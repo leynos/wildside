@@ -1,42 +1,36 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
+.PHONY: be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint
 
-APP ?= wildside
-CARGO ?= cargo
-BUILD_JOBS ?=
-CLIPPY_FLAGS ?= --all-targets --all-features -- -D warnings
-MDLINT ?= markdownlint
-NIXIE ?= nixie
+be:
+	cargo run --manifest-path backend/Cargo.toml
 
-build: target/debug/$(APP) ## Build debug binary
-release: target/release/$(APP) ## Build release binary
+fe:
+	cd frontend-pwa && bun dev
 
-all: release ## Default target builds release binary
+openapi:
+	# Replace with a bin that prints OpenAPI
+	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
 
-clean: ## Remove build artifacts
-	$(CARGO) clean
+gen:
+	cd frontend-pwa && bunx orval --config orval.config.yaml
 
-test: ## Run tests with warnings treated as errors
-	RUSTFLAGS="-D warnings" $(CARGO) test --all-targets --all-features $(BUILD_JOBS)
+docker-up:
+	cd deploy && docker compose up --build -d
 
-target/%/$(APP): ## Build binary in debug or release mode
-	$(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --bin $(APP)
+docker-down:
+	cd deploy && docker compose down
 
-lint: ## Run Clippy with warnings denied
-	$(CARGO) clippy $(CLIPPY_FLAGS)
+fmt:
+	cargo fmt --manifest-path backend/Cargo.toml --all
 
-fmt: ## Format Rust and Markdown sources
-	$(CARGO) fmt --all
-	mdformat-all
 
-check-fmt: ## Verify formatting
-	$(CARGO) fmt --all -- --check
+lint:
+	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 
-markdownlint: ## Lint Markdown files
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- $(MDLINT)
+test:
+	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 
-nixie: ## Validate Mermaid diagrams
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -n 1 -- $(NIXIE)
+check-fmt:
+	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
 
-help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
-	awk 'BEGIN {FS=":"; printf "Available targets:\n"} {printf "  %-20s %s\n", $$1, $$2}'
+markdownlint:
+	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint

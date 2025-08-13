@@ -1,0 +1,6 @@
+{
+  "name": "myapp",
+  "private": true,
+  "type": "module",
+  "workspaces": ["frontend-pwa", "packages/*"]
+}

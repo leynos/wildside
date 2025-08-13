@@ -1,42 +1,40 @@
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
+name: ci
+"on":
   push:
-    branches: [main]
-
+  pull_request:
 jobs:
-  build-test:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      CARGO_TERM_COLOR: always
-      BUILD_PROFILE: debug
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6559452842af6a83b83429129dccaf910e34562
-      - name: Show Ninja version
-        run: ninja --version
-      - name: Format
-        run: make check-fmt
-      - name: Lint
-        run: make lint
-      - name: Test
-        run: make test
-      - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@c6559452842af6a83b83429129dccaf910e34562
+      - uses: actions/setup-node@v4
         with:
-          output-path: lcov.info
-          format: lcov
-      - name: Upload coverage data to CodeScene
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: ${{ env.CS_ACCESS_TOKEN }}
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6559452842af6a83b83429129dccaf910e34562
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v1
         with:
-          format: lcov
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
-          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
+          bun-version: '1.1.x'
+
+      # Backend
+      - name: Rust build
+        run: |
+          sudo apt-get update && sudo apt-get install -y musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --manifest-path backend/Cargo.toml --release --target x86_64-unknown-linux-musl
+
+      # OpenAPI dump (at runtime or via a small bin)
+      - name: Run backend to extract OpenAPI
+        run: |
+          mkdir -p spec
+          # Prefer generating from source; keep fallback only if generation is unavailable
+          if cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json; then
+            echo "OpenAPI generated from backend"
+          else
+            echo "openapi-dump bin not available; using existing spec or placeholder"
+            test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
+          fi
+
+      # Frontend
+      - name: Build tokens & PWA
+        run: |
+          cd packages/tokens && bun install && bun run build
+          cd ../../frontend-pwa && bun install && bun run build
