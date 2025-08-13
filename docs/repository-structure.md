@@ -1,11 +1,14 @@
 # Repository Design Guide
 
-A practical design for a web application with a Rust/Actix backend and a React + Tailwind/daisyUI PWA frontend. The repo supports:
+A practical design for a web application with a Rust/Actix backend and a React
++ Tailwind/daisyUI PWA frontend. The repo supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
-- **Design tokens** as a first‑class package powering Tailwind/daisyUI and future native shells.
-- Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS, with static assets served from object storage/CDN.
+- **Design tokens** as a first‑class package powering Tailwind/daisyUI and
+  future native shells.
+- Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
+  with static assets served from object storage/CDN.
 - Bun as the JS runtime/package manager.
 
 ---
@@ -76,22 +79,28 @@ myapp/
 
 ### 2.1 Rust/Actix → OpenAPI → TypeScript Client (orval)
 
-- Use **utoipa** and **utoipa-actix-web** to annotate handlers and derive schemas from serde models.
-- Expose the OpenAPI document at runtime (e.g., `/api-docs/openapi.json`) and/or emit a static `spec/openapi.json` via `build.rs` or a small bin.
-- Frontend runs **orval** under bun to generate a fetch client and types that align with the backend.
+- Use **utoipa** and **utoipa-actix-web** to annotate handlers and derive
+  schemas from serde models.
+- Expose the OpenAPI document at runtime (e.g., `/api-docs/openapi.json`)
+  and/or emit a static `spec/openapi.json` via `build.rs` or a small bin.
+- Frontend runs **orval** under bun to generate a fetch client and types that
+  align with the backend.
 
 **Backend (sketch):**
 
-- `models/` contains structs with `#[derive(Serialize, Deserialize, utoipa::ToSchema)]`.
+- `models/` contains structs with
+  `#[derive(Serialize, Deserialize, utoipa::ToSchema)]`.
 - `api/` handlers carry `#[utoipa::path(...)]` per route.
 - `main.rs` derives `#[derive(utoipa::OpenApi)]` and mounts Swagger UI for DX.
 
 **Frontend (sketch):**
 
-- `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev URL).
+- `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev
+  URL).
 - `bunx orval` writes `src/api/client.ts` with typed functions.
 - A small `src/api/fetcher.ts` centralises base URL, auth, and error handling.
-- TanStack Query hooks (hand-written or template‑generated) wrap the client for caching and retries.
+- TanStack Query hooks (hand-written or template‑generated) wrap the client for
+  caching and retries.
 
 **Flow:**
 
@@ -102,7 +111,8 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 ### 2.2 Actix WebSocket/Events → AsyncAPI → Consumers
 
 - For evented channels (WS/SSE/Kafka/etc.), describe contracts in **AsyncAPI**.
-- Author `spec/asyncapi.yaml` by hand **or** construct it programmatically (e.g., using an AsyncAPI crate) and emit YAML/JSON.
+- Author `spec/asyncapi.yaml` by hand **or** construct it programmatically
+  (e.g., using an AsyncAPI crate) and emit YAML/JSON.
 - Use the AsyncAPI Generator in CI to produce:
   - Human‑readable HTML docs for events.
   - Optional client/server stubs (WebSocket helpers) as a starting point.
@@ -113,16 +123,21 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs  →  Frontend WS client + TanStack Query/SWR
 ```
 
-> Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI message payloads; derive JSON Schema via `schemars` if you want runtime validation or to feed generator pipelines.
+> Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
+> message payloads; derive JSON Schema via `schemars` if you want runtime
+> validation or to feed generator pipelines.
 
 ---
 
 ## 3) Design Tokens as a First‑Class Package
 
-**Goals:** single source of truth for colours/spacing/typography/radii; drive Tailwind/daisyUI and any future native shells.
+**Goals:** single source of truth for colours/spacing/typography/radii; drive
+Tailwind/daisyUI and any future native shells.
 
-- `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`, `radius.*`, `font.*`).
-- `packages/tokens/src/themes/{light,dark}.json`: semantic overrides (`semantic.bg.default`, `semantic.fg.default`, `semantic.brand.*`).
+- `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
+  `radius.*`, `font.*`).
+- `packages/tokens/src/themes/{light,dark}.json`: semantic overrides
+  (`semantic.bg.default`, `semantic.fg.default`, `semantic.brand.*`).
 - `packages/tokens/build/style-dictionary.js`: exports
   - `dist/css/variables.css` (CSS variables for runtime theming),
   - `dist/tw/preset.cjs` (Tailwind preset mapping spacing/radius/colours),
@@ -135,15 +150,19 @@ Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs 
 - daisyUI `daisyui: require('@app/tokens/dist/daisy/theme.cjs')`.
 - Import CSS vars once in `main.tsx`.
 
-This keeps the visual system consistent across PWA, desktop (Tauri), and mobile (Capacitor) shells.
+This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
+(Capacitor) shells.
 
 ---
 
 ## 4) Environment Strategy & Ports/Adapters
 
-- Keep domain logic in `backend/src/domain` (no IO). Define **ports** for storage, cache, queues, email, etc., with **adapters** in `infra/`.
-- Mirror that concept in the frontend: create thin adapters around fetch (REST) and WS (events) so tests can stub them.
-- Use `.env` + `env_file` in Docker Compose for local dev and ConfigMaps/Secrets in K8s.
+- Keep domain logic in `backend/src/domain` (no IO). Define **ports** for
+  storage, cache, queues, email, etc., with **adapters** in `infra/`.
+- Mirror that concept in the frontend: create thin adapters around fetch (REST)
+  and WS (events) so tests can stub them.
+- Use `.env` + `env_file` in Docker Compose for local dev and
+  ConfigMaps/Secrets in K8s.
 
 ---
 
@@ -200,7 +219,8 @@ ENV RUST_LOG=info
 ENTRYPOINT ["/srv/app"]
 ```
 
-> If any dependency prevents musl, switch the target to gnu and use `gcr.io/distroless/cc:nonroot` as base; copy any needed CA certs.
+> If any dependency prevents musl, switch the target to gnu and use
+> `gcr.io/distroless/cc:nonroot` as base; copy any needed CA certs.
 
 ### 6.2 Frontend (Vite + Bun) — build once, serve from object storage/CDN
 
@@ -222,7 +242,8 @@ FROM scratch AS export
 COPY --from=build /web/frontend-pwa/dist/ /dist/
 ```
 
-- In CI, extract `/dist` and upload to **DOKS Spaces** (object storage) behind a CDN.
+- In CI, extract `/dist` and upload to **DOKS Spaces** (object storage) behind
+  a CDN.
 - The backend serves only the API; static assets come from CDN.
 - For local dev, you can also serve via `vite dev` or a simple nginx container.
 
@@ -251,7 +272,8 @@ services:
     depends_on: [backend]
 ```
 
-> For an even faster local loop, run `cargo watch -x run` natively and `bun dev` for the PWA; keep Docker for parity and CI.
+> For an even faster local loop, run `cargo watch -x run` natively and
+> `bun dev` for the PWA; keep Docker for parity and CI.
 
 ---
 
@@ -259,14 +281,19 @@ services:
 
 **Principles:**
 
-- Backend pods are stateless; DB/cache live in managed services (e.g., PostgreSQL, Redis). Migrations run via Job.
-- Frontend assets are immutable in Spaces + CDN; deploys are object‑store uploads (no pod just to serve files).
-- Ingress terminates TLS; backend exposed via HTTP (or gRPC) behind a single hostname.
+- Backend pods are stateless; DB/cache live in managed services (e.g.,
+  PostgreSQL, Redis). Migrations run via Job.
+- Frontend assets are immutable in Spaces + CDN; deploys are object‑store
+  uploads (no pod just to serve files).
+- Ingress terminates TLS; backend exposed via HTTP (or gRPC) behind a single
+  hostname.
 
 ### 7.1 Static Assets on DOKS Spaces
 
-1. CI uploads `frontend-pwa/dist/` to `spaces://my-bucket/app/<git-sha>/` and updates a `latest` object (or versioned index).
-2. CDN is configured on the bucket; cache‑control headers set during upload (`immutable`, long max‑age) with a short TTL for `index.html`.
+1. CI uploads `frontend-pwa/dist/` to `spaces://my-bucket/app/<git-sha>/` and
+   updates a `latest` object (or versioned index).
+2. CDN is configured on the bucket; cache‑control headers set during upload
+   (`immutable`, long max‑age) with a short TTL for `index.html`.
 
 **Upload script (pseudo):** `deploy/scripts/push_static.sh`
 
@@ -285,7 +312,8 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 
 ### 7.2 Backend on K8s
 
-**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), Secret (tokens/DB urls), HPA, PodDisruptionBudget, NetworkPolicy.
+**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), Secret
+(tokens/DB urls), HPA, PodDisruptionBudget, NetworkPolicy.
 
 ``** (sketch):**
 
@@ -323,9 +351,11 @@ spec:
   ports: [{ port: 80, targetPort: 8080 }]
 ```
 
-**Ingress** points `/api/*` at the Service. The frontend public hostname points to the CDN; only `/api` goes to cluster.
+**Ingress** points `/api/*` at the Service. The frontend public hostname points
+to the CDN; only `/api` goes to cluster.
 
-**Optional:** use a **Helm chart** or **Kustomize** overlays per environment (dev/stage/prod) and FluxCD/ArgoCD for GitOps.
+**Optional:** use a **Helm chart** or **Kustomize** overlays per environment
+(dev/stage/prod) and FluxCD/ArgoCD for GitOps.
 
 ### 7.3 CI/CD Outline
 
@@ -333,11 +363,15 @@ spec:
 2. **Build artifacts**:
    - Build backend image → push to registry.
    - Build frontend dist → upload to Spaces.
-   - Emit `spec/openapi.json` and publish as build artifact; run `orval` in a “types up‑to‑date” check.
-   - (Optional) Generate AsyncAPI HTML docs and publish to an internal docs bucket.
+   - Emit `spec/openapi.json` and publish as build artifact; run `orval` in a
+     “types up‑to‑date” check.
+   - (Optional) Generate AsyncAPI HTML docs and publish to an internal docs
+     bucket.
 3. **Deploy**:
-   - Update Helm values with new image tag; commit to a GitOps repo watched by FluxCD.
-   - Invalidate CDN (only for `index.html`), or rely on cache busting for hashed assets.
+   - Update Helm values with new image tag; commit to a GitOps repo watched by
+     FluxCD.
+   - Invalidate CDN (only for `index.html`), or rely on cache busting for
+     hashed assets.
 
 ---
 
@@ -378,28 +412,37 @@ docker-down:
 
 ## 9) Observability & Operations Hooks
 
-- **Health endpoints**: `/health/live` and `/health/ready` in backend for probes.
+- **Health endpoints**: `/health/live` and `/health/ready` in backend for
+  probes.
 - **Structured logs** (JSON) with request IDs; propagate over WS too.
 - **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
-- **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers where relevant.
+- **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
+  where relevant.
 
 ---
 
 ## 10) Security & Hardening Notes
 
 - Minimal base images (distroless). Non‑root user.
-- SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in cluster (policy‑controller/Kyverno).
+- SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in
+  cluster (policy‑controller/Kyverno).
 - CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
-- Secrets: mount via K8s Secrets (consider external secret operator for DO Secrets Manager).
+- Secrets: mount via K8s Secrets (consider external secret operator for DO
+  Secrets Manager).
 
 ---
 
 ## 11) Summary of Hand‑offs
 
-- **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client → React + TanStack.
-- **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS clients/docs.
-- **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset + daisyUI theme.
-- **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment → CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster.
+- **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client →
+  React + TanStack.
+- **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS
+  clients/docs.
+- **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
+  daisyUI theme.
+- **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
+  CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster.
 
-This structure keeps contracts central, isolates platform concerns, and allows painless evolution from PWA to native shells without a rewrite.
+This structure keeps contracts central, isolates platform concerns, and allows
+painless evolution from PWA to native shells without a rewrite.
 
