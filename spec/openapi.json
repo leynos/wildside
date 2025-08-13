@@ -8,6 +8,9 @@
     },
     "version": "0.1.0"
   },
+  "security": [
+    { "cookieAuth": [] }
+  ],
   "paths": {
     "/api/users": {
       "get": {
@@ -38,6 +41,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      }
+    },
     "schemas": {
       "User": {
         "type": "object",
