@@ -1,0 +1,7 @@
+{
+  "name": "@app/tokens",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build/style-dictionary.js" },
+  "devDependencies": { "style-dictionary": "^4" }
+}
