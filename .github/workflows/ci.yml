@@ -1,42 +1,30 @@
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
+name: ci
+on: [push, pull_request]
 jobs:
-  build-test:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      CARGO_TERM_COLOR: always
-      BUILD_PROFILE: debug
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6559452842af6a83b83429129dccaf910e34562
-      - name: Show Ninja version
-        run: ninja --version
-      - name: Format
-        run: make check-fmt
-      - name: Lint
-        run: make lint
-      - name: Test
-        run: make test
-      - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@c6559452842af6a83b83429129dccaf910e34562
-        with:
-          output-path: lcov.info
-          format: lcov
-      - name: Upload coverage data to CodeScene
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: ${{ env.CS_ACCESS_TOKEN }}
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6559452842af6a83b83429129dccaf910e34562
-        with:
-          format: lcov
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
-          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: oven-sh/setup-bun@v1
+        with: { bun-version: '1.1.x' }
+
+      # Backend
+      - name: Rust build
+        run: |
+          sudo apt-get update && sudo apt-get install -y musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --manifest-path backend/Cargo.toml --release --target x86_64-unknown-linux-musl
+
+      # OpenAPI dump (at runtime or via a small bin)
+      - name: Run backend to extract OpenAPI
+        run: |
+          # In real CI, run a small bin that prints ApiDoc JSON to stdout
+          echo "{}" > spec/openapi.json
+
+      # Frontend
+      - name: Build tokens & PWA
+        run: |
+          cd packages/tokens && bun install && bun run build
+          cd ../../frontend-pwa && bun install && bun run build

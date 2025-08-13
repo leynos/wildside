@@ -1,0 +1,1 @@
+{ "semantic": { "bg": { "default": "{color.neutral.0}" }, "fg": { "default": "{color.neutral.900}" }, "brand": { "default": "{color.primary.600}" } } }
