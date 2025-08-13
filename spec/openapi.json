@@ -1,15 +1,18 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
-    "title": "myapp",
+    "title": "backend",
+    "description": "",
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
     "/api/users": {
       "get": {
-        "summary": "Users",
-        "operationId": "listUsers",
-        "tags": ["users"],
+        "tags": [],
+        "operationId": "list_users",
         "responses": {
           "200": {
             "description": "Users",
@@ -17,33 +20,46 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "maxItems": 1000,
-                  "items": { "$ref": "#/components/schemas/User" }
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorised"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "cookieAuth": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "session"
-      }
-    },
     "schemas": {
       "User": {
         "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "display_name": { "type": "string" }
-        },
-        "required": ["id", "display_name"]
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable user identifier"
+          }
+        }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "users"
+    }
+  ]
 }

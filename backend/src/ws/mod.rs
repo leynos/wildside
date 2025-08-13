@@ -1,3 +1,5 @@
+//! WebSocket entry and routing.
+
 use actix_web::web::Payload;
 use actix_web::{get, HttpRequest, HttpResponse};
 use actix_web_actors::ws;

@@ -21,10 +21,13 @@ jobs:
       - name: Run backend to extract OpenAPI
         run: |
           mkdir -p spec
-          # TODO: Replace with a small bin that prints ApiDoc JSON to stdout
-          # cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
-          # Temporary fallback to avoid breaking builds:
-          test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
+          # Prefer generating from source; keep fallback only if generation is unavailable
+          if cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json; then
+            echo "OpenAPI generated from backend"
+          else
+            echo "openapi-dump bin not available; using existing spec or placeholder"
+            test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
+          fi
 
       # Frontend
       - name: Build tokens & PWA

@@ -1,3 +1,5 @@
+//! WebSocket actor for user connections.
+
 use actix::{Actor, StreamHandler};
 use actix_web_actors::ws::{self, Message, ProtocolError};
 

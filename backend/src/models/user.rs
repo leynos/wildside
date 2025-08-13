@@ -1,3 +1,5 @@
+//! User data model.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
