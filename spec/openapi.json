@@ -8,6 +8,8 @@
     "/api/users": {
       "get": {
         "summary": "Users",
+        "operationId": "listUsers",
+        "tags": ["users"],
         "responses": {
           "200": {
             "description": "Users",
@@ -15,6 +17,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
+                  "maxItems": 1000,
                   "items": { "$ref": "#/components/schemas/User" }
                 }
               }
@@ -25,6 +28,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      }
+    },
     "schemas": {
       "User": {
         "type": "object",

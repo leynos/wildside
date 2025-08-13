@@ -20,8 +20,11 @@ jobs:
       # OpenAPI dump (at runtime or via a small bin)
       - name: Run backend to extract OpenAPI
         run: |
-          # In real CI, run a small bin that prints ApiDoc JSON to stdout
-          echo "{}" > spec/openapi.json
+          mkdir -p spec
+          # TODO: Replace with a small bin that prints ApiDoc JSON to stdout
+          # cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
+          # Temporary fallback to avoid breaking builds:
+          test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
 
       # Frontend
       - name: Build tokens & PWA
