@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "gen:api": "bunx orval --config orval.config.yaml"
+    "gen:api": "bunx orval --config orval.config.yaml",
+    "audit": "bun x npm@latest audit",
+    "audit:snyk": "bun x snyk test"
   },
   "devDependencies": {
     "@types/node": "^20",

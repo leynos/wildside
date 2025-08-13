@@ -230,7 +230,8 @@ This document mirrors the intent of the Rust guidance—strictness, clarity, and
   - `build`: `vite build`
   - `preview`: `vite preview`
   - `test`: `vitest run --coverage`
-  - `audit`: `bun audit`
+  - `audit`: `bun x npm@latest audit`
+  - `audit:snyk`: `bun x snyk test`
 
 ### Compiler Configuration (Make It Sharp)
 
@@ -291,7 +292,7 @@ Use a strict `tsconfig.json` suitable for browser builds:
 
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde (`~x.y.z`) only with a documented justification.
 - **Lockfile**: Commit `bun.lockb`. Recreate on major tool upgrades.
-- **Audit**: Run `bun audit` locally and in automation. Track exceptions with explicit expiry dates.
+- **Audit**: Run `bun run audit` locally and in automation. Track exceptions with explicit expiry dates.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained or risky dependencies swiftly.
 
 ### Linting & Formatting
@@ -351,7 +352,7 @@ Use a strict `tsconfig.json` suitable for browser builds:
 ### Quick Checklist (Before Commit)
 
 - `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings; no TypeScript errors; coverage thresholds hold.
-- `bun audit` passes or has justified, time‑boxed exceptions.
+- `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
 - All async APIs accept `AbortSignal` where relevant; all fetchers validated against runtime schemas.
 - Module headers present; public exports documented; design tokens consistent across Tailwind/daisyUI.
