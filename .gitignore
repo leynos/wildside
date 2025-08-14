@@ -4,7 +4,10 @@
 
 # Node
 node_modules/
-**/dist/
+/frontend-pwa/node_modules/
+/packages/tokens/node_modules/
+/frontend-pwa/dist/
+/packages/tokens/dist/
 
 # Misc
 .DS_Store

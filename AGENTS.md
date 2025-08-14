@@ -58,7 +58,7 @@
     behaviour being corrected both to validate the fix and to guard against
     regression.
   - Passes all relevant unit and behavioural tests according to the guidelines
-    above. See “### Testing”. (Use `make test` to verify).
+    above. (Use `make test` to verify).
   - Passes lint checks. (Use `make lint` to verify).
   - Adheres to formatting standards tested using a formatting validator. (Use
     `make check-fmt` to verify).
@@ -79,7 +79,7 @@
 
 ## Refactoring Heuristics & Workflow
 
-- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
+- **Recognising Refactoring Needs:** Regularly assess the codebase for potential
   refactoring opportunities. Consider refactoring when you observe:
   - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
@@ -242,8 +242,7 @@ browser‑only runtime.
   - `preview`: `vite preview`
   - `test`: `vitest run --coverage`
   - `audit`: `bun x npm@latest audit`
-  - `audit:snyk`: `bun x snyk test` (requires `snyk` CLI and authentication;
-    run `snyk auth` locally, and set `SNYK_TOKEN` in CI secrets)
+  - `audit:snyk`: `bun x snyk test`
 
 ### Compiler Configuration (Make It Sharp)
 
@@ -330,12 +329,12 @@ Keep docs close to code.
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct
   dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde
   (`~x.y.z`) only with a documented justification.
-- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep 
+- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep
   `bun.lockb` ignored.
 - **Audit**: Run `bun run audit` locally and in automation. Track exceptions
   with explicit expiry dates.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained
-  or risky dependencies swiftly.
+or risky dependencies swiftly.
 
 ### Linting & Formatting
 
@@ -434,8 +433,8 @@ Keep docs close to code.
 
 ### Quick Checklist (Before Commit)
 
-- `bun run fmt`, `bun run lint`, `bun test` all clean; no Biome warnings;
-  no TypeScript errors; coverage thresholds hold.
+- `bun run fmt`, `bun run lint`, `bun test` all clean; no Biome warnings; no
+  TypeScript errors; coverage thresholds hold.
 - `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
 - All async APIs accept `AbortSignal` where relevant; all fetchers validated
