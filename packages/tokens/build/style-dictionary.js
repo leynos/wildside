@@ -26,13 +26,36 @@ sd.buildAllPlatforms();
 
 // naive tw + daisy mappers (replace with richer mapping later)
 const tokens = JSON.parse(fs.readFileSync('src/tokens.json', 'utf-8'));
-fs.writeFileSync(
-  'dist/tw/preset.cjs',
-  `module.exports={theme:{extend:{spacing:${JSON.stringify(tokens.space)},borderRadius:${JSON.stringify(tokens.radius)},colors:${JSON.stringify(tokens.color)}}}`
-);
+const unwrap = input =>
+  Object.fromEntries(
+    Object.entries(input).map(([k, v]) => [
+      k,
+      typeof v === 'object' && 'value' in v ? v.value : unwrap(v)
+    ])
+  );
+
+const preset = {
+  theme: {
+    extend: {
+      spacing: unwrap(tokens.space),
+      borderRadius: unwrap(tokens.radius),
+      colors: Object.fromEntries(
+        Object.entries(tokens.color).map(([k, v]) => [k, unwrap(v)])
+      )
+    }
+  }
+};
+fs.writeFileSync('dist/tw/preset.cjs', `module.exports=${JSON.stringify(preset)}`);
+
+const light = JSON.parse(fs.readFileSync('src/themes/light.json', 'utf-8'));
+const semantic = unwrap(light.semantic);
 const theme = {
-  primary: tokens?.semantic?.brand?.default ?? '#000000',
-  'base-100': tokens?.semantic?.bg?.default ?? '#ffffff',
-  'base-content': tokens?.semantic?.fg?.default ?? '#111111'
+  primary: semantic.brand.default,
+  'primary-focus': semantic.brand.hover,
+  'primary-content': semantic.brand.contrast,
+  'base-100': semantic.bg.default,
+  'base-200': semantic.bg.subtle,
+  'base-content': semantic.fg.default,
+  'base-content-muted': semantic.fg.muted
 };
 fs.writeFileSync('dist/daisy/theme.cjs', `module.exports={themes:[${JSON.stringify(theme)}]}`);

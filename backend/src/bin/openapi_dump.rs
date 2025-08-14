@@ -4,5 +4,10 @@ use backend::doc::ApiDoc;
 use utoipa::OpenApi;
 
 fn main() {
-    println!("{}", ApiDoc::openapi().to_json().unwrap());
+    println!(
+        "{}",
+        ApiDoc::openapi()
+            .to_json()
+            .expect("serialising OpenAPI document"),
+    );
 }

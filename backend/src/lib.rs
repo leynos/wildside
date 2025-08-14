@@ -5,4 +5,5 @@ pub mod doc;
 pub mod models;
 pub mod ws;
 
+/// Public OpenAPI surface used by Swagger UI and tooling.
 pub use doc::ApiDoc;
