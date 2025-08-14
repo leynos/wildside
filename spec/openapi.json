@@ -3,9 +3,6 @@
   "info": {
     "title": "backend",
     "description": "",
-    "license": {
-      "name": ""
-    },
     "version": "0.1.0"
   },
   "security": [

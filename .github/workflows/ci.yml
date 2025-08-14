@@ -16,10 +16,22 @@ jobs:
 
       # Backend
       - name: Rust build
-        run: |
-          sudo apt-get update && sudo apt-get install -y musl-tools
-          rustup target add x86_64-unknown-linux-musl
-          cargo build --manifest-path backend/Cargo.toml --release --target x86_64-unknown-linux-musl
+        run: cargo build --manifest-path backend/Cargo.toml --release
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Rust fmt check
+        run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
+      - name: Rust clippy
+        run: cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Rust tests
+        run: RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 
       # OpenAPI dump (at runtime or via a small bin)
       - name: Run backend to extract OpenAPI
