@@ -211,17 +211,28 @@ project:
 
 ## TypeScript Frontend Guidance (Client‑Side Only)
 
-**Stack**: Bun · Biome · Vite (esbuild under the hood for dev) · React · Tailwind CSS v4 · daisyUI v5 · TanStack (Query/Router/Table).
+**Stack**: Bun · Biome · Vite (esbuild under the hood for dev) · React ·
+Tailwind CSS v4 · daisyUI v5 · TanStack (Query/Router/Table).
 
-This document mirrors the intent of the Rust guidance—strictness, clarity, and predictable builds—translated into idiomatic, modern TypeScript and a browser‑only runtime.
+This document mirrors the intent of the Rust guidance—strictness, clarity, and
+predictable builds—translated into idiomatic, modern TypeScript and a
+browser‑only runtime.
 
 ### Toolchain & Project Shape
 
-- **ESM‑only**: Source and build outputs are ES Modules. No CommonJS. Configure Vite accordingly; package publishes only ESM (for libraries) or static assets (for apps).
-- **Runtime targets**: Target modern evergreen browsers. Use `browserslist` to define the support matrix; drop legacy where feasible. Prefer native Web APIs (Fetch, URL, AbortController, Streams).
-- **Bun as runner**: Use Bun for scripts and dev server invocations. Prefer `bun run` for scripts and `bunx` for one‑off CLIs.
-- **Workspaces (optional)**: If a monorepo, use `pnpm` or Bun workspaces with clear package boundaries and TS project references.
-- **Vite**: Default bundler for dev/build. Enable code‑splitting, prefetch hints, and asset hashing. Esbuild handles TS/JS transforms in dev; production uses Rollup via Vite.
+- **ESM‑only**: Source and build outputs are ES Modules. No CommonJS. Configure
+  Vite accordingly; package publishes only ESM (for libraries) or static assets
+  (for apps).
+- **Runtime targets**: Target modern evergreen browsers. Use `browserslist` to
+  define the support matrix; drop legacy where feasible. Prefer native Web APIs
+  (Fetch, URL, AbortController, Streams).
+- **Bun as runner**: Use Bun for scripts and dev server invocations. Prefer
+  `bun run` for scripts and `bunx` for one‑off CLIs.
+- **Workspaces (optional)**: If a monorepo, use `pnpm` or Bun workspaces with
+  clear package boundaries and TS project references.
+- **Vite**: Default bundler for dev/build. Enable code‑splitting, prefetch
+  hints, and asset hashing. Esbuild handles TS/JS transforms in dev; production
+  uses Rollup via Vite.
 - **Project scripts (Bun)**:
   - `fmt`: `biome format --write .`
   - `lint`: `biome lint . && tsc -p tsconfig.json --noEmit`
@@ -247,118 +258,190 @@ Use a strict `tsconfig.json` suitable for browser builds:
 - `verbatimModuleSyntax: true` (and use `import type` / `export type`)
 - `moduleResolution: "bundler"` (lets Vite resolve modern packages)
 - `lib`: include only what you need (e.g., `dom`, `dom.iterable`, `es2022`)
-- Do not emit from `tsc` in app packages (`noEmit: true`); Vite handles emission.
+- Do not emit from `tsc` in app packages (`noEmit: true`); Vite handles
+  emission.
 
-**Order**: Place JSDoc comments above declarations and above any decorators. Keep docs close to code.
+**Order**: Place JSDoc comments above declarations and above any decorators.
+Keep docs close to code.
 
 ### Code Style & Structure
 
-- **Immutability first**: Prefer `const`, `readonly`, and `Readonly<T>`; avoid mutating props or inputs.
-- **Functions**: Extract meaningfully named helpers when a function grows long. Keep trivial functions on one line when readability allows:
+- **Immutability first**: Prefer `const`, `readonly`, and `Readonly<T>`; avoid
+  mutating props or inputs.
+- **Functions**: Extract meaningfully named helpers when a function grows long.
+  Keep trivial functions on one line when readability allows:
   ```ts
   export const mkId = (n: number): Id => new Id(n);
   ```
-- **Parameters**: Group related parameters into typed objects or builders; avoid long positional lists.
-- **Predicates**: When `if/else` grows beyond two branches, extract a predicate function or use a lookup table. Ensure exhaustive `switch` with a `never` guard helper.
-- **Docs**: Every module begins with a `/** @file … */` block describing purpose, responsibilities, and usage.
-- **Public APIs (for libs)**: Export explicit entry points via `package.json` `exports`/`types`. Avoid wildcard re‑exports that mask breaking changes.
+- **Parameters**: Group related parameters into typed objects or builders;
+  avoid long positional lists.
+- **Predicates**: When `if/else` grows beyond two branches, extract a predicate
+  function or use a lookup table. Ensure exhaustive `switch` with a `never`
+  guard helper.
+- **Docs**: Every module begins with a `/** @file … */` block describing
+  purpose, responsibilities, and usage.
+- **Public APIs (for libs)**: Export explicit entry points via `package.json`
+  `exports`/`types`. Avoid wildcard re‑exports that mask breaking changes.
 
 ### Runtime Validation & Types
 
-- **Runtime schemas**: Validate I/O boundaries (network responses, localStorage payloads, URL params) with `zod`/`valibot`. Generate TS types from schemas or derive schemas from types, but add a CI check to keep them in sync.
-- **Nominal branding**: Use branded types for IDs/tokens to avoid accidental mixing:
+- **Runtime schemas**: Validate I/O boundaries (network responses, localStorage
+  payloads, URL params) with `zod`/`valibot`. Generate TS types from schemas or
+  derive schemas from types, but add a CI check to keep them in sync.
+- **Nominal branding**: Use branded types for IDs/tokens to avoid accidental
+  mixing:
   ```ts
   type UserId = string & { readonly brand: "UserId" };
   ```
-- **Cancellation**: Accept `AbortSignal` for any async that can hang (fetches, long UI work). Wire signals through TanStack Query via `signal` in fetchers.
-- **Time & RNG**: Centralise `now()` and `rng()` adapters; never call `Date.now()` or `Math.random()` directly in business logic.
+- **Cancellation**: Accept `AbortSignal` for any async that can hang (fetches,
+  long UI work). Wire signals through TanStack Query via `signal` in fetchers.
+- **Time & RNG**: Centralise `now()` and `rng()` adapters; never call
+  `Date.now()` or `Math.random()` directly in business logic.
 
 ### Error Handling
 
-- **Semantic errors**: Use discriminated unions for recoverable conditions callers might branch on (e.g., `{ type: "rate_limited"; retryAfterMs: number }`).
-- **Exceptions**: Reserve `Error` subclasses for exceptional paths (framework/edge). Always attach a `cause` where available.
-- **App boundary**: Map domain errors to user‑facing messages in UI components only. Never leak raw stack traces to the DOM or logs shipped to analytics.
+- **Semantic errors**: Use discriminated unions for recoverable conditions
+  callers might branch on (e.g.,
+  `{ type: "rate_limited"; retryAfterMs: number }`).
+- **Exceptions**: Reserve `Error` subclasses for exceptional paths
+  (framework/edge). Always attach a `cause` where available.
+- **App boundary**: Map domain errors to user‑facing messages in UI components
+  only. Never leak raw stack traces to the DOM or logs shipped to analytics.
 
 ### Testing (Unit, Behavioural, and UI)
 
-- **Runner**: Vitest with `jsdom` (or `happy-dom`) for component tests. Keep tests parallel‑safe and deterministic.
-- **Fixtures**: Use factories/builders for component props and server responses. Avoid ad hoc object literals in tests.
-- **Parameterised tests**: Prefer table‑driven cases via `test.each` / `it.each`.
-- **Mocking**: Use `vi.mock` for module boundaries. Inject adapters for env/time/storage/fetch; do not monkey‑patch globals in product code.
-- **Fake timers**: `vi.useFakeTimers()` for time‑based logic; restore after each test.
-- **Snapshots**: Keep deterministic by sorting keys and fixing seeds. Limit snapshot scope to stable UI fragments.
-- **E2E (optional)**: Playwright for flows critical to revenue or safety; keep the set minimal and fast.
+- **Runner**: Vitest with `jsdom` (or `happy-dom`) for component tests. Keep
+  tests parallel‑safe and deterministic.
+- **Fixtures**: Use factories/builders for component props and server
+  responses. Avoid ad hoc object literals in tests.
+- **Parameterised tests**: Prefer table‑driven cases via `test.each` /
+  `it.each`.
+- **Mocking**: Use `vi.mock` for module boundaries. Inject adapters for
+  env/time/storage/fetch; do not monkey‑patch globals in product code.
+- **Fake timers**: `vi.useFakeTimers()` for time‑based logic; restore after
+  each test.
+- **Snapshots**: Keep deterministic by sorting keys and fixing seeds. Limit
+  snapshot scope to stable UI fragments.
+- **E2E (optional)**: Playwright for flows critical to revenue or safety; keep
+  the set minimal and fast.
 
 ### Dependency Management
 
-- **Version policy**: Use caret requirements (`^x.y.z`) for all direct dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde (`~x.y.z`) only with a documented justification.
-- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep `bun.lockb` ignored.
-- **Audit**: Run `bun run audit` locally and in automation. Track exceptions in
-  `security/audit-exceptions.json` with explicit expiry dates, and fail CI when
-  they lapse.
-- **Culling**: Prefer small, actively maintained packages. Remove unmaintained or risky dependencies swiftly.
+- **Version policy**: Use caret requirements (`^x.y.z`) for all direct
+  dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde
+  (`~x.y.z`) only with a documented justification.
+- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep 
+  `bun.lockb` ignored.
+- **Audit**: Run `bun run audit` locally and in automation. Track exceptions
+  with explicit expiry dates.
+- **Culling**: Prefer small, actively maintained packages. Remove unmaintained
+  or risky dependencies swiftly.
 
 ### Linting & Formatting
 
-- **Biome**: One tool for format + lint. Configure with strict rules: disallow `any`, no non‑null `!`, forbid `@ts-ignore` in favour of `@ts-expect-error` (with a reason).
-- **Type‑checking**: `tsc --noEmit` as part of `lint` to catch type errors early.
-- **Import hygiene**: Enforce sorted, grouped imports; no unused or extraneous dependencies.
+- **Biome**: One tool for format + lint. Configure with strict rules: disallow
+  `any`, no non‑null `!`, forbid `@ts-ignore` in favour of `@ts-expect-error`
+  (with a reason).
+- **Type‑checking**: `tsc --noEmit` as part of `lint` to catch type errors
+  early.
+- **Import hygiene**: Enforce sorted, grouped imports; no unused or extraneous
+  dependencies.
 
 ### Performance & Correctness
 
-- **Code‑splitting**: Use Vite’s dynamic `import()` to split routes and heavy feature bundles.
-- **TanStack Query**: Use stale‑time, cache‑time, and prefetch strategically. Avoid `refetchOnWindowFocus` unless the data truly needs it.
-- **Async**: Avoid `await` inside loops; batch with `Promise.allSettled`. Use `async` iterables/streams for large data.
-- **Rendering**: Enable React StrictMode in dev; memoise expensive components; prefer derived data via selectors.
-- **Stability**: Keep JSON stable (deterministic key order) for snapshots and client‑side caches.
+- **Code‑splitting**: Use Vite’s dynamic `import()` to split routes and heavy
+  feature bundles.
+- **TanStack Query**: Use stale‑time, cache‑time, and prefetch strategically.
+  Avoid `refetchOnWindowFocus` unless the data truly needs it.
+- **Async**: Avoid `await` inside loops; batch with `Promise.allSettled`. Use
+  `async` iterables/streams for large data.
+- **Rendering**: Enable React StrictMode in dev; memoise expensive components;
+  prefer derived data via selectors.
+- **Stability**: Keep JSON stable (deterministic key order) for snapshots and
+  client‑side caches.
 
 ### Security & Privacy (Client‑Side)
 
-- **CSP**: Ship a Content Security Policy where deployment allows it. For SPA hosting, prefer hashed scripts and forbid `eval`/`new Function`.
-- **Trusted Types**: If embedding third‑party HTML, gate through a sanitiser and (where supported) Trusted Types policies.
-- **Secrets**: Never hard‑code secrets in client bundles. Use public, least‑privilege tokens only; treat everything as public.
-- **Origin hygiene**: Centralise fetch base URLs; validate response schemas; handle opaque redirects.
-- **Storage**: Encrypt sensitive data server‑side; treat client storage as untrusted. Namespaced keys; versioned payloads; schema‑validated reads.
+- **CSP**: Ship a Content Security Policy where deployment allows it. For SPA
+  hosting, prefer hashed scripts and forbid `eval`/`new Function`.
+- **Trusted Types**: If embedding third‑party HTML, gate through a sanitiser
+  and (where supported) Trusted Types policies.
+- **Secrets**: Never hard‑code secrets in client bundles. Use public,
+  least‑privilege tokens only; treat everything as public.
+- **Origin hygiene**: Centralise fetch base URLs; validate response schemas;
+  handle opaque redirects.
+- **Storage**: Encrypt sensitive data server‑side; treat client storage as
+  untrusted. Namespaced keys; versioned payloads; schema‑validated reads.
 
 ### React, Tailwind 4, and daisyUI 5
 
-- **Tailwind v4**: Use the new config conventions and JIT‑only pipeline. Co‑locate `@apply` in component‑scoped CSS when it improves clarity; prefer utilities otherwise. Remove unused utilities via content‑aware purge in production.
-- **daisyUI v5**: Keep theme tokens in sync with Tailwind config. Extend rather than override where possible; avoid deep custom CSS that fights component variables.
-- **Design tokens**: Define a single source of truth (CSS variables) for colour, spacing, radius, and typography. Expose tokens to Tailwind via `theme.extend` to keep utilities aligned with design.
-- **A11y**: Use semantic HTML first. Prefer daisyUI components only where they don’t harm semantics. Audit focus states and colour contrast with automated checks.
+- **Tailwind v4**: Use the new config conventions and JIT‑only pipeline.
+  Co‑locate `@apply` in component‑scoped CSS when it improves clarity; prefer
+  utilities otherwise. Remove unused utilities via content‑aware purge in
+  production.
+- **daisyUI v5**: Keep theme tokens in sync with Tailwind config. Extend rather
+  than override where possible; avoid deep custom CSS that fights component
+  variables.
+- **Design tokens**: Define a single source of truth (CSS variables) for
+  colour, spacing, radius, and typography. Expose tokens to Tailwind via
+  `theme.extend` to keep utilities aligned with design.
+- **A11y**: Use semantic HTML first. Prefer daisyUI components only where they
+  don’t harm semantics. Audit focus states and colour contrast with automated
+  checks.
 
 ### TanStack Usage Notes
 
-- **Query**: Co‑locate query keys and fetchers; prefer stable keys; use `select` to project server data for components. Wire `AbortSignal` to fetches. Use `retry` policies appropriate to the endpoint.
-- **Router** (if used): Code‑split per route; prefetch data on navigation where it improves perceived performance. Handle not‑found/unauthorised with typed loaders.
-- **Table** (if used): Keep row models pure; virtualise for large sets; memoise column defs.
+- **Query**: Co‑locate query keys and fetchers; prefer stable keys; use
+  `select` to project server data for components. Wire `AbortSignal` to
+  fetches. Use `retry` policies appropriate to the endpoint.
+- **Router** (if used): Code‑split per route; prefetch data on navigation where
+  it improves perceived performance. Handle not‑found/unauthorised with typed
+  loaders.
+- **Table** (if used): Keep row models pure; virtualise for large sets; memoise
+  column defs.
 
 ### Observability (Frontend)
 
-- **Structured logs**: Gate debug logs behind a flag (`?debug=1` or build‑time define). Use a small logger that emits structured objects in dev and terse strings in prod.
-- **Metrics**: Basic RUM—navigation timings, error counts, and SPA route transitions. Sample aggressively to preserve privacy and cost.
-- **Feature flags**: Centralise flags; keep a kill‑switch for risky features; document fallback behaviour.
+- **Structured logs**: Gate debug logs behind a flag (`?debug=1` or build‑time
+  define). Use a small logger that emits structured objects in dev and terse
+  strings in prod.
+- **Metrics**: Basic RUM—navigation timings, error counts, and SPA route
+  transitions. Sample aggressively to preserve privacy and cost.
+- **Feature flags**: Centralise flags; keep a kill‑switch for risky features;
+  document fallback behaviour.
 
 ### Documentation & Examples
 
-- **Literate examples**: Keep small TS snippets in docs that compile during builds (typecheck only). Prefer examples that mirror production patterns (schema‑validated fetchers, `AbortSignal`, TanStack Query hooks).
-- **Module headers**: Each file begins with `/** @file … */` stating purpose, invariants, and cross‑links to related modules.
-- **Error semantics**: Document user‑visible failure modes next to components and hooks that surface them.
+- **Literate examples**: Keep small TS snippets in docs that compile during
+  builds (typecheck only). Prefer examples that mirror production patterns
+  (schema‑validated fetchers, `AbortSignal`, TanStack Query hooks).
+- **Module headers**: Each file begins with `/** @file … */` stating purpose,
+  invariants, and cross‑links to related modules.
+- **Error semantics**: Document user‑visible failure modes next to components
+  and hooks that surface them.
 
 ### Release Discipline 
 
-- **Conventional Commits + Changesets** for versioning (libraries) and change logs.
-- **SemVer**: Honour breaking changes with a major bump; avoid sneaking them in via dependency updates.
-- **Reproducibility**: Pin tool versions via `.tool-versions`/`.bun-version` (or document required Bun/Node versions). Rebuild the lockfile on major upgrades.
-- **Bundle sanity**: Maintain a bundle size budget; track regressions; document acceptable variances when adding large features.
+- **Conventional Commits + Changesets** for versioning (libraries) and change
+  logs.
+- **SemVer**: Honour breaking changes with a major bump; avoid sneaking them in
+  via dependency updates.
+- **Reproducibility**: Pin tool versions via `.tool-versions`/`.bun-version`
+  (or document required Bun/Node versions). Rebuild the lockfile on major
+  upgrades.
+- **Bundle sanity**: Maintain a bundle size budget; track regressions; document
+  acceptable variances when adding large features.
 
 ### Quick Checklist (Before Commit)
 
-- `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings; no TypeScript errors; coverage thresholds hold.
+- `bun run fmt`, `bun run lint`, `bun test` all clean; no Biome warnings;
+  no TypeScript errors; coverage thresholds hold.
 - `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
-- All async APIs accept `AbortSignal` where relevant; all fetchers validated against runtime schemas.
-- Module headers present; public exports documented; design tokens consistent across Tailwind/daisyUI.
+- All async APIs accept `AbortSignal` where relevant; all fetchers validated
+  against runtime schemas.
+- Module headers present; public exports documented; design tokens consistent
+  across Tailwind/daisyUI.
 
 ## Additional tooling
 
