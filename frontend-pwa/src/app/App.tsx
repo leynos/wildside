@@ -13,17 +13,25 @@ export function App() {
 
   if (isLoading) {
     return (
-      <div className="p-6 min-h-screen bg-base-200 text-base-content" role="status">
+      <p
+        className="p-6 min-h-screen bg-base-200 text-base-content"
+        role="status"
+        aria-live="polite"
+      >
         Loading users…
-      </div>
+      </p>
     );
   }
 
   if (isError) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error({ msg: 'Failed to load users', error });
+    }
     return (
-      <div className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
-        Failed to load users: {(error as Error).message}
-      </div>
+      <p className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
+        Failed to load users. Please try again.
+      </p>
     );
   }
 
@@ -35,11 +43,17 @@ export function App() {
         </a>
       </div>
       <ul className="menu bg-base-100 rounded-box">
-        {(data ?? []).map(u => (
-          <li key={u.id}>
-            <span>{u.display_name}</span>
+        {data && data.length > 0 ? (
+          data.map(u => (
+            <li key={u.id}>
+              <span>{u.display_name}</span>
+            </li>
+          ))
+        ) : (
+          <li>
+            <span>No users found.</span>
           </li>
-        ))}
+        )}
       </ul>
     </div>
   );

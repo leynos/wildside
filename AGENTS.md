@@ -58,7 +58,7 @@
     behaviour being corrected both to validate the fix and to guard against
     regression.
   - Passes all relevant unit and behavioural tests according to the guidelines
-    above. (Use `make test` to verify).
+    above. See “### Testing”. (Use `make test` to verify).
   - Passes lint checks. (Use `make lint` to verify).
   - Adheres to formatting standards tested using a formatting validator. (Use
     `make check-fmt` to verify).
@@ -79,7 +79,7 @@
 
 ## Refactoring Heuristics & Workflow
 
-- **Recognising Refactoring Needs:** Regularly assess the codebase for potential
+- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
   refactoring opportunities. Consider refactoring when you observe:
   - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
@@ -231,7 +231,8 @@ This document mirrors the intent of the Rust guidance—strictness, clarity, and
   - `preview`: `vite preview`
   - `test`: `vitest run --coverage`
   - `audit`: `bun x npm@latest audit`
-  - `audit:snyk`: `bun x snyk test`
+  - `audit:snyk`: `bun x snyk test` (requires `snyk` CLI and authentication;
+    run `snyk auth` locally, and set `SNYK_TOKEN` in CI secrets)
 
 ### Compiler Configuration (Make It Sharp)
 
@@ -292,7 +293,9 @@ Use a strict `tsconfig.json` suitable for browser builds:
 
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde (`~x.y.z`) only with a documented justification.
 - **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep `bun.lockb` ignored.
-- **Audit**: Run `bun run audit` locally and in automation. Track exceptions with explicit expiry dates.
+- **Audit**: Run `bun run audit` locally and in automation. Track exceptions in
+  `security/audit-exceptions.json` with explicit expiry dates, and fail CI when
+  they lapse.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained or risky dependencies swiftly.
 
 ### Linting & Formatting
