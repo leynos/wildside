@@ -1,7 +1,7 @@
 import StyleDictionary from 'style-dictionary';
 import fs from 'node:fs';
 
-const sd = StyleDictionary.extend({
+const sd = new StyleDictionary({
   source: ['src/tokens.json', 'src/themes/*.json'],
   platforms: {
     css: {
