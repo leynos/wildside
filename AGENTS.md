@@ -243,7 +243,8 @@ browser‑only runtime.
   - `test`: `vitest run --coverage`
   - `audit`: `bun x npm@latest audit`
   - `audit:snyk`: `bun x snyk test`
-
+  - Note: `audit` requires a committed `bun.lock`; `audit:snyk` requires
+    installed dependencies—run `bun install` before invoking it.
 ### Compiler Configuration (Make It Sharp)
 
 Use a strict `tsconfig.json` suitable for browser builds:
@@ -334,7 +335,7 @@ Keep docs close to code.
 - **Audit**: Run `bun run audit` locally and in automation. Track exceptions
   with explicit expiry dates.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained
-or risky dependencies swiftly.
+  or risky dependencies swiftly.
 
 ### Linting & Formatting
 
@@ -433,8 +434,8 @@ or risky dependencies swiftly.
 
 ### Quick Checklist (Before Commit)
 
-- `bun run fmt`, `bun run lint`, `bun test` all clean; no Biome warnings; no
-  TypeScript errors; coverage thresholds hold.
+ - `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings;
+  no TypeScript errors; coverage thresholds hold.
 - `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
 - All async APIs accept `AbortSignal` where relevant; all fetchers validated

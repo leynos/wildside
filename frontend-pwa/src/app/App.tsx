@@ -7,23 +7,27 @@ import { listUsers } from '../api/client';
 export function App() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['users'],
-    queryFn: listUsers,
+    queryFn: ({ signal }) => listUsers(signal),
     staleTime: 60_000,
   });
 
   if (isLoading) {
     return (
-      <div className="p-6 min-h-screen bg-base-200 text-base-content" role="status">
+      <output className="p-6 min-h-screen bg-base-200 text-base-content">
         Loading users…
-      </div>
+      </output>
     );
   }
 
   if (isError) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error(error);
+    }
     return (
-      <div className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
-        Failed to load users: {(error as Error).message}
-      </div>
+      <p className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
+        Failed to load users.
+      </p>
     );
   }
 
@@ -35,11 +39,17 @@ export function App() {
         </a>
       </div>
       <ul className="menu bg-base-100 rounded-box">
-        {(data ?? []).map(u => (
-          <li key={u.id}>
-            <span>{u.display_name}</span>
+        {data && data.length > 0 ? (
+          data.map(u => (
+            <li key={u.id}>
+              <span>{u.display_name}</span>
+            </li>
+          ))
+        ) : (
+          <li>
+            <span>No users found.</span>
           </li>
-        ))}
+        )}
       </ul>
     </div>
   );

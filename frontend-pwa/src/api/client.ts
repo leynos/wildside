@@ -1,11 +1,15 @@
 /**
  * @file API client functions generated from OpenAPI.
  */
-import { customFetch } from './fetcher';
+import { z } from 'zod';
+import { customFetchParsed } from './fetcher';
 
-export interface User {
-  id: string;
-  display_name: string;
-}
+const userSchema = z.object({
+  id: z.string(),
+  display_name: z.string(),
+});
 
-export const listUsers = () => customFetch<User[]>('/api/users');
+export type User = z.infer<typeof userSchema>;
+
+export const listUsers = (signal?: AbortSignal) =>
+  customFetchParsed('/api/users', z.array(userSchema), { signal });
