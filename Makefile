@@ -22,6 +22,10 @@ gen:
 	cd frontend-pwa && bunx orval --config orval.config.yaml
 
 docker-up:
+	@if [ ! -d "frontend-pwa/dist" ]; then \
+		echo "Error: frontend-pwa/dist not found. Run: cd frontend-pwa && bun run build"; \
+		exit 1; \
+	fi
 	cd deploy && docker compose up --build -d
 
 docker-down:

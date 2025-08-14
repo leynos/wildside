@@ -8,10 +8,21 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   resolve: {
     alias: {
-      '@app/tokens': resolve(__dirname, '../packages/tokens/dist')
-    }
+      '@app/tokens': resolve(__dirname, '../packages/tokens/dist'),
+    },
   },
   plugins: [react()],
-  server: { port: 5173, strictPort: true },
-  build: { sourcemap: true }
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
+  build: { sourcemap: process.env.SOURCEMAP === 'true' },
 });
