@@ -1,3 +1,6 @@
+/**
+ * @file API client functions generated from OpenAPI.
+ */
 import { customFetch } from './fetcher';
 
 export interface User {
@@ -5,4 +8,4 @@ export interface User {
   display_name: string;
 }
 
-export const getUsers = () => customFetch<User[]>('/api/users');
+export const listUsers = () => customFetch<User[]>('/api/users');
