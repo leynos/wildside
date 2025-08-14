@@ -1,0 +1,33 @@
+{
+  "devDependencies": {
+    "prettier-plugin-sort-json": "^3.0.0"
+  },
+  "name": "myapp",
+  "prettier": {
+    "overrides": [
+      {
+        "files": [
+          "**/*.json"
+        ],
+        "options": {
+          "jsonRecursiveSort": true
+        }
+      }
+    ],
+    "plugins": [
+      "prettier-plugin-sort-json"
+    ]
+  },
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend-pwa",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
