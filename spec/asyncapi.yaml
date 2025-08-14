@@ -1,0 +1,15 @@
+asyncapi: 3.0.0
+info:
+  title: myapp events
+  version: 0.1.0
+channels:
+  /ws:
+    messages:
+      UserCreated:
+        payload:
+          type: object
+          properties:
+            id:
+              type: string
+            display_name:
+              type: string

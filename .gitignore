@@ -1,0 +1,11 @@
+# Rust
+**/target/
+/target
+
+# Node
+node_modules/
+**/dist/
+
+# Misc
+.DS_Store
+bun.lockb

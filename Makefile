@@ -1,42 +1,48 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
+.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint
 
-APP ?= wildside
-CARGO ?= cargo
-BUILD_JOBS ?=
-CLIPPY_FLAGS ?= --all-targets --all-features -- -D warnings
-MDLINT ?= markdownlint
-NIXIE ?= nixie
+all: fmt lint test
 
-build: target/debug/$(APP) ## Build debug binary
-release: target/release/$(APP) ## Build release binary
+clean:
+	cargo clean --manifest-path backend/Cargo.toml
+	rm -rf frontend-pwa/node_modules packages/tokens/node_modules
 
-all: release ## Default target builds release binary
+be:
+	cargo run --manifest-path backend/Cargo.toml
 
-clean: ## Remove build artifacts
-	$(CARGO) clean
+fe:
+	# Long-running dev server
+	cd frontend-pwa && bun dev
 
-test: ## Run tests with warnings treated as errors
-	RUSTFLAGS="-D warnings" $(CARGO) test --all-targets --all-features $(BUILD_JOBS)
+openapi:
+	# Replace with a bin that prints OpenAPI
+	mkdir -p spec
+	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
 
-target/%/$(APP): ## Build binary in debug or release mode
-	$(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --bin $(APP)
+gen:
+	cd frontend-pwa && bunx orval --config orval.config.yaml
 
-lint: ## Run Clippy with warnings denied
-	$(CARGO) clippy $(CLIPPY_FLAGS)
+docker-up:
+	@if [ ! -d "frontend-pwa/dist" ]; then \
+		echo "Error: frontend-pwa/dist not found. Run: cd frontend-pwa && bun run build"; \
+		exit 1; \
+	fi
+	cd deploy && docker compose up --build -d
 
-fmt: ## Format Rust and Markdown sources
-	$(CARGO) fmt --all
-	mdformat-all
+docker-down:
+	cd deploy && docker compose down
 
-check-fmt: ## Verify formatting
-	$(CARGO) fmt --all -- --check
+fmt:
+	cargo fmt --manifest-path backend/Cargo.toml --all
 
-markdownlint: ## Lint Markdown files
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- $(MDLINT)
 
-nixie: ## Validate Mermaid diagrams
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -n 1 -- $(NIXIE)
+lint:
+	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 
-help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
-	awk 'BEGIN {FS=":"; printf "Available targets:\n"} {printf "  %-20s %s\n", $$1, $$2}'
+test:
+	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+
+check-fmt:
+	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
+
+markdownlint:
+	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint

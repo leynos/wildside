@@ -1,0 +1,21 @@
+{
+  "semantic": {
+    "bg": {
+      "default": { "value": "{color.neutral.900}", "description": "Surface" },
+      "subtle": { "value": "{color.neutral.800}", "description": "Raised surface" },
+      "inverted": { "value": "{color.neutral.0}", "description": "Light surface for inverted areas" }
+    },
+    "fg": {
+      "default": { "value": "{color.neutral.0}", "description": "Primary text" },
+      "muted": { "value": "{color.neutral.50}", "description": "Muted text" },
+      "inverted": { "value": "{color.neutral.900}", "description": "Text on light surfaces" }
+    },
+    "brand": {
+      "default": { "value": "{color.primary.500}", "description": "Brand colour" },
+      "hover": { "value": "{color.primary.600}", "description": "Brand hover" },
+      "contrast": { "value": "{color.neutral.900}", "description": "Text on brand" },
+      "muted": { "value": "{color.primary.400}", "description": "Subtle brand elements" }
+    }
+  }
+}
+

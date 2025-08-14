@@ -28,7 +28,7 @@
   examples demonstrating the usage and outcome of the function. Test
   documentation should omit examples where the example serves only to reiterate
   the test logic.
-- **Keep file size managable.** No single code file may be longer than 400
+- **Keep file size manageable.** No single code file may be longer than 400
   lines. Long switch statements or dispatch tables should be broken up by
   feature and constituents colocated with targets. Large blocks of test data
   should be moved to external data files.
@@ -57,8 +57,8 @@
   - Where a bug is being fixed, a unittest has been provided demonstrating the
     behaviour being corrected both to validate the fix and to guard against
     regression.
-  - Passes all relevant unit and behavioral tests according to the guidelines
-    above. (Use `make test` to verify).
+  - Passes all relevant unit and behavioural tests according to the guidelines
+    above. See “### Testing”. (Use `make test` to verify).
   - Passes lint checks. (Use `make lint` to verify).
   - Adheres to formatting standards tested using a formatting validator. (Use
     `make check-fmt` to verify).
@@ -104,7 +104,7 @@
 - **Separate Atomic Refactors:** If refactoring is deemed necessary:
   - Perform the refactoring as a **separate, atomic commit** *after* the
     functional change commit.
-  - Ensure the refactoring adheres to the testing guidelines (behavioral tests
+  - Ensure the refactoring adheres to the testing guidelines (behavioural tests
     pass before and after, unit tests added for new units).
   - Ensure the refactoring commit itself passes all quality gates.
 
@@ -241,7 +241,9 @@ browser‑only runtime.
   - `build`: `vite build`
   - `preview`: `vite preview`
   - `test`: `vitest run --coverage`
-  - `audit`: `bun audit`
+  - `audit`: `bun x npm@latest audit`
+  - `audit:snyk`: `bun x snyk test` (requires `snyk` CLI and authentication;
+    run `snyk auth` locally, and set `SNYK_TOKEN` in CI secrets)
 
 ### Compiler Configuration (Make It Sharp)
 
@@ -328,9 +330,10 @@ Keep docs close to code.
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct
   dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde
   (`~x.y.z`) only with a documented justification.
-- **Lockfile**: Commit `bun.lockb`. Recreate on major tool upgrades.
-- **Audit**: Run `bun audit` locally and in automation. Track exceptions with
-  explicit expiry dates.
+- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep 
+  `bun.lockb` ignored.
+- **Audit**: Run `bun run audit` locally and in automation. Track exceptions
+  with explicit expiry dates.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained
   or risky dependencies swiftly.
 
@@ -431,9 +434,9 @@ Keep docs close to code.
 
 ### Quick Checklist (Before Commit)
 
-- `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings;
+- `bun run fmt`, `bun run lint`, `bun test` all clean; no Biome warnings;
   no TypeScript errors; coverage thresholds hold.
-- `bun audit` passes or has justified, time‑boxed exceptions.
+- `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
 - All async APIs accept `AbortSignal` where relevant; all fetchers validated
   against runtime schemas.
