@@ -46,7 +46,13 @@ jobs:
           fi
 
       # Frontend
-      - name: Build tokens & PWA
+      - name: Build tokens
+        working-directory: packages/tokens
         run: |
-          cd packages/tokens && bun install && bun run build
-          cd ../../frontend-pwa && bun install && bun run build
+          bun install
+          bun run build
+      - name: Build PWA
+        working-directory: frontend-pwa
+        run: |
+          bun install
+          bun run build

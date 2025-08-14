@@ -9,10 +9,16 @@ export function App() {
   return (
     <div className="p-6 min-h-screen bg-base-200 text-base-content">
       <div className="navbar bg-base-100 rounded-box mb-6">
-        <a className="btn btn-ghost text-xl">myapp</a>
+        <a className="btn btn-ghost text-xl" href="/">
+          myapp
+        </a>
       </div>
       <ul className="menu bg-base-100 rounded-box">
-        {(data ?? []).map(u => <li key={u.id}><a>{u.display_name}</a></li>)}
+        {(data ?? []).map(u => (
+          <li key={u.id}>
+            <span>{u.display_name}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );
