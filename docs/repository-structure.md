@@ -11,6 +11,30 @@ A practical design for a web application with a Rust/Actix backend and a React
   with static assets served from object storage/CDN.
 - Bun as the JS runtime/package manager.
 
+A typical request flow is illustrated below:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Browser
+  participant Nginx
+  participant Backend
+  participant Swagger
+
+  Browser->>Nginx: GET /
+  Nginx-->>Browser: index.html + assets
+  Browser->>Nginx: GET /api/users
+  Nginx->>Backend: proxy /api/users
+  Backend-->>Nginx: 200 [User[]]
+  Nginx-->>Browser: 200 [User[]]
+  Browser->>Backend: GET /api-docs/openapi.json
+  Backend-->>Browser: OpenAPI JSON
+  Browser->>Backend: GET /ws (upgrade)
+  Backend-->>Browser: WebSocket upgrade (heartbeat)
+  Browser->>Swagger: GET /docs
+  Swagger-->>Browser: Swagger UI
+```
+
 ---
 
 ## 1) Monorepo Layout
