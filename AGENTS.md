@@ -270,9 +270,11 @@ Keep docs close to code.
   mutating props or inputs.
 - **Functions**: Extract meaningfully named helpers when a function grows long.
   Keep trivial functions on one line when readability allows:
+
   ```ts
   export const mkId = (n: number): Id => new Id(n);
   ```
+
 - **Parameters**: Group related parameters into typed objects or builders;
   avoid long positional lists.
 - **Predicates**: When `if/else` grows beyond two branches, extract a predicate
@@ -290,9 +292,11 @@ Keep docs close to code.
   derive schemas from types, but add a CI check to keep them in sync.
 - **Nominal branding**: Use branded types for IDs/tokens to avoid accidental
   mixing:
+
   ```ts
   type UserId = string & { readonly brand: "UserId" };
   ```
+
 - **Cancellation**: Accept `AbortSignal` for any async that can hang (fetches,
   long UI work). Wire signals through TanStack Query via `signal` in fetchers.
 - **Time & RNG**: Centralise `now()` and `rng()` adapters; never call
@@ -330,7 +334,7 @@ Keep docs close to code.
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct
   dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde
   (`~x.y.z`) only with a documented justification.
-- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep 
+- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep
   `bun.lockb` ignored.
 - **Audit**: Run `bun run audit` locally and in automation. Track exceptions
   with explicit expiry dates.
@@ -420,7 +424,7 @@ Keep docs close to code.
 - **Error semantics**: Document user‑visible failure modes next to components
   and hooks that surface them.
 
-### Release Discipline 
+### Release Discipline
 
 - **Conventional Commits + Changesets** for versioning (libraries) and change
   logs.

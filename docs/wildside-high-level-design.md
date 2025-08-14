@@ -1431,198 +1431,198 @@ how people experience and connect with the cities around them.
 
 ## Works cited
 
-1. API Pricing - OpenAI, https://openai.com/api/pricing/
+1. API Pricing - OpenAI, <https://openai.com/api/pricing/>
 2. ZeLonewolf's Diary | Host an OpenMapTiles Vector Tile Server on AWS for
    $19.75/month | OpenStreetMap,
-   https://www.openstreetmap.org/user/ZeLonewolf/diary/401697
+   <https://www.openstreetmap.org/user/ZeLonewolf/diary/401697>
 3. Comparing React Native vs Capacitor - Capgo,
-   https://capgo.app/blog/comparing-react-native-vs-capacitor/
+   <https://capgo.app/blog/comparing-react-native-vs-capacitor/>
 4. Capacitor vs React Native - Reveation Labs,
-   https://www.reveation.io/blog/capacitor-vs-react-native
-5. Using Capacitor with React, https://capacitorjs.com/solution/react
+   <https://www.reveation.io/blog/capacitor-vs-react-native>
+5. Using Capacitor with React, <https://capacitorjs.com/solution/react>
 6. Team Orienteering Problem with Time Windows and Variable Profit - Annals of
    Computer Science and Information Systems,
-   https://annals-csis.org/Volume_30/drp/pdf/158.pdf
+   <https://annals-csis.org/Volume_30/drp/pdf/158.pdf>
 7. [2506.08837] Design Patterns for Securing LLM Agents against Prompt
-   Injections - arXiv, https://arxiv.org/abs/2506.08837
+   Injections - arXiv, <https://arxiv.org/abs/2506.08837>
 8. Geometa Lab at IFS / OpenStreetMap Wikidata Quality Checker - GitLab,
-   https://gitlab.com/geometalab/osm-wikidata-quality-checker
+   <https://gitlab.com/geometalab/osm-wikidata-quality-checker>
 9. LLM Chronicles #6.9: Design Patterns for Securing LLM Agents Against Prompt
    Injection (Paper Review) - YouTube,
-   https://www.youtube.com/watch?v=2Er7bmyhPfM
+   <https://www.youtube.com/watch?v=2Er7bmyhPfM>
 10. Wikidata for Digital Preservationists,
-    https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file
+    <https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file>
 11. Intent Classification using LLMs (Hybrid) - Voiceflow's docs,
-    https://docs.voiceflow.com/docs/llm-intent-classification-method
+    <https://docs.voiceflow.com/docs/llm-intent-classification-method>
 12. Comparing React Native vs. Vue and Capacitor - LogRocket Blog,
-    https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/
+    <https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/>
 13. Tauri vs. Electron: performance, bundle size, and the real trade-offs -
-    Hopp, https://www.gethopp.app/blog/tauri-vs-electron
+    Hopp, <https://www.gethopp.app/blog/tauri-vs-electron>
 14. Tauri vs. Electron: A New Dawn in Desktop App Development | by DhruvK_Sethi
-    | Medium, https://medium.com/@DhruvK_Sethi/tauri-vs-electron-a-new-dawn-in-desktop-app-development-16f13372b8fc |
+    | Medium, <https://medium.com/@DhruvK_Sethi/tauri-vs-electron-a-new-dawn-in-desktop-app-development-16f13372b8fc> |
 15. Tauri VS. Electron - Real world application - Levminer,
-    https://www.levminer.com/blog/tauri-vs-electron
+    <https://www.levminer.com/blog/tauri-vs-electron>
 16. Tauri vs Electron: The best Electron alternative created yet -
-    Astrolytics.io analytics, https://www.astrolytics.io/blog/electron-vs-tauri
+    Astrolytics.io analytics, <https://www.astrolytics.io/blog/electron-vs-tauri>
 17. Comparing Diesel and rust-postgres | by Sean Griffin | HackerNoon.com -
     Medium,
-    https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd
+    <https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd>
 18. TypeScript vs. JavaScript: Which One to Choose in 2025? - Carmatec,
-    https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/
+    <https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/>
 19. Rust Web Frameworks Compared: Actix vs Axum vs Rocket - DEV Community,
-    https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad
+    <https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad>
 20. OR-Tools' Vehicle Routing Solver: a Generic Constraint-Programming Solver
     with Heuristic Search for Routing Problems - Google Research,
-    https://research.google/pubs/or-tools-vehicle-routing-solver-a-generic-constraint-programming-solver-with-heuristic-search-for-routing-problems/
-21. PostGIS, https://postgis.net/
+    <https://research.google/pubs/or-tools-vehicle-routing-solver-a-generic-constraint-programming-solver-with-heuristic-search-for-routing-problems/>
+21. PostGIS, <https://postgis.net/>
 22. The best React UI component libraries of 2025 | Croct Blog,
-    https://blog.croct.com/post/best-react-ui-component-libraries
+    <https://blog.croct.com/post/best-react-ui-component-libraries>
 23. Solving Orienteering Problem with Advanced Techniques - Number Analytics,
-    https://www.numberanalytics.com/blog/advanced-orienteering-problem-solutions
+    <https://www.numberanalytics.com/blog/advanced-orienteering-problem-solutions>
 24. Leaflet migration guide - MapLibre GL JS,
-    https://maplibre.org/maplibre-gl-js/docs/guides/leaflet-migration-guide/
+    <https://maplibre.org/maplibre-gl-js/docs/guides/leaflet-migration-guide/>
 25. Pricing - Anthropic API,
-    https://docs.anthropic.com/en/docs/about-claude/pricing
+    <https://docs.anthropic.com/en/docs/about-claude/pricing>
 26. Don't trust the LLM: Rethinking LLM Architectures for Better Security -
-    Mindgard AI, https://mindgard.ai/blog/llm-architecture-positioning
+    Mindgard AI, <https://mindgard.ai/blog/llm-architecture-positioning>
 27. Worry-Free Managed PostgreSQL Hosting - DigitalOcean,
-    https://www.digitalocean.com/products/managed-databases-postgresql
-28. Redis Cloud Pricing, https://redis.io/pricing/
+    <https://www.digitalocean.com/products/managed-databases-postgresql>
+28. Redis Cloud Pricing, <https://redis.io/pricing/>
 29. The Data Model of OpenStreetMap - Overpass API,
-    https://dev.overpass-api.de/overpass-doc/en/preface/osm_data_model.html
-30. Wikidata - OpenStreetMap Wiki, https://wiki.openstreetmap.org/wiki/Wikidata
+    <https://dev.overpass-api.de/overpass-doc/en/preface/osm_data_model.html>
+30. Wikidata - OpenStreetMap Wiki, <https://wiki.openstreetmap.org/wiki/Wikidata>
 31. The cooperative orienteering problem with time windows - Optimization
-    Online, https://optimization-online.org/wp-content/uploads/2014/04/4316.pdf
+    Online, <https://optimization-online.org/wp-content/uploads/2014/04/4316.pdf>
 32. I'm a bit uncertain about what Google OR-Tools is…it *seems* to be some
-    sort of - Hacker News, https://news.ycombinator.com/item?id=22582688
+    sort of - Hacker News, <https://news.ycombinator.com/item?id=22582688>
 33. JSONB PostgreSQL: How To Store & Index JSON Data - ScaleGrid,
-    https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/
+    <https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/>
 34. Best Walking Apps (2025) - Garage Gym Reviews,
-    https://www.garagegymreviews.com/best-walking-apps
+    <https://www.garagegymreviews.com/best-walking-apps>
 35. 14 Best Walking Trip Planner Apps in 2025 - Upper,
-    https://www.upperinc.com/blog/best-walking-route-planner-apps/
+    <https://www.upperinc.com/blog/best-walking-route-planner-apps/>
 36. User:Krauss/Wikidata-question1 - OpenStreetMap Wiki,
-    https://wiki.openstreetmap.org/wiki/User:Krauss/Wikidata-question1
+    <https://wiki.openstreetmap.org/wiki/User:Krauss/Wikidata-question1>
 37. Software MVP: Monolith vs Other Form : r/startups - Reddit,
-    https://www.reddit.com/r/startups/comments/125u276/software_mvp_monolith_vs_other_form/
+    <https://www.reddit.com/r/startups/comments/125u276/software_mvp_monolith_vs_other_form/>
 38. Rust Web Frameworks Compared: Actix vs Axum vs Rocket | by Leapcell | Jul,
     2025,
-    https://leapcell.medium.com/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-20f0cc8a6cda
+    <https://leapcell.medium.com/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-20f0cc8a6cda>
 39. Unleashing the Power of Rust in GIS Development - GEO Jobe,
-    https://geo-jobe.com/mapthis/unleashing-the-power-of-rust-in-gis-development/
+    <https://geo-jobe.com/mapthis/unleashing-the-power-of-rust-in-gis-development/>
 40. TanStack Query: A Powerful Tool for Data Management in React - Medium,
-    https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c
+    <https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c>
 41. Self Host LLM vs Api LLM : r/AI_Agents - Reddit,
-    https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/
+    <https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/>
 42. How to Monitor Your LLM API Costs and Cut Spending by 90% - Helicone,
-    https://www.helicone.ai/blog/monitor-and-optimize-llm-costs
+    <https://www.helicone.ai/blog/monitor-and-optimize-llm-costs>
 43. Load OpenStreetMap data to PostGIS - Blog @ RustProof Labs,
-    https://blog.rustprooflabs.com/2019/01/postgis-osm-load
+    <https://blog.rustprooflabs.com/2019/01/postgis-osm-load>
 44. Using OpenStreetMap data - Algorithms,
-    https://algo.win.tue.nl/tutorials/openstreetmap/
+    <https://algo.win.tue.nl/tutorials/openstreetmap/>
 45. A Practical Review: Solving Vehicle Routing Problems with OR-Tools and
     SCIP,
-    https://dev.to/thana_b/a-practical-review-solving-vehicle-routing-problems-with-or-tools-and-scip-52me
+    <https://dev.to/thana_b/a-practical-review-solving-vehicle-routing-problems-with-or-tools-and-scip-52me>
 46. GPSmyCity: Walks in 1K+ Cities - App Store,
-    https://apps.apple.com/us/app/gpsmycity-walks-in-1k-cities/id417207307
+    <https://apps.apple.com/us/app/gpsmycity-walks-in-1k-cities/id417207307>
 47. Top 11 Multi-Stop Route Planner Apps in 2025,
-    https://www.upperinc.com/blog/best-multi-stop-route-planner-app/
-48. Home - osm2pgsql, https://osm2pgsql.org/
-49. Claude Sonnet 4 - Anthropic, https://www.anthropic.com/claude/sonnet
+    <https://www.upperinc.com/blog/best-multi-stop-route-planner-app/>
+48. Home - osm2pgsql, <https://osm2pgsql.org/>
+49. Claude Sonnet 4 - Anthropic, <https://www.anthropic.com/claude/sonnet>
 50. Tour Guide Apps Development 101 - Krasamo,
-    https://www.krasamo.com/tour-guide-apps/
+    <https://www.krasamo.com/tour-guide-apps/>
 51. Vite vs. Next.js: Features, Comparisons, Pros & Cons, & More - Prismic,
-    https://prismic.io/blog/vite-vs-nextjs
+    <https://prismic.io/blog/vite-vs-nextjs>
 52. What is DaisyUI? Advantages, Disadvantages, and FAQ's - By SW Habitation,
-    https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs
+    <https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs>
 53. daisyUI adoption guide: Overview, examples, and alternatives - LogRocket
-    Blog, https://blog.logrocket.com/daisyui-adoption-guide/
+    Blog, <https://blog.logrocket.com/daisyui-adoption-guide/>
 54. DaisyUI vs Mantine: Which One is Better in 2025? - Subframe,
-    https://www.subframe.com/tips/daisyui-vs-mantine
+    <https://www.subframe.com/tips/daisyui-vs-mantine>
 55. My Favorite Tailwind Library | Daisy UI - DEV Community,
-    https://dev.to/thatanjan/my-favorite-tailwind-library-daisy-ui-2n3j
+    <https://dev.to/thatanjan/my-favorite-tailwind-library-daisy-ui-2n3j>
 56. DaisyUI Reviews (2025) - Product Hunt,
-    https://www.producthunt.com/products/daisyui/reviews
+    <https://www.producthunt.com/products/daisyui/reviews>
 57. Comparison of UI libraries for React : r/reactjs - Reddit,
-    https://www.reddit.com/r/reactjs/comments/vtgbai/comparison_of_ui_libraries_for_react/
+    <https://www.reddit.com/r/reactjs/comments/vtgbai/comparison_of_ui_libraries_for_react/>
 58. Daisy UI is a godsend : r/Frontend - Reddit,
-    https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/
+    <https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/>
 59. AllTrails Review - Exploration Solo,
-    https://explorationsolo.com/alltrails-review/
+    <https://explorationsolo.com/alltrails-review/>
 60. Is AllTrails+ worth it? (Spoiler: It isn't for everyone but it is for this
-    type of hiker.), https://uprootedtraveler.com/is-alltrails-pro-worth-it/
+    type of hiker.), <https://uprootedtraveler.com/is-alltrails-pro-worth-it/>
 61. Visit A City - Apps on Google Play,
-    https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp
+    <https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp>
 62. Top 12 Features to Look for in a Modern Tour Guide App - Vox Tours,
-    https://voxtours.com/12-features-to-look-for-in-a-modern-tour-guide-app/
+    <https://voxtours.com/12-features-to-look-for-in-a-modern-tour-guide-app/>
 63. React Component Libraries - Mismo,
-    https://mismo.team/react-component-libraries-comparison-mui-vs-mantine/
+    <https://mismo.team/react-component-libraries-comparison-mui-vs-mantine/>
 64. Diesel is a Safe, Extensible ORM and Query Builder for Rust,
-    https://diesel.rs/
+    <https://diesel.rs/>
 65. Self-Hosting vs Managed Hosting - Which Suits Your Business? - MGT
-    Commerce, https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/
+    Commerce, <https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/>
 66. 11 Best Free Route Planners with Unlimited Stops - Maptive,
-    https://www.maptive.com/free-route-planners-with-unlimited-stops/
+    <https://www.maptive.com/free-route-planners-with-unlimited-stops/>
 67. Point-of-interest lists and their potential in recommendation systems -
-    PMC, https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/
+    PMC, <https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/>
 68. TypeScript vs JavaScript: Which is Better for Your Next Project? - Medium,
-    https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499
+    <https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499>
 69. Intent Recognition using a LLM with Predefined Intentions | by Ai
     insightful - Medium,
-    https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7
+    <https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7>
 70. PostgreSQL Pricing | DigitalOcean Documentation,
-    https://docs.digitalocean.com/products/databases/postgresql/details/pricing/
+    <https://docs.digitalocean.com/products/databases/postgresql/details/pricing/>
 71. Heroku PostgreSQL vs. Amazon RDS for PostgreSQL - CloudBees,
-    https://www.cloudbees.com/blog/heroku-postgresql-versus-amazon-rds-postgresql
+    <https://www.cloudbees.com/blog/heroku-postgresql-versus-amazon-rds-postgresql>
 72. Heroku Postgres - Add-ons,
-    https://elements.heroku.com/addons/heroku-postgresql
+    <https://elements.heroku.com/addons/heroku-postgresql>
 73. A Straightforward Comparison Of Mantine Vs Chakra | Magic UI,
-    https://magicui.design/blog/mantine-vs-chakra
+    <https://magicui.design/blog/mantine-vs-chakra>
 74. Flexible pricing for online mapping - MapTiler,
-    https://www.maptiler.com/cloud/pricing/
+    <https://www.maptiler.com/cloud/pricing/>
 75. Choosing the best graph database for your organization: A practical guide -
-    Linkurious, https://linkurious.com/blog/choosing-the-best-graph-database/
+    Linkurious, <https://linkurious.com/blog/choosing-the-best-graph-database/>
 76. Diesel: A Safe, Extensible ORM and Query Builder for Rust | Hacker News,
-    https://news.ycombinator.com/item?id=11045412
+    <https://news.ycombinator.com/item?id=11045412>
 77. A Primer on Tailwind CSS: Pros, Cons & Real-World Use Cases - Telerik.com,
-    https://www.telerik.com/blogs/primer-tailwind-css-pros-cons-real-world-use-cases
+    <https://www.telerik.com/blogs/primer-tailwind-css-pros-cons-real-world-use-cases>
 78. OpenStreetMap Data Model - Itinero - Documentation,
-    https://docs.itinero.tech/docs/osmsharp/osm.html
+    <https://docs.itinero.tech/docs/osmsharp/osm.html>
 79. LLM Prompt Injection Prevention - OWASP Cheat Sheet Series,
-    https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
+    <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html>
 80. Amazon RDS for PostgreSQL Pricing,
-    https://aws.amazon.com/rds/postgresql/pricing/
+    <https://aws.amazon.com/rds/postgresql/pricing/>
 81. Mistral 7B System Requirements: What You Need to Run It Locally,
-    https://www.oneclickitsolution.com/centerofexcellence/aiml/run-mistral-7b-locally-hardware-software-specs
+    <https://www.oneclickitsolution.com/centerofexcellence/aiml/run-mistral-7b-locally-hardware-software-specs>
 82. TypeScript vs JavaScript Which is Best for Web Development - Moon
-    Technolabs, https://www.moontechnolabs.com/blog/typescript-vs-javascript/
+    Technolabs, <https://www.moontechnolabs.com/blog/typescript-vs-javascript/>
 83. Vehicle Routing Problem | OR-Tools - Google for Developers,
-    https://developers.google.com/optimization/routing/vrp
+    <https://developers.google.com/optimization/routing/vrp>
 84. Prompt Injection Attacks in LLMs: Mitigating Risks with Microsegmentation -
     ColorTokens,
-    https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/
+    <https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/>
 85. Orienteering Problem: A survey of recent variants, solution approaches and
     applications,
-    https://smusg.elsevierpure.com/en/publications/orienteering-problem-a-survey-of-recent-variants-solution-approac
+    <https://smusg.elsevierpure.com/en/publications/orienteering-problem-a-survey-of-recent-variants-solution-approac>
 86. Personalized Tour Recommendation Based on User Interests and Points of
     Interest Visit Durations - IJCAI,
-    https://www.ijcai.org/Proceedings/15/Papers/253.pdf
+    <https://www.ijcai.org/Proceedings/15/Papers/253.pdf>
 87. The Orienteering Problem: A Review of Variants and Solution Approaches -
     ResearchGate,
-    https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches
+    <https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches>
 88. An iterated local search algorithm for solving the Orienteering Problem
-    with Time Windows - InK@SMU.edu.sg,
-    https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research
+    with Time Windows - <InK@SMU.edu.sg>,
+    <https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research>
 89. Asynchronous State Management with TanStack Query - Atlantbh Sarajevo,
-    https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/
+    <https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/>
 90. Preparing Geospatial Data in PostGIS - Benny's Mind Hack,
-    https://bennycheung.github.io/preparing-geospatial-data-in-postgis
+    <https://bennycheung.github.io/preparing-geospatial-data-in-postgis>
 91. Osm2pgsql - OpenStreetMap Wiki,
-    https://wiki.openstreetmap.org/wiki/Osm2pgsql
-92. Pricing | Render, https://render.com/pricing
+    <https://wiki.openstreetmap.org/wiki/Osm2pgsql>
+92. Pricing | Render, <https://render.com/pricing>
 93. Monolith vs. Microservices Architecture - DevZero,
-    https://www.devzero.io/blog/monolith-vs-microservices
+    <https://www.devzero.io/blog/monolith-vs-microservices>
 94. How to Balance The Pros and Cons of Tailwind CSS - Blogs - Purecode.AI,
-    https://blogs.purecode.ai/blogs/pros-cons-tailwind
+    <https://blogs.purecode.ai/blogs/pros-cons-tailwind>
 95. Render PostgreSQL | FindDevTools,
-    https://finddev.tools/about/render-postgresql
+    <https://finddev.tools/about/render-postgresql>

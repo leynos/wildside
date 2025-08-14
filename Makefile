@@ -33,7 +33,7 @@ docker-down:
 
 fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all
-
+	mdformat-all
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
