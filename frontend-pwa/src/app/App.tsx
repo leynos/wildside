@@ -7,30 +7,26 @@ import { listUsers } from '../api/client';
 export function App() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['users'],
-    queryFn: listUsers,
+    queryFn: ({ signal }) => listUsers(signal),
     staleTime: 60_000,
   });
 
   if (isLoading) {
     return (
-      <p
-        className="p-6 min-h-screen bg-base-200 text-base-content"
-        role="status"
-        aria-live="polite"
-      >
+      <output className="p-6 min-h-screen bg-base-200 text-base-content">
         Loading users…
-      </p>
+      </output>
     );
   }
 
   if (isError) {
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.error({ msg: 'Failed to load users', error });
+      console.error(error);
     }
     return (
       <p className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
-        Failed to load users. Please try again.
+        Failed to load users.
       </p>
     );
   }

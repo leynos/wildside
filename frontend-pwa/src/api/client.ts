@@ -8,8 +8,8 @@ const userSchema = z.object({
   id: z.string(),
   display_name: z.string(),
 });
-export type User = z.infer<typeof userSchema>;
-const usersSchema = z.array(userSchema);
 
-export const listUsers = ({ signal }: { signal?: AbortSignal } = {}) =>
-  customFetchParsed('/api/users', usersSchema, { signal });
+export type User = z.infer<typeof userSchema>;
+
+export const listUsers = (signal?: AbortSignal) =>
+  customFetchParsed('/api/users', z.array(userSchema), { signal });
