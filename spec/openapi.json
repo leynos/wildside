@@ -11,7 +11,7 @@
   "paths": {
     "/api/users": {
       "get": {
-        "tags": [],
+        "tags": ["users"],
         "operationId": "listUsers",
         "responses": {
           "200": {

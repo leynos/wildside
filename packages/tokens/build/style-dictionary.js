@@ -24,7 +24,7 @@ const sd = StyleDictionary.extend({
 
 sd.buildAllPlatforms();
 
-// naive tw + daisy mappers (replace with richer mapping later)
+// Map tokens into Tailwind and DaisyUI presets
 const tokens = JSON.parse(fs.readFileSync('src/tokens.json', 'utf-8'));
 const unwrap = input =>
   Object.fromEntries(
@@ -47,15 +47,25 @@ const preset = {
 };
 fs.writeFileSync('dist/tw/preset.cjs', `module.exports=${JSON.stringify(preset)}`);
 
-const light = JSON.parse(fs.readFileSync('src/themes/light.json', 'utf-8'));
-const semantic = unwrap(light.semantic);
-const theme = {
-  primary: semantic.brand.default,
-  'primary-focus': semantic.brand.hover,
-  'primary-content': semantic.brand.contrast,
-  'base-100': semantic.bg.default,
-  'base-200': semantic.bg.subtle,
-  'base-content': semantic.fg.default,
-  'base-content-muted': semantic.fg.muted
-};
-fs.writeFileSync('dist/daisy/theme.cjs', `module.exports={themes:[${JSON.stringify(theme)}]}`);
+const themesDir = 'src/themes';
+const themeFiles = fs.readdirSync(themesDir).filter(f => f.endsWith('.json'));
+const daisyThemes = themeFiles.map(file => {
+  const json = JSON.parse(fs.readFileSync(`${themesDir}/${file}`, 'utf-8'));
+  const semantic = unwrap(json.semantic ?? {});
+  return {
+    ...(json.name ? { name: json.name } : {}),
+    primary: semantic?.brand?.default ?? '#000000',
+    'primary-focus': semantic?.brand?.hover ?? '#000000',
+    'primary-content': semantic?.brand?.contrast ?? '#111111',
+    'base-100': semantic?.bg?.default ?? '#ffffff',
+    'base-200': semantic?.bg?.subtle ?? '#f4f4f5',
+    'base-content': semantic?.fg?.default ?? '#111111',
+    'base-content-muted': semantic?.fg?.muted ?? '#4b5563'
+  };
+});
+fs.mkdirSync('dist/daisy', { recursive: true });
+fs.writeFileSync(
+  'dist/daisy/theme.cjs',
+  `module.exports = {themes: ${JSON.stringify(daisyThemes)}};\n`,
+  'utf-8'
+);

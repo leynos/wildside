@@ -1,13 +1,21 @@
-.PHONY: be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint
+.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint
+
+all: fmt lint test
+
+clean:
+	cargo clean --manifest-path backend/Cargo.toml
+	rm -rf frontend-pwa/node_modules packages/tokens/node_modules
 
 be:
 	cargo run --manifest-path backend/Cargo.toml
 
 fe:
+	# Long-running dev server
 	cd frontend-pwa && bun dev
 
 openapi:
 	# Replace with a bin that prints OpenAPI
+	mkdir -p spec
 	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
 
 gen:
