@@ -1,7 +1,12 @@
 {
   "name": "@app/tokens",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
-  "scripts": { "build": "node build/style-dictionary.js" },
-  "devDependencies": { "style-dictionary": "^4" }
+  "scripts": {
+    "build": "node build/style-dictionary.js",
+    "postinstall": "node build/style-dictionary.js"
+  },
+  "devDependencies": { "style-dictionary": "^4" },
+  "engines": { "node": ">=18.17" }
 }

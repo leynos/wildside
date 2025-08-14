@@ -23,5 +23,11 @@
   "workspaces": [
     "frontend-pwa",
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
 }

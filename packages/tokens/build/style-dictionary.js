@@ -12,12 +12,12 @@ const sd = StyleDictionary.extend({
     tailwind: {
       transformGroup: 'js',
       buildPath: 'dist/tw/',
-      files: [{ destination: 'preset.cjs', format: 'javascript/module' }]
+      files: [{ destination: 'preset.js', format: 'javascript/module' }]
     },
     daisy: {
       transformGroup: 'js',
       buildPath: 'dist/daisy/',
-      files: [{ destination: 'theme.cjs', format: 'javascript/module' }]
+      files: [{ destination: 'theme.js', format: 'javascript/module' }]
     }
   }
 });
@@ -37,15 +37,20 @@ const unwrap = input =>
 const preset = {
   theme: {
     extend: {
-      spacing: unwrap(tokens.space),
-      borderRadius: unwrap(tokens.radius),
+      spacing: unwrap(tokens.space ?? {}),
+      borderRadius: unwrap(tokens.radius ?? {}),
       colors: Object.fromEntries(
-        Object.entries(tokens.color).map(([k, v]) => [k, unwrap(v)])
+        Object.entries(tokens.color ?? {}).map(([k, v]) => [k, unwrap(v)])
       )
     }
   }
 };
-fs.writeFileSync('dist/tw/preset.cjs', `module.exports=${JSON.stringify(preset)}`);
+fs.mkdirSync('dist/tw', { recursive: true });
+fs.writeFileSync(
+  'dist/tw/preset.js',
+  `export default ${JSON.stringify(preset)};\n`,
+  'utf-8'
+);
 
 const themesDir = 'src/themes';
 const themeFiles = fs.readdirSync(themesDir).filter(f => f.endsWith('.json'));
@@ -65,7 +70,7 @@ const daisyThemes = themeFiles.map(file => {
 });
 fs.mkdirSync('dist/daisy', { recursive: true });
 fs.writeFileSync(
-  'dist/daisy/theme.cjs',
-  `module.exports = {themes: ${JSON.stringify(daisyThemes)}};\n`,
+  'dist/daisy/theme.js',
+  `export default {themes: ${JSON.stringify(daisyThemes)}};\n`,
   'utf-8'
 );
