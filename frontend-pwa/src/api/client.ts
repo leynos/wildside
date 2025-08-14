@@ -2,11 +2,13 @@
  * @file API client functions generated from OpenAPI.
  * Uses shared user types from `@app/types`.
  */
-import { z } from 'zod';
-import { customFetchParsed } from './fetcher';
+import { customFetch } from './fetcher';
 import { User, UserSchema } from '@app/types';
 
 /** Fetch all registered users. */
-export const listUsers = (
+export const listUsers = async (
   signal?: AbortSignal,
-): Promise<User[]> => customFetchParsed('/api/users', z.array(UserSchema), { signal });
+): Promise<User[]> => {
+  const data = await customFetch<unknown>('/api/users', { signal });
+  return UserSchema.array().parse(data);
+};
