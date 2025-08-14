@@ -291,7 +291,7 @@ Use a strict `tsconfig.json` suitable for browser builds:
 ### Dependency Management
 
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde (`~x.y.z`) only with a documented justification.
-- **Lockfile**: Commit `bun.lockb`. Recreate on major tool upgrades.
+- **Lockfile**: Commit `bun.lock`. Recreate on major tool upgrades; keep `bun.lockb` ignored.
 - **Audit**: Run `bun run audit` locally and in automation. Track exceptions with explicit expiry dates.
 - **Culling**: Prefer small, actively maintained packages. Remove unmaintained or risky dependencies swiftly.
 
