@@ -2,15 +2,15 @@
 
 A practical design for a web application with a Rust/Actix backend and a React
 
-+ Tailwind/daisyUI PWA frontend. The repo supports:
+- Tailwind/daisyUI PWA frontend. The repo supports:
 
-+ Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
-+ Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
-+ **Design tokens** as a first‑class package powering Tailwind/daisyUI and
+- Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
+- Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
+- **Design tokens** as a first‑class package powering Tailwind/daisyUI and
   future native shells.
-+ Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
+- Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
   with static assets served from object storage/CDN.
-+ Bun as the JS runtime/package manager.
+- Bun as the JS runtime/package manager.
 
 ---
 
@@ -80,27 +80,27 @@ myapp/
 
 ### 2.1 Rust/Actix → OpenAPI → TypeScript Client (orval)
 
-+ Use **utoipa** and **utoipa-actix-web** to annotate handlers and derive
+- Use **utoipa** and **utoipa-actix-web** to annotate handlers and derive
   schemas from serde models.
-+ Expose the OpenAPI document at runtime (e.g., `/api-docs/openapi.json`)
+- Expose the OpenAPI document at runtime (e.g., `/api-docs/openapi.json`)
   and/or emit a static `spec/openapi.json` via `build.rs` or a small bin.
-+ Frontend runs **orval** under bun to generate a fetch client and types that
+- Frontend runs **orval** under bun to generate a fetch client and types that
   align with the backend.
 
 **Backend (sketch):**
 
-+ `models/` contains structs with
+- `models/` contains structs with
   `#[derive(Serialize, Deserialize, utoipa::ToSchema)]`.
-+ `api/` handlers carry `#[utoipa::path(...)]` per route.
-+ `main.rs` derives `#[derive(utoipa::OpenApi)]` and mounts Swagger UI for DX.
+- `api/` handlers carry `#[utoipa::path(...)]` per route.
+- `main.rs` derives `#[derive(utoipa::OpenApi)]` and mounts Swagger UI for DX.
 
 **Frontend (sketch):**
 
-+ `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev
+- `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev
   URL).
-+ `bunx orval` writes `src/api/client.ts` with typed functions.
-+ A small `src/api/fetcher.ts` centralises base URL, auth, and error handling.
-+ TanStack Query hooks (hand-written or template‑generated) wrap the client for
+- `bunx orval` writes `src/api/client.ts` with typed functions.
+- A small `src/api/fetcher.ts` centralizes base URL, auth, and error handling.
+- TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
 
 **Flow:**
@@ -111,12 +111,12 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 ### 2.2 Actix WebSocket/Events → AsyncAPI → Consumers
 
-+ For evented channels (WS/SSE/Kafka/etc.), describe contracts in **AsyncAPI**.
-+ Author `spec/asyncapi.yaml` by hand **or** construct it programmatically
+- For evented channels (WS/SSE/Kafka/etc.), describe contracts in **AsyncAPI**.
+- Author `spec/asyncapi.yaml` by hand **or** construct it programmatically
   (e.g., using an AsyncAPI crate) and emit YAML/JSON.
-+ Use the AsyncAPI Generator in CI to produce:
-  + Human‑readable HTML docs for events.
-  + Optional client/server stubs (WebSocket helpers) as a starting point.
+- Use the AsyncAPI Generator in CI to produce:
+  - Human‑readable HTML docs for events.
+  - Optional client/server stubs (WebSocket helpers) as a starting point.
 
 **Flow:**
 
@@ -135,21 +135,21 @@ Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs 
 **Goals:** single source of truth for colours/spacing/typography/radii; drive
 Tailwind/daisyUI and any future native shells.
 
-+ `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
+- `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
   `radius.*`, `font.*`).
-+ `packages/tokens/src/themes/{light,dark}.json`: semantic overrides
+- `packages/tokens/src/themes/{light,dark}.json`: semantic overrides
   (`semantic.bg.default`, `semantic.fg.default`, `semantic.brand.*`).
-+ `packages/tokens/build/style-dictionary.js`: exports
-  + `dist/css/variables.css` (CSS variables for runtime theming),
-  + `dist/tw/preset.cjs` (Tailwind preset mapping spacing/radius/colours),
-  + `dist/daisy/theme.cjs` (daisyUI theme object from semantic tokens),
-  + optional JS/TS token bundle for RN/NativeWind down the road.
+- `packages/tokens/build/style-dictionary.js`: exports
+  - `dist/css/variables.css` (CSS variables for runtime theming),
+  - `dist/tw/preset.cjs` (Tailwind preset mapping spacing/radius/colours),
+  - `dist/daisy/theme.cjs` (daisyUI theme object from semantic tokens),
+  - optional JS/TS token bundle for RN/NativeWind down the road.
 
 **Frontend consumption:**
 
-+ Tailwind `presets: [require('@app/tokens/dist/tw/preset.cjs')]`.
-+ daisyUI `daisyui: require('@app/tokens/dist/daisy/theme.cjs')`.
-+ Import CSS vars once in `main.tsx`.
+- Tailwind `presets: [require('@app/tokens/dist/tw/preset.cjs')]`.
+- daisyUI `daisyui: require('@app/tokens/dist/daisy/theme.cjs')`.
+- Import CSS vars once in `main.tsx`.
 
 This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 (Capacitor) shells.
@@ -158,11 +158,11 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ## 4) Environment Strategy & Ports/Adapters
 
-+ Keep domain logic in `backend/src/domain` (no IO). Define **ports** for
+- Keep domain logic in `backend/src/domain` (no IO). Define **ports** for
   storage, cache, queues, email, etc., with **adapters** in `infra/`.
-+ Mirror that concept in the frontend: create thin adapters around fetch (REST)
+- Mirror that concept in the frontend: create thin adapters around fetch (REST)
   and WS (events) so tests can stub them.
-+ Use `.env` + `env_file` in Docker Compose for local dev and
+- Use `.env` + `env_file` in Docker Compose for local dev and
   ConfigMaps/Secrets in K8s.
 
 ---
@@ -195,8 +195,6 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ### 6.1 Backend (Rust/Actix) — multi‑stage, static (musl) where possible
 
-``
-
 ```dockerfile
 # ===== Build stage =====
 FROM rust:1.79-alpine AS build
@@ -225,8 +223,6 @@ ENTRYPOINT ["/srv/app"]
 
 ### 6.2 Frontend (Vite + Bun) — build once, serve from object storage/CDN
 
-``
-
 ```dockerfile
 # ===== Build stage =====
 FROM oven/bun:1 AS build
@@ -243,14 +239,12 @@ FROM scratch AS export
 COPY --from=build /web/frontend-pwa/dist/ /dist/
 ```
 
-+ In CI, extract `/dist` and upload to **DOKS Spaces** (object storage) behind
+- In CI, extract `/dist` and upload to **DOKS Spaces** (object storage) behind
   a CDN.
-+ The backend serves only the API; static assets come from CDN.
-+ For local dev, you can also serve via `vite dev` or a simple nginx container.
+- The backend serves only the API; static assets come from CDN.
+- For local dev, you can also serve via `vite dev` or a simple nginx container.
 
 ### 6.3 Docker Compose for Local Dev
-
-``
 
 ```yaml
 version: "3.9"
@@ -267,8 +261,8 @@ services:
   web:
     image: nginx:1.27-alpine
     volumes:
-      + ./frontend-pwa/dist:/usr/share/nginx/html:ro
-      + ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend-pwa/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports: ["3000:80"]
     depends_on: [backend]
 ```
@@ -282,11 +276,11 @@ services:
 
 **Principles:**
 
-+ Backend pods are stateless; DB/cache live in managed services (e.g.,
+- Backend pods are stateless; DB/cache live in managed services (e.g.,
   PostgreSQL, Redis). Migrations run via Job.
-+ Frontend assets are immutable in Spaces + CDN; deploys are object‑store
+- Frontend assets are immutable in Spaces + CDN; deploys are object‑store
   uploads (no pod just to serve files).
-+ Ingress terminates TLS; backend exposed via HTTP (or gRPC) behind a single
+- Ingress terminates TLS; backend exposed via HTTP (or gRPC) behind a single
   hostname.
 
 ### 7.1 Static Assets on DOKS Spaces
@@ -330,12 +324,12 @@ spec:
     metadata: { labels: { app: myapp-backend } }
     spec:
       containers:
-      + name: app
+      - name: app
         image: ghcr.io/acme/myapp-backend:{{ .Values.imageTag }}
         ports: [{ containerPort: 8080 }]
         envFrom:
-          + configMapRef: { name: myapp-config }
-          + secretRef: { name: myapp-secrets }
+          - configMapRef: { name: myapp-config }
+          - secretRef: { name: myapp-secrets }
         readinessProbe:
           httpGet: { path: /health/ready, port: 8080 }
         livenessProbe:
@@ -362,16 +356,16 @@ to the CDN; only `/api` goes to cluster.
 
 1. **Lint & test**: cargo fmt/clippy/test; bun lint/type‑check/unit tests.
 2. **Build artifacts**:
-   + Build backend image → push to registry.
-   + Build frontend dist → upload to Spaces.
-   + Emit `spec/openapi.json` and publish as build artifact; run `orval` in a
+   - Build backend image → push to registry.
+   - Build frontend dist → upload to Spaces.
+   - Emit `spec/openapi.json` and publish as build artifact; run `orval` in a
      “types up‑to‑date” check.
-   + (Optional) Generate AsyncAPI HTML docs and publish to an internal docs
+   - (Optional) Generate AsyncAPI HTML docs and publish to an internal docs
      bucket.
 3. **Deploy**:
-   + Update Helm values with new image tag; commit to a GitOps repo watched by
+   - Update Helm values with new image tag; commit to a GitOps repo watched by
      FluxCD.
-   + Invalidate CDN (only for `index.html`), or rely on cache busting for
+   - Invalidate CDN (only for `index.html`), or rely on cache busting for
      hashed assets.
 
 ---
@@ -411,35 +405,35 @@ docker-down:
 
 ## 9) Observability & Operations Hooks
 
-+ **Health endpoints**: `/health/live` and `/health/ready` in backend for
+- **Health endpoints**: `/health/live` and `/health/ready` in backend for
    probes.
-+ **Structured logs** (JSON) with request IDs; propagate over WS too.
-+ **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
-+ **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
+- **Structured logs** (JSON) with request IDs; propagate over WS too.
+- **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
+- **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
    where relevant.
 
 ---
 
 ## 10) Security & Hardening Notes
 
-+ Minimal base images (distroless). Non‑root user.
-+ SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in
+- Minimal base images (distroless). Non‑root user.
+- SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in
    cluster (policy‑controller/Kyverno).
-+ CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
-+ Secrets: mount via K8s Secrets (consider external secret operator for DO
+- CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
+- Secrets: mount via K8s Secrets (consider external secret operator for DO
    Secrets Manager).
 
 ---
 
 ## 11) Summary of Hand‑offs
 
-+ **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client →
+- **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client →
    React + TanStack.
-+ **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS
+- **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS
    clients/docs.
-+ **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
+- **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
    daisyUI theme.
-+ **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
+- **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
   CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster.
 This structure keeps contracts central, isolates platform concerns, and allows
 painless evolution from PWA to native shells without a rewrite.
