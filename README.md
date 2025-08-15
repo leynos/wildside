@@ -8,3 +8,12 @@ a PWA with a Rust/React stack, self-hosted map/routing services, and a strong
 data-validation pipeline. The strategy emphasises cost control, security-first
 AI integration, and clear differentiation from fitness, hiking, and static tour
 apps.
+
+## Documentation linting
+
+Ensure documentation and diagrams remain valid:
+
+```bash
+make markdownlint-docs
+make mermaid-lint
+```
