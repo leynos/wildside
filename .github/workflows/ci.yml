@@ -18,7 +18,9 @@ jobs:
         run: bun install
 
       - name: Markdown lint
-        run: make markdownlint-docs
+        uses: DavidAnson/markdownlint-cli2-action@v20
+        with:
+          globs: '**/*.md'
 
       - name: Mermaid lint
         run: make mermaid-lint
