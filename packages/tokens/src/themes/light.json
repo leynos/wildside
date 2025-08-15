@@ -1,21 +1,24 @@
 {
   "semantic": {
     "bg": {
-      "default": { "value": "{color.neutral.0}", "description": "Surface" },
-      "subtle": { "value": "{color.neutral.50}", "description": "Raised surface" },
-      "inverted": { "value": "{color.neutral.900}", "description": "Dark surface" }
+      "default": { "value": "{color.neutral.0}", "description": "Default background for light theme" },
+      "subtle": { "value": "{color.neutral.50}", "description": "Raised surface (e.g., cards) for light theme" },
+      "inverted": { "value": "{color.neutral.900}", "description": "Inverted surface for light theme" }
     },
     "fg": {
-      "default": { "value": "{color.neutral.900}", "description": "Primary text" },
-      "muted": { "value": "{color.neutral.600}", "description": "Muted text" },
-      "inverted": { "value": "{color.neutral.0}", "description": "Text on dark surfaces" }
+      "default": { "value": "{color.neutral.900}", "description": "Default foreground/text for light theme" },
+      "muted": { "value": "{color.neutral.600}", "description": "Muted foreground for light theme" },
+      "inverted": { "value": "{color.neutral.0}", "description": "Text on inverted surfaces for light theme" }
     },
     "brand": {
-      "default": { "value": "{color.primary.600}", "description": "Brand colour" },
-      "hover": { "value": "{color.primary.700}", "description": "Brand hover" },
-      "contrast": { "value": "{color.neutral.0}", "description": "Text on brand" },
-      "muted": { "value": "{color.primary.500}", "description": "Subtle brand elements" }
+      "default": { "value": "{color.primary.500}", "description": "Primary brand colour (orange)" },
+      "hover": { "value": "{color.primary.600}", "description": "Brand hover state" },
+      "contrast": { "value": "{color.neutral.900}", "description": "Text on brand-coloured elements" }
+    },
+    "accent": {
+      "default": { "value": "{color.secondary.400}", "description": "Accent colour (teal)" },
+      "hover": { "value": "{color.secondary.500}", "description": "Accent hover state" },
+      "contrast": { "value": "{color.neutral.900}", "description": "Text on accent-coloured elements" }
     }
   }
 }
-
