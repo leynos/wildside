@@ -1,4 +1,4 @@
-.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint
+.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint
 
 all: fmt lint test
 
@@ -46,3 +46,9 @@ check-fmt:
 
 markdownlint:
 	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint
+
+markdownlint-docs:
+	markdownlint docs/repository-structure.md
+
+mermaid-lint:
+	npx mmdc -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json

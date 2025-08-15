@@ -14,6 +14,15 @@ jobs:
         with:
           bun-version: '1.1.32'
 
+      - name: Install dependencies
+        run: bun install
+
+      - name: Markdown lint
+        run: make markdownlint-docs
+
+      - name: Mermaid lint
+        run: make mermaid-lint
+
       # Backend
       - name: Rust build
         run: cargo build --manifest-path backend/Cargo.toml --release

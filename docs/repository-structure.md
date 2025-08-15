@@ -17,22 +17,35 @@ A typical request flow is illustrated below:
 sequenceDiagram
   autonumber
   participant Browser
-  participant Nginx
+  participant CDN
+  participant Ingress
   participant Backend
-  participant Swagger
+  participant SwaggerUI
 
-  Browser->>Nginx: GET /
-  Nginx-->>Browser: index.html + assets
-  Browser->>Nginx: GET /api/users
-  Nginx->>Backend: proxy /api/users
-  Backend-->>Nginx: 200 [User[]]
-  Nginx-->>Browser: 200 [User[]]
-  Browser->>Backend: GET /api-docs/openapi.json
-  Backend-->>Browser: OpenAPI JSON
-  Browser->>Backend: GET /ws (upgrade)
-  Backend-->>Browser: WebSocket upgrade (heartbeat)
-  Browser->>Swagger: GET /docs
-  Swagger-->>Browser: Swagger UI
+  Browser->>CDN: GET /
+  CDN-->>Browser: index.html + assets
+
+  Browser->>Ingress: GET /api/users
+  Ingress->>Backend: proxy /api/users
+  Backend-->>Ingress: 200 [User[]]
+  Ingress-->>Browser: 200 [User[]]
+
+  Browser->>Ingress: GET /api-docs/openapi.json
+  Ingress->>Backend: GET /api-docs/openapi.json
+  Backend-->>Ingress: OpenAPI JSON
+  Ingress-->>Browser: OpenAPI JSON
+
+  Browser->>Ingress: GET /ws (upgrade)
+  Ingress->>Backend: Upgrade request
+  Backend-->>Ingress: 101 Switching Protocols
+  Ingress-->>Browser: 101 Switching Protocols
+
+  Browser->>Ingress: GET /docs
+  Ingress->>Backend: GET /docs
+  Backend-->>Ingress: Swagger UI
+  Ingress-->>Browser: Swagger UI
+
+  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, nginx may serve dist/ (§6.3)
 ```
 
 ---
