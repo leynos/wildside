@@ -1,15 +1,20 @@
 /**
  * @file API client functions generated from OpenAPI.
+ * Uses shared user types from `@app/types`.
+ * Endpoint: GET /api/users
+ * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
-import { z } from 'zod';
 import { customFetchParsed } from './fetcher';
+import { User, UsersSchema } from '@app/types';
 
-const userSchema = z.object({
-  id: z.string(),
-  display_name: z.string(),
-});
-
-export type User = z.infer<typeof userSchema>;
-
-export const listUsers = (signal?: AbortSignal) =>
-  customFetchParsed('/api/users', z.array(userSchema), { signal });
+/**
+ * Fetch all registered users.
+ *
+ * @example
+ * const users = await listUsers();
+ * users.length;
+ */
+export const listUsers = (
+  signal?: AbortSignal,
+): Promise<User[]> =>
+  customFetchParsed('/api/users', UsersSchema, { signal });

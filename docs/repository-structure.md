@@ -1,8 +1,7 @@
 # Repository Design Guide
 
-A practical design for a web application with a Rust/Actix backend and a React
-
-- Tailwind/daisyUI PWA frontend. The repo supports:
+A practical design for a web application with a Rust/Actix backend and a React \+
+Tailwind/daisyUI PWA frontend. The repo supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
@@ -11,6 +10,43 @@ A practical design for a web application with a Rust/Actix backend and a React
 - Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
   with static assets served from object storage/CDN.
 - Bun as the JS runtime/package manager.
+
+A typical request flow is illustrated below:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Browser
+  participant CDN
+  participant Ingress
+  participant Backend
+  participant SwaggerUI
+
+  Browser->>CDN: GET /
+  CDN-->>Browser: index.html + assets
+
+  Browser->>Ingress: GET /api/users
+  Ingress->>Backend: proxy /api/users
+  Backend-->>Ingress: 200 [User[]]
+  Ingress-->>Browser: 200 [User[]]
+
+  Browser->>Ingress: GET /api-docs/openapi.json
+  Ingress->>Backend: GET /api-docs/openapi.json
+  Backend-->>Ingress: OpenAPI JSON
+  Ingress-->>Browser: OpenAPI JSON
+
+  Browser->>Ingress: GET /ws (upgrade)
+  Ingress->>Backend: Upgrade request
+  Backend-->>Ingress: 101 Switching Protocols
+  Ingress-->>Browser: 101 Switching Protocols
+
+  Browser->>Ingress: GET /docs
+  Ingress->>Backend: GET /docs
+  Backend-->>Ingress: Swagger UI
+  Ingress-->>Browser: Swagger UI
+
+  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, nginx may serve dist/ (§6.3)
+```
 
 ---
 
