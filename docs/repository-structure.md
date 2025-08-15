@@ -1,7 +1,9 @@
 # Repository Design Guide
 
-A practical design for a web application with a Rust/Actix backend and a React +
+A practical design for a web application with a Rust/Actix backend and a React \+
 Tailwind/daisyUI PWA frontend. The repo supports:
+
+- Tailwind/daisyUI PWA frontend. The repo supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
@@ -135,8 +137,8 @@ myapp/
 - `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev
   URL).
 - `bunx orval` writes `src/api/client.ts` with typed functions.
-- A small `src/api/fetcher.ts` centralises base URL, auth, and error handling.
-- TanStack Query hooks (hand-written or template‑generated) wrap the client for
+- A small `src/api/fetcher.ts` centralizes base URL, auth, and error handling.
+- TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
 
 **Flow:**
@@ -205,7 +207,7 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ## 5) Bun‑first Workspace Plumbing
 
-**Root `package.json`** sets bun workspaces and unifies scripts:
+**Root** `package.json` sets bun workspaces and unifies scripts:
 
 ```jsonc
 {
@@ -230,8 +232,6 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 ## 6) Docker‑Friendly Build System
 
 ### 6.1 Backend (Rust/Actix) — multi‑stage, static (musl) where possible
-
-``
 
 ```dockerfile
 # ===== Build stage =====
@@ -261,8 +261,6 @@ ENTRYPOINT ["/srv/app"]
 
 ### 6.2 Frontend (Vite + Bun) — build once, serve from object storage/CDN
 
-``
-
 ```dockerfile
 # ===== Build stage =====
 FROM oven/bun:1 AS build
@@ -285,8 +283,6 @@ COPY --from=build /web/frontend-pwa/dist/ /dist/
 - For local dev, you can also serve via `vite dev` or a simple nginx container.
 
 ### 6.3 Docker Compose for Local Dev
-
-``
 
 ```yaml
 version: "3.9"
@@ -414,35 +410,33 @@ to the CDN; only `/api` goes to cluster.
 
 ## 8) Local DX (Makefile targets)
 
-``
-
 ```makefile
 .PHONY: dev be fe gen openapi asyncapi docker-up docker-down
 
 be:
-	cargo run --manifest-path backend/Cargo.toml
+    cargo run --manifest-path backend/Cargo.toml
 
 fe:
-	cd frontend-pwa && bun dev
+    cd frontend-pwa && bun dev
 
 dev:
-	# run both (use tmux or just two terminals)
+    # run both (use tmux or just two terminals)
 
 openapi:
-	# write openapi.json to spec/
-	cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
+    # write openapi.json to spec/
+    cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
 
 gen:
-	bunx orval --config frontend-pwa/orval.config.yaml
+    bunx orval --config frontend-pwa/orval.config.yaml
 
 asyncapi:
-	bunx @asyncapi/generator spec/asyncapi.yaml @asyncapi/html-template -o docs/asyncapi
+    bunx @asyncapi/generator spec/asyncapi.yaml @asyncapi/html-template -o docs/asyncapi
 
 docker-up:
-	cd deploy && docker compose up --build -d
+    cd deploy && docker compose up --build -d
 
 docker-down:
-	cd deploy && docker compose down
+    cd deploy && docker compose down
 ```
 
 ---
@@ -450,11 +444,11 @@ docker-down:
 ## 9) Observability & Operations Hooks
 
 - **Health endpoints**: `/health/live` and `/health/ready` in backend for
-  probes.
+   probes.
 - **Structured logs** (JSON) with request IDs; propagate over WS too.
 - **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
 - **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
-  where relevant.
+   where relevant.
 
 ---
 
@@ -462,23 +456,22 @@ docker-down:
 
 - Minimal base images (distroless). Non‑root user.
 - SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in
-  cluster (policy‑controller/Kyverno).
+   cluster (policy‑controller/Kyverno).
 - CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
 - Secrets: mount via K8s Secrets (consider external secret operator for DO
-  Secrets Manager).
+   Secrets Manager).
 
 ---
 
 ## 11) Summary of Hand‑offs
 
 - **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client →
-  React + TanStack.
+   React + TanStack.
 - **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS
-  clients/docs.
+   clients/docs.
 - **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
-  daisyUI theme.
+   daisyUI theme.
 - **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
   CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster.
-
 This structure keeps contracts central, isolates platform concerns, and allows
 painless evolution from PWA to native shells without a rewrite.

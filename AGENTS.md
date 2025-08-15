@@ -52,6 +52,7 @@
   subsequent commit) should represent a single logical unit of work.
 - **Quality Gates:** Before considering a change complete or proposing a commit,
   ensure it meets the following criteria:
+
   - New functionality or changes in behaviour are fully validated by relevant
     unittests and behavioural tests.
   - Where a bug is being fixed, a unittest has been provided demonstrating the
@@ -62,51 +63,55 @@
   - Passes lint checks. (Use `make lint` to verify).
   - Adheres to formatting standards tested using a formatting validator. (Use
     `make check-fmt` to verify).
+
 - **Committing:**
+
   - Only changes that meet all the quality gates above should be committed.
   - Write clear, descriptive commit messages summarizing the change, following
     these formatting guidelines:
+
     - **Imperative Mood:** Use the imperative mood in the subject line (e.g.,
       "Fix bug", "Add feature" instead of "Fixed bug", "Added feature").
     - **Subject Line:** The first line should be a concise summary of the change
-      (ideally 50 characters or less).
+      (ideally 50 characters or fewer).
     - **Body:** Separate the subject from the body with a blank line. Subsequent
       lines should explain the *what* and *why* of the change in more detail,
       including rationale, goals, and scope. Wrap the body at 72 characters.
     - **Formatting:** Use Markdown for any formatted text (like bullet points or
       code snippets) within the commit message body.
-  - Do not commit changes that fail any of the quality gates.
+
+- Do not commit changes that fail any of the quality gates.
 
 ## Refactoring Heuristics & Workflow
 
-- **Recognising Refactoring Needs:** Regularly assess the codebase for potential
+- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
   refactoring opportunities. Consider refactoring when you observe:
-  - **Long Methods/Functions:** Functions or methods that are excessively long
+- **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
-  - **Duplicated Code:** Identical or very similar code blocks appearing in
+- **Duplicated Code:** Identical or very similar code blocks appearing in
     multiple places.
-  - **Complex Conditionals:** Deeply nested or overly complex `if`/`else` or
+- **Complex Conditionals:** Deeply nested or overly complex `if`/`else` or
     `switch` statements (high cyclomatic complexity).
-  - **Large Code Blocks for Single Values:** Significant chunks of logic
+- **Large Code Blocks for Single Values:** Significant chunks of logic
     dedicated solely to calculating or deriving a single value.
-  - **Primitive Obsession / Data Clumps:** Groups of simple variables (strings,
+- **Primitive Obsession / Data Clumps:** Groups of simple variables (strings,
     numbers, booleans) that are frequently passed around together, often
     indicating a missing class or object structure.
-  - **Excessive Parameters:** Functions or methods requiring a very long list of
+- **Excessive Parameters:** Functions or methods requiring a very long list of
     parameters.
-  - **Feature Envy:** Methods that seem more interested in the data of another
+- **Feature Envy:** Methods that seem more interested in the data of another
     class/object than their own.
-  - **Shotgun Surgery:** A single change requiring small modifications in many
+- **Shotgun Surgery:** A single change requiring small modifications in many
     different classes or functions.
 - **Post-Commit Review:** After committing a functional change or bug fix (that
   meets all quality gates), review the changed code and surrounding areas using
   the heuristics above.
 - **Separate Atomic Refactors:** If refactoring is deemed necessary:
-  - Perform the refactoring as a **separate, atomic commit** *after* the
+- Perform the refactoring as a **separate, atomic commit** *after* the
     functional change commit.
-  - Ensure the refactoring adheres to the testing guidelines (behavioural tests
+- Ensure the refactoring adheres to the testing guidelines (behavioural tests
     pass before and after, unit tests added for new units).
-  - Ensure the refactoring commit itself passes all quality gates.
+- Ensure the refactoring commit itself passes all quality gates.
 
 ## Rust Specific Guidance
 
@@ -171,7 +176,7 @@ project:
   like `Env` and `Clock`) where appropriate. See
   `docs/reliable-testing-in-rust-via-dependency-injection.md` for guidance.
 
-### Dependency Management
+### Dependency Management (Rust)
 
 - **Mandate caret requirements for all dependencies.** All crate versions
   specified in `Cargo.toml` must use SemVer-compatible caret requirements
@@ -185,7 +190,7 @@ project:
   (`~`) should only be used where a dependency must be locked to patch-level
   updates for a specific, documented reason.
 
-### Error Handling
+### Error Handling (Rust)
 
 - **Prefer semantic error enums**. Derive `std::error::Error` (via the
   `thiserror` crate) for any condition the caller might inspect, retry, or map
@@ -234,17 +239,18 @@ browser‑only runtime.
   hints, and asset hashing. Esbuild handles TS/JS transforms in dev; production
   uses Rollup via Vite.
 - **Project scripts (Bun)**:
-  - `fmt`: `biome format --write .`
-  - `lint`: `biome lint . && tsc -p tsconfig.json --noEmit`
-  - `typecheck`: `tsc -p tsconfig.json --noEmit`
-  - `dev`: `vite`
-  - `build`: `vite build`
-  - `preview`: `vite preview`
-  - `test`: `vitest run --coverage`
-  - `audit`: `bun x npm@latest audit`
-  - `audit:snyk`: `bun x snyk test`
-  - Note: `audit` requires a committed `bun.lock`; `audit:snyk` requires
-    installed dependencies—run `bun install` before invoking it.
+- `fmt`: `biome format --write .`
+- `lint`: `biome lint . && tsc -p tsconfig.json --noEmit`
+- `typecheck`: `tsc -p tsconfig.json --noEmit`
+- `dev`: `vite`
+- `build`: `vite build`
+- `preview`: `vite preview`
+- `test`: `vitest run --coverage`
+- `audit`: `bun x npm@latest audit`
+- `audit:snyk`: `bun x snyk test`
+- Note: `audit` requires a committed `bun.lock`; `audit:snyk` requires
+      installed dependencies—run `bun install` before invoking it.
+
 ### Compiler Configuration (Make It Sharp)
 
 Use a strict `tsconfig.json` suitable for browser builds:
@@ -270,9 +276,11 @@ Keep docs close to code.
   mutating props or inputs.
 - **Functions**: Extract meaningfully named helpers when a function grows long.
   Keep trivial functions on one line when readability allows:
+
   ```ts
   export const mkId = (n: number): Id => new Id(n);
   ```
+
 - **Parameters**: Group related parameters into typed objects or builders;
   avoid long positional lists.
 - **Predicates**: When `if/else` grows beyond two branches, extract a predicate
@@ -289,16 +297,18 @@ Keep docs close to code.
   payloads, URL params) with `zod`/`valibot`. Generate TS types from schemas or
   derive schemas from types, but add a CI check to keep them in sync.
 - **Nominal branding**: Use branded types for IDs/tokens to avoid accidental
-  mixing:
-  ```ts
-  type UserId = string & { readonly brand: "UserId" };
-  ```
+    mixing:
+
+    ```ts
+    type UserId = string & { readonly brand: "UserId" };
+    ```
+
 - **Cancellation**: Accept `AbortSignal` for any async that can hang (fetches,
   long UI work). Wire signals through TanStack Query via `signal` in fetchers.
-- **Time & RNG**: Centralise `now()` and `rng()` adapters; never call
+- **Time & RNG**: Centralize `now()` and `rng()` adapters; never call
   `Date.now()` or `Math.random()` directly in business logic.
 
-### Error Handling
+### Error Handling (Frontend)
 
 - **Semantic errors**: Use discriminated unions for recoverable conditions
   callers might branch on (e.g.,
@@ -325,7 +335,7 @@ Keep docs close to code.
 - **E2E (optional)**: Playwright for flows critical to revenue or safety; keep
   the set minimal and fast.
 
-### Dependency Management
+### Dependency Management (Frontend)
 
 - **Version policy**: Use caret requirements (`^x.y.z`) for all direct
   dependencies. Avoid `*`, `>=` or tag aliases like `latest`. Use tilde
@@ -368,7 +378,7 @@ Keep docs close to code.
   and (where supported) Trusted Types policies.
 - **Secrets**: Never hard‑code secrets in client bundles. Use public,
   least‑privilege tokens only; treat everything as public.
-- **Origin hygiene**: Centralise fetch base URLs; validate response schemas;
+- **Origin hygiene**: Centralize fetch base URLs; validate response schemas;
   handle opaque redirects.
 - **Storage**: Encrypt sensitive data server‑side; treat client storage as
   untrusted. Namespaced keys; versioned payloads; schema‑validated reads.
@@ -407,7 +417,7 @@ Keep docs close to code.
   strings in prod.
 - **Metrics**: Basic RUM—navigation timings, error counts, and SPA route
   transitions. Sample aggressively to preserve privacy and cost.
-- **Feature flags**: Centralise flags; keep a kill‑switch for risky features;
+- **Feature flags**: Centralize flags; keep a kill‑switch for risky features;
   document fallback behaviour.
 
 ### Documentation & Examples
@@ -420,7 +430,7 @@ Keep docs close to code.
 - **Error semantics**: Document user‑visible failure modes next to components
   and hooks that surface them.
 
-### Release Discipline 
+### Release Discipline
 
 - **Conventional Commits + Changesets** for versioning (libraries) and change
   logs.
@@ -434,7 +444,7 @@ Keep docs close to code.
 
 ### Quick Checklist (Before Commit)
 
- - `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings;
+- `bun run fmt`, `bun run lint`, `bun run test` all clean; no Biome warnings;
   no TypeScript errors; coverage thresholds hold.
 - `bun run audit` passes or has justified, time‑boxed exceptions.
 - No `any`, no `@ts-ignore`; use `@ts-expect-error` only with a reason.
