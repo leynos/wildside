@@ -84,7 +84,7 @@
 
 ## Refactoring Heuristics & Workflow
 
-- **Recognising Refactoring Needs:** Regularly assess the codebase for potential
+- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
   refactoring opportunities. Consider refactoring when you observe:
 - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
@@ -305,7 +305,7 @@ Keep docs close to code.
 
 - **Cancellation**: Accept `AbortSignal` for any async that can hang (fetches,
   long UI work). Wire signals through TanStack Query via `signal` in fetchers.
-- **Time & RNG**: Centralise `now()` and `rng()` adapters; never call
+- **Time & RNG**: Centralize `now()` and `rng()` adapters; never call
   `Date.now()` or `Math.random()` directly in business logic.
 
 ### Error Handling (Frontend)
@@ -378,7 +378,7 @@ Keep docs close to code.
   and (where supported) Trusted Types policies.
 - **Secrets**: Never hard‑code secrets in client bundles. Use public,
   least‑privilege tokens only; treat everything as public.
-- **Origin hygiene**: Centralise fetch base URLs; validate response schemas;
+- **Origin hygiene**: Centralize fetch base URLs; validate response schemas;
   handle opaque redirects.
 - **Storage**: Encrypt sensitive data server‑side; treat client storage as
   untrusted. Namespaced keys; versioned payloads; schema‑validated reads.
@@ -417,7 +417,7 @@ Keep docs close to code.
   strings in prod.
 - **Metrics**: Basic RUM—navigation timings, error counts, and SPA route
   transitions. Sample aggressively to preserve privacy and cost.
-- **Feature flags**: Centralise flags; keep a kill‑switch for risky features;
+- **Feature flags**: Centralize flags; keep a kill‑switch for risky features;
   document fallback behaviour.
 
 ### Documentation & Examples

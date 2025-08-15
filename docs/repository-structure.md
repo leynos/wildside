@@ -3,6 +3,8 @@
 A practical design for a web application with a Rust/Actix backend and a React \+
 Tailwind/daisyUI PWA frontend. The repo supports:
 
+- Tailwind/daisyUI PWA frontend. The repo supports:
+
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
 - **Design tokens** as a first‑class package powering Tailwind/daisyUI and
