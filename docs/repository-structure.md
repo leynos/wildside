@@ -1,7 +1,7 @@
 # Repository Design Guide
 
-A practical design for a web application with a Rust/Actix backend and a React
-+ Tailwind/daisyUI PWA frontend. The repo supports:
+A practical design for a web application with a Rust/Actix backend and a React +
+Tailwind/daisyUI PWA frontend. The repo supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
@@ -52,7 +52,7 @@ sequenceDiagram
 
 ## 1) Monorepo Layout
 
-```
+```text
 myapp/
 ├─ backend/                           # Rust (Actix)
 │  ├─ src/
@@ -141,7 +141,7 @@ myapp/
 
 **Flow:**
 
-```
+```text
 Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  →  React + TanStack Query
 ```
 
@@ -156,7 +156,7 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 **Flow:**
 
-```
+```text
 Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs  →  Frontend WS client + TanStack Query/SWR
 ```
 
@@ -205,7 +205,7 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ## 5) Bun‑first Workspace Plumbing
 
-**Root **`` sets bun workspaces and unifies scripts:
+**Root `package.json`** sets bun workspaces and unifies scripts:
 
 ```jsonc
 {
@@ -352,7 +352,7 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 **Key objects:** Deployment, Service, ConfigMap (non‑secret settings), Secret
 (tokens/DB urls), HPA, PodDisruptionBudget, NetworkPolicy.
 
-``** (sketch):**
+**Deployment (sketch):**
 
 ```yaml
 apiVersion: apps/v1
@@ -482,4 +482,3 @@ docker-down:
 
 This structure keeps contracts central, isolates platform concerns, and allows
 painless evolution from PWA to native shells without a rewrite.
-

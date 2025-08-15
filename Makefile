@@ -51,4 +51,4 @@ markdownlint-docs:
 	markdownlint docs/repository-structure.md
 
 mermaid-lint:
-	npx mmdc -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
+	npx --yes @mermaid-js/mermaid-cli -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
