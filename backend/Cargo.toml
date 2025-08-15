@@ -16,9 +16,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"]
 utoipa = { version = "5", features = ["macros", "uuid", "yaml", "actix_extras"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 
-# JSON Schema (share with AsyncAPI if desired)
-schemars = { version = "0.8", features = ["derive"] }
-
 [dev-dependencies]
 actix-rt = "2"
 
