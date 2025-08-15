@@ -1,9 +1,11 @@
 /**
  * @file API client functions generated from OpenAPI.
  * Uses shared user types from `@app/types`.
+ * Endpoint: GET /api/users
+ * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
 import { customFetchParsed } from './fetcher';
-import { User, UserSchema } from '@app/types';
+import { User, UsersSchema } from '@app/types';
 
 /**
  * Fetch all registered users.
@@ -15,4 +17,4 @@ import { User, UserSchema } from '@app/types';
 export const listUsers = (
   signal?: AbortSignal,
 ): Promise<User[]> =>
-  customFetchParsed('/api/users', UserSchema.array(), { signal });
+  customFetchParsed('/api/users', UsersSchema, { signal });
