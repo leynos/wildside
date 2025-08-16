@@ -21,6 +21,7 @@ services:
       - ../frontend-pwa:/frontend
     command: ["sh", "-c", "bun install --frozen-lockfile && bun run build"]
     restart: "no"
+    user: "1000:1000"
     environment:
       - BUN_INSTALL_CACHE=/frontend/.bun-cache
   web:

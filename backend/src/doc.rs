@@ -1,6 +1,6 @@
 //! OpenAPI documentation setup.
 
-use crate::models::user::User;
+use crate::models::User;
 use utoipa::OpenApi;
 
 /// OpenAPI document for the REST API. Served via Swagger UI and used by tooling.

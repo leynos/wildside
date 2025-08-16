@@ -419,6 +419,24 @@ docker-down:
 - **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
   where relevant.
 
+### WebSocket heartbeat sequence
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant UserSocket
+    participant Server
+    Note over UserSocket: Heartbeat interval triggers
+    UserSocket->UserSocket: Check last_heartbeat
+    alt Heartbeat timeout exceeded
+        UserSocket->Server: Log info (heartbeat timeout)
+        UserSocket->Client: Close connection (CloseCode::Normal, "heartbeat timeout")
+        UserSocket->UserSocket: Stop actor
+    else Heartbeat received
+        UserSocket->UserSocket: Update last_heartbeat
+    end
+```
+
 ---
 
 ## 10) Security & Hardening Notes

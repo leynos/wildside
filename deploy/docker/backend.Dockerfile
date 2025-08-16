@@ -9,9 +9,9 @@ RUN cargo build --release --target x86_64-unknown-linux-musl
 
 FROM alpine:3.18 AS runtime
 RUN apk add --no-cache curl
-WORKDIR /srv
-COPY --from=build /app/backend/target/x86_64-unknown-linux-musl/release/backend /srv/app
 RUN adduser -D -u 1000 app
+WORKDIR /srv
+COPY --from=build --chown=1000:1000 /app/backend/target/x86_64-unknown-linux-musl/release/backend /srv/app
 USER app
 EXPOSE 8080
 ENV RUST_LOG=info
