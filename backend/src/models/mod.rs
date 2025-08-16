@@ -5,7 +5,7 @@
 //! serialisation contracts (serde) in each type's Rustdoc.
 //!
 //! Public surface:
-//! - user::User — domain user identity and display name.
+//! - User (alias to `user::User`) — domain user identity and display name.
 
 pub mod user;
 pub use self::user::User;

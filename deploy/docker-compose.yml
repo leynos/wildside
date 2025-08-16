@@ -9,16 +9,20 @@ services:
       - RUST_LOG=info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/ready || exit 1"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 20s
   frontend-build:
     image: oven/bun:1
     working_dir: /frontend
     volumes:
       - ../frontend-pwa:/frontend
-    command: ["sh", "-c", "bun install && bun run build"]
+    command: ["sh", "-c", "bun install --frozen-lockfile && bun run build"]
+    restart: "no"
+    environment:
+      - BUN_INSTALL_CACHE=/frontend/.bun-cache
   web:
     image: nginx:1.27-alpine
     volumes:

@@ -3,18 +3,23 @@
 use actix_web::{get, App, HttpResponse, HttpServer};
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
+#[cfg(debug_assertions)]
 use utoipa::OpenApi;
+#[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
 use backend::api::users::list_users;
+#[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
 
+/// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
 #[get("/health/ready")]
 async fn ready() -> HttpResponse {
     HttpResponse::Ok().finish()
 }
 
+/// Liveness probe. Return 200 when the process is alive.
 #[get("/health/live")]
 async fn live() -> HttpResponse {
     HttpResponse::Ok().finish()

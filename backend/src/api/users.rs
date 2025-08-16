@@ -1,6 +1,6 @@
 //! Users API handlers.
 
-use crate::models::user::User;
+use crate::models::User;
 use actix_web::{get, web, Result};
 
 /// List known users.
