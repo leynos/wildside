@@ -405,7 +405,26 @@ docker-up:
 	cd deploy && docker compose up --build -d
 
 docker-down:
-	cd deploy && docker compose down
+        cd deploy && docker compose down
+```
+
+### Docker Compose startup sequence
+
+```mermaid
+sequenceDiagram
+  participant DC as Docker Compose
+  participant FB as frontend-build
+  participant BE as backend
+  participant WEB as web
+
+  DC->>FB: Start frontend build (bun install && bun run build)
+  DC->>BE: Start backend
+  BE-->>BE: Serve /health/ready and /health/live
+  loop until healthy
+    DC->>BE: GET /health/ready
+    BE-->>DC: 200 OK when ready
+  end
+  DC->>WEB: Start web after FB completed and BE healthy
 ```
 
 ---
