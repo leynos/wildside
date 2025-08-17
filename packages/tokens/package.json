@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build/style-dictionary.js",
     "postinstall": "node build/style-dictionary.js",
-    "test": "node build/validate-contrast.js"
+    "validate:contrast": "node build/validate-contrast.js",
+    "test": "npm run validate:contrast"
   },
   "devDependencies": {
     "style-dictionary": "^4"
