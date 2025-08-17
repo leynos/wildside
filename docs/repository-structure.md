@@ -233,61 +233,24 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ### 6.1 Backend (Rust/Actix) — multi‑stage, static (musl) where possible
 
-```dockerfile
-# ===== Build stage =====
-FROM rust:1.79-alpine AS build
-RUN apk add --no-cache \
-        build-base=0.5-r3 \
-        musl-dev=1.2.4-r3 \
-        pkgconf=1.9.5-r0 \
-        openssl-dev=3.1.8-r0 && \
-    rustup target add x86_64-unknown-linux-musl
-ENV OPENSSL_STATIC=1
-WORKDIR /app
-# Cache deps
-COPY backend/Cargo.toml backend/Cargo.lock backend/
-RUN cargo fetch --locked --manifest-path backend/Cargo.toml
-COPY backend/ backend/
-RUN cargo build --locked --release --target x86_64-unknown-linux-musl \
-    --manifest-path backend/Cargo.toml
+See [`deploy/docker/backend.Dockerfile`](../deploy/docker/backend.Dockerfile) for
+the canonical image build. Key points:
 
-# ===== Runtime stage =====
-FROM alpine:3.18 AS runtime
-RUN apk add --no-cache curl=8.12.1-r0 ca-certificates=20241121-r1 && adduser -D -u 1000 app
-WORKDIR /srv
-COPY --from=build --chown=1000:1000 /app/target/x86_64-unknown-linux-musl/release/backend /srv/app
-USER app
-EXPOSE 8080
-ENV RUST_LOG=info
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:8080/health || exit 1
-ENTRYPOINT ["/srv/app"]
-```
+- Dependencies are cached before sources are copied to maximise layer reuse.
+- Alpine packages and OpenSSL are version‑pinned for reproducible builds.
+- The `HEALTHCHECK_PORT` and `HEALTHCHECK_PATH` build args allow the liveness
+  probe to be tailored without editing the file.
 
 > If any dependency prevents musl, switch the target to gnu and use
 > `gcr.io/distroless/cc:nonroot` as base; copy any needed CA certs.
 
 ### 6.2 Frontend (Vite + Bun) — build once, serve via nginx
 
-```dockerfile
-# ===== Build stage =====
-FROM oven/bun:1 AS build
-WORKDIR /web
-# install deps with cacheable layers
-COPY package.json bun.lock ./
-COPY packages/tokens/package.json packages/tokens/
-COPY frontend-pwa/package.json frontend-pwa/
-RUN cd packages/tokens && bun install --frozen-lockfile && \
-    cd ../.. && cd frontend-pwa && bun install --frozen-lockfile
-# copy sources and build
-COPY packages/tokens packages/tokens
-COPY frontend-pwa frontend-pwa
-RUN cd packages/tokens && bun run build && \
-    cd ../frontend-pwa && bun run build
-
-# ===== Runtime stage =====
-FROM nginx:1.27-alpine AS runtime
-COPY --from=build /web/frontend-pwa/dist/ /usr/share/nginx/html
-```
+The frontend Dockerfile lives at
+[`deploy/docker/frontend.Dockerfile`](../deploy/docker/frontend.Dockerfile).
+It installs workspace dependencies before copying sources so that builds
+benefit from layer caching. The final stage uses `nginx:alpine` to serve the
+compiled `dist/` directory.
 
 - In CI, extract `/usr/share/nginx/html` and upload to **DOKS Spaces** (object
   storage) behind a CDN.
