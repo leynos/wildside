@@ -5,8 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "node build/style-dictionary.js",
-    "postinstall": "node build/style-dictionary.js"
+    "postinstall": "node build/style-dictionary.js",
+    "validate:contrast": "node build/validate-contrast.js",
+    "test": "npm run validate:contrast"
   },
-  "devDependencies": { "style-dictionary": "^4" },
-  "engines": { "node": ">=18.17" }
+  "devDependencies": {
+    "style-dictionary": "^4"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
 }
