@@ -74,7 +74,15 @@ function checkTheme(file, threshold) {
         );
       }
     } catch (err) {
-      errors.push(err instanceof Error ? err.message : String(err));
+      console.error(
+        `Failed to resolve token reference for "${label}" in ${fileHint}.`,
+        { fgRef, bgRef, error: err }
+      );
+      errors.push(
+        `${label} in ${fileHint} failed to resolve token reference: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
     }
   }
 

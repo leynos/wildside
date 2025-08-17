@@ -26,13 +26,17 @@ export function resolveToken(ref) {
       throw new Error(`Circular token reference detected: "${key}"`);
     }
     seen.add(key);
-    const node = key.split('.').reduce((obj, k) => {
+    const pathSegments = key.split('.');
+    let obj = TOKENS;
+    for (let i = 0; i < pathSegments.length; i++) {
+      const k = pathSegments[i];
       if (obj?.[k] == null) {
-        throw new Error(`Token "${key}" not found`);
+        const missingPath = pathSegments.slice(0, i + 1).join('.');
+        throw new Error(`Token path "${missingPath}" not found (while resolving "${key}")`);
       }
-      return obj[k];
-    }, TOKENS);
-    current = node?.value;
+      obj = obj[k];
+    }
+    current = obj?.value;
   }
   return current;
 }

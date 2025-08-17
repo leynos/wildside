@@ -13,7 +13,17 @@ import Color from 'color';
  * contrast('#000', '#fff'); // => 21
  */
 export function contrast(foreground, background) {
-  const fg = Color(foreground);
-  const bg = Color(background);
+  let fg;
+  let bg;
+  try {
+    fg = Color(foreground);
+  } catch {
+    throw new Error(`Invalid colour: ${foreground}`);
+  }
+  try {
+    bg = Color(background);
+  } catch {
+    throw new Error(`Invalid colour: ${background}`);
+  }
   return fg.contrast(bg);
 }
