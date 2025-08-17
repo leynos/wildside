@@ -182,6 +182,10 @@ Tailwind/daisyUI and any future native shells.
   - `dist/tw/preset.cjs` (Tailwind preset mapping spacing/radius/colours),
   - `dist/daisy/theme.cjs` (daisyUI theme object from semantic tokens),
   - optional JS/TS token bundle for RN/NativeWind down the road.
+- `packages/tokens/build/validate-contrast.js`: checks theme colours meet
+  the `contrastThreshold` (override via `CONTRAST_THRESHOLD` env or
+  `packages/tokens/package.json`). Uses the `color` library for WCAG
+  contrast.
 
 **Frontend consumption:**
 
