@@ -91,7 +91,7 @@ findings are as follows:
 
 A thorough analysis of the mobile application market reveals that the "walking
 app" space is not a single category but a collection of distinct segments, each
-with different user profiles, value propositions, and monetization strategies.1
+with different user profiles, value propositions, and monetization strategies[^1]
 Understanding this segmentation is critical to positioning Wildside effectively.
 
 #### Segment 1: Fitness & Performance Trackers (Direct/Indirect Competitors)
@@ -130,15 +130,15 @@ mountain biking, and trail running, typically in non-urban environments.
   These apps serve as vast databases of trails, with powerful search and
   filtering capabilities. They emphasize practical features for outdoor use,
   such as detailed topographic maps, information on trail conditions, and
-  robust offline functionality.2 A strong community element, focused on
+  robust offline functionality[^2] A strong community element, focused on
   user-submitted reviews, photos, and trail condition updates, is a key driver
-  of value for apps like AllTrails.2
+  of value for apps like AllTrails[^2]
 
 - **Monetization:** The model is again freemium. The free versions allow for
   trail discovery and online navigation. Premium subscriptions are primarily
   driven by the need for offline maps, a critical feature when hiking in areas
   with no cell service. Additional premium features include advanced map layers
-  (e.g., heatmaps, 3D views), wrong-turn alerts, and live tracking.4
+  (e.g., heatmaps, 3D views), wrong-turn alerts, and live tracking[^3]
 
 - **Wildside's Position:** These are the closest direct competitors in terms of
   core functionality (route discovery and turn-by-turn navigation). However,
@@ -149,7 +149,7 @@ mountain biking, and trail running, typically in non-urban environments.
   data foundation. The market dominance of AllTrails underscores the power of a
   strong community and user-generated content, presenting a challenge that
   Wildside's purely algorithmic approach must address, perhaps in later
-  versions through social features.2
+  versions through social features[^2]
 
 #### Segment 3: Self-Guided Tour & Itinerary Planners (Niche Competitors)
 
@@ -180,11 +180,11 @@ particularly among tourists.
 
 These are the ubiquitous navigation utilities used by billions of people daily.
 
-- **Exemplars:** Google Maps, Apple Maps.7
+- **Exemplars:** Google Maps, Apple Maps[^4]
 
 - **Core Focus:** Their primary function is efficient A-to-B navigation across
   all modes of transport. When a user requests walking directions, the
-  algorithm's objective is to find the shortest or fastest path.7
+  algorithm's objective is to find the shortest or fastest path[^4]
 
 - **Wildside's Position:** While these platforms are the default for functional
   navigation, they are not designed for exploration or leisure. Their
@@ -196,7 +196,7 @@ These are the ubiquitous navigation utilities used by billions of people daily.
 ### App Store Optimization (ASO) & Marketing Analysis
 
 A competitor's presence on the App Store provides critical intelligence for
-go-to-market strategy.1
+go-to-market strategy[^1]
 
 - **Keyword Analysis:** Competitor keyword strategies reveal distinct market
   segments. AllTrails and Komoot dominate terms like "hiking trails,"
@@ -208,7 +208,7 @@ go-to-market strategy.1
   walk," "urban exploration," "generative tours," "AI walk planner," and
   "discover my city."
 
-- **Creative Analysis:** First impressions on the app store are paramount.1
+- **Creative Analysis:** First impressions on the app store are paramount[^1]
   Competitors' screenshots visually articulate their core value proposition.
   Strava displays performance graphs and social feeds. AllTrails showcases
   stunning landscape photography and detailed trail maps. GPSmyCity features
@@ -218,7 +218,7 @@ go-to-market strategy.1
   Courtyard" or "Art Deco Facade," and emphasizing the personalization controls.
 
 - **User Review Sentiment:** Analyzing negative reviews of competitors provides
-  a roadmap of pitfalls to avoid.1 Common complaints across the space include
+  a roadmap of pitfalls to avoid[^1] Common complaints across the space include
   inaccurate GPS tracking, excessive battery drain from background location
   services, opaque or frustrating paywalls, and application instability. To
   succeed, Wildside must deliver a technically polished experience with a focus
@@ -252,7 +252,7 @@ The competitive analysis reveals a clear and compelling market opportunity.
   an interesting walk I can take right now?" The recent popularization of the
   "Citywalk" trend on social media platforms indicates a growing cultural
   interest in walking as a form of leisure and engagement with the built
-  environment, separate from its function as transport or exercise.9
+  environment, separate from its function as transport or exercise[^5]
 
 This leads to a clear strategic path. The existing market is saturated with
 apps for walking, but they are all optimized for a purpose other than the
@@ -266,7 +266,7 @@ best, most delightful route for a given user at a given moment.
 
 ---
 
-**Table 1: Competitive Feature Matrix**
+### Table 1: Competitive Feature Matrix
 
 | Feature             | Wildside (Proposed)             | AllTrails                             | Komoot                          | Strava                         | GPSmyCity                   |
 | ------------------- | ------------------------------- | ------------------------------------- | ------------------------------- | ------------------------------ | --------------------------- |
@@ -303,7 +303,7 @@ robust and reliable core.
   encourages an exploration-first mindset. Users can pan and zoom to any area
   of the city and initiate the route generation process from there. Key Points
   of Interest (POIs) will be tappable, revealing a concise summary of their
-  significance, derived from enriched Wikidata.10
+  significance, derived from enriched Wikidata[^6]
 
 - **Route Generation Controls:** The primary user interaction is designed for
   simplicity and immediacy. A single button, "Generate Walk," will open a
@@ -402,14 +402,14 @@ foundation for efficient expansion to desktop and mobile platforms.
     using Capacitor. This packages the web application into a native container
     that can be submitted to the Apple App Store and Google Play Store,
     providing access to native device APIs (like advanced camera or biometrics)
-    while reusing 100% of the DaisyUI frontend.3
+    while reusing 100% of the DaisyUI frontend[^7]
 
   - **Desktop (macOS/Windows/Linux via Tauri):** For a superior desktop
     experience, the web UI will be bundled into a Tauri application. Tauri
     offers significant advantages over alternatives like Electron, including
     dramatically smaller bundle sizes, lower memory usage, and enhanced
     security, by leveraging the system's native WebView instead of bundling a
-    full browser.87 The use of a Rust backend in Tauri aligns perfectly with
+    full browser[^8] The use of a Rust backend in Tauri aligns perfectly with
     the main application backend.
 
 - **Phase 3: Advanced Features & Community Integration:**
@@ -423,7 +423,7 @@ foundation for efficient expansion to desktop and mobile platforms.
     to save, rate, and share their favorite generated walks. This creates a
     powerful feedback loop to refine the POI scoring and route generation
     algorithms, addressing the strong competitive advantage of community-driven
-    platforms like AllTrails.2
+    platforms like AllTrails[^2]
 
 ## The 'Wildside' Recommendation Engine: Data, Scoring, and Optimization
 
@@ -439,7 +439,7 @@ datasets: OpenStreetMap for geospatial structure and Wikidata for semantic
 meaning.
 
 - **Primary Geospatial Data: OpenStreetMap (OSM):** OSM provides the
-  foundational "canvas" for our world.12 It supplies the essential data for any
+  foundational "canvas" for our world[^9] It supplies the essential data for any
   mapping application: the complete network of streets, footpaths, and trails;
   building footprints; and a vast, user-contributed repository of Points of
   Interest (POIs). The OSM data model is composed of three primary elements:
@@ -447,7 +447,7 @@ meaning.
   `nodes` (points), `ways` (ordered lists of nodes forming lines or polygons),
   and `relations` (groups of other elements). Each element is described by a
   flexible system of key-value `tags` (e.g., `amenity=cafe`,
-  `historic=castle`).12 While this tag system is incredibly comprehensive, its
+  `historic=castle`)[^9] While this tag system is incredibly comprehensive, its
   lack of a rigid schema presents a data processing challenge that our pipeline
   must address.
 
@@ -457,19 +457,19 @@ meaning.
   `tourism=museum`), it often cannot tell us *why* that feature is interesting.
   Wikidata bridges this gap. Many OSM objects include a `wikidata=*` tag, which
   links the geospatial object to its corresponding structured data item in the
-  Wikidata knowledge base.14
+  Wikidata knowledge base[^10]
 
   This linkage is the cornerstone of our personalization strategy. It allows us
   to move beyond simple tag-based filtering to a much deeper, property-based
   understanding of each POI. For example, an OSM node for a museum, once linked
   to its Wikidata item, provides access to structured properties like its
-  architect, date of construction, architectural style, and collection size.10
+  architect, date of construction, architectural style, and collection size[^6]
   This enables a profound shift in capability: instead of merely finding
   "museums," the system can now identify "Art Nouveau museums designed by
   Victor Horta," allowing for the creation of highly specific and personalized
   thematic walks. The
 
-  `wikidata=*` tag is the critical conduit that makes this symbiosis possible.14
+  `wikidata=*` tag is the critical conduit that makes this symbiosis possible[^10]
 
 ### POI Scoring & Personalization Algorithm
 
@@ -553,7 +553,7 @@ well-studied problem in combinatorial optimization.
   involving more than a very small number of POIs. This is a fundamental
   limitation that dictates our technical approach. A brute-force method is
   impossible; the system must rely on **heuristics and metaheuristics** to find
-  a high-quality, near-optimal solution within a few seconds.17
+  a high-quality, near-optimal solution within a few seconds[^11]
 
 - **Proposed Solution Stack:**
 
@@ -582,7 +582,7 @@ well-studied problem in combinatorial optimization.
      solvers for a wide range of vehicle routing problems (VRPs), of which the
      OP is a well-known variant. Its flexible CP-SAT solver is particularly
      well-suited for modeling the unique constraints of our problem, such as
-     maximizing a collected score under a time budget.19 This provides a
+     maximizing a collected score under a time budget[^12] This provides a
      robust, production-ready foundation for our core processing layer.
 
 ## System Architecture & Technology Stack
@@ -593,26 +593,26 @@ For the initial development and launch of the Wildside MVP, a **monolithic
 architecture** is the most pragmatic and strategically sound choice. While
 microservices offer benefits at scale, they introduce significant complexity
 that is counterproductive for an early-stage product where speed of iteration
-is the primary concern.25
+is the primary concern[^13]
 
 - **Rationale:**
 
   - **Maximized Development Velocity:** A monolithic application involves a
     single codebase, a unified build process, and a straightforward deployment
     pipeline. This simplicity dramatically accelerates the development cycle,
-    allowing a small team to build, test, and deploy new features rapidly.25
+    allowing a small team to build, test, and deploy new features rapidly[^13]
 
   - **Reduced Operational Complexity:** Managing a single, unified service is
     orders of magnitude simpler than orchestrating, monitoring, and debugging a
     distributed system of microservices. A monolithic approach avoids the
     immediate need for extensive DevOps expertise, complex service discovery
     mechanisms, and distributed tracing, thereby lowering the initial
-    operational cost and cognitive overhead.25
+    operational cost and cognitive overhead[^13]
 
   - **Avoiding Premature Optimization:** Microservices are an architectural
     pattern designed primarily to solve *organizational* scaling
     problems—enabling multiple independent teams to work on different parts of
-    a large application without blocking each other.26 Wildside, as a new
+    a large application without blocking each other[^14] Wildside, as a new
     product, does not face these "million dollar problems" yet. Adopting
     microservices at the MVP stage would be a classic case of premature
     optimization, introducing significant technical debt and complexity with no
@@ -637,7 +637,7 @@ technology choices prioritize performance, safety, and productivity.
 - **API Server: Rust with Actix Web**
 
   - **Language: Rust.** Rust is selected for its unique combination of
-    performance, memory safety, and concurrency.30 The route optimization
+    performance, memory safety, and concurrency[^15] The route optimization
     algorithm at the core of Wildside is computationally intensive. Rust's
     zero-cost abstractions and fine-grained memory control will ensure that
     route generation requests are processed with the speed and efficiency
@@ -646,27 +646,27 @@ technology choices prioritize performance, safety, and productivity.
     dereferences, data races), leading to a more robust and reliable system.
 
   - **Framework: Actix Web.** Within the Rust ecosystem, Actix Web is a mature,
-    battle-tested, and exceptionally high-performance web framework.30
+    battle-tested, and exceptionally high-performance web framework[^15]
     Benchmarks consistently place it among the fastest web frameworks available
     in any language, making it an ideal choice for a performance-critical API
-    server.32 Its actor-based architecture is well-suited for handling a high
+    server[^16] Its actor-based architecture is well-suited for handling a high
     volume of concurrent user requests.
 
 - **Database: PostgreSQL with PostGIS & JSONB**
 
   - **Core RDBMS: PostgreSQL.** A powerful, open-source, and highly extensible
     relational database that serves as a stable and reliable foundation for our
-    data persistence layer.33
+    data persistence layer[^17]
 
   - **Geospatial Extension: PostGIS.** PostGIS is the de facto industry
     standard for storing, indexing, and querying geospatial data within
-    PostgreSQL.35 It provides the essential spatial data types (e.g.,
+    PostgreSQL[^18] It provides the essential spatial data types (e.g.,
 
     `geometry`, `geography`) and a rich library of spatial functions (e.g.,
     `ST_DWithin` for finding nearby POIs, `ST_Distance` for calculating
     distances) that are fundamental to the application's functionality. Its
     support for spatial indexing (GiST) is critical for ensuring that
-    geographic queries remain performant as the dataset grows.35
+    geographic queries remain performant as the dataset grows[^18]
 
   - **Flexible Data Storage: JSONB.** The binary JSON data type in PostgreSQL
     is the perfect solution for handling the semi-structured nature of
@@ -677,20 +677,20 @@ technology choices prioritize performance, safety, and productivity.
     would be impossible to maintain given the ever-evolving nature of OSM
     tagging. This hybrid approach combines the transactional integrity of a
     relational database with the schema-on-read flexibility of a document
-    store.40
+    store[^19]
 
 - **ORM: Diesel**
 
   - Diesel is a mature and widely-adopted Object-Relational Mapper (ORM) and
-    query builder for Rust.42 It is chosen for its strong emphasis on
+    query builder for Rust[^20] It is chosen for its strong emphasis on
     compile-time safety. Diesel's macros analyze SQL queries at compile time,
     catching errors like mismatched types or incorrect column names before the
     code is ever run. This significantly increases developer productivity and
-    reduces the likelihood of runtime database errors.42 While it has a steeper
+    reduces the likelihood of runtime database errors[^20] While it has a steeper
     learning curve than simpler database drivers, the safety and expressiveness
     it provides are invaluable for a complex, data-intensive application. For
     performance-critical raw SQL, Diesel provides a clear escape hatch,
-    ensuring no loss of capability.42
+    ensuring no loss of capability[^20]
 
 ### Frontend Application: A Web-First PWA Approach
 
@@ -702,31 +702,31 @@ clear path to native mobile and desktop distribution.
 
   - TypeScript is chosen over plain JavaScript due to its static typing system.
     For an application of this complexity, static types are essential for
-    building a maintainable, scalable, and less error-prone codebase.87 The
+    building a maintainable, scalable, and less error-prone codebase[^8] The
     ability to catch type-related errors during development, coupled with
     superior IDE support for autocompletion and refactoring, dramatically
-    improves developer efficiency and code quality.18
+    improves developer efficiency and code quality[^21]
 
 - **UI Framework/Build Tool: React via Vite**
 
   - The application will be built with React. For the MVP, **Vite** is
-    recommended as the build tool and development server.67 As a
+    recommended as the build tool and development server[^22] As a
     framework-agnostic and unopinionated tool, Vite offers a simpler setup and
     a gentler learning curve compared to a full-stack framework like Next.js.
     Its primary focus on frontend development aligns perfectly with our
-    architecture, where the backend is a separate, dedicated Rust service.67
+    architecture, where the backend is a separate, dedicated Rust service[^22]
 
 - **UI Components & Styling: DaisyUI with Tailwind CSS**
 
-  - The UI will be built using **DaisyUI**, a plugin for Tailwind CSS.91 Unlike
+  - The UI will be built using **DaisyUI**, a plugin for Tailwind CSS[^23] Unlike
     component libraries that bundle JavaScript, DaisyUI is a pure CSS solution
     that provides semantic class names (e.g.,
 
     `btn`, `card`) to compose complex components from Tailwind's utility
-    classes.93 This approach keeps the HTML clean, is highly performant, and is
-    framework-agnostic, which is ideal for the PWA-first strategy.92 Because
+    classes[^24] This approach keeps the HTML clean, is highly performant, and is
+    framework-agnostic, which is ideal for the PWA-first strategy[^25] Because
     DaisyUI is logicless, all state management (e.g., for opening modals) will
-    be handled within React, providing a clean separation of concerns.95
+    be handled within React, providing a clean separation of concerns[^26]
 
 - **Server State Management: TanStack Query (formerly React Query)**
 
@@ -734,17 +734,17 @@ clear path to native mobile and desktop distribution.
     state in React applications. It provides a simple hook-based API
     (`useQuery`, `useMutation`) that handles the complexities of data fetching,
     caching, background synchronization, and error handling with minimal
-    boilerplate code.47 It will be used to manage all interactions with the
+    boilerplate code[^27] It will be used to manage all interactions with the
     backend API, including fetching POI data, user profiles, and the results of
     generated routes. This eliminates the need for a more complex global state
     management library like Redux for handling server data, leading to a
-    simpler and more maintainable application architecture.47
+    simpler and more maintainable application architecture[^27]
 
 - **Map Rendering: MapLibre GL JS**
 
   - MapLibre GL JS is a high-performance, community-driven, open-source library
     for rendering vector maps. It is a fork of Mapbox GL JS created after
-    Mapbox changed its licensing.51 Vector tiles are essential for a smooth,
+    Mapbox changed its licensing[^28] Vector tiles are essential for a smooth,
     interactive map experience, allowing for client-side styling, seamless
     zooming, and map rotation. MapLibre's capabilities far exceed those of
     simpler raster tile libraries like Leaflet, making it the appropriate
@@ -756,30 +756,30 @@ The web-first architecture allows for a low-waste, high-reuse path to native
 platforms.
 
 - **Mobile (Capacitor):** To reach the iOS and Android app stores, the PWA will
-  be wrapped using **Capacitor**.3 Capacitor packages the existing web
+  be wrapped using **Capacitor**[^7] Capacitor packages the existing web
   application into a native WebView, providing full access to native device
-  APIs through a plugin system.4 This approach allows for 100% reuse of the
+  APIs through a plugin system[^3] This approach allows for 100% reuse of the
   DaisyUI codebase and is significantly faster and more cost-effective than a
-  full rewrite in a framework like React Native.3 The primary trade-off is that
+  full rewrite in a framework like React Native[^7] The primary trade-off is that
   performance for highly complex animations may not match that of a true native
-  app, as it is rendered in a WebView.3
+  app, as it is rendered in a WebView[^7]
 
 - **Desktop (Tauri):** For a first-class desktop experience on macOS, Windows,
-  and Linux, the same web UI will be bundled using **Tauri**.87 Tauri is a
+  and Linux, the same web UI will be bundled using **Tauri**[^8] Tauri is a
   modern, lightweight alternative to Electron that offers substantial benefits
-  in this project's context.88
+  in this project's context[^29]
 
   - **Performance & Size:** Tauri applications are significantly smaller
     (\~3-9MB) and use considerably less memory than Electron apps (\~80-240MB+)
     because they utilize the operating system's native WebView instead of
-    bundling an entire Chromium instance.87
+    bundling an entire Chromium instance[^8]
 
-  - **Backend Synergy:** Tauri's backend is written in Rust.89 This creates a
+  - **Backend Synergy:** Tauri's backend is written in Rust[^30] This creates a
     perfect synergy with the main application backend, allowing for shared
     code, libraries, and developer expertise.
 
   - **Security:** Tauri is designed with a security-first mindset, offering a
-    more secure default configuration than Electron.88
+    more secure default configuration than Electron[^29]
 
 ### AI/LLM Integration Strategy: A Secure, Two-Tiered Approach
 
@@ -796,11 +796,11 @@ is proposed to balance these requirements.
 
   - **Technology:** A small, efficient, and quantized 7-billion parameter model
     (e.g., a fine-tuned variant of Mistral 7B) will be run directly on the
-    user's device using a framework like llama.cpp.52
+    user's device using a framework like llama.cpp[^31]
 
   - **Rationale:** This task is essentially a classification and entity
     extraction problem, which smaller, specialized models can handle
-    effectively.54 Running the model locally means user queries are processed
+    effectively[^32] Running the model locally means user queries are processed
     instantly without network latency and, crucially, without sending
     potentially private conversational data to a third-party server. The
     hardware requirements for running a quantized 7B model are now met by many
@@ -825,10 +825,10 @@ is proposed to balance these requirements.
 
     1. **Aggressive Caching:** Generated descriptions for popular POIs will be
        stored in our database and served directly, avoiding repeated API
-       calls.58
+       calls[^33]
 
     2. **Prompt Optimization:** Prompts will be engineered to be concise and
-       effective, minimizing token usage.58
+       effective, minimizing token usage[^33]
 
     3. **Model Selection:** Choosing a model with a favorable
        price-to-performance ratio, like Claude 3.5 Sonnet ($3/M input, $15/M
@@ -839,7 +839,7 @@ is proposed to balance these requirements.
   evolves, the narrative-generation LLM may need to call external tools (e.g.,
   an API to fetch real-time museum hours). This introduces a severe security
   vulnerability to prompt injection attacks, where malicious data from an
-  external source can trick the LLM into executing unintended actions.61
+  external source can trick the LLM into executing unintended actions[^34]
 
   - **Proposed Design Patterns:** To mitigate this risk, a combination of
     secure architectural patterns will be implemented 65:
@@ -850,7 +850,7 @@ is proposed to balance these requirements.
        is tasked with handling the untrusted data (e.g., the content of a
        webpage). The Executor LLM's role is strictly to extract and return
        structured data to the Orchestrator; it is never allowed to make
-       decisions or initiate actions itself.65
+       decisions or initiate actions itself[^35]
 
     2. **Plan-Then-Execute Pattern:** The Orchestrator LLM will create a
        complete, static plan of tool calls *before* any interaction with
@@ -858,16 +858,16 @@ is proposed to balance these requirements.
        input for a subsequent tool, but it cannot influence the *choice* of
        which tool to call next. This prevents a prompt injection from
        escalating and causing the agent to call an unintended, potentially
-       harmful tool (e.g., `send_email` or `delete_database_record`).65
+       harmful tool (e.g., `send_email` or `delete_database_record`)[^35]
 
   - This architectural separation is a non-negotiable requirement for building
     a secure, tool-using LLM agent. It treats the LLM interacting with the
     outside world as an untrusted user, a fundamental principle of secure
-    system design.68
+    system design[^36]
 
 ---
 
-**Table 2: Technology Stack Recommendation**
+### Table 2: Technology Stack Recommendation
 
 | Layer              | Technology                          | Rationale                                                                                            | Pros                                                                                             | Cons/Risks                                                                                         |
 | ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
@@ -878,8 +878,8 @@ is proposed to balance these requirements.
 | Frontend Framework | React (via Vite) as a PWA           | Web-first approach for rapid MVP delivery and maximum code reuse for future mobile/desktop wrappers. | Fast iteration, single codebase for web/mobile/desktop, large ecosystem.                         | Performance in native wrappers may not match true native apps for complex UI.                      |
 | Frontend Language  | TypeScript                          | Static typing for building scalable, maintainable, and less error-prone large applications.          | Catches errors at compile time, improved developer tooling and code navigation.                  | Adds a compilation step; can slightly slow down initial development speed for simple tasks.        |
 | Server State Mgt.  | TanStack Query                      | Modern, hook-based library for simplifying data fetching, caching, and synchronization.              | Reduces boilerplate, automatic background refetching, excellent dev tools.                       | Primarily for server state; still need a solution for complex global client state.                 |
-| UI Components      | DaisyUI                             | A lightweight Tailwind CSS plugin providing component classes for rapid, consistent UI development.  | Speeds up development, keeps HTML clean, framework-agnostic, highly customizable via Tailwind.91 | Logicless (requires manual state management), learning curve for those unfamiliar with Tailwind.91 |
-| UI Styling         | Tailwind CSS                        | Utility-first CSS for rapid, consistent, and maintainable styling.                                   | Speeds up development, enforces design system consistency, optimized production builds.91        | Can lead to verbose HTML; initial learning curve to master utility classes.96                      |
+| UI Components      | DaisyUI                             | A lightweight Tailwind CSS plugin providing component classes for rapid, consistent UI development.  | Speeds up development, keeps HTML clean, framework-agnostic, highly customizable via Tailwind[^23] | Logicless (requires manual state management), learning curve for those unfamiliar with Tailwind[^23] |
+| UI Styling         | Tailwind CSS                        | Utility-first CSS for rapid, consistent, and maintainable styling.                                   | Speeds up development, enforces design system consistency, optimized production builds[^23]        | Can lead to verbose HTML; initial learning curve to master utility classes[^37]                      |
 | Map Rendering      | MapLibre GL JS                      | High-performance, open-source vector map rendering for a fluid user experience.                      | Smooth zooming/panning, client-side styling, map rotation, 3D capabilities.                      | More complex API than simpler libraries like Leaflet.                                              |
 | LLM (Intent)       | Local 7B Model (e.g., Mistral)      | Fast, private, and offline-capable intent recognition on the user's device.                          | High performance for simple tasks, no network latency, preserves user privacy.                   | Limited to simpler tasks; requires sufficient device hardware; model management on client.         |
 | LLM (Narrative)    | Cloud API (e.g., Claude 3.5 Sonnet) | Access to state-of-the-art creative generation without prohibitive hardware costs.                   | High-quality output, scalable, no infrastructure maintenance.                                    | Pay-per-token cost can become significant; data privacy concerns; network dependency.              |
@@ -907,7 +907,7 @@ global state of OSM and Wikidata.
     `.osm.pbf` format) and the complete Wikidata JSON dump. For initial
     development and regional launches, smaller regional extracts (e.g.,
     `north-america-latest.osm.pbf`) can be used to significantly speed up
-    processing.33
+    processing[^17]
 
 - **Step 2: Transformation & Loading into PostGIS (T & L):**
 
@@ -924,17 +924,17 @@ global state of OSM and Wikidata.
        query performance high.
 
     2. **Geometry Creation:** OSM elements will be converted into the
-       appropriate PostGIS geometry types (Points, LineStrings, Polygons).69
+       appropriate PostGIS geometry types (Points, LineStrings, Polygons)[^38]
 
     3. **Flexible Tag Storage:** All original OSM tags for each imported
        feature will be stored in a single `tags` column of type `JSONB`. This
        approach provides maximum flexibility for future queries without
-       requiring schema changes.41
+       requiring schema changes[^39]
 
   - This bulk-loading process is extremely disk I/O intensive. The PostgreSQL
     server must be temporarily tuned for this task by adjusting parameters like
     disabling `autovacuum` and `fsync`, increasing `max_wal_size`, and using
-    unlogged tables to maximize import speed.34
+    unlogged tables to maximize import speed[^40]
 
 - **Step 3: Linking and Enrichment:**
 
@@ -970,12 +970,12 @@ complex, multi-faceted data.
   - `geom` (GEOMETRY(Geometry, 4326)): The core PostGIS geometry object, stored
     in the WGS 84 spatial reference system (SRID 4326). This column will have a
     GiST (Generalized Search Tree) index to enable extremely fast spatial
-    queries (e.g., "find all POIs within this bounding box").35
+    queries (e.g., "find all POIs within this bounding box")[^18]
 
   - `tags` (JSONB): A flexible column containing all raw key-value tags from
     the original OSM element. This column will have a GIN (Generalized Inverted
     Index) to allow for efficient querying of any key or value within the JSONB
-    structure.40
+    structure[^19]
 
   - `wikidata_qid` (VARCHAR(20)): The linked Wikidata Q-ID (e.g., "Q90"),
     extracted from the `tags` for easy joining and indexed for fast lookups.
@@ -1006,28 +1006,28 @@ the outset.
 - **The Latency Problem:** There is an inherent delay between an edit being
   made in OSM or Wikidata and that change being reflected in the Wildside app.
   Wikimedia's own servers have a sync process from OSM that can take up to a
-  day.70 Our own nightly batch process introduces further latency. This means
+  day[^41] Our own nightly batch process introduces further latency. This means
   the app's data will always be 24-48 hours behind the real world at best. This
   limitation must be accepted, and potentially communicated to users.
 
 - **The Link Integrity Problem:** The `wikidata=*` tag that connects our two
   data worlds is maintained by human editors and is susceptible to errors.
   Links can be incorrect, point to the wrong entity, become outdated, or point
-  to a Wikidata item that has since been merged and is now a redirect.14
+  to a Wikidata item that has since been merged and is now a redirect[^10]
 
   - **Mitigation Strategy:** The ETL pipeline must include a dedicated data
     validation and cleansing stage. This stage will programmatically check for
     and flag common issues. Tools like the **OSM Wikidata Quality Checker**
     provide a model for this, performing checks for malformed Q-IDs, links to
-    redirects, and geographic mismatches.72 More advanced validation can be
+    redirects, and geographic mismatches[^42] More advanced validation can be
     performed using federated SPARQL queries that combine OSM and Wikidata data
-    on the fly to spot inconsistencies.14 POIs with flagged data integrity
+    on the fly to spot inconsistencies[^10] POIs with flagged data integrity
     issues can be excluded from route generation until the issues are resolved
     in the source datasets.
 
 - **The Mismatched Granularity Problem:** A frequent challenge is that the
   concept of a "place" does not always map one-to-one between OSM and
-  Wikidata.73 A single Wikidata item for "The University of Edinburgh"
+  Wikidata[^43] A single Wikidata item for "The University of Edinburgh"
   (Q160302) corresponds to hundreds of separate
 
   `way` elements in OSM representing individual buildings, paths, and lawns.
@@ -1073,7 +1073,7 @@ strategy is strongly recommended over self-hosting.
     developer-friendly, and scale predictably from a small MVP to a production
     workload. They strike an excellent balance between ease of use and cost,
     representing a more modern and often more cost-effective alternative to the
-    complexity of a full AWS setup or the historically higher costs of Heroku.75
+    complexity of a full AWS setup or the historically higher costs of Heroku[^44]
 
   - **Frontend-related Web Assets:** Any static web assets, such as the
     application's landing page or documentation, can be deployed for free or at
@@ -1091,7 +1091,7 @@ control.
   - **Third-Party API (e.g., MapTiler):** This is the simplest option to
     implement. A starter plan like MapTiler's "Flex" tier provides 500,000 map
     requests for approximately $25/month, which is suitable for initial
-    development and low-traffic beta testing.79 However, this is a variable
+    development and low-traffic beta testing[^45] However, this is a variable
     cost that scales directly with usage and can become substantial.
 
   - **Self-Hosting:** This approach requires more initial setup but offers
@@ -1155,7 +1155,7 @@ usage scenarios for the first year of operation.
 
 ---
 
-**Table 3: Detailed MVP Monthly Cost Estimation**
+### Table 3: Detailed MVP Monthly Cost Estimation
 
 | Service/Component            | Provider/Technology         | Plan/Tier                          | Estimated Monthly Cost (Low Usage: ~1k MAU) | Estimated Monthly Cost (Medium Usage: ~10k MAU) | Estimated Monthly Cost (High Usage: ~50k MAU) |
 | ---------------------------- | --------------------------- | ---------------------------------- | ------------------------------------------- | ----------------------------------------------- | --------------------------------------------- |
@@ -1165,10 +1165,9 @@ usage scenarios for the first year of operation.
 | Map Tile Hosting             | AWS S3 + CloudFront         | Pay-as-you-go                      | ~$25                                        | ~$50                                            | ~$150                                         |
 | Cache                        | Redis Cloud                 | Essentials (250 MB)                | $7                                          | $7                                              | $15 (500 MB)                                  |
 | LLM API Usage                | Anthropic Claude 3.5 Sonnet | Pay-as-you-go                      | ~$200                                       | ~$2,000                                         | ~$10,000                                      |
-| Total Estimated Monthly Cost |
-| ~$283                        | ~$2,150                     | ~$10,391                           |
+| Total Estimated Monthly Cost | - | - | ~$283 | ~$2,150 | ~$10,391 |
 
-Note: Cost estimates are based on pricing data from sources , and.83 LLM costs
+Note: Cost estimates are based on pricing data from sources , and[^46] LLM costs
 are highly variable and represent the largest financial risk; the estimate
 assumes an average of 2 walks/month per user, 10 POIs per walk, and 1,000
 tokens per POI description at an average cost of $10/M tokens.
@@ -1204,7 +1203,7 @@ scale. A clear, phased plan for evolving the architecture is essential.
   streaming pipeline using tools like Apache Kafka to reduce data latency. If
   the complexity of querying the interconnected OSM and Wikidata data becomes a
   bottleneck, the team may evaluate migrating the enriched POI data to a
-  dedicated graph database like Neo4j to optimize complex traversal queries.84
+  dedicated graph database like Neo4j to optimize complex traversal queries[^47]
 
 ## Risks, Limitations, and Mitigation Strategies
 
@@ -1297,7 +1296,7 @@ Wildside and proposes concrete strategies for their mitigation.
 
 - **Risk (Security):** The integration of LLMs, especially those with
   tool-calling capabilities, creates a significant new attack surface for
-  prompt injection attacks.61
+  prompt injection attacks[^34]
 
 - **Mitigation (Security):**
 
@@ -1310,7 +1309,7 @@ Wildside and proposes concrete strategies for their mitigation.
      sources (e.g., webpages, third-party APIs) will be treated as potentially
      malicious. It will be sanitized and processed by a sandboxed "Executor
      LLM" that has no privileges to perform actions, returning only structured
-     data to the trusted "Orchestrator LLM".68
+     data to the trusted "Orchestrator LLM"[^36]
 
 ### Market Adoption & Monetization
 
@@ -1339,7 +1338,7 @@ Wildside and proposes concrete strategies for their mitigation.
 
      - **Offline Maps & Navigation:** This is a proven and powerful driver for
        subscription conversion in competitor apps like AllTrails and is a
-       critical feature for travelers.2
+       critical feature for travelers[^2]
 
      - **Advanced Features (Post-MVP):** Future features like Audio Guides and
        AR overlays will be exclusive to premium subscribers.
@@ -1353,7 +1352,7 @@ Wildside and proposes concrete strategies for their mitigation.
 
 ---
 
-**Table 4: Risk Assessment Matrix**
+### Table 4: Risk Assessment Matrix
 
 | Risk Category | Specific Risk Description                                                                                                  | Likelihood | Impact | Mitigation Strategy                                                                                                                                              |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1431,198 +1430,50 @@ how people experience and connect with the cities around them.
 
 ## Works cited
 
-1. API Pricing - OpenAI, https://openai.com/api/pricing/
-2. ZeLonewolf's Diary | Host an OpenMapTiles Vector Tile Server on AWS for
-   $19.75/month | OpenStreetMap,
-   https://www.openstreetmap.org/user/ZeLonewolf/diary/401697
-3. Comparing React Native vs Capacitor - Capgo,
-   https://capgo.app/blog/comparing-react-native-vs-capacitor/
-4. Capacitor vs React Native - Reveation Labs,
-   https://www.reveation.io/blog/capacitor-vs-react-native
-5. Using Capacitor with React, https://capacitorjs.com/solution/react
-6. Team Orienteering Problem with Time Windows and Variable Profit - Annals of
-   Computer Science and Information Systems,
-   https://annals-csis.org/Volume_30/drp/pdf/158.pdf
-7. [2506.08837] Design Patterns for Securing LLM Agents against Prompt
-   Injections - arXiv, https://arxiv.org/abs/2506.08837
-8. Geometa Lab at IFS / OpenStreetMap Wikidata Quality Checker - GitLab,
-   https://gitlab.com/geometalab/osm-wikidata-quality-checker
-9. LLM Chronicles #6.9: Design Patterns for Securing LLM Agents Against Prompt
-   Injection (Paper Review) - YouTube,
-   https://www.youtube.com/watch?v=2Er7bmyhPfM
-10. Wikidata for Digital Preservationists,
-    https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file
-11. Intent Classification using LLMs (Hybrid) - Voiceflow's docs,
-    https://docs.voiceflow.com/docs/llm-intent-classification-method
-12. Comparing React Native vs. Vue and Capacitor - LogRocket Blog,
-    https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/
-13. Tauri vs. Electron: performance, bundle size, and the real trade-offs -
-    Hopp, https://www.gethopp.app/blog/tauri-vs-electron
-14. Tauri vs. Electron: A New Dawn in Desktop App Development | by DhruvK_Sethi
-    | Medium, https://medium.com/@DhruvK_Sethi/tauri-vs-electron-a-new-dawn-in-desktop-app-development-16f13372b8fc |
-15. Tauri VS. Electron - Real world application - Levminer,
-    https://www.levminer.com/blog/tauri-vs-electron
-16. Tauri vs Electron: The best Electron alternative created yet -
-    Astrolytics.io analytics, https://www.astrolytics.io/blog/electron-vs-tauri
-17. Comparing Diesel and rust-postgres | by Sean Griffin | HackerNoon.com -
-    Medium,
-    https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd
-18. TypeScript vs. JavaScript: Which One to Choose in 2025? - Carmatec,
-    https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/
-19. Rust Web Frameworks Compared: Actix vs Axum vs Rocket - DEV Community,
-    https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad
-20. OR-Tools' Vehicle Routing Solver: a Generic Constraint-Programming Solver
-    with Heuristic Search for Routing Problems - Google Research,
-    https://research.google/pubs/or-tools-vehicle-routing-solver-a-generic-constraint-programming-solver-with-heuristic-search-for-routing-problems/
-21. PostGIS, https://postgis.net/
-22. The best React UI component libraries of 2025 | Croct Blog,
-    https://blog.croct.com/post/best-react-ui-component-libraries
-23. Solving Orienteering Problem with Advanced Techniques - Number Analytics,
-    https://www.numberanalytics.com/blog/advanced-orienteering-problem-solutions
-24. Leaflet migration guide - MapLibre GL JS,
-    https://maplibre.org/maplibre-gl-js/docs/guides/leaflet-migration-guide/
-25. Pricing - Anthropic API,
-    https://docs.anthropic.com/en/docs/about-claude/pricing
-26. Don't trust the LLM: Rethinking LLM Architectures for Better Security -
-    Mindgard AI, https://mindgard.ai/blog/llm-architecture-positioning
-27. Worry-Free Managed PostgreSQL Hosting - DigitalOcean,
-    https://www.digitalocean.com/products/managed-databases-postgresql
-28. Redis Cloud Pricing, https://redis.io/pricing/
-29. The Data Model of OpenStreetMap - Overpass API,
-    https://dev.overpass-api.de/overpass-doc/en/preface/osm_data_model.html
-30. Wikidata - OpenStreetMap Wiki, https://wiki.openstreetmap.org/wiki/Wikidata
-31. The cooperative orienteering problem with time windows - Optimization
-    Online, https://optimization-online.org/wp-content/uploads/2014/04/4316.pdf
-32. I'm a bit uncertain about what Google OR-Tools is…it *seems* to be some
-    sort of - Hacker News, https://news.ycombinator.com/item?id=22582688
-33. JSONB PostgreSQL: How To Store & Index JSON Data - ScaleGrid,
-    https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/
-34. Best Walking Apps (2025) - Garage Gym Reviews,
-    https://www.garagegymreviews.com/best-walking-apps
-35. 14 Best Walking Trip Planner Apps in 2025 - Upper,
-    https://www.upperinc.com/blog/best-walking-route-planner-apps/
-36. User:Krauss/Wikidata-question1 - OpenStreetMap Wiki,
-    https://wiki.openstreetmap.org/wiki/User:Krauss/Wikidata-question1
-37. Software MVP: Monolith vs Other Form : r/startups - Reddit,
-    https://www.reddit.com/r/startups/comments/125u276/software_mvp_monolith_vs_other_form/
-38. Rust Web Frameworks Compared: Actix vs Axum vs Rocket | by Leapcell | Jul,
-    2025,
-    https://leapcell.medium.com/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-20f0cc8a6cda
-39. Unleashing the Power of Rust in GIS Development - GEO Jobe,
-    https://geo-jobe.com/mapthis/unleashing-the-power-of-rust-in-gis-development/
-40. TanStack Query: A Powerful Tool for Data Management in React - Medium,
-    https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c
-41. Self Host LLM vs Api LLM : r/AI_Agents - Reddit,
-    https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/
-42. How to Monitor Your LLM API Costs and Cut Spending by 90% - Helicone,
-    https://www.helicone.ai/blog/monitor-and-optimize-llm-costs
-43. Load OpenStreetMap data to PostGIS - Blog @ RustProof Labs,
-    https://blog.rustprooflabs.com/2019/01/postgis-osm-load
-44. Using OpenStreetMap data - Algorithms,
-    https://algo.win.tue.nl/tutorials/openstreetmap/
-45. A Practical Review: Solving Vehicle Routing Problems with OR-Tools and
-    SCIP,
-    https://dev.to/thana_b/a-practical-review-solving-vehicle-routing-problems-with-or-tools-and-scip-52me
-46. GPSmyCity: Walks in 1K+ Cities - App Store,
-    https://apps.apple.com/us/app/gpsmycity-walks-in-1k-cities/id417207307
-47. Top 11 Multi-Stop Route Planner Apps in 2025,
-    https://www.upperinc.com/blog/best-multi-stop-route-planner-app/
-48. Home - osm2pgsql, https://osm2pgsql.org/
-49. Claude Sonnet 4 - Anthropic, https://www.anthropic.com/claude/sonnet
-50. Tour Guide Apps Development 101 - Krasamo,
-    https://www.krasamo.com/tour-guide-apps/
-51. Vite vs. Next.js: Features, Comparisons, Pros & Cons, & More - Prismic,
-    https://prismic.io/blog/vite-vs-nextjs
-52. What is DaisyUI? Advantages, Disadvantages, and FAQ's - By SW Habitation,
-    https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs
-53. daisyUI adoption guide: Overview, examples, and alternatives - LogRocket
-    Blog, https://blog.logrocket.com/daisyui-adoption-guide/
-54. DaisyUI vs Mantine: Which One is Better in 2025? - Subframe,
-    https://www.subframe.com/tips/daisyui-vs-mantine
-55. My Favorite Tailwind Library | Daisy UI - DEV Community,
-    https://dev.to/thatanjan/my-favorite-tailwind-library-daisy-ui-2n3j
-56. DaisyUI Reviews (2025) - Product Hunt,
-    https://www.producthunt.com/products/daisyui/reviews
-57. Comparison of UI libraries for React : r/reactjs - Reddit,
-    https://www.reddit.com/r/reactjs/comments/vtgbai/comparison_of_ui_libraries_for_react/
-58. Daisy UI is a godsend : r/Frontend - Reddit,
-    https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/
-59. AllTrails Review - Exploration Solo,
-    https://explorationsolo.com/alltrails-review/
-60. Is AllTrails+ worth it? (Spoiler: It isn't for everyone but it is for this
-    type of hiker.), https://uprootedtraveler.com/is-alltrails-pro-worth-it/
-61. Visit A City - Apps on Google Play,
-    https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp
-62. Top 12 Features to Look for in a Modern Tour Guide App - Vox Tours,
-    https://voxtours.com/12-features-to-look-for-in-a-modern-tour-guide-app/
-63. React Component Libraries - Mismo,
-    https://mismo.team/react-component-libraries-comparison-mui-vs-mantine/
-64. Diesel is a Safe, Extensible ORM and Query Builder for Rust,
-    https://diesel.rs/
-65. Self-Hosting vs Managed Hosting - Which Suits Your Business? - MGT
-    Commerce, https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/
-66. 11 Best Free Route Planners with Unlimited Stops - Maptive,
-    https://www.maptive.com/free-route-planners-with-unlimited-stops/
-67. Point-of-interest lists and their potential in recommendation systems -
-    PMC, https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/
-68. TypeScript vs JavaScript: Which is Better for Your Next Project? - Medium,
-    https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499
-69. Intent Recognition using a LLM with Predefined Intentions | by Ai
-    insightful - Medium,
-    https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7
-70. PostgreSQL Pricing | DigitalOcean Documentation,
-    https://docs.digitalocean.com/products/databases/postgresql/details/pricing/
-71. Heroku PostgreSQL vs. Amazon RDS for PostgreSQL - CloudBees,
-    https://www.cloudbees.com/blog/heroku-postgresql-versus-amazon-rds-postgresql
-72. Heroku Postgres - Add-ons,
-    https://elements.heroku.com/addons/heroku-postgresql
-73. A Straightforward Comparison Of Mantine Vs Chakra | Magic UI,
-    https://magicui.design/blog/mantine-vs-chakra
-74. Flexible pricing for online mapping - MapTiler,
-    https://www.maptiler.com/cloud/pricing/
-75. Choosing the best graph database for your organization: A practical guide -
-    Linkurious, https://linkurious.com/blog/choosing-the-best-graph-database/
-76. Diesel: A Safe, Extensible ORM and Query Builder for Rust | Hacker News,
-    https://news.ycombinator.com/item?id=11045412
-77. A Primer on Tailwind CSS: Pros, Cons & Real-World Use Cases - Telerik.com,
-    https://www.telerik.com/blogs/primer-tailwind-css-pros-cons-real-world-use-cases
-78. OpenStreetMap Data Model - Itinero - Documentation,
-    https://docs.itinero.tech/docs/osmsharp/osm.html
-79. LLM Prompt Injection Prevention - OWASP Cheat Sheet Series,
-    https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
-80. Amazon RDS for PostgreSQL Pricing,
-    https://aws.amazon.com/rds/postgresql/pricing/
-81. Mistral 7B System Requirements: What You Need to Run It Locally,
-    https://www.oneclickitsolution.com/centerofexcellence/aiml/run-mistral-7b-locally-hardware-software-specs
-82. TypeScript vs JavaScript Which is Best for Web Development - Moon
-    Technolabs, https://www.moontechnolabs.com/blog/typescript-vs-javascript/
-83. Vehicle Routing Problem | OR-Tools - Google for Developers,
-    https://developers.google.com/optimization/routing/vrp
-84. Prompt Injection Attacks in LLMs: Mitigating Risks with Microsegmentation -
-    ColorTokens,
-    https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/
-85. Orienteering Problem: A survey of recent variants, solution approaches and
-    applications,
-    https://smusg.elsevierpure.com/en/publications/orienteering-problem-a-survey-of-recent-variants-solution-approac
-86. Personalized Tour Recommendation Based on User Interests and Points of
-    Interest Visit Durations - IJCAI,
-    https://www.ijcai.org/Proceedings/15/Papers/253.pdf
-87. The Orienteering Problem: A Review of Variants and Solution Approaches -
-    ResearchGate,
-    https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches
-88. An iterated local search algorithm for solving the Orienteering Problem
-    with Time Windows - InK@SMU.edu.sg,
-    https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research
-89. Asynchronous State Management with TanStack Query - Atlantbh Sarajevo,
-    https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/
-90. Preparing Geospatial Data in PostGIS - Benny's Mind Hack,
-    https://bennycheung.github.io/preparing-geospatial-data-in-postgis
-91. Osm2pgsql - OpenStreetMap Wiki,
-    https://wiki.openstreetmap.org/wiki/Osm2pgsql
-92. Pricing | Render, https://render.com/pricing
-93. Monolith vs. Microservices Architecture - DevZero,
-    https://www.devzero.io/blog/monolith-vs-microservices
-94. How to Balance The Pros and Cons of Tailwind CSS - Blogs - Purecode.AI,
-    https://blogs.purecode.ai/blogs/pros-cons-tailwind
-95. Render PostgreSQL | FindDevTools,
-    https://finddev.tools/about/render-postgresql
+[^1]: API Pricing - OpenAI, <https://openai.com/api/pricing/>
+[^2]: ZeLonewolf's Diary | Host an OpenMapTiles Vector Tile Server on AWS for $19.75/month | OpenStreetMap, <https://www.openstreetmap.org/user/ZeLonewolf/diary/401697>
+[^3]: Capacitor vs React Native - Reveation Labs, <https://www.reveation.io/blog/capacitor-vs-react-native>
+[^4]: [2506.08837] Design Patterns for Securing LLM Agents against Prompt Injections - arXiv, <https://arxiv.org/abs/2506.08837>
+[^5]: LLM Chronicles #6.9: Design Patterns for Securing LLM Agents Against Prompt Injection (Paper Review) - YouTube, <https://www.youtube.com/watch?v=2Er7bmyhPfM>
+[^6]: Wikidata for Digital Preservationists, <https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file>
+[^7]: Comparing React Native vs Capacitor - Capgo, <https://capgo.app/blog/comparing-react-native-vs-capacitor/>
+[^8]: The Orienteering Problem: A Review of Variants and Solution Approaches - ResearchGate, <https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches>
+[^9]: Comparing React Native vs. Vue and Capacitor - LogRocket Blog, <https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/>
+[^10]: Tauri vs. Electron: A New Dawn in Desktop App Development – DhruvK_Sethi Medium, <https://medium.com/p/16f13372b8fc>
+[^11]: Comparing Diesel and rust-postgres | by Sean Griffin | HackerNoon.com - Medium, <https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd>
+[^12]: Rust Web Frameworks Compared: Actix vs Axum vs Rocket - DEV Community, <https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad>
+[^13]: Pricing - Anthropic API, <https://docs.anthropic.com/en/docs/about-claude/pricing>
+[^14]: Don't trust the LLM: Rethinking LLM Architectures for Better Security - Mindgard AI, <https://mindgard.ai/blog/llm-architecture-positioning>
+[^15]: Wikidata - OpenStreetMap Wiki, <https://wiki.openstreetmap.org/wiki/Wikidata>
+[^16]: I'm a bit uncertain about what Google OR-Tools is…it *seems* to be some sort of - Hacker News, <https://news.ycombinator.com/item?id=22582688>
+[^17]: JSONB PostgreSQL: How To Store & Index JSON Data - ScaleGrid, <https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/>
+[^18]: 14 Best Walking Trip Planner Apps in 2025 - Upper, <https://www.upperinc.com/blog/best-walking-route-planner-apps/>
+[^19]: TanStack Query: A Powerful Tool for Data Management in React - Medium, <https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c>
+[^20]: How to Monitor Your LLM API Costs and Cut Spending by 90% - Helicone, <https://www.helicone.ai/blog/monitor-and-optimize-llm-costs>
+[^21]: TypeScript vs. JavaScript: Which One to Choose in 2025? - Carmatec, <https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/>
+[^22]: Point-of-interest lists and their potential in recommendation systems - PMC, <https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/>
+[^23]: Osm2pgsql - OpenStreetMap Wiki, <https://wiki.openstreetmap.org/wiki/Osm2pgsql>
+[^24]: Monolith vs. Microservices Architecture - DevZero, <https://www.devzero.io/blog/monolith-vs-microservices>
+[^25]: Pricing | Render, <https://render.com/pricing>
+[^26]: Render PostgreSQL | FindDevTools, <https://finddev.tools/about/render-postgresql>
+[^27]: Top 11 Multi-Stop Route Planner Apps in 2025, <https://www.upperinc.com/blog/best-multi-stop-route-planner-app/>
+[^28]: Vite vs. Next.js: Features, Comparisons, Pros & Cons, & More - Prismic, <https://prismic.io/blog/vite-vs-nextjs>
+[^29]: An iterated local search algorithm for solving the Orienteering Problem with Time Windows - <InK@SMU.edu>.sg, <https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research>
+[^30]: Asynchronous State Management with TanStack Query - Atlantbh Sarajevo, <https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/>
+[^31]: What is DaisyUI? Advantages, Disadvantages, and FAQ's - By SW Habitation, <https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs>
+[^32]: DaisyUI vs Mantine: Which One is Better in 2025? - Subframe, <https://www.subframe.com/tips/daisyui-vs-mantine>
+[^33]: Daisy UI is a godsend : r/Frontend - Reddit, <https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/>
+[^34]: Visit A City - Apps on Google Play, <https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp>
+[^35]: Self-Hosting vs Managed Hosting - Which Suits Your Business? - MGT Commerce, <https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/>
+[^36]: TypeScript vs JavaScript: Which is Better for Your Next Project? - Medium, <https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499>
+[^37]: How to Balance The Pros and Cons of Tailwind CSS - Blogs - Purecode.AI, <https://blogs.purecode.ai/blogs/pros-cons-tailwind>
+[^38]: Intent Recognition using a LLM with Predefined Intentions | by Ai insightful - Medium, <https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7>
+[^39]: Self Host LLM vs Api LLM : r/AI_Agents - Reddit, <https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/>
+[^40]: Best Walking Apps (2025) - Garage Gym Reviews, <https://www.garagegymreviews.com/best-walking-apps>
+[^41]: PostgreSQL Pricing | DigitalOcean Documentation, <https://docs.digitalocean.com/products/databases/postgresql/details/pricing/>
+[^42]: Heroku Postgres - Add-ons, <https://elements.heroku.com/addons/heroku-postgresql>
+[^43]: A Straightforward Comparison Of Mantine Vs Chakra | Magic UI, <https://magicui.design/blog/mantine-vs-chakra>
+[^44]: Choosing the best graph database for your organization: A practical guide - Linkurious, <https://linkurious.com/blog/choosing-the-best-graph-database/>
+[^45]: LLM Prompt Injection Prevention - OWASP Cheat Sheet Series, <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html>
+[^46]: Vehicle Routing Problem | OR-Tools - Google for Developers, <https://developers.google.com/optimization/routing/vrp>
+[^47]: Prompt Injection Attacks in LLMs: Mitigating Risks with Microsegmentation - ColorTokens, <https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/>

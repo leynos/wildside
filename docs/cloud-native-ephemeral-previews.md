@@ -74,7 +74,7 @@ DigitalOcean, Kubernetes, and Helm.
 
 Terraform
 
-```
+```hcl
 # providers.tf
 
 terraform {
@@ -105,7 +105,7 @@ variable "do_token" {
 provider "digitalocean" {
   token = var.do_token
 }
-```
+    ```yaml
 
 This configuration establishes the required providers and sets up the
 DigitalOcean provider.4 The DigitalOcean API token is defined as a sensitive
@@ -124,7 +124,7 @@ resources, such as internal load balancers and databases.7
 
 Terraform
 
-```
+```hcl
 # network.tf
 
 resource "digitalocean_vpc" "wildside_vpc" {
@@ -132,7 +132,7 @@ resource "digitalocean_vpc" "wildside_vpc" {
   region   = "nyc3"
   ip_range = "10.244.0.0/16"
 }
-```
+    ```yaml
 
 ### DOKS Cluster Resource (`digitalocean_kubernetes_cluster`)
 
@@ -142,7 +142,7 @@ operational best practices.8
 
 Terraform
 
-```
+```hcl
 # cluster.tf
 
 # Data source to get the latest supported patch version for a specific minor release
@@ -199,7 +199,7 @@ improve security, and optimize costs. This is achieved using the
 
 Terraform
 
-```
+```hcl
 # node_pools.tf
 
 # 1. Core Services Node Pool
@@ -272,7 +272,7 @@ dependency chain.10
 
 Terraform
 
-```
+```hcl
 # providers.tf (continued)
 
 # Configure the Kubernetes provider to connect to the new DOKS cluster
@@ -353,7 +353,7 @@ the primary source of truth for the cluster's platform state.
 
 Bash
 
-```
+```bash
 # Set environment variables for GitHub credentials and repository details
 export GITHUB_TOKEN="<your-personal-access-token>"
 export GITHUB_USER="<your-github-username>"
@@ -391,7 +391,7 @@ A well-defined repository structure is essential for managing the complexity of
 the system and ensuring maintainability. The following structures are
 recommended for the two GitOps repositories.
 
-**Table 1: GitOps Repository Structure**
+#### Table 1: GitOps Repository Structure
 
 | Repository | Path | Purpose |
 | --- | --- | --- |
@@ -419,7 +419,7 @@ to tell Flux where to find the Helm charts for the platform components.
 
 YAML
 
-```
+```yaml
 # infrastructure/sources/helm-repositories.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
@@ -456,7 +456,7 @@ elsewhere.18
 
 YAML
 
-```
+```yaml
 # infrastructure/sources/git-repositories.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
@@ -490,7 +490,7 @@ paths. It is deployed using its official Helm chart.
 
 YAML
 
-```
+```yaml
 # infrastructure/core/ingress-nginx.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -538,7 +538,7 @@ manual step of pointing a subdomain to the load balancer's IP address.19
 
 YAML
 
-```
+```yaml
 # infrastructure/core/external-dns.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -593,7 +593,7 @@ First, the `HelmRelease` for `cert-manager` itself:
 
 YAML
 
-```
+```yaml
 # infrastructure/core/cert-manager.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -624,7 +624,7 @@ that defines how `cert-manager` should obtain certificates.
 
 YAML
 
-```
+```yaml
 # infrastructure/core/cluster-issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -683,7 +683,7 @@ The implementation involves a three-step process:
 
    YAML
 
-   ```
+   ```yaml
    # infrastructure/secrets/cluster-secret-store.yaml
    apiVersion: external-secrets.io/v1beta1
    kind: ClusterSecretStore
@@ -712,7 +712,7 @@ The implementation involves a three-step process:
 
    YAML
 
-   ```
+   ```yaml
    # infrastructure/secrets/cloudflare-token-secret.yaml
    apiVersion: external-secrets.io/v1beta1
    kind: ExternalSecret
@@ -758,7 +758,7 @@ First, the operator is deployed via a `HelmRelease`:
 
 YAML
 
-```
+```yaml
 # infrastructure/databases/cnpg-operator.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -782,7 +782,7 @@ cluster.
 
 YAML
 
-```
+```yaml
 # infrastructure/databases/wildside-postgres-cluster.yaml
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -827,7 +827,7 @@ disabled to reduce cost and complexity.
 
 YAML
 
-```
+```yaml
 # infrastructure/core/redis.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -900,7 +900,7 @@ strategy is implemented within the
 The `wildside-apps` repository is structured to facilitate the
 Helm-plus-Kustomize pattern:
 
-```
+```text
 wildside-apps/
 ├── base/
 │   ├── helmrelease.yaml    # The base HelmRelease for Wildside
@@ -928,7 +928,7 @@ non-production environment.
 
 YAML
 
-```
+```yaml
 # wildside-apps/base/helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -989,7 +989,7 @@ The kustomization.yaml file defines the production environment:
 
 YAML
 
-```
+```yaml
 # wildside-apps/overlays/production/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -1007,7 +1007,7 @@ requests/limits, and update the hostname.
 
 YAML
 
-```
+```yaml
 # wildside-apps/overlays/production/patch-replicas-resources.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -1032,7 +1032,7 @@ dynamically generate these files.
 
 YAML
 
-```
+```yaml
 # wildside-apps/overlays/ephemeral/pr-123/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -1048,7 +1048,7 @@ The patch file will be generated with the unique details for the pull request.
 
 YAML
 
-```
+```yaml
 # wildside-apps/overlays/ephemeral/pr-123/patch-hostname-image.yaml
 # THIS FILE IS GENERATED BY CI
 apiVersion: helm.toolkit.fluxcd.io/v2
@@ -1084,7 +1084,7 @@ The workflow is defined in the application source code repository (e.g.,
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml
 name: Preview Environment
 
@@ -1103,7 +1103,7 @@ closed) to tear it down.49 It requires permissions to write to a repository (the
 
 `wildside-apps` repo) and to comment on the pull request.
 
-**Table 2: GitHub Actions Workflow Secrets & Variables**
+#### Table 2: GitHub Actions Workflow Secrets & Variables
 
 | Name                 | Scope  | Required | Description                                                                                                |
 | -------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------- |
@@ -1121,7 +1121,7 @@ into a container image and pushes it to a registry.
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml (continued)
 jobs:
   build-and-push:
@@ -1174,7 +1174,7 @@ repository.54
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml (continued)
   deploy-preview:
     if: github.event.action!= 'closed'
@@ -1204,7 +1204,7 @@ files.56
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml (continued)
       - name: Generate Ephemeral Environment Manifests
         id: generate
@@ -1259,7 +1259,7 @@ preview URL.
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml (continued)
       - name: Commit and Push Manifests
         run: |
@@ -1295,7 +1295,7 @@ pruning mechanism handles the rest.
 
 YAML
 
-```
+```yaml
 #.github/workflows/preview-environment.yaml (continued)
   teardown-preview:
     if: github.event.action == 'closed'
