@@ -3,8 +3,8 @@
 use std::time::{Duration, Instant};
 
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
-use actix_web_actors::ws::{self, Message, ProtocolError};
-use tracing::warn;
+use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
+use tracing::{info, warn};
 
 /// Time between heartbeats to the client.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -30,6 +30,11 @@ impl Actor for UserSocket {
         self.last_heartbeat = Instant::now();
         ctx.run_interval(HEARTBEAT_INTERVAL, |actor, ctx| {
             if Instant::now().duration_since(actor.last_heartbeat) > CLIENT_TIMEOUT {
+                info!("WebSocket heartbeat timeout; closing connection");
+                ctx.close(Some(CloseReason {
+                    code: CloseCode::Normal,
+                    description: Some("heartbeat timeout".into()),
+                }));
                 ctx.stop();
                 return;
             }

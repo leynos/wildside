@@ -436,7 +436,26 @@ docker-up:
     cd deploy && docker compose up --build -d
 
 docker-down:
-    cd deploy && docker compose down
+        cd deploy && docker compose down
+```
+
+### Docker Compose startup sequence
+
+```mermaid
+sequenceDiagram
+  participant DC as Docker Compose
+  participant FB as frontend-build
+  participant BE as backend
+  participant WEB as web
+
+  DC->>FB: Start frontend build (bun install && bun run build)
+  DC->>BE: Start backend
+  BE-->>BE: Serve /health/ready and /health/live
+  loop until healthy
+    DC->>BE: GET /health/ready
+    BE-->>DC: 200 OK when ready
+  end
+  DC->>WEB: Start web after FB completed and BE healthy
 ```
 
 ---
@@ -449,6 +468,24 @@ docker-down:
 - **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
 - **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
    where relevant.
+
+### WebSocket heartbeat sequence
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant UserSocket
+    participant Server
+    Note over UserSocket: Heartbeat interval triggers
+    UserSocket->UserSocket: Check last_heartbeat
+    alt Heartbeat timeout exceeded
+        UserSocket->Server: Log info (heartbeat timeout)
+        UserSocket->Client: Close connection (CloseCode::Normal, "heartbeat timeout")
+        UserSocket->UserSocket: Stop actor
+    else Heartbeat received
+        UserSocket->UserSocket: Update last_heartbeat
+    end
+```
 
 ---
 
