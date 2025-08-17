@@ -8,8 +8,8 @@ COPY backend/ ./
 RUN cargo build --release --target x86_64-unknown-linux-musl
 
 FROM alpine:3.18 AS runtime
-RUN apk add --no-cache curl
-RUN adduser -D -u 1000 app
+RUN apk add --no-cache curl=8.12.1-r0 ca-certificates=20241121-r1 && \
+    adduser -D -u 1000 app
 WORKDIR /srv
 COPY --from=build --chown=1000:1000 /app/backend/target/x86_64-unknown-linux-musl/release/backend /srv/app
 USER app
