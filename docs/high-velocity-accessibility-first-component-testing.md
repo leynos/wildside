@@ -1003,26 +1003,26 @@ To ensure a smooth and successful adoption of this strategy, a phased
 implementation is recommended. This allows the team to build foundational
 capabilities first and incrementally roll out the complete framework.
 
-1. **Phase[^1]: Environment Setup (1-2 Days)**
+1. **Phase 1: Environment Setup (1-2 Days)**
 
 - Install all required dependencies: `vitest`, `jsdom`, `vitest-axe`,
   `@testing-library/react`.
 - Create and configure the `vitest.config.ts` file to use the `jsdom`
   environment and specify the test setup file.
 - Update the `tsconfig.json` to include the new configuration and setup files.
-2. **Phase[^2]: Core Tooling (1 Day)**
+2. **Phase 2: Core Tooling (1 Day)**
 
 - Create the `./tests/setup.ts` file and add the import for
   `vitest-axe/extend-expect` to globally register the custom matcher.
 - (Optional but Recommended) Implement the custom `toHaveNoAxeViolations`
   matcher logic for enhanced error reporting, as detailed in Section 2.3.
-3. **Phase[^3]: Initial Rollout (2-3 Days)**
+3. **Phase 3: Initial Rollout (2-3 Days)**
 
 - Select a single, well-defined component (e.g., a Button or an Input).
 - Create a `*.a11y.test.ts` file for this component.
 - Write the first accessibility tests using the established pattern to validate
   the entire setup from configuration to assertion.
-4. **Phase[^4]: E2E Integration (3-5 Days)**
+4. **Phase 4: E2E Integration (3-5 Days)**
 
 - Install `@axe-core/playwright`.
 - Identify a critical user flow (e.g., login, add to cart).
@@ -1032,7 +1032,7 @@ capabilities first and incrementally roll out the complete framework.
   navigation menu or a complex form.
 - Implement a Playwright accessibility tree snapshot test for a complex, shared
   component.
-5. **Phase[^5]: CI/CD Integration (2-3 Days)**
+5. **Phase 5: CI/CD Integration (2-3 Days)**
 
 - Implement the sharded GitHub Actions workflow as detailed in Section 4.1.
 - Configure the workflow to upload the final HTML reports from both Vitest and
