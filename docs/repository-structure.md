@@ -252,6 +252,11 @@ It installs workspace dependencies before copying sources so that builds
 benefit from layer caching. The final stage uses `nginx:alpine` to serve the
 compiled `dist/` directory.
 
+- Version pins for Bun, Nginx, and Alpine are exposed via `BUN_VERSION`,
+  `NGINX_VERSION`, and `ALPINE_VERSION` build arguments.
+- Health checks can be tailored using `HEALTHCHECK_PORT`, `HEALTHCHECK_PATH`,
+  `HEALTHCHECK_INTERVAL`, `HEALTHCHECK_TIMEOUT`, and `HEALTHCHECK_RETRIES`.
+
 - In CI, extract `/usr/share/nginx/html` and upload to **DOKS Spaces** (object
   storage) behind a CDN.
 - The backend serves only the API; static assets come from CDN or the Nginx
