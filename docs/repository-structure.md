@@ -237,54 +237,35 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ### 6.1 Backend (Rust/Actix) — multi‑stage, static (musl) where possible
 
-```dockerfile
-# ===== Build stage =====
-FROM rust:1.79-alpine AS build
-RUN apk add --no-cache musl-dev pkgconfig openssl-dev # adjust for your deps
-WORKDIR /app
-# cache deps
-COPY backend/Cargo.toml backend/Cargo.lock ./backend/
-COPY backend/ ./backend/
-WORKDIR /app/backend
-# build with musl (if your deps allow); otherwise use gnu + distroless base later
-RUN RUSTFLAGS="-C target-feature=-crt-static" \
-    cargo build --release --target x86_64-unknown-linux-musl
+See [`deploy/docker/backend.Dockerfile`](../deploy/docker/backend.Dockerfile) for
+the canonical image build. Key points:
 
-# ===== Runtime stage =====
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /srv
-COPY --from=build /app/backend/target/x86_64-unknown-linux-musl/release/backend /srv/app
-USER nonroot:nonroot
-EXPOSE 8080
-ENV RUST_LOG=info
-ENTRYPOINT ["/srv/app"]
-```
+- Dependencies are cached before sources are copied to maximise layer reuse.
+- Alpine packages and OpenSSL are version‑pinned for reproducible builds.
+- The `HEALTHCHECK_PORT` and `HEALTHCHECK_PATH` build args allow the liveness
+  probe to be tailored without editing the file.
 
 > If any dependency prevents musl, switch the target to gnu and use
 > `gcr.io/distroless/cc:nonroot` as base; copy any needed CA certs.
 
-### 6.2 Frontend (Vite + Bun) — build once, serve from object storage/CDN
+### 6.2 Frontend (Vite + Bun) — build once, serve via nginx
 
-```dockerfile
-# ===== Build stage =====
-FROM oven/bun:1 AS build
-WORKDIR /web
-COPY packages/tokens /web/packages/tokens
-COPY frontend-pwa /web/frontend-pwa
-WORKDIR /web/packages/tokens
-RUN bun install && bun run build
-WORKDIR /web/frontend-pwa
-RUN bun install && bun run build # emits dist/
+The frontend Dockerfile lives at
+[`deploy/docker/frontend.Dockerfile`](../deploy/docker/frontend.Dockerfile).
+It installs workspace dependencies before copying sources so that builds
+benefit from layer caching. The final stage uses `nginx:alpine` to serve the
+compiled `dist/` directory.
 
-# ===== Artifact export stage (optional) =====
-FROM scratch AS export
-COPY --from=build /web/frontend-pwa/dist/ /dist/
-```
+- Version pins for Bun, Nginx, and Alpine are exposed via `BUN_VERSION`,
+  `NGINX_VERSION`, and `ALPINE_VERSION` build arguments.
+- Health checks can be tailored using `HEALTHCHECK_PORT`, `HEALTHCHECK_PATH`,
+  `HEALTHCHECK_INTERVAL`, `HEALTHCHECK_TIMEOUT`, and `HEALTHCHECK_RETRIES`.
 
-- In CI, extract `/dist` and upload to **DOKS Spaces** (object storage) behind
-  a CDN.
-- The backend serves only the API; static assets come from CDN.
-- For local dev, you can also serve via `vite dev` or a simple nginx container.
+- In CI, extract `/usr/share/nginx/html` and upload to **DOKS Spaces** (object
+  storage) behind a CDN.
+- The backend serves only the API; static assets come from CDN or the Nginx
+  runtime image.
+- For local dev, you can still run `vite dev` for HMR.
 
 ### 6.3 Docker Compose for Local Dev
 
