@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: myapp
 commonLabels:
   app: myapp-backend
+  app.kubernetes.io/part-of: myapp
 resources:
   - api.yaml

@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: myapp
 commonLabels:
   app: myapp-backend
+  app.kubernetes.io/part-of: myapp
 resources:
   - deployment.yaml
   - pdb.yaml
