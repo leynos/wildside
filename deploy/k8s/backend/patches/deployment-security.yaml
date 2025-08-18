@@ -5,6 +5,17 @@ metadata:
 spec:
   template:
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: app
           securityContext:
@@ -14,5 +25,7 @@ spec:
             capabilities:
               drop:
                 - ALL
-            seccompProfile:
-              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+              readOnly: false

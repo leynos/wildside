@@ -102,7 +102,7 @@ myapp/
 │  │  └─ frontend.Dockerfile
 │  ├─ k8s/                            # manifests and kustomizations
 │  │  ├─ backend/                     # Deployment, Service, PDB, configurable patches
-│  │  ├─ ingress/
+│  │  ├─ ingress/                     # Ingress and namespace/label kustomization
 │  │  └─ jobs/                        # migrations, one-off tasks
 │  └─ scripts/                        # CI/deploy helpers
 │
