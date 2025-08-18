@@ -174,9 +174,7 @@ props passed to memoized components are immutable.
 
 Consider a simple presentational component:
 
-TypeScript
-
-```
+```typescript
 // components/DisplayValue.tsx
 import React from 'react';
 
@@ -350,9 +348,7 @@ booleans
 (`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`
  ), an FSM approach would use a single state object:
 
-TypeScript
-
-```
+```typescript
 // State definition
 type State =
 
@@ -458,9 +454,7 @@ To illustrate, consider the foundation of a form built with Radix primitives.
 This code defines the structure and accessibility wiring, but contains no
 styling.
 
-TypeScript
-
-```
+```typescript
 // Unstyled, accessible form structure using Radix UI
 import * as Form from '@radix-ui/react-form';
 
@@ -510,9 +504,7 @@ interactions with Tanstack Query must be encapsulated within the custom hook.
 The hook's public API will expose the fetched data, loading/error states, and
 mutation functions to the presentational component.
 
-TypeScript
-
-```
+```typescript
 // hooks/useUserData.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchUser, updateUser } from '../api/user'; // Type-safe API functions
@@ -596,9 +588,7 @@ DaisyUI's aesthetics.
 
 Revisiting the form example, we can now apply the presentation layer:
 
-TypeScript
-
-```
+```typescript
 // Styled, accessible, and responsive form
 import * as Form from '@radix-ui/react-form';
 
@@ -685,9 +675,7 @@ handling plurals.[^42]
 The first step is to install the necessary packages and create a central
 configuration file.
 
-Bash
-
-```
+```bash
 npm install react-i18next i18next i18next-http-backend i18next-browser-languagedetector
 
 ```
@@ -697,9 +685,7 @@ instance. This configuration specifies the backend for loading translation
 files, the language detection order, the default language, and a fallback
 language.[^41]
 
-TypeScript
-
-```
+```typescript
 // src/i18n.ts
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -737,9 +723,7 @@ contain JSON files corresponding to namespaces. Namespaces allow for splitting
 translations into logical chunks (e.g., `common.json`, `userProfile.json`),
 which can be loaded on demand to improve performance in large applications.[^41]
 
-JSON
-
-```
+```json
 // public/locales/en/userProfile.json
 {
   "settingsTitle": "User Settings",
@@ -759,9 +743,7 @@ The `useTranslation` hook is the primary tool for accessing translations within
 components. It returns a `t` function, which takes a translation key and
 returns the corresponding string for the active language.[^41]
 
-TypeScript
-
-```
+```typescript
 const { t } = useTranslation('userProfile');
 //...
 <label>{t('nameLabel')}</label>
@@ -820,9 +802,7 @@ user settings.
    `Form.Root` provides the accessible form structure. This initial step
    produces an unstyled but fully functional and accessible component.
 
-TypeScript
-
-```
+```typescript
 // UserSettingsModal.view.tsx (initial structure)
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Form from '@radix-ui/react-form';
@@ -860,9 +840,7 @@ export const UserSettingsModalView = ({ /* props */ }) => (
   `'success'`). The reducer handles actions like `'UPDATE_FIELD'` and
   `'SET_VALIDATION_ERROR'`.
 
-TypeScript
-
-```
+```typescript
 // useUserSettingsForm.ts
 import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';

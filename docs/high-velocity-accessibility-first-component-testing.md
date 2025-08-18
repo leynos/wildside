@@ -214,9 +214,7 @@ provides a clear signal of intent and allows for strategic test execution in CI.
 The following is a complete, annotated `vitest.config.ts` file that implements
 these foundational settings:
 
-TypeScript
-
-```
+```typescript
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
 
@@ -274,9 +272,7 @@ Here is the complete setup:
 
 **1. Test Setup File (**`./tests/setup.ts`**)**
 
-TypeScript
-
-```
+```typescript
 //./tests/setup.ts
 
 // Import the matcher extensions for TypeScript type safety and autocompletion.
@@ -298,9 +294,7 @@ expect.extend(matchers);
 Ensure the setup file is included in your `tsconfig.json` so TypeScript can
 process the type augmentations.
 
-JSON
-
-```
+```json
 {
   "compilerOptions": {
     //... your existing compiler options
@@ -360,9 +354,7 @@ The following is a complete, production-quality implementation of the
 
 **1. Custom Matcher Implementation (can be placed in **`./tests/setup.ts`**)**
 
-TypeScript
-
-```
+```typescript
 import { expect } from 'vitest';
 import type { AxeResults, Result } from 'axe-core';
 import {-red, -green, -dim} from 'kleur/colors'; // For colored console output
@@ -418,9 +410,7 @@ expect.extend({
 
 **2. TypeScript Type Declarations (in a **`vitest.d.ts`** file)**
 
-TypeScript
-
-```
+```typescript
 // vitest.d.ts
 import 'vitest';
 import type { AxeResults } from 'axe-core';
@@ -470,9 +460,7 @@ states and apply contextual rule configuration.
 This test checks a simple `Button` component for any structural accessibility
 issues.
 
-TypeScript
-
-```
+```typescript
 // src/components/Button/Button.a11y.test.ts
 import { render, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -500,9 +488,7 @@ This test evaluates a `Modal` component, ensuring it is accessible both when
 hidden and when visible. It also demonstrates how to disable a page-level rule
 that is irrelevant in this isolated context.
 
-TypeScript
-
-```
+```typescript
 // src/components/Modal/Modal.a11y.test.ts
 import { render } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -574,9 +560,7 @@ of re-scanning the entire page.
 The following example demonstrates this strategic approach by testing the
 accessibility of a modal dialog within a larger user flow.
 
-TypeScript
-
-```
+```typescript
 // tests/e2e/modal-flow.spec.ts
 import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
@@ -645,9 +629,7 @@ A robust keyboard navigation test involves several steps:
 5. Assert that interactive elements like buttons and dropdowns can be activated
    using `Enter` or `Space`.
 
-TypeScript
-
-```
+```typescript
 // tests/e2e/keyboard-nav.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -695,9 +677,7 @@ irrelevant `div` wrappers but will correctly fail if a change is made that
 alters the semantic meaning, such as removing an `aria-label` or changing a
 `heading` level.[^48]
 
-TypeScript
-
-```
+```typescript
 // tests/e2e/product-card.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -726,9 +706,7 @@ A comprehensive localization test combines this emulation with assertions that
 verify both the `lang` attribute and the presence of translated text on the
 page.
 
-TypeScript
-
-```
+```typescript
 // tests/e2e/localization.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -837,9 +815,7 @@ The following is a complete, production-ready GitHub Actions workflow
 (`.github/workflows/ci.yml`) that implements this sharding strategy for the
 Vitest suite.
 
-YAML
-
-```
+```yaml
 #.github/workflows/ci.yml
 name: Vitest CI
 
