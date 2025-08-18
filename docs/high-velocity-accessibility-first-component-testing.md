@@ -216,7 +216,7 @@ these foundational settings:
 
 TypeScript
 
-```null
+```
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
 
@@ -276,7 +276,7 @@ Here is the complete setup:
 
 TypeScript
 
-```null
+```
 //./tests/setup.ts
 
 // Import the matcher extensions for TypeScript type safety and autocompletion.
@@ -300,7 +300,7 @@ process the type augmentations.
 
 JSON
 
-```null
+```
 {
   "compilerOptions": {
     //... your existing compiler options
@@ -362,7 +362,7 @@ The following is a complete, production-quality implementation of the
 
 TypeScript
 
-```null
+```
 import { expect } from 'vitest';
 import type { AxeResults, Result } from 'axe-core';
 import {-red, -green, -dim} from 'kleur/colors'; // For colored console output
@@ -420,7 +420,7 @@ expect.extend({
 
 TypeScript
 
-```null
+```
 // vitest.d.ts
 import 'vitest';
 import type { AxeResults } from 'axe-core';
@@ -472,7 +472,7 @@ issues.
 
 TypeScript
 
-```null
+```
 // src/components/Button/Button.a11y.test.ts
 import { render, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -502,7 +502,7 @@ that is irrelevant in this isolated context.
 
 TypeScript
 
-```null
+```
 // src/components/Modal/Modal.a11y.test.ts
 import { render } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -576,7 +576,7 @@ accessibility of a modal dialog within a larger user flow.
 
 TypeScript
 
-```null
+```
 // tests/e2e/modal-flow.spec.ts
 import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
@@ -647,7 +647,7 @@ A robust keyboard navigation test involves several steps:
 
 TypeScript
 
-```null
+```
 // tests/e2e/keyboard-nav.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -697,7 +697,7 @@ alters the semantic meaning, such as removing an `aria-label` or changing a
 
 TypeScript
 
-```null
+```
 // tests/e2e/product-card.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -728,7 +728,7 @@ page.
 
 TypeScript
 
-```null
+```
 // tests/e2e/localization.spec.ts
 import { test, expect } from '@playwright/test';
 
@@ -839,7 +839,7 @@ Vitest suite.
 
 YAML
 
-```null
+```
 #.github/workflows/ci.yml
 name: Vitest CI
 

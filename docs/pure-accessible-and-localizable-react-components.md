@@ -176,7 +176,7 @@ Consider a simple presentational component:
 
 TypeScript
 
-```null
+```
 // components/DisplayValue.tsx
 import React from 'react';
 
@@ -352,7 +352,7 @@ booleans
 
 TypeScript
 
-```null
+```
 // State definition
 type State =
 
@@ -460,7 +460,7 @@ styling.
 
 TypeScript
 
-```null
+```
 // Unstyled, accessible form structure using Radix UI
 import * as Form from '@radix-ui/react-form';
 
@@ -512,7 +512,7 @@ mutation functions to the presentational component.
 
 TypeScript
 
-```null
+```
 // hooks/useUserData.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchUser, updateUser } from '../api/user'; // Type-safe API functions
@@ -598,7 +598,7 @@ Revisiting the form example, we can now apply the presentation layer:
 
 TypeScript
 
-```null
+```
 // Styled, accessible, and responsive form
 import * as Form from '@radix-ui/react-form';
 
@@ -687,7 +687,7 @@ configuration file.
 
 Bash
 
-```null
+```
 npm install react-i18next i18next i18next-http-backend i18next-browser-languagedetector
 
 ```
@@ -699,7 +699,7 @@ language.[^41]
 
 TypeScript
 
-```null
+```
 // src/i18n.ts
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -739,7 +739,7 @@ which can be loaded on demand to improve performance in large applications.[^41]
 
 JSON
 
-```null
+```
 // public/locales/en/userProfile.json
 {
   "settingsTitle": "User Settings",
@@ -761,7 +761,7 @@ returns the corresponding string for the active language.[^41]
 
 TypeScript
 
-```null
+```
 const { t } = useTranslation('userProfile');
 //...
 <label>{t('nameLabel')}</label>
@@ -822,7 +822,7 @@ user settings.
 
 TypeScript
 
-```null
+```
 // UserSettingsModal.view.tsx (initial structure)
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Form from '@radix-ui/react-form';
@@ -862,7 +862,7 @@ export const UserSettingsModalView = ({ /* props */ }) => (
 
 TypeScript
 
-```null
+```
 // useUserSettingsForm.ts
 import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
