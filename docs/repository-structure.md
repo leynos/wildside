@@ -100,8 +100,8 @@ myapp/
 │  ├─ docker/                         # Dockerfiles
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
-│  ├─ k8s/                            # manifests or Helm/ks
-│  │  ├─ backend/
+│  ├─ k8s/                            # manifests and kustomizations
+│  │  ├─ backend/                     # Deployment, Service, PDB, configurable patches
 │  │  ├─ ingress/
 │  │  └─ jobs/                        # migrations, one-off tasks
 │  └─ scripts/                        # CI/deploy helpers
