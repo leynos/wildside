@@ -1,27 +1,59 @@
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: myapp-backend }
+metadata:
+  name: myapp-backend
 spec:
   replicas: 2
-  selector: { matchLabels: { app: myapp-backend } }
+  selector:
+    matchLabels:
+      app: myapp-backend
   template:
-    metadata: { labels: { app: myapp-backend } }
+    metadata:
+      labels:
+        app: myapp-backend
     spec:
       containers:
-      - name: app
-        image: ghcr.io/acme/myapp-backend:{{TAG}}
-        ports: [{ containerPort: 8080 }]
-        envFrom:
-          - configMapRef: { name: myapp-config }
-          - secretRef: { name: myapp-secrets }
-        readinessProbe:
-          httpGet: { path: /health/ready, port: 8080 }
-        livenessProbe:
-          httpGet: { path: /health/live,  port: 8080 }
+        - name: app
+          image: ghcr.io/acme/myapp-backend:{{TAG}}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: myapp-config
+            - secretRef:
+                name: myapp-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: myapp-backend }
+metadata:
+  name: myapp-backend
 spec:
-  selector: { app: myapp-backend }
-  ports: [{ port: 80, targetPort: 8080 }]
+  selector:
+    app: myapp-backend
+  ports:
+    - port: 80
+      targetPort: 8080
