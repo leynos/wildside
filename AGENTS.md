@@ -398,6 +398,12 @@ Keep docs close to code.
 - **A11y**: Use semantic HTML first. Prefer daisyUI components only where they
   don’t harm semantics. Audit focus states and colour contrast with automated
   checks.
+- **Radix UI**: Build behaviour with Radix primitives and layer DaisyUI/Tailwind
+  classes for presentation.
+- **Purity**: Export view components as pure functions with props treated as
+  read‑only. Move state, effects, and translations into dedicated `use*` hooks.
+- **Component tests**: Use React Testing Library under Vitest for rendering and
+  user‑centric assertions.
 
 ### TanStack Usage Notes
 
@@ -409,6 +415,29 @@ Keep docs close to code.
   loaders.
 - **Table** (if used): Keep row models pure; virtualise for large sets; memoise
   column defs.
+- **State**: Encapsulate server state with TanStack Query and model complex
+  local state with reducers or state machines inside custom hooks.
+
+### Internationalisation
+
+- **Setup**: Initialise `react-i18next` with `i18next-http-backend` and
+  `i18next-browser-languagedetector`; set `fallbackLng: 'en'`.
+- **Translations**: Store locale files under `public/locales/<lang>/<ns>.json`
+  and load strings by namespace.
+- **Hooks**: Call `useTranslation` within logic hooks and pass all translated
+  strings to view components via props.
+
+### Testing (Vitest & Playwright)
+
+- **Vitest config**: Use the `jsdom` environment, include `tests/setup.ts`, and
+  prioritise `**/*.a11y.test.ts` before other test files.
+- **axe integration**: Import `vitest-axe/extend-expect` in `tests/setup.ts` and
+  list this file in `tsconfig.json` so the matcher types load.
+- **Rule gaps**: Disable `color-contrast` and `scrollable-region-focusable`
+  rules in Vitest; verify them in Playwright.
+- **Playwright**: Run `@axe-core/playwright` scans, exercise keyboard
+  navigation, capture accessibility tree snapshots, and emulate locales to test
+  translations.
 
 ### Observability (Frontend)
 
