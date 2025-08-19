@@ -3,7 +3,11 @@ kind: Kustomization
 namespace: myapp
 commonLabels:
   app: myapp-backend
+  app.kubernetes.io/name: myapp-backend
   app.kubernetes.io/part-of: myapp
+  app.kubernetes.io/component: backend
+commonAnnotations:
+  app.kubernetes.io/managed-by: kustomize
 resources:
   - configmap.yaml
   - secret.yaml

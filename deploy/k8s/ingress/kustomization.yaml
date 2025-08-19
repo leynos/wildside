@@ -9,5 +9,6 @@ commonLabels:
 commonAnnotations:
   app.kubernetes.io/managed-by: kustomize
 resources:
-  - secret.yaml
+  - cluster-issuer.yaml
+  - certificate.yaml
   - api.yaml
