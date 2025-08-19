@@ -418,15 +418,14 @@ Keep docs close to code.
 - **State**: Encapsulate server state with TanStack Query and model complex
   local state with reducers or state machines inside custom hooks.
 
-### Internationalisation
+### Internationalization
 
-- **Setup**: Initialise `react-i18next` with `i18next-http-backend` and
+- **Setup**: Initialize `react-i18next` with `i18next-http-backend` and
   `i18next-browser-languagedetector`; set `fallbackLng: 'en'`.
 - **Translations**: Store locale files under `public/locales/<lang>/<ns>.json`
   and load strings by namespace.
 - **Hooks**: Call `useTranslation` within logic hooks and pass all translated
   strings to view components via props.
-
 ### Testing (Vitest & Playwright)
 
 - **Vitest config**: Use the `jsdom` environment, include `tests/setup.ts`, and
