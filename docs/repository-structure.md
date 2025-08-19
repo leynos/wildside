@@ -102,7 +102,7 @@ myapp/
 │  │  └─ frontend.Dockerfile
 │  ├─ k8s/                            # manifests and kustomizations
 │  │  ├─ backend/                     # Deployment, Service, ConfigMap/Secret generators, PDB, patches
-│  │  ├─ ingress/                     # Ingress and cert-manager manifests with namespace/label kustomization
+│  │  ├─ ingress/                     # Ingress and cert-manager manifests with label kustomization
 │  │  │  ├─ api.yaml
 │  │  │  ├─ certificate.yaml
 │  │  │  ├─ cluster-issuer.yaml

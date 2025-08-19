@@ -2,6 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: myapp-api
+  namespace: myapp
 spec:
   ingressClassName: nginx
   tls:
