@@ -345,6 +345,7 @@ impossible by design.
 
 Consider a component that fetches data. Instead of managing state with multiple
 booleans
+<!-- markdownlint-disable-next-line MD013 -->
 (`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`
  ), an FSM approach would use a single state object:
 
@@ -400,6 +401,7 @@ to prevent invalid state transitions.[^24] A
 `useReducer` centralizes this transition logic, which is an improvement. A full
 state machine library like XState goes further by allowing declarative side
 effects, such as an `after` delay for the animation, directly within the state
+<!-- markdownlint-disable-next-line MD013 -->
 definition.[^24] Therefore, for components with non-trivial lifecycles, adopting a
 reducer-based state machine from the outset is a strategic investment in future
 maintainability, even if it appears more verbose initially.
@@ -666,6 +668,7 @@ view.
 
 To build a truly global application, components must be localizable.
 `react-i18next`, built on top of the powerful `i18next` library, is the de
+<!-- markdownlint-disable-next-line MD013 -->
 facto standard for internationalization in the React ecosystem.[^41] It provides a
 complete solution for managing translations, formatting dates and numbers, and
 handling plurals.[^42]
@@ -798,92 +801,95 @@ user settings.
 **Step-by-Step Implementation:**
 
 1. **Foundation (Behavioral Layer):** The component's structure is defined
-   using Radix UI primitives. `AlertDialog.Root` creates the modal context, and
-   `Form.Root` provides the accessible form structure. This initial step
-   produces an unstyled but fully functional and accessible component.
+    using Radix UI primitives. `AlertDialog.Root` creates the modal context, and
+    `Form.Root` provides the accessible form structure. This initial step
+    produces an unstyled but fully functional and accessible component.
 
-```typescript
-// UserSettingsModal.view.tsx (initial structure)
-import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import * as Form from '@radix-ui/react-form';
+    ```typescript
+    // UserSettingsModal.view.tsx (initial structure)
+    import * as AlertDialog from '@radix-ui/react-alert-dialog';
+    import * as Form from '@radix-ui/react-form';
 
-//... props interface defined here...
+    //... props interface defined here...
 
-export const UserSettingsModalView = ({ /* props */ }) => (
-  <AlertDialog.Portal>
-    <AlertDialog.Overlay />
-    <AlertDialog.Content>
-      <AlertDialog.Title>{/* title text */}</AlertDialog.Title>
-      <Form.Root>
-        {/* Form fields will go here */}
-      </Form.Root>
-    </AlertDialog.Content>
-  </AlertDialog.Portal>
-);
+    export const UserSettingsModalView = ({ /* props */ }) => (
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay />
+        <AlertDialog.Content>
+          <AlertDialog.Title>{/* title text */}</AlertDialog.Title>
+          <Form.Root>
+            {/* Form fields will go here */}
+          </Form.Root>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    );
 
-```
+    ```
+
 2. **Styling (Presentational Layer):** DaisyUI and Tailwind CSS classes are
-   applied to the Radix primitives. `AlertDialog.Content` gets `modal-box`,
-   `Form.Field` gets `form-control`, and so on. Responsive prefixes like `md:`
-   are used to adjust layout for larger screens.
+    applied to the Radix primitives. `AlertDialog.Content` gets `modal-box`,
+    `Form.Field` gets `form-control`, and so on. Responsive prefixes like `md:`
+    are used to adjust layout for larger screens.
+
 3. **State & Logic (Hook Layer):** A `useUserSettingsForm` hook is created to
-   encapsulate all logic.
+    encapsulate all logic.
 
-- **Localization:** The hook begins by calling `useTranslation('userProfile')`
-  to get the `t` function. It prepares all necessary strings to be returned to
-  the view.
-- **Server State:** It uses `useQuery` to fetch the initial user data and
-  `useMutation` to handle the form submission. The `onSuccess` callback of the
-  mutation invalidates the user query.
-- **Local State:** It uses `useReducer` to manage the form's state, including
-  input values, validation status, and submission state (e.g., `'submitting'`,
-  `'success'`). The reducer handles actions like `'UPDATE_FIELD'` and
-  `'SET_VALIDATION_ERROR'`.
+    - **Localization:** The hook begins by calling `useTranslation('userProfile')`
+      to get the `t` function. It prepares all necessary strings to be returned to
+      the view.
+    - **Server State:** It uses `useQuery` to fetch the initial user data and
+      `useMutation` to handle the form submission. The `onSuccess` callback of the
+      mutation invalidates the user query.
+    - **Local State:** It uses `useReducer` to manage the form's state, including
+      input values, validation status, and submission state (e.g., `'submitting'`,
+      `'success'`). The reducer handles actions like `'UPDATE_FIELD'` and
+      `'SET_VALIDATION_ERROR'`.
 
-```typescript
-// useUserSettingsForm.ts
-import { useReducer } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-//... other imports
+    ```typescript
+    // useUserSettingsForm.ts
+    import { useReducer } from 'react';
+    import { useTranslation } from 'react-i18next';
+    import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    //... other imports
 
-export const useUserSettingsForm = (userId: string) => {
-  const { t } = useTranslation('userProfile');
-  const queryClient = useQueryClient();
+    export const useUserSettingsForm = (userId: string) => {
+      const { t } = useTranslation('userProfile');
+      const queryClient = useQueryClient();
 
-  //... useQuery to fetch user data...
+      //... useQuery to fetch user data...
 
-  //... useReducer for form state...
+      //... useReducer for form state...
 
-  //... useMutation to update user...
+      //... useMutation to update user...
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    //... validation logic...
-    //... call mutation...
-  };
+      const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        //... validation logic...
+        //... call mutation...
+      };
 
-  return {
-    // State for the view
-    title: t('settingsTitle'),
-    nameLabel: t('nameLabel'),
-    submitButtonText: t('submitButton'),
-    //... other translated strings
-    formState,
-    isLoading,
+      return {
+        // State for the view
+        title: t('settingsTitle'),
+        nameLabel: t('nameLabel'),
+        submitButtonText: t('submitButton'),
+        //... other translated strings
+        formState,
+        isLoading,
 
-    // Handlers for the view
-    dispatch,
-    handleSubmit,
-  };
-};
+        // Handlers for the view
+        dispatch,
+        handleSubmit,
+      };
+    };
 
-```
+    ```
+
 4. **Connecting the View (Synthesis):** The final `UserSettingsModal.view.tsx`
-   is a pure presentational component. It is wrapped in `React.memo` and
-   receives all its data and callbacks from the `useUserSettingsForm` hook via
-   props. It has no internal logic, no direct calls to state management or data
-   fetching libraries, and no direct knowledge of the i18n system.
+    is a pure presentational component. It is wrapped in `React.memo` and
+    receives all its data and callbacks from the `useUserSettingsForm` hook via
+    props. It has no internal logic, no direct calls to state management or data
+    fetching libraries, and no direct knowledge of the i18n system.
 
 This architecture achieves the ultimate separation of concerns. The view
 component is "language-agnostic"; it simply renders the strings it is given.
@@ -1101,4 +1107,3 @@ but also adaptable and maintainable for the future.
 51. Complete Guide — React Internationalization (i18n) with i18next - YouTube,
     accessed on 17 August 2025,
     [https://www.youtube.com/watch?v=LFaFPORPmeo](https://www.youtube.com/watch?v=LFaFPORPmeo)
-
