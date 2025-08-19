@@ -8,5 +8,9 @@ spec:
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
+  duration: 2160h        # 90d
+  renewBefore: 360h      # 15d
+  privateKey:
+    rotationPolicy: Always
   dnsNames:
     - api.wildside.cc  # Matches your Ingress host

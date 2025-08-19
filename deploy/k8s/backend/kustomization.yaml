@@ -10,6 +10,7 @@ commonAnnotations:
   app.kubernetes.io/managed-by: kustomize
 resources:
   - deployment.yaml
+  - service.yaml
   - pdb.yaml
 configMapGenerator:
   - name: myapp-config
