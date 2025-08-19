@@ -5,6 +5,8 @@ commonLabels:
   app: myapp-backend
   app.kubernetes.io/part-of: myapp
 resources:
+  - configmap.yaml
+  - secret.yaml
   - deployment.yaml
   - pdb.yaml
 patches:

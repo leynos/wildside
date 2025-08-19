@@ -101,8 +101,8 @@ myapp/
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
 │  ├─ k8s/                            # manifests and kustomizations
-│  │  ├─ backend/                     # Deployment, Service, PDB, configurable patches
-│  │  ├─ ingress/                     # Ingress and namespace/label kustomization
+│  │  ├─ backend/                     # Deployment, Service, ConfigMap, Secret, PDB, configurable patches
+│  │  ├─ ingress/                     # Ingress, TLS Secret, and namespace/label kustomization
 │  │  └─ jobs/                        # migrations, one-off tasks
 │  └─ scripts/                        # CI/deploy helpers
 │

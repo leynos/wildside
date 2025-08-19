@@ -12,6 +12,19 @@ spec:
       labels:
         app: myapp-backend
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: myapp-backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: myapp-backend
       containers:
         - name: app
           image: ghcr.io/acme/myapp-backend:{{TAG}}
