@@ -376,6 +376,30 @@ spec:
 **Ingress** points `/api/*` at the Service. The frontend public hostname points
 to the CDN; only `/api` goes to cluster.
 
+The sequence below shows how an HTTPS request traverses the cluster:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant Ingress as Ingress (nginx)
+  participant Service as Service (myapp-backend)
+  participant Pod as Pod (Deployment: myapp-backend)
+  note over Ingress,Pod: TLS via cert-manager Certificate/ClusterIssuer
+
+  User->>Ingress: HTTPS GET api.example.com/
+  Ingress->>Service: Route to port "http"
+  Service->>Pod: Forward to containerPort 8080
+  Pod-->>User: HTTP 200
+
+  rect rgb(235, 245, 255)
+  note right of Pod: Probes (named port "http")
+  Ingress--x Pod: (unrelated)
+  Pod->>Pod: readinessProbe: GET /health/ready
+  Pod->>Pod: livenessProbe: GET /health/live
+  end
+```
+
 **Optional:** use a **Helm chart** or **Kustomize** overlays per environment
 (dev/stage/prod) and FluxCD/ArgoCD for GitOps.
 
