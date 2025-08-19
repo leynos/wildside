@@ -9,16 +9,19 @@ commonLabels:
 commonAnnotations:
   app.kubernetes.io/managed-by: kustomize
 resources:
-  - configmap.yaml
-  - secret.yaml
   - deployment.yaml
   - pdb.yaml
-patches:
-  - path: patches/deployment-security.yaml
-    target:
-      kind: Deployment
-      name: myapp-backend
-  - path: patches/deployment-resources.yaml
-    target:
-      kind: Deployment
-      name: myapp-backend
+configMapGenerator:
+  - name: myapp-config
+    literals:
+      - APP_ENV=production
+secretGenerator:
+  - name: myapp-secrets
+    envs:
+      - secret.env
+generatorOptions:
+  disableNameSuffixHash: false
+patchesStrategicMerge:
+  - patches/deployment-security.yaml
+  - patches/deployment-resources.yaml
+  - patches/configmap-immutable.yaml

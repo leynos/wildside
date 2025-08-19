@@ -4,14 +4,15 @@ metadata:
   name: myapp-api
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - api.example.com
+        - api.wildside.cc
       secretName: myapp-api-tls
   rules:
-    - host: api.example.com
+    - host: api.wildside.cc
       http:
         paths:
           - path: /

@@ -2,5 +2,4 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: myapp-config
-data:
-  APP_ENV: production
+immutable: true

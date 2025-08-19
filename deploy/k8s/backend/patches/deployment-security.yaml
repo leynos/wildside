@@ -5,6 +5,9 @@ metadata:
 spec:
   template:
     spec:
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
       automountServiceAccountToken: false
       securityContext:
         seccompProfile:
@@ -20,7 +23,6 @@ spec:
       containers:
         - name: app
           securityContext:
-            runAsNonRoot: true
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:

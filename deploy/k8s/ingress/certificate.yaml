@@ -9,4 +9,4 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - api.example.com  # Matches your Ingress host
+    - api.wildside.cc  # Matches your Ingress host
