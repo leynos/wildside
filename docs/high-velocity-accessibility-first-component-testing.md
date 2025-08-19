@@ -12,7 +12,7 @@ capabilities and limitations of the proposed two-tiered testing model. This
 revised framework leverages Vitest for immediate, component-level feedback and
 Playwright for comprehensive, end-to-end validation, ensuring that the core
 philosophy is upheld through a pragmatic and technically sound approach.
-<!-- markdownlint-disable-next-line MD013 -->
+
 ### 1.1 Deconstructing the Tooling Deadlock: Why the Bun and ,`happy-dom`, Approach is Untenable
 
 An effective testing strategy must be built upon a compatible and stable set of
@@ -110,7 +110,7 @@ the team can immediately implement its accessibility strategy without being
 blocked by the ecosystem immaturity of a newer tool. This pivot ensures that
 the team's accessibility-first ambitions are realized in practice, not just in
 theory.
-<!-- markdownlint-disable-next-line MD013 -->
+
 ### 1.3 Setting Realistic Expectations: Understanding ,`axe-core`, Limitations in ,`jsdom`
 
 While pivoting to Vitest with a `jsdom` environment solves the primary tooling

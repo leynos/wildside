@@ -1,4 +1,3 @@
-<!-- markdownlint-disable-next-line MD013 -->
 # A Comprehensive Architectural Guide to Pure, Accessible, and Localizable React Components with Radix, Tanstack, and DaisyUI
 
 ## Introduction: The Modern Component Imperative
