@@ -430,15 +430,15 @@ Keep docs close to code.
 ### Testing (Vitest & Playwright)
 
 - **Vitest config**: Use the `jsdom` environment, include `tests/setup.ts`, and
-  prioritise `**/*.a11y.test.ts` before other test files.
+  prioritize running `**/*.a11y.test.ts` in a dedicated Vitest invocation
+  before the rest of the suite.
 - **axe integration**: Import `vitest-axe/extend-expect` in `tests/setup.ts` and
   list this file in `tsconfig.json` so the matcher types load.
 - **Rule gaps**: Disable `color-contrast` and `scrollable-region-focusable`
-  rules in Vitest; verify them in Playwright.
+  rules in Vitest (jsdom limits these checks); verify them in Playwright.
 - **Playwright**: Run `@axe-core/playwright` scans, exercise keyboard
   navigation, capture accessibility tree snapshots, and emulate locales to test
   translations.
-
 ### Observability (Frontend)
 
 - **Structured logs**: Gate debug logs behind a flag (`?debug=1` or build‑time
