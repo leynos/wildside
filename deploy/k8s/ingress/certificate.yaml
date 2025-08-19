@@ -8,6 +8,7 @@ spec:
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
+    group: cert-manager.io
   duration: 2160h        # 90d
   renewBefore: 360h      # 15d
   privateKey:

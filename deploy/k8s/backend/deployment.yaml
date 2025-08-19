@@ -2,8 +2,19 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: myapp-backend
+  labels:
+    app.kubernetes.io/name: myapp-backend
+    app.kubernetes.io/instance: myapp-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: myapp
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: myapp-backend
@@ -11,7 +22,12 @@ spec:
     metadata:
       labels:
         app: myapp-backend
+        app.kubernetes.io/name: myapp-backend
+        app.kubernetes.io/instance: myapp-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: myapp
     spec:
+      terminationGracePeriodSeconds: 30
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone

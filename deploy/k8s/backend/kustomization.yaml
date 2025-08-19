@@ -23,6 +23,8 @@ secretGenerator:
       - secret.env
 generatorOptions:
   disableNameSuffixHash: false
+  labels:
+    wildside.io/generated: "true"
 patches:
   - path: patches/deployment-security.yaml
     target:
@@ -39,7 +41,7 @@ patches:
   - target:
       version: v1
       kind: ConfigMap
-      labelSelector: app.kubernetes.io/name=myapp-backend
+      labelSelector: wildside.io/generated=true
     patch: |-
       - op: add
         path: /immutable
