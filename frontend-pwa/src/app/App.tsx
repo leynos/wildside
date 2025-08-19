@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { listUsers } from '../api/client';
 
 export function App() {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['users'],
     queryFn: ({ signal }) => listUsers(signal),
     staleTime: 60_000,
@@ -20,10 +20,6 @@ export function App() {
   }
 
   if (isError) {
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.error(error);
-    }
     return (
       <p className="p-6 min-h-screen bg-base-200 text-base-content" role="alert">
         Failed to load users.

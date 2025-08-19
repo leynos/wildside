@@ -2,7 +2,7 @@
  * @file Fetch helper that augments requests with common defaults.
  */
 
-import { z } from 'zod';
+import type { z } from 'zod';
 
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
@@ -20,7 +20,7 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
   });
 
   if (!res.ok) {
-    let detail: unknown = undefined;
+    let detail: unknown;
     const ct = res.headers.get('content-type') ?? '';
     try {
       detail = ct.includes('application/json') ? await res.json() : await res.text();

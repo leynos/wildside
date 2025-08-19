@@ -5,7 +5,7 @@
  * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
 import { customFetchParsed } from './fetcher';
-import { User, UsersSchema } from '@app/types';
+import { type User, UsersSchema } from '@app/types';
 
 /**
  * Fetch all registered users.

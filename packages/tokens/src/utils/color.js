@@ -3,6 +3,14 @@
  */
 import Color from 'color';
 
+function parseColour(value) {
+  try {
+    return Color(value);
+  } catch {
+    throw new Error(`Invalid colour: ${value}`);
+  }
+}
+
 /**
  * Compute the WCAG contrast ratio between two colours.
  *
@@ -13,17 +21,7 @@ import Color from 'color';
  * contrast('#000', '#fff'); // => 21
  */
 export function contrast(foreground, background) {
-  let fg;
-  let bg;
-  try {
-    fg = Color(foreground);
-  } catch {
-    throw new Error(`Invalid colour: ${foreground}`);
-  }
-  try {
-    bg = Color(background);
-  } catch {
-    throw new Error(`Invalid colour: ${background}`);
-  }
+  const fg = parseColour(foreground);
+  const bg = parseColour(background);
   return fg.contrast(bg);
 }

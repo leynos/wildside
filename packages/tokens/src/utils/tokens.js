@@ -28,13 +28,14 @@ export function resolveToken(ref) {
     seen.add(key);
     const pathSegments = key.split('.');
     let obj = TOKENS;
-    for (let i = 0; i < pathSegments.length; i++) {
-      const k = pathSegments[i];
+    let i = 0;
+    for (const k of pathSegments) {
       if (obj?.[k] == null) {
         const missingPath = pathSegments.slice(0, i + 1).join('.');
         throw new Error(`Token path "${missingPath}" not found (while resolving "${key}")`);
       }
       obj = obj[k];
+      i++;
     }
     current = obj?.value;
   }
