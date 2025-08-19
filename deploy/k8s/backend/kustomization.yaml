@@ -22,7 +22,21 @@ secretGenerator:
       - secret.env
 generatorOptions:
   disableNameSuffixHash: false
-patchesStrategicMerge:
-  - patches/deployment-security.yaml
-  - patches/deployment-resources.yaml
-  - patches/configmap-immutable.yaml
+patches:
+  - path: patches/deployment-security.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: myapp-backend
+  - path: patches/deployment-resources.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: myapp-backend
+  - path: patches/configmap-immutable.yaml
+    target:
+      version: v1
+      kind: ConfigMap
+      name: myapp-config

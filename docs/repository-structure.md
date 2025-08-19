@@ -47,7 +47,7 @@ sequenceDiagram
   Backend-->>Ingress: Swagger UI
   Ingress-->>Browser: Swagger UI
 
-  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, nginx may serve dist/ (Section 6.3)
+  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, Nginx may serve dist/ (Section 6.3)
 ```
 
 ---
