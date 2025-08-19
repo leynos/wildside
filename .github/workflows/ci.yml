@@ -30,7 +30,7 @@ jobs:
         run: uv tool install --from git+https://github.com/leynos/nixie nixie
 
       - name: Nixie
-        run: nixie
+        run: make nixie
 
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@v20

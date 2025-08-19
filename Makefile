@@ -1,5 +1,4 @@
-.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint
-
+.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint nixie
 all: fmt lint test
 
 clean:
@@ -48,3 +47,7 @@ markdownlint-docs:
 
 mermaid-lint:
 	npx --yes @mermaid-js/mermaid-cli -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
+
+nixie:
+	nixie
+
