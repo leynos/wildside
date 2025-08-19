@@ -35,8 +35,11 @@ patches:
       version: v1
       kind: Deployment
       name: myapp-backend
-  - path: patches/configmap-immutable.yaml
-    target:
+  - target:
       version: v1
       kind: ConfigMap
-      name: myapp-config
+      labelSelector: app.kubernetes.io/name=myapp-backend
+    patch: |-
+      - op: add
+        path: /immutable
+        value: true
