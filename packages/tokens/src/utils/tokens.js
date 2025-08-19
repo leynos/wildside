@@ -1,9 +1,9 @@
 /** @file Token utilities for resolving design token references. */
-import fs from 'node:fs';
+import fs from "node:fs";
 
 // Load token tree once for reference resolution.
 const TOKENS = JSON.parse(
-  fs.readFileSync(new URL('../tokens.json', import.meta.url), 'utf8')
+	fs.readFileSync(new URL("../tokens.json", import.meta.url), "utf8"),
 );
 
 /**
@@ -16,28 +16,30 @@ const TOKENS = JSON.parse(
  * resolveToken('{color.brand}')
  */
 export function resolveToken(ref) {
-  let current = ref;
-  const seen = new Set();
-  while (typeof current === 'string') {
-    const match = /^\{(.+)\}$/.exec(current.trim());
-    if (!match) return current;
-    const key = match[1];
-    if (seen.has(key)) {
-      throw new Error(`Circular token reference detected: "${key}"`);
-    }
-    seen.add(key);
-    const pathSegments = key.split('.');
-    let obj = TOKENS;
-    let i = 0;
-    for (const k of pathSegments) {
-      if (obj?.[k] == null) {
-        const missingPath = pathSegments.slice(0, i + 1).join('.');
-        throw new Error(`Token path "${missingPath}" not found (while resolving "${key}")`);
-      }
-      obj = obj[k];
-      i++;
-    }
-    current = obj?.value;
-  }
-  return current;
+	let current = ref;
+	const seen = new Set();
+	while (typeof current === "string") {
+		const match = /^\{(.+)\}$/.exec(current.trim());
+		if (!match) return current;
+		const key = match[1];
+		if (seen.has(key)) {
+			throw new Error(`Circular token reference detected: "${key}"`);
+		}
+		seen.add(key);
+		const pathSegments = key.split(".");
+		let obj = TOKENS;
+		let i = 0;
+		for (const k of pathSegments) {
+			if (obj?.[k] == null) {
+				const missingPath = pathSegments.slice(0, i + 1).join(".");
+				throw new Error(
+					`Token path "${missingPath}" not found (while resolving "${key}")`,
+				);
+			}
+			obj = obj[k];
+			i++;
+		}
+		current = obj?.value;
+	}
+	return current;
 }
