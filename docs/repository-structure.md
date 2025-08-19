@@ -47,7 +47,7 @@ sequenceDiagram
   Backend-->>Ingress: Swagger UI
   Ingress-->>Browser: Swagger UI
 
-  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, Nginx may serve dist/ (Section 6.3)
+  Note over Browser, CDN: Prod serves assets via CDN. Locally, Nginx may serve dist/ (Section 6.3)
 ```
 
 ---
@@ -101,7 +101,7 @@ myapp/
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
 │  ├─ k8s/                            # manifests and kustomizations
-│  │  ├─ backend/                     # Deployment, Service, ConfigMap and Secret generators, PDB, configurable patches
+│  │  ├─ backend/                     # Deployment, Service, ConfigMap/Secret generators, PDB, patches
 │  │  ├─ ingress/                     # Ingress and cert-manager manifests with namespace/label kustomization
 │  │  │  ├─ api.yaml
 │  │  │  ├─ certificate.yaml
@@ -162,9 +162,12 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 **Flow:**
 
-```text
-Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs  →  Frontend WS client + TanStack Query/SWR
-```
+  ```text
+  Rust event payloads (serde + schemars)
+    → AsyncAPI (YAML)
+    → Docs & stubs
+    → Frontend WS client + TanStack Query/SWR
+  ```
 
 > Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
 > message payloads; derive JSON Schema via `schemars` if you want runtime

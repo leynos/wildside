@@ -6,6 +6,7 @@ commonLabels:
   app.kubernetes.io/name: myapp-backend
   app.kubernetes.io/part-of: myapp
   app.kubernetes.io/component: backend
+  app.kubernetes.io/instance: myapp-backend
 commonAnnotations:
   app.kubernetes.io/managed-by: kustomize
 resources:
