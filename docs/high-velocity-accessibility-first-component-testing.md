@@ -12,7 +12,7 @@ capabilities and limitations of the proposed two-tiered testing model. This
 revised framework leverages Vitest for immediate, component-level feedback and
 Playwright for comprehensive, end-to-end validation, ensuring that the core
 philosophy is upheld through a pragmatic and technically sound approach.
-
+<!-- markdownlint-disable-next-line MD013 -->
 ### 1.1 Deconstructing the Tooling Deadlock: Why the Bun and ,`happy-dom`, Approach is Untenable
 
 An effective testing strategy must be built upon a compatible and stable set of
@@ -110,7 +110,7 @@ the team can immediately implement its accessibility strategy without being
 blocked by the ecosystem immaturity of a newer tool. This pivot ensures that
 the team's accessibility-first ambitions are realized in practice, not just in
 theory.
-
+<!-- markdownlint-disable-next-line MD013 -->
 ### 1.3 Setting Realistic Expectations: Understanding ,`axe-core`, Limitations in ,`jsdom`
 
 While pivoting to Vitest with a `jsdom` environment solves the primary tooling
@@ -986,19 +986,22 @@ capabilities first and incrementally roll out the complete framework.
 - Create and configure the `vitest.config.ts` file to use the `jsdom`
   environment and specify the test setup file.
 - Update the `tsconfig.json` to include the new configuration and setup files.
-2. **Phase 2: Core Tooling (1 Day)**
+
+1. **Phase 2: Core Tooling (1 Day)**
 
 - Create the `./tests/setup.ts` file and add the import for
   `vitest-axe/extend-expect` to globally register the custom matcher.
 - (Optional but Recommended) Implement the custom `toHaveNoAxeViolations`
   matcher logic for enhanced error reporting, as detailed in Section 2.3.
-3. **Phase 3: Initial Rollout (2-3 Days)**
+
+1. **Phase 3: Initial Rollout (2-3 Days)**
 
 - Select a single, well-defined component (e.g., a Button or an Input).
 - Create a `*.a11y.test.ts` file for this component.
 - Write the first accessibility tests using the established pattern to validate
   the entire setup from configuration to assertion.
-4. **Phase 4: E2E Integration (3-5 Days)**
+
+1. **Phase 4: E2E Integration (3-5 Days)**
 
 - Install `@axe-core/playwright`.
 - Identify a critical user flow (e.g., login, add to cart).
@@ -1008,7 +1011,8 @@ capabilities first and incrementally roll out the complete framework.
   navigation menu or a complex form.
 - Implement a Playwright accessibility tree snapshot test for a complex, shared
   component.
-5. **Phase 5: CI/CD Integration (2-3 Days)**
+
+1. **Phase 5: CI/CD Integration (2-3 Days)**
 
 - Implement the sharded GitHub Actions workflow as detailed in Section 4.1.
 - Configure the workflow to upload the final HTML reports from both Vitest and
@@ -1105,7 +1109,7 @@ quality to be built in from the very first line of code.
     [https://vitest.dev/api/expect](https://vitest.dev/api/expect)
 28. Custom Test Matchers - tutorials - Nut.js, accessed on 17 August 2025,
     [https://nutjs.dev/tutorials/custom-test-matchers](https://nutjs.dev/tutorials/custom-test-matchers)
-29. 10. Custom Assertions - Full Stack Testing, accessed on 17 August 2025,
+29. Custom Assertions - Full Stack Testing, accessed on 17 August 2025,
     [https://testing.epicweb.dev/10](https://testing.epicweb.dev/10)
 30. Using the Accessibility Results with Java - Deque Docs, accessed on 17
     August 2025,
