@@ -399,7 +399,7 @@ recommended for the two GitOps repositories.
 |  | clusters/production/ | Root directory for the production cluster's Flux configuration. |
 |  | clusters/production/flux-system/ | Contains the core Flux manifests, managed automatically by flux bootstrap. |
 |  | infrastructure/sources/ | Contains GitRepository and HelmRepository CRDs, defining all external sources Flux can pull from (e.g., Bitnami Helm repo, wildside-apps Git repo). |
-|  | infrastructure/core/ | Contains Flux Kustomization and HelmRelease manifests for core services like ingress-nginx, cert-manager, and external-dns. |
+|  | infrastructure/core/ | Contains Flux Kustomization and HelmRelease manifests for core services like Traefik, cert-manager, and external-dns. |
 |  | infrastructure/secrets/ | Contains manifests for the secrets management solution (Vault and External Secrets Operator). |
 |  | infrastructure/databases/ | Contains manifests for database operators like CloudNativePG. |
 |  | infrastructure/apps.yaml | A root Kustomization that orchestrates the deployment of all applications by referencing the wildside-apps repository. |
@@ -481,53 +481,45 @@ services that provide essential functionality to the cluster, such as ingress,
 DNS, TLS, and data persistence. These services are all deployed declaratively
 via FluxCD, with their manifests stored in the `wildside-infra` repository.
 
-### Ingress Controller: NGINX
+### Ingress Controller: Traefik
 
-The NGINX Ingress Controller is responsible for managing external access to
-services within the cluster. It acts as a reverse proxy and load balancer,
-routing HTTP/S traffic to the appropriate application based on hostnames and
-paths. It is deployed using its official Helm chart.
+The Traefik Ingress Controller manages external access to services within the
+cluster. Acting as a reverse proxy and load balancer, it routes HTTP/S traffic
+to the appropriate application based on hostnames and paths. It is deployed
+using its official Helm chart.
 
 YAML
 
 ```yaml
-# infrastructure/core/ingress-nginx.yaml
+# infrastructure/core/traefik.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: ingress-nginx
+  name: traefik
   namespace: kube-system
 spec:
   interval: 30m
   chart:
     spec:
-      chart: ingress-nginx
+      chart: traefik
       sourceRef:
         kind: HelmRepository
-        name: ingress-nginx # Assumes a HelmRepository for ingress-nginx is defined
+        name: traefik
         namespace: flux-system
-      version: "4.10.x"
+      version: "25.0.x"
   values:
-    controller:
-      replicaCount: 3 # For high availability
-      service:
-        type: LoadBalancer
-        annotations:
-          # This annotation is specific to DigitalOcean and ensures the client's real IP is passed through
-          service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
-          service.beta.kubernetes.io/do-loadbalancer-healthcheck-port: "10254"
-      # Tolerations to allow scheduling on the core-services node pool
-      tolerations:
-      - key: "CriticalAddonsOnly"
-        operator: "Exists"
-        effect: "NoSchedule"
+    ingressClass:
+      enabled: true
+      isDefaultClass: false
+    service:
+      type: LoadBalancer
+    dashboard:
+      enabled: true
 ```
 
-This `HelmRelease` manifest instructs Flux to install the `ingress-nginx`
-chart. The configuration specifies a `replicaCount` of 3 for high availability
-and sets the service `type` to `LoadBalancer`, which prompts DigitalOcean to
-provision a public-facing load balancer. The annotations are crucial for proper
-operation on DOKS.
+This `HelmRelease` manifest instructs Flux to install the `traefik` chart. The
+configuration exposes Traefik via a `LoadBalancer` service and enables a
+dedicated `IngressClass`. The optional dashboard is enabled for observability.
 
 ### Automated DNS: ExternalDNS
 
@@ -964,7 +956,7 @@ spec:
 
     ingress:
       enabled: true
-      className: "nginx"
+      className: "traefik"
       hostname: "staging.your-domain.com" # Default hostname
       tls:
         - hosts:
@@ -1457,7 +1449,7 @@ operational practices are recommended:
 
 - **Monitoring and Observability:** Deploy the Prometheus Operator and Grafana
   stack via a Flux `HelmRelease`. Configure Prometheus to scrape metrics from
-  all key cluster components, including the NGINX Ingress Controller,
+  all key cluster components, including the Traefik Ingress Controller,
   `cert-manager`, CloudNativePG, and the Wildside application pods themselves.
   Create Grafana dashboards to visualize key performance indicators (KPIs) such
   as request latency, error rates, database connection pooling, and resource
