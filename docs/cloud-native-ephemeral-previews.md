@@ -957,10 +957,10 @@ spec:
     ingress:
       enabled: true
       className: "traefik"
-      hostname: "staging.your-domain.com" # Default hostname
+      hostname: "staging.example.com" # Default hostname
       tls:
         - hosts:
-            - "staging.your-domain.com"
+            - "staging.example.com"
           secretName: wildside-app-tls # cert-manager will create this
 
     # Connection details for dependencies
