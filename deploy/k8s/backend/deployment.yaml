@@ -21,6 +21,8 @@ spec:
   template:
     metadata:
       labels:
+        # Apply standard app labels to pods for observability and policy
+        # targeting.
         app: myapp-backend
         app.kubernetes.io/name: myapp-backend
         app.kubernetes.io/instance: myapp-backend
