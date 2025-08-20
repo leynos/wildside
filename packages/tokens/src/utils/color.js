@@ -8,10 +8,8 @@ function parseColour(value, name = "colour") {
 		return Color(value);
 	} catch (err) {
 		const message = `Invalid ${name}: ${String(value)}`;
-		const e = new TypeError(message);
 		// Preserve underlying error details for debugging across runtimes
-		e.cause = err;
-		throw e;
+		throw new TypeError(message, { cause: err });
 	}
 }
 
