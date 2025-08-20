@@ -48,7 +48,8 @@ export const customFetch = async <T>(
 			/* ignore parse errors */
 		}
 		throw new Error(
-			`${res.status} ${res.statusText}${detail ? `: ${JSON.stringify(detail)}` : ""}`,
+			`${res.status} ${res.statusText} ${res.url}${detail ? `: ${JSON.stringify(detail)}` : ""}`,
+			{ cause: detail },
 		);
 	}
 

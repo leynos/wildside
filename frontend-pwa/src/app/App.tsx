@@ -9,13 +9,18 @@ export function App() {
 		queryKey: ["users"],
 		queryFn: ({ signal }) => listUsers(signal),
 		staleTime: 60_000,
+		refetchOnWindowFocus: false,
 	});
 
 	if (isLoading) {
 		return (
-			<output className="p-6 min-h-screen bg-base-200 text-base-content">
+			<p
+				className="p-6 min-h-screen bg-base-200 text-base-content"
+				aria-live="polite"
+				aria-busy="true"
+			>
 				Loading users…
-			</output>
+			</p>
 		);
 	}
 
