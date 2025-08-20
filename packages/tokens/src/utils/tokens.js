@@ -1,6 +1,19 @@
 /** @file Token utilities for resolving design token references. */
 import fs from "node:fs";
 
+/**
+ * Enumerate an array yielding [index, value] pairs.
+ *
+ * @template T
+ * @param {T[]} array - Array to iterate.
+ * @returns {IterableIterator<[number, T]>}
+ */
+function* enumerate(array) {
+	for (let i = 0; i < array.length; i++) {
+		yield [i, array[i]];
+	}
+}
+
 // Load token tree once for reference resolution.
 const TOKENS = JSON.parse(
 	fs.readFileSync(new URL("../tokens.json", import.meta.url), "utf8"),
@@ -27,19 +40,17 @@ export function resolveToken(ref) {
 		}
 		seen.add(key);
 		const pathSegments = key.split(".");
-		let obj = TOKENS;
-		let i = 0;
-		for (const k of pathSegments) {
-			if (obj?.[k] == null) {
-				const missingPath = pathSegments.slice(0, i + 1).join(".");
+		let cursor = TOKENS;
+		for (const [segmentIndex, segment] of enumerate(pathSegments)) {
+			if (cursor?.[segment] == null) {
+				const missingPath = pathSegments.slice(0, segmentIndex + 1).join(".");
 				throw new Error(
 					`Token path "${missingPath}" not found (while resolving "${key}")`,
 				);
 			}
-			obj = obj[k];
-			i++;
+			cursor = cursor[segment];
 		}
-		current = obj?.value;
+		current = cursor?.value;
 	}
 	return current;
 }

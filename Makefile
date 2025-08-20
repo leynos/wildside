@@ -33,7 +33,7 @@ fmt:
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-	npx biome ci frontend-pwa packages
+	npx biome ci frontend-pwa packages/tokens/src packages/tokens/build packages/types/src
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features

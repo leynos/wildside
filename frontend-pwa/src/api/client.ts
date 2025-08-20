@@ -4,8 +4,8 @@
  * Endpoint: GET /api/users
  * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
-import { customFetchParsed } from "./fetcher";
 import { type User, UsersSchema } from "@app/types";
+import { customFetchParsed } from "./fetcher";
 
 /**
  * Fetch all registered users.

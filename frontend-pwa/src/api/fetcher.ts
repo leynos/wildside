@@ -13,7 +13,24 @@ export const customFetch = async <T>(
 	const headers = new Headers(init?.headers as HeadersInit | undefined);
 	if (!headers.has("Accept")) headers.set("Accept", "application/json");
 	if (init?.body != null && !headers.has("Content-Type")) {
-		headers.set("Content-Type", "application/json");
+		const b = init.body as unknown;
+		const isMultipart =
+			typeof FormData !== "undefined" && b instanceof FormData;
+		const isBlob = typeof Blob !== "undefined" && b instanceof Blob;
+		const isUrlEncoded =
+			typeof URLSearchParams !== "undefined" && b instanceof URLSearchParams;
+		const isBinary =
+			typeof ArrayBuffer !== "undefined" &&
+			(b instanceof ArrayBuffer || ArrayBuffer.isView(b as ArrayBufferView));
+		if (
+			!isMultipart &&
+			!isBlob &&
+			!isUrlEncoded &&
+			!isBinary &&
+			typeof b === "string"
+		) {
+			headers.set("Content-Type", "application/json");
+		}
 	}
 
 	const res = await fetch(url, {
@@ -26,9 +43,7 @@ export const customFetch = async <T>(
 		let detail: unknown;
 		const ct = res.headers.get("content-type") ?? "";
 		try {
-			detail = ct.includes("application/json")
-				? await res.json()
-				: await res.text();
+			detail = ct.includes("json") ? await res.json() : await res.text();
 		} catch {
 			/* ignore parse errors */
 		}
@@ -40,7 +55,7 @@ export const customFetch = async <T>(
 	if (res.status === 204) return undefined as unknown as T;
 	const ct = res.headers.get("content-type") ?? "";
 	const len = res.headers.get("content-length");
-	if (!ct.includes("application/json") || len === "0") {
+	if (!ct.includes("json") || len === "0") {
 		return undefined as unknown as T;
 	}
 	return res.json() as Promise<T>;

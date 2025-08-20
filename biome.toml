@@ -149,3 +149,14 @@ includes = ["**/*.tsx"]
 
 [overrides.linter.rules.style]
 use-filenaming-convention = { level = "error", options = { strict-case = true, require-ascii = true, filename-cases = ["PascalCase", "export"] } }
+
+[[overrides]]
+includes = [
+  "vite.config.{js,ts,mjs,cjs}",
+  "rollup.config.{js,ts,mjs,cjs}",
+  "webpack.config.{js,ts,mjs,cjs}",
+  "**/{scripts,config}/**/*.{js,ts}",
+]
+
+[overrides.linter.rules.style]
+no-process-env = "off"

@@ -12,10 +12,12 @@ export const UserIdSchema = z.string().brand<"UserId">();
 export type UserId = z.infer<typeof UserIdSchema>;
 
 /** Runtime schema for a user record. */
-export const UserSchema = z.object({
-	id: UserIdSchema,
-	display_name: z.string().trim().min(1, "display_name must not be empty"),
-});
+export const UserSchema = z
+	.object({
+		id: UserIdSchema,
+		display_name: z.string().trim().min(1, "display_name must not be empty"),
+	})
+	.strict();
 /** User record returned from the API. */
 export type User = z.infer<typeof UserSchema>;
 
