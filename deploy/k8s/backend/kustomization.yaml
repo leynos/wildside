@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: myapp
+commonLabels:
+  app: myapp-backend
+  app.kubernetes.io/name: myapp-backend
+  app.kubernetes.io/part-of: myapp
+  app.kubernetes.io/component: backend
+  app.kubernetes.io/instance: myapp-backend
+commonAnnotations:
+  app.kubernetes.io/managed-by: kustomize
+resources:
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+configMapGenerator:
+  - name: myapp-config
+    literals:
+      - APP_ENV=production
+secretGenerator:
+  - name: myapp-secrets
+    envs:
+      - secret.env
+generatorOptions:
+  disableNameSuffixHash: false
+  labels:
+    wildside.io/generated: "true"
+patches:
+  - path: patches/deployment-security.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: myapp-backend
+  - path: patches/deployment-resources.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: myapp-backend
+  - target:
+      version: v1
+      kind: ConfigMap
+      labelSelector: wildside.io/generated=true
+    patch: |-
+      - op: add
+        path: /immutable
+        value: true

@@ -2,16 +2,21 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: myapp-api
-  annotations:
-    kubernetes.io/ingress.class: nginx
+  namespace: myapp
 spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.wildside.cc
+      secretName: myapp-api-tls
   rules:
-  - host: api.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: myapp-backend
-            port: { number: 80 }
+    - host: api.wildside.cc
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: myapp-backend
+                port:
+                  name: http

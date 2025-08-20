@@ -9,3 +9,5 @@ node_modules/
 # Misc
 .DS_Store
 bun.lockb
+
+deploy/k8s/backend/secret.env

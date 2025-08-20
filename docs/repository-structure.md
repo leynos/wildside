@@ -47,7 +47,7 @@ sequenceDiagram
   Backend-->>Ingress: Swagger UI
   Ingress-->>Browser: Swagger UI
 
-  Note over Browser, CDN: In prod, static assets are served via CDN. Locally, nginx may serve dist/ (§6.3)
+  Note over Browser, CDN: Prod serves assets via CDN. Locally, Nginx may serve dist/ (Section 6.3)
 ```
 
 ---
@@ -100,14 +100,18 @@ myapp/
 │  ├─ docker/                         # Dockerfiles
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
-│  ├─ k8s/                            # manifests or Helm/ks
-│  │  ├─ backend/
-│  │  ├─ ingress/
+│  ├─ k8s/                            # manifests and kustomizations
+│  │  ├─ backend/                     # Deployment, Service, ConfigMap/Secret generators, PDB, patches
+│  │  ├─ ingress/                     # Ingress and cert-manager manifests with label kustomization
+│  │  │  ├─ api.yaml
+│  │  │  ├─ certificate.yaml
+│  │  │  ├─ cluster-issuer.yaml
+│  │  │  └─ kustomization.yaml
 │  │  └─ jobs/                        # migrations, one-off tasks
 │  └─ scripts/                        # CI/deploy helpers
 │
 ├─ .github/workflows/                 # CI pipelines (lint, build, test, push images)
-├─ Makefile                           # local DX (optional, see §6)
+├─ Makefile                           # local DX (optional, see Section 6)
 ├─ package.json                       # bun workspaces + root scripts
 └─ README.md
 ```
@@ -158,9 +162,12 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 **Flow:**
 
-```text
-Rust event payloads (serde + schemars)  →  AsyncAPI (YAML)  →  Docs & stubs  →  Frontend WS client + TanStack Query/SWR
-```
+  ```text
+  Rust event payloads (serde + schemars)
+    → AsyncAPI (YAML)
+    → Docs & stubs
+    → Frontend WS client + TanStack Query/SWR
+  ```
 
 > Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
 > message payloads; derive JSON Schema via `schemars` if you want runtime
@@ -240,7 +247,7 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 See [`deploy/docker/backend.Dockerfile`](../deploy/docker/backend.Dockerfile) for
 the canonical image build. Key points:
 
-- Dependencies are cached before sources are copied to maximise layer reuse.
+- Dependencies are cached before sources are copied to maximize layer reuse.
 - Alpine packages and OpenSSL are version‑pinned for reproducible builds.
 - The `HEALTHCHECK_PORT` and `HEALTHCHECK_PATH` build args allow the liveness
   probe to be tailored without editing the file.
