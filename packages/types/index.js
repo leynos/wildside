@@ -16,5 +16,6 @@ export const UserSchema = z
 /** Runtime schema for a list of user records. */
 export const UsersSchema = z.array(UserSchema);
 
-// Expose a benign default to guard against mistaken default imports.
+// Benign default: guards against accidental `import x from '@app/types'`.
+// Always import named schemas from this module.
 export default undefined;

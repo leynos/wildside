@@ -20,6 +20,8 @@ export const usersQK = {
   all: USERS_QK,
   byId: (id: User['id']) => [...USERS_QK, id] as const,
 } as const;
+// Freeze to guard against runtime mutation.
+Object.freeze(usersQK);
 
 /**
  * Fetch all registered users.

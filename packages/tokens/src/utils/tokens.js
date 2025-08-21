@@ -52,8 +52,14 @@ export function resolveToken(ref, tokens = TOKENS) {
     for (const [segmentIndex, segment] of enumerate(pathSegments)) {
       if (cursor?.[segment] == null) {
         const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
+        const siblings =
+          cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
+        const hint =
+          siblings.length > 0
+            ? ` Available keys: ${siblings.slice(0, 10).join(', ')}`
+            : '';
         throw new Error(
-          `Token path "${missingPath}" not found (while resolving "${key}")`,
+          `Token path "${missingPath}" not found (while resolving "${key}").${hint}`,
         );
       }
       cursor = cursor[segment];
