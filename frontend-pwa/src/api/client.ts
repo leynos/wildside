@@ -5,12 +5,21 @@
  * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
 import { type User, UsersSchema } from '@app/types';
+import type { QueryKey } from '@tanstack/react-query';
 import { customFetchParsed } from './fetcher';
 
 /**
  * Query key for user listings.
  */
-export const USERS_QK = ['users'] as const;
+export const USERS_QK = ['users'] as const satisfies QueryKey;
+
+/**
+ * Helpers for composing user query keys.
+ */
+export const usersQK = {
+  all: USERS_QK,
+  byId: (id: User['id']) => [...USERS_QK, id] as const,
+} as const;
 
 /**
  * Fetch all registered users.

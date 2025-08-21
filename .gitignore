@@ -5,6 +5,8 @@
 # Node
 node_modules/
 **/dist/
+!packages/types/dist/
+!packages/types/dist/**
 
 # Misc
 .DS_Store

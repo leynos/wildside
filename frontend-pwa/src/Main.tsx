@@ -8,11 +8,12 @@ import '@app/tokens/css/variables.css';
 import './index.css';
 import { App } from './app/App';
 
-const qc = new QueryClient({
+const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
       refetchOnWindowFocus: false,
+      retry: 2,
     },
   },
 });
@@ -21,7 +22,7 @@ if (!rootElem) throw new Error('#root element not found');
 
 createRoot(rootElem).render(
   <React.StrictMode>
-    <QueryClientProvider client={qc}>
+    <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>
   </React.StrictMode>,

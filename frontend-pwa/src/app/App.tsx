@@ -8,6 +8,7 @@ export function App() {
   const { data, isLoading, isError } = useQuery({
     queryKey: USERS_QK,
     queryFn: ({ signal }) => listUsers(signal),
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) {

@@ -1,10 +1,7 @@
 /** @file Token utilities for resolving design token references. */
-import fs from 'node:fs';
-
-// Load token tree once for reference resolution.
-const TOKENS = JSON.parse(
-  fs.readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'),
-);
+// Load token tree once for reference resolution (Node 18.17+ or bundler with JSON modules).
+import tokensJson from '../tokens.json' assert { type: 'json' };
+const TOKENS = tokensJson;
 
 /**
  * Iterate over `iterable` yielding `[index, value]` pairs.

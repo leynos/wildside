@@ -5,10 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "main": "./index.js",
-  "types": "./src/user.ts",
+  "types": "./dist/src/user.d.ts",
   "exports": {
     ".": {
-      "types": "./src/user.ts",
+      "types": "./dist/src/user.d.ts",
+      "import": "./index.js",
       "default": "./index.js"
     },
     "./package.json": "./package.json"
@@ -18,6 +19,9 @@
   },
   "devDependencies": {
     "zod": "^3"
+  },
+  "scripts": {
+    "build": "tsc src/user.ts --declaration --emitDeclarationOnly --outDir dist/src"
   },
   "engines": {
     "node": ">=18.17"
