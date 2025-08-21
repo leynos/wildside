@@ -4,16 +4,19 @@
   "license": "ISC",
   "type": "module",
   "sideEffects": false,
-  "main": "./src/user.ts",
+  "main": "./index.js",
   "types": "./src/user.ts",
   "exports": {
     ".": {
-      "import": "./src/user.ts",
-      "types": "./src/user.ts"
+      "types": "./src/user.ts",
+      "default": "./index.js"
     },
     "./package.json": "./package.json"
   },
-  "dependencies": {
+  "peerDependencies": {
+    "zod": "^3"
+  },
+  "devDependencies": {
     "zod": "^3"
   },
   "engines": {

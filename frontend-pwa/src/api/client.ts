@@ -8,6 +8,11 @@ import { type User, UsersSchema } from '@app/types';
 import { customFetchParsed } from './fetcher';
 
 /**
+ * Query key for user listings.
+ */
+export const USERS_QK = ['users'] as const;
+
+/**
  * Fetch all registered users.
  *
  * @example

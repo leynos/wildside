@@ -1,21 +1,10 @@
 /** @file Token utilities for resolving design token references. */
 import fs from 'node:fs';
 
-/**
- * Enumerate an array yielding [index, value] pairs.
- *
- * @template T
- * @param {T[]} array - Array to iterate.
- * @returns {IterableIterator<[number, T]>}
- */
-function* enumerate(array) {
-  for (let i = 0; i < array.length; i++) {
-    yield [i, array[i]];
-  }
-}
-
 // Load token tree once for reference resolution.
-const TOKENS = JSON.parse(fs.readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'));
+const TOKENS = JSON.parse(
+  fs.readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'),
+);
 
 /**
  * Resolve a `{token.path}` reference to its concrete value.
@@ -26,7 +15,7 @@ const TOKENS = JSON.parse(fs.readFileSync(new URL('../tokens.json', import.meta.
  * @example
  * resolveToken('{color.brand}')
  */
-export function resolveToken(ref) {
+export function resolveToken(ref, tokens = TOKENS) {
   let current = ref;
   const seen = new Set();
   while (typeof current === 'string') {
@@ -38,11 +27,14 @@ export function resolveToken(ref) {
     }
     seen.add(key);
     const pathSegments = key.split('.');
-    let cursor = TOKENS;
-    for (const [segmentIndex, segment] of enumerate(pathSegments)) {
+    let cursor = tokens;
+    for (let segmentIndex = 0; segmentIndex < pathSegments.length; segmentIndex++) {
+      const segment = pathSegments[segmentIndex];
       if (cursor?.[segment] == null) {
         const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
-        throw new Error(`Token path "${missingPath}" not found (while resolving "${key}")`);
+        throw new Error(
+          `Token path "${missingPath}" not found (while resolving "${key}")`,
+        );
       }
       cursor = cursor[segment];
     }
