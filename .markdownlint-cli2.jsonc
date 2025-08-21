@@ -10,8 +10,5 @@
     },
     "MD029": { "style": "ordered" }
   },
-  "ignores": [
-    "**/.venv/**",
-    "**/node_modules/**"
-  ]
+  "ignores": ["**/.venv/**", "**/node_modules/**"]
 }

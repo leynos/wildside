@@ -354,10 +354,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useAltText": {
           "description": "Enforce that all elements that require alternative text have meaningful information to relay back to the end user.",
@@ -595,21 +592,14 @@
     },
     "Accessibility": {
       "type": "string",
-      "enum": [
-        "noPublic",
-        "explicit",
-        "none"
-      ]
+      "enum": ["noPublic", "explicit", "none"]
     },
     "Actions": {
       "type": "object",
       "properties": {
         "recommended": {
           "description": "It enables the assist actions recommended by Biome. `true` by default.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "source": {
           "anyOf": [
@@ -626,10 +616,7 @@
     },
     "ArrowParentheses": {
       "type": "string",
-      "enum": [
-        "always",
-        "asNeeded"
-      ]
+      "enum": ["always", "asNeeded"]
     },
     "AssistConfiguration": {
       "type": "object",
@@ -658,10 +645,7 @@
         },
         "includes": {
           "description": "A list of glob patterns. Biome will include files/folders that will match these patterns.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/NormalizedGlob"
           }
@@ -671,10 +655,7 @@
     },
     "AttributePosition": {
       "type": "string",
-      "enum": [
-        "auto",
-        "multiline"
-      ]
+      "enum": ["auto", "multiline"]
     },
     "Bool": {
       "type": "boolean"
@@ -1011,10 +992,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useArrowFunction": {
           "description": "Use arrow functions over function expressions.",
@@ -1158,16 +1136,12 @@
         {
           "description": "`ItemType[]`",
           "type": "string",
-          "enum": [
-            "shorthand"
-          ]
+          "enum": ["shorthand"]
         },
         {
           "description": "`Array<ItemType>`",
           "type": "string",
-          "enum": [
-            "generic"
-          ]
+          "enum": ["generic"]
         }
       ]
     },
@@ -1764,10 +1738,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useExhaustiveDependencies": {
           "description": "Enforce all dependencies are correctly specified in a React hook.",
@@ -1908,10 +1879,7 @@
         },
         "globals": {
           "description": "CSS globals",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           },
@@ -2132,10 +2100,7 @@
         },
         "use": {
           "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": false
@@ -2176,23 +2141,17 @@
         {
           "description": "Objects are expanded when the first property has a leading newline. Arrays are always expanded if they are shorter than the line width.",
           "type": "string",
-          "enum": [
-            "auto"
-          ]
+          "enum": ["auto"]
         },
         {
           "description": "Objects and arrays are always expanded.",
           "type": "string",
-          "enum": [
-            "always"
-          ]
+          "enum": ["always"]
         },
         {
           "description": "Objects and arrays are never expanded, if they are shorter than the line width.",
           "type": "string",
-          "enum": [
-            "never"
-          ]
+          "enum": ["never"]
         }
       ]
     },
@@ -2215,37 +2174,27 @@
         {
           "description": "camelCase",
           "type": "string",
-          "enum": [
-            "camelCase"
-          ]
+          "enum": ["camelCase"]
         },
         {
           "description": "Match an export name",
           "type": "string",
-          "enum": [
-            "export"
-          ]
+          "enum": ["export"]
         },
         {
           "description": "kebab-case",
           "type": "string",
-          "enum": [
-            "kebab-case"
-          ]
+          "enum": ["kebab-case"]
         },
         {
           "description": "PascalCase",
           "type": "string",
-          "enum": [
-            "PascalCase"
-          ]
+          "enum": ["PascalCase"]
         },
         {
           "description": "snake_case",
           "type": "string",
-          "enum": [
-            "snake_case"
-          ]
+          "enum": ["snake_case"]
         }
       ]
     },
@@ -2306,10 +2255,7 @@
       "properties": {
         "experimentalScannerIgnores": {
           "description": "Set of file and folder names that should be unconditionally ignored by Biome's scanner.\n\nBiome maintains an internal list of default ignore entries, which is based on user feedback and which may change in any release. This setting allows overriding this internal list completely.\n\nThis is considered an advanced feature that users _should_ not need to tweak themselves, but they can as a last resort. This setting can only be configured in root configurations, and is ignored in nested configs.\n\nEntries must be file or folder *names*. Specific paths and globs are not supported.\n\nExamples where this may be useful:\n\n```jsonc { \"files\": { \"experimentalScannerIgnores\": [ // You almost certainly don't want to scan your `.git` // folder, which is why it's already ignored by default: \".git\",\n\n// But the scanner does scan `node_modules` by default. If // you *really* don't want this, you can ignore it like // this: \"node_modules\",\n\n// But it's probably better to ignore a specific dependency. // For instance, one that happens to be particularly slow to // scan: \"RedisCommander.d.ts\", ], } } ```\n\nPlease be aware that rules relying on the module graph or type inference information may be negatively affected if dependencies of your project aren't (fully) scanned.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           }
@@ -2327,10 +2273,7 @@
         },
         "includes": {
           "description": "A list of glob patterns. Biome will handle only those files/folders that will match these patterns.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/NormalizedGlob"
           }
@@ -2355,35 +2298,24 @@
         {
           "description": "The rule doesn't emit code actions.",
           "type": "string",
-          "enum": [
-            "none"
-          ]
+          "enum": ["none"]
         },
         {
           "description": "The rule emits a code action that is safe to apply. Usually these fixes don't change the semantic of the program.",
           "type": "string",
-          "enum": [
-            "safe"
-          ]
+          "enum": ["safe"]
         },
         {
           "description": "The rule emits a code action that is _unsafe_ to apply. Usually these fixes remove comments, or change the semantic of the program.",
           "type": "string",
-          "enum": [
-            "unsafe"
-          ]
+          "enum": ["unsafe"]
         }
       ]
     },
     "Format": {
       "description": "Supported cases.",
       "type": "string",
-      "enum": [
-        "camelCase",
-        "CONSTANT_CASE",
-        "PascalCase",
-        "snake_case"
-      ]
+      "enum": ["camelCase", "CONSTANT_CASE", "PascalCase", "snake_case"]
     },
     "Formats": {
       "type": "array",
@@ -2463,10 +2395,7 @@
         },
         "includes": {
           "description": "A list of glob patterns. The formatter will include files/folders that will match these patterns.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/NormalizedGlob"
           }
@@ -2850,37 +2779,27 @@
         {
           "description": "It disables all the rules of this group",
           "type": "string",
-          "enum": [
-            "off"
-          ]
+          "enum": ["off"]
         },
         {
           "description": "It enables all the rules of this group, with their default severity",
           "type": "string",
-          "enum": [
-            "on"
-          ]
+          "enum": ["on"]
         },
         {
           "description": "It enables all the rules of this group, and set their severity to \"info\"",
           "type": "string",
-          "enum": [
-            "info"
-          ]
+          "enum": ["info"]
         },
         {
           "description": "It enables all the rules of this group, and set their severity to \"warn\"",
           "type": "string",
-          "enum": [
-            "warn"
-          ]
+          "enum": ["warn"]
         },
         {
           "description": "It enables all the rules of this group, and set their severity to \"error+\"",
           "type": "string",
-          "enum": [
-            "error"
-          ]
+          "enum": ["error"]
         }
       ]
     },
@@ -2890,20 +2809,14 @@
         "closureIndex": {
           "description": "The \"position\" of the closure function, starting from zero.\n\nFor example, for React's `useEffect()` hook, the closure index is 0.",
           "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint8",
           "minimum": 0
         },
         "dependenciesIndex": {
           "description": "The \"position\" of the array of dependencies, starting from zero.\n\nFor example, for React's `useEffect()` hook, the dependencies index is 1.",
           "default": null,
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint8",
           "minimum": 0
         },
@@ -3113,10 +3026,7 @@
           ]
         },
         "type": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         }
       }
     },
@@ -3141,9 +3051,7 @@
     "ImportTypeOptions": {
       "description": "Rule's options.",
       "type": "object",
-      "required": [
-        "style"
-      ],
+      "required": ["style"],
       "properties": {
         "style": {
           "$ref": "#/definitions/Style2"
@@ -3160,16 +3068,12 @@
         {
           "description": "Tab",
           "type": "string",
-          "enum": [
-            "tab"
-          ]
+          "enum": ["tab"]
         },
         {
           "description": "Space",
           "type": "string",
-          "enum": [
-            "space"
-          ]
+          "enum": ["space"]
         }
       ]
     },
@@ -3224,10 +3128,7 @@
         },
         "globals": {
           "description": "A list of global bindings that should be ignored by the analyzers\n\nIf defined here, they should not emit diagnostics.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           },
@@ -3715,16 +3616,12 @@
         {
           "description": "Indicates a modern or native JSX environment, that doesn't require special handling by Biome.",
           "type": "string",
-          "enum": [
-            "transparent"
-          ]
+          "enum": ["transparent"]
         },
         {
           "description": "Indicates a classic React environment that requires the `React` import.\n\nCorresponds to the `react` value for the `jsx` option in TypeScript's `tsconfig.json`.\n\nThis option should only be necessary if you cannot upgrade to a React version that supports the new JSX runtime. For more information about the old vs. new JSX runtime, please see: <https://legacy.reactjs.org/blog/2020/09/22/introducing-the-new-jsx-transform.html>",
           "type": "string",
-          "enum": [
-            "reactClassic"
-          ]
+          "enum": ["reactClassic"]
         }
       ]
     },
@@ -3761,107 +3658,77 @@
         {
           "description": "All kinds",
           "type": "string",
-          "enum": [
-            "any"
-          ]
+          "enum": ["any"]
         },
         {
           "description": "All type definitions: classes, enums, interfaces, and type aliases",
           "type": "string",
-          "enum": [
-            "typeLike"
-          ]
+          "enum": ["typeLike"]
         },
         {
           "description": "Named function declarations and expressions",
           "type": "string",
-          "enum": [
-            "function"
-          ]
+          "enum": ["function"]
         },
         {
           "description": "TypeScript namespaces, import and export namespaces",
           "type": "string",
-          "enum": [
-            "namespaceLike"
-          ]
+          "enum": ["namespaceLike"]
         },
         {
           "description": "TypeScript namespaces",
           "type": "string",
-          "enum": [
-            "namespace"
-          ]
+          "enum": ["namespace"]
         },
         {
           "description": "All function parameters, but parameter properties",
           "type": "string",
-          "enum": [
-            "functionParameter"
-          ]
+          "enum": ["functionParameter"]
         },
         {
           "description": "All generic type parameters",
           "type": "string",
-          "enum": [
-            "typeParameter"
-          ]
+          "enum": ["typeParameter"]
         },
         {
           "description": "All class members: properties, methods, getters, and setters",
           "type": "string",
-          "enum": [
-            "classMember"
-          ]
+          "enum": ["classMember"]
         },
         {
           "description": "All class properties, including parameter properties",
           "type": "string",
-          "enum": [
-            "classProperty"
-          ]
+          "enum": ["classProperty"]
         },
         {
           "description": "All object literal members: properties, methods, getters, and setters",
           "type": "string",
-          "enum": [
-            "objectLiteralMember"
-          ]
+          "enum": ["objectLiteralMember"]
         },
         {
           "description": "All members defined in type alaises and interfaces",
           "type": "string",
-          "enum": [
-            "typeMember"
-          ]
+          "enum": ["typeMember"]
         },
         {
           "description": "All getters defined in type alaises and interfaces",
           "type": "string",
-          "enum": [
-            "typeGetter"
-          ]
+          "enum": ["typeGetter"]
         },
         {
           "description": "All properties defined in type alaises and interfaces",
           "type": "string",
-          "enum": [
-            "typeProperty"
-          ]
+          "enum": ["typeProperty"]
         },
         {
           "description": "All setters defined in type alaises and interfaces",
           "type": "string",
-          "enum": [
-            "typeSetter"
-          ]
+          "enum": ["typeSetter"]
         },
         {
           "description": "All methods defined in type alaises and interfaces",
           "type": "string",
-          "enum": [
-            "typeMethod"
-          ]
+          "enum": ["typeMethod"]
         }
       ]
     },
@@ -3870,23 +3737,17 @@
         {
           "description": "Line Feed only (\\n), common on Linux and macOS as well as inside git repos",
           "type": "string",
-          "enum": [
-            "lf"
-          ]
+          "enum": ["lf"]
         },
         {
           "description": "Carriage Return + Line Feed characters (\\r\\n), common on Windows",
           "type": "string",
-          "enum": [
-            "crlf"
-          ]
+          "enum": ["crlf"]
         },
         {
           "description": "Carriage Return character only (\\r), used very rarely",
           "type": "string",
-          "enum": [
-            "cr"
-          ]
+          "enum": ["cr"]
         }
       ]
     },
@@ -3923,10 +3784,7 @@
         },
         "includes": {
           "description": "A list of glob patterns. The analyzer will handle only those files/folders that will match these patterns.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/NormalizedGlob"
           }
@@ -4096,9 +3954,7 @@
     },
     "NoConsoleOptions": {
       "type": "object",
-      "required": [
-        "allow"
-      ],
+      "required": ["allow"],
       "properties": {
         "allow": {
           "description": "Allowed calls on the console object.",
@@ -4308,10 +4164,7 @@
       "properties": {
         "entropyThreshold": {
           "description": "Set entropy threshold (default is 41).",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint16",
           "minimum": 0
         }
@@ -4639,10 +4492,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useAdjacentGetterSetter": {
           "description": "Enforce that getters and setters for the same property are adjacent in class and object definitions.",
@@ -4883,16 +4733,12 @@
         {
           "description": "`{foo: foo}`",
           "type": "string",
-          "enum": [
-            "explicit"
-          ]
+          "enum": ["explicit"]
         },
         {
           "description": "`{foo}`",
           "type": "string",
-          "enum": [
-            "shorthand"
-          ]
+          "enum": ["shorthand"]
         }
       ]
     },
@@ -5353,10 +5199,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useTopLevelRegex": {
           "description": "Require regex literals to be declared at the top level.",
@@ -5391,32 +5234,22 @@
         {
           "description": "Allows property assignments on function parameters. This is the default behavior, enabling flexibility in parameter usage.",
           "type": "string",
-          "enum": [
-            "allow"
-          ]
+          "enum": ["allow"]
         },
         {
           "description": "Disallows property assignments on function parameters. Enforces stricter immutability to prevent unintended side effects.",
           "type": "string",
-          "enum": [
-            "deny"
-          ]
+          "enum": ["deny"]
         }
       ]
     },
     "QuoteProperties": {
       "type": "string",
-      "enum": [
-        "asNeeded",
-        "preserve"
-      ]
+      "enum": ["asNeeded", "preserve"]
     },
     "QuoteStyle": {
       "type": "string",
-      "enum": [
-        "double",
-        "single"
-      ]
+      "enum": ["double", "single"]
     },
     "ReadonlyClassPropertiesConfiguration": {
       "anyOf": [
@@ -5492,13 +5325,7 @@
     },
     "RestrictedModifier": {
       "type": "string",
-      "enum": [
-        "abstract",
-        "private",
-        "protected",
-        "readonly",
-        "static"
-      ]
+      "enum": ["abstract", "private", "protected", "readonly", "static"]
     },
     "RuleAssistConfiguration_for_Null": {
       "anyOf": [
@@ -5522,17 +5349,11 @@
     },
     "RuleAssistPlainConfiguration": {
       "type": "string",
-      "enum": [
-        "off",
-        "on"
-      ]
+      "enum": ["off", "on"]
     },
     "RuleAssistWithOptions_for_Null": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5551,10 +5372,7 @@
     },
     "RuleAssistWithOptions_for_Options": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5591,44 +5409,32 @@
         {
           "description": "React library rules",
           "type": "string",
-          "enum": [
-            "react"
-          ]
+          "enum": ["react"]
         },
         {
           "description": "Testing rules",
           "type": "string",
-          "enum": [
-            "test"
-          ]
+          "enum": ["test"]
         },
         {
           "description": "Solid.js framework rules",
           "type": "string",
-          "enum": [
-            "solid"
-          ]
+          "enum": ["solid"]
         },
         {
           "description": "Next.js framework rules",
           "type": "string",
-          "enum": [
-            "next"
-          ]
+          "enum": ["next"]
         },
         {
           "description": "Vue.js framework rules",
           "type": "string",
-          "enum": [
-            "vue"
-          ]
+          "enum": ["vue"]
         },
         {
           "description": "For rules that require querying multiple files inside a project",
           "type": "string",
-          "enum": [
-            "project"
-          ]
+          "enum": ["project"]
         }
       ]
     },
@@ -5637,23 +5443,17 @@
         {
           "description": "Enables all the rules that belong to this domain",
           "type": "string",
-          "enum": [
-            "all"
-          ]
+          "enum": ["all"]
         },
         {
           "description": "Disables all the rules that belong to this domain",
           "type": "string",
-          "enum": [
-            "none"
-          ]
+          "enum": ["none"]
         },
         {
           "description": "It enables only the recommended rules for this domain",
           "type": "string",
-          "enum": [
-            "recommended"
-          ]
+          "enum": ["recommended"]
         }
       ]
     },
@@ -5680,46 +5480,33 @@
       "oneOf": [
         {
           "type": "string",
-          "enum": [
-            "off"
-          ]
+          "enum": ["off"]
         },
         {
           "description": "Enables the rule using the default severity of the rule",
           "type": "string",
-          "enum": [
-            "on"
-          ]
+          "enum": ["on"]
         },
         {
           "description": "Enables the rule, and it will emit a diagnostic with information severity",
           "type": "string",
-          "enum": [
-            "info"
-          ]
+          "enum": ["info"]
         },
         {
           "description": "Enables the rule, and it will emit a diagnostic with warning severity",
           "type": "string",
-          "enum": [
-            "warn"
-          ]
+          "enum": ["warn"]
         },
         {
           "description": "Enables the rule, and it will emit a diagnostic with error severity",
           "type": "string",
-          "enum": [
-            "error"
-          ]
+          "enum": ["error"]
         }
       ]
     },
     "RuleWithComplexityOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5742,10 +5529,7 @@
     },
     "RuleWithConsistentArrayTypeOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -5779,10 +5563,7 @@
     },
     "RuleWithConsistentMemberAccessibilityOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5805,10 +5586,7 @@
     },
     "RuleWithDeprecatedHooksOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5831,10 +5609,7 @@
     },
     "RuleWithFilenamingConventionOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5857,9 +5632,7 @@
     },
     "RuleWithFixNoOptions": {
       "type": "object",
-      "required": [
-        "level"
-      ],
+      "required": ["level"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -5885,10 +5658,7 @@
     },
     "RuleWithImportTypeOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -5922,10 +5692,7 @@
     },
     "RuleWithNamingConventionOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -5959,10 +5726,7 @@
     },
     "RuleWithNoBitwiseOperatorsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -5985,10 +5749,7 @@
     },
     "RuleWithNoBlankTargetOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6022,10 +5783,7 @@
     },
     "RuleWithNoConfusingLabelsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6048,10 +5806,7 @@
     },
     "RuleWithNoConsoleOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6085,10 +5840,7 @@
     },
     "RuleWithNoDoubleEqualsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6122,10 +5874,7 @@
     },
     "RuleWithNoForEachOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6148,10 +5897,7 @@
     },
     "RuleWithNoLabelWithoutControlOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6174,9 +5920,7 @@
     },
     "RuleWithNoOptions": {
       "type": "object",
-      "required": [
-        "level"
-      ],
+      "required": ["level"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6191,10 +5935,7 @@
     },
     "RuleWithNoParameterAssignOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6217,10 +5958,7 @@
     },
     "RuleWithNoPrivateImportsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6243,10 +5981,7 @@
     },
     "RuleWithNoRestrictedElementsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6269,10 +6004,7 @@
     },
     "RuleWithNoRestrictedTypesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6306,10 +6038,7 @@
     },
     "RuleWithNoSecretsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6332,10 +6061,7 @@
     },
     "RuleWithNoUndeclaredDependenciesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6358,10 +6084,7 @@
     },
     "RuleWithNoUnusedVariablesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6395,10 +6118,7 @@
     },
     "RuleWithReadonlyClassPropertiesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6432,10 +6152,7 @@
     },
     "RuleWithRestrictedGlobalsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6458,10 +6175,7 @@
     },
     "RuleWithRestrictedImportsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6484,10 +6198,7 @@
     },
     "RuleWithUndeclaredVariablesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6510,10 +6221,7 @@
     },
     "RuleWithUseComponentExportOnlyModulesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6536,10 +6244,7 @@
     },
     "RuleWithUseConsistentObjectDefinitionOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6573,10 +6278,7 @@
     },
     "RuleWithUseExhaustiveDependenciesOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6610,10 +6312,7 @@
     },
     "RuleWithUseImportExtensionsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6647,10 +6346,7 @@
     },
     "RuleWithUseJsxKeyInIterableOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6673,10 +6369,7 @@
     },
     "RuleWithUseSelfClosingElementsOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6710,10 +6403,7 @@
     },
     "RuleWithUseValidAutocompleteOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "level": {
           "description": "The severity of the emitted diagnostics by the rule",
@@ -6736,10 +6426,7 @@
     },
     "RuleWithUtilityClassSortingOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6773,10 +6460,7 @@
     },
     "RuleWithValidAriaRoleOptions": {
       "type": "object",
-      "required": [
-        "level",
-        "options"
-      ],
+      "required": ["level", "options"],
       "properties": {
         "fix": {
           "description": "The kind of the code actions emitted by the rule",
@@ -6863,10 +6547,7 @@
         },
         "recommended": {
           "description": "It enables the lint rules recommended by Biome. `true` by default.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "security": {
           "anyOf": [
@@ -6906,10 +6587,7 @@
     },
     "Scope": {
       "type": "string",
-      "enum": [
-        "any",
-        "global"
-      ]
+      "enum": ["any", "global"]
     },
     "Security": {
       "description": "A list of rules that belong to this group",
@@ -6961,10 +6639,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         }
       },
       "additionalProperties": false
@@ -7005,25 +6680,18 @@
         {
           "description": "The `/` inside void elements is removed by the formatter",
           "type": "string",
-          "enum": [
-            "never"
-          ]
+          "enum": ["never"]
         },
         {
           "description": "The `/` inside void elements is always added",
           "type": "string",
-          "enum": [
-            "always"
-          ]
+          "enum": ["always"]
         }
       ]
     },
     "Semicolons": {
       "type": "string",
-      "enum": [
-        "always",
-        "asNeeded"
-      ]
+      "enum": ["always", "asNeeded"]
     },
     "SeverityOrGroup_for_A11y": {
       "anyOf": [
@@ -7122,10 +6790,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useSortedAttributes": {
           "description": "Enforce attribute sorting in JSX elements.",
@@ -7486,10 +7151,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useArrayLiterals": {
           "description": "Disallow Array constructors.",
@@ -7896,23 +7558,17 @@
         {
           "description": "Use the best fitting style according to the situation",
           "type": "string",
-          "enum": [
-            "auto"
-          ]
+          "enum": ["auto"]
         },
         {
           "description": "Always use inline type keywords",
           "type": "string",
-          "enum": [
-            "inlineType"
-          ]
+          "enum": ["inlineType"]
         },
         {
           "description": "Always separate types in a dedicated `import type`",
           "type": "string",
-          "enum": [
-            "separatedType"
-          ]
+          "enum": ["separatedType"]
         }
       ]
     },
@@ -8692,10 +8348,7 @@
         },
         "recommended": {
           "description": "It enables the recommended rules for this group",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "useAdjacentOverloadSignatures": {
           "description": "Disallow the use of overload signatures that are not next to each other.",
@@ -8827,23 +8480,17 @@
         {
           "description": "Trailing commas wherever possible (including function parameters and calls).",
           "type": "string",
-          "enum": [
-            "all"
-          ]
+          "enum": ["all"]
         },
         {
           "description": "Trailing commas where valid in ES5 (objects, arrays, etc.). No trailing commas in type parameters in TypeScript.",
           "type": "string",
-          "enum": [
-            "es5"
-          ]
+          "enum": ["es5"]
         },
         {
           "description": "No trailing commas.",
           "type": "string",
-          "enum": [
-            "none"
-          ]
+          "enum": ["none"]
         }
       ]
     },
@@ -8852,16 +8499,12 @@
         {
           "description": "The formatter will remove the trailing commas.",
           "type": "string",
-          "enum": [
-            "none"
-          ]
+          "enum": ["none"]
         },
         {
           "description": "The trailing commas are allowed and advised only in JSONC files. Trailing commas are removed from JSON files.",
           "type": "string",
-          "enum": [
-            "all"
-          ]
+          "enum": ["all"]
         }
       ]
     },
@@ -9075,20 +8718,14 @@
       "properties": {
         "attributes": {
           "description": "Additional attributes that will be sorted.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           }
         },
         "functions": {
           "description": "Names of the functions or tagged templates that will be sorted.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           }
@@ -9128,9 +8765,7 @@
         {
           "description": "Integration with the git client as VCS",
           "type": "string",
-          "enum": [
-            "git"
-          ]
+          "enum": ["git"]
         }
       ]
     },
@@ -9151,10 +8786,7 @@
         },
         "defaultBranch": {
           "description": "The main branch of the project",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "enabled": {
           "description": "Whether Biome should integrate itself with the VCS client",
@@ -9169,10 +8801,7 @@
         },
         "root": {
           "description": "The folder where Biome should check for VCS files. By default, Biome will use the same folder where `biome.json` was found.\n\nIf Biome can't find the configuration, it will attempt to use the current working directory. If no current working directory can't be found, Biome won't use the VCS integration, and a diagnostic will be emitted",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "useIgnoreFile": {
           "description": "Whether Biome should use the VCS ignore file. When [true], Biome will ignore the files specified in the ignore file.",
@@ -9190,11 +8819,7 @@
     },
     "Visibility": {
       "type": "string",
-      "enum": [
-        "public",
-        "package",
-        "private"
-      ]
+      "enum": ["public", "package", "private"]
     },
     "WhitespaceSensitivity": {
       "description": "Whitespace sensitivity for HTML formatting.\n\nThe following two cases won't produce the same output:\n\n|                |      html      |    output    | | -------------- | :------------: | :----------: | | with spaces    | `1<b> 2 </b>3` | 1<b> 2 </b>3 | | without spaces |  `1<b>2</b>3`  |  1<b>2</b>3  |\n\nThis happens because whitespace is significant in inline elements.\n\nAs a consequence of this, the formatter must format blocks that look like this (assume a small line width, <20): ```html <span>really long content</span> ``` as this, where the content hugs the tags: ```html <span >really long content</span > ```\n\nNote that this is only necessary for inline elements. Block elements do not have this restriction.",
@@ -9202,23 +8827,17 @@
         {
           "description": "The formatter considers whitespace significant for elements that have an \"inline\" display style by default in browser's user agent style sheets.",
           "type": "string",
-          "enum": [
-            "css"
-          ]
+          "enum": ["css"]
         },
         {
           "description": "Leading and trailing whitespace in content is considered significant for all elements.\n\nThe formatter should leave at least one whitespace character if whitespace is present. Otherwise, if there is no whitespace, it should not add any after `>` or before `<`. In other words, if there's no whitespace, the text content should hug the tags.\n\nExample of text hugging the tags: ```html <b >content</b > ```",
           "type": "string",
-          "enum": [
-            "strict"
-          ]
+          "enum": ["strict"]
         },
         {
           "description": "Whitespace is considered insignificant. The formatter is free to remove or add whitespace as it sees fit.",
           "type": "string",
-          "enum": [
-            "ignore"
-          ]
+          "enum": ["ignore"]
         }
       ]
     }

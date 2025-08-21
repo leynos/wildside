@@ -4,8 +4,8 @@
  * Endpoint: GET /api/users
  * Invariants: returns a JSON array matching the User schema; throws ZodError on mismatch.
  */
-import { type User, UsersSchema } from "@app/types";
-import { customFetchParsed } from "./fetcher";
+import { type User, UsersSchema } from '@app/types';
+import { customFetchParsed } from './fetcher';
 
 /**
  * Fetch all registered users.
@@ -15,4 +15,4 @@ import { customFetchParsed } from "./fetcher";
  * users.length;
  */
 export const listUsers = (signal?: AbortSignal): Promise<User[]> =>
-	customFetchParsed("/api/users", UsersSchema, { signal });
+  customFetchParsed('/api/users', UsersSchema, { signal });

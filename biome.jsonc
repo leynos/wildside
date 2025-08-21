@@ -7,10 +7,7 @@
   "files": {
     "includes": ["**"],
     // Use .biomeignore for ignore patterns; also add scanner ignores for certainty
-    "experimentalScannerIgnores": [
-      "target",
-      "**/target/**"
-    ]
+    "experimentalScannerIgnores": ["target", "**/target/**"]
   },
   "formatter": {
     "enabled": true,
@@ -118,7 +115,10 @@
         "noArguments": "error",
         "noBannedTypes": "error",
         "noCommaOperator": "error",
-        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } },
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 15 }
+        },
         "noForEach": "error",
         "noImplicitCoercions": "error",
         "noUselessCatch": "error",
