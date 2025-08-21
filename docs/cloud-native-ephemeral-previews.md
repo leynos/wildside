@@ -1,4 +1,3 @@
-
 # A Cloud-Native Architecture for On-Demand Ephemeral Preview Environments
 
 ## Executive Summary: The GitOps-Driven Ephemeral Environment Architecture
@@ -17,12 +16,12 @@ a robust and scalable system:
 
 - **Declarative Infrastructure:** All foundational cloud resources, including
   the Kubernetes cluster and its networking, are defined as code using
-  OpenTofu.1 This Infrastructure as Code (IaC) approach eliminates manual
+  OpenTofu.[^1] This Infrastructure as Code (IaC) approach eliminates manual
   configuration, prevents environmental drift, and provides a
   version-controlled, auditable record of the entire platform's desired state.
 
 - **Git as the Single Source of Truth:** The system's operational heart is a
-  GitOps workflow orchestrated by FluxCD.2 Flux acts as an in-cluster agent,
+  GitOps workflow orchestrated by FluxCD.[^2] Flux acts as an in-cluster agent,
   continuously monitoring a dedicated Git repository and reconciling the
   cluster's live state to match the manifests defined in that repository. This
   paradigm shifts the operational model from imperative commands (
@@ -40,7 +39,7 @@ a robust and scalable system:
   is to commit updated manifests to the GitOps repository. FluxCD then detects
   this change and securely pulls the configuration into the cluster. This model
   enhances security by minimizing the credentials and access required by the CI
-  system and aligns with modern GitOps best practices.3
+  system and aligns with modern GitOps best practices.[^3]
 
 - **End-to-End Automation:** The complete lifecycle of a feature branch
   environment is automated. Upon the creation of a pull request, the system
@@ -105,22 +104,22 @@ variable "do_token" {
 provider "digitalocean" {
   token = var.do_token
 }
-    ```yaml
+```
 
 This configuration establishes the required providers and sets up the
-DigitalOcean provider.4 The DigitalOcean API token is defined as a sensitive
+DigitalOcean provider.[^4] The DigitalOcean API token is defined as a sensitive
 variable, with the expectation that its value will be supplied via an
 environment variable (
 
 `TF_VAR_do_token`) during execution. This practice is critical for security, as
-it prevents credentials from being hardcoded in version control.6
+it prevents credentials from being hardcoded in version control.[^5]
 
 ### VPC and Network Design
 
 For production environments, isolating the cluster within a Virtual Private
 Cloud (VPC) is a fundamental security best practice. A `digitalocean_vpc`
 resource creates a private network space for the cluster's nodes and associated
-resources, such as internal load balancers and databases.7
+resources, such as internal load balancers and databases.[^6]
 
 Terraform
 
@@ -132,13 +131,13 @@ resource "digitalocean_vpc" "wildside_vpc" {
   region   = "nyc3"
   ip_range = "10.244.0.0/16"
 }
-    ```yaml
+```
 
 ### DOKS Cluster Resource (`digitalocean_kubernetes_cluster`)
 
 The core of the infrastructure is the DOKS cluster itself. The configuration
 below defines a resilient, auto-updating cluster that adheres to DigitalOcean's
-operational best practices.8
+operational best practices.[^7]
 
 Terraform
 
@@ -180,15 +179,15 @@ resource "digitalocean_kubernetes_cluster" "wildside_cluster" {
 
 This configuration implements several key strategies. It uses a data source to
 dynamically fetch the latest supported patch release for a specific minor
-version (e.g., `1.28.x`).7 This ensures the cluster receives security patches
+version (e.g., `1.28.x`).[^6] This ensures the cluster receives security patches
 automatically while preventing unexpected, potentially breaking, major version
 upgrades. The
 
 `ha = true` flag provisions a highly available control plane, which is
-essential for production workloads.9 Furthermore,
+essential for production workloads.[^8] Furthermore,
 
 `auto_upgrade` and `surge_upgrade` are enabled to automate the update process
-for nodes, minimizing disruption and manual toil.8 The cluster is explicitly
+for nodes, minimizing disruption and manual toil.[^7] The cluster is explicitly
 associated with the previously defined VPC.
 
 ### Node Pool Architecture
@@ -268,7 +267,7 @@ To manage Kubernetes resources declaratively, the OpenTofu `kubernetes` and
 `helm` providers must be authenticated to the newly created cluster. This is
 achieved by sourcing the connection details directly from the
 `digitalocean_kubernetes_cluster` resource output, creating a seamless
-dependency chain.10
+dependency chain.[^9]
 
 Terraform
 
@@ -305,7 +304,7 @@ output "kubeconfig" {
 This configuration ensures that after `tofu apply` provisions the DOKS cluster,
 the same run can immediately proceed to install Helm charts and other
 Kubernetes resources onto it. The `kubeconfig` is exported as a sensitive
-output for use by cluster administrators.6
+output for use by cluster administrators.[^5]
 
 ## The GitOps Control Plane: Installing and Configuring FluxCD
 
@@ -322,7 +321,7 @@ where an application developer could inadvertently break critical cluster
 infrastructure. Furthermore, platform components and applications have
 different release cadences, security requirements, and ownership. A more robust
 and secure architecture separates these concerns into two distinct
-repositories.12 This approach is a cornerstone of scalable, multi-team GitOps.
+repositories.[^10] This approach is a cornerstone of scalable, multi-team GitOps.
 
 - `wildside-infra` **Repository:** This repository serves as the source of
   truth for the *platform*. It is managed by the platform or DevOps team and
@@ -346,7 +345,7 @@ of the underlying platform.
 The installation of FluxCD is performed using the `flux bootstrap` command.
 This command not only installs the Flux controllers onto the DOKS cluster but
 also configures them to synchronize with a specified Git repository,
-immediately establishing the GitOps loop.2
+immediately establishing the GitOps loop.[^2]
 
 The bootstrap process will target the `wildside-infra` repository, making it
 the primary source of truth for the cluster's platform state.
@@ -410,7 +409,7 @@ recommended for the two GitOps repositories.
 |  | overlays/ephemeral/ | A directory to house the dynamically generated overlays for each pull request (e.g., pr-123/, pr-124/). |
 
 This structure provides a clear separation of concerns and a logical hierarchy
-for defining the cluster's state.15
+for defining the cluster's state.[^11]
 
 ### Declaring Cluster-Wide Sources
 
@@ -452,7 +451,7 @@ spec:
 Similarly, a `GitRepository` resource is created to make the `wildside-apps`
 repository available as a source within the cluster. This cross-repository
 reference is what enables the platform to deploy applications defined
-elsewhere.18
+elsewhere.[^12]
 
 YAML
 
@@ -526,7 +525,7 @@ dedicated `IngressClass`. The optional dashboard is enabled for observability.
 ExternalDNS automates the management of DNS records. It monitors Kubernetes
 Ingress and Service resources and automatically creates, updates, and deletes
 records in a configured DNS provider, such as Cloudflare. This eliminates the
-manual step of pointing a subdomain to the load balancer's IP address.19
+manual step of pointing a subdomain to the load balancer's IP address.[^13]
 
 YAML
 
@@ -566,7 +565,7 @@ spec:
 ```
 
 This configuration deploys `external-dns` and configures it to use Cloudflare
-as the provider.20 Critically, the
+as the provider.[^14] Critically, the
 
 `CF_API_TOKEN` is not hardcoded but is referenced from a Kubernetes `Secret`
 named `cloudflare-api-token`. The management of this secret is handled by the
@@ -579,7 +578,7 @@ can obtain certificates from various issuing authorities, like Let's Encrypt,
 and ensures they remain valid and are renewed before expiration. For this
 architecture, it will be configured to use the DNS-01 challenge, which is
 necessary for issuing wildcard certificates required for the ephemeral
-subdomains.22
+subdomains.[^15]
 
 First, the `HelmRelease` for `cert-manager` itself:
 
@@ -636,7 +635,7 @@ spec:
             key: token
 ```
 
-This `ClusterIssuer` configures the DNS-01 challenge with Cloudflare.24 Like
+This `ClusterIssuer` configures the DNS-01 challenge with Cloudflare.[^16] Like
 ExternalDNS, it references the
 
 `cloudflare-api-token` secret for authentication. This single secret, managed
@@ -647,19 +646,19 @@ securely, provides credentials for both DNS and TLS automation.
 Storing sensitive credentials like the Cloudflare API token directly in a Git
 repository, even a private one, poses a significant security risk. DigitalOcean
 does not currently offer a native, managed secrets management service analogous
-to AWS Secrets Manager or Google Secret Manager.26 Therefore, for a
+to AWS Secrets Manager or Google Secret Manager.[^17] Therefore, for a
 production-grade system, deploying a dedicated secrets management solution is a
 critical architectural requirement. HashiCorp Vault is the industry standard
 for this purpose.
 
 The External Secrets Operator (ESO) serves as the secure bridge between Vault
-and Kubernetes.29 It allows Kubernetes applications and controllers to consume
+and Kubernetes.[^18] It allows Kubernetes applications and controllers to consume
 secrets stored in Vault as if they were native Kubernetes
 
 `Secret` objects. ESO periodically fetches secrets from Vault and synchronizes
 them into the cluster. This design means that the master Vault token is never
 exposed in Git or to most components of the cluster; only ESO has the
-credentials needed to communicate with Vault.31
+credentials needed to communicate with Vault.[^19]
 
 The implementation involves a three-step process:
 
@@ -671,7 +670,7 @@ The implementation involves a three-step process:
 2. **Configure a** `ClusterSecretStore`**:** This custom resource tells ESO how
    to connect to and authenticate with the Vault instance. Authentication can
    be configured using the Kubernetes service account token of the ESO pod
-   itself, which is a secure, credential-less method.33
+   itself, which is a secure, credential-less method.[^20]
 
    YAML
 
@@ -736,15 +735,15 @@ The implementation involves a three-step process:
 ### Stateful Services for "Project Wildside"
 
 The "Project Wildside" application has specific stateful dependencies: a
-PostGIS-enabled database and a Redis cache.35 These are also deployed as shared
+PostGIS-enabled database and a Redis cache.[^21] These are also deployed as shared
 platform services.
 
 #### PostGIS with CloudNativePG
 
 CloudNativePG is a Kubernetes operator that automates the entire lifecycle of a
-PostgreSQL cluster, providing high availability, backup, and recovery.36 It is
+PostgreSQL cluster, providing high availability, backup, and recovery.[^22] It is
 particularly well-suited for this project due to its first-class support for
-PostGIS.38
+PostGIS.[^23]
 
 First, the operator is deployed via a `HelmRelease`:
 
@@ -802,17 +801,17 @@ spec:
 ```
 
 This manifest defines a 3-node HA PostgreSQL cluster. The `imageName` is
-explicitly set to a version that includes PostGIS.38 The
+explicitly set to a version that includes PostGIS.[^23] The
 
 `postInitTemplateSQL` block is a powerful feature that runs the specified SQL
 commands after the cluster is initialized, automatically creating the necessary
 PostGIS extensions in the `template1` database, which makes them available to
-all databases created in the cluster.38
+all databases created in the cluster.[^23]
 
 #### Redis Cache
 
 For caching, a Redis cluster is deployed using the highly configurable and
-well-maintained Bitnami Helm chart.40 The configuration will differ for
+well-maintained Bitnami Helm chart.[^24] The configuration will differ for
 production/staging versus the ephemeral environments. For the shared production
 cache, persistence might be desirable, but for ephemeral caches, it should be
 disabled to reduce cost and complexity.
@@ -854,7 +853,7 @@ spec:
 This `HelmRelease` sets up a master-replica Redis deployment with persistence
 enabled, suitable for the production environment. The password is not stored in
 the manifest but is referenced from a Kubernetes `Secret` that, like the
-others, would be managed by ESO and Vault.42
+others, would be managed by ESO and Vault.[^25]
 
 ## Application Delivery Strategy: Combining Helm and Kustomize
 
@@ -870,7 +869,7 @@ While Helm is a powerful packaging manager, relying solely on different
 `values.yaml` files for each environment can lead to a sprawling,
 hard-to-manage set of configurations. Kustomize, on the other hand, excels at
 applying declarative patches to a common set of base manifests. The most
-effective and scalable GitOps pattern combines the strengths of both tools.43
+effective and scalable GitOps pattern combines the strengths of both tools.[^26]
 
 1. **Helm for Templating:** The application and all its Kubernetes resources
    (Deployment, Service, Ingress, etc.) are packaged into a single, versioned
@@ -882,7 +881,7 @@ effective and scalable GitOps pattern combines the strengths of both tools.43
    directly to this base `HelmRelease` object.
 
 This approach keeps environment configurations minimal and focused only on the
-differences, making the entire setup more maintainable and declarative.46 This
+differences, making the entire setup more maintainable and declarative.[^27] This
 strategy is implemented within the
 
 `wildside-apps` repository.
@@ -1091,7 +1090,7 @@ permissions:
 
 The workflow triggers on `opened` and `synchronize` (new commits pushed to the
 PR branch) to create or update the environment, and on `closed` (PR merged or
-closed) to tear it down.49 It requires permissions to write to a repository (the
+closed) to tear it down.[^28] It requires permissions to write to a repository (the
 
 `wildside-apps` repo) and to comment on the pull request.
 
@@ -1145,12 +1144,12 @@ jobs:
 ```
 
 This job uses official Docker actions to handle login, build, and push
-operations.50 The image is tagged with the unique Git commit SHA (
+operations.[^29] The image is tagged with the unique Git commit SHA (
 
 `github.sha`) to ensure immutability. A key optimization is the use of GitHub
 Actions cache (`type=gha`) for Docker layers. For a Rust application, this
 dramatically speeds up subsequent builds by caching the compiled dependencies,
-which is crucial for a fast feedback loop.51
+which is crucial for a fast feedback loop.[^30]
 
 ### Job 2: Generate and Commit Manifests
 
@@ -1162,7 +1161,7 @@ Kustomize overlay in the `wildside-apps` repository.
 The workflow must interact with a repository other than the one it is running
 in. This is accomplished by checking out both repositories side-by-side and
 using a Personal Access Token (PAT) for authentication to the target
-repository.54
+repository.[^31]
 
 YAML
 
@@ -1192,7 +1191,7 @@ YAML
 
 A script step uses standard shell commands and `yq` (a command-line YAML
 processor pre-installed on GitHub runners) to dynamically create the required
-files.56
+files.[^32]
 
 YAML
 
@@ -1460,7 +1459,7 @@ operational practices are recommended:
   is a primary cost-saving measure, it is crucial to enforce resource
   management best practices across all workloads. Define sensible `requests`
   and `limits` for CPU and memory in all Helm charts, as recommended by
-  DigitalOcean.8 This allows the Kubernetes scheduler to efficiently pack pods
+  DigitalOcean.[^7] This allows the Kubernetes scheduler to efficiently pack pods
   onto nodes and prevents resource contention or starvation.
 
 - **Security Hardening:** For a production deployment, the development-mode
@@ -1479,7 +1478,7 @@ project's needs.
   production. The dual-repository GitOps model is perfectly suited for this.
   The `wildside-infra` repository can be extended to define multiple clusters,
   and Flux can manage all of them from the same sources of truth, enabling
-  consistent deployments across the entire fleet.13
+  consistent deployments across the entire fleet.[^33]
 
 - **Ephemeral Database Optimization:** For very rapid CI cycles, provisioning a
   full, new PostgreSQL cluster for every PR might introduce a time delay. The
@@ -1495,203 +1494,120 @@ enabling them to innovate and deliver features more rapidly and reliably.
 
 ## Works cited
 
-1. Use Cases - OpenTofu, accessed on August 12, 2025,
+[^1]: Use Cases - OpenTofu, accessed on August 12, 2025,
    <https://opentofu.org/docs/intro/use-cases/>
 
-2. What is Flux CD & How Does It Work? \[Tutorial\] - Spacelift, accessed on
+[^2]: What is Flux CD & How Does It Work? \[Tutorial\] - Spacelift, accessed on
    August 12, 2025, <https://spacelift.io/blog/fluxcd>
 
-3. Hands-On FluxCD: GitOps for Kubernetes at Scale 🛠️ | by Anvesh Muppeda |
+[^3]: Hands-On FluxCD: GitOps for Kubernetes at Scale 🛠️ | by Anvesh Muppeda |
    Medium, accessed on August 12, 2025,
    <https://medium.com/@muppedaanvesh/hands-on-fluxcd-gitops-for-kubernetes-at-scale-%EF%B8%8F-7e3d06ed4c35>
 
-4. Provider: DigitalOcean - OpenTofu Registry, accessed on August 12, 2025,
+[^4]: Provider: DigitalOcean - OpenTofu Registry, accessed on August 12, 2025,
    <https://search.opentofu.org/provider/opentofu/digitalocean/latest>
 
-5. Provider: DigitalOcean - v2.36.0 - OpenTofu Registry, accessed on August 12,
-   2025, <https://search.opentofu.org/provider/opentofu/digitalocean/v2.36.0>
-
-6. \[06/52\] Accessible Kubernetes with Terraform and DigitalOcean - DEV
+[^5]: \[06/52\] Accessible Kubernetes with Terraform and DigitalOcean - DEV
    Community, accessed on August 12, 2025,
    <https://dev.to/tythos/accessible-kubernetes-with-terraform-and-digitalocean-12o>
 
-7. Using Terraform to Set Up a DigitalOcean Kubernetes Cluster ::, accessed on
+[^6]: Using Terraform to Set Up a DigitalOcean Kubernetes Cluster ::, accessed on
    August 12, 2025, <https://lstats.blog/posts/terraform-cloud-doks/>
 
-8. Kubernetes Best Practices | DigitalOcean Documentation, accessed on August
+[^7]: Kubernetes Best Practices | DigitalOcean Documentation, accessed on August
    12, 2025,
    <https://docs.digitalocean.com/products/kubernetes/concepts/best-practices/>
 
-9. kroche-co/k8s-cluster/digitalocean - OpenTofu Registry, accessed on August
+[^8]: kroche-co/k8s-cluster/digitalocean - OpenTofu Registry, accessed on August
    12, 2025,
    <https://search.opentofu.org/module/kroche-co/k8s-cluster/digitalocean/latest>
 
-10. Kubernetes Provider - OpenTofu Registry, accessed on August 12, 2025,
+[^9]: Kubernetes Provider - OpenTofu Registry, accessed on August 12, 2025,
     <https://search.opentofu.org/provider/opentofu/kubernetes/latest>
 
-11. Provider: Kubernetes - v2.21.1 - OpenTofu Registry, accessed on August 12,
-    2025, <https://search.opentofu.org/provider/opentofu/kubernetes/v2.21.1>
-
-12. How do you structure repos and folders for gitops? : r/kubernetes - Reddit,
+[^10]: How do you structure repos and folders for gitops? : r/kubernetes - Reddit,
     accessed on August 12, 2025,
     <https://www.reddit.com/r/kubernetes/comments/1fvqllb/how_do_you_structure_repos_and_folders_for_gitops/>
 
-13. FluxCD Multi-cluster Architecture | by Stefan Prodan - Medium, accessed on
-    August 12, 2025,
-    <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>
+[^11]: Flux Documentation, accessed on August 12, 2025, <https://fluxcd.io/flux/>
 
-14. Get Started with Flux, accessed on August 12, 2025,
-    <https://fluxcd.io/flux/get-started/>
-
-15. Flux Documentation, accessed on August 12, 2025, <https://fluxcd.io/flux/>
-
-16. How to structure Flux Kustomizations for single repository? · fluxcd flux2
-    · Discussion #3801, accessed on August 12, 2025,
-    <https://github.com/fluxcd/flux2/discussions/3801>
-
-17. fluxcd/flux2-kustomize-helm-example - GitHub, accessed on August 12, 2025,
-    <https://github.com/fluxcd/flux2-kustomize-helm-example>
-
-18. Kustomization - Flux, accessed on August 12, 2025,
+[^12]: Kustomization - Flux, accessed on August 12, 2025,
     <https://fluxcd.io/flux/components/kustomize/kustomizations/>
 
-19. Configure external DNS servers dynamically from Kubernetes resources -
+[^13]: Configure external DNS servers dynamically from Kubernetes resources -
     GitHub, accessed on August 12, 2025,
     <https://github.com/kubernetes-sigs/external-dns>
 
-20. Automate DNS for Your Ingress: Kubernetes + Cloudflare + ExternalDNS,
+[^14]: Automate DNS for Your Ingress: Kubernetes + Cloudflare + ExternalDNS,
     accessed on August 12, 2025,
     <https://aws.plainenglish.io/automate-dns-for-your-ingress-kubernetes-cloudflare-externaldns-133772cc46df>
 
-21. external-dns/docs/tutorials/[cloudflare.md](http://cloudflare.md) at master
-    · kubernetes-sigs ..., accessed on August 12, 2025,
-    <https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md>
-
-22. DNS Validation - cert-manager Documentation, accessed on August 12, 2025,
+[^15]: DNS Validation - cert-manager Documentation, accessed on August 12, 2025,
     <https://cert-manager.io/v1.2-docs/tutorials/acme/dns-validation/>
 
-23. DNS Validation - cert-manager Documentation, accessed on August 12, 2025,
-    <https://cert-manager.io/docs/tutorials/acme/dns-validation/>
-
-24. Cert-manager and Cloudflare demo - ELASTX Documentation, accessed on August
+[^16]: Cert-manager and Cloudflare demo - ELASTX Documentation, accessed on August
     12, 2025, <https://docs.elastx.cloud/docs/kubernetes/guides/cert-manager/>
 
-25. Cloudflare - cert-manager Documentation, accessed on August 12, 2025,
-    <https://cert-manager.io/docs/configuration/acme/dns01/cloudflare/>
-
-26. Connect AWS Secrets Manager and DigitalOcean - StrongDM, accessed on August
+[^17]: Connect AWS Secrets Manager and DigitalOcean - StrongDM, accessed on August
     12, 2025,
     <https://www.strongdm.com/connect/aws-secrets-manager-digitalocean>
 
-27. Enabling Engineering Teams Through Developer-First Secrets Management -
-    DigitalOcean, accessed on August 12, 2025,
-    <https://www.digitalocean.com/blog/enabling-engineering-teams-developer-first-secrets-management>
-
-28. How To Securely Manage Secrets with HashiCorp Vault - DigitalOcean,
-    accessed on August 12, 2025,
-    <https://www.digitalocean.com/community/tutorial-collections/how-to-securely-manage-secrets-with-hashicorp-vault>
-
-29. How to Configure External Secrets Operator with Vault in DOKS -
+[^18]: How to Configure External Secrets Operator with Vault in DOKS -
     DigitalOcean, accessed on August 12, 2025,
     <https://www.digitalocean.com/community/developer-center/how-to-configure-external-secrets-operator-with-vault-in-doks>
 
-30. External Secrets Operator: Introduction, accessed on August 12, 2025,
-    <https://external-secrets.io/>
-
-31. How To Access Vault Secrets Inside of Kubernetes Using External Secrets
+[^19]: How To Access Vault Secrets Inside of Kubernetes Using External Secrets
     Operator (ESO), accessed on August 12, 2025,
     <https://www.digitalocean.com/community/tutorials/how-to-access-vault-secrets-inside-of-kubernetes-using-external-secrets-operator-eso>
 
-32. External secrets on Kubernetes - Reddit, accessed on August 12, 2025,
-    <https://www.reddit.com/r/kubernetes/comments/1bc31u5/external_secrets_on_kubernetes/>
-
-33. External Secret Operator With Vault | by Topahadzi - Medium, accessed on
+[^20]: External Secret Operator With Vault | by Topahadzi - Medium, accessed on
     August 12, 2025,
     <https://medium.com/@topahadzi/external-secret-operator-with-vault-a781be1048a1>
 
-34. HashiCorp Vault - External Secrets Operator, accessed on August 12, 2025,
-    <https://external-secrets.io/latest/provider/hashicorp-vault/>
+[^21]: Wildside App: Design Document Expansion
 
-35. Wildside App: Design Document Expansion
-
-36. CloudNativePG is an open source operator designed to manage PostgreSQL
+[^22]: CloudNativePG is an open source operator designed to manage PostgreSQL
     workloads on any supported Kubernetes cluster running in private, public,
     hybrid, or multi-cloud environments. CloudNativePG adheres to DevOps
     principles and concepts such as declarative configuration and immutable
     infrastructure., accessed on August 12, 2025,
     <https://cloudnative-pg.io/documentation/1.17/>
 
-37. CloudNativePG - PostgreSQL Operator for Kubernetes, accessed on August 12,
-    2025, <https://cloudnative-pg.io/>
-
-38. PostGIS - CloudNativePG v1.25, accessed on August 12, 2025,
+[^23]: PostGIS - CloudNativePG v1.25, accessed on August 12, 2025,
     <https://cloudnative-pg.io/documentation/1.25/postgis/>
 
-39. PostGIS - CloudNativePG v1.26, accessed on August 12, 2025,
-    <https://cloudnative-pg.io/documentation/1.26/postgis/>
-
-40. Redis Helm Chart - Datree, accessed on August 12, 2025,
+[^24]: Redis Helm Chart - Datree, accessed on August 12, 2025,
     <https://www.datree.io/helm-chart/redis-bitnami>
 
-41. redis 22.0.1 · bitnami/bitnami - Artifact Hub, accessed on August 12, 2025,
-    <https://artifacthub.io/packages/helm/bitnami/redis>
-
-42. accessed on January 1, 1970,
+[^25]: accessed on January 1, 1970,
     <https://github.com/bitnami/charts/blob/main/bitnami/redis/values.yaml>
 
-43. Helm + Kustomize in GitOps: Building a Scalable Platform with Crossplane -
+[^26]: Helm + Kustomize in GitOps: Building a Scalable Platform with Crossplane -
     Medium, accessed on August 12, 2025,
     <https://medium.com/@nishioriental68/helm-kustomize-in-gitops-building-a-scalable-platform-with-crossplane-60e888a8d000>
 
-44. Kustomize vs. Helm - How to Use & Comparison - Spacelift, accessed on
-    August 12, 2025, <https://spacelift.io/blog/kustomize-vs-helm>
-
-45. Kustomize vs Helm charts : r/kubernetes - Reddit, accessed on August 12,
-    2025,
-    <https://www.reddit.com/r/kubernetes/comments/11k4t06/kustomize_vs_helm_charts/>
-
-46. Helm chart , Templates or Kustomization file ? - Red Hat Learning
+[^27]: Helm chart , Templates or Kustomization file ? - Red Hat Learning
     Community, accessed on August 12, 2025,
     <https://learn.redhat.com/t5/Containers-DevOps-OpenShift/Helm-chart-Templates-or-Kustomization-file/td-p/22285>
 
-47. GitOps : Kustomize vs Helm - Medium, accessed on August 12, 2025,
-    <https://medium.com/@shrishs/gitops-kustomize-vs-helm-1941cdbc4786>
-
-48. Kustomize vs Helm | Glasskube, accessed on August 12, 2025,
-    <https://glasskube.dev/blog/kustomize-vs-helm/>
-
-49. Workflow syntax for GitHub Actions, accessed on August 12, 2025,
+[^28]: Workflow syntax for GitHub Actions, accessed on August 12, 2025,
     <https://docs.github.com/actions/reference/workflow-syntax-for-github-actions>
 
-50. Configure CI/CD for your Rust application - Docker Docs, accessed on August
+[^29]: Configure CI/CD for your Rust application - Docker Docs, accessed on August
     12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>
 
-51. Optimizing Rust container builds - GitHub Gist, accessed on August 12,
+[^30]: Optimizing Rust container builds - GitHub Gist, accessed on August 12,
     2025, <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>
 
-52. Dockerize a Rust Application with AWS ECR and GitHub Actions - The New
-    Stack, accessed on August 12, 2025,
-    <https://thenewstack.io/dockerize-a-rust-application-with-aws-ecr-and-github-actions/>
-
-53. How to Write a GitHub Action in Rust - Dylan Anthony, accessed on August
-    12, 2025,
-    <https://dylananthony.com/blog/how-to-write-a-github-action-in-rust/>
-
-54. actions/checkout: Action for checking out a repo - GitHub, accessed on
+[^31]: actions/checkout: Action for checking out a repo - GitHub, accessed on
     August 12, 2025, <https://github.com/actions/checkout>
 
-55. Push commits to another repository with GitHub Actions, accessed on August
-    12, 2025, <https://some-natalie.dev/blog/multi-repo-actions/>
-
-56. yokawasa/action-setup-kube-tools: Github Action that setup Kubernetes tools
+[^32]: yokawasa/action-setup-kube-tools: Github Action that setup Kubernetes tools
     (kubectl, kustomize, helm, kubeconform, conftest, yq, rancher, tilt,
     skaffold) very fast and cache them on the runner. Please \[ Star\] if
     you're using it!, accessed on August 12, 2025,
     <https://github.com/yokawasa/action-setup-kube-tools>
 
-57. Using yq in GitHub Actions - Mostafa Wael - Medium, accessed on August 12,
-    2025,
-    <https://mostafawael.medium.com/using-yq-in-github-actions-5a3a7e2f3f5a>
-
-58. YAML Update Action - GitHub Marketplace, accessed on August 12, 2025,
-    <https://github.com/marketplace/actions/yaml-update-action>
+[^33]: FluxCD Multi-cluster Architecture | by Stefan Prodan - Medium, accessed on
+    August 12, 2025,
+    <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>

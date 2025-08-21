@@ -21,3 +21,10 @@ spec:
       type: LoadBalancer
     dashboard:
       enabled: true
+    metrics:
+      prometheus:
+        enabled: true
+        service:
+          enabled: true
+        serviceMonitor:
+          enabled: true
