@@ -51,5 +51,5 @@ mermaid-lint:
 	npx --yes @mermaid-js/mermaid-cli -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
 
 nixie:
-	nixie
+	nixie --no-sandbox
 
