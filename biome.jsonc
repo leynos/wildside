@@ -1,0 +1,203 @@
+// Biome Configuration File (JSONC format)
+// Converted from biome.toml to JSONC for native Biome support.
+// Keep rules and options identical; only key casing changes where required.
+{
+  "$schema": "https://biomejs.dev/schemas/stable/schema.json",
+  "root": true,
+  "files": {
+    "includes": ["**"],
+    // Use .biomeignore for ignore patterns; also add scanner ignores for certainty
+    "experimentalScannerIgnores": [
+      "target",
+      "**/target/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    // Biome supports "transparent" or "reactClassic". Prefer transparent.
+    "jsxRuntime": "transparent",
+    "formatter": {
+      "bracketSpacing": true,
+      "jsxQuoteStyle": "double",
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "vcs": {
+    "useIgnoreFile": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noInvalidConstructorSuper": "error",
+        "noInvalidUseBeforeDeclaration": "error",
+        "noUndeclaredVariables": "error",
+        "noUnreachable": "error",
+        "noUnsafeOptionalChaining": "error",
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useValidForDirection": "error",
+        "useValidTypeof": "error"
+      },
+      "suspicious": {
+        "noDuplicateObjectKeys": "error",
+        "noConsole": "error",
+        "noDebugger": "error",
+        "noDoubleEquals": { "level": "error", "options": { "ignoreNull": false } },
+        "noDuplicateCase": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateElseIf": "error",
+        "noDuplicateParameters": "error",
+        "noExplicitAny": "error",
+        "noExtraNonNullAssertion": "error",
+        "noFallthroughSwitchClause": "error",
+        "noImplicitAnyLet": "error",
+        "noImportAssign": "error",
+        "noIrregularWhitespace": "error",
+        "noPrototypeBuiltins": "error",
+        "noShadowRestrictedNames": "error",
+        "noTsIgnore": "error",
+        "noVar": "error",
+        "noConstEnum": "error",
+        "useGetterReturn": "error"
+      },
+      "style": {
+        "noInferrableTypes": "error",
+        "noParameterAssign": "error",
+        "noProcessEnv": "error",
+        "useArrayLiterals": "error",
+        "useConsistentArrayType": "error",
+        "useConst": "error",
+        "useExportType": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "requireAscii": true,
+            "strictCase": true,
+            "filenameCases": ["kebab-case", "export"]
+          }
+        },
+        "useForOf": "error",
+        "useImportType": "error",
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "requireAscii": true,
+            "strictCase": true,
+            "conventions": [
+              { "selector": { "kind": "variable" }, "match": "(.{2,})" },
+              { "selector": { "kind": "class" }, "formats": ["PascalCase"] },
+              { "selector": { "kind": "typeLike" }, "formats": ["PascalCase"] },
+              { "selector": { "kind": "enum" }, "formats": ["PascalCase"] },
+              { "selector": { "kind": "classMember", "modifiers": ["private"] }, "match": "_(.+)" },
+              { "selector": { "kind": "const", "scope": "global" }, "formats": ["CONSTANT_CASE"] }
+            ]
+          }
+        },
+        "noNestedTernary": "error",
+        "noUselessElse": "error",
+        "useObjectSpread": "error",
+        "useReadonlyClassProperties": "error",
+        "useSelfClosingElements": "error",
+        "useShorthandAssign": "error",
+        "useShorthandFunctionType": "error",
+        "useSingleVarDeclarator": "error",
+        "useTemplate": "error",
+        "useThrowOnlyError": "error",
+        "useUnifiedTypeSignatures": "error"
+      },
+      "complexity": {
+        "noArguments": "error",
+        "noBannedTypes": "error",
+        "noCommaOperator": "error",
+        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } },
+        "noForEach": "error",
+        "noImplicitCoercions": "error",
+        "noUselessCatch": "error",
+        "noUselessTernary": "error",
+        "noStaticOnlyClass": "error",
+        "useWhile": "error",
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": { "maxLines": 60, "skipBlankLines": true, "skipIifes": true }
+        }
+      },
+      "performance": {
+        "noAccumulatingSpread": "error",
+        "noNamespaceImport": "error",
+        "noBarrelFile": "error"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noImportCycles": "error",
+        "noNonNullAssertedOptionalChain": "error",
+        "useExhaustiveSwitchCases": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/target/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      "includes": [
+        "**/*.{test,spec}.{js,jsx,ts,tsx}",
+        "**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
+        "**/{features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off",
+            "noExplicitAny": "warn"
+          },
+          "nursery": {
+            "noFloatingPromises": "warn"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": {
+                "strictCase": true,
+                "requireAscii": true,
+                "filenameCases": ["PascalCase", "export"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "vite.config.{js,ts,mjs,cjs}",
+        "rollup.config.{js,ts,mjs,cjs}",
+        "webpack.config.{js,ts,mjs,cjs}",
+        "**/{scripts,config}/**/*.{js,ts}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    }
+  ]
+}
