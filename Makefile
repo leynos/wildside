@@ -51,5 +51,7 @@ mermaid-lint:
 	npx --yes @mermaid-js/mermaid-cli -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
 
 nixie:
+	# CI currently requires --no-sandbox; remove once nixie supports
+	# environment variable control for this option
 	nixie --no-sandbox
 

@@ -450,6 +450,7 @@ Keep docs close to code.
   and load strings by namespace.
 - **Hooks**: Call `useTranslation` within logic hooks and pass all translated
   strings to view components via props.
+
 ### Testing (Vitest & Playwright)
 
 - **Vitest config**: Use the `jsdom` environment, include `tests/setup.ts`, and
@@ -462,6 +463,7 @@ Keep docs close to code.
 - **Playwright**: Run `@axe-core/playwright` scans, exercise keyboard
   navigation, capture accessibility tree snapshots, and emulate locales to test
   translations.
+
 ### Observability (Frontend)
 
 - **Structured logs**: Gate debug logs behind a flag (`?debug=1` or build‑time
