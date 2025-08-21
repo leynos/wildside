@@ -28,17 +28,18 @@ docker-down:
 
 fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all
-
+	bun x biome format --write
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-	npx biome ci frontend-pwa packages/tokens/src packages/tokens/build packages/types/src
+	bun x biome ci frontend-pwa packages/tokens/src packages/tokens/build packages/types/src
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
+	bun x biome format
 
 markdownlint:
 	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint
