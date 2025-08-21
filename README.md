@@ -9,6 +9,45 @@ data-validation pipeline. The strategy emphasises cost control, security-first
 AI integration, and clear differentiation from fitness, hiking, and static tour
 apps.
 
+## Formatting and linting
+
+Use the Makefile targets to format and lint both the Rust backend and the
+TypeScript/JavaScript workspaces via Biome:
+
+```bash
+# Format all code (Rust + Biome with write)
+make fmt
+
+# Lint all code (Clippy + Biome CI)
+make lint
+
+# Check formatting only (no writes)
+make check-fmt
+```
+
+Under the hood, Biome runs via Bun (see the Makefile). If you prefer to invoke
+Biome directly:
+
+```bash
+# Format JS/TS files in-place
+bun x biome format --write
+
+# Lint with CI output for selected packages/paths
+bun x biome ci \
+  frontend-pwa \
+  packages/tokens/src packages/tokens/build \
+  packages/types/src
+```
+
+Notes:
+
+- Biome respects `.biomeignore` and VCS ignore files (we enable
+  `vcs.useIgnoreFile`), so build artefacts such as any `target/` directory are
+  ignored. There is also an explicit override that disables Biome for
+  `**/target/**`.
+- Run `bun install` once in the repo root if Bun tooling is not already set up
+  locally.
+
 ## Documentation linting
 
 Ensure documentation and diagrams remain valid:

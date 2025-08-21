@@ -1,0 +1,11 @@
+node_modules
+dist
+**/dist/**
+build
+**/build/**
+coverage
+.git
+target
+**/target/**
+**/*.min.*
+**/*.d.ts

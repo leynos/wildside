@@ -240,7 +240,7 @@ browser‑only runtime.
   uses Rollup via Vite.
 - **Project scripts (Bun)**:
 - `fmt`: `biome format --write .`
-- `lint`: `biome lint . && tsc -p tsconfig.json --noEmit`
+- `lint`: `biome ci . && tsc -p tsconfig.json --noEmit`
 - `typecheck`: `tsc -p tsconfig.json --noEmit`
 - `dev`: `vite`
 - `build`: `vite build`
@@ -250,6 +250,27 @@ browser‑only runtime.
 - `audit:snyk`: `bun x snyk test`
 - Note: `audit` requires a committed `bun.lock`; `audit:snyk` requires
       installed dependencies—run `bun install` before invoking it.
+
+  In this repository, Biome is orchestrated via the Makefile along with Rust
+  tooling. Prefer these entry points locally and in CI:
+
+  ```bash
+  # Format all code (Rust + JS/TS via Biome)
+  make fmt
+
+  # Lint all code (Clippy + Biome CI)
+  make lint
+
+  # Check formatting only (no writes)
+  make check-fmt
+  ```
+
+  You can also call Biome directly through Bun when needed:
+
+  ```bash
+  bun x biome format --write
+  bun x biome ci frontend-pwa packages/tokens/src packages/tokens/build packages/types/src
+  ```
 
 ### Compiler Configuration (Make It Sharp)
 
@@ -352,6 +373,9 @@ Keep docs close to code.
 - **Biome**: One tool for format + lint. Configure with strict rules: disallow
   `any`, no non‑null `!`, forbid `@ts-ignore` in favour of `@ts-expect-error`
   (with a reason).
+  - In this repo: use `make fmt`, `make lint`, and `make check-fmt`.
+  - Biome respects `.biomeignore` and VCS ignore files; large build trees like
+    any `target/` directory are excluded.
 - **Type‑checking**: `tsc --noEmit` as part of `lint` to catch type errors
   early.
 - **Import hygiene**: Enforce sorted, grouped imports; no unused or extraneous

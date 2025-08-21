@@ -5,9 +5,7 @@
     "description": "",
     "version": "0.1.0"
   },
-  "security": [
-    { "cookieAuth": [] }
-  ],
+  "security": [{ "cookieAuth": [] }],
   "paths": {
     "/api/users": {
       "get": {
@@ -67,10 +65,7 @@
       },
       "User": {
         "type": "object",
-        "required": [
-          "id",
-          "display_name"
-        ],
+        "required": ["id", "display_name"],
         "properties": {
           "display_name": {
             "type": "string"
