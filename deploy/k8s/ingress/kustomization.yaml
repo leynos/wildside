@@ -8,6 +8,7 @@ commonLabels:
 commonAnnotations:
   app.kubernetes.io/managed-by: kustomize
 resources:
+  - traefik-namespace.yaml
   - traefik-helmrelease.yaml
   - cluster-issuer.yaml
   - certificate.yaml

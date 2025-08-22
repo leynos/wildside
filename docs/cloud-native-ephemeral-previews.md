@@ -485,7 +485,9 @@ via FluxCD, with their manifests stored in the `wildside-infra` repository.
 The Traefik Ingress Controller manages external access to services within the
 cluster. Acting as a reverse proxy and load balancer, it routes HTTP/S traffic
 to the appropriate application based on hostnames and paths. It is deployed
-using its official Helm chart.
+using its official Helm chart in a dedicated `traefik` namespace. Exposing the
+dashboard on a public `LoadBalancer` without authentication or allowlisting is
+unsafe; secure or disable it in production as shown in the values.
 
 YAML
 
@@ -495,9 +497,15 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: traefik
-  namespace: kube-system
+  namespace: traefik
 spec:
   interval: 30m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
   chart:
     spec:
       chart: traefik
@@ -514,11 +522,23 @@ spec:
       type: LoadBalancer
     dashboard:
       enabled: true
+    metrics:
+      prometheus:
+        enabled: true
+        service:
+          enabled: true
+        serviceMonitor:
+          enabled: true
+    tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+        effect: "NoSchedule"
 ```
 
 This `HelmRelease` manifest instructs Flux to install the `traefik` chart. The
 configuration exposes Traefik via a `LoadBalancer` service and enables a
-dedicated `IngressClass`. The optional dashboard is enabled for observability.
+dedicated `IngressClass`. The optional dashboard is enabled for observability
+but should be restricted behind authentication or network policies.
 
 ### Automated DNS: ExternalDNS
 
@@ -801,12 +821,11 @@ spec:
 ```
 
 This manifest defines a 3-node HA PostgreSQL cluster. The `imageName` is
-explicitly set to a version that includes PostGIS.[^23] The
-
+explicitly set to a version that includes PostGIS[^23]. The
 `postInitTemplateSQL` block is a powerful feature that runs the specified SQL
-commands after the cluster is initialized, automatically creating the necessary
-PostGIS extensions in the `template1` database, which makes them available to
-all databases created in the cluster.[^23]
+commands after the cluster is initialised, automatically creating the necessary
+PostGIS extensions in the `template1` database so they are available to all
+databases created in the cluster.
 
 #### Redis Cache
 
@@ -1564,50 +1583,50 @@ enabling them to innovate and deliver features more rapidly and reliably.
     August 12, 2025,
     <https://medium.com/@topahadzi/external-secret-operator-with-vault-a781be1048a1>
 
-[^21]: Wildside App: Design Document Expansion
+[^21]: Wildside App: Design Document Expansion.
 
 [^22]: CloudNativePG is an open source operator designed to manage PostgreSQL
     workloads on any supported Kubernetes cluster running in private, public,
     hybrid, or multi-cloud environments. CloudNativePG adheres to DevOps
     principles and concepts such as declarative configuration and immutable
-    infrastructure., accessed on August 12, 2025,
-    <https://cloudnative-pg.io/documentation/1.17/>
+    infrastructure. Accessed on August 12, 2025,
+    <https://cloudnative-pg.io/documentation/1.17/>.
 
 [^23]: PostGIS - CloudNativePG v1.25, accessed on August 12, 2025,
-    <https://cloudnative-pg.io/documentation/1.25/postgis/>
+    <https://cloudnative-pg.io/documentation/1.25/postgis/>.
 
 [^24]: Redis Helm Chart - Datree, accessed on August 12, 2025,
-    <https://www.datree.io/helm-chart/redis-bitnami>
+    <https://www.datree.io/helm-chart/redis-bitnami>.
 
-[^25]: accessed on January 1, 1970,
-    <https://github.com/bitnami/charts/blob/main/bitnami/redis/values.yaml>
+[^25]: Bitnami Redis chart values, accessed on August 12, 2025,
+    <https://github.com/bitnami/charts/blob/main/bitnami/redis/values.yaml>.
 
 [^26]: Helm + Kustomize in GitOps: Building a Scalable Platform with Crossplane -
     Medium, accessed on August 12, 2025,
-    <https://medium.com/@nishioriental68/helm-kustomize-in-gitops-building-a-scalable-platform-with-crossplane-60e888a8d000>
+    <https://medium.com/@nishioriental68/helm-kustomize-in-gitops-building-a-scalable-platform-with-crossplane-60e888a8d000>.
 
-[^27]: Helm chart , Templates or Kustomization file ? - Red Hat Learning
+[^27]: Helm chart, Templates or Kustomization file? - Red Hat Learning
     Community, accessed on August 12, 2025,
-    <https://learn.redhat.com/t5/Containers-DevOps-OpenShift/Helm-chart-Templates-or-Kustomization-file/td-p/22285>
+    <https://learn.redhat.com/t5/Containers-DevOps-OpenShift/Helm-chart-Templates-or-Kustomization-file/td-p/22285>.
 
 [^28]: Workflow syntax for GitHub Actions, accessed on August 12, 2025,
-    <https://docs.github.com/actions/reference/workflow-syntax-for-github-actions>
+    <https://docs.github.com/actions/reference/workflow-syntax-for-github-actions>.
 
 [^29]: Configure CI/CD for your Rust application - Docker Docs, accessed on August
-    12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>
+    12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>.
 
-[^30]: Optimizing Rust container builds - GitHub Gist, accessed on August 12,
-    2025, <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>
+[^30]: Optimising Rust container builds - GitHub Gist, accessed on August 12,
+    2025, <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>.
 
 [^31]: actions/checkout: Action for checking out a repo - GitHub, accessed on
-    August 12, 2025, <https://github.com/actions/checkout>
+    August 12, 2025, <https://github.com/actions/checkout>.
 
-[^32]: yokawasa/action-setup-kube-tools: Github Action that setup Kubernetes tools
-    (kubectl, kustomize, helm, kubeconform, conftest, yq, rancher, tilt,
-    skaffold) very fast and cache them on the runner. Please \[ Star\] if
-    you're using it!, accessed on August 12, 2025,
-    <https://github.com/yokawasa/action-setup-kube-tools>
+[^32]: yokawasa/action-setup-kube-tools: GitHub Action that sets up Kubernetes
+    tools (kubectl, kustomize, helm, kubeconform, conftest, yq, rancher, tilt,
+    skaffold) very fast and caches them on the runner. Please \[Star\] if you're
+    using it!, accessed on August 12, 2025,
+    <https://github.com/yokawasa/action-setup-kube-tools>.
 
 [^33]: FluxCD Multi-cluster Architecture | by Stefan Prodan - Medium, accessed on
     August 12, 2025,
-    <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>
+    <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>.
