@@ -37,6 +37,9 @@ export function resolveToken(ref, tokens = TOKENS) {
   if (tokens == null || typeof tokens !== 'object') {
     throw new TypeError('tokens must be an object token tree');
   }
+  if (typeof ref !== 'string') {
+    throw new TypeError('ref must be a string token reference');
+  }
   let current = ref;
   const seen = new Set();
   while (typeof current === 'string') {
@@ -65,6 +68,11 @@ export function resolveToken(ref, tokens = TOKENS) {
       cursor = cursor[segment];
     }
     current = cursor?.value;
+    if (current == null || typeof current !== 'string') {
+      throw new TypeError(
+        `Token "${key}" must resolve to an object with a string "value"`,
+      );
+    }
   }
   return current;
 }
