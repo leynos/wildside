@@ -1,7 +1,7 @@
 /** @file Token utilities for resolving design token references. */
 // Load token tree once for reference resolution (Node 18.17+ or bundler with JSON modules).
 import tokensJson from '../tokens.json' assert { type: 'json' };
-const TOKENS = tokensJson;
+const TOKENS = Object.freeze(tokensJson);
 
 /**
  * Iterate over `iterable` yielding `[index, value]` pairs.

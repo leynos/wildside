@@ -12,6 +12,8 @@ import { customFetchParsed } from './fetcher';
  * Query key for user listings.
  */
 export const USERS_QK = ['users'] as const satisfies QueryKey;
+// Freeze to guard against accidental mutation at runtime.
+Object.freeze(USERS_QK);
 
 /**
  * Helpers for composing user query keys.
@@ -20,7 +22,6 @@ export const usersQK = {
   all: USERS_QK,
   byId: (id: User['id']) => [...USERS_QK, id] as const,
 } as const;
-// Freeze to guard against runtime mutation.
 Object.freeze(usersQK);
 
 /**

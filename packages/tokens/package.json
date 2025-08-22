@@ -16,5 +16,10 @@
   "contrastThreshold": 4.5,
   "engines": {
     "node": ">=18.17"
-  }
+  },
+  "files": [
+    "src/tokens.json",
+    "src/themes/*.json",
+    "src/utils/"
+  ]
 }
