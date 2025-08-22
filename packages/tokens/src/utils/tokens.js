@@ -29,16 +29,18 @@ function* enumerate(iterable) {
  * @param {object} [tokens=TOKENS] - Token tree mirroring the structure of
  * `tokens.json`, where leaves contain a `value` string.
  * @returns {string} Token value.
+ * @throws {TypeError} If `ref` is not a string or `tokens` is not an object.
+ * @throws {Error} If the token path does not exist or a circular reference is detected.
  * @example
  * resolveToken('{color.brand}')
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
 export function resolveToken(ref, tokens = TOKENS) {
+  if (typeof ref !== 'string') {
+    throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
+  }
   if (tokens == null || typeof tokens !== 'object') {
     throw new TypeError('tokens must be an object token tree');
-  }
-  if (typeof ref !== 'string') {
-    throw new TypeError('ref must be a string token reference');
   }
   let current = ref;
   const seen = new Set();

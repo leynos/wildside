@@ -42,7 +42,7 @@ test('throws on invalid tokens arg', () => {
 test('throws on non-string ref', () => {
   assert.throws(
     () => resolveToken(123, baseTokens),
-    /ref must be a string token reference/
+    /ref must be a string like "\{path\.to\.token\}" or a literal string/
   );
 });
 
