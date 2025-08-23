@@ -18,8 +18,8 @@
     "node": ">=18.17"
   },
   "files": [
-    "src/tokens.json",
     "src/themes/*.json",
-    "src/utils/"
+    "src/tokens.json",
+    "src/utils/tokens.js"
   ]
 }

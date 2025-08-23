@@ -44,16 +44,22 @@ test('throws on missing path with enriched message', () => {
 });
 
 test('throws on invalid tokens arg', () => {
+  // Assert class
+  assert.throws(() => resolveToken('{color.brand}', null), TypeError);
+  // Assert message
   assert.throws(
     () => resolveToken('{color.brand}', null),
-    /tokens must be an object token tree/
+    /tokens must be an object token tree/,
   );
 });
 
 test('throws on non-string ref', () => {
+  // Assert class
+  assert.throws(() => resolveToken(123, baseTokens), TypeError);
+  // Assert message
   assert.throws(
     () => resolveToken(123, baseTokens),
-    /ref must be a string like "\{path\.to\.token\}" or a literal string/
+    /ref must be a string like "\{path\.to\.token\}" or a literal string/,
   );
 });
 
@@ -68,8 +74,11 @@ test('handles optional whitespace inside braces', () => {
 
 test('throws when token leaf lacks a string value', () => {
   const tokens = { a: { value: 1 } };
+  // Assert class
+  assert.throws(() => resolveToken('{a}', tokens), TypeError);
+  // Assert message
   assert.throws(
     () => resolveToken('{a}', tokens),
-    /must resolve to an object with a string "value"/
+    /must resolve to an object with a string "value"/,
   );
 });

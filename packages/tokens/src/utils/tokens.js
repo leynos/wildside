@@ -47,7 +47,7 @@ export function resolveToken(ref, tokens = TOKENS) {
   while (typeof current === 'string') {
     const match = /^\{(.+)\}$/.exec(current.trim());
     if (!match) return current;
-    const key = match[1];
+    const key = match[1].trim();
     if (seen.has(key)) {
       throw new Error(`Circular token reference detected: "${key}"`);
     }
