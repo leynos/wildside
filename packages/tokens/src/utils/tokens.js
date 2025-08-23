@@ -1,25 +1,14 @@
-/** @file Token utilities for resolving design token references. */
-// Load token tree once for reference resolution (Node 18.17+ or bundler with JSON modules).
-import tokensJson from '../tokens.json' assert { type: 'json' };
-const TOKENS = Object.freeze(tokensJson);
-
-/**
- * Iterate over `iterable` yielding `[index, value]` pairs.
+/** @file Token utilities with the bundled token tree.
  *
- * @template T
- * @param {Iterable<T>} iterable - Sequence to walk.
- * @returns {IterableIterator<[number, T]>}
- * @example
- * for (const [i, v] of enumerate(['a', 'b'])) {
- *   console.log(i, v);
- * }
+ * Loads the design tokens JSON once and wires it to `resolveToken`. A lean
+ * browser entry is available via the conditional export `"browser"` which
+ * omits this import to avoid bundling unused data.
  */
-function* enumerate(iterable) {
-  let index = 0;
-  for (const value of iterable) {
-    yield [index++, value];
-  }
-}
+import tokensJson from '../tokens.json' assert { type: 'json' };
+import { resolveToken as baseResolveToken } from './resolve-token.js';
+
+// Freeze to guard against accidental mutation at runtime.
+const TOKENS = Object.freeze(tokensJson);
 
 /**
  * Resolve a `{token.path}` reference to its concrete value.
@@ -36,45 +25,6 @@ function* enumerate(iterable) {
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
 export function resolveToken(ref, tokens = TOKENS) {
-  if (typeof ref !== 'string') {
-    throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
-  }
-  if (tokens == null || typeof tokens !== 'object') {
-    throw new TypeError('tokens must be an object token tree');
-  }
-  let current = ref;
-  const seen = new Set();
-  while (typeof current === 'string') {
-    const match = /^\{(.+)\}$/.exec(current.trim());
-    if (!match) return current;
-    const key = match[1].trim();
-    if (seen.has(key)) {
-      throw new Error(`Circular token reference detected: "${key}"`);
-    }
-    seen.add(key);
-    const pathSegments = key.split('.');
-    let cursor = tokens;
-    for (const [segmentIndex, segment] of enumerate(pathSegments)) {
-      if (cursor?.[segment] == null) {
-        const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
-        const siblings =
-          cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
-        const hint =
-          siblings.length > 0
-            ? ` Available keys: ${siblings.slice(0, 10).join(', ')}`
-            : '';
-        throw new Error(
-          `Token path "${missingPath}" not found (while resolving "${key}").${hint}`,
-        );
-      }
-      cursor = cursor[segment];
-    }
-    current = cursor?.value;
-    if (current == null || typeof current !== 'string') {
-      throw new TypeError(
-        `Token "${key}" must resolve to an object with a string "value"`,
-      );
-    }
-  }
-  return current;
+  return baseResolveToken(ref, tokens);
 }
+
