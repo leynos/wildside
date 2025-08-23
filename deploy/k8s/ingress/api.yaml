@@ -4,7 +4,7 @@ metadata:
   name: myapp-api
   namespace: myapp
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
     - hosts:
         - api.wildside.cc
