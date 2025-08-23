@@ -518,20 +518,28 @@ spec:
     ingressClass:
       enabled: true
       isDefaultClass: false
+      name: traefik
     service:
       type: LoadBalancer
+      annotations: {} # Add cloud-specific load balancer annotations
+      spec:
+        externalTrafficPolicy: Local # Preserve client source IPs
     dashboard:
       enabled: false
       # If enabling, secure access:
       # - Expose only internally or behind an authenticated IngressRoute
       # - Restrict by source ranges or network policy
+    ports:
+      web:
+        redirectTo:
+          port: websecure
     metrics:
       prometheus:
         enabled: true
         service:
           enabled: true
         serviceMonitor:
-          enabled: true
+          enabled: true # Requires Prometheus Operator CRDs
     tolerations:
       - key: "CriticalAddonsOnly"
         operator: "Exists"
