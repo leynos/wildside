@@ -397,8 +397,8 @@ recommended for the two GitOps repositories.
 | wildside-infra | / | Defines the desired state of the cluster's shared platform infrastructure. |
 |  | clusters/production/ | Root directory for the production cluster's Flux configuration. |
 |  | clusters/production/flux-system/ | Contains the core Flux manifests, managed automatically by flux bootstrap. |
-|  | infrastructure/sources/ | Contains GitRepository and HelmRepository CRDs, defining all external sources Flux can pull from (e.g., Bitnami Helm repo, wildside-apps Git repo). |
-|  | infrastructure/core/ | Contains Flux Kustomization and HelmRelease manifests for core services like Traefik, cert-manager, and external-dns. |
+|  | deploy/k8s/sources/ | Contains GitRepository and HelmRepository CRDs, defining all external sources Flux can pull from (e.g., Bitnami Helm repo, wildside-apps Git repo). |
+|  | deploy/k8s/ingress/ | Contains Flux Kustomization and HelmRelease manifests for core services like Traefik, cert-manager, and external-dns. |
 |  | infrastructure/secrets/ | Contains manifests for the secrets management solution (Vault and External Secrets Operator). |
 |  | infrastructure/databases/ | Contains manifests for database operators like CloudNativePG. |
 |  | infrastructure/apps.yaml | A root Kustomization that orchestrates the deployment of all applications by referencing the wildside-apps repository. |
@@ -419,7 +419,7 @@ to tell Flux where to find the Helm charts for the platform components.
 YAML
 
 ```yaml
-# infrastructure/sources/helm-repositories.yaml
+# deploy/k8s/sources/traefik-repo.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -456,7 +456,7 @@ elsewhere.[^12]
 YAML
 
 ```yaml
-# infrastructure/sources/git-repositories.yaml
+# deploy/k8s/sources/git-repositories.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
@@ -492,7 +492,7 @@ without authentication or allowlisting is unsafe.
 YAML
 
 ```yaml
-# infrastructure/core/traefik.yaml
+# deploy/k8s/ingress/traefik-helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -547,7 +547,7 @@ middleware or IP allowlisting.
 YAML
 
 ```yaml
-# infrastructure/core/traefik-dashboard.yaml
+# deploy/k8s/ingress/traefik-dashboard.yaml
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -579,7 +579,7 @@ manual step of pointing a subdomain to the load balancer's IP address.[^13]
 YAML
 
 ```yaml
-# infrastructure/core/external-dns.yaml
+# deploy/k8s/ingress/external-dns.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -634,7 +634,7 @@ First, the `HelmRelease` for `cert-manager` itself:
 YAML
 
 ```yaml
-# infrastructure/core/cert-manager.yaml
+# deploy/k8s/ingress/cert-manager.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -665,7 +665,7 @@ that defines how `cert-manager` should obtain certificates.
 YAML
 
 ```yaml
-# infrastructure/core/cluster-issuer.yaml
+# deploy/k8s/ingress/cluster-issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -867,7 +867,7 @@ disabled to reduce cost and complexity.
 YAML
 
 ```yaml
-# infrastructure/core/redis.yaml
+# deploy/k8s/ingress/redis.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:

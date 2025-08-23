@@ -37,7 +37,7 @@ spec:
         service:
           enabled: true
         serviceMonitor:
-          enabled: true
+          enabled: true # Requires Prometheus Operator CRDs
     tolerations:
       - key: "CriticalAddonsOnly"
         operator: "Exists"
