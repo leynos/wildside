@@ -485,9 +485,9 @@ via FluxCD, with their manifests stored in the `wildside-infra` repository.
 The Traefik Ingress Controller manages external access to services within the
 cluster. Acting as a reverse proxy and load balancer, it routes HTTP/S traffic
 to the appropriate application based on hostnames and paths. It is deployed
-using its official Helm chart in a dedicated `traefik` namespace. Exposing the
-dashboard on a public `LoadBalancer` without authentication or allowlisting is
-unsafe; secure or disable it in production as shown in the values.
+using its official Helm chart in a dedicated `traefik` namespace. The values
+below disable the dashboard by default; exposing it on a public `LoadBalancer`
+without authentication or allowlisting is unsafe.
 
 YAML
 
@@ -513,7 +513,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: flux-system
-      version: "25.0.x"
+      version: "25.0.3"
   values:
     ingressClass:
       enabled: true
@@ -521,7 +521,10 @@ spec:
     service:
       type: LoadBalancer
     dashboard:
-      enabled: true
+      enabled: false
+      # If enabling, secure access:
+      # - Expose only internally or behind an authenticated IngressRoute
+      # - Restrict by source ranges or network policy
     metrics:
       prometheus:
         enabled: true
@@ -537,8 +540,34 @@ spec:
 
 This `HelmRelease` manifest instructs Flux to install the `traefik` chart. The
 configuration exposes Traefik via a `LoadBalancer` service and enables a
-dedicated `IngressClass`. The optional dashboard is enabled for observability
-but should be restricted behind authentication or network policies.
+dedicated `IngressClass`. The dashboard remains off by default. To expose it,
+create an `IngressRoute` that targets `api@internal` and attach authentication
+middleware or IP allowlisting.
+
+YAML
+
+```yaml
+# infrastructure/core/traefik-dashboard.yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-basicauth@kubernetescrd
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`dashboard.example.com`)
+      kind: Rule
+      services:
+        - name: api@internal
+          kind: TraefikService
+```
+
+The `traefik-basicauth` middleware supplies credentials; substitute an OIDC
+middleware if preferred.
 
 ### Automated DNS: ExternalDNS
 
@@ -1615,7 +1644,7 @@ enabling them to innovate and deliver features more rapidly and reliably.
 [^29]: Configure CI/CD for your Rust application - Docker Docs, accessed on August
     12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>.
 
-[^30]: Optimising Rust container builds - GitHub Gist, accessed on August 12,
+[^30]: Optimizing Rust container builds - GitHub Gist, accessed on August 12,
     2025, <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>.
 
 [^31]: actions/checkout: Action for checking out a repo - GitHub, accessed on

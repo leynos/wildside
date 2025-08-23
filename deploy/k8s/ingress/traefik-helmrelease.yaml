@@ -11,6 +11,7 @@ spec:
   upgrade:
     remediation:
       retries: 3
+      remediateLastFailure: true
   chart:
     spec:
       chart: traefik
@@ -18,7 +19,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: flux-system
-      version: "25.0.x"
+      version: "25.0.3"
   values:
     ingressClass:
       enabled: true
@@ -26,7 +27,10 @@ spec:
     service:
       type: LoadBalancer
     dashboard:
-      enabled: true
+      enabled: false
+      # If enabling, secure access:
+      # - Expose only internally or behind an authenticated IngressRoute
+      # - Restrict by source ranges or network policy
     metrics:
       prometheus:
         enabled: true
