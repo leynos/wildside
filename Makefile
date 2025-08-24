@@ -1,4 +1,5 @@
-.PHONY: all clean be fe openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint nixie
+SHELL := bash
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint nixie
 all: fmt lint test
 
 clean:
@@ -11,6 +12,10 @@ be:
 fe:
 	# Long-running dev server
 	cd frontend-pwa && bun dev
+
+fe-build:
+	pushd frontend-pwa && bun install && popd
+	cd frontend-pwa && bun run build
 
 openapi:
 	# Replace with a bin that prints OpenAPI
