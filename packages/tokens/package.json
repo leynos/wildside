@@ -16,5 +16,18 @@
   "contrastThreshold": 4.5,
   "engines": {
     "node": ">=18.17"
-  }
+  },
+  "exports": {
+    "./utils/tokens.js": {
+      "browser": "./src/utils/tokens.browser.js",
+      "default": "./src/utils/tokens.js"
+    }
+  },
+  "files": [
+    "src/themes/*.json",
+    "src/tokens.json",
+    "src/utils/resolve-token.js",
+    "src/utils/tokens.browser.js",
+    "src/utils/tokens.js"
+  ]
 }

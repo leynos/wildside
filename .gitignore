@@ -5,6 +5,10 @@
 # Node
 node_modules/
 **/dist/
+packages/types/dist/
+
+!packages/types/dist/src/
+!packages/types/dist/**/*.d.ts
 
 # Misc
 .DS_Store
