@@ -54,12 +54,13 @@ test('throws on invalid tokens arg', () => {
 });
 
 test('throws on non-string ref', () => {
-  // Assert class
-  assert.throws(() => resolveToken(123, baseTokens), TypeError);
-  // Assert message
   assert.throws(
     () => resolveToken(123, baseTokens),
-    /ref must be a string like "\{path\.to\.token\}" or a literal string/,
+    {
+      name: 'TypeError',
+      message:
+        /ref must be a string like "\{path\.to\.token\}" or a literal string/,
+    },
   );
 });
 
