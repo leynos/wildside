@@ -1,0 +1,26 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/acme/myapp-backend
+  tag: "latest"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+pdb:
+  maxUnavailable: 1
+
+ingress:
+  enabled: true
+  className: "traefik" # Default to your new controller
+  hostname: "api.wildside.cc"
+  tlsSecretName: "myapp-api-tls"
+
+# You can also include default env vars, secrets, etc.
+config:
+  APP_ENV: "development"

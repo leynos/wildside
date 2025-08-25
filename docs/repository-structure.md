@@ -100,14 +100,16 @@ myapp/
 │  ├─ docker/                         # Dockerfiles
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
-│  ├─ k8s/                            # manifests and kustomizations
-│  │  ├─ backend/                     # Deployment, Service, ConfigMap/Secret generators, PDB, patches
-│  │  ├─ ingress/                     # Ingress and cert-manager manifests with label kustomization
-│  │  │  ├─ api.yaml
-│  │  │  ├─ certificate.yaml
-│  │  │  ├─ cluster-issuer.yaml
-│  │  │  └─ kustomization.yaml
-│  │  └─ jobs/                        # migrations, one-off tasks
+│  ├─ charts/                         # Helm charts for the application
+│  │  └─ wildside/                    # reusable chart with templates and values
+│  ├─ k8s/                            # HelmReleases and Kustomize overlays
+│  │  ├─ base/                        # base HelmRelease
+│  │  └─ overlays/
+│  │     └─ production/               # production overrides
+│  ├─ ingress/                        # Ingress and cert-manager manifests
+│  │  ├─ certificate.yaml
+│  │  ├─ cluster-issuer.yaml
+│  │  └─ kustomization.yaml
 │  └─ scripts/                        # CI/deploy helpers
 │
 ├─ .github/workflows/                 # CI pipelines (lint, build, test, push images)

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: myapp-backend
+  name: {{ .Chart.Name }}
 spec:
   selector:
-    app: myapp-backend
+    app: {{ .Chart.Name }}
   ports:
     - name: http
       port: 80
