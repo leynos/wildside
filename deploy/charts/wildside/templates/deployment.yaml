@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ .Release.Name }}
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/instance: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: myapp
 spec:
@@ -17,15 +17,15 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app: {{ .Chart.Name }}
+      app: {{ .Release.Name }}
   template:
     metadata:
       labels:
         # Apply standard app labels to pods for observability and policy
         # targeting.
-        app: {{ .Chart.Name }}
+        app: {{ .Release.Name }}
         app.kubernetes.io/name: {{ .Chart.Name }}
-        app.kubernetes.io/instance: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: myapp
     spec:
@@ -36,17 +36,17 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: {{ .Chart.Name }}
+              app: {{ .Release.Name }}
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
-              app: {{ .Chart.Name }}
+              app: {{ .Release.Name }}
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
@@ -55,6 +55,19 @@ spec:
                 name: myapp-config
             - secretRef:
                 name: myapp-secrets
+{{- with .Values.config.APP_ENV }}
+          env:
+            - name: APP_ENV
+              value: {{ . | quote }}
+{{- end }}
+{{- with .Values.securityContext }}
+          securityContext:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- with .Values.container.readinessProbe }}
+          readinessProbe:
+{{ toYaml . | nindent 12 }}
+{{- else }}
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -63,6 +76,11 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
+{{- end }}
+{{- with .Values.container.livenessProbe }}
+          livenessProbe:
+{{ toYaml . | nindent 12 }}
+{{- else }}
           livenessProbe:
             httpGet:
               path: /health/live
@@ -71,6 +89,11 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
+{{- end }}
+{{- with .Values.container.startupProbe }}
+          startupProbe:
+{{ toYaml . | nindent 12 }}
+{{- else }}
           startupProbe:
             httpGet:
               path: /health/ready
@@ -78,5 +101,6 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 12
+{{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

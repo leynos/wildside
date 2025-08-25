@@ -132,10 +132,13 @@ classDiagram
       +Pdb pdb
       +Ingress ingress
       +Config config
+      +SecurityContext securityContext
+      +Container container
     }
     class Image {
       +string repository
       +string tag
+      +string pullPolicy
     }
     class Resources {
       +Requests requests
@@ -156,10 +159,29 @@ classDiagram
       +bool enabled
       +string className
       +string hostname
-      +string tlsSecretName
+      +Tls tls
+      +map<string,string> annotations
+    }
+    class Tls {
+      +bool enabled
+      +string secretName
     }
     class Config {
       +string APP_ENV
+    }
+    class SecurityContext {
+      +bool runAsNonRoot
+      +int runAsUser
+      +bool allowPrivilegeEscalation
+      +bool readOnlyRootFilesystem
+    }
+    class Container {
+      +Probe livenessProbe
+      +Probe readinessProbe
+      +Probe startupProbe
+    }
+    class Probe {
+      +int timeoutSeconds
     }
     Values --> Image
     Values --> Resources
@@ -168,6 +190,10 @@ classDiagram
     Values --> Pdb
     Values --> Ingress
     Values --> Config
+    Values --> SecurityContext
+    Values --> Container
+    Ingress --> Tls
+    Container --> Probe
 ```
 
 ---
