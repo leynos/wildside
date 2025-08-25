@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-backend
+  name: {{ .Chart.Name }}
   labels:
-    app.kubernetes.io/name: myapp-backend
-    app.kubernetes.io/instance: myapp-backend
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: myapp
 spec:
-  replicas: 2
+  replicas: {{ .Values.replicaCount }}
   revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
@@ -17,15 +17,15 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app: myapp-backend
+      app: {{ .Chart.Name }}
   template:
     metadata:
       labels:
         # Apply standard app labels to pods for observability and policy
         # targeting.
-        app: myapp-backend
-        app.kubernetes.io/name: myapp-backend
-        app.kubernetes.io/instance: myapp-backend
+        app: {{ .Chart.Name }}
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Chart.Name }}
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: myapp
     spec:
@@ -36,16 +36,16 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: myapp-backend
+              app: {{ .Chart.Name }}
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
-              app: myapp-backend
+              app: {{ .Chart.Name }}
       containers:
         - name: app
-          image: ghcr.io/acme/myapp-backend:{{TAG}}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: Always
           ports:
             - name: http
@@ -78,3 +78,5 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 12
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

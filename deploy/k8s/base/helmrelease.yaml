@@ -1,0 +1,15 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: wildside-app
+spec:
+  interval: 5m
+  chart:
+    spec:
+      # This points to your new chart directory
+      chart: ./deploy/charts/wildside
+      sourceRef:
+        kind: GitRepository
+        name: flux-system # Assumes your repo is the 'flux-system' source
+  # Default values can be specified here, but we will use the chart's defaults
+  values: {}
