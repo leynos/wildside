@@ -118,6 +118,58 @@ myapp/
 └─ README.md
 ```
 
+### Helm chart values structure
+
+The Helm chart values file (`values.yaml`) is organised as the following
+hierarchy:
+
+```mermaid
+classDiagram
+    class Values {
+      +int replicaCount
+      +Image image
+      +Resources resources
+      +Pdb pdb
+      +Ingress ingress
+      +Config config
+    }
+    class Image {
+      +string repository
+      +string tag
+    }
+    class Resources {
+      +Requests requests
+      +Limits limits
+    }
+    class Requests {
+      +string cpu
+      +string memory
+    }
+    class Limits {
+      +string cpu
+      +string memory
+    }
+    class Pdb {
+      +int maxUnavailable
+    }
+    class Ingress {
+      +bool enabled
+      +string className
+      +string hostname
+      +string tlsSecretName
+    }
+    class Config {
+      +string APP_ENV
+    }
+    Values --> Image
+    Values --> Resources
+    Resources --> Requests
+    Resources --> Limits
+    Values --> Pdb
+    Values --> Ingress
+    Values --> Config
+```
+
 ---
 
 ## 2) Contracts & Code Generation Hand‑offs
