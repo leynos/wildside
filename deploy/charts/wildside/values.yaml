@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/acme/myapp-backend
   tag: "latest"
-  pullPolicy: IfNotPresent
+  # pullPolicy: IfNotPresent
 
 resources:
   requests:
@@ -14,15 +14,14 @@ resources:
     memory: 512Mi
 
 pdb:
+  enabled: true
   maxUnavailable: 1
 
 ingress:
   enabled: true
   className: "traefik" # Default to your new controller
   hostname: "api.wildside.cc"
-  tls:
-    enabled: true
-    secretName: "myapp-api-tls"
+  tlsSecretName: "myapp-api-tls"
   annotations: {}
 
 # You can also include default env vars, secrets, etc.

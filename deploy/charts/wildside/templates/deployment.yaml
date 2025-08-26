@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: backend
-    app.kubernetes.io/part-of: myapp
+    app.kubernetes.io/part-of: {{ .Chart.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
   revisionHistoryLimit: 3
@@ -27,7 +27,7 @@ spec:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: backend
-        app.kubernetes.io/part-of: myapp
+        app.kubernetes.io/part-of: {{ .Chart.Name }}
     spec:
       terminationGracePeriodSeconds: 30
       topologySpreadConstraints:
@@ -45,8 +45,9 @@ spec:
               app: {{ .Release.Name }}
       containers:
         - name: app
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $tag := .Values.image.tag | default .Chart.AppVersion }}
+          image: "{{ .Values.image.repository }}:{{$tag}}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default (ternary "Always" "IfNotPresent" (eq $tag "latest")) }}
           ports:
             - name: http
               containerPort: 8080

@@ -5,15 +5,15 @@ metadata:
   name: {{ .Release.Name }}-ingress
   {{- with .Values.ingress.annotations }}
   annotations:
-{{ toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  ingressClassName: {{ .Values.ingress.className }}
-  {{- if .Values.ingress.tls.enabled }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- with .Values.ingress.tlsSecretName }}
   tls:
     - hosts:
-        - {{ .Values.ingress.hostname | quote }}
-      secretName: {{ .Values.ingress.tls.secretName }}
+        - {{ $.Values.ingress.hostname | quote }}
+      secretName: {{ . | quote }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.hostname | quote }}

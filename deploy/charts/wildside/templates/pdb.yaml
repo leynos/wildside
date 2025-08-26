@@ -1,3 +1,4 @@
+{{- if and .Values.pdb.enabled (gt .Values.replicaCount 1) }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -7,3 +8,4 @@ spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}
+{{- end }}

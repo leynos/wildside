@@ -120,7 +120,7 @@ myapp/
 
 ### Helm chart values structure
 
-The Helm chart values file (`values.yaml`) is organised as the following
+The Helm chart values file (`values.yaml`) is organized in the following
 hierarchy:
 
 ```mermaid
@@ -153,18 +153,15 @@ classDiagram
       +string memory
     }
     class Pdb {
+      +bool enabled
       +int maxUnavailable
     }
     class Ingress {
       +bool enabled
       +string className
       +string hostname
-      +Tls tls
+      +string tlsSecretName
       +map<string,string> annotations
-    }
-    class Tls {
-      +bool enabled
-      +string secretName
     }
     class Config {
       +string APP_ENV
@@ -192,9 +189,11 @@ classDiagram
     Values --> Config
     Values --> SecurityContext
     Values --> Container
-    Ingress --> Tls
     Container --> Probe
 ```
+
+> The deployment injects `.Values.config.APP_ENV` into the container as the
+> `APP_ENV` environment variable.
 
 ---
 
