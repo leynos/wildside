@@ -226,9 +226,7 @@ creator function also receives a
 `get` function, which allows actions to access the current state, enabling
 complex logic where the next state depends on the current one.[^10]
 
-JavaScript
-
-```null
+```javascript
 // src/stores/uiStore.js
 import { create } from 'zustand';
 
@@ -269,9 +267,7 @@ changes.[^11] This granular subscription model is the foundation of Zustand's
 performance and prevents the unnecessary re-renders that can plague other state
 management solutions.
 
-JavaScript
-
-```null
+```javascript
 // src/components/Header.jsx
 import React from 'react';
 import useUIStore from '../stores/uiStore';
@@ -341,9 +337,7 @@ sessions, such as user preferences or UI settings. The `persist` middleware
 automatically handles the serialization and hydration of the state, making it
 trivial to implement.
 
-JavaScript
-
-```null
+```javascript
 // src/stores/settingsStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -460,9 +454,7 @@ The primary interface for interacting with Tanstack Query is through its hooks,
   the query's state, including derived flags like `isPending`, `isError`, and
   the `data` itself.[^3]
 
-JavaScript
-
-```null
+```javascript
 // src/hooks/useTodos.js
 import { useQuery } from '@tanstack/react-query';
 import { fetchTodos } from '../api/todosApi';
@@ -485,9 +477,7 @@ export function useTodos(filters) {
   the `onSuccess` callback to invalidate related queries, which prompts
   Tanstack Query to automatically refetch the data and keep the UI in sync.[^15]
 
-JavaScript
-
-```null
+```javascript
 // src/hooks/useAddTodo.js
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTodo } from '../api/todosApi';
@@ -592,9 +582,7 @@ term. This creates a seamless, declarative data flow that leverages the
 strengths of both libraries without any manual synchronization or effect
 hooks.[^7]
 
-JavaScript
-
-```null
+```javascript
 // 1. Client State Layer (Zustand)
 // src/stores/filterStore.js
 import { create } from 'zustand';
@@ -660,9 +648,7 @@ mechanism and then manually push the fetched data into a Zustand store. This is
 typically done using a `useEffect` hook that watches the `data` returned from
 `useQuery` or via the now-deprecated `onSuccess` callback.[^8]
 
-JavaScript
-
-```null
+```javascript
 // ANTI-PATTERN: DO NOT DO THIS
 const useProductStore = create((set) => ({
   products:,
@@ -748,9 +734,7 @@ While the native IndexedDB API can be verbose, a lightweight wrapper library
 like `idb-keyval` simplifies it to a `get`/`set`/`del` promise-based API,
 making it easy to create a custom persister for Tanstack Query.
 
-JavaScript
-
-```null
+```javascript
 // src/lib/idbPersister.js
 import { get, set, del } from 'idb-keyval';
 
@@ -798,9 +782,7 @@ these will lead to a broken or unreliable offline experience.
    thereby ensuring that the application always starts with its persisted
    state.[^25]
 
-JavaScript
-
-```null
+```javascript
 // src/App.jsx
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -919,9 +901,7 @@ the `mutationFn` is executed:
    cache is eventually synchronized with the true, authoritative state from the
    server.
 
-JavaScript
-
-```null
+```javascript
 // src/hooks/useUpdateTodo.js
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateTodo } from '../api/todosApi';
@@ -995,9 +975,7 @@ receives this event and uses queryClient.invalidateQueries to tell Tanstack
 Query that the relevant data is now stale. If there is an active useQuery hook
 for that data, a background refetch will be triggered automatically.
 
-JavaScript
-
-```null
+```javascript
 // In a top-level component
 useEffect(() => {
   const socket = new WebSocket('wss://your-server.com');
@@ -1024,9 +1002,7 @@ server can push the entire data object over the WebSocket. The client then
 directly injects this data into the cache using queryClient.setQueryData. This
 avoids the second HTTP request, making the UI update feel instantaneous.
 
-JavaScript
-
-```null
+```javascript
 // In a top-level component
 useEffect(() => {
   const socket = new WebSocket('wss://your-server.com');
@@ -1137,9 +1113,7 @@ source of events.
    controlling what the user sees (e.g., a loading spinner, the data, or an
    error message with a retry button).
 
-JavaScript
-
-```null
+```javascript
 // Example of a component using XState with Tanstack Query
 import { useQuery } from '@tanstack/react-query';
 import { useMachine } from '@xstate/react';
