@@ -20,8 +20,14 @@ pdb:
   enabled: true
   minAvailable: 1
 
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
 ingress:
-  enabled: true
+  enabled: false
   className: "traefik" # Default to your new controller
   hostname: "api.wildside.cc"
   tlsSecretName: "myapp-api-tls"
@@ -31,6 +37,8 @@ ingress:
 config:
   APP_ENV: "development"
 secretEnv: {}
+
+affinity: {}
 
 securityContext: {}
 

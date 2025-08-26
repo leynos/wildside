@@ -137,6 +137,8 @@ classDiagram
       +string nameOverride
       +string fullnameOverride
       +SecurityContext securityContext
+      +Autoscaling autoscaling
+      +Affinity affinity
       +Container container
     }
     class Image {
@@ -159,6 +161,15 @@ classDiagram
     class Pdb {
       +bool enabled
       +int minAvailable
+    }
+    class Autoscaling {
+      +bool enabled
+      +int minReplicas
+      +int maxReplicas
+      +int targetCPUUtilizationPercentage
+    }
+    class Affinity {
+      +map<string, any> podAntiAffinity
     }
     class Ingress {
       +bool enabled
@@ -192,6 +203,8 @@ classDiagram
     Values --> Ingress
     Values --> Config
     Values --> SecurityContext
+    Values --> Autoscaling
+    Values --> Affinity
     Values --> Container
     Container --> Probe
 ```

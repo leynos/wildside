@@ -8,7 +8,9 @@ metadata:
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: {{ .Chart.Name }}
 spec:
+{{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+{{- end }}
   revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
@@ -45,6 +47,10 @@ spec:
             matchLabels:
               app.kubernetes.io/name: {{ include "wildside.name" . }}
               app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: app
           {{- $tag := .Values.image.tag | default .Chart.AppVersion }}

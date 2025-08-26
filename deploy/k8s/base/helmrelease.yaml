@@ -18,7 +18,10 @@ spec:
     remediation:
       retries: 3
     createNamespace: true
+    crds: CreateReplace
   upgrade:
     remediation:
       retries: 3
     cleanupOnFail: true
+    rollback:
+      enable: true
