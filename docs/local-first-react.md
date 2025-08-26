@@ -8,11 +8,11 @@ The dominant architectural pattern for web applications over the past two
 decades has been the cloud-first, or "thin-client," model. In this paradigm,
 the server holds the primary, authoritative copy of all data, and the
 client-side application is merely a subordinate cache, a window through which
-users interact with this central source of truth.1 Every significant data
+users interact with this central source of truth.[^1] Every significant data
 modification must be sent to the server to be validated and persisted;
-otherwise, from the system's perspective, it "didn't happen".1 While this model
-has enabled unprecedented levels of real-time collaboration and multi-device
-access, it is fundamentally constrained by the physics of network
+otherwise, from the system's perspective, it "didn't happen".[^1] While this
+model has enabled unprecedented levels of real-time collaboration and
+multi-device access, it is fundamentally constrained by the physics of network
 communication. Latency is an unavoidable reality, leading to user interfaces
 filled with loading spinners and a user experience that is entirely dependent
 on a stable internet connection.
@@ -20,19 +20,19 @@ on a stable internet connection.
 In response to these limitations, a new architectural philosophy has emerged:
 **local-first software**. This paradigm inverts the traditional model. It
 treats the copy of the data on the user's local device—their laptop, tablet, or
-phone—as the primary copy.1 Servers are relegated to a secondary role, acting
-as a backup and a rendezvous point for synchronizing data between a user's
-devices or with other collaborators.2 This fundamental shift is not merely a
-technical implementation detail; it is a re-evaluation of the relationship
-between the user, their data, and the network. The motivation is to create
-applications that are inherently faster, more reliable, and that grant users
-true ownership and control over their digital artifacts.1 The ultimate goal is
-to achieve the best of both worlds: the rich, real-time collaboration of modern
-cloud applications combined with the performance, longevity, and data
-sovereignty of traditional, offline-capable desktop software.1 This
-architectural approach redefines the server's role from a gatekeeper of data to
-a facilitator of synchronization, prioritizing the user's immediate experience
-above all else.
+phone—as the primary copy.[^1] Servers are relegated to a secondary role,
+acting as a backup and a rendezvous point for synchronizing data between a
+user's devices or with other collaborators.[^2] This fundamental shift is not
+merely a technical implementation detail; it is a re-evaluation of the
+relationship between the user, their data, and the network. The motivation is
+to create applications that are inherently faster, more reliable, and that
+grant users true ownership and control over their digital artifacts.[^1] The
+ultimate goal is to achieve the best of both worlds: the rich, real-time
+collaboration of modern cloud applications combined with the performance,
+longevity, and data sovereignty of traditional, offline-capable desktop
+software.[^1] This architectural approach redefines the server's role from a
+gatekeeper of data to a facilitator of synchronization, prioritizing the user's
+immediate experience above all else.
 
 ### The Seven Ideals of Local-First Software
 
@@ -40,7 +40,7 @@ The principles of local-first software can be distilled into seven distinct
 ideals, as articulated by the research group Ink & Switch. These ideals serve
 as a guiding philosophy and a benchmark for the architecture detailed in this
 report, outlining the tangible user-facing benefits that this approach aims to
-deliver.1
+deliver.[^1]
 
 1. **No spinners: your work at your fingertips.** The most immediate and
    perceptible benefit of a local-first architecture is its speed. Because all
@@ -49,55 +49,55 @@ deliver.1
    a network round-trip to complete before reflecting a change. This eliminates
    the ubiquitous loading spinners and progress bars that characterize
    cloud-centric applications, creating a fluid and responsive user
-   experience.1 Data synchronization with other devices or collaborators occurs
-   quietly and asynchronously in the background.
+   experience.[^1] Data synchronization with other devices or collaborators
+   occurs quietly and asynchronously in the background.
 2. **Your work is not trapped on one device.** While the primary copy of the
    data resides locally, a core tenet of modern computing is the ability to
    access information from multiple devices. Local-first applications achieve
    this by ensuring that data is seamlessly synchronized across all of a user's
    devices, providing the convenience of multi-device access without being
-   solely dependent on a central server.1
+   solely dependent on a central server.[^1]
 3. **The network is optional.** In a local-first model, an internet connection
    is treated as an enhancement, not a requirement. The application must be
    fully functional offline, allowing users to create, read, update, and delete
    data without interruption. When a network connection becomes available, the
    application opportunistically synchronizes any local changes with the server
-   and pulls down updates from other clients.1
+   and pulls down updates from other clients.[^1]
 4. **Seamless collaboration with your colleagues.** Local-first architecture
    does not sacrifice the collaborative capabilities that have made cloud
    applications indispensable. The goal is to support real-time, multi-user
    collaboration that is on par with, or even superior to, existing cloud-based
    tools. This is often achieved through advanced data structures and
    algorithms that allow for the automatic merging of changes from multiple
-   users, even when those changes are made concurrently while offline.1
+   users, even when those changes are made concurrently while offline.[^1]
 5. **The Long Now.** By storing both the application's data and the software
    required to interpret it on the user's device, local-first applications
    offer greater longevity. Users are not dependent on a company's continued
    operation to access their data. Even if the service provider were to shut
    down its servers, the user would retain their local data and the ability to
    use the application, safeguarding their work against the volatility of the
-   tech industry.1
+   tech industry.[^1]
 6. **Security and privacy by default.** Centralized servers that store
    unencrypted data for thousands or millions of users are high-value targets
    for attackers. Local-first applications enhance security and privacy by
    design. Data is stored on the user's own device, and when it is synchronized
    via a server, it can be end-to-end encrypted. This ensures that the server
    operator cannot access the content of the user's data, only store the
-   encrypted blobs.1
+   encrypted blobs.[^1]
 7. **You retain ultimate ownership and control.** Perhaps the most profound
    philosophical shift is the restoration of data ownership to the user.
    Because the data resides in files on their local device, users have ultimate
    agency. They can back it up, move it, manipulate it with other tools, or
    delete it permanently, all without needing permission from a service
    provider. This model empowers users with full control and sovereignty over
-   their own data.1
+   their own data.[^1]
 
 ### Acknowledging the Core Challenge: Eventual Consistency
 
 The profound benefits of the local-first paradigm come with a significant
 architectural trade-off: the abandonment of strong consistency in favor of
-**eventual consistency**.2 In a traditional cloud-first model, the server acts
-as a single, authoritative source of truth, ensuring that all users see a
+**eventual consistency**.[^2] In a traditional cloud-first model, the server
+acts as a single, authoritative source of truth, ensuring that all users see a
 consistent view of the data at all times. In a local-first system, however,
 there are multiple sources of truth—one on each user's device, and potentially
 another on the server.
@@ -109,7 +109,7 @@ arise when two or more users (or the same user on different devices) modify the
 same piece of data independently while offline. When these devices later
 reconnect and attempt to synchronize their changes, the system must have a
 strategy for reconciling the conflicting versions into a single, coherent
-state.2 This is not a problem that can be solved by a single library or
+state.[^2] This is not a problem that can be solved by a single library or
 framework; it is a fundamental business logic challenge that requires careful
 design and consideration, a topic that will be explored in depth in Section 8
 of this report.
@@ -130,8 +130,8 @@ disciplined separation of these two state types.
   condition. Examples of client state include the open or closed status of a
   dialog box, the current values in a multi-step form before submission, the
   application's theme (e.g., light or dark mode), or the selection state of
-  items in a list.6 This state is not persisted remotely and is generally not
-  expected to survive a browser refresh unless explicitly saved to local
+  items in a list.[^6] This state is not persisted remotely and is generally
+  not expected to survive a browser refresh unless explicitly saved to local
   storage for user convenience.
 - **Server State:** This refers to data that is persisted remotely on a server
   and is considered the authoritative source of truth for the application's
@@ -139,7 +139,7 @@ disciplined separation of these two state types.
   cache of this remote data. It is inherently asynchronous, as it must be
   fetched over a network. It is also shared, meaning other users or processes
   can change it without the client's direct knowledge, causing the local cache
-  to become "stale".3 In the context of our local-first architecture, this
+  to become "stale".[^3] In the context of our local-first architecture, this
   "server state" is mirrored and persisted on the client's device, becoming the
   primary data source that the application interacts with, but its lifecycle
   and synchronization challenges remain.
@@ -149,21 +149,21 @@ disciplined separation of these two state types.
 A common architectural mistake, particularly in applications that have grown
 organically, is the attempt to manage both client and server state within a
 single global state management library, such as Redux or even a simple
-implementation using Zustand alone.7 This approach inevitably leads to what can
-be described as a "state management soup," where the distinct lifecycles of the
-two state types become entangled, creating a host of problems.
+implementation using Zustand alone.[^7] This approach inevitably leads to what
+can be described as a "state management soup," where the distinct lifecycles of
+the two state types become entangled, creating a host of problems.
 
 When a client state library is used to store server state, the developer is
 forced to manually re-implement a vast amount of complex logic that is required
 to manage the asynchronous nature of that data. This includes manually tracking
 loading and error states for every network request, implementing caching logic
 to avoid redundant fetches, devising strategies for background data refetching
-to prevent staleness, and handling request deduplication.3 This results in a
+to prevent staleness, and handling request deduplication.[^3] This results in a
 significant amount of boilerplate code and introduces numerous opportunities
 for bugs, such as displaying stale data or creating race conditions. The core
 issue is that libraries designed for managing simple, synchronous client state
 are not equipped with the specialized tools needed to handle the complex,
-asynchronous lifecycle of server state.8
+asynchronous lifecycle of server state.[^8]
 
 ### Introducing the Specialists: Zustand and Tanstack Query
 
@@ -174,23 +174,23 @@ libraries that are purpose-built for their respective domains.
 
 - **Zustand for Client State:** Zustand is a small, fast, and scalable state
   management solution designed for managing client state with minimal
-  boilerplate.10 Its API is based on hooks, making it feel native to the React
-  ecosystem. It is unopinionated, performant by default due to its selective
-  subscription model, and does not require wrapping the application in a
-  context provider.13 These characteristics make it the ideal tool for managing
-  the ephemeral, UI-related state that is owned by the client.
+  boilerplate.[^10] Its API is based on hooks, making it feel native to the
+  React ecosystem. It is unopinionated, performant by default due to its
+  selective subscription model, and does not require wrapping the application
+  in a context provider.[^13] These characteristics make it the ideal tool for
+  managing the ephemeral, UI-related state that is owned by the client.
 - **Tanstack Query for Server State:** Tanstack Query (formerly React Query) is
-  a powerful library for managing server state.3 It is more accurately
+  a powerful library for managing server state.[^3] It is more accurately
   described as a server-state synchronization engine rather than a simple
-  data-fetching library.3 It provides a declarative, hook-based API that
+  data-fetching library.[^3] It provides a declarative, hook-based API that
   automates the difficult challenges of server state management, including
   caching, background updates, request deduplication, and handling loading and
-  error states.3 By offloading these responsibilities to Tanstack Query,
+  error states.[^3] By offloading these responsibilities to Tanstack Query,
   developers can drastically simplify their component logic and build more
   resilient applications. Adopting a dedicated server-state tool like Tanstack
   Query has the profound effect of simplifying and shrinking the amount of
   global client state an application needs, often reducing it to just a few UI
-  flags.6
+  flags.[^6]
 
 This deliberate separation forms the cornerstone of our local-first
 architecture. It allows each library to perform the task for which it was
@@ -211,7 +211,7 @@ easier to maintain at scale.
 
 Zustand's API is intentionally minimalist, centered around a single function:
 `create`. This function takes a "creator" function as an argument, which
-defines the initial state and the actions that can modify it.10 The
+defines the initial state and the actions that can modify it.[^10] The
 
 `create` function returns a custom hook that can be used to access the store
 from any component in the application.
@@ -220,11 +220,11 @@ A key feature of Zustand is its developer-friendly approach to state updates.
 The `set` function, which is provided to the creator function, handles state
 merging by default. This means developers can update a single property of an
 object without needing to manually spread the rest of the state (`{...state}`),
-reducing boilerplate and a common source of errors.10 Furthermore, the creator
-function also receives a
+reducing boilerplate and a common source of errors.[^10] Furthermore, the
+creator function also receives a
 
 `get` function, which allows actions to access the current state, enabling
-complex logic where the next state depends on the current one.10
+complex logic where the next state depends on the current one.[^10]
 
 JavaScript
 
@@ -258,14 +258,14 @@ export default useUIStore;
 
 Connecting a React component to a Zustand store is as simple as calling the
 custom hook returned by `create`. However, the key to achieving optimal
-performance with Zustand lies in the use of the **selector pattern**.11
+performance with Zustand lies in the use of the **selector pattern**.[^11]
 
 Instead of subscribing to the entire state object, which would cause the
 component to re-render whenever _any_ part of the state changes, a selector
 function is passed to the hook. This function "selects" only the specific piece
 of state that the component needs. Zustand then tracks this selected value and
 will only trigger a re-render in the component if that specific value
-changes.11 This granular subscription model is the foundation of Zustand's
+changes.[^11] This granular subscription model is the foundation of Zustand's
 performance and prevents the unnecessary re-renders that can plague other state
 management solutions.
 
@@ -334,7 +334,7 @@ through middleware. Middleware are functions that wrap the creator function,
 augmenting the store's capabilities. One of the most commonly used is the
 `persist` middleware, which provides a simple way to save the store's state to
 a persistent storage layer like `localStorage` or `AsyncStorage` in React
-Native.11
+Native.[^11]
 
 This is particularly useful for client state that should be remembered across
 sessions, such as user preferences or UI settings. The `persist` middleware
@@ -377,13 +377,13 @@ persisting the server state cache in Section 6.
 
 It is a common misconception to view Tanstack Query as merely a data-fetching
 library. While it does manage the process of fetching data, its true power and
-purpose lie in its role as a **server-state synchronization engine**.3 Its
+purpose lie in its role as a **server-state synchronization engine**.[^3] Its
 primary responsibility is to manage the client-side cache of server state,
 ensuring that it remains as synchronized as possible with the remote source of
 truth.
 
 Tanstack Query automates a wide range of complex tasks that are otherwise left
-to the developer to handle manually. These include 3:
+to the developer to handle manually. These include[^3]:
 
 - **Caching:** Storing the results of successful requests in memory to avoid
   redundant network calls for the same data.
@@ -408,7 +408,7 @@ cached query and are often a point of confusion.
 
 - `staleTime`**:** This option determines the duration, in milliseconds, for
   which fetched data is considered "fresh." By default, `staleTime` is `0`,
-  meaning data is considered stale immediately after it is fetched.16 When a
+  meaning data is considered stale immediately after it is fetched.[^16] When a
   query's data is fresh, Tanstack Query will serve it directly from the cache
   without making a network request. When a new component mounts that uses a
   query with stale data, Tanstack Query will return the stale data from the
@@ -417,8 +417,8 @@ cached query and are often a point of confusion.
   change frequently, as it will prevent unnecessary background refetches.
 - `gcTime`**:** This option, formerly known as `cacheTime`, determines the
   duration, in milliseconds, that data for an **inactive** query is kept in the
-  cache before being garbage collected.16 A query becomes inactive when there
-  are no longer any mounted components subscribing to it (i.e., no active
+  cache before being garbage collected.[^16] A query becomes inactive when
+  there are no longer any mounted components subscribing to it (i.e., no active
 
 `useQuery` hooks for that query key). The default `gcTime` is 5 minutes
 (300,000 ms). This means that if a user navigates away from a page, the data
@@ -431,7 +431,7 @@ as the default value is insufficient for offline persistence.
 ### The Power of Query Keys: The Cache's Primary Identifier
 
 The entire mechanism of Tanstack Query is built upon **query keys**. A query
-key is an array that uniquely identifies a piece of data in the cache.16
+key is an array that uniquely identifies a piece of data in the cache.[^16]
 Tanstack Query uses a deterministic hash of this array to manage caching,
 refetching, and invalidation.
 
@@ -447,7 +447,7 @@ This structure allows for powerful and targeted cache invalidations. For
 example, calling `queryClient.invalidateQueries({ queryKey: ['todos'] })` will
 invalidate all queries whose keys start with `'todos'`, including all list and
 detail queries. This is essential for keeping the UI consistent after a
-mutation.20
+mutation.[^20]
 
 ### Implementing Queries and Mutations
 
@@ -458,7 +458,7 @@ The primary interface for interacting with Tanstack Query is through its hooks,
   takes an object with a `queryKey` and a `queryFn` (an async function that
   returns the data) as its primary arguments. It returns an object containing
   the query's state, including derived flags like `isPending`, `isError`, and
-  the `data` itself.3
+  the `data` itself.[^3]
 
 JavaScript
 
@@ -483,7 +483,7 @@ export function useTodos(filters) {
   data. It takes a `mutationFn` as its argument. The returned `mutate` function
   is called to trigger the mutation. A common and powerful pattern is to use
   the `onSuccess` callback to invalidate related queries, which prompts
-  Tanstack Query to automatically refetch the data and keep the UI in sync.15
+  Tanstack Query to automatically refetch the data and keep the UI in sync.[^15]
 
 JavaScript
 
@@ -538,7 +538,7 @@ the application. This means:
   state, form inputs, and other ephemeral data owned by the client.
 
 Under no circumstances should server state be duplicated by storing it in a
-Zustand store.7 Adhering to this principle prevents a wide range of bugs
+Zustand store.[^7] Adhering to this principle prevents a wide range of bugs
 related to data synchronization, stale UIs, and conflicting states.
 
 ### A Layered Architectural Pattern
@@ -546,7 +546,7 @@ related to data synchronization, stale UIs, and conflicting states.
 To enforce this separation of concerns and create a scalable, maintainable
 codebase, a layered architecture is highly recommended. This pattern, inspired
 by clean architecture principles, decouples the various parts of the
-application, making them easier to reason about, test, and modify.8
+application, making them easier to reason about, test, and modify.[^8]
 
 1. **API Layer:** This layer contains simple, reusable functions responsible
    for the raw communication with the backend. These functions typically use
@@ -589,7 +589,8 @@ Because the `queryKey` is reactive, any change to the search term in the
 Zustand store will cause the `queryKey` to change. Tanstack Query detects this
 change and automatically triggers a refetch of the data with the new search
 term. This creates a seamless, declarative data flow that leverages the
-strengths of both libraries without any manual synchronization or effect hooks.7
+strengths of both libraries without any manual synchronization or effect
+hooks.[^7]
 
 JavaScript
 
@@ -657,7 +658,7 @@ function ProductSearch() {
 A common but flawed approach is to use Tanstack Query solely as a data-fetching
 mechanism and then manually push the fetched data into a Zustand store. This is
 typically done using a `useEffect` hook that watches the `data` returned from
-`useQuery` or via the now-deprecated `onSuccess` callback.8
+`useQuery` or via the now-deprecated `onSuccess` callback.[^8]
 
 JavaScript
 
@@ -684,7 +685,7 @@ function ProductComponent() {
 
 ```
 
-This pattern should be avoided for several critical reasons 7:
+This pattern should be avoided for several critical reasons[^7]:
 
 - **It creates two sources of truth:** The data now exists in both Tanstack
   Query's cache and the Zustand store, which will inevitably lead to
@@ -717,7 +718,7 @@ The Tanstack ecosystem provides a dedicated utility for this purpose: the
 `@tanstack/react-query-persist-client` package. Its primary export, the
 `persistQueryClient` function, orchestrates the process of saving the
 `QueryClient`'s state to a chosen storage mechanism and rehydrating it when the
-application loads.25 This utility works in conjunction with a "persister"
+application loads.[^25] This utility works in conjunction with a "persister"
 object, which provides the specific logic for reading from and writing to the
 storage layer.
 
@@ -728,11 +729,11 @@ significant limitations that make it unsuitable for a serious local-first
 application. It has a small storage limit (typically around 5 MB), operates
 synchronously (which can block the main thread), and can only store strings,
 requiring manual serialization and deserialization of complex JavaScript
-objects.27
+objects.[^27]
 
 **IndexedDB** is a far superior choice for this task. It is a low-level,
 asynchronous API for client-side storage of large amounts of structured data.
-Its key advantages include 25:
+Its key advantages include[^25]:
 
 - **Large Storage Capacity:** IndexedDB allows for significantly more storage
   than `localStorage`, often hundreds of megabytes or more, depending on the
@@ -781,10 +782,10 @@ these will lead to a broken or unreliable offline experience.
    "inactive" for longer than this period. If `gcTime` is not increased,
    Tanstack Query's garbage collector will remove the data from the in-memory
    cache, and because the persister maintains a 1:1 mirror of the cache, it
-   will also be removed from IndexedDB.28 To prevent this,
+   will also be removed from IndexedDB.[^28] To prevent this,
 
 `gcTime` must be set to a much higher value, such as 24 hours or even
-`Infinity`, to ensure that offline data is preserved indefinitely.25
+`Infinity`, to ensure that offline data is preserved indefinitely.[^25]
 2. **Using **`PersistQueryClientProvider`** to Prevent Race Conditions:**
    Restoring the cache from an asynchronous storage like IndexedDB takes a
    small amount of time. During this hydration process, components may mount
@@ -795,7 +796,7 @@ these will lead to a broken or unreliable offline experience.
    `QueryClientProvider`. It intelligently pauses all queries, holding them in
    an `idle` state until the asynchronous restoration from storage is complete,
    thereby ensuring that the application always starts with its persisted
-   state.25
+   state.[^25]
 
 JavaScript
 
@@ -837,12 +838,12 @@ Tanstack Query has a built-in `onlineManager` that tracks the network status of
 the application. By default, it operates in an "online" mode. If the
 application goes offline, any attempt to execute a mutation will be paused. The
 mutation will be held in a pending state and will automatically be fired as
-soon as network connectivity is restored.29 This default behavior works
+soon as network connectivity is restored.[^29] This default behavior works
 seamlessly with the persistence layer. A user can perform multiple actions
 while offline; these actions are queued up as paused mutations, and the UI can
 be updated optimistically (as described in the next section). When the user
 comes back online, Tanstack Query will automatically execute the queued
-mutations, synchronizing the local changes with the server.26
+mutations, synchronizing the local changes with the server.[^26]
 
 ## Real-Time Data Flow: Integrating REST and WebSockets
 
@@ -861,14 +862,14 @@ data synchronization layer.
   connection is closed. This model is simple, scalable, and well-supported by
   web infrastructure. It is ideal for standard CRUD (Create, Read, Update,
   Delete) operations, such as fetching the initial state of a resource or
-  submitting a form.31
+  submitting a form.[^31]
 - **WebSockets:** The WebSocket protocol provides a stateful, persistent, and
   bidirectional (full-duplex) communication channel over a single TCP
   connection. Once the initial handshake is complete, the connection remains
   open, allowing both the client and the server to send messages to each other
   at any time with very low latency. This makes WebSockets the ideal choice for
   features that require real-time updates, such as chat applications, live
-  notifications, and collaborative editing environments.31
+  notifications, and collaborative editing environments.[^31]
 
 | Characteristic          | REST (HTTP)                                                                  | WebSocket                                                                                         |
 | ----------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -885,7 +886,7 @@ data synchronization layer.
 Even when using a stateless protocol like REST, it is possible to create a user
 experience that feels instantaneous and aligns with the "no spinners" ideal of
 local-first design. The key technique for achieving this is **optimistic
-updates**.36
+updates**.[^36]
 
 An optimistic update involves updating the client-side UI immediately, _before_
 the server has confirmed that the operation was successful. The application
@@ -970,7 +971,7 @@ WebSockets are the superior choice. Integrating WebSocket messages into the
 Tanstack Query cache can be achieved by establishing a single, application-wide
 WebSocket connection (typically within a top-level component's `useEffect`
 hook) and then using the `queryClient` to update the cache when messages are
-received.37
+received.[^37]
 
 There are two primary strategies for how the server should communicate updates
 and how the client should apply them to the cache. The choice between them
@@ -1059,23 +1060,24 @@ application features involve complex, multi-step processes, intricate user
 flows, or behaviors with a finite number of well-defined states. For these
 scenarios, a more robust solution is needed to prevent bugs and manage
 complexity. This is where XState, a library for creating and managing state
-machines and statecharts, becomes an invaluable addition to our architecture.44
+machines and statecharts, becomes an invaluable addition to our
+architecture.[^44]
 
 ### Introducing XState: Beyond State Management to State Orchestration
 
 XState is not just another state management library; it is a state
-_orchestration_ solution.46 It uses the formal concepts of
+_orchestration_ solution.[^46] It uses the formal concepts of
 
 **finite state machines (FSMs)** and **statecharts** to model application
-logic.47 This approach provides a declarative and predictable way to handle
-complex behavior.47
+logic.[^47] This approach provides a declarative and predictable way to handle
+complex behavior.[^47]
 
-The core concepts include 47:
+The core concepts include[^47]:
 
 - **States:** A finite set of explicit conditions your application or component
   can be in (e.g., `idle`, `loading`, `success`, `error`). A machine can only
   be in one state at a time, which eliminates impossible states and reduces
-  bugs.48
+  bugs.[^48]
 - **Events:** Plain objects that describe something that has happened, which
   can trigger a state change (e.g., `{ type: 'FETCH' }`).
 - **Transitions:** Rules that define how the machine moves from one state to
@@ -1083,34 +1085,34 @@ The core concepts include 47:
 - **Context:** Quantitative data that is stored alongside the qualitative state
   (e.g., a list of items, an error message).
 - **Actors:** Long-running processes or side effects that can be invoked by the
-  machine.47
+  machine.[^47]
 
 By modeling logic this way, XState makes complex flows visualizable, easier to
 reason about, and more robust, especially for features like multi-step forms,
-onboarding flows, or intricate UI interactions.49
+onboarding flows, or intricate UI interactions.[^49]
 
 ### The Division of Labor: XState vs. Zustand
 
 At first glance, XState and Zustand seem to overlap as they both manage client
 state. However, they are designed to solve different classes of problems, and
-understanding their distinct roles is key to using them effectively.51
+understanding their distinct roles is key to using them effectively.[^51]
 
 - **Zustand is for storing _state values_.** It is ideal for simple,
   independent pieces of UI state that don't have complex transition logic.
   Think of it as a lightweight, global key-value store. Examples include the
   status of a modal (`isOpen`), the content of a search input, or a theme
-  preference.52
+  preference.[^52]
 - **XState is for modeling _state flows_.** It excels at managing
   complex, interdependent states where the sequence of operations and the
   transitions between states are critical. It defines the _behavior_ of a
-  system, ensuring that only valid transitions can occur.50
+  system, ensuring that only valid transitions can occur.[^50]
 
 The primary impedance mismatch arises when one tool is used for the other's
 job. Using Zustand to manage a complex wizard can lead to a "boolean
 explosion"—a confusing web of `isLoading`, `isSuccess`, `isError`, `isStepOne`,
-`isStepTwo` flags that can easily result in invalid or impossible states.53
+`isStepTwo` flags that can easily result in invalid or impossible states.[^53]
 Conversely, using XState for a simple theme toggle is overly verbose and adds
-unnecessary complexity.50
+unnecessary complexity.[^50]
 
 The best practice is to use them together, not as mutually exclusive options.
 Use Zustand for simple, global UI state, and introduce XState for specific,
@@ -1119,8 +1121,8 @@ complex components or features that benefit from the rigor of a state machine.
 ### Best Practices for Seamless Integration with Tanstack Query
 
 Integrating XState into our architecture with Tanstack Query follows the same
-core principle: **Tanstack Query owns the server state**.54 The state machine
-should not duplicate this state but rather react to it.
+core principle: **Tanstack Query owns the server state**.[^54] The state
+machine should not duplicate this state but rather react to it.
 
 The most effective pattern is to have the XState machine manage the UI and
 interaction flow, while treating the status of a Tanstack Query hook as a
@@ -1227,7 +1229,7 @@ responsible for the mechanics of data fetching and caching, while XState is
 responsible for orchestrating the user-facing flow, making the component's
 logic explicit and robust. For even tighter integration, the
 `zustand-middleware-xstate` package allows an XState machine to be embedded
-directly within a Zustand store, offering a hybrid approach.55
+directly within a Zustand store, offering a hybrid approach.[^55]
 
 ## Advanced Considerations and Future Frontiers
 
@@ -1236,7 +1238,7 @@ directly within a Zustand store, offering a hybrid approach.55
 The architecture detailed thus far provides a powerful foundation for building
 offline-capable, resilient applications. However, it is crucial to recognize
 that it does not, by itself, solve the most difficult challenge of local-first
-development: **data conflict resolution**.2
+development: **data conflict resolution**.[^2]
 
 Conflicts are an inevitable consequence of eventual consistency. They occur
 when the same piece of data is modified on two different clients while they are
@@ -1265,11 +1267,11 @@ problem that requires a deliberate strategy. Common strategies include:
 - **Conflict-Free Replicated Data Types (CRDTs):** These are advanced data
   structures mathematically designed to merge concurrent changes in a way that
   is guaranteed to converge to the same result on all clients, without
-  conflicts. While powerful, implementing CRDTs can be complex.5
+  conflicts. While powerful, implementing CRDTs can be complex.[^5]
 - **User-Driven Resolution:** In many cases, the only way to correctly resolve
   a conflict is to ask the user. The application's UI can be designed to detect
   and present the conflicting versions to the user, allowing them to manually
-  choose the correct version or merge the changes themselves.5
+  choose the correct version or merge the changes themselves.[^5]
 
 The choice of strategy is highly dependent on the nature of the data and the
 application's requirements. It is a critical design decision that must be
@@ -1282,26 +1284,26 @@ and conflict resolution have highlighted the need for more integrated,
 purpose-built tools. Recognizing this gap, the Tanstack ecosystem is evolving.
 The emergence of **Tanstack DB** represents the logical next step in this
 evolution, providing a higher-level abstraction specifically designed for
-local-first and real-time applications.17
+local-first and real-time applications.[^17]
 
 Tanstack DB builds directly on top of Tanstack Query, extending it with a set
 of primitives that formalize the patterns we have manually constructed in this
-guide 43:
+guide[^43]:
 
 - **Collections:** A formal local store primitive that acts as the client-side
   database. Collections can be populated by Tanstack Query, a real-time sync
   engine, or local-only data, providing a unified interface for all application
-  data.42
+  data.[^42]
 - **Live Queries:** These are reactive queries that run directly against the
   local collections. When the data in a collection changes (whether from a user
   action or a background sync), any component using a live query on that
   collection will automatically and efficiently re-render. This abstracts away
-  the need for manual cache invalidation or updates.42
+  the need for manual cache invalidation or updates.[^42]
 - **Transactional Mutations:** Tanstack DB introduces mutations that are
   transactional, meaning they can be applied atomically across multiple
   collections. They are also more tightly integrated with the lifecycle of a
   sync engine, providing better support for managing optimistic state and
-  rollbacks.42
+  rollbacks.[^42]
 
 The patterns documented in this report are powerful and effective, but they
 require significant manual implementation and a deep understanding of the
@@ -1377,160 +1379,215 @@ an even broader range of applications.
 
 ## Works cited
 
-1. Local-first software: You own your data, in spite of the cloud, accessed on
-   August 20, 2025,
-   [https://www.inkandswitch.com/essay/local-first/](https://www.inkandswitch.com/essay/local-first/)
-2. Why Local-First Software Is the Future and its Limitations | RxDB -
-   JavaScript Database, accessed on August 20, 2025,
-   [https://rxdb.info/articles/local-first-future.html](https://rxdb.info/articles/local-first-future.html)
-3. Overview | TanStack Query React Docs, accessed on August 20, 2025,
-   [https://tanstack.com/query/v5/docs/react/overview](https://tanstack.com/query/v5/docs/react/overview)
-4. Mastering Local-First Apps: The Ultimate Guide to Offline-First Development
-   with Seamless Cloud Sync | by M Mahdi Ramadhan, M. Si | Medium, accessed on
-   August 20, 2025,
-   [https://medium.com/@Mahdi_ramadhan/mastering-local-first-apps-the-ultimate-guide-to-offline-first-development-with-seamless-cloud-be656167f43f](https://medium.com/@Mahdi_ramadhan/mastering-local-first-apps-the-ultimate-guide-to-offline-first-development-with-seamless-cloud-be656167f43f)
-5. Downsides of Local First / Offline First | RxDB - JavaScript Database,
-   accessed on August 20, 2025,
-   [https://rxdb.info/downsides-of-offline-first.html](https://rxdb.info/downsides-of-offline-first.html)
-6. Does TanStack Query replace Redux, MobX or other global state managers?,
-   accessed on August 20, 2025,
-   [https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state](https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state)
-7. Zustand vs tanstack query : r/reactjs - Reddit, accessed on August 20, 2025,
-   [https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/](https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/)
-8. How to structure Next.js project with Zustand and React Query | by ...,
-   accessed on August 20, 2025,
-   [https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe](https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe)
-9. Separating Concerns with Zustand and TanStack Query, accessed on August 20,
-   2025,
-   [https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/](https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/)
-10. React State Management — using Zustand | by Chikku George | Globant -
-    Medium, accessed on August 20, 2025,
-    [https://medium.com/globant/react-state-management-b0c81e0cbbf3](https://medium.com/globant/react-state-management-b0c81e0cbbf3)
-11. Managing React state with Zustand | by Dzmitry Ihnatovich - Medium,
-    accessed on August 20, 2025,
-    [https://medium.com/@ignatovich.dm/managing-react-state-with-zustand-4e4d6bb50722](https://medium.com/@ignatovich.dm/managing-react-state-with-zustand-4e4d6bb50722)
-12. Modernizing Your React Applications: From Redux to Zustand, TanStack Query,
-    and Redux Toolkit - Makepath, accessed on August 20, 2025,
-    [https://makepath.com/modernizing-your-react-applications-from-redux-to-zustand-tanstack-query-and-redux-toolkit/](https://makepath.com/modernizing-your-react-applications-from-redux-to-zustand-tanstack-query-and-redux-toolkit/)
-13. Introduction - Zustand, accessed on August 20, 2025,
-    [https://zustand.docs.pmnd.rs/getting-started/introduction](https://zustand.docs.pmnd.rs/getting-started/introduction)
-14. Zustand vs. RTK Query vs. TanStack Query: Unpacking the React State
-    Management Toolbox | by Imran Rafeek | Medium, accessed on August 20, 2025,
-    [https://medium.com/@imranrafeek/zustand-vs-rtk-query-vs-tanstack-query-unpacking-the-react-state-management-toolbox-d47893479742](https://medium.com/@imranrafeek/zustand-vs-rtk-query-vs-tanstack-query-unpacking-the-react-state-management-toolbox-d47893479742)
-15. TanStack Query: A Powerful Tool for Data Management in React - Medium,
-    accessed on August 20, 2025,
-    [https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c](https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c)
-16. Asynchronous State Management with TanStack Query - Atlantbh Sarajevo,
-    accessed on August 20, 2025,
-    [https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/](https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/)
-17. TanStack | High Quality Open-Source Software for Web Developers, accessed
-    on August 20, 2025, [https://tanstack.com/](https://tanstack.com/)
-18. useQuery | TanStack Query React Docs, accessed on August 20, 2025,
-    [https://tanstack.com/query/v4/docs/react/reference/useQuery](https://tanstack.com/query/v4/docs/react/reference/useQuery)
-19. Cache storage in Tanstack query. Introduction | by Akilesh Rao - JavaScript
-    in Plain English, accessed on August 20, 2025,
-    [https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705](https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705)
-20. Query Invalidation | TanStack Query React Docs, accessed on August 20,
-    2025,
-    [https://tanstack.com/query/v5/docs/react/guides/query-invalidation](https://tanstack.com/query/v5/docs/react/guides/query-invalidation)
-21. React Query Cache Invalidation: Why Your Mutations Work But Your UI Doesn't
-    Update, accessed on August 20, 2025,
-    [https://medium.com/@kennediowusu/react-query-cache-invalidation-why-your-mutations-work-but-your-ui-doesnt-update-a1ad23bc7ef1](https://medium.com/@kennediowusu/react-query-cache-invalidation-why-your-mutations-work-but-your-ui-doesnt-update-a1ad23bc7ef1)
-22. Managing Query Keys for Cache Invalidation in React Query - Wisp CMS,
-    accessed on August 20, 2025,
-    [https://www.wisp.blog/blog/managing-query-keys-for-cache-invalidation-in-react-query](https://www.wisp.blog/blog/managing-query-keys-for-cache-invalidation-in-react-query)
-23. How to use zustand to store the result of a query - Stack Overflow,
-    accessed on August 20, 2025,
-    [https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query](https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query)
-24. Behavior of onSuccess and idea for callbacks · TanStack query · Discussion
-    #5034 - GitHub, accessed on August 20, 2025,
-    [https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
-25. persistQueryClient | TanStack Query React Docs, accessed on August 20,
-    2025,
-    [https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient](https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient)
-26. Building Offline-First React Native Apps with React Query and ..., accessed
-    on August 20, 2025,
-    [https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/](https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/)
-27. Cache Persistence in IndexedDB · TanStack query · Discussion #1638 -
-    GitHub, accessed on August 20, 2025,
-    [https://github.com/TanStack/query/discussions/1638](https://github.com/TanStack/query/discussions/1638)
-28. Understanding offline example · TanStack query · Discussion #4296 - GitHub,
-    accessed on August 20, 2025,
-    [https://github.com/TanStack/query/discussions/4296](https://github.com/TanStack/query/discussions/4296)
-29. Offline caching with AWS Amplify, Tanstack, AppSync and MongoDB Atlas,
-    accessed on August 20, 2025,
-    [https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/](https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/)
-30. Adding Offline Capabilities to React Native Apps with TanStack Query |
-    Benoit Paul, accessed on August 20, 2025,
-    [https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/](https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/)
-31. WebSocket vs REST: Key differences and which to use - Ably, accessed on
-    August 20, 2025,
-    [https://ably.com/topic/websocket-vs-rest](https://ably.com/topic/websocket-vs-rest)
-32. Websocket vs REST when sending data to server - Stack Overflow, accessed on
-    August 20, 2025,
-    [https://stackoverflow.com/questions/45460734/websocket-vs-rest-when-sending-data-to-server](https://stackoverflow.com/questions/45460734/websocket-vs-rest-when-sending-data-to-server)
-33. REST API vs. WebSocket API - JDoodle Blog | Latest Updates, Industry News &
-    more, accessed on August 20, 2025,
-    [https://www.jdoodle.com/blog/rest-vs-websocket](https://www.jdoodle.com/blog/rest-vs-websocket)
-34. What is the difference between RESTful APIs and WebSockets? -
-    [Polygon.io](http://Polygon.io), accessed on August 20, 2025,
-    [https://polygon.io/knowledge-base/article/what-is-the-difference-between-restful-apis-and-websockets](https://polygon.io/knowledge-base/article/what-is-the-difference-between-restful-apis-and-websockets)
-35. TanStack Query and WebSockets: Real-time React data fetching - LogRocket
-    Blog, accessed on August 20, 2025,
-    [https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/](https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/)
-36. Optimistic Updates | TanStack Query React Docs, accessed on August 20,
-    2025,
-    [https://tanstack.com/query/v5/docs/react/guides/optimistic-updates](https://tanstack.com/query/v5/docs/react/guides/optimistic-updates)
-37. TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
-    [https://tanstack.com/query/v4/docs/react/community/tkdodos-blog](https://tanstack.com/query/v4/docs/react/community/tkdodos-blog)
-38. TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
-    [https://tanstack.com/query/latest/docs/react/community/tkdodos-blog](https://tanstack.com/query/latest/docs/react/community/tkdodos-blog)
-39. Using WebSockets with React Query | TkDodo's blog, accessed on August 20,
-    2025,
-    [https://tkdodo.eu/blog/using-web-sockets-with-react-query](https://tkdodo.eu/blog/using-web-sockets-with-react-query)
-40. Using Websockets with React Query - Jon Bellah, accessed on August 20,
-    2025,
-    [https://jonbellah.com/articles/websockets-with-react-query](https://jonbellah.com/articles/websockets-with-react-query)
-41. How do you guys build offline-first apps with React Native? - Reddit,
-    accessed on August 20, 2025,
-    [https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/](https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/)
-42. TanStack/db: A reactive client store for building super fast apps on sync -
-    GitHub, accessed on August 20, 2025,
-    [https://github.com/TanStack/db](https://github.com/TanStack/db)
-43. Local-first sync with TanStack DB and Electric | ElectricSQL, accessed on
-    August 20, 2025,
-    [https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db](https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db)
-44. XState | Stately, accessed on August 21, 2025,
-    [https://stately.ai/docs/xstate](https://stately.ai/docs/xstate)
-45. statelyai/xstate: Actor-based state management & orchestration for complex
-    app logic. - GitHub, accessed on August 21, 2025,
-    [https://github.com/statelyai/xstate](https://github.com/statelyai/xstate)
-46. Do You use XState? Pros and cons? When use it ? : r/reactjs - Reddit,
-    accessed on August 21, 2025,
-    [https://www.reddit.com/r/reactjs/comments/16l39r5/do_you_use_xstate_pros_and_cons_when_use_it/](https://www.reddit.com/r/reactjs/comments/16l39r5/do_you_use_xstate_pros_and_cons_when_use_it/)
-47. XState for React Developers, accessed on August 21, 2025,
-    [https://www.xstateforreactdevelopers.com/](https://www.xstateforreactdevelopers.com/)
-48. Mastering State Management with XState React: Best Practices for Developers
-    - DhiWise, accessed on August 21, 2025,
-    [https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices](https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices)
-49. This Library Makes State Management So Much Easier - YouTube, accessed on
-    August 21, 2025,
-    [https://www.youtube.com/watch?v=s0h34OkEVUE](https://www.youtube.com/watch?v=s0h34OkEVUE)
-50. How do you actually use xstate? : r/reactjs - Reddit, accessed on August
-    21, 2025,
-    [https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/](https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/)
-51. What's the deal with XState? : r/reactjs - Reddit, accessed on August 21,
-    2025,
-    [https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/](https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/)
-52. pmndrs/zustand: Bear necessities for state management in React - GitHub,
-    accessed on August 21, 2025,
-    [https://github.com/pmndrs/zustand](https://github.com/pmndrs/zustand)
-53. Effective State Management in React with XState | by Daniel Oberman |
-    Medium, accessed on August 21, 2025,
-    [https://medium.com/@danieloberman770/effective-state-management-in-react-with-xstate-775d27ee1445](https://medium.com/@danieloberman770/effective-state-management-in-react-with-xstate-775d27ee1445)
-54. How do you use XState with React Query (or other data-fetching/caching
-    libs)? Should they even be used together? : r/reactjs - Reddit, accessed on
-    August 21, 2025,
-    [https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/](https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/)
-55. biowaffeln/zustand-middleware-xstate - GitHub, accessed on August 21, 2025,
-    [https://github.com/biowaffeln/zustand-middleware-xstate](https://github.com/biowaffeln/zustand-middleware-xstate)
+
+[^1] Local-first software: You own your data, in spite of the cloud, accessed
+on August 20, 2025,
+[https://www.inkandswitch.com/essay/local-first/](https://www.inkandswitch.com/essay/local-first/)
+
+[^2] Why Local-First Software Is the Future and its Limitations | RxDB -
+JavaScript Database, accessed on August 20, 2025,
+[https://rxdb.info/articles/local-first-future.html](https://rxdb.info/articles/local-first-future.html)
+
+[^3] Overview | TanStack Query React Docs, accessed on August 20, 2025,
+[https://tanstack.com/query/v5/docs/react/overview](https://tanstack.com/query/v5/docs/react/overview)
+
+[^4] Mastering Local-First Apps: The Ultimate Guide to Offline-First
+Development with Seamless Cloud Sync | by M Mahdi Ramadhan, M. Si | Medium,
+accessed on August 20, 2025,
+[https://medium.com/@Mahdi_ramadhan/mastering-local-first-apps-the-ultimate-guide-to-offline-first-development-with-seamless-cloud-be656167f43f](https://medium.com/@Mahdi_ramadhan/mastering-local-first-apps-the-ultimate-guide-to-offline-first-development-with-seamless-cloud-be656167f43f)
+
+[^5] Downsides of Local First / Offline First | RxDB - JavaScript Database,
+accessed on August 20, 2025,
+[https://rxdb.info/downsides-of-offline-first.html](https://rxdb.info/downsides-of-offline-first.html)
+
+[^6] Does TanStack Query replace Redux, MobX or other global state managers?,
+accessed on August 20, 2025,
+[https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state](https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state)
+
+[^7] Zustand vs tanstack query : r/reactjs - Reddit, accessed on August 20,
+2025,
+[https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/](https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/)
+
+[^8] How to structure Next.js project with Zustand and React Query | by ...,
+accessed on August 20, 2025,
+[https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe](https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe)
+
+[^9] Separating Concerns with Zustand and TanStack Query, accessed on August
+20, 2025,
+[https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/](https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/)
+
+[^10] React State Management — using Zustand | by Chikku George | Globant -
+Medium, accessed on August 20, 2025,
+[https://medium.com/globant/react-state-management-b0c81e0cbbf3](https://medium.com/globant/react-state-management-b0c81e0cbbf3)
+
+[^11] Managing React state with Zustand | by Dzmitry Ihnatovich - Medium,
+accessed on August 20, 2025,
+[https://medium.com/@ignatovich.dm/managing-react-state-with-zustand-4e4d6bb50722](https://medium.com/@ignatovich.dm/managing-react-state-with-zustand-4e4d6bb50722)
+
+[^12] Modernizing Your React Applications: From Redux to Zustand, TanStack
+Query, and Redux Toolkit - Makepath, accessed on August 20, 2025,
+[https://makepath.com/modernizing-your-react-applications-from-redux-to-zustand-tanstack-query-and-redux-toolkit/](https://makepath.com/modernizing-your-react-applications-from-redux-to-zustand-tanstack-query-and-redux-toolkit/)
+
+[^13] Introduction - Zustand, accessed on August 20, 2025,
+[https://zustand.docs.pmnd.rs/getting-started/introduction](https://zustand.docs.pmnd.rs/getting-started/introduction)
+
+[^14] Zustand vs. RTK Query vs. TanStack Query: Unpacking the React State
+Management Toolbox | by Imran Rafeek | Medium, accessed on August 20, 2025,
+[https://medium.com/@imranrafeek/zustand-vs-rtk-query-vs-tanstack-query-unpacking-the-react-state-management-toolbox-d47893479742](https://medium.com/@imranrafeek/zustand-vs-rtk-query-vs-tanstack-query-unpacking-the-react-state-management-toolbox-d47893479742)
+
+[^15] TanStack Query: A Powerful Tool for Data Management in React - Medium,
+accessed on August 20, 2025,
+[https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c](https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c)
+
+[^16] Asynchronous State Management with TanStack Query - Atlantbh Sarajevo,
+accessed on August 20, 2025,
+[https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/](https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/)
+
+[^17] TanStack | High Quality Open-Source Software for Web Developers, accessed
+on August 20, 2025, [https://tanstack.com/](https://tanstack.com/)
+
+[^18] useQuery | TanStack Query React Docs, accessed on August 20, 2025,
+[https://tanstack.com/query/v4/docs/react/reference/useQuery](https://tanstack.com/query/v4/docs/react/reference/useQuery)
+
+[^19] Cache storage in Tanstack query. Introduction | by Akilesh Rao -
+JavaScript in Plain English, accessed on August 20, 2025,
+[https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705](https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705)
+
+[^20] Query Invalidation | TanStack Query React Docs, accessed on August 20,
+2025,
+[https://tanstack.com/query/v5/docs/react/guides/query-invalidation](https://tanstack.com/query/v5/docs/react/guides/query-invalidation)
+
+[^21] React Query Cache Invalidation: Why Your Mutations Work But Your UI
+Doesn't Update, accessed on August 20, 2025,
+[https://medium.com/@kennediowusu/react-query-cache-invalidation-why-your-mutations-work-but-your-ui-doesnt-update-a1ad23bc7ef1](https://medium.com/@kennediowusu/react-query-cache-invalidation-why-your-mutations-work-but-your-ui-doesnt-update-a1ad23bc7ef1)
+
+[^22] Managing Query Keys for Cache Invalidation in React Query - Wisp CMS,
+accessed on August 20, 2025,
+[https://www.wisp.blog/blog/managing-query-keys-for-cache-invalidation-in-react-query](https://www.wisp.blog/blog/managing-query-keys-for-cache-invalidation-in-react-query)
+
+[^23] How to use zustand to store the result of a query - Stack Overflow,
+accessed on August 20, 2025,
+[https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query](https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query)
+
+[^24] Behavior of onSuccess and idea for callbacks · TanStack query · Discussion
+#5034 - GitHub, accessed on August 20, 2025,
+[https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
+
+[^25] persistQueryClient | TanStack Query React Docs, accessed on August 20,
+2025,
+[https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient](https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient)
+
+[^26] Building Offline-First React Native Apps with React Query and ...,
+accessed on August 20, 2025,
+[https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/](https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/)
+
+[^27] Cache Persistence in IndexedDB · TanStack query · Discussion #1638 -
+GitHub, accessed on August 20, 2025,
+[https://github.com/TanStack/query/discussions/1638](https://github.com/TanStack/query/discussions/1638)
+
+[^28] Understanding offline example · TanStack query · Discussion #4296 -
+GitHub, accessed on August 20, 2025,
+[https://github.com/TanStack/query/discussions/4296](https://github.com/TanStack/query/discussions/4296)
+
+[^29] Offline caching with AWS Amplify, Tanstack, AppSync and MongoDB Atlas,
+accessed on August 20, 2025,
+[https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/](https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/)
+
+[^30] Adding Offline Capabilities to React Native Apps with TanStack Query
+| Benoit Paul, accessed on August 20, 2025, [https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/](https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/) |
+
+[^31] WebSocket vs REST: Key differences and which to use - Ably, accessed on
+August 20, 2025,
+[https://ably.com/topic/websocket-vs-rest](https://ably.com/topic/websocket-vs-rest)
+
+[^32] Websocket vs REST when sending data to server - Stack Overflow, accessed
+on August 20, 2025,
+[https://stackoverflow.com/questions/45460734/websocket-vs-rest-when-sending-data-to-server](https://stackoverflow.com/questions/45460734/websocket-vs-rest-when-sending-data-to-server)
+
+[^33] REST API vs. WebSocket API - JDoodle Blog | Latest Updates, Industry News
+& more, accessed on August 20, 2025,
+[https://www.jdoodle.com/blog/rest-vs-websocket](https://www.jdoodle.com/blog/rest-vs-websocket)
+
+[^34] What is the difference between RESTful APIs and WebSockets? -
+[Polygon.io](http://Polygon.io), accessed on August 20, 2025,
+[https://polygon.io/knowledge-base/article/what-is-the-difference-between-restful-apis-and-websockets](https://polygon.io/knowledge-base/article/what-is-the-difference-between-restful-apis-and-websockets)
+
+[^35] TanStack Query and WebSockets: Real-time React data fetching - LogRocket
+Blog, accessed on August 20, 2025,
+[https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/](https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/)
+
+[^36] Optimistic Updates | TanStack Query React Docs, accessed on August 20,
+2025,
+[https://tanstack.com/query/v5/docs/react/guides/optimistic-updates](https://tanstack.com/query/v5/docs/react/guides/optimistic-updates)
+
+[^37] TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
+[https://tanstack.com/query/v4/docs/react/community/tkdodos-blog](https://tanstack.com/query/v4/docs/react/community/tkdodos-blog)
+
+[^38] TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
+[https://tanstack.com/query/latest/docs/react/community/tkdodos-blog](https://tanstack.com/query/latest/docs/react/community/tkdodos-blog)
+
+[^39] Using WebSockets with React Query | TkDodo's blog, accessed on August 20,
+2025,
+[https://tkdodo.eu/blog/using-web-sockets-with-react-query](https://tkdodo.eu/blog/using-web-sockets-with-react-query)
+
+[^40] Using Websockets with React Query - Jon Bellah, accessed on August 20,
+2025,
+[https://jonbellah.com/articles/websockets-with-react-query](https://jonbellah.com/articles/websockets-with-react-query)
+
+[^41] How do you guys build offline-first apps with React Native? - Reddit,
+accessed on August 20, 2025,
+[https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/](https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/)
+
+[^42] TanStack/db: A reactive client store for building super fast apps on sync
+- GitHub, accessed on August 20, 2025,
+[https://github.com/TanStack/db](https://github.com/TanStack/db) [^43]
+Local-first sync with TanStack DB and Electric | ElectricSQL, accessed on
+August 20, 2025,
+[https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db](https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db)
+
+[^44] XState | Stately, accessed on August 21, 2025,
+[https://stately.ai/docs/xstate](https://stately.ai/docs/xstate) [^45]
+statelyai/xstate: Actor-based state management & orchestration for complex app
+logic. - GitHub, accessed on August 21, 2025,
+[https://github.com/statelyai/xstate](https://github.com/statelyai/xstate)
+
+[^46] Do You use XState? Pros and cons? When use it ? : r/reactjs - Reddit,
+accessed on August 21, 2025,
+[https://www.reddit.com/r/reactjs/comments/16l39r5/do_you_use_xstate_pros_and_cons_when_use_it/](https://www.reddit.com/r/reactjs/comments/16l39r5/do_you_use_xstate_pros_and_cons_when_use_it/)
+
+[^47] XState for React Developers, accessed on August 21, 2025,
+[https://www.xstateforreactdevelopers.com/](https://www.xstateforreactdevelopers.com/)
+
+[^48] Mastering State Management with XState React: Best Practices for
+Developers
+- DhiWise, accessed on August 21, 2025,
+[https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices](https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices)
+
+[^49] This Library Makes State Management So Much Easier - YouTube, accessed on
+August 21, 2025,
+[https://www.youtube.com/watch?v=s0h34OkEVUE](https://www.youtube.com/watch?v=s0h34OkEVUE)
+
+[^50] How do you actually use xstate? : r/reactjs - Reddit, accessed on August
+21, 2025,
+[https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/](https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/)
+
+[^51] What's the deal with XState? : r/reactjs - Reddit, accessed on August 21,
+2025,
+[https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/](https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/)
+
+[^52] pmndrs/zustand: Bear necessities for state management in React - GitHub,
+accessed on August 21, 2025,
+[https://github.com/pmndrs/zustand](https://github.com/pmndrs/zustand)
+
+[^53] Effective State Management in React with XState | by Daniel Oberman |
+Medium, accessed on August 21, 2025,
+[https://medium.com/@danieloberman770/effective-state-management-in-react-with-xstate-775d27ee1445](https://medium.com/@danieloberman770/effective-state-management-in-react-with-xstate-775d27ee1445)
+
+[^54] How do you use XState with React Query (or other data-fetching/caching
+libs)? Should they even be used together? : r/reactjs
+- Reddit, accessed on August 21, 2025,
+[https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/](https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/)
+
+[^55] biowaffeln/zustand-middleware-xstate - GitHub, accessed on August 21,
+2025,
+[https://github.com/biowaffeln/zustand-middleware-xstate](https://github.com/biowaffeln/zustand-middleware-xstate)
