@@ -53,16 +53,20 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: myapp-config
-            - secretRef:
-                name: myapp-secrets
-{{- with .Values.config.APP_ENV }}
+          {{- if or .Values.config .Values.secretEnv }}
           env:
-            - name: APP_ENV
-              value: {{ . | quote }}
-{{- end }}
+            {{- range $k, $v := .Values.config }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- range $k, $v := .Values.secretEnv }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Chart.Name }}-secrets
+                  key: {{ $k }}
+            {{- end }}
+          {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
 {{ toYaml . | nindent 12 }}
@@ -105,5 +109,7 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 12
 {{- end }}
+          {{- with .Values.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

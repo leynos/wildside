@@ -11,5 +11,14 @@ spec:
       sourceRef:
         kind: GitRepository
         name: flux-system # Assumes your repo is the 'flux-system' source
+        namespace: flux-system
   # Default values can be specified here, but we will use the chart's defaults
   values: {}
+  install:
+    remediation:
+      retries: 3
+    createNamespace: true
+  upgrade:
+    remediation:
+      retries: 3
+    cleanupOnFail: true

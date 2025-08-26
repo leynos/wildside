@@ -30,6 +30,7 @@ ingress:
 # You can also include default env vars, secrets, etc.
 config:
   APP_ENV: "development"
+secretEnv: {}
 
 securityContext: {}
 

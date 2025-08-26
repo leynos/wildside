@@ -3,8 +3,6 @@
 A practical design for a web application with a Rust/Actix backend and a React \+
 Tailwind/daisyUI PWA frontend. The repo supports:
 
-- Tailwind/daisyUI PWA frontend. The repo supports:
-
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
 - **Design tokens** as a first‑class package powering Tailwind/daisyUI and
@@ -440,11 +438,11 @@ spec:
     spec:
       containers:
       - name: app
-        image: ghcr.io/acme/myapp-backend:{{ .Values.imageTag }}
+        image: {{ `{{ .Values.image.repository }}` }}:{{ `{{ .Values.image.tag | default .Chart.AppVersion }}` }}
         ports: [{ containerPort: 8080 }]
-        envFrom:
-          - configMapRef: { name: myapp-config }
-          - secretRef: { name: myapp-secrets }
+        env:
+          - name: APP_ENV
+            value: {{ `{{ .Values.config.APP_ENV | quote }}` }}
         readinessProbe:
           httpGet: { path: /health/ready, port: 8080 }
         livenessProbe:
@@ -462,10 +460,13 @@ spec:
 ```
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname points
-to the CDN; only `/api` goes to cluster.
+to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap and
+Secret named `<release-name>-config` and `<release-name>-secrets`, populated from
+`.Values.config` and `.Values.secretEnv`.
 
-**Optional:** use a **Helm chart** or **Kustomize** overlays per environment
-(dev/stage/prod) and FluxCD/ArgoCD for GitOps.
+Use the **Helm chart** as the primary packaging. Drive deploys via a Flux
+**HelmRelease** in `deploy/k8s/base`, and apply environment‑specific overrides
+with **Kustomize overlays** that patch `spec.values` (e.g., production).
 
 ### 7.3 CI/CD Outline
 
