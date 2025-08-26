@@ -59,8 +59,8 @@ ensures an application's stability as its complexity grows.
 ### 1.1 The Pure Function Paradigm in React
 
 At its core, the React rendering model is built on the assumption that every
-component behaves as a pure function.[^9] In computer science, a pure function is
-defined by two strict characteristics: first, its return value is determined
+component behaves as a pure function.[^9] In computer science, a pure function
+is defined by two strict characteristics: first, its return value is determined
 exclusively by its input values, and second, it produces no observable side
 effects.[^9] For a React component, the "inputs" are its props, state, and
 context. The "return value" is the JSX that describes the UI. This means that
@@ -72,8 +72,8 @@ entire rendering process. It allows React to make powerful optimizations. If
 the inputs to a component have not changed, React can safely skip re-rendering
 that component and its entire subtree, knowing that the output would be
 identical. This is a primary mechanism for performance enhancement in React
-applications.[^9] The ability to safely cache or memoize the output of a component
-is entirely dependent on its purity.
+applications.[^9] The ability to safely cache or memoize the output of a
+component is entirely dependent on its purity.
 
 This paradigm also underpins React's advanced concurrent features. The renderer
 must be able to pause, abort, or restart a render at any time to prioritize
@@ -99,9 +99,9 @@ application's state. This is one of the most common sources of bugs in React
 applications.[^13]
 
 React enforces a single strict rule: all components must act like pure
-functions with respect to their props, which are to be treated as read-only.[^11]
-To update the UI, one must not mutate pre-existing state objects. Instead, the
-state update function (e.g., the setter from
+functions with respect to their props, which are to be treated as
+read-only.[^11] To update the UI, one must not mutate pre-existing state
+objects. Instead, the state update function (e.g., the setter from
 
 `useState`) must be called with a _new_ object or array. This creates a new
 reference, allowing React's reconciliation process to efficiently and correctly
@@ -124,13 +124,14 @@ and executed outside of the component's main body. React provides two primary
 
 1. **Event Handlers:** These functions execute in response to user
    interactions, such as a button click. They are the ideal place for side
-   effects that are a direct result of a user action, like submitting a form.[^9]
+   effects that are a direct result of a user action, like submitting a
+   form.[^9]
 2. **The **`useEffect`** Hook:** This hook is used for side effects that need
    to synchronize with the component's lifecycle, such as fetching data when
    the component mounts or subscribing to an external data source. The function
    passed to `useEffect` runs _after_ the component has rendered and the DOM
-   has been updated, thereby keeping the render itself pure.[^16] The dependency
-   array of
+   has been updated, thereby keeping the render itself pure.[^16] The
+   dependency array of
 
 `useEffect` provides fine-grained control over when the effect re-runs, and the
 returned cleanup function prevents memory leaks by unsubscribing or canceling
@@ -157,11 +158,11 @@ re-renders if they hadn't changed.[^10]
 
 With the advent of functional components and hooks, this optimization is now
 provided by `React.memo`, a Higher-Order Component (HOC). `React.memo` is the
-recommended modern approach for optimizing functional components.[^10] It wraps a
-component and memoizes its rendered output. Before re-rendering the component,
-React will compare the new props with the previous props. If they are the same
-according to a shallow comparison, React will reuse the memoized result from
-the last render, skipping the re-render entirely.[^10]
+recommended modern approach for optimizing functional components.[^10] It wraps
+a component and memoizes its rendered output. Before re-rendering the
+component, React will compare the new props with the previous props. If they
+are the same according to a shallow comparison, React will reuse the memoized
+result from the last render, skipping the re-render entirely.[^10]
 
 #### Memoization Strategies
 
@@ -205,8 +206,8 @@ in the console, confirming that the re-render was successfully skipped.
 
 `React.memo` accepts an optional second argument: a custom comparison function
 that receives the old and new props and returns `true` if they are equal
-(preventing a re-render).[^10] While this offers granular control, its use should
-be considered an anti-pattern within the proposed architecture.
+(preventing a re-render).[^10] While this offers granular control, its use
+should be considered an anti-pattern within the proposed architecture.
 
 The need for a custom, deep comparison function often indicates an
 architectural smell. It typically arises in two scenarios:
@@ -231,8 +232,8 @@ eliminating the need for custom comparison logic.
 The primary architectural goal of this guide is to create components that are
 completely "free from business logic." This separation of concerns is a
 long-standing principle in software engineering that enhances maintainability,
-reusability, and testability.[^18] In modern React, the custom hook has emerged as
-the definitive pattern for achieving this decoupling, serving as a dedicated
+reusability, and testability.[^18] In modern React, the custom hook has emerged
+as the definitive pattern for achieving this decoupling, serving as a dedicated
 layer for all logic and state management.
 
 ### 2.1 The Custom Hook as the Logic Layer
@@ -241,9 +242,10 @@ The pattern of separating logic from presentation is not new. The classic
 "Container and Presentational Components" pattern, popularized by Dan Abramov,
 advocated for a similar separation where container components managed data and
 logic while presentational components were only concerned with rendering the
-UI.[^18] The introduction of React Hooks provided a more elegant and powerful way
-to implement this separation. The custom hook pattern can be seen as the modern
-evolution of this concept, offering a cleaner and more composable approach.[^18]
+UI.[^18] The introduction of React Hooks provided a more elegant and powerful
+way to implement this separation. The custom hook pattern can be seen as the
+modern evolution of this concept, offering a cleaner and more composable
+approach.[^18]
 
 In this architecture, every non-trivial component is composed of two parts:
 
@@ -346,8 +348,8 @@ impossible by design.
 Consider a component that fetches data. Instead of managing state with multiple
 booleans
 <!-- markdownlint-disable-next-line MD013 -->
-(`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`
- ), an FSM approach would use a single state object:
+(`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`),
+an FSM approach would use a single state object:
 
 ```typescript
 // State definition
@@ -402,9 +404,9 @@ to prevent invalid state transitions.[^24] A
 state machine library like XState goes further by allowing declarative side
 effects, such as an `after` delay for the animation, directly within the state
 <!-- markdownlint-disable-next-line MD013 -->
-definition.[^24] Therefore, for components with non-trivial lifecycles, adopting a
-reducer-based state machine from the outset is a strategic investment in future
-maintainability, even if it appears more verbose initially.
+definition.[^24] Therefore, for components with non-trivial lifecycles,
+adopting a reducer-based state machine from the outset is a strategic
+investment in future maintainability, even if it appears more verbose initially.
 
 The following table provides a framework for selecting the appropriate state
 management hook based on key architectural considerations.
@@ -440,8 +442,8 @@ design system.
 
 Radix primitives are built in strict accordance with the WAI-ARIA (Web
 Accessibility Initiative – Accessible Rich Internet Applications) authoring
-practices.[^1] This means that when a Radix component is used, it comes with the
-correct
+practices.[^1] This means that when a Radix component is used, it comes with
+the correct
 
 `role` and `aria-*` attributes, comprehensive keyboard navigation, and proper
 focus management built-in.[^1] For example, a
@@ -669,9 +671,9 @@ view.
 To build a truly global application, components must be localizable.
 `react-i18next`, built on top of the powerful `i18next` library, is the de
 <!-- markdownlint-disable-next-line MD013 -->
-facto standard for internationalization in the React ecosystem.[^41] It provides a
-complete solution for managing translations, formatting dates and numbers, and
-handling plurals.[^42]
+facto standard for internationalization in the React ecosystem.[^41] It
+provides a complete solution for managing translations, formatting dates and
+numbers, and handling plurals.[^42]
 
 #### Setup and Configuration
 
@@ -801,8 +803,8 @@ user settings.
 **Step-by-Step Implementation:**
 
 1. **Foundation (Behavioral Layer):** The component's structure is defined
-    using Radix UI primitives. `AlertDialog.Root` creates the modal context, and
-    `Form.Root` provides the accessible form structure. This initial step
+    using Radix UI primitives. `AlertDialog.Root` creates the modal context,
+    and `Form.Root` provides the accessible form structure. This initial step
     produces an unstyled but fully functional and accessible component.
 
     ```typescript
@@ -834,16 +836,16 @@ user settings.
 3. **State & Logic (Hook Layer):** A `useUserSettingsForm` hook is created to
     encapsulate all logic.
 
-    - **Localization:** The hook begins by calling `useTranslation('userProfile')`
-      to get the `t` function. It prepares all necessary strings to be returned to
-      the view.
+    - **Localization:** The hook begins by calling
+      `useTranslation('userProfile')` to get the `t` function. It prepares all
+      necessary strings to be returned to the view.
     - **Server State:** It uses `useQuery` to fetch the initial user data and
-      `useMutation` to handle the form submission. The `onSuccess` callback of the
-      mutation invalidates the user query.
-    - **Local State:** It uses `useReducer` to manage the form's state, including
-      input values, validation status, and submission state (e.g., `'submitting'`,
-      `'success'`). The reducer handles actions like `'UPDATE_FIELD'` and
-      `'SET_VALIDATION_ERROR'`.
+      `useMutation` to handle the form submission. The `onSuccess` callback of
+      the mutation invalidates the user query.
+    - **Local State:** It uses `useReducer` to manage the form's state,
+      including input values, validation status, and submission state (e.g.,
+      `'submitting'`, `'success'`). The reducer handles actions like
+      `'UPDATE_FIELD'` and `'SET_VALIDATION_ERROR'`.
 
     ```typescript
     // useUserSettingsForm.ts
@@ -888,8 +890,8 @@ user settings.
 4. **Connecting the View (Synthesis):** The final `UserSettingsModal.view.tsx`
     is a pure presentational component. It is wrapped in `React.memo` and
     receives all its data and callbacks from the `useUserSettingsForm` hook via
-    props. It has no internal logic, no direct calls to state management or data
-    fetching libraries, and no direct knowledge of the i18n system.
+    props. It has no internal logic, no direct calls to state management or
+    data fetching libraries, and no direct knowledge of the i18n system.
 
 This architecture achieves the ultimate separation of concerns. The view
 component is "language-agnostic"; it simply renders the strings it is given.
@@ -1029,8 +1031,8 @@ but also adaptable and maintainable for the future.
 23. To Redux or not to Redux. To useReducer or useState. : r/reactjs - Reddit,
     accessed on 17 August 2025,
     [https://www.reddit.com/r/reactjs/comments/10uf6vf/to_redux_or_not_to_redux_to_usereducer_or_usestate/](https://www.reddit.com/r/reactjs/comments/10uf6vf/to_redux_or_not_to_redux_to_usereducer_or_usestate/)
-24. useState vs useReducer vs XState - Part[^1]: Modals | Stately, accessed on 17
-    August 2025,
+24. useState vs useReducer vs XState - Part[^1]: Modals | Stately, accessed on
+    17 August 2025,
     [https://stately.ai/blog/2021-07-28-usestate-vs-usereducer-vs-xstate-part-1-modals](https://stately.ai/blog/2021-07-28-usestate-vs-usereducer-vs-xstate-part-1-modals)
 25. Reader question: useReducer or XState? - Swizec Teller, accessed on 17
     August 2025,

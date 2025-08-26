@@ -88,9 +88,9 @@ central blocker encountered with Bun, as it allows the selection of
 While Bun's runtime is renowned for its raw JavaScript execution speed, Vitest
 is also architected for performance. It leverages worker threads to run tests
 in parallel and features a highly optimized, instant watch mode that provides
-near-immediate feedback during development.[^15] This performance profile ensures
-that component-level accessibility checks remain exceptionally fast, satisfying
-the core requirement that they should not become a "slow bus" in the
+near-immediate feedback during development.[^15] This performance profile
+ensures that component-level accessibility checks remain exceptionally fast,
+satisfying the core requirement that they should not become a "slow bus" in the
 development workflow.
 
 Furthermore, the transition to Vitest is facilitated by a robust ecosystem. The
@@ -126,8 +126,8 @@ end-to-end testing in a real browser.
 
 The official `axe-core` documentation explicitly states that it offers "limited
 support for JSDOM" and advises that rules known to be incompatible should be
-disabled to prevent inaccurate results.[^2] The most significant and widely-known
-incompatible rule is
+disabled to prevent inaccurate results.[^2] The most significant and
+widely-known incompatible rule is
 
 `color-contrast`. This rule requires the ability to compute the final, rendered
 foreground color of text and the actual background color(s) it is painted on.
@@ -196,12 +196,14 @@ test execution to align with our accessibility-first principles.
 First, we must establish `jsdom` as the default environment for all tests. This
 ensures that browser-like globals such as `document` and `window` are
 available, enabling us to render components and interact with a simulated DOM.
-This is accomplished by setting the `test.environment` property to `'jsdom'`.[^11]
+This is accomplished by setting the `test.environment` property to
+`'jsdom'`.[^11]
 
 Next, to maintain clean and organized tests, we will leverage Vitest's
 `test.setupFiles` option. This property points to a script that runs before
 every test file, making it the ideal location to perform global setup tasks,
-such as extending Vitest's `expect` API with our custom accessibility matcher.[^11]
+such as extending Vitest's `expect` API with our custom accessibility
+matcher.[^11]
 
 To operationalize the "accessibility tests run first" philosophy, we will
 employ a file-naming convention. By creating a distinct pattern for
@@ -909,8 +911,8 @@ These reports should always be uploaded as artifacts in CI for easy access.
 To prevent the team from being overwhelmed by a raw list of violations, a
 structured triage process based on severity is essential. The `axe-core`
 violation object provides an `impact` property, which categorizes each issue as
-`'minor'`, `'moderate'`, `'serious'`, or `'critical'`.[^31] This property is the
-key to automating triage.
+`'minor'`, `'moderate'`, `'serious'`, or `'critical'`.[^31] This property is
+the key to automating triage.
 
 A recommended triage workflow is as follows:
 
@@ -985,7 +987,8 @@ capabilities first and incrementally roll out the complete framework.
       `@testing-library/react`.
     - Create and configure the `vitest.config.ts` file to use the `jsdom`
       environment and specify the test setup file.
-    - Update the `tsconfig.json` to include the new configuration and setup files.
+    - Update the `tsconfig.json` to include the new configuration and setup
+      files.
 
 2. **Phase 2: Core Tooling (1 Day)**
 
@@ -998,25 +1001,25 @@ capabilities first and incrementally roll out the complete framework.
 
     - Select a single, well-defined component (e.g., a Button or an Input).
     - Create a `*.a11y.test.ts` file for this component.
-    - Write the first accessibility tests using the established pattern to validate
-      the entire setup from configuration to assertion.
+    - Write the first accessibility tests using the established pattern to
+      validate the entire setup from configuration to assertion.
 
 4. **Phase 4: E2E Integration (3-5 Days)**
 
     - Install `@axe-core/playwright`.
     - Identify a critical user flow (e.g., login, add to cart).
-    - Implement an initial Playwright test that performs a strategic `axe` scan at
-      a key stable state within that flow.
+    - Implement an initial Playwright test that performs a strategic `axe` scan
+      at a key stable state within that flow.
     - Implement a dedicated Playwright test for keyboard navigation on a primary
       navigation menu or a complex form.
-    - Implement a Playwright accessibility tree snapshot test for a complex, shared
-      component.
+    - Implement a Playwright accessibility tree snapshot test for a complex,
+      shared component.
 
 5. **Phase 5: CI/CD Integration (2-3 Days)**
 
     - Implement the sharded GitHub Actions workflow as detailed in Section 4.1.
-    - Configure the workflow to upload the final HTML reports from both Vitest and
-      Playwright as artifacts.
+    - Configure the workflow to upload the final HTML reports from both Vitest
+      and Playwright as artifacts.
     - Establish branch protection rules to require the E2E tests to pass before
   merging.
 
