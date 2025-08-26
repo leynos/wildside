@@ -104,9 +104,13 @@ myapp/
 │  │  └─ wildside/                    # reusable chart with templates and values
 │  ├─ k8s/                            # HelmReleases and Kustomize overlays
 │  │  ├─ base/                        # base HelmRelease
+│  │  │  ├─ helmrelease.yaml
+│  │  │  └─ kustomization.yaml
 │  │  └─ overlays/
 │  │     └─ production/               # production overrides
-│  ├─ ingress/                        # Ingress and cert-manager manifests
+│  │        ├─ patch-helmrelease-values.yaml
+│  │        └─ kustomization.yaml
+│  ├─ ingress/                        # cert-manager only; app Ingress is templated in the Helm chart
 │  │  ├─ certificate.yaml
 │  │  ├─ cluster-issuer.yaml
 │  │  └─ kustomization.yaml
@@ -132,6 +136,8 @@ classDiagram
       +Pdb pdb
       +Ingress ingress
       +Config config
+      +string nameOverride
+      +string fullnameOverride
       +SecurityContext securityContext
       +Container container
     }

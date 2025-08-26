@@ -1,5 +1,8 @@
 replicaCount: 1
 
+nameOverride: ""
+fullnameOverride: ""
+
 image:
   repository: ghcr.io/acme/myapp-backend
   tag: "latest"

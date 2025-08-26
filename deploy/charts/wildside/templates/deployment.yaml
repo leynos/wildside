@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "wildside.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/name: {{ include "wildside.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: {{ .Chart.Name }}
@@ -17,14 +17,14 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "wildside.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         # Apply standard app labels to pods for observability and policy
         # targeting.
-        app: {{ .Release.Name }}
-        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/name: {{ include "wildside.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: {{ .Chart.Name }}
@@ -36,13 +36,15 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: {{ .Release.Name }}
+              app.kubernetes.io/name: {{ include "wildside.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
-              app: {{ .Release.Name }}
+              app.kubernetes.io/name: {{ include "wildside.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
       containers:
         - name: app
           {{- $tag := .Values.image.tag | default .Chart.AppVersion }}

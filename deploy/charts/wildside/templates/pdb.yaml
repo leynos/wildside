@@ -1,11 +1,16 @@
-{{- if and .Values.pdb.enabled (gt .Values.replicaCount 1) }}
+{{- if .Values.pdb.enabled }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "wildside.fullname" . }}
 spec:
-  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+{{- if ge (int .Values.replicaCount) 2 }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable | default 1 }}
+{{- else }}
+  minAvailable: 1
+{{- end }}
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "wildside.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
