@@ -1,3 +1,5 @@
 extends: default
 ignore: |
-  deploy/charts/**/templates/**
+  **/charts/**/templates/**
+  **/*.tpl
+  **/*.gotmpl

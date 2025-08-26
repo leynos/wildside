@@ -63,7 +63,7 @@ spec:
             - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Chart.Name }}-secrets
+                  name: {{ include "wildside.fullname" $ }}-secret
                   key: {{ $k }}
             {{- end }}
           {{- end }}

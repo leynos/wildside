@@ -13,7 +13,7 @@ sources:
   - https://github.com/leynos/wildside
 maintainers:
   - name: Wildside Team
-    email: dev@wildside.example
-icon: https://example.com/wildside-icon.png
+    email: team@wildside.cc
+icon: https://wildside.cc/assets/icon.png
 # Pin supported Kubernetes versions (example range, adjust as needed)
 kubeVersion: ">=1.26.0-0 <1.32.0-0"

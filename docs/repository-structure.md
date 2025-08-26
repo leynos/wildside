@@ -196,8 +196,8 @@ classDiagram
     Container --> Probe
 ```
 
-> The deployment injects `.Values.config.APP_ENV` into the container as the
-> `APP_ENV` environment variable.
+> The chart converts keys under `.Values.config` into environment variables.
+> Setting `APP_ENV` in `config` exposes it to the container.
 
 ---
 
@@ -260,8 +260,9 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 ## 3) Design Tokens as a First‑Class Package
 
-**Goals:** single source of truth for colours/spacing/typography/radii; drive
-Tailwind/daisyUI and any future native shells.
+**Goals:** single source of truth for
+colours/spacing/typography/radii; drive Tailwind/daisyUI and any
+future native shells.
 
 - `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
   `radius.*`, `font.*`).
@@ -459,10 +460,11 @@ spec:
   ports: [{ port: 80, targetPort: 8080 }]
 ```
 
-**Ingress** points `/api/*` at the Service. The frontend public hostname points
-to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap and
-Secret named `<release-name>-config` and `<release-name>-secrets`, populated from
-`.Values.config` and `.Values.secretEnv`.
+**Ingress** points `/api/*` at the Service. The frontend public hostname
+points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
+named `<release-name>-config` and a Secret named `<release-name>-secret`,
+populated from `.Values.config` and `.Values.secretEnv`. The `<release-name>`
+is computed by the chart's fullname helper.
 
 Use the **Helm chart** as the primary packaging. Drive deploys via a Flux
 **HelmRelease** in `deploy/k8s/base`, and apply environment‑specific overrides
