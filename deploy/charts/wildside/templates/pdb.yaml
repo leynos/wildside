@@ -4,11 +4,7 @@ kind: PodDisruptionBudget
 metadata:
   name: {{ include "wildside.fullname" . }}
 spec:
-{{- if ge (int .Values.replicaCount) 2 }}
-  maxUnavailable: {{ .Values.pdb.maxUnavailable | default 1 }}
-{{- else }}
-  minAvailable: 1
-{{- end }}
+  minAvailable: {{ .Values.pdb.minAvailable | default 1 }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "wildside.name" . }}

@@ -5,7 +5,7 @@ fullnameOverride: ""
 
 image:
   repository: ghcr.io/acme/myapp-backend
-  tag: "latest"
+  tag: ""
   # pullPolicy: IfNotPresent
 
 resources:
@@ -18,7 +18,7 @@ resources:
 
 pdb:
   enabled: true
-  maxUnavailable: 1
+  minAvailable: 1
 
 ingress:
   enabled: true

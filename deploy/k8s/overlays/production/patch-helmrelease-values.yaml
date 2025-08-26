@@ -5,8 +5,8 @@ metadata:
 spec:
   values:
     replicaCount: 3
-    image:
-      tag: "v1.2.3" # Production image tag
+    pdb:
+      minAvailable: 2
     resources:
       requests:
         cpu: "1"

@@ -160,7 +160,7 @@ classDiagram
     }
     class Pdb {
       +bool enabled
-      +int maxUnavailable
+      +int minAvailable
     }
     class Ingress {
       +bool enabled
