@@ -35,9 +35,12 @@ ingress:
 
 # You can also include default env vars, secrets, etc.
 config:
-  # Non-secret configuration only; place secrets under secretEnv
+  # Non-secret configuration only
   APP_ENV: "development"
-secretEnv: {}
+
+# Map environment variables to keys in an existing Secret
+existingSecretName: ""
+secretEnvFromKeys: {}
 
 affinity: {}
 

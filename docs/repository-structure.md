@@ -134,6 +134,8 @@ classDiagram
       +Pdb pdb
       +Ingress ingress
       +Config config
+      +string existingSecretName
+      +SecretEnvFromKeys secretEnvFromKeys
       +string nameOverride
       +string fullnameOverride
       +SecurityContext securityContext
@@ -181,6 +183,9 @@ classDiagram
     class Config {
       +string APP_ENV
     }
+    class SecretEnvFromKeys {
+      +map<string,string> envToKey
+    }
     class SecurityContext {
       +bool runAsNonRoot
       +int runAsUser
@@ -202,6 +207,7 @@ classDiagram
     Values --> Pdb
     Values --> Ingress
     Values --> Config
+    Values --> SecretEnvFromKeys
     Values --> SecurityContext
     Values --> Autoscaling
     Values --> Affinity
@@ -435,8 +441,8 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 
 ### 7.2 Backend on K8s
 
-**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), Secret
-(tokens/DB urls), HPA, PodDisruptionBudget, NetworkPolicy.
+**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), existing
+Secret (tokens/DB URLs), HPA, PodDisruptionBudget, NetworkPolicy.
 
 **Deployment (sketch):**
 
@@ -476,12 +482,13 @@ spec:
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
 points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
-named `<release-name>-config` and a Secret named `<release-name>-secret`,
-populated from `.Values.config` and `.Values.secretEnv`. The `<release-name>`
-is computed by the chart's fullname helper.
+named `<release-name>-config`, populated from `.Values.config`. Secrets are not
+templated; instead, map environment variables to keys in an existing Secret
+through `secretEnvFromKeys` and `existingSecretName`. The `<release-name>` is
+computed by the chart's fullname helper.
 
-`config` is for non-secret settings; place secrets under `secretEnv` so they
-render into the Secret rather than the ConfigMap.
+`config` is for non-secret settings. Supply secret references by setting
+`existingSecretName` and providing key mappings under `secretEnvFromKeys`.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
