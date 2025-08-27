@@ -1,5 +1,6 @@
 SHELL := bash
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint nixie
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test \
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie
 all: fmt lint test
 
 clean:
@@ -59,4 +60,12 @@ nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
 	# environment variable control for this option
 	nixie --no-sandbox
+
+yamllint:
+	command -v helm >/dev/null
+	command -v yamllint >/dev/null
+	helm lint ./deploy/charts/wildside
+	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version 1.31.0 | yamllint -f parsable -
+	[ ! -f deploy/k8s/overlays/production/values.yaml ] || \
+	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f deploy/k8s/overlays/production/values.yaml --kube-version 1.31.0 | yamllint -f parsable -)
 

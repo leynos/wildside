@@ -1,0 +1,3 @@
+skip-check:
+  - id: CKV_SECRET_6
+    comment: "tlsSecretName is not a credential; false positive in HelmRelease values"

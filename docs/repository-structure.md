@@ -3,8 +3,6 @@
 A practical design for a web application with a Rust/Actix backend and a React \+
 Tailwind/daisyUI PWA frontend. The repo supports:
 
-- Tailwind/daisyUI PWA frontend. The repo supports:
-
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
 - **Design tokens** as a first‑class package powering Tailwind/daisyUI and
@@ -100,14 +98,20 @@ myapp/
 │  ├─ docker/                         # Dockerfiles
 │  │  ├─ backend.Dockerfile
 │  │  └─ frontend.Dockerfile
-│  ├─ k8s/                            # manifests and kustomizations
-│  │  ├─ backend/                     # Deployment, Service, ConfigMap/Secret generators, PDB, patches
-│  │  ├─ ingress/                     # Ingress and cert-manager manifests with label kustomization
-│  │  │  ├─ api.yaml
-│  │  │  ├─ certificate.yaml
-│  │  │  ├─ cluster-issuer.yaml
+│  ├─ charts/                         # Helm charts for the application
+│  │  └─ wildside/                    # reusable chart with templates and values
+│  ├─ k8s/                            # HelmReleases and Kustomize overlays
+│  │  ├─ base/                        # base HelmRelease
+│  │  │  ├─ helmrelease.yaml
 │  │  │  └─ kustomization.yaml
-│  │  └─ jobs/                        # migrations, one-off tasks
+│  │  └─ overlays/
+│  │     └─ production/               # production overrides
+│  │        ├─ patch-helmrelease-values.yaml
+│  │        └─ kustomization.yaml
+│  ├─ ingress/                        # cert-manager only; app Ingress is templated in the Helm chart
+│  │  ├─ certificate.yaml
+│  │  ├─ cluster-issuer.yaml
+│  │  └─ kustomization.yaml
 │  └─ scripts/                        # CI/deploy helpers
 │
 ├─ .github/workflows/                 # CI pipelines (lint, build, test, push images)
@@ -115,6 +119,128 @@ myapp/
 ├─ package.json                       # bun workspaces + root scripts
 └─ README.md
 ```
+
+### Helm chart values structure
+
+The Helm chart values file (`values.yaml`) is organized in the following
+hierarchy:
+
+```mermaid
+classDiagram
+    class Values {
+      +int replicaCount
+      +Image image
+      +Resources resources
+      +Service service
+      +Pdb pdb
+      +Ingress ingress
+      +Config config
+      +string existingSecretName
+      +SecretEnvFromKeys secretEnvFromKeys
+      +string nameOverride
+      +string fullnameOverride
+      +PodSecurityContext podSecurityContext
+      +SecurityContext securityContext
+      +Autoscaling autoscaling
+      +Affinity affinity
+      +Container container
+    }
+    class Image {
+      +string repository
+      +string tag
+      +string pullPolicy
+    }
+    class Resources {
+      +Requests requests
+      +Limits limits
+    }
+    class Requests {
+      +string cpu
+      +string memory
+    }
+    class Limits {
+      +string cpu
+      +string memory
+    }
+    class Service {
+      +string type
+      +string portName
+      +int port
+      +string targetPort
+    }
+    class Pdb {
+      +bool enabled
+      +int minAvailable
+    }
+    class Autoscaling {
+      +bool enabled
+      +int minReplicas
+      +int maxReplicas
+      +int targetCPUUtilizationPercentage
+    }
+    class Affinity {
+      +map<string, any> podAntiAffinity
+    }
+    class Ingress {
+      +bool enabled
+      +string className
+      +string hostname
+      +string tlsSecretName
+      +map<string,string> annotations
+    }
+    class Config {
+      +string APP_ENV
+    }
+    class SecretEnvFromKeys {
+      +map<string,string> envToKey
+    }
+    class PodSecurityContext {
+      +SeccompProfile seccompProfile
+      +int fsGroup
+    }
+    class SeccompProfile {
+      +string type
+    }
+    class SecurityContext {
+      +bool runAsNonRoot
+      +int runAsUser
+      +bool allowPrivilegeEscalation
+      +bool readOnlyRootFilesystem
+    }
+    class Container {
+      +Probe livenessProbe
+      +Probe readinessProbe
+      +Probe startupProbe
+    }
+    class Probe {
+      +int timeoutSeconds
+    }
+    Values --> Image
+    Values --> Resources
+    Resources --> Requests
+    Resources --> Limits
+    Values --> Service
+    Values --> Pdb
+    Values --> Ingress
+    Values --> Config
+    Values --> SecretEnvFromKeys
+    Values --> PodSecurityContext
+    Values --> SecurityContext
+    Values --> Autoscaling
+    Values --> Affinity
+    Values --> Container
+    PodSecurityContext --> SeccompProfile
+    Container --> Probe
+```
+
+> The chart converts keys under `.Values.config` into environment variables
+> (see the env block in
+> [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)).
+> Setting `APP_ENV` in `config` exposes it to the container.
+>
+> Apply pod-wide security defaults with `podSecurityContext` (for example,
+> enabling `seccompProfile` and setting `fsGroup`). Container-specific controls
+> remain under `securityContext`.
 
 ---
 
@@ -177,8 +303,9 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 ## 3) Design Tokens as a First‑Class Package
 
-**Goals:** single source of truth for colours/spacing/typography/radii; drive
-Tailwind/daisyUI and any future native shells.
+**Goals:** single source of truth for
+colours/spacing/typography/radii; drive Tailwind/daisyUI and any
+future native shells.
 
 - `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
   `radius.*`, `font.*`).
@@ -337,8 +464,8 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 
 ### 7.2 Backend on K8s
 
-**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), Secret
-(tokens/DB urls), HPA, PodDisruptionBudget, NetworkPolicy.
+**Key objects:** Deployment, Service, ConfigMap (non‑secret settings), existing
+Secret (tokens/DB URLs), HPA, PodDisruptionBudget, NetworkPolicy.
 
 **Deployment (sketch):**
 
@@ -355,11 +482,14 @@ spec:
     spec:
       containers:
       - name: app
-        image: ghcr.io/acme/myapp-backend:{{ .Values.imageTag }}
+        image: {{ `{{ .Values.image.repository }}` }}:{{ `{{ .Values.image.tag | default .Chart.AppVersion }}` }}
         ports: [{ containerPort: 8080 }]
-        envFrom:
-          - configMapRef: { name: myapp-config }
-          - secretRef: { name: myapp-secrets }
+        env:
+          - name: APP_ENV
+            valueFrom:
+              configMapKeyRef:
+                name: {{ `{{ include "wildside.fullname" . }}` }}-config
+                key: APP_ENV
         readinessProbe:
           httpGet: { path: /health/ready, port: 8080 }
         livenessProbe:
@@ -376,11 +506,24 @@ spec:
   ports: [{ port: 80, targetPort: 8080 }]
 ```
 
-**Ingress** points `/api/*` at the Service. The frontend public hostname points
-to the CDN; only `/api` goes to cluster.
+**Ingress** points `/api/*` at the Service. The frontend public hostname
+points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
+named `<release-name>-config`, populated from `.Values.config`; the Deployment
+pulls keys from it with `configMapKeyRef`. Map environment variables to keys in
+an existing Secret through `secretEnvFromKeys` and `existingSecretName`. Avoid
+committing sensitive values to Git; prefer SOPS or an External Secrets
+operator. The `<release-name>` is computed by the chart's fullname helper.
 
-**Optional:** use a **Helm chart** or **Kustomize** overlays per environment
-(dev/stage/prod) and FluxCD/ArgoCD for GitOps.
+`config` is for non-secret settings. Place confidential keys in an external
+Secret and reference them by setting `existingSecretName` and providing key
+mappings under `secretEnvFromKeys`.
+
+> Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
+> Flux HelmRelease values (e.g., the production overlay) when exposing the API.
+
+Use the **Helm chart** as the primary packaging. Drive deploys via a Flux
+**HelmRelease** in `deploy/k8s/base`, and apply environment‑specific overrides
+with **Kustomize overlays** that patch `spec.values` (e.g., production).
 
 ### 7.3 CI/CD Outline
 

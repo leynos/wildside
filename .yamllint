@@ -1,0 +1,8 @@
+extends: default
+ignore: |
+  **/charts/**/templates/**
+  **/*.tpl
+  **/*.gotmpl
+rules:
+  document-start: disable
+  line-length: disable

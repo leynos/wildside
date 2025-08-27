@@ -40,6 +40,18 @@ jobs:
       - name: Mermaid lint
         run: make mermaid-lint
 
+      - name: Setup Helm
+        uses: azure/setup-helm@v3.10.0
+
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+
+      - name: Helm lint
+        run: helm lint ./deploy/charts/wildside
+
+      - name: YAML lint
+        run: make yamllint
+
       # Backend
       - name: Rust build
         run: cargo build --manifest-path backend/Cargo.toml --release
