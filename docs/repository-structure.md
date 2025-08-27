@@ -131,6 +131,7 @@ classDiagram
       +int replicaCount
       +Image image
       +Resources resources
+      +Service service
       +Pdb pdb
       +Ingress ingress
       +Config config
@@ -160,6 +161,12 @@ classDiagram
     class Limits {
       +string cpu
       +string memory
+    }
+    class Service {
+      +string type
+      +string portName
+      +int port
+      +string targetPort
     }
     class Pdb {
       +bool enabled
@@ -212,6 +219,7 @@ classDiagram
     Values --> Resources
     Resources --> Requests
     Resources --> Limits
+    Values --> Service
     Values --> Pdb
     Values --> Ingress
     Values --> Config
@@ -497,16 +505,15 @@ spec:
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
 points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
-named `<release-name>-config`, populated from `.Values.config`. When
-`secretEnv` has entries, a Secret `<release-name>-secrets` is generated and
-referenced by the Deployment. Alternatively, map environment variables to keys
-in an existing Secret through `secretEnvFromKeys` and `existingSecretName`.
-Avoid committing sensitive values to Git; prefer SOPS or an External Secrets
-operator. The `<release-name>` is computed by the chart's fullname helper.
+named `<release-name>-config`, populated from `.Values.config`. Map
+environment variables to keys in an existing Secret through `secretEnvFromKeys`
+and `existingSecretName`. Avoid committing sensitive values to Git; prefer
+SOPS or an External Secrets operator. The `<release-name>` is computed by the
+chart's fullname helper.
 
-`config` is for non-secret settings. Place confidential keys under
-`secretEnv` or reference an existing Secret by setting `existingSecretName` and
-providing key mappings under `secretEnvFromKeys`.
+`config` is for non-secret settings. Place confidential keys in an external
+Secret and reference them by setting `existingSecretName` and providing key
+mappings under `secretEnvFromKeys`.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.

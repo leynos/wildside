@@ -1,5 +1,6 @@
 SHELL := bash
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test check-fmt markdownlint markdownlint-docs mermaid-lint nixie
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test \
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie
 all: fmt lint test
 
 clean:

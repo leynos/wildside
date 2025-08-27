@@ -56,18 +56,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          {{- if or .Values.config .Values.secretEnv .Values.secretEnvFromKeys }}
+          {{- if or .Values.config .Values.secretEnvFromKeys }}
           env:
             {{- range $k, $v := .Values.config }}
             - name: {{ $k }}
               value: {{ $v | quote }}
-            {{- end }}
-            {{- range $k, $v := .Values.secretEnv }}
-            - name: {{ $k }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wildside.fullname" $ }}-secrets
-                  key: {{ $k }}
             {{- end }}
             {{- range $k, $secretKey := .Values.secretEnvFromKeys }}
             - name: {{ $k }}

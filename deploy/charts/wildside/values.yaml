@@ -20,6 +20,12 @@ pdb:
   enabled: true
   minAvailable: 1
 
+service:
+  type: ClusterIP
+  portName: http
+  port: 80
+  targetPort: http
+
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -37,8 +43,6 @@ ingress:
 config:
   # Non-secret configuration only
   APP_ENV: "development"
-
-secretEnv: {}
 
 # Map environment variables to keys in an existing Secret
 existingSecretName: ""
