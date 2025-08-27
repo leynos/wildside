@@ -1,5 +1,11 @@
+/** @file Build Style Dictionary outputs and derive framework presets.
+ * Converts design token sources into CSS variables, Tailwind presets, and
+ * daisyUI themes. Utility functions live alongside build scripts to keep them
+ * small and focused.
+ */
 import fs from 'node:fs';
 import StyleDictionary from 'style-dictionary';
+import { readJson } from './read-json.js';
 
 const sd = new StyleDictionary({
   source: ['src/tokens.json', 'src/themes/*.json'],
@@ -25,7 +31,7 @@ const sd = new StyleDictionary({
 sd.buildAllPlatforms();
 
 // Map tokens into Tailwind and DaisyUI presets
-const tokens = JSON.parse(fs.readFileSync('src/tokens.json', 'utf-8'));
+const tokens = readJson('src/tokens.json');
 const unwrap = (input) =>
   Object.fromEntries(
     Object.entries(input).map(([k, v]) => [
@@ -51,7 +57,7 @@ fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};
 const themesDir = 'src/themes';
 const themeFiles = fs.readdirSync(themesDir).filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
-  const json = JSON.parse(fs.readFileSync(`${themesDir}/${file}`, 'utf-8'));
+  const json = readJson(`${themesDir}/${file}`);
   const semantic = unwrap(json.semantic ?? {});
   return {
     ...(json.name ? { name: json.name } : {}),

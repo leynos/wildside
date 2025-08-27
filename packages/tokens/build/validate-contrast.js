@@ -7,9 +7,10 @@
 import fs from 'node:fs';
 import { contrast } from '../src/utils/color.js';
 import { resolveToken } from '../src/utils/tokens.js';
+import { readJson } from './read-json.js';
 
 // Load package settings for defaults.
-const pkgJson = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const pkgJson = readJson(new URL('../package.json', import.meta.url));
 
 /** Resolve the contrast threshold from CLI, env, or package.json. */
 function getThreshold() {
@@ -37,7 +38,7 @@ const contrastThreshold = getThreshold();
  * aggregation of failures.
  */
 function checkTheme(file, threshold) {
-  const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const json = readJson(file);
   const brand = json.semantic?.brand;
   const accent = json.semantic?.accent;
   const errors = [];
