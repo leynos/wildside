@@ -138,6 +138,7 @@ classDiagram
       +SecretEnvFromKeys secretEnvFromKeys
       +string nameOverride
       +string fullnameOverride
+      +PodSecurityContext podSecurityContext
       +SecurityContext securityContext
       +Autoscaling autoscaling
       +Affinity affinity
@@ -186,6 +187,13 @@ classDiagram
     class SecretEnvFromKeys {
       +map<string,string> envToKey
     }
+    class PodSecurityContext {
+      +SeccompProfile seccompProfile
+      +int fsGroup
+    }
+    class SeccompProfile {
+      +string type
+    }
     class SecurityContext {
       +bool runAsNonRoot
       +int runAsUser
@@ -208,16 +216,23 @@ classDiagram
     Values --> Ingress
     Values --> Config
     Values --> SecretEnvFromKeys
+    Values --> PodSecurityContext
     Values --> SecurityContext
     Values --> Autoscaling
     Values --> Affinity
     Values --> Container
+    PodSecurityContext --> SeccompProfile
     Container --> Probe
 ```
 
 > The chart converts keys under `.Values.config` into environment variables
-> (see [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)
-> lines 55–67). Setting `APP_ENV` in `config` exposes it to the container.
+> (see the env block in
+> [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)).
+> Setting `APP_ENV` in `config` exposes it to the container.
+>
+> Apply pod-wide security defaults with `podSecurityContext` (for example,
+> enabling `seccompProfile` and setting `fsGroup`). Container-specific controls
+> remain under `securityContext`.
 
 ---
 
@@ -483,7 +498,7 @@ spec:
 **Ingress** points `/api/*` at the Service. The frontend public hostname
 points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
 named `<release-name>-config`, populated from `.Values.config`. When
-`secretEnv` has entries, a Secret `<release-name>-secret` is generated and
+`secretEnv` has entries, a Secret `<release-name>-secrets` is generated and
 referenced by the Deployment. Alternatively, map environment variables to keys
 in an existing Secret through `secretEnvFromKeys` and `existingSecretName`.
 Avoid committing sensitive values to Git; prefer SOPS or an External Secrets

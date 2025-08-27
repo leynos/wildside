@@ -27,6 +27,10 @@ spec:
         app.kubernetes.io/part-of: {{ .Chart.Name }}
     spec:
       terminationGracePeriodSeconds: 30
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
@@ -62,7 +66,7 @@ spec:
             - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "wildside.fullname" $ }}-secret
+                  name: {{ include "wildside.fullname" $ }}-secrets
                   key: {{ $k }}
             {{- end }}
             {{- range $k, $secretKey := .Values.secretEnvFromKeys }}

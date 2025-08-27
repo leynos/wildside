@@ -46,6 +46,11 @@ secretEnvFromKeys: {}
 
 affinity: {}
 
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+  fsGroup: 1000
+
 securityContext:
   runAsNonRoot: true
   runAsUser: 10001
