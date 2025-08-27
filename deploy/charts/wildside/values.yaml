@@ -35,12 +35,17 @@ ingress:
 
 # You can also include default env vars, secrets, etc.
 config:
+  # Non-secret configuration only; place secrets under secretEnv
   APP_ENV: "development"
 secretEnv: {}
 
 affinity: {}
 
-securityContext: {}
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
 
 container:
   livenessProbe:

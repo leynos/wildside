@@ -18,6 +18,8 @@ spec:
     securityContext:
       runAsNonRoot: true
       runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
     affinity:
@@ -31,9 +33,6 @@ spec:
             topologyKey: kubernetes.io/hostname
     autoscaling:
       enabled: false
-      minReplicas: 3
-      maxReplicas: 10
-      targetCPUUtilizationPercentage: 70
     ingress:
       enabled: true
       hostname: "prod-api.wildside.cc"

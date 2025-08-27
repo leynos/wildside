@@ -479,6 +479,12 @@ named `<release-name>-config` and a Secret named `<release-name>-secret`,
 populated from `.Values.config` and `.Values.secretEnv`. The `<release-name>`
 is computed by the chart's fullname helper.
 
+`config` is for non-secret settings; place secrets under `secretEnv` so they
+render into the Secret rather than the ConfigMap.
+
+> Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
+> Flux HelmRelease values (e.g., the production overlay) when exposing the API.
+
 Use the **Helm chart** as the primary packaging. Drive deploys via a Flux
 **HelmRelease** in `deploy/k8s/base`, and apply environment‑specific overrides
 with **Kustomize overlays** that patch `spec.values` (e.g., production).

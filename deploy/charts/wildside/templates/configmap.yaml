@@ -3,8 +3,10 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "wildside.fullname" . }}-config
+  labels:
+    {{- include "wildside.labels" . | nindent 4 }}
 data:
-  {{- range $k, $v := .Values.config }}
+{{- range $k, $v := .Values.config }}
   {{ $k }}: {{ $v | quote }}
-  {{- end }}
+{{- end }}
 {{- end }}
