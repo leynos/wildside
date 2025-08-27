@@ -38,6 +38,8 @@ config:
   # Non-secret configuration only
   APP_ENV: "development"
 
+secretEnv: {}
+
 # Map environment variables to keys in an existing Secret
 existingSecretName: ""
 secretEnvFromKeys: {}

@@ -482,13 +482,16 @@ spec:
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
 points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
-named `<release-name>-config`, populated from `.Values.config`. Secrets are not
-templated; instead, map environment variables to keys in an existing Secret
-through `secretEnvFromKeys` and `existingSecretName`. The `<release-name>` is
-computed by the chart's fullname helper.
+named `<release-name>-config`, populated from `.Values.config`. When
+`secretEnv` has entries, a Secret `<release-name>-secret` is generated and
+referenced by the Deployment. Alternatively, map environment variables to keys
+in an existing Secret through `secretEnvFromKeys` and `existingSecretName`.
+Avoid committing sensitive values to Git; prefer SOPS or an External Secrets
+operator. The `<release-name>` is computed by the chart's fullname helper.
 
-`config` is for non-secret settings. Supply secret references by setting
-`existingSecretName` and providing key mappings under `secretEnvFromKeys`.
+`config` is for non-secret settings. Place confidential keys under
+`secretEnv` or reference an existing Secret by setting `existingSecretName` and
+providing key mappings under `secretEnvFromKeys`.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
