@@ -5,18 +5,47 @@ metadata:
   name: {{ include "wildside.fullname" . }}
   labels:
     {{- include "wildside.labels" . | nindent 4 }}
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: {{ include "wildside.fullname" . }}
-  minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
-{{- end }}
+  spec:
+    scaleTargetRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: {{ include "wildside.fullname" . }}
+    minReplicas: {{ .Values.autoscaling.minReplicas }}
+    maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- with .Values.autoscaling.behavior }}
+    behavior:
+      {{- with .scaleUp }}
+      scaleUp:
+        {{- with .stabilizationWindowSeconds }}
+        stabilizationWindowSeconds: {{ . }}
+        {{- end }}
+        {{- with .selectPolicy }}
+        selectPolicy: {{ . }}
+        {{- end }}
+        {{- with .policies }}
+        policies:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      {{- with .scaleDown }}
+      scaleDown:
+        {{- with .stabilizationWindowSeconds }}
+        stabilizationWindowSeconds: {{ . }}
+        {{- end }}
+        {{- with .selectPolicy }}
+        selectPolicy: {{ . }}
+        {{- end }}
+        {{- with .policies }}
+        policies:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}

@@ -31,6 +31,7 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
+  behavior: {}
 
 ingress:
   enabled: false
@@ -57,8 +58,14 @@ podSecurityContext:
 securityContext:
   runAsNonRoot: true
   runAsUser: 10001
+  runAsGroup: 10001
   readOnlyRootFilesystem: true
   allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
 
 container:
   livenessProbe:
