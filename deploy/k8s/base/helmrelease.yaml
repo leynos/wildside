@@ -8,6 +8,8 @@ spec:
     spec:
       # This points to your new chart directory
       chart: ./deploy/charts/wildside
+      reconcileStrategy: Revision
+      interval: 5m
       sourceRef:
         kind: GitRepository
         name: flux-system # Assumes your repo is the 'flux-system' source
