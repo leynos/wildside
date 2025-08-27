@@ -3,6 +3,8 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ include "wildside.fullname" . }}
+  labels:
+    {{- include "wildside.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

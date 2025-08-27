@@ -209,8 +209,9 @@ classDiagram
     Container --> Probe
 ```
 
-> The chart converts keys under `.Values.config` into environment variables.
-> Setting `APP_ENV` in `config` exposes it to the container.
+> The chart converts keys under `.Values.config` into environment variables
+> (see [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)
+> lines 55–67). Setting `APP_ENV` in `config` exposes it to the container.
 
 ---
 

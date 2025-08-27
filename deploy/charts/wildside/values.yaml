@@ -28,7 +28,7 @@ autoscaling:
 
 ingress:
   enabled: false
-  className: "traefik" # Default to your new controller
+  className: "traefik" # Default to controller
   hostname: "api.wildside.cc"
   tlsSecretName: "myapp-api-tls"
   annotations: {}
@@ -43,9 +43,9 @@ affinity: {}
 
 securityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  runAsUser: 10001
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
 
 container:
   livenessProbe:

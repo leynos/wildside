@@ -39,5 +39,3 @@ spec:
       tlsSecretName: wildside-prod-tls
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod
-    config:
-      APP_ENV: "production"

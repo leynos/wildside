@@ -40,6 +40,15 @@ jobs:
       - name: Mermaid lint
         run: make mermaid-lint
 
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: YAML lint
+        run: make yamllint
+
       # Backend
       - name: Rust build
         run: cargo build --manifest-path backend/Cargo.toml --release

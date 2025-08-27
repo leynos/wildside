@@ -3,12 +3,10 @@ kind: Service
 metadata:
   name: {{ include "wildside.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "wildside.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "wildside.labels" . | nindent 4 }}
 spec:
   selector:
-    app.kubernetes.io/name: {{ include "wildside.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "wildside.selectorLabels" . | nindent 4 }}
   ports:
     - name: http
       port: 80
