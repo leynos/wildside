@@ -486,7 +486,10 @@ spec:
         ports: [{ containerPort: 8080 }]
         env:
           - name: APP_ENV
-            value: {{ `{{ .Values.config.APP_ENV | quote }}` }}
+            valueFrom:
+              configMapKeyRef:
+                name: {{ `{{ include "wildside.fullname" . }}` }}-config
+                key: APP_ENV
         readinessProbe:
           httpGet: { path: /health/ready, port: 8080 }
         livenessProbe:
@@ -505,11 +508,11 @@ spec:
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
 points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
-named `<release-name>-config`, populated from `.Values.config`. Map
-environment variables to keys in an existing Secret through `secretEnvFromKeys`
-and `existingSecretName`. Avoid committing sensitive values to Git; prefer
-SOPS or an External Secrets operator. The `<release-name>` is computed by the
-chart's fullname helper.
+named `<release-name>-config`, populated from `.Values.config`; the Deployment
+pulls keys from it with `configMapKeyRef`. Map environment variables to keys in
+an existing Secret through `secretEnvFromKeys` and `existingSecretName`. Avoid
+committing sensitive values to Git; prefer SOPS or an External Secrets
+operator. The `<release-name>` is computed by the chart's fullname helper.
 
 `config` is for non-secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key

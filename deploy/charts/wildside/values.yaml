@@ -39,12 +39,11 @@ ingress:
   tlsSecretName: "myapp-api-tls"
   annotations: {}
 
-# You can also include default env vars, secrets, etc.
+# Non-secret configuration. Keys become environment variables via a ConfigMap.
 config:
-  # Non-secret configuration only
   APP_ENV: "development"
 
-# Map environment variables to keys in an existing Secret
+# Reference an externally managed Secret; map environment variables to keys.
 existingSecretName: ""
 secretEnvFromKeys: {}
 
