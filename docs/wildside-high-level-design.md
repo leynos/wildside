@@ -91,8 +91,9 @@ findings are as follows:
 
 A thorough analysis of the mobile application market reveals that the "walking
 app" space is not a single category but a collection of distinct segments, each
-with different user profiles, value propositions, and monetization strategies[^1]
-Understanding this segmentation is critical to positioning Wildside effectively.
+with different user profiles, value propositions, and monetization
+strategies[^1] Understanding this segmentation is critical to positioning
+Wildside effectively.
 
 #### Segment 1: Fitness & Performance Trackers (Direct/Indirect Competitors)
 
@@ -439,10 +440,11 @@ datasets: OpenStreetMap for geospatial structure and Wikidata for semantic
 meaning.
 
 - **Primary Geospatial Data: OpenStreetMap (OSM):** OSM provides the
-  foundational "canvas" for our world[^9] It supplies the essential data for any
-  mapping application: the complete network of streets, footpaths, and trails;
-  building footprints; and a vast, user-contributed repository of Points of
-  Interest (POIs). The OSM data model is composed of three primary elements:
+  foundational "canvas" for our world[^9] It supplies the essential data for
+  any mapping application: the complete network of streets, footpaths, and
+  trails; building footprints; and a vast, user-contributed repository of
+  Points of Interest (POIs). The OSM data model is composed of three primary
+  elements:
 
   `nodes` (points), `ways` (ordered lists of nodes forming lines or polygons),
   and `relations` (groups of other elements). Each element is described by a
@@ -469,7 +471,8 @@ meaning.
   Victor Horta," allowing for the creation of highly specific and personalized
   thematic walks. The
 
-  `wikidata=*` tag is the critical conduit that makes this symbiosis possible[^10]
+  `wikidata=*` tag is the critical conduit that makes this symbiosis
+  possible[^10]
 
 ### POI Scoring & Personalization Algorithm
 
@@ -686,11 +689,11 @@ technology choices prioritize performance, safety, and productivity.
     compile-time safety. Diesel's macros analyze SQL queries at compile time,
     catching errors like mismatched types or incorrect column names before the
     code is ever run. This significantly increases developer productivity and
-    reduces the likelihood of runtime database errors[^20] While it has a steeper
-    learning curve than simpler database drivers, the safety and expressiveness
-    it provides are invaluable for a complex, data-intensive application. For
-    performance-critical raw SQL, Diesel provides a clear escape hatch,
-    ensuring no loss of capability[^20]
+    reduces the likelihood of runtime database errors[^20] While it has a
+    steeper learning curve than simpler database drivers, the safety and
+    expressiveness it provides are invaluable for a complex, data-intensive
+    application. For performance-critical raw SQL, Diesel provides a clear
+    escape hatch, ensuring no loss of capability[^20]
 
 ### Frontend Application: A Web-First PWA Approach
 
@@ -718,15 +721,16 @@ clear path to native mobile and desktop distribution.
 
 - **UI Components & Styling: DaisyUI with Tailwind CSS**
 
-  - The UI will be built using **DaisyUI**, a plugin for Tailwind CSS[^23] Unlike
-    component libraries that bundle JavaScript, DaisyUI is a pure CSS solution
-    that provides semantic class names (e.g.,
+  - The UI will be built using **DaisyUI**, a plugin for Tailwind CSS[^23]
+    Unlike component libraries that bundle JavaScript, DaisyUI is a pure CSS
+    solution that provides semantic class names (e.g.,
 
     `btn`, `card`) to compose complex components from Tailwind's utility
-    classes[^24] This approach keeps the HTML clean, is highly performant, and is
-    framework-agnostic, which is ideal for the PWA-first strategy[^25] Because
-    DaisyUI is logicless, all state management (e.g., for opening modals) will
-    be handled within React, providing a clean separation of concerns[^26]
+    classes[^24] This approach keeps the HTML clean, is highly performant, and
+    is framework-agnostic, which is ideal for the PWA-first strategy[^25]
+    Because DaisyUI is logicless, all state management (e.g., for opening
+    modals) will be handled within React, providing a clean separation of
+    concerns[^26]
 
 - **Server State Management: TanStack Query (formerly React Query)**
 
@@ -760,9 +764,9 @@ platforms.
   application into a native WebView, providing full access to native device
   APIs through a plugin system[^3] This approach allows for 100% reuse of the
   DaisyUI codebase and is significantly faster and more cost-effective than a
-  full rewrite in a framework like React Native[^7] The primary trade-off is that
-  performance for highly complex animations may not match that of a true native
-  app, as it is rendered in a WebView[^7]
+  full rewrite in a framework like React Native[^7] The primary trade-off is
+  that performance for highly complex animations may not match that of a true
+  native app, as it is rendered in a WebView[^7]
 
 - **Desktop (Tauri):** For a first-class desktop experience on macOS, Windows,
   and Linux, the same web UI will be bundled using **Tauri**[^8] Tauri is a
@@ -869,20 +873,20 @@ is proposed to balance these requirements.
 
 ### Table 2: Technology Stack Recommendation
 
-| Layer              | Technology                          | Rationale                                                                                            | Pros                                                                                             | Cons/Risks                                                                                         |
-| ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| Backend API        | Rust / Actix Web                    | High performance for computationally intensive route generation; memory safety for reliability.      | Blazing fast performance, excellent concurrency, compile-time safety reduces runtime bugs.       | Steeper learning curve for developers; smaller ecosystem than Node.js or Python.                   |
-| Database           | PostgreSQL w/ PostGIS               | Industry-standard for robust relational data and powerful geospatial querying.                       | Mature, reliable, feature-rich. PostGIS is the most capable spatial extension available.         | Requires careful tuning for optimal performance under heavy load.                                  |
-| Flexible Storage   | PostgreSQL JSONB                    | Natively stores and indexes semi-structured OSM tag data within the relational database.             | Combines relational integrity with NoSQL flexibility; powerful indexing capabilities (GIN).      | Query syntax can be less intuitive than dedicated document stores; no column statistics.           |
-| ORM                | Diesel                              | Provides compile-time query validation, preventing a large class of runtime errors.                  | Increased type safety, highly expressive query builder, good performance.                        | Steeper learning curve, can increase compile times, less flexible for dynamic queries.             |
-| Frontend Framework | React (via Vite) as a PWA           | Web-first approach for rapid MVP delivery and maximum code reuse for future mobile/desktop wrappers. | Fast iteration, single codebase for web/mobile/desktop, large ecosystem.                         | Performance in native wrappers may not match true native apps for complex UI.                      |
-| Frontend Language  | TypeScript                          | Static typing for building scalable, maintainable, and less error-prone large applications.          | Catches errors at compile time, improved developer tooling and code navigation.                  | Adds a compilation step; can slightly slow down initial development speed for simple tasks.        |
-| Server State Mgt.  | TanStack Query                      | Modern, hook-based library for simplifying data fetching, caching, and synchronization.              | Reduces boilerplate, automatic background refetching, excellent dev tools.                       | Primarily for server state; still need a solution for complex global client state.                 |
+| Layer              | Technology                          | Rationale                                                                                            | Pros                                                                                               | Cons/Risks                                                                                           |
+| ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Backend API        | Rust / Actix Web                    | High performance for computationally intensive route generation; memory safety for reliability.      | Blazing fast performance, excellent concurrency, compile-time safety reduces runtime bugs.         | Steeper learning curve for developers; smaller ecosystem than Node.js or Python.                     |
+| Database           | PostgreSQL w/ PostGIS               | Industry-standard for robust relational data and powerful geospatial querying.                       | Mature, reliable, feature-rich. PostGIS is the most capable spatial extension available.           | Requires careful tuning for optimal performance under heavy load.                                    |
+| Flexible Storage   | PostgreSQL JSONB                    | Natively stores and indexes semi-structured OSM tag data within the relational database.             | Combines relational integrity with NoSQL flexibility; powerful indexing capabilities (GIN).        | Query syntax can be less intuitive than dedicated document stores; no column statistics.             |
+| ORM                | Diesel                              | Provides compile-time query validation, preventing a large class of runtime errors.                  | Increased type safety, highly expressive query builder, good performance.                          | Steeper learning curve, can increase compile times, less flexible for dynamic queries.               |
+| Frontend Framework | React (via Vite) as a PWA           | Web-first approach for rapid MVP delivery and maximum code reuse for future mobile/desktop wrappers. | Fast iteration, single codebase for web/mobile/desktop, large ecosystem.                           | Performance in native wrappers may not match true native apps for complex UI.                        |
+| Frontend Language  | TypeScript                          | Static typing for building scalable, maintainable, and less error-prone large applications.          | Catches errors at compile time, improved developer tooling and code navigation.                    | Adds a compilation step; can slightly slow down initial development speed for simple tasks.          |
+| Server State Mgt.  | TanStack Query                      | Modern, hook-based library for simplifying data fetching, caching, and synchronization.              | Reduces boilerplate, automatic background refetching, excellent dev tools.                         | Primarily for server state; still need a solution for complex global client state.                   |
 | UI Components      | DaisyUI                             | A lightweight Tailwind CSS plugin providing component classes for rapid, consistent UI development.  | Speeds up development, keeps HTML clean, framework-agnostic, highly customizable via Tailwind[^23] | Logicless (requires manual state management), learning curve for those unfamiliar with Tailwind[^23] |
 | UI Styling         | Tailwind CSS                        | Utility-first CSS for rapid, consistent, and maintainable styling.                                   | Speeds up development, enforces design system consistency, optimized production builds[^23]        | Can lead to verbose HTML; initial learning curve to master utility classes[^37]                      |
-| Map Rendering      | MapLibre GL JS                      | High-performance, open-source vector map rendering for a fluid user experience.                      | Smooth zooming/panning, client-side styling, map rotation, 3D capabilities.                      | More complex API than simpler libraries like Leaflet.                                              |
-| LLM (Intent)       | Local 7B Model (e.g., Mistral)      | Fast, private, and offline-capable intent recognition on the user's device.                          | High performance for simple tasks, no network latency, preserves user privacy.                   | Limited to simpler tasks; requires sufficient device hardware; model management on client.         |
-| LLM (Narrative)    | Cloud API (e.g., Claude 3.5 Sonnet) | Access to state-of-the-art creative generation without prohibitive hardware costs.                   | High-quality output, scalable, no infrastructure maintenance.                                    | Pay-per-token cost can become significant; data privacy concerns; network dependency.              |
+| Map Rendering      | MapLibre GL JS                      | High-performance, open-source vector map rendering for a fluid user experience.                      | Smooth zooming/panning, client-side styling, map rotation, 3D capabilities.                        | More complex API than simpler libraries like Leaflet.                                                |
+| LLM (Intent)       | Local 7B Model (e.g., Mistral)      | Fast, private, and offline-capable intent recognition on the user's device.                          | High performance for simple tasks, no network latency, preserves user privacy.                     | Limited to simpler tasks; requires sufficient device hardware; model management on client.           |
+| LLM (Narrative)    | Cloud API (e.g., Claude 3.5 Sonnet) | Access to state-of-the-art creative generation without prohibitive hardware costs.                   | High-quality output, scalable, no infrastructure maintenance.                                      | Pay-per-token cost can become significant; data privacy concerns; network dependency.                |
 
 ---
 
@@ -1073,7 +1077,8 @@ strategy is strongly recommended over self-hosting.
     developer-friendly, and scale predictably from a small MVP to a production
     workload. They strike an excellent balance between ease of use and cost,
     representing a more modern and often more cost-effective alternative to the
-    complexity of a full AWS setup or the historically higher costs of Heroku[^44]
+    complexity of a full AWS setup or the historically higher costs of
+    Heroku[^44]
 
   - **Frontend-related Web Assets:** Any static web assets, such as the
     application's landing page or documentation, can be deployed for free or at
@@ -1165,12 +1170,12 @@ usage scenarios for the first year of operation.
 | Map Tile Hosting             | AWS S3 + CloudFront         | Pay-as-you-go                      | ~$25                                        | ~$50                                            | ~$150                                         |
 | Cache                        | Redis Cloud                 | Essentials (250 MB)                | $7                                          | $7                                              | $15 (500 MB)                                  |
 | LLM API Usage                | Anthropic Claude 3.5 Sonnet | Pay-as-you-go                      | ~$200                                       | ~$2,000                                         | ~$10,000                                      |
-| Total Estimated Monthly Cost | - | - | ~$283 | ~$2,150 | ~$10,391 |
+| Total Estimated Monthly Cost | -                           | -                                  | ~$283                                       | ~$2,150                                         | ~$10,391                                      |
 
-Note: Cost estimates are based on pricing data from sources , and[^46] LLM costs
-are highly variable and represent the largest financial risk; the estimate
-assumes an average of 2 walks/month per user, 10 POIs per walk, and 1,000
-tokens per POI description at an average cost of $10/M tokens.
+Note: Cost estimates are based on pricing data from sources , and[^46] LLM
+costs are highly variable and represent the largest financial risk; the
+estimate assumes an average of 2 walks/month per user, 10 POIs per walk, and
+1,000 tokens per POI description at an average cost of $10/M tokens.
 
 ---
 
@@ -1431,49 +1436,105 @@ how people experience and connect with the cities around them.
 ## Works cited
 
 [^1]: API Pricing - OpenAI, <https://openai.com/api/pricing/>
-[^2]: ZeLonewolf's Diary | Host an OpenMapTiles Vector Tile Server on AWS for $19.75/month | OpenStreetMap, <https://www.openstreetmap.org/user/ZeLonewolf/diary/401697>
-[^3]: Capacitor vs React Native - Reveation Labs, <https://www.reveation.io/blog/capacitor-vs-react-native>
-[^4]: [2506.08837] Design Patterns for Securing LLM Agents against Prompt Injections - arXiv, <https://arxiv.org/abs/2506.08837>
-[^5]: LLM Chronicles #6.9: Design Patterns for Securing LLM Agents Against Prompt Injection (Paper Review) - YouTube, <https://www.youtube.com/watch?v=2Er7bmyhPfM>
-[^6]: Wikidata for Digital Preservationists, <https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file>
-[^7]: Comparing React Native vs Capacitor - Capgo, <https://capgo.app/blog/comparing-react-native-vs-capacitor/>
-[^8]: The Orienteering Problem: A Review of Variants and Solution Approaches - ResearchGate, <https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches>
-[^9]: Comparing React Native vs. Vue and Capacitor - LogRocket Blog, <https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/>
-[^10]: Tauri vs. Electron: A New Dawn in Desktop App Development – DhruvK_Sethi Medium, <https://medium.com/p/16f13372b8fc>
-[^11]: Comparing Diesel and rust-postgres | by Sean Griffin | HackerNoon.com - Medium, <https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd>
-[^12]: Rust Web Frameworks Compared: Actix vs Axum vs Rocket - DEV Community, <https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad>
-[^13]: Pricing - Anthropic API, <https://docs.anthropic.com/en/docs/about-claude/pricing>
-[^14]: Don't trust the LLM: Rethinking LLM Architectures for Better Security - Mindgard AI, <https://mindgard.ai/blog/llm-architecture-positioning>
-[^15]: Wikidata - OpenStreetMap Wiki, <https://wiki.openstreetmap.org/wiki/Wikidata>
-[^16]: I'm a bit uncertain about what Google OR-Tools is…it *seems* to be some sort of - Hacker News, <https://news.ycombinator.com/item?id=22582688>
-[^17]: JSONB PostgreSQL: How To Store & Index JSON Data - ScaleGrid, <https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/>
-[^18]: 14 Best Walking Trip Planner Apps in 2025 - Upper, <https://www.upperinc.com/blog/best-walking-route-planner-apps/>
-[^19]: TanStack Query: A Powerful Tool for Data Management in React - Medium, <https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c>
-[^20]: How to Monitor Your LLM API Costs and Cut Spending by 90% - Helicone, <https://www.helicone.ai/blog/monitor-and-optimize-llm-costs>
-[^21]: TypeScript vs. JavaScript: Which One to Choose in 2025? - Carmatec, <https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/>
-[^22]: Point-of-interest lists and their potential in recommendation systems - PMC, <https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/>
-[^23]: Osm2pgsql - OpenStreetMap Wiki, <https://wiki.openstreetmap.org/wiki/Osm2pgsql>
-[^24]: Monolith vs. Microservices Architecture - DevZero, <https://www.devzero.io/blog/monolith-vs-microservices>
+[^2]: ZeLonewolf's Diary | Host an OpenMapTiles Vector Tile Server on AWS for
+      $19.75/month | OpenStreetMap,
+      <https://www.openstreetmap.org/user/ZeLonewolf/diary/401697>
+[^3]: Capacitor vs React Native - Reveation Labs,
+      <https://www.reveation.io/blog/capacitor-vs-react-native>
+[^4]: [2506.08837] Design Patterns for Securing LLM Agents against Prompt
+      Injections - arXiv, <https://arxiv.org/abs/2506.08837>
+[^5]: LLM Chronicles #6.9: Design Patterns for Securing LLM Agents Against
+      Prompt Injection (Paper Review) - YouTube,
+      <https://www.youtube.com/watch?v=2Er7bmyhPfM>
+[^6]: Wikidata for Digital Preservationists,
+      <https://www.dpconline.org/docs/technology-watch-reports/2551-thorntonwikidatadpc-revsionthornton/file>
+[^7]: Comparing React Native vs Capacitor - Capgo,
+      <https://capgo.app/blog/comparing-react-native-vs-capacitor/>
+[^8]: The Orienteering Problem: A Review of Variants and Solution Approaches -
+      ResearchGate,
+      <https://www.researchgate.net/publication/367666894_The_Orienteering_Problem_A_Review_of_Variants_and_Solution_Approaches>
+[^9]: Comparing React Native vs. Vue and Capacitor - LogRocket Blog,
+      <https://blog.logrocket.com/comparing-react-native-vs-vue-capacitor/>
+[^10]: Tauri vs. Electron: A New Dawn in Desktop App Development – DhruvK_Sethi
+       Medium, <https://medium.com/p/16f13372b8fc>
+[^11]: Comparing Diesel and rust-postgres | by Sean Griffin | HackerNoon.com -
+       Medium,
+       <https://medium.com/hackernoon/comparing-diesel-and-rust-postgres-97fd8c656fdd>
+[^12]: Rust Web Frameworks Compared: Actix vs Axum vs Rocket - DEV Community,
+       <https://dev.to/leapcell/rust-web-frameworks-compared-actix-vs-axum-vs-rocket-4bad>
+[^13]: Pricing - Anthropic API,
+       <https://docs.anthropic.com/en/docs/about-claude/pricing>
+[^14]: Don't trust the LLM: Rethinking LLM Architectures for Better Security -
+       Mindgard AI, <https://mindgard.ai/blog/llm-architecture-positioning>
+[^15]: Wikidata - OpenStreetMap Wiki,
+       <https://wiki.openstreetmap.org/wiki/Wikidata>
+[^16]: I'm a bit uncertain about what Google OR-Tools is…it *seems* to be some
+       sort of - Hacker News, <https://news.ycombinator.com/item?id=22582688>
+[^17]: JSONB PostgreSQL: How To Store & Index JSON Data - ScaleGrid,
+       <https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/>
+[^18]: 14 Best Walking Trip Planner Apps in 2025 - Upper,
+       <https://www.upperinc.com/blog/best-walking-route-planner-apps/>
+[^19]: TanStack Query: A Powerful Tool for Data Management in React - Medium,
+       <https://medium.com/@ignatovich.dm/tanstack-query-a-powerful-tool-for-data-management-in-react-0c5ae6ef037c>
+[^20]: How to Monitor Your LLM API Costs and Cut Spending by 90% - Helicone,
+       <https://www.helicone.ai/blog/monitor-and-optimize-llm-costs>
+[^21]: TypeScript vs. JavaScript: Which One to Choose in 2025? - Carmatec,
+       <https://www.carmatec.com/blog/typescript-vs-javascript-which-one-to-choose/>
+[^22]: Point-of-interest lists and their potential in recommendation systems -
+       PMC, <https://pmc.ncbi.nlm.nih.gov/articles/PMC7848883/>
+[^23]: Osm2pgsql - OpenStreetMap Wiki,
+       <https://wiki.openstreetmap.org/wiki/Osm2pgsql>
+[^24]: Monolith vs. Microservices Architecture - DevZero,
+       <https://www.devzero.io/blog/monolith-vs-microservices>
 [^25]: Pricing | Render, <https://render.com/pricing>
-[^26]: Render PostgreSQL | FindDevTools, <https://finddev.tools/about/render-postgresql>
-[^27]: Top 11 Multi-Stop Route Planner Apps in 2025, <https://www.upperinc.com/blog/best-multi-stop-route-planner-app/>
-[^28]: Vite vs. Next.js: Features, Comparisons, Pros & Cons, & More - Prismic, <https://prismic.io/blog/vite-vs-nextjs>
-[^29]: An iterated local search algorithm for solving the Orienteering Problem with Time Windows - <InK@SMU.edu>.sg, <https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research>
-[^30]: Asynchronous State Management with TanStack Query - Atlantbh Sarajevo, <https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/>
-[^31]: What is DaisyUI? Advantages, Disadvantages, and FAQ's - By SW Habitation, <https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs>
-[^32]: DaisyUI vs Mantine: Which One is Better in 2025? - Subframe, <https://www.subframe.com/tips/daisyui-vs-mantine>
-[^33]: Daisy UI is a godsend : r/Frontend - Reddit, <https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/>
-[^34]: Visit A City - Apps on Google Play, <https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp>
-[^35]: Self-Hosting vs Managed Hosting - Which Suits Your Business? - MGT Commerce, <https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/>
-[^36]: TypeScript vs JavaScript: Which is Better for Your Next Project? - Medium, <https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499>
-[^37]: How to Balance The Pros and Cons of Tailwind CSS - Blogs - Purecode.AI, <https://blogs.purecode.ai/blogs/pros-cons-tailwind>
-[^38]: Intent Recognition using a LLM with Predefined Intentions | by Ai insightful - Medium, <https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7>
-[^39]: Self Host LLM vs Api LLM : r/AI_Agents - Reddit, <https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/>
-[^40]: Best Walking Apps (2025) - Garage Gym Reviews, <https://www.garagegymreviews.com/best-walking-apps>
-[^41]: PostgreSQL Pricing | DigitalOcean Documentation, <https://docs.digitalocean.com/products/databases/postgresql/details/pricing/>
-[^42]: Heroku Postgres - Add-ons, <https://elements.heroku.com/addons/heroku-postgresql>
-[^43]: A Straightforward Comparison Of Mantine Vs Chakra | Magic UI, <https://magicui.design/blog/mantine-vs-chakra>
-[^44]: Choosing the best graph database for your organization: A practical guide - Linkurious, <https://linkurious.com/blog/choosing-the-best-graph-database/>
-[^45]: LLM Prompt Injection Prevention - OWASP Cheat Sheet Series, <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html>
-[^46]: Vehicle Routing Problem | OR-Tools - Google for Developers, <https://developers.google.com/optimization/routing/vrp>
-[^47]: Prompt Injection Attacks in LLMs: Mitigating Risks with Microsegmentation - ColorTokens, <https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/>
+[^26]: Render PostgreSQL | FindDevTools,
+       <https://finddev.tools/about/render-postgresql>
+[^27]: Top 11 Multi-Stop Route Planner Apps in 2025,
+       <https://www.upperinc.com/blog/best-multi-stop-route-planner-app/>
+[^28]: Vite vs. Next.js: Features, Comparisons, Pros & Cons, & More - Prismic,
+       <https://prismic.io/blog/vite-vs-nextjs>
+[^29]: An iterated local search algorithm for solving the Orienteering Problem
+       with Time Windows - <InK@SMU.edu>.sg,
+       <https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=3794&context=sis_research>
+[^30]: Asynchronous State Management with TanStack Query - Atlantbh Sarajevo,
+       <https://www.atlantbh.com/asynchronous-state-management-with-tanstack-query/>
+[^31]: What is DaisyUI? Advantages, Disadvantages, and FAQ's - By SW
+       Habitation,
+       <https://www.swhabitation.com/blogs/what-is-daisyui-advantages-disadvantages-and-faqs>
+[^32]: DaisyUI vs Mantine: Which One is Better in 2025? - Subframe,
+       <https://www.subframe.com/tips/daisyui-vs-mantine>
+[^33]: Daisy UI is a godsend : r/Frontend - Reddit,
+       <https://www.reddit.com/r/Frontend/comments/1ag8qx3/daisy_ui_is_a_godsend/>
+[^34]: Visit A City - Apps on Google Play,
+       <https://play.google.com/store/apps/details?id=com.visitacity.visitacityapp>
+[^35]: Self-Hosting vs Managed Hosting - Which Suits Your Business? - MGT
+       Commerce,
+       <https://www.mgt-commerce.com/blog/self-hosting-vs-managed-hosting/>
+[^36]: TypeScript vs JavaScript: Which is Better for Your Next Project? -
+       Medium,
+       <https://medium.com/@killoldesai/typescript-vs-javascript-which-is-better-for-your-next-project-23475355e499>
+[^37]: How to Balance The Pros and Cons of Tailwind CSS - Blogs - Purecode.AI,
+       <https://blogs.purecode.ai/blogs/pros-cons-tailwind>
+[^38]: Intent Recognition using a LLM with Predefined Intentions | by Ai
+       insightful - Medium,
+       <https://medium.com/@aiinisghtful/intent-recognition-using-a-llm-with-predefined-intentions-4620284b72f7>
+[^39]: Self Host LLM vs Api LLM : r/AI_Agents - Reddit,
+       <https://www.reddit.com/r/AI_Agents/comments/1kpt89v/self_host_llm_vs_api_llm/>
+[^40]: Best Walking Apps (2025) - Garage Gym Reviews,
+       <https://www.garagegymreviews.com/best-walking-apps>
+[^41]: PostgreSQL Pricing | DigitalOcean Documentation,
+       <https://docs.digitalocean.com/products/databases/postgresql/details/pricing/>
+[^42]: Heroku Postgres - Add-ons,
+       <https://elements.heroku.com/addons/heroku-postgresql>
+[^43]: A Straightforward Comparison Of Mantine Vs Chakra | Magic UI,
+       <https://magicui.design/blog/mantine-vs-chakra>
+[^44]: Choosing the best graph database for your organization: A practical
+       guide - Linkurious,
+       <https://linkurious.com/blog/choosing-the-best-graph-database/>
+[^45]: LLM Prompt Injection Prevention - OWASP Cheat Sheet Series,
+       <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html>
+[^46]: Vehicle Routing Problem | OR-Tools - Google for Developers,
+       <https://developers.google.com/optimization/routing/vrp>
+[^47]: Prompt Injection Attacks in LLMs: Mitigating Risks with
+       Microsegmentation - ColorTokens,
+       <https://colortokens.com/blogs/prompt-injection-attack-llm-microsegmentation/>

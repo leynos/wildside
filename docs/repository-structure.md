@@ -215,8 +215,7 @@ future native shells.
   - optional JS/TS token bundle for RN/NativeWind down the road.
 - `packages/tokens/build/validate-contrast.js`: checks theme colours meet
   the `contrastThreshold` (override via `CONTRAST_THRESHOLD` env or
-  `packages/tokens/package.json`). Uses the `color` library for WCAG
-  contrast.
+  `packages/tokens/package.json`). Uses the `color` library for WCAG contrast.
 
 **Frontend consumption:**
 
@@ -268,8 +267,8 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 
 ### 6.1 Backend (Rust/Actix) — multi‑stage, static (musl) where possible
 
-See [`deploy/docker/backend.Dockerfile`](../deploy/docker/backend.Dockerfile) for
-the canonical image build. Key points:
+See [`deploy/docker/backend.Dockerfile`](../deploy/docker/backend.Dockerfile)
+for the canonical image build. Key points:
 
 - Dependencies are cached before sources are copied to maximize layer reuse.
 - Alpine packages and OpenSSL are version‑pinned for reproducible builds.
@@ -282,10 +281,10 @@ the canonical image build. Key points:
 ### 6.2 Frontend (Vite + Bun) — build once, serve via nginx
 
 The frontend Dockerfile lives at
-[`deploy/docker/frontend.Dockerfile`](../deploy/docker/frontend.Dockerfile).
-It installs workspace dependencies before copying sources so that builds
-benefit from layer caching. The final stage uses `nginx:alpine` to serve the
-compiled `dist/` directory.
+[`deploy/docker/frontend.Dockerfile`](../deploy/docker/frontend.Dockerfile). It
+installs workspace dependencies before copying sources so that builds benefit
+from layer caching. The final stage uses `nginx:alpine` to serve the compiled
+`dist/` directory.
 
 - Version pins for Bun, Nginx, and Alpine are exposed via `BUN_VERSION`,
   `NGINX_VERSION`, and `ALPINE_VERSION` build arguments.
@@ -544,6 +543,6 @@ sequenceDiagram
 - **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
    daisyUI theme.
 - **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
-  CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster.
-This structure keeps contracts central, isolates platform concerns, and allows
-painless evolution from PWA to native shells without a rewrite.
+  CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster. This
+  structure keeps contracts central, isolates platform concerns, and allows
+  painless evolution from PWA to native shells without a rewrite.

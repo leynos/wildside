@@ -179,9 +179,9 @@ resource "digitalocean_kubernetes_cluster" "wildside_cluster" {
 
 This configuration implements several key strategies. It uses a data source to
 dynamically fetch the latest supported patch release for a specific minor
-version (e.g., `1.28.x`).[^6] This ensures the cluster receives security patches
-automatically while preventing unexpected, potentially breaking, major version
-upgrades. The
+version (e.g., `1.28.x`).[^6] This ensures the cluster receives security
+patches automatically while preventing unexpected, potentially breaking, major
+version upgrades. The
 
 `ha = true` flag provisions a highly available control plane, which is
 essential for production workloads.[^8] Furthermore,
@@ -321,7 +321,8 @@ where an application developer could inadvertently break critical cluster
 infrastructure. Furthermore, platform components and applications have
 different release cadences, security requirements, and ownership. A more robust
 and secure architecture separates these concerns into two distinct
-repositories.[^10] This approach is a cornerstone of scalable, multi-team GitOps.
+repositories.[^10] This approach is a cornerstone of scalable, multi-team
+GitOps.
 
 - `wildside-infra` **Repository:** This repository serves as the source of
   truth for the *platform*. It is managed by the platform or DevOps team and
@@ -709,8 +710,8 @@ critical architectural requirement. HashiCorp Vault is the industry standard
 for this purpose.
 
 The External Secrets Operator (ESO) serves as the secure bridge between Vault
-and Kubernetes.[^18] It allows Kubernetes applications and controllers to consume
-secrets stored in Vault as if they were native Kubernetes
+and Kubernetes.[^18] It allows Kubernetes applications and controllers to
+consume secrets stored in Vault as if they were native Kubernetes
 
 `Secret` objects. ESO periodically fetches secrets from Vault and synchronizes
 them into the cluster. This design means that the master Vault token is never
@@ -792,14 +793,14 @@ The implementation involves a three-step process:
 ### Stateful Services for "Project Wildside"
 
 The "Project Wildside" application has specific stateful dependencies: a
-PostGIS-enabled database and a Redis cache.[^21] These are also deployed as shared
-platform services.
+PostGIS-enabled database and a Redis cache.[^21] These are also deployed as
+shared platform services.
 
 #### PostGIS with CloudNativePG
 
 CloudNativePG is a Kubernetes operator that automates the entire lifecycle of a
-PostgreSQL cluster, providing high availability, backup, and recovery.[^22] It is
-particularly well-suited for this project due to its first-class support for
+PostgreSQL cluster, providing high availability, backup, and recovery.[^22] It
+is particularly well-suited for this project due to its first-class support for
 PostGIS.[^23]
 
 First, the operator is deployed via a `HelmRelease`:
@@ -937,8 +938,8 @@ effective and scalable GitOps pattern combines the strengths of both tools.[^26]
    directly to this base `HelmRelease` object.
 
 This approach keeps environment configurations minimal and focused only on the
-differences, making the entire setup more maintainable and declarative.[^27] This
-strategy is implemented within the
+differences, making the entire setup more maintainable and declarative.[^27]
+This strategy is implemented within the
 
 `wildside-apps` repository.
 
@@ -1146,7 +1147,8 @@ permissions:
 
 The workflow triggers on `opened` and `synchronize` (new commits pushed to the
 PR branch) to create or update the environment, and on `closed` (PR merged or
-closed) to tear it down.[^28] It requires permissions to write to a repository (the
+closed) to tear it down.[^28] It requires permissions to write to a repository
+(the
 
 `wildside-apps` repo) and to comment on the pull request.
 
@@ -1515,8 +1517,8 @@ operational practices are recommended:
   is a primary cost-saving measure, it is crucial to enforce resource
   management best practices across all workloads. Define sensible `requests`
   and `limits` for CPU and memory in all Helm charts, as recommended by
-  DigitalOcean.[^7] This allows the Kubernetes scheduler to efficiently pack pods
-  onto nodes and prevents resource contention or starvation.
+  DigitalOcean.[^7] This allows the Kubernetes scheduler to efficiently pack
+  pods onto nodes and prevents resource contention or starvation.
 
 - **Security Hardening:** For a production deployment, the development-mode
   Vault instance should be replaced with a hardened, external Vault cluster
@@ -1567,8 +1569,8 @@ enabling them to innovate and deliver features more rapidly and reliably.
    Community, accessed on August 12, 2025,
    <https://dev.to/tythos/accessible-kubernetes-with-terraform-and-digitalocean-12o>
 
-[^6]: Using Terraform to Set Up a DigitalOcean Kubernetes Cluster ::, accessed on
-   August 12, 2025, <https://lstats.blog/posts/terraform-cloud-doks/>
+[^6]: Using Terraform to Set Up a DigitalOcean Kubernetes Cluster ::, accessed
+      on August 12, 2025, <https://lstats.blog/posts/terraform-cloud-doks/>
 
 [^7]: Kubernetes Best Practices | DigitalOcean Documentation, accessed on August
    12, 2025,
@@ -1581,11 +1583,12 @@ enabling them to innovate and deliver features more rapidly and reliably.
 [^9]: Kubernetes Provider - OpenTofu Registry, accessed on August 12, 2025,
     <https://search.opentofu.org/provider/opentofu/kubernetes/latest>
 
-[^10]: How do you structure repos and folders for gitops? : r/kubernetes - Reddit,
-    accessed on August 12, 2025,
-    <https://www.reddit.com/r/kubernetes/comments/1fvqllb/how_do_you_structure_repos_and_folders_for_gitops/>
+[^10]: How do you structure repos and folders for gitops? : r/kubernetes -
+       Reddit, accessed on August 12, 2025,
+       <https://www.reddit.com/r/kubernetes/comments/1fvqllb/how_do_you_structure_repos_and_folders_for_gitops/>
 
-[^11]: Flux Documentation, accessed on August 12, 2025, <https://fluxcd.io/flux/>
+[^11]: Flux Documentation, accessed on August 12, 2025,
+       <https://fluxcd.io/flux/>
 
 [^12]: Kustomization - Flux, accessed on August 12, 2025,
     <https://fluxcd.io/flux/components/kustomize/kustomizations/>
@@ -1601,12 +1604,13 @@ enabling them to innovate and deliver features more rapidly and reliably.
 [^15]: DNS Validation - cert-manager Documentation, accessed on August 12, 2025,
     <https://cert-manager.io/v1.2-docs/tutorials/acme/dns-validation/>
 
-[^16]: Cert-manager and Cloudflare demo - ELASTX Documentation, accessed on August
-    12, 2025, <https://docs.elastx.cloud/docs/kubernetes/guides/cert-manager/>
+[^16]: Cert-manager and Cloudflare demo - ELASTX Documentation, accessed on
+       August 12, 2025,
+       <https://docs.elastx.cloud/docs/kubernetes/guides/cert-manager/>
 
-[^17]: Connect AWS Secrets Manager and DigitalOcean - StrongDM, accessed on August
-    12, 2025,
-    <https://www.strongdm.com/connect/aws-secrets-manager-digitalocean>
+[^17]: Connect AWS Secrets Manager and DigitalOcean - StrongDM, accessed on
+       August 12, 2025,
+       <https://www.strongdm.com/connect/aws-secrets-manager-digitalocean>
 
 [^18]: How to Configure External Secrets Operator with Vault in DOKS -
     DigitalOcean, accessed on August 12, 2025,
@@ -1638,7 +1642,7 @@ enabling them to innovate and deliver features more rapidly and reliably.
 [^25]: Bitnami Redis chart values, accessed on August 12, 2025,
     <https://github.com/bitnami/charts/blob/main/bitnami/redis/values.yaml>.
 
-[^26]: Helm + Kustomize in GitOps: Building a Scalable Platform with Crossplane -
+[^26]: Helm + Kustomize in GitOps: Building a Scalable Platform with Crossplane
     Medium, accessed on August 12, 2025,
     <https://medium.com/@nishioriental68/helm-kustomize-in-gitops-building-a-scalable-platform-with-crossplane-60e888a8d000>.
 
@@ -1649,21 +1653,22 @@ enabling them to innovate and deliver features more rapidly and reliably.
 [^28]: Workflow syntax for GitHub Actions, accessed on August 12, 2025,
     <https://docs.github.com/actions/reference/workflow-syntax-for-github-actions>.
 
-[^29]: Configure CI/CD for your Rust application - Docker Docs, accessed on August
-    12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>.
+[^29]: Configure CI/CD for your Rust application - Docker Docs, accessed on
+       August 12, 2025, <https://docs.docker.com/guides/rust/configure-ci-cd/>.
 
 [^30]: Optimizing Rust container builds - GitHub Gist, accessed on August 12,
-    2025, <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>.
+    2025,
+    <https://gist.github.com/noelbundick/6922d26667616e2ba5c3aff59f0824cd>.
 
 [^31]: actions/checkout: Action for checking out a repo - GitHub, accessed on
     August 12, 2025, <https://github.com/actions/checkout>.
 
 [^32]: yokawasa/action-setup-kube-tools: GitHub Action that sets up Kubernetes
     tools (kubectl, kustomize, helm, kubeconform, conftest, yq, rancher, tilt,
-    skaffold) very fast and caches them on the runner. Please \[Star\] if you're
-    using it!, accessed on August 12, 2025,
+    skaffold) very fast and caches them on the runner. Please \[Star\] if
+    you're using it!, accessed on August 12, 2025,
     <https://github.com/yokawasa/action-setup-kube-tools>.
 
-[^33]: FluxCD Multi-cluster Architecture | by Stefan Prodan - Medium, accessed on
-    August 12, 2025,
-    <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>.
+[^33]: FluxCD Multi-cluster Architecture | by Stefan Prodan - Medium, accessed
+       on August 12, 2025,
+       <https://medium.com/@stefanprodan/fluxcd-multi-cluster-architecture-e426fb2bca0f>.
