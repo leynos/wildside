@@ -77,7 +77,14 @@ spec:
           {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
-{{- toYaml . | nindent 12 }}
+            runAsNonRoot: {{ .runAsNonRoot }}
+            runAsUser: {{ .runAsUser }}
+            runAsGroup: {{ .runAsGroup }}
+            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
+            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
+            capabilities:
+              drop:
+                - ALL
 {{- end }}
 {{- with .Values.container.readinessProbe }}
           readinessProbe:

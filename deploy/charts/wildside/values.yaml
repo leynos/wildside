@@ -65,8 +65,6 @@ securityContext:
   capabilities:
     drop:
       - ALL
-  seccompProfile:
-    type: RuntimeDefault
 
 container:
   livenessProbe:

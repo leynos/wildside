@@ -48,7 +48,7 @@ jobs:
         run: pip install yamllint==1.35.1
 
       - name: Helm lint
-        run: helm lint ./deploy/charts/wildside
+        run: helm lint --strict ./deploy/charts/wildside
 
       - name: YAML lint
         run: make yamllint

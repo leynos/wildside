@@ -1,9 +1,7 @@
 # Repository Design Guide
 
 A practical design for a Rust/Actix backend and a React plus Tailwind/daisyUI
-PWA frontend.
-
-The repo supports:
+PWA frontend. It supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
@@ -369,22 +367,22 @@ Secret (tokens/DB URLs), HPA, PodDisruptionBudget.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-backend
+  name: {{ include "wildside.fullname" . }}
 spec:
   replicas: 3
-  selector: { matchLabels: { app: myapp-backend } }
+  selector: { matchLabels: { app: {{ include "wildside.name" . }} } }
   template:
-    metadata: { labels: { app: myapp-backend } }
+    metadata: { labels: { app: {{ include "wildside.name" . }} } }
     spec:
       containers:
       - name: app
-        image: {{ `{{ .Values.image.repository }}` }}:{{ `{{ .Values.image.tag | default .Chart.AppVersion }}` }}
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         ports: [{ containerPort: 8080 }]
         env:
           - name: APP_ENV
             valueFrom:
               configMapKeyRef:
-                name: {{ `{{ include "wildside.fullname" . }}` }}-config
+                name: {{ include "wildside.fullname" . }}-config
                 key: APP_ENV
         readinessProbe:
           httpGet: { path: /health/ready, port: 8080 }
@@ -396,21 +394,21 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: myapp-backend }
+metadata: { name: {{ include "wildside.fullname" . }} }
 spec:
-  selector: { app: myapp-backend }
+  selector: { app: {{ include "wildside.name" . }} }
   ports: [{ port: 80, targetPort: 8080 }]
 ```
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
-points to the CDN; only `/api` goes to cluster. The chart renders a ConfigMap
-named `<release-name>-config`, populated from `.Values.config`; the Deployment
-pulls keys from it with `configMapKeyRef`. Map environment variables to keys in
-an existing Secret through `secretEnvFromKeys` and `existingSecretName`. Avoid
-committing sensitive values to Git; prefer SOPS or an External Secrets
-operator. The `<release-name>` is computed by the chart's fullname helper.
+points to the CDN; only `/api` reaches the cluster. The chart renders a
+ConfigMap named `<release-name>-config`, populated from `.Values.config`; the
+Deployment injects keys from it via `configMapKeyRef`. Reference Secret keys
+using `existingSecretName` and `secretEnvFromKeys`; never commit secret
+material to Git—manage it with SOPS or an External Secrets operator. If
+enabled, `tlsSecretName` points at a pre‑provisioned TLS Secret.
 
-`config` is for non-secret settings. Place confidential keys in an external
+`config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
 mappings under `secretEnvFromKeys`.
 
