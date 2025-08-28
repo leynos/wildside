@@ -292,7 +292,7 @@ compiled `dist/` directory.
   storage) behind a CDN.
 - The backend serves only the API; static assets come from CDN or the Nginx
   runtime image.
-- For local dev, you can still run `vite dev` for HMR.
+- For local development, running `vite dev` remains possible for HMR.
 
 ### 6.3 Docker Compose for Local Dev
 
