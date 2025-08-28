@@ -377,7 +377,7 @@ spec:
       containers:
       - name: app
         image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
-        ports: [{ containerPort: 8080 }]
+        ports: [{ name: http, containerPort: 8080 }]
         env:
           - name: APP_ENV
             valueFrom:
@@ -397,7 +397,7 @@ kind: Service
 metadata: { name: {{ include "wildside.fullname" . }} }
 spec:
   selector: { app: {{ include "wildside.name" . }} }
-  ports: [{ port: 80, targetPort: 8080 }]
+  ports: [{ port: 80, targetPort: http }]
 ```
 
 **Ingress** points `/api/*` at the Service. The frontend public hostname
