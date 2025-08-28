@@ -23,15 +23,6 @@ spec:
       runAsGroup: 1000
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
-    affinity:
-      podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-                - key: app.kubernetes.io/instance
-                  operator: In
-                  values: [wildside-app]
-            topologyKey: kubernetes.io/hostname
     autoscaling:
       enabled: false
     ingress:

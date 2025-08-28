@@ -404,17 +404,19 @@ spec:
   ports: [{ port: 80, targetPort: http }]
 ```
 
-**Ingress** points `/api/*` at the Service. The frontend public hostname
+**Ingress** points `/api/*` to the Service. The frontend public hostname
 points to the CDN; only `/api` reaches the cluster. The chart renders a
 ConfigMap named `<release-name>-config`, populated from `.Values.config`; the
 Deployment injects keys from it via `configMapKeyRef`. Reference Secret keys
 using `existingSecretName` and `secretEnvFromKeys`; never commit secret
 material to Git—manage it with SOPS or an External Secrets operator. If
-enabled, `tlsSecretName` points at a pre‑provisioned TLS Secret.
+enabled, `tlsSecretName` points to a pre‑provisioned TLS Secret.
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
-mappings under `secretEnvFromKeys`.
+mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
+enforce this wiring by requiring `existingSecretName` whenever
+`secretEnvFromKeys` is populated.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.

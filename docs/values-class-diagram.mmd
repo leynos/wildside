@@ -39,7 +39,7 @@ classDiagram
       +string portName
       +int port
       +string targetPort
-      +map annotations
+      +map<string,string> annotations
     }
     class Pdb {
       +bool enabled
@@ -106,9 +106,10 @@ classDiagram
       +Probe startupProbe
     }
     class Probe {
-      +int timeoutSeconds
       +int initialDelaySeconds
       +int periodSeconds
+      +int timeoutSeconds
+      +int successThreshold
       +int failureThreshold
     }
     Values --> Image

@@ -117,6 +117,10 @@
     },
     "config": {
       "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._-]{1,253}$"
+      },
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "type": ["string", "number", "boolean"]
