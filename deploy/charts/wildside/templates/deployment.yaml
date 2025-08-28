@@ -25,6 +25,8 @@ spec:
         {{- include "wildside.labels" . | nindent 8 }}
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: {{ .Chart.Name }}
+      annotations:
+        checksum/config: {{ if .Values.config }}{{ toYaml .Values.config | sha256sum }}{{ end }}
     spec:
       terminationGracePeriodSeconds: 30
       {{- with .Values.podSecurityContext }}
@@ -73,18 +75,11 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.existingSecretName }}
                   key: {{ $secretKey }}
-            {{- end }}
           {{- end }}
+        {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
-            runAsNonRoot: {{ .runAsNonRoot }}
-            runAsUser: {{ .runAsUser }}
-            runAsGroup: {{ .runAsGroup }}
-            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
-            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
-            capabilities:
-              drop:
-                - ALL
+{{ toYaml . | replace "drop:\n  -" "drop:\n    -" | nindent 12 }}
 {{- end }}
 {{- with .Values.container.readinessProbe }}
             readinessProbe:

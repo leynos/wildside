@@ -53,7 +53,8 @@
             "required": ["minAvailable", "maxUnavailable"]
           }
         }
-      ]
+      ],
+      "additionalProperties": false
     },
     "service": {
       "type": "object",
@@ -76,8 +77,12 @@
         "minReplicas": {"type": "integer"},
         "maxReplicas": {"type": "integer"},
         "targetCPUUtilizationPercentage": {"type": "integer"},
-        "behavior": {"type": "object"}
-      }
+        "behavior": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "ingress": {
       "type": "object",

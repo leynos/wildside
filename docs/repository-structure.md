@@ -124,7 +124,10 @@ myapp/
 
 The Helm chart values file (`values.yaml`) is organised in the following
 hierarchy. See [values-class-diagram.mmd](values-class-diagram.mmd) for a visual
-overview.
+overview. Validation via
+[`values.schema.json`](../deploy/charts/wildside/values.schema.json) enforces
+cross-field rules (for example, requiring `existingSecretName` when
+`secretEnvFromKeys` is set).
 
 > The chart converts keys under `.Values.config` into environment
 > variables (see the env block in
@@ -359,7 +362,8 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 ### 7.2 Backend on K8s
 
 **Key objects:** Deployment, Service, ConfigMap (non‑secret settings), existing
-Secret (tokens/DB URLs), HPA, PodDisruptionBudget.
+Secret (tokens/DB URLs), HPA, PodDisruptionBudget (rendered only when
+`pdb.enabled` is true and `replicaCount` exceeds 1).
 
 **Deployment (sketch):**
 

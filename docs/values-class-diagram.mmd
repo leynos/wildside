@@ -39,6 +39,7 @@ classDiagram
       +string portName
       +int port
       +string targetPort
+      +map annotations
     }
     class Pdb {
       +bool enabled
@@ -91,8 +92,13 @@ classDiagram
     class SecurityContext {
       +bool runAsNonRoot
       +int runAsUser
+      +int runAsGroup
       +bool allowPrivilegeEscalation
       +bool readOnlyRootFilesystem
+      +Capabilities capabilities
+    }
+    class Capabilities {
+      +string[] drop
     }
     class Container {
       +Probe livenessProbe
@@ -101,6 +107,9 @@ classDiagram
     }
     class Probe {
       +int timeoutSeconds
+      +int initialDelaySeconds
+      +int periodSeconds
+      +int failureThreshold
     }
     Values --> Image
     Values --> Resources
@@ -121,3 +130,4 @@ classDiagram
     ScalePolicy --> Policy
     PodSecurityContext --> SeccompProfile
     Container --> Probe
+    SecurityContext --> Capabilities

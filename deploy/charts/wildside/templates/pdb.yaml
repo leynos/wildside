@@ -6,7 +6,18 @@ metadata:
   labels:
     {{- include "wildside.labels" . | nindent 4 }}
 spec:
-  minAvailable: {{ .Values.pdb.minAvailable | default 0 }}
+{{- $hasMin := hasKey .Values.pdb "minAvailable" -}}
+{{- $hasMax := hasKey .Values.pdb "maxUnavailable" -}}
+{{- if and $hasMin $hasMax -}}
+  {{- fail "Set only one of pdb.minAvailable or pdb.maxUnavailable" -}}
+{{- end }}
+{{- if $hasMin }}
+  minAvailable: {{ .Values.pdb.minAvailable }}
+{{- else if $hasMax }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+{{- else }}
+  minAvailable: 0
+{{- end }}
   selector:
     matchLabels:
       {{- include "wildside.selectorLabels" . | nindent 6 }}
