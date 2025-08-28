@@ -1,7 +1,9 @@
 # Repository Design Guide
 
-A practical design for a web application with a Rust/Actix backend and a React \+
-Tailwind/daisyUI PWA frontend. The repo supports:
+A practical design for a Rust/Actix backend and a React plus Tailwind/daisyUI
+PWA frontend.
+
+The repo supports:
 
 - Rust→OpenAPI→TypeScript client generation via **utoipa** + **orval**.
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
@@ -126,14 +128,15 @@ The Helm chart values file (`values.yaml`) is organised in the following
 hierarchy. See [values-class-diagram.mmd](values-class-diagram.mmd) for a visual
 overview.
 
-> The chart converts keys under `.Values.config` into environment variables
-> (see the env block in
-> [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)).
+> The chart converts keys under `.Values.config` into environment
+> variables (see the env block in
+> [`deploy/charts/wildside/templates/deployment.yaml`](
+> ../deploy/charts/wildside/templates/deployment.yaml)).
 > Setting `APP_ENV` in `config` exposes it to the container.
 >
-> Apply pod-wide security defaults with `podSecurityContext` (for example,
-> enabling `seccompProfile` and setting `fsGroup`). Container-specific controls
-> remain under `securityContext`.
+> Apply pod-wide security defaults with `podSecurityContext`
+> (for example, enabling `seccompProfile` and setting `fsGroup`).
+> Container-specific controls remain under `securityContext`.
 
 ---
 
@@ -358,7 +361,7 @@ rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
 ### 7.2 Backend on K8s
 
 **Key objects:** Deployment, Service, ConfigMap (non‑secret settings), existing
-Secret (tokens/DB URLs), HPA, PodDisruptionBudget, NetworkPolicy.
+Secret (tokens/DB URLs), HPA, PodDisruptionBudget.
 
 **Deployment (sketch):**
 

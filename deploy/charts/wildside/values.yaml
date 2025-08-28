@@ -25,6 +25,7 @@ service:
   portName: http
   port: 80
   targetPort: http
+  annotations: {}
 
 autoscaling:
   enabled: false

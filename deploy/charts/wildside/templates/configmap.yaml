@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "wildside.labels" . | nindent 4 }}
 data:
-{{ range $key, $value := .Values.config }}
-  {{ $key }}: "{{ $value | toString }}"
+{{- range $key := keys .Values.config | sortAlpha }}
+  {{ $key }}: "{{ index $.Values.config $key | toString }}"
 {{- end }}
 {{- end }}

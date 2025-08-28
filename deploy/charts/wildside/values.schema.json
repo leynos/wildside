@@ -47,7 +47,8 @@
         "type": {"type": "string"},
         "portName": {"type": "string"},
         "port": {"type": "integer"},
-        "targetPort": {"type": ["integer", "string"]}
+        "targetPort": {"type": ["integer", "string"]},
+        "annotations": {"type": "object"}
       }
     },
     "autoscaling": {

@@ -49,6 +49,21 @@ classDiagram
       +int minReplicas
       +int maxReplicas
       +int targetCPUUtilizationPercentage
+      +Behavior behavior
+    }
+    class Behavior {
+      +ScalePolicy scaleUp
+      +ScalePolicy scaleDown
+    }
+    class ScalePolicy {
+      +int stabilizationWindowSeconds
+      +string selectPolicy
+      +Policy[] policies
+    }
+    class Policy {
+      +string type
+      +int value
+      +int periodSeconds
     }
     class Affinity {
       +map<string, any> podAntiAffinity
@@ -101,5 +116,8 @@ classDiagram
     Values --> Autoscaling
     Values --> Affinity
     Values --> Container
+    Autoscaling --> Behavior
+    Behavior --> ScalePolicy
+    ScalePolicy --> Policy
     PodSecurityContext --> SeccompProfile
     Container --> Probe

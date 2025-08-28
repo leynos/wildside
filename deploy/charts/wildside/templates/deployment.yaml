@@ -77,19 +77,19 @@ spec:
           {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
-{{- toYaml . | replace "\n-" "\n    -" | nindent 12 }}
+{{- toYaml . | nindent 12 }}
 {{- end }}
 {{- with .Values.container.readinessProbe }}
           readinessProbe:
-{{- toYaml . | replace "\n-" "\n    -" | nindent 12 }}
+{{- toYaml . | nindent 12 }}
 {{- end }}
 {{- with .Values.container.livenessProbe }}
           livenessProbe:
-{{- toYaml . | replace "\n-" "\n    -" | nindent 12 }}
+{{- toYaml . | nindent 12 }}
 {{- end }}
 {{- with .Values.container.startupProbe }}
           startupProbe:
-{{- toYaml . | replace "\n-" "\n    -" | nindent 12 }}
+{{- toYaml . | nindent 12 }}
 {{- end }}
           {{- with .Values.resources }}
           resources:
