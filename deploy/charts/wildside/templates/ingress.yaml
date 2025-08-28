@@ -13,11 +13,11 @@ spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}
   {{- end }}
-  {{- with .Values.ingress.tlsSecretName }}
+  {{- if and .Values.ingress.tlsSecretName .Values.ingress.hostname }}
   tls:
     - hosts:
-        - {{ $.Values.ingress.hostname | quote }}
-      secretName: {{ . | quote }}
+        - {{ .Values.ingress.hostname | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName | quote }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.hostname | quote }}

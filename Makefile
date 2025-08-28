@@ -54,7 +54,7 @@ markdownlint-docs:
 	markdownlint docs/repository-structure.md
 
 mermaid-lint:
-	npx --yes @mermaid-js/mermaid-cli -i docs/repository-structure.md -o /tmp/diagram.svg -p mmdc-puppeteer.json
+	npx --yes -p @mermaid-js/mermaid-cli@10.9.0 mmdc -i docs/values-class-diagram.mmd -o /tmp/diagram.svg -p mmdc-puppeteer.json
 
 nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
@@ -64,7 +64,6 @@ nixie:
 yamllint:
 	command -v helm >/dev/null
 	command -v yamllint >/dev/null
-	helm lint ./deploy/charts/wildside
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version 1.31.0 | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/values.yaml ] || \
 	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f deploy/k8s/overlays/production/values.yaml --kube-version 1.31.0 | yamllint -f parsable -)

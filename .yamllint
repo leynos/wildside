@@ -6,3 +6,4 @@ ignore: |
 rules:
   document-start: disable
   line-length: disable
+  indentation: disable

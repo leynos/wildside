@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "replicaCount": {"type": "integer", "minimum": 1},
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {"type": "string"},
+        "tag": {"type": "string"},
+        "pullPolicy": {"type": "string"}
+      },
+      "required": ["repository"]
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "properties": {
+            "cpu": {"type": "string"},
+            "memory": {"type": "string"}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpu": {"type": "string"},
+            "memory": {"type": "string"}
+          }
+        }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minAvailable": {"type": "integer"},
+        "maxUnavailable": {"type": "integer"}
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string"},
+        "portName": {"type": "string"},
+        "port": {"type": "integer"},
+        "targetPort": {"type": ["integer", "string"]}
+      }
+    },
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minReplicas": {"type": "integer"},
+        "maxReplicas": {"type": "integer"},
+        "targetCPUUtilizationPercentage": {"type": "integer"},
+        "behavior": {"type": "object"}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "hostname": {"type": "string"},
+        "tlsSecretName": {"type": "string"},
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "existingSecretName": {"type": "string"},
+    "secretEnvFromKeys": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "affinity": {"type": "object"},
+    "podSecurityContext": {"type": "object"},
+    "securityContext": {"type": "object"},
+    "container": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "secretEnvFromKeys": {"minProperties": 1}
+        }
+      },
+      "then": {
+        "required": ["existingSecretName"],
+        "properties": {
+          "existingSecretName": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  ]
+}

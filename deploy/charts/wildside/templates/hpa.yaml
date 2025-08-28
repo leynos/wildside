@@ -19,9 +19,10 @@ metadata:
           target:
             type: Utilization
             averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
-    {{- with .Values.autoscaling.behavior }}
+    {{- $behavior := .Values.autoscaling.behavior }}
+    {{- if or $behavior.scaleUp $behavior.scaleDown }}
     behavior:
-      {{- with .scaleUp }}
+      {{- with $behavior.scaleUp }}
       scaleUp:
         {{- with .stabilizationWindowSeconds }}
         stabilizationWindowSeconds: {{ . }}
@@ -34,7 +35,7 @@ metadata:
           {{- toYaml . | nindent 10 }}
         {{- end }}
       {{- end }}
-      {{- with .scaleDown }}
+      {{- with $behavior.scaleDown }}
       scaleDown:
         {{- with .stabilizationWindowSeconds }}
         stabilizationWindowSeconds: {{ . }}
