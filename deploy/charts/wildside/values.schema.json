@@ -43,14 +43,24 @@
         "enabled": {"type": "boolean"},
         "minAvailable": {"type": "integer"},
         "maxUnavailable": {"type": "integer"}
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": ["minAvailable", "maxUnavailable"]
+          }
+        }
+      ]
     },
     "service": {
       "type": "object",
       "properties": {
-        "type": {"type": "string"},
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
         "portName": {"type": "string"},
-        "port": {"type": "integer"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "targetPort": {"type": ["integer", "string"]},
         "annotations": {"type": "object"}
       }
@@ -70,13 +80,19 @@
       "properties": {
         "enabled": {"type": "boolean"},
         "className": {"type": "string"},
-        "hostname": {"type": "string"},
-        "tlsSecretName": {"type": "string"},
+        "hostname": {"type": "string", "format": "hostname", "minLength": 1},
+        "tlsSecretName": {"type": "string", "minLength": 1},
         "annotations": {
           "type": "object",
           "additionalProperties": {"type": "string"}
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": { "required": ["hostname"] }
+        }
+      ]
     },
     "config": {
       "type": "object",

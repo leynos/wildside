@@ -1,6 +1,7 @@
 SHELL := bash
+KUBE_VERSION ?= 1.31.0
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 all: fmt lint test
 
 clean:
@@ -64,7 +65,9 @@ nixie:
 yamllint:
 	command -v helm >/dev/null
 	command -v yamllint >/dev/null
-	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version 1.31.0 | yamllint -f parsable -
-	[ ! -f deploy/k8s/overlays/production/values.yaml ] || \
-	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f deploy/k8s/overlays/production/values.yaml --kube-version 1.31.0 | yamllint -f parsable -)
+	command -v yq >/dev/null
+	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
+	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
+	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+
 
