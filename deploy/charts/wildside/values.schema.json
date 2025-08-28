@@ -16,7 +16,8 @@
           "enum": ["Always", "IfNotPresent", "Never"]
         }
       },
-      "required": ["repository"]
+      "required": ["repository"],
+      "additionalProperties": false
     },
     "resources": {
       "type": "object",
