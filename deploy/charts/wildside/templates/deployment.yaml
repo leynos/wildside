@@ -87,16 +87,16 @@ spec:
                 - ALL
 {{- end }}
 {{- with .Values.container.readinessProbe }}
-          readinessProbe:
-{{- toYaml . | nindent 12 }}
+            readinessProbe:
+{{- toYaml . | nindent 14 }}
 {{- end }}
 {{- with .Values.container.livenessProbe }}
-          livenessProbe:
-{{- toYaml . | nindent 12 }}
+            livenessProbe:
+{{- toYaml . | nindent 14 }}
 {{- end }}
 {{- with .Values.container.startupProbe }}
-          startupProbe:
-{{- toYaml . | nindent 12 }}
+            startupProbe:
+{{- toYaml . | nindent 14 }}
 {{- end }}
           {{- with .Values.resources }}
           resources:

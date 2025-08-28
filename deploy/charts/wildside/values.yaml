@@ -18,7 +18,7 @@ resources:
 
 pdb:
   enabled: true
-  minAvailable: 1
+  minAvailable: 0
 
 service:
   type: ClusterIP
@@ -36,9 +36,9 @@ autoscaling:
 
 ingress:
   enabled: false
-  className: "traefik" # Default to controller
-  hostname: "api.wildside.cc"
-  tlsSecretName: "myapp-api-tls"
+  className: ""
+  hostname: ""
+  tlsSecretName: ""
   annotations: {}
 
 # Non-secret configuration. Keys become environment variables via a ConfigMap.

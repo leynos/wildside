@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "wildside.labels" . | nindent 4 }}
 spec:
-  minAvailable: {{ .Values.pdb.minAvailable | default 1 }}
+  minAvailable: {{ .Values.pdb.minAvailable | default 0 }}
   selector:
     matchLabels:
       {{- include "wildside.selectorLabels" . | nindent 6 }}

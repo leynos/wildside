@@ -26,16 +26,19 @@
           "properties": {
             "cpu": {"type": "string"},
             "memory": {"type": "string"}
-          }
+          },
+          "additionalProperties": false
         },
         "limits": {
           "type": "object",
           "properties": {
             "cpu": {"type": "string"},
             "memory": {"type": "string"}
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "pdb": {
       "type": "object",
@@ -63,7 +66,8 @@
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "targetPort": {"type": ["integer", "string"]},
         "annotations": {"type": "object"}
-      }
+      },
+      "additionalProperties": false
     },
     "autoscaling": {
       "type": "object",
@@ -80,8 +84,20 @@
       "properties": {
         "enabled": {"type": "boolean"},
         "className": {"type": "string"},
-        "hostname": {"type": "string", "format": "hostname", "minLength": 1},
-        "tlsSecretName": {"type": "string", "minLength": 1},
+        "hostname": {
+          "type": "string",
+          "oneOf": [
+            {"const": ""},
+            {"format": "hostname", "minLength": 1}
+          ]
+        },
+        "tlsSecretName": {
+          "type": "string",
+          "oneOf": [
+            {"const": ""},
+            {"minLength": 1}
+          ]
+        },
         "annotations": {
           "type": "object",
           "additionalProperties": {"type": "string"}
@@ -96,7 +112,12 @@
     },
     "config": {
       "type": "object",
-      "additionalProperties": {"type": "string"}
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "type": ["string", "number", "boolean"]
+        }
+      },
+      "additionalProperties": false
     },
     "existingSecretName": {"type": "string"},
     "secretEnvFromKeys": {
