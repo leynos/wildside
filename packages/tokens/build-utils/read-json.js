@@ -8,9 +8,16 @@ import fs from 'node:fs';
 /**
  * Read and parse a JSON file from disk.
  *
+ * @template T
  * @param {string | URL} file - Path or URL pointing to the JSON file.
- * @returns {unknown} Parsed JSON content.
+ * @returns {T} Parsed JSON content.
  * @throws {Error} When the file cannot be read or parsed.
+ * @example
+ * ```js
+ * // Load package metadata
+ * const pkg = readJson(new URL('./package.json', import.meta.url));
+ * console.log(pkg.name);
+ * ```
  */
 export function readJson(file) {
   try {
@@ -18,7 +25,6 @@ export function readJson(file) {
     return JSON.parse(data);
   } catch (err) {
     const fileHint = file instanceof URL ? file.pathname : file;
-    console.error(`Failed to load JSON from ${fileHint}.`, err);
-    throw err;
+    throw new Error(`Failed to load JSON from ${fileHint}`, { cause: err });
   }
 }

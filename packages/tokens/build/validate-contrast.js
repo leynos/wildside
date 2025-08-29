@@ -7,12 +7,48 @@
 import fs from 'node:fs';
 import { contrast } from '../src/utils/color.js';
 import { resolveToken } from '../src/utils/tokens.js';
-import { readJson } from './read-json.js';
+import { readJson } from '../build-utils/read-json.js';
 
 // Load package settings for defaults.
+/**
+ * @typedef {{name: string, version: string, contrastThreshold?: number}} PackageJson
+ */
+/** @type {PackageJson} */
 const pkgJson = readJson(new URL('../package.json', import.meta.url));
+validatePkgJson(pkgJson);
 
-/** Resolve the contrast threshold from CLI, env, or package.json. */
+/**
+ * Validate the structure of package.json.
+ *
+ * @param {unknown} json - Parsed package.json content.
+ * @throws {Error} If required fields are missing.
+ * @example
+ * ```js
+ * validatePkgJson({ name: 'pkg', version: '1.0.0' });
+ * // passes
+ * validatePkgJson({});
+ * // throws Error
+ * ```
+ */
+function validatePkgJson(json) {
+  if (!json || typeof json !== 'object') {
+    throw new Error('package.json is not a valid JSON object.');
+  }
+  if (typeof json.name !== 'string' || typeof json.version !== 'string') {
+    throw new Error('package.json must contain "name" and "version" fields as strings.');
+  }
+}
+
+/** Resolve the contrast threshold from CLI, env, or package.json.
+ *
+ * @returns {number} Desired contrast ratio.
+ * @example
+ * ```js
+ * // CLI: node validate-contrast.js 5 -> returns 5
+ * process.env.CONTRAST_THRESHOLD = '4.5';
+ * getThreshold(); //=> 4.5
+ * ```
+ */
 function getThreshold() {
   const sources = [process.argv[2], process.env.CONTRAST_THRESHOLD, pkgJson.contrastThreshold];
   for (const src of sources) {
@@ -36,9 +72,23 @@ const contrastThreshold = getThreshold();
  * Validate contrast ratios for brand and accent pairs within a theme file.
  * Returns an array of error messages rather than throwing to allow full
  * aggregation of failures.
+ *
+ * @param {string | URL} file - Theme file to check.
+ * @param {number} threshold - Minimum required contrast.
+ * @returns {string[]} Any contrast violations.
+ * @example
+ * ```js
+ * const errs = checkTheme(new URL('src/themes/light.json', import.meta.url), 4.5);
+ * if (errs.length) console.error(errs);
+ * ```
  */
 function checkTheme(file, threshold) {
+  /**
+   * @typedef {{name?: string, semantic: {brand?: object, accent?: object}}} ThemeJson
+   */
+  /** @type {ThemeJson} */
   const json = readJson(file);
+  validateThemeJson(json, file);
   const brand = json.semantic?.brand;
   const accent = json.semantic?.accent;
   const errors = [];
@@ -83,6 +133,35 @@ function checkTheme(file, threshold) {
   }
 
   return errors;
+}
+
+/**
+ * Validate the structure of a theme JSON file.
+ *
+ * @param {unknown} json - Parsed theme content.
+ * @param {string | URL} file - File path for error context.
+ * @throws {Error} If required fields are missing.
+ * @example
+ * ```js
+ * validateThemeJson({ semantic: { brand: {}, accent: {} } }, 'theme.json');
+ * // passes
+ * validateThemeJson({}, 'theme.json');
+ * // throws Error
+ * ```
+ */
+function validateThemeJson(json, file) {
+  const fileHint = file instanceof URL ? file.pathname : file;
+  if (!json || typeof json !== 'object') {
+    throw new Error(`Theme file ${fileHint} is not a valid JSON object.`);
+  }
+  if (!json.semantic || typeof json.semantic !== 'object') {
+    throw new Error(`Theme file ${fileHint} is missing "semantic" object.`);
+  }
+  if (!json.semantic.brand || !json.semantic.accent) {
+    throw new Error(
+      `Theme file ${fileHint} must contain "semantic.brand" and "semantic.accent" fields.`,
+    );
+  }
 }
 
 const themesDir = new URL('../src/themes/', import.meta.url);

@@ -1,11 +1,11 @@
 /** @file Build Style Dictionary outputs and derive framework presets.
  * Converts design token sources into CSS variables, Tailwind presets, and
- * daisyUI themes. Utility functions live alongside build scripts to keep them
+ * daisyUI themes. Shared utilities live in `../build-utils` to keep scripts
  * small and focused.
  */
 import fs from 'node:fs';
 import StyleDictionary from 'style-dictionary';
-import { readJson } from './read-json.js';
+import { readJson } from '../build-utils/read-json.js';
 
 const sd = new StyleDictionary({
   source: ['src/tokens.json', 'src/themes/*.json'],
@@ -31,12 +31,29 @@ const sd = new StyleDictionary({
 sd.buildAllPlatforms();
 
 // Map tokens into Tailwind and DaisyUI presets
+/**
+ * Tokens source loaded from disk.
+ *
+ * @type {Record<string, unknown>}
+ */
 const tokens = readJson('src/tokens.json');
+
+/**
+ * Recursively strip `value` wrappers from tokens.
+ *
+ * @param {Record<string, unknown>} input - Nested token structure.
+ * @returns {Record<string, unknown>} Unwrapped tokens.
+ * @example
+ * ```js
+ * unwrap({ size: { sm: { value: '1rem' } } });
+ * //=> { size: { sm: '1rem' } }
+ * ```
+ */
 const unwrap = (input) =>
   Object.fromEntries(
     Object.entries(input).map(([k, v]) => [
       k,
-      typeof v === 'object' && 'value' in v ? v.value : unwrap(v),
+      typeof v === 'object' && v !== null && 'value' in v ? v.value : unwrap(v),
     ]),
   );
 
