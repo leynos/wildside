@@ -60,6 +60,9 @@ spec:
               containerPort: 8080
           {{- $cfg := .Values.config }}
           {{- $sec := .Values.secretEnvFromKeys }}
+          {{- if and (gt (len $sec) 0) (not .Values.existingSecretName) }}
+          {{- fail "existingSecretName is required when secretEnvFromKeys is set" }}
+          {{- end }}
           {{- if or (gt (len $cfg) 0) (gt (len $sec) 0) }}
           env:
             {{- range $k, $_ := $cfg }}
