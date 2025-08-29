@@ -136,6 +136,68 @@ function checkTheme(file, threshold) {
 }
 
 /**
+ * Ensure loaded JSON is a plain object.
+ *
+ * @param {unknown} json - Parsed JSON to verify.
+ * @param {string} fileHint - File path for error context.
+ * @throws {Error} If the JSON is not an object.
+ * @example
+ * ```js
+ * validateJsonStructure({}, 'theme.json');
+ * // passes
+ * validateJsonStructure(null, 'theme.json');
+ * // throws Error
+ * ```
+ */
+function validateJsonStructure(json, fileHint) {
+  if (!json || typeof json !== 'object') {
+    throw new Error(`Theme file ${fileHint} is not a valid JSON object.`);
+  }
+}
+
+/**
+ * Ensure the "semantic" object exists.
+ *
+ * @param {{semantic?: unknown}} json - Parsed theme JSON.
+ * @param {string} fileHint - File path for error context.
+ * @throws {Error} If "semantic" is missing or not an object.
+ * @example
+ * ```js
+ * validateSemanticObject({ semantic: {} }, 'theme.json');
+ * // passes
+ * validateSemanticObject({}, 'theme.json');
+ * // throws Error
+ * ```
+ */
+function validateSemanticObject(json, fileHint) {
+  if (!json.semantic || typeof json.semantic !== 'object') {
+    throw new Error(`Theme file ${fileHint} is missing "semantic" object.`);
+  }
+}
+
+/**
+ * Ensure the "semantic" object includes brand and accent fields.
+ *
+ * @param {{brand?: unknown, accent?: unknown}} semantic - Semantic section.
+ * @param {string} fileHint - File path for error context.
+ * @throws {Error} If brand or accent are missing.
+ * @example
+ * ```js
+ * validateBrandAndAccent({ brand: {}, accent: {} }, 'theme.json');
+ * // passes
+ * validateBrandAndAccent({}, 'theme.json');
+ * // throws Error
+ * ```
+ */
+function validateBrandAndAccent(semantic, fileHint) {
+  if (!semantic.brand || !semantic.accent) {
+    throw new Error(
+      `Theme file ${fileHint} must contain "semantic.brand" and "semantic.accent" fields.`,
+    );
+  }
+}
+
+/**
  * Validate the structure of a theme JSON file.
  *
  * @param {unknown} json - Parsed theme content.
@@ -151,17 +213,10 @@ function checkTheme(file, threshold) {
  */
 function validateThemeJson(json, file) {
   const fileHint = file instanceof URL ? file.pathname : file;
-  if (!json || typeof json !== 'object') {
-    throw new Error(`Theme file ${fileHint} is not a valid JSON object.`);
-  }
-  if (!json.semantic || typeof json.semantic !== 'object') {
-    throw new Error(`Theme file ${fileHint} is missing "semantic" object.`);
-  }
-  if (!json.semantic.brand || !json.semantic.accent) {
-    throw new Error(
-      `Theme file ${fileHint} must contain "semantic.brand" and "semantic.accent" fields.`,
-    );
-  }
+  validateJsonStructure(json, fileHint);
+  validateSemanticObject(json, fileHint);
+  // At this point json.semantic is a valid object.
+  validateBrandAndAccent(json.semantic, fileHint);
 }
 
 const themesDir = new URL('../src/themes/', import.meta.url);
