@@ -982,7 +982,8 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: wildside-app
-  namespace: default # This will be patched by overlays
+  # Set the namespace via Helm values or environment. Default is 'myapp' if not overridden.
+  namespace: {{ .Values.namespace | default "myapp" }}
 spec:
   interval: 5m
   chart:
