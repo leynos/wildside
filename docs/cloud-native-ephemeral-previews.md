@@ -982,6 +982,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: wildside-app
+  namespace: myapp
 spec:
   interval: 5m
   chart:
