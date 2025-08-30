@@ -18,6 +18,28 @@ const pkgJson = readJson(new URL('../package.json', import.meta.url));
 validatePkgJson(pkgJson);
 
 /**
+ * Check for required package.json fields.
+ *
+ * @param {unknown} json - Parsed package.json content.
+ * @returns {boolean} True if structure and fields are valid.
+ * @example
+ * ```js
+ * hasRequiredPkgFields({ name: 'pkg', version: '1.0.0' });
+ * //=> true
+ * hasRequiredPkgFields({});
+ * //=> false
+ * ```
+ */
+function hasRequiredPkgFields(json) {
+  return (
+    json &&
+    typeof json === 'object' &&
+    typeof json.name === 'string' &&
+    typeof json.version === 'string'
+  );
+}
+
+/**
  * Validate the structure of package.json.
  *
  * @param {unknown} json - Parsed package.json content.
@@ -31,11 +53,10 @@ validatePkgJson(pkgJson);
  * ```
  */
 function validatePkgJson(json) {
-  if (!json || typeof json !== 'object') {
-    throw new Error('package.json is not a valid JSON object.');
-  }
-  if (typeof json.name !== 'string' || typeof json.version !== 'string') {
-    throw new Error('package.json must contain "name" and "version" fields as strings.');
+  if (!hasRequiredPkgFields(json)) {
+    throw new Error(
+      'package.json must be a valid object with "name" and "version" string fields.',
+    );
   }
 }
 
@@ -50,6 +71,21 @@ function validatePkgJson(json) {
  * ```
  */
 /**
+ * Determine whether a threshold falls within WCAG's valid range.
+ *
+ * @param {number} value - Candidate contrast ratio.
+ * @returns {boolean} True if > 1 and < 21.
+ * @example
+ * ```js
+ * isValidThresholdRange(4.5); //=> true
+ * isValidThresholdRange(25); //=> false
+ * ```
+ */
+function isValidThresholdRange(value) {
+  return value > 1 && value < 21;
+}
+
+/**
  * Parse a potential contrast threshold value.
  *
  * @param {unknown} src - Raw threshold source.
@@ -58,7 +94,7 @@ function validatePkgJson(json) {
 function parseThresholdSource(src) {
   const value = parseFloat(src);
   if (Number.isNaN(value)) return null;
-  if (value <= 1 || value >= 21) {
+  if (!isValidThresholdRange(value)) {
     console.error(
       `Error: contrastThreshold value (${value}) is out of range. It must be > 1 and < 21.`,
     );
@@ -93,25 +129,49 @@ const contrastThreshold = getThreshold();
  * ```
  */
 /**
+ * Resolve tokens and compute their contrast ratio.
+ *
+ * @param {string} fgRef - Foreground token reference.
+ * @param {string} bgRef - Background token reference.
+ * @returns {number} Contrast ratio.
+ * @example
+ * ```js
+ * calculateColorRatio('{color.fg}', '{color.bg}');
+ * //=> 4.5
+ * ```
+ */
+function calculateColorRatio(fgRef, bgRef) {
+  const fg = resolveToken(fgRef);
+  const bg = resolveToken(bgRef);
+  return contrast(fg, bg);
+}
+
+/**
  * Validate a foreground/background colour pair against the contrast threshold.
  *
- * @param {string} label - Description of the pair for error messages.
- * @param {string | undefined} fgRef - Token reference for the foreground colour.
- * @param {string | undefined} bgRef - Token reference for the background colour.
- * @param {number} threshold - Minimum required contrast ratio.
- * @param {string} fileHint - File path for error context.
+ * @param {{label: string, fgRef?: string, bgRef?: string}} colorPair - Pair to check.
+ * @param {{threshold: number, fileHint: string}} context - Threshold and error context.
  * @returns {string | null} Error message if validation fails.
+ * @example
+ * ```js
+ * validateColorPair(
+ *   { label: 'brand', fgRef: '{fg}', bgRef: '{bg}' },
+ *   { threshold: 4.5, fileHint: 'theme.json' },
+ * );
+ * //=> null
+ * ```
  */
-function validateColorPair(label, fgRef, bgRef, threshold, fileHint) {
+function validateColorPair(colorPair, context) {
+  const { label, fgRef, bgRef } = colorPair;
+  const { threshold, fileHint } = context;
   if (fgRef == null || bgRef == null) {
     return `${label} in ${fileHint} is missing a value or contrast token`;
   }
   try {
-    const ratio = contrast(resolveToken(fgRef), resolveToken(bgRef));
-    if (ratio < threshold) {
-      return `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`;
-    }
-    return null;
+    const ratio = calculateColorRatio(fgRef, bgRef);
+    return ratio < threshold
+      ? `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`
+      : null;
   } catch (err) {
     console.error(`Failed to resolve token reference for "${label}" in ${fileHint}.`, {
       fgRef,
@@ -146,7 +206,9 @@ function checkTheme(file, threshold) {
   ];
 
   return pairs
-    .map(([label, fgRef, bgRef]) => validateColorPair(label, fgRef, bgRef, threshold, fileHint))
+    .map(([label, fgRef, bgRef]) =>
+      validateColorPair({ label, fgRef, bgRef }, { threshold, fileHint }),
+    )
     .filter((error) => error !== null);
 }
 
