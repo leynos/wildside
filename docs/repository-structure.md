@@ -415,7 +415,9 @@ enabled, `tlsSecretName` points to a pre‑provisioned TLS Secret.
 Secret and reference them by setting `existingSecretName` and providing key
 mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
 enforce this wiring by requiring `existingSecretName` whenever
-`secretEnvFromKeys` is populated.
+`secretEnvFromKeys` is populated. Set `allowMissingSecret` to `false` to fail
+rendering if the referenced Secret is absent; it defaults to `true` so `helm
+template` can run without a cluster connection.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
