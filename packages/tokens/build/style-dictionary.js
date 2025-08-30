@@ -1,5 +1,11 @@
+/** @file Build Style Dictionary outputs and derive framework presets.
+ * Converts design token sources into CSS variables, Tailwind presets, and
+ * daisyUI themes. Shared utilities live in `../build-utils` to keep scripts
+ * small and focused.
+ */
 import fs from 'node:fs';
 import StyleDictionary from 'style-dictionary';
+import { readJson } from '../build-utils/read-json.js';
 
 const sd = new StyleDictionary({
   source: ['src/tokens.json', 'src/themes/*.json'],
@@ -25,14 +31,40 @@ const sd = new StyleDictionary({
 sd.buildAllPlatforms();
 
 // Map tokens into Tailwind and DaisyUI presets
-const tokens = JSON.parse(fs.readFileSync('src/tokens.json', 'utf-8'));
-const unwrap = (input) =>
-  Object.fromEntries(
-    Object.entries(input).map(([k, v]) => [
-      k,
-      typeof v === 'object' && 'value' in v ? v.value : unwrap(v),
-    ]),
+/**
+ * Tokens source loaded from disk.
+ *
+ * @type {Record<string, unknown>}
+ */
+const tokens = readJson(new URL('../src/tokens.json', import.meta.url));
+
+/**
+ * Recursively strip `value` wrappers from tokens.
+ *
+ * @param {unknown} input - Token node to unwrap.
+ * @returns {unknown} Unwrapped token tree.
+ * @example
+ * ```js
+ * unwrap({ size: { sm: { value: '1rem' } } });
+ * //=> { size: { sm: '1rem' } }
+ * unwrap([{ value: '1px' }]);
+ * //=> ['1px']
+ * ```
+ */
+function unwrap(input) {
+  if (input == null || typeof input !== 'object') {
+    return input;
+  }
+  if (Array.isArray(input)) {
+    return input.map(unwrap);
+  }
+  if ('value' in input) {
+    return input.value;
+  }
+  return Object.fromEntries(
+    Object.entries(input).map(([k, v]) => [k, unwrap(v)]),
   );
+}
 
 const preset = {
   theme: {
@@ -48,10 +80,10 @@ const preset = {
 fs.mkdirSync('dist/tw', { recursive: true });
 fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};\n`, 'utf-8');
 
-const themesDir = 'src/themes';
+const themesDir = new URL('../src/themes/', import.meta.url);
 const themeFiles = fs.readdirSync(themesDir).filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
-  const json = JSON.parse(fs.readFileSync(`${themesDir}/${file}`, 'utf-8'));
+  const json = readJson(new URL(file, themesDir));
   const semantic = unwrap(json.semantic ?? {});
   return {
     ...(json.name ? { name: json.name } : {}),
