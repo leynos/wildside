@@ -4,12 +4,24 @@ info:
   version: 0.1.0
 channels:
   /ws:
-    messages:
-      UserCreated:
-        payload:
-          type: object
-          properties:
-            id:
-              type: string
-            display_name:
-              type: string
+    operations:
+      userCreated:
+        action: receive
+        messages:
+          - $ref: '#/components/messages/UserCreated'
+components:
+  messages:
+    UserCreated:
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+          - id
+          - display_name
+        properties:
+          id:
+            type: string
+            description: Unique user identifier
+          display_name:
+            type: string
+            description: User's display name

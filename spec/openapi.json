@@ -2,15 +2,23 @@
   "openapi": "3.1.0",
   "info": {
     "title": "backend",
-    "description": "",
+    "description": "HTTP interface for the wildside backend",
     "version": "0.1.0"
   },
+  "servers": [
+    {
+      "url": "https://api.yourdomain.example",
+      "description": "Production API"
+    }
+  ],
   "security": [{ "cookieAuth": [] }],
   "paths": {
     "/api/users": {
       "get": {
         "tags": ["users"],
         "operationId": "listUsers",
+        "summary": "List users",
+        "description": "Return known users in the system",
         "responses": {
           "200": {
             "description": "Users",
@@ -20,13 +28,22 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/User"
-                  }
+                  },
+                  "maxItems": 100
                 }
               }
             }
           },
           "401": {
             "description": "Unauthorised",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
@@ -55,24 +72,45 @@
     },
     "schemas": {
       "Error": {
+        "title": "Error",
         "type": "object",
+        "description": "An error response",
+        "additionalProperties": false,
         "properties": {
-          "code": { "type": "string" },
-          "message": { "type": "string" },
-          "details": { "type": "object", "additionalProperties": true }
+          "code": {
+            "type": "string",
+            "description": "Stable error code",
+            "example": "invalid_request"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Something went wrong"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Supplementary error details"
+          }
         },
         "required": ["code", "message"]
       },
       "User": {
+        "title": "User",
         "type": "object",
+        "description": "A user of the system",
+        "additionalProperties": false,
         "required": ["id", "display_name"],
         "properties": {
           "display_name": {
-            "type": "string"
+            "type": "string",
+            "description": "User's display name",
+            "example": "Ada Lovelace"
           },
           "id": {
             "type": "string",
-            "description": "Stable user identifier"
+            "description": "Stable user identifier",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
           }
         }
       }
@@ -80,7 +118,8 @@
   },
   "tags": [
     {
-      "name": "users"
+      "name": "users",
+      "description": "Operations about system users"
     }
   ]
 }
