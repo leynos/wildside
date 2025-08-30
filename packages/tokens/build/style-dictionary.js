@@ -81,7 +81,10 @@ fs.mkdirSync('dist/tw', { recursive: true });
 fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};\n`, 'utf-8');
 
 const themesDir = new URL('../src/themes/', import.meta.url);
-const themeFiles = fs.readdirSync(themesDir).filter((f) => f.endsWith('.json'));
+// `fs.readdirSync` expects a file system path, not a `URL` object.
+const themeFiles = fs
+  .readdirSync(themesDir.pathname)
+  .filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
   const json = readJson(new URL(file, themesDir));
   const semantic = unwrap(json.semantic ?? {});
