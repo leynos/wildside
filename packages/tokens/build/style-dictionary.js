@@ -4,6 +4,7 @@
  * small and focused.
  */
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import StyleDictionary from 'style-dictionary';
 import { readJson } from '../build-utils/read-json.js';
 
@@ -81,9 +82,9 @@ fs.mkdirSync('dist/tw', { recursive: true });
 fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};\n`, 'utf-8');
 
 const themesDir = new URL('../src/themes/', import.meta.url);
-// `fs.readdirSync` expects a file system path, not a `URL` object.
+// Convert the URL to a file-system path via `fileURLToPath` for cross-platform compatibility.
 const themeFiles = fs
-  .readdirSync(themesDir.pathname)
+  .readdirSync(fileURLToPath(themesDir))
   .filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
   const json = readJson(new URL(file, themesDir));

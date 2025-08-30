@@ -5,6 +5,7 @@
  * combinations slipping into the design system.
  */
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { contrast } from '../src/utils/color.js';
 import { resolveToken } from '../src/utils/tokens.js';
 import { readJson } from '../build-utils/read-json.js';
@@ -297,8 +298,9 @@ function validateThemeJson(json, file) {
 }
 
 const themesDir = new URL('../src/themes/', import.meta.url);
+// Convert the URL to a file-system path for cross-platform compatibility.
 const themeFiles = fs
-  .readdirSync(themesDir)
+  .readdirSync(fileURLToPath(themesDir))
   .filter((f) => f.endsWith('.json'))
   .map((f) => new URL(f, themesDir));
 
