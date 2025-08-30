@@ -58,7 +58,7 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          {{- $cfg := .Values.config }}
+          {{- $cfg := .Values.config | default dict }}
           {{- $sec := .Values.secretEnvFromKeys | default dict }}
           {{- $name := .Values.existingSecretName }}
           {{- $allowMissing := .Values.allowMissingSecret | default true }}
@@ -68,7 +68,7 @@ spec:
           {{- if $name }}
           {{- $found := lookup "v1" "Secret" .Release.Namespace $name }}
           {{- if and (not $found) (not $allowMissing) }}
-          {{- fail (printf "secret %s not found in namespace %s" $name .Release.Namespace) }}
+          {{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) }}
           {{- end }}
           {{- end }}
           {{- if or (gt (len $cfg) 0) (gt (len $sec) 0) }}
@@ -84,7 +84,7 @@ spec:
             - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Values.existingSecretName }}
+                  name: {{ $name }}
                   key: {{ $secretKey }}
           {{- end }}
         {{- end }}
