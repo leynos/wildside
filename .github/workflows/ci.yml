@@ -6,11 +6,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '18.17'
-      - uses: oven-sh/setup-bun@v2
+          node-version: '22'
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
         with:
           bun-version: '1.1.32'
 
@@ -33,18 +33,33 @@ jobs:
         run: make nixie
 
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@v20
+        uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20
         with:
           globs: '**/*.md'
 
       - name: Mermaid lint
         run: make mermaid-lint
 
+      - name: Setup Helm
+        # v4.3.1
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.15.0
+
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+
+      - name: Helm lint
+        run: helm lint --strict ./deploy/charts/wildside
+
+      - name: YAML lint
+        run: make yamllint
+
       # Backend
       - name: Rust build
         run: cargo build --manifest-path backend/Cargo.toml --release
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
           path: |
             ~/.cargo/registry
