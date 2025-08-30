@@ -28,11 +28,10 @@ jobs:
 
       - name: Install Mermaid CLI
         run: |
+          set -euxo pipefail
           bun install --global @mermaid-js/mermaid-cli@11.9.0
           bun x puppeteer browsers install chrome-headless-shell
-
-      - name: Check Mermaid CLI
-        run: mmdc --version
+          mmdc --version
 
       - name: Debug Bun and Mermaid
         run: |
