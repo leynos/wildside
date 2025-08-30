@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install Mermaid CLI
+        run: bun install --global @mermaid-js/mermaid-cli
+
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie
 
