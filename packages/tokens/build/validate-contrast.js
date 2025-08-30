@@ -49,19 +49,29 @@ function validatePkgJson(json) {
  * getThreshold(); //=> 4.5
  * ```
  */
+/**
+ * Parse a potential contrast threshold value.
+ *
+ * @param {unknown} src - Raw threshold source.
+ * @returns {number | null} Parsed value or null if invalid.
+ */
+function parseThresholdSource(src) {
+  const value = parseFloat(src);
+  if (Number.isNaN(value)) return null;
+  if (value <= 1 || value >= 21) {
+    console.error(
+      `Error: contrastThreshold value (${value}) is out of range. It must be > 1 and < 21.`,
+    );
+    process.exit(1);
+  }
+  return value;
+}
+
 function getThreshold() {
   const sources = [process.argv[2], process.env.CONTRAST_THRESHOLD, pkgJson.contrastThreshold];
   for (const src of sources) {
-    const value = parseFloat(src);
-    if (!Number.isNaN(value)) {
-      if (value <= 1 || value >= 21) {
-        console.error(
-          `Error: contrastThreshold value (${value}) is out of range. It must be > 1 and < 21.`,
-        );
-        process.exit(1);
-      }
-      return value;
-    }
+    const value = parseThresholdSource(src);
+    if (value !== null) return value;
   }
   return 4.5;
 }
@@ -82,6 +92,38 @@ const contrastThreshold = getThreshold();
  * if (errs.length) console.error(errs);
  * ```
  */
+/**
+ * Validate a foreground/background colour pair against the contrast threshold.
+ *
+ * @param {string} label - Description of the pair for error messages.
+ * @param {string | undefined} fgRef - Token reference for the foreground colour.
+ * @param {string | undefined} bgRef - Token reference for the background colour.
+ * @param {number} threshold - Minimum required contrast ratio.
+ * @param {string} fileHint - File path for error context.
+ * @returns {string | null} Error message if validation fails.
+ */
+function validateColorPair(label, fgRef, bgRef, threshold, fileHint) {
+  if (fgRef == null || bgRef == null) {
+    return `${label} in ${fileHint} is missing a value or contrast token`;
+  }
+  try {
+    const ratio = contrast(resolveToken(fgRef), resolveToken(bgRef));
+    if (ratio < threshold) {
+      return `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`;
+    }
+    return null;
+  } catch (err) {
+    console.error(`Failed to resolve token reference for "${label}" in ${fileHint}.`, {
+      fgRef,
+      bgRef,
+      error: err,
+    });
+    return `${label} in ${fileHint} failed to resolve token reference: ${
+      err instanceof Error ? err.message : String(err)
+    }`;
+  }
+}
+
 function checkTheme(file, threshold) {
   /**
    * @typedef {{name?: string, semantic: {brand?: object, accent?: object}}} ThemeJson
@@ -89,13 +131,11 @@ function checkTheme(file, threshold) {
   /** @type {ThemeJson} */
   const json = readJson(file);
   validateThemeJson(json, file);
-  const brand = json.semantic?.brand;
-  const accent = json.semantic?.accent;
-  const errors = [];
 
+  const { brand, accent } = json.semantic ?? {};
+  const fileHint = file instanceof URL ? file.pathname : file;
   if (!brand || !accent) {
-    errors.push(`Missing brand/accent in ${file instanceof URL ? file.pathname : file}`);
-    return errors;
+    return [`Missing brand/accent in ${fileHint}`];
   }
 
   const pairs = [
@@ -105,34 +145,9 @@ function checkTheme(file, threshold) {
     ['accent hover', accent.hover?.value, accent.contrast?.value],
   ];
 
-  for (const [label, fgRef, bgRef] of pairs) {
-    const fileHint = file instanceof URL ? file.pathname : file;
-    if (fgRef == null || bgRef == null) {
-      errors.push(`${label} in ${fileHint} is missing a value or contrast token`);
-      continue;
-    }
-    try {
-      const ratio = contrast(resolveToken(fgRef), resolveToken(bgRef));
-      if (ratio < threshold) {
-        errors.push(
-          `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`,
-        );
-      }
-    } catch (err) {
-      console.error(`Failed to resolve token reference for "${label}" in ${fileHint}.`, {
-        fgRef,
-        bgRef,
-        error: err,
-      });
-      errors.push(
-        `${label} in ${fileHint} failed to resolve token reference: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-
-  return errors;
+  return pairs
+    .map(([label, fgRef, bgRef]) => validateColorPair(label, fgRef, bgRef, threshold, fileHint))
+    .filter((error) => error !== null);
 }
 
 /**

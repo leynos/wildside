@@ -22,7 +22,9 @@ import fs from 'node:fs';
 export function readJson(file) {
   try {
     const data = fs.readFileSync(file, 'utf8');
-    return JSON.parse(data);
+    // Some editors prefix files with a UTF-8 BOM; JSON.parse rejects it.
+    const text = data.charCodeAt(0) === 0xfeff ? data.slice(1) : data;
+    return JSON.parse(text);
   } catch (err) {
     const fileHint = file instanceof URL ? file.pathname : file;
     throw new Error(`Failed to load JSON from ${fileHint}`, { cause: err });
