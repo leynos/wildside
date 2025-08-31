@@ -1,6 +1,7 @@
 /** @file Tests for design token resolution utilities. */
-import test from 'node:test';
+
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { resolveToken } from './tokens.js';
 
 // helper tokens for tests
@@ -30,7 +31,7 @@ test('throws on missing path with enriched message', () => {
     resolveToken('{color.missing}', baseTokens);
     assert.fail('Expected to throw');
   } catch (err) {
-    const msg = String((err && err.message) || err);
+    const msg = String(err?.message || err);
     assert.match(msg, /Token path "color.missing" not found/);
     assert.match(msg, /(while resolving "color\.missing")/);
     assert.match(msg, /Available keys:/);

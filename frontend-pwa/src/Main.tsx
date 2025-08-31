@@ -8,6 +8,7 @@ import '@app/tokens/css/variables.css';
 import './index.css';
 import { App } from './app/App';
 
+// Use lower camelCase for module-level consts to satisfy lint rules.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

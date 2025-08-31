@@ -29,6 +29,16 @@
   "vcs": {
     "useIgnoreFile": true
   },
+  /*
+  TODO: Enable when Biome adds support for Tailwind CSS directives
+  Tracking: https://github.com/biomejs/biome/issues/XXXX (tailwindDirectives)
+  Target: enable when Biome >= v1.9.0 or by 2025-01-31
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  */
   "linter": {
     "enabled": true,
     "rules": {
@@ -64,7 +74,8 @@
         "noTsIgnore": "error",
         "noVar": "error",
         "noConstEnum": "error",
-        "useGetterReturn": "error"
+        "useGetterReturn": "error",
+        "noUnknownAtRules": "error"
       },
       "style": {
         "noInferrableTypes": "error",
@@ -95,7 +106,16 @@
               { "selector": { "kind": "typeLike" }, "formats": ["PascalCase"] },
               { "selector": { "kind": "enum" }, "formats": ["PascalCase"] },
               { "selector": { "kind": "classMember", "modifiers": ["private"] }, "match": "_(.+)" },
-              { "selector": { "kind": "const", "scope": "global" }, "formats": ["CONSTANT_CASE"] }
+              // Global consts: allow camel/Pascal, not CONSTANT_CASE
+              {
+                "selector": { "kind": "const", "scope": "global" },
+                "formats": ["camelCase", "PascalCase"]
+              },
+              // Class static readonly props: force camelCase
+              {
+                "selector": { "kind": "classProperty", "modifiers": ["static", "readonly"] },
+                "formats": ["camelCase"]
+              }
             ]
           }
         },
@@ -150,9 +170,59 @@
       "linter": { "enabled": false }
     },
     {
+      // Build scripts may legitimately write diagnostic output to the console.
+      "includes": ["packages/tokens/build/**/*.js"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      // Tailwind/PostCSS styles include framework-specific at‑rules in the app styles.
+      // Scope suppression narrowly to the actual project layout.
+      "includes": [
+        "frontend-pwa/src/**/*.css",
+        "frontend-pwa/src/**/*.pcss",
+        "frontend-pwa/src/index.css"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noUnknownAtRules": "off" }
+        }
+      }
+    },
+    {
+      // Allow `x != null` nullish checks in fetcher for concise header/body logic
+      "includes": ["frontend-pwa/src/api/fetcher.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDoubleEquals": { "level": "error", "options": { "ignoreNull": true } }
+          }
+        }
+      }
+    },
+    {
+      // Ignore generated type declaration files and dist outputs.
+      "includes": ["**/*.d.ts", "**/dist/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      // Allow snake_case object properties in Zod schemas without inline ignores.
+      // These files intentionally mirror API payload shapes.
+      "includes": ["packages/types/**/*.{js,ts}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useNamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "**/*.{test,spec}.{js,jsx,ts,tsx}",
         "**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
+        "**/packages/**/*.{test,spec}.{js,jsx,ts,tsx}",
+        "**/packages/**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
         "**/{features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
       ],
       "linter": {

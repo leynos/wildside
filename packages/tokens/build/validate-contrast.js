@@ -6,9 +6,9 @@
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { readJson } from '../build-utils/read-json.js';
 import { contrast } from '../src/utils/color.js';
 import { resolveToken } from '../src/utils/tokens.js';
-import { readJson } from '../build-utils/read-json.js';
 
 // Load package settings for defaults.
 /**
@@ -59,13 +59,13 @@ function validatePkgJson(json) {
   }
 }
 
-/** Resolve the contrast threshold from CLI, env, or package.json.
+/** Resolve the contrast threshold from CLI or package.json.
  *
  * @returns {number} Desired contrast ratio.
  * @example
  * ```js
  * // CLI: node validate-contrast.js 5 -> returns 5
- * process.env.CONTRAST_THRESHOLD = '4.5';
+ * // Or fallback to package.json "contrastThreshold"
  * getThreshold(); //=> 4.5
  * ```
  */
@@ -103,7 +103,7 @@ function parseThresholdSource(src) {
 }
 
 function getThreshold() {
-  const sources = [process.argv[2], process.env.CONTRAST_THRESHOLD, pkgJson.contrastThreshold];
+  const sources = [process.argv[2], pkgJson.contrastThreshold];
   for (const src of sources) {
     const value = parseThresholdSource(src);
     if (value !== null) return value;
@@ -163,9 +163,12 @@ function calculateColorRatio(fgRef, bgRef) {
 function validateColorPair(colorPair, context) {
   const { label, fgRef, bgRef } = colorPair;
   const { threshold, fileHint } = context;
-  if (fgRef == null || bgRef == null) {
-    return `${label} in ${fileHint} is missing a value or contrast token`;
-  }
+  const invalidRef =
+    typeof fgRef !== 'string' ||
+    typeof bgRef !== 'string' ||
+    fgRef.trim() === '' ||
+    bgRef.trim() === '';
+  if (invalidRef) return `${label} in ${fileHint} is missing a value or contrast token`;
   try {
     const ratio = calculateColorRatio(fgRef, bgRef);
     return ratio < threshold
@@ -308,7 +311,9 @@ for (const file of themeFiles) {
 }
 
 if (allErrors.length) {
-  allErrors.forEach((e) => console.error(e));
+  for (const err of allErrors) {
+    console.error(err);
+  }
   process.exit(1);
 }
 

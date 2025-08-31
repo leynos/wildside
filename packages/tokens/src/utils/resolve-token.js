@@ -36,39 +36,76 @@ function* enumerate(iterable) {
  * @example
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
+function resolvePathOrThrow(tokens, key) {
+  const segments = key.split('.');
+  let cursor = tokens;
+  for (const [index, segment] of enumerate(segments)) {
+    const missing = segments.slice(0, index + 1).join('.');
+    const hasObjectShape = cursor && typeof cursor === 'object';
+    const siblings = hasObjectShape ? Object.keys(cursor).slice(0, 10) : [];
+    const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
+
+    // 1) Cursor is falsy
+    if (!cursor) {
+      throw new Error(
+        `Token path "${missing}" not found (while resolving "${key}"). ` +
+          `Reason: cursor is null/undefined.${hint}`,
+      );
+    }
+
+    // 2) Cursor is not an object
+    if (typeof cursor !== 'object') {
+      throw new Error(
+        `Token path "${missing}" not found (while resolving "${key}"). ` +
+          `Reason: cursor is not an object.${hint}`,
+      );
+    }
+
+    // 3) Segment missing on current object
+    if (!Object.hasOwn(cursor, segment)) {
+      throw new Error(`Token path "${missing}" not found (while resolving "${key}").${hint}`);
+    }
+
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+
+function getTokenValue(tokens, key) {
+  const node = resolvePathOrThrow(tokens, key);
+  const { value } = node ?? {};
+  if (typeof value !== 'string') {
+    throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
+  }
+  return value;
+}
+
+/** Assert that the provided tokens tree is a valid object. */
+function assertValidTokens(tokens) {
+  if (tokens === null || tokens === undefined || typeof tokens !== 'object') {
+    throw new TypeError('tokens must be an object token tree');
+  }
+}
+
 export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {
     throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
   }
-  if (tokens == null || typeof tokens !== 'object') {
-    throw new TypeError('tokens must be an object token tree');
-  }
-  let current = ref;
+  assertValidTokens(tokens);
+
   const seen = new Set();
+  let current = ref;
+  const refRe = /^\{(.+)\}$/;
+
   while (typeof current === 'string') {
-    const match = /^\{(.+)\}$/.exec(current.trim());
+    const match = refRe.exec(current.trim());
     if (!match) return current;
+
     const key = match[1].trim();
-    if (seen.has(key)) {
-      throw new Error(`Circular token reference detected: "${key}"`);
-    }
+    if (seen.has(key)) throw new Error(`Circular token reference detected: "${key}"`);
     seen.add(key);
-    const pathSegments = key.split('.');
-    let cursor = tokens;
-    for (const [segmentIndex, segment] of enumerate(pathSegments)) {
-      if (cursor?.[segment] == null) {
-        const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
-        const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
-        const hint =
-          siblings.length > 0 ? ` Available keys: ${siblings.slice(0, 10).join(', ')}` : '';
-        throw new Error(`Token path "${missingPath}" not found (while resolving "${key}").${hint}`);
-      }
-      cursor = cursor[segment];
-    }
-    current = cursor?.value;
-    if (current == null || typeof current !== 'string') {
-      throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
-    }
+
+    current = getTokenValue(tokens, key);
   }
   return current;
 }

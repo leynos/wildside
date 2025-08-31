@@ -16,14 +16,14 @@ import { resolveToken as baseResolveToken } from './resolve-token.js';
 const tokensJson = JSON.parse(readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'));
 
 // Freeze to guard against accidental mutation at runtime.
-const TOKENS = Object.freeze(tokensJson);
+const DefaultTokens = Object.freeze(tokensJson);
 
 /**
  * Resolve a `{token.path}` reference to its concrete value.
  * Follows chained references and detects cycles.
  *
  * @param {string} ref - Token reference in `{path.to.token}` form.
- * @param {object} [tokens=TOKENS] - Token tree mirroring the structure of
+ * @param {object} [tokens=DefaultTokens] - Token tree mirroring the structure of
  * `tokens.json`, where leaves contain a `value` string.
  * @returns {string} Token value.
  * @throws {TypeError} If `ref` is not a string or `tokens` is not an object.
@@ -32,6 +32,6 @@ const TOKENS = Object.freeze(tokensJson);
  * resolveToken('{color.brand}')
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
-export function resolveToken(ref, tokens = TOKENS) {
+export function resolveToken(ref, tokens = DefaultTokens) {
   return baseResolveToken(ref, tokens);
 }
