@@ -43,6 +43,7 @@ lint:
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+	npm test --workspaces --if-present
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
