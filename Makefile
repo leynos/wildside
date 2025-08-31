@@ -1,7 +1,7 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test \
-	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck \
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 all: fmt lint test
 
 clean:
@@ -46,6 +46,12 @@ test:
 	# Ensure JavaScript dependencies are present for all workspaces
 	npm ci --workspaces || npm install --workspaces
 	npm --workspaces run test --if-present --silent --no-audit --no-fund
+
+typecheck:
+	bun install
+	bun x tsc --noEmit -p frontend-pwa/tsconfig.json
+	bun x tsc --noEmit -p packages/tokens/tsconfig.json
+	bun x tsc --noEmit -p packages/types/tsconfig.json
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

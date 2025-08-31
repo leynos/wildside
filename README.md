@@ -9,10 +9,10 @@ data-validation pipeline. The strategy emphasises cost control, security-first
 AI integration, and clear differentiation from fitness, hiking, and static tour
 apps.
 
-## Formatting and linting
+## Formatting, linting, and type checking
 
-Use the Makefile targets to format and lint both the Rust backend and the
-TypeScript/JavaScript workspaces via Biome:
+Use the Makefile targets to format, lint, and type-check both the Rust backend and the
+TypeScript/JavaScript workspaces:
 
 ```bash
 # Format all code (Rust + Biome with write)
@@ -20,6 +20,9 @@ make fmt
 
 # Lint all code (Clippy + Biome CI)
 make lint
+
+# Type-check TypeScript workspaces
+make typecheck
 
 # Check formatting only (no writes)
 make check-fmt
