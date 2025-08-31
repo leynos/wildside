@@ -62,7 +62,7 @@ function unwrap(input) {
   if ('value' in input) {
     return input.value;
   }
-  return Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unwrap(v)]));
+  return Object.fromEntries(Object.entries(input).map(([key, val]) => [key, unwrap(val)]));
 }
 
 const preset = {
@@ -71,7 +71,7 @@ const preset = {
       spacing: unwrap(tokens.space ?? {}),
       borderRadius: unwrap(tokens.radius ?? {}),
       colors: Object.fromEntries(
-        Object.entries(tokens.color ?? {}).map(([k, v]) => [k, unwrap(v)]),
+        Object.entries(tokens.color ?? {}).map(([key, val]) => [key, unwrap(val)]),
       ),
     },
   },
