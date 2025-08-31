@@ -59,10 +59,15 @@ function unwrap(input) {
   if (Array.isArray(input)) {
     return input.map(unwrap);
   }
-  if ('value' in input) {
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: using hasOwnProperty via Object.prototype to avoid shadowing issues
+  if (Object.prototype.hasOwnProperty.call(input, 'value')) {
     return input.value;
   }
-  return Object.fromEntries(Object.entries(input).map(([key, val]) => [key, unwrap(val)]));
+  return Object.fromEntries(
+    Object.entries(input)
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .map(([key, val]) => [key, unwrap(val)]),
+  );
 }
 
 const preset = {
@@ -71,13 +76,19 @@ const preset = {
       spacing: unwrap(tokens.space ?? {}),
       borderRadius: unwrap(tokens.radius ?? {}),
       colors: Object.fromEntries(
-        Object.entries(tokens.color ?? {}).map(([key, val]) => [key, unwrap(val)]),
+        Object.entries(tokens.color ?? {})
+          .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+          .map(([key, val]) => [key, unwrap(val)]),
       ),
     },
   },
 };
 fs.mkdirSync('dist/tw', { recursive: true });
-fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};\n`, 'utf-8');
+fs.writeFileSync(
+  'dist/tw/preset.js',
+  `export default ${JSON.stringify(preset, null, 2)};\n`,
+  'utf-8',
+);
 
 const themesUrl = new URL('../src/themes/', import.meta.url);
 // Convert the URL to a file-system path via `fileURLToPath` for cross-platform compatibility.
@@ -99,6 +110,6 @@ const daisyThemes = themeFiles.map((file) => {
 fs.mkdirSync('dist/daisy', { recursive: true });
 fs.writeFileSync(
   'dist/daisy/theme.js',
-  `export default {themes: ${JSON.stringify(daisyThemes)}};\n`,
+  `export default ${JSON.stringify({ themes: daisyThemes }, null, 2)};\n`,
   'utf-8',
 );
