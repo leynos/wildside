@@ -36,59 +36,46 @@ function* enumerate(iterable) {
  * @example
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
-function assertStringRef(ref) {
-  if (typeof ref !== 'string') {
-    throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
-  }
-}
-
-function assertTokenTree(tokens) {
-  if (tokens === null || typeof tokens !== 'object') {
-    throw new TypeError('tokens must be an object token tree');
-  }
-}
-
-const refMatch = (value) => /^\{(.+)\}$/.exec(value.trim());
-
-function resolvePathOrThrow(tokens, key) {
-  const pathSegments = key.split('.');
+function getTokenValue(tokens, key) {
+  const segments = key.split('.');
   let cursor = tokens;
-  for (const [segmentIndex, segment] of enumerate(pathSegments)) {
+  for (const [index, segment] of enumerate(segments)) {
     if (!cursor || typeof cursor !== 'object' || !(segment in cursor)) {
-      const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
-      const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
-      const hint =
-        siblings.length > 0 ? ` Available keys: ${siblings.slice(0, 10).join(', ')}` : '';
-      throw new Error(`Token path "${missingPath}" not found (while resolving "${key}").${hint}`);
+      const missing = segments.slice(0, index + 1).join('.');
+      const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor).slice(0, 10) : [];
+      const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
+      throw new Error(`Token path "${missing}" not found (resolving "${key}").${hint}`);
     }
     cursor = cursor[segment];
   }
-  return cursor;
-}
-
-function extractTokenValue(node, key) {
-  const value = node?.value;
-  if (value === null || typeof value !== 'string') {
+  const { value } = cursor ?? {};
+  if (typeof value !== 'string') {
     throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
   }
   return value;
 }
 
 export function resolveToken(ref, tokens) {
-  assertStringRef(ref);
-  assertTokenTree(tokens);
+  if (typeof ref !== 'string') {
+    throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
+  }
+  if (tokens === null || tokens === undefined || typeof tokens !== 'object') {
+    throw new TypeError('tokens must be an object token tree');
+  }
 
-  let current = ref;
   const seen = new Set();
+  let current = ref;
+  const refRe = /^\{(.+)\}$/;
+
   while (typeof current === 'string') {
-    const match = refMatch(current);
+    const match = refRe.exec(current.trim());
     if (!match) return current;
+
     const key = match[1].trim();
     if (seen.has(key)) throw new Error(`Circular token reference detected: "${key}"`);
     seen.add(key);
 
-    const node = resolvePathOrThrow(tokens, key);
-    current = extractTokenValue(node, key);
+    current = getTokenValue(tokens, key);
   }
   return current;
 }

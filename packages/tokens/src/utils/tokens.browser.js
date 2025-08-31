@@ -2,7 +2,7 @@
 import { resolveToken as baseResolveToken } from './resolve-token.js';
 
 // No default token tree to avoid bundling large JSON payloads in the browser.
-export const tokensDefault = undefined;
+export const DefaultTokens = undefined;
 
 /**
  * Resolve a `{token.path}` reference using an injected token tree.
@@ -10,11 +10,11 @@ export const tokensDefault = undefined;
  * and receive a clear `TypeError` when tokens are not provided.
  *
  * @param {string} ref - Token reference in `{path.to.token}` form.
- * @param {object} [tokens=tokensDefault] - Token tree mirroring `tokens.json`.
+ * @param {object} [tokens=DEFAULT_TOKENS] - Token tree mirroring `tokens.json`.
  * @returns {string} Token value.
  * @throws {TypeError} If `ref` is not a string or `tokens` is not an object.
  * @throws {Error} If the token path does not exist or a circular reference is detected.
  */
-export function resolveToken(ref, tokens = tokensDefault) {
+export function resolveToken(ref, tokens = DefaultTokens) {
   return baseResolveToken(ref, tokens);
 }
