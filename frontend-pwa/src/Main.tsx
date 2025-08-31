@@ -8,7 +8,7 @@ import '@app/tokens/css/variables.css';
 import './index.css';
 import { App } from './app/App';
 
-const queryClient = new QueryClient({
+const QUERY_CLIENT = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
@@ -17,12 +17,12 @@ const queryClient = new QueryClient({
     },
   },
 });
-const rootElem = document.getElementById('root');
-if (!rootElem) throw new Error('#root element not found');
+const ROOT_ELEM = document.getElementById('root');
+if (!ROOT_ELEM) throw new Error('#root element not found');
 
-createRoot(rootElem).render(
+createRoot(ROOT_ELEM).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={QUERY_CLIENT}>
       <App />
     </QueryClientProvider>
   </React.StrictMode>,
