@@ -18,5 +18,3 @@ export const TOKENS = undefined;
 export function resolveToken(ref, tokens = TOKENS) {
   return baseResolveToken(ref, tokens);
 }
-
-

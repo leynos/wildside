@@ -55,9 +55,7 @@ function hasRequiredPkgFields(json) {
  */
 function validatePkgJson(json) {
   if (!hasRequiredPkgFields(json)) {
-    throw new Error(
-      'package.json must be a valid object with "name" and "version" string fields.',
-    );
+    throw new Error('package.json must be a valid object with "name" and "version" string fields.');
   }
 }
 

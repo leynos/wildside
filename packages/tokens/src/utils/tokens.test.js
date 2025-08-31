@@ -22,10 +22,7 @@ test('resolves a chained reference', () => {
 
 test('throws on circular reference', () => {
   const tokens = { a: { value: '{b}' }, b: { value: '{a}' } };
-  assert.throws(
-    () => resolveToken('{a}', tokens),
-    /Circular token reference detected: "a"/,
-  );
+  assert.throws(() => resolveToken('{a}', tokens), /Circular token reference detected: "a"/);
 });
 
 test('throws on missing path with enriched message', () => {
@@ -47,10 +44,7 @@ test('throws on invalid tokens arg', () => {
   // Assert class
   assert.throws(() => resolveToken('{color.brand}', null), TypeError);
   // Assert message
-  assert.throws(
-    () => resolveToken('{color.brand}', null),
-    /tokens must be an object token tree/,
-  );
+  assert.throws(() => resolveToken('{color.brand}', null), /tokens must be an object token tree/);
 });
 
 test('throws on non-string ref', () => {
@@ -58,9 +52,7 @@ test('throws on non-string ref', () => {
     () => resolveToken(123, baseTokens),
     (err) =>
       err instanceof TypeError &&
-      /ref must be a string like "\{path\.to\.token\}" or a literal string/.test(
-        err.message,
-      ),
+      /ref must be a string like "\{path\.to\.token\}" or a literal string/.test(err.message),
   );
 });
 

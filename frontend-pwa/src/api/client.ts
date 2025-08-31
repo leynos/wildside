@@ -24,8 +24,7 @@ Object.freeze(USERS_QK);
  */
 export const usersQK = {
   all: USERS_QK,
-  byId: (id: User['id']): readonly [...typeof USERS_QK, User['id']] =>
-    [...USERS_QK, id] as const,
+  byId: (id: User['id']): readonly [...typeof USERS_QK, User['id']] => [...USERS_QK, id] as const,
 } as const;
 Object.freeze(usersQK);
 

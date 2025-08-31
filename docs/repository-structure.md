@@ -123,8 +123,8 @@ myapp/
 ### Helm chart values structure
 
 The Helm chart values file (`values.yaml`) is organised in the following
-hierarchy. See [values-class-diagram.mmd](values-class-diagram.mmd) for a visual
-overview. Validation via
+hierarchy. See [values-class-diagram.mmd](values-class-diagram.mmd) for a
+visual overview. Validation via
 [`values.schema.json`](../deploy/charts/wildside/values.schema.json) enforces
 cross-field rules (for example, requiring `existingSecretName` when
 `secretEnvFromKeys` is set).
@@ -200,9 +200,8 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 ## 3) Design Tokens as a First‑Class Package
 
-**Goals:** single source of truth for
-colours/spacing/typography/radii; drive Tailwind/daisyUI and any
-future native shells.
+**Goals:** single source of truth for colours/spacing/typography/radii; drive
+Tailwind/daisyUI and any future native shells.
 
 - `packages/tokens/src/tokens.json`: global primitives (`color.*`, `space.*`,
   `radius.*`, `font.*`).
@@ -403,13 +402,13 @@ spec:
   ports: [{ port: 80, targetPort: http }]
 ```
 
-**Ingress** points `/api/*` to the Service. The frontend public hostname
-points to the CDN; only `/api` reaches the cluster. The chart renders a
-ConfigMap named `<release-name>-config`, populated from `.Values.config`; the
-Deployment injects keys from it via `configMapKeyRef`. Reference Secret keys
-using `existingSecretName` and `secretEnvFromKeys`; never commit secret
-material to Git—manage it with SOPS or an External Secrets operator. If
-enabled, `tlsSecretName` points to a pre‑provisioned TLS Secret.
+**Ingress** points `/api/*` to the Service. The frontend public hostname points
+to the CDN; only `/api` reaches the cluster. The chart renders a ConfigMap
+named `<release-name>-config`, populated from `.Values.config`; the Deployment
+injects keys from it via `configMapKeyRef`. Reference Secret keys using
+`existingSecretName` and `secretEnvFromKeys`; never commit secret material to
+Git—manage it with SOPS or an External Secrets operator. If enabled,
+`tlsSecretName` points to a pre‑provisioned TLS Secret.
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
