@@ -84,8 +84,8 @@ spec:
             - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $name }}
-                  key: {{ $secretKey }}
+                    name: {{ $name | quote }}
+                    key: {{ $secretKey | quote }}
           {{- end }}
         {{- end }}
 {{- with .Values.securityContext }}

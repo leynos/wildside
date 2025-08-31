@@ -983,7 +983,7 @@ kind: HelmRelease
 metadata:
   name: wildside-app
   namespace: myapp # Overridden by Kustomize overlays (production, ephemeral)
-spec:
+spec: # overlays will reset namespace; set explicitly if needed
   interval: 5m
   chart:
     spec:
