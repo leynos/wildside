@@ -59,13 +59,13 @@ function validatePkgJson(json) {
   }
 }
 
-/** Resolve the contrast threshold from CLI, env, or package.json.
+/** Resolve the contrast threshold from CLI or package.json.
  *
  * @returns {number} Desired contrast ratio.
  * @example
  * ```js
  * // CLI: node validate-contrast.js 5 -> returns 5
- * process.env.CONTRAST_THRESHOLD = '4.5';
+ * // Or fallback to package.json "contrastThreshold"
  * getThreshold(); //=> 4.5
  * ```
  */
@@ -103,7 +103,7 @@ function parseThresholdSource(src) {
 }
 
 function getThreshold() {
-  const sources = [process.argv[2], process.env.CONTRAST_THRESHOLD, pkgJson.contrastThreshold];
+  const sources = [process.argv[2], pkgJson.contrastThreshold];
   for (const src of sources) {
     const value = parseThresholdSource(src);
     if (value !== null) return value;
@@ -308,7 +308,9 @@ for (const file of themeFiles) {
 }
 
 if (allErrors.length) {
-  allErrors.forEach((e) => console.error(e));
+  for (const err of allErrors) {
+    console.error(err);
+  }
   process.exit(1);
 }
 
