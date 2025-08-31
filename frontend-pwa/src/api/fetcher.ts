@@ -92,13 +92,13 @@ const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boole
     !headers.has('Content-Type') &&
     (bodyInfo.isJson || (rawBody != null && shouldAddJsonContentType(rawBody, headers)))
   ) {
-    headers.set('Content-Type', 'application/json');
+    headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
 };
 
 const parseErrorDetail = async (res: Response): Promise<unknown> => {
-  const ct = res.headers.get('content-type') ?? '';
+  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
   try {
     return ct.includes('json') ? await res.json() : await res.text();
   } catch {
@@ -107,10 +107,11 @@ const parseErrorDetail = async (res: Response): Promise<unknown> => {
 };
 
 const shouldParseJson = (res: Response): boolean => {
-  if (res.status === 204) return false;
-  const ct = res.headers.get('content-type') ?? '';
+  if (res.status === 204 || res.status === 205) return false;
+  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
   const len = res.headers.get('content-length');
-  return ct.includes('json') && len !== '0';
+  const hasBody = len == null || len !== '0';
+  return ct.includes('json') && hasBody;
 };
 
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
