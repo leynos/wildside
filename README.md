@@ -11,8 +11,8 @@ apps.
 
 ## Formatting, linting, and type checking
 
-Use the Makefile targets to format, lint, and type-check both the Rust backend and the
-TypeScript/JavaScript workspaces:
+Use the Makefile targets to format, lint, and type-check both the Rust backend
+and the TypeScript/JavaScript workspaces:
 
 ```bash
 # Format all code (Rust + Biome with write)

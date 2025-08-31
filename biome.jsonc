@@ -140,7 +140,6 @@
           "options": { "maxAllowedComplexity": 15 }
         },
         "noForEach": "error",
-        "noImplicitCoercions": "error",
         "noUselessCatch": "error",
         "noUselessTernary": "error",
         "noStaticOnlyClass": "error",
