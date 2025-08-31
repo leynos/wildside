@@ -198,6 +198,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/**/*.{js,ts}", "packages/**/index.js"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useNamingConvention": "off"
+          }
+        }
+      }
     }
   ]
 }
