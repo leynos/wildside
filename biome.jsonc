@@ -30,7 +30,9 @@
     "useIgnoreFile": true
   },
   /*
-  TODO: Enable this when tailwindDirectives is released
+  TODO: Enable when Biome adds support for Tailwind CSS directives
+  Tracking: https://github.com/biomejs/biome/issues/XXXX (tailwindDirectives)
+  Target: enable when Biome >= v1.9.0 or by 2025-01-31
   "css": {
     "parser": {
       "tailwindDirectives": true
@@ -73,8 +75,7 @@
         "noVar": "error",
         "noConstEnum": "error",
         "useGetterReturn": "error",
-        // TODO: Remove this when tailwindDirectives is released
-        "noUnknownAtRules": "off"
+        "noUnknownAtRules": "error"
       },
       "style": {
         "noInferrableTypes": "error",
@@ -169,6 +170,25 @@
       "linter": { "enabled": false }
     },
     {
+      // Build scripts may legitimately write diagnostic output to the console.
+      "includes": ["packages/tokens/build/**/*.js"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      // Tailwind/PostCSS styles include framework-specific at‑rules in the app styles.
+      // Scope suppression narrowly to the actual project layout.
+      "includes": [
+        "frontend-pwa/src/**/*.css",
+        "frontend-pwa/src/**/*.pcss",
+        "frontend-pwa/src/index.css"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noUnknownAtRules": "off" }
+        }
+      }
+    },
+    {
       // Allow `x != null` nullish checks in fetcher for concise header/body logic
       "includes": ["frontend-pwa/src/api/fetcher.ts"],
       "linter": {
@@ -201,7 +221,9 @@
       "includes": [
         "**/*.{test,spec}.{js,jsx,ts,tsx}",
         "**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
-        "**/{packages,features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
+        "**/packages/**/*.{test,spec}.{js,jsx,ts,tsx}",
+        "**/packages/**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
+        "**/{features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
       ],
       "linter": {
         "rules": {
