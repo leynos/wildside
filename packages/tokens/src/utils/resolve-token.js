@@ -36,19 +36,44 @@ function* enumerate(iterable) {
  * @example
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
-function getTokenValue(tokens, key) {
+function resolvePathOrThrow(tokens, key) {
   const segments = key.split('.');
   let cursor = tokens;
   for (const [index, segment] of enumerate(segments)) {
-    if (!cursor || typeof cursor !== 'object' || !(segment in cursor)) {
-      const missing = segments.slice(0, index + 1).join('.');
-      const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor).slice(0, 10) : [];
-      const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
-      throw new Error(`Token path "${missing}" not found (resolving "${key}").${hint}`);
+    const missing = segments.slice(0, index + 1).join('.');
+    const hasObjectShape = cursor && typeof cursor === 'object';
+    const siblings = hasObjectShape ? Object.keys(cursor).slice(0, 10) : [];
+    const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
+
+    // 1) Cursor is falsy
+    if (!cursor) {
+      throw new Error(
+        `Token path "${missing}" not found (while resolving "${key}"). ` +
+          `Reason: cursor is null/undefined.${hint}`,
+      );
     }
+
+    // 2) Cursor is not an object
+    if (typeof cursor !== 'object') {
+      throw new Error(
+        `Token path "${missing}" not found (while resolving "${key}"). ` +
+          `Reason: cursor is not an object.${hint}`,
+      );
+    }
+
+    // 3) Segment missing on current object
+    if (!(segment in cursor)) {
+      throw new Error(`Token path "${missing}" not found (while resolving "${key}").${hint}`);
+    }
+
     cursor = cursor[segment];
   }
-  const { value } = cursor ?? {};
+  return cursor;
+}
+
+function getTokenValue(tokens, key) {
+  const node = resolvePathOrThrow(tokens, key);
+  const { value } = node ?? {};
   if (typeof value !== 'string') {
     throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
   }
