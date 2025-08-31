@@ -13,16 +13,19 @@ export type UserId = z.infer<typeof UserIdSchema>;
 export declare const UserSchema: z.ZodObject<
   {
     id: z.ZodBranded<z.ZodString, 'UserId'>;
+    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
     display_name: z.ZodString;
   },
   'strict',
   z.ZodTypeAny,
   {
     id?: string & z.BRAND<'UserId'>;
+    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
     display_name?: string;
   },
   {
     id?: string;
+    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
     display_name?: string;
   }
 >;
@@ -33,16 +36,19 @@ export declare const UsersSchema: z.ZodArray<
   z.ZodObject<
     {
       id: z.ZodBranded<z.ZodString, 'UserId'>;
+      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
       display_name: z.ZodString;
     },
     'strict',
     z.ZodTypeAny,
     {
       id?: string & z.BRAND<'UserId'>;
+      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
       display_name?: string;
     },
     {
       id?: string;
+      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
       display_name?: string;
     }
   >,

@@ -10,6 +10,7 @@ export const UserIdSchema = z.string().brand();
 export const UserSchema = z
   .object({
     id: UserIdSchema,
+    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
     display_name: z.string().trim().min(1, 'display_name must not be empty'),
   })
   .strict();
