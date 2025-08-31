@@ -1,6 +1,7 @@
 /** @file Tests for design token resolution utilities. */
-import test from 'node:test';
+
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { resolveToken } from './tokens.js';
 
 // helper tokens for tests

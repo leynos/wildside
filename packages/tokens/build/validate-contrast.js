@@ -6,9 +6,9 @@
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { readJson } from '../build-utils/read-json.js';
 import { contrast } from '../src/utils/color.js';
 import { resolveToken } from '../src/utils/tokens.js';
-import { readJson } from '../build-utils/read-json.js';
 
 // Load package settings for defaults.
 /**
