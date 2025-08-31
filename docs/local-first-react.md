@@ -1442,8 +1442,8 @@ accessed on August 20, 2025,
 accessed on August 20, 2025,
 [https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query](https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query)
 
-[^24] Behavior of onSuccess and idea for callbacks · TanStack query · Discussion
-\# 5034 - GitHub, accessed on August 20, 2025,
+[^24] Behavior of onSuccess and idea for callbacks · TanStack query - GitHub,
+accessed on August 20, 2025,
 [https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
 
 [^25] persistQueryClient | TanStack Query React Docs, accessed on August 20,
@@ -1513,10 +1513,10 @@ accessed on August 20, 2025,
 [https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/](https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/)
 
 [^42] TanStack/db: A reactive client store for building super fast apps on sync
+GitHub, accessed on August 20, 2025,
+[https://github.com/TanStack/db](https://github.com/TanStack/db)
 
-- GitHub, accessed on August 20, 2025,
-[https://github.com/TanStack/db](https://github.com/TanStack/db) [^43]
-Local-first sync with TanStack DB and Electric | ElectricSQL, accessed on
+[^43] Local-first sync with TanStack DB and Electric | ElectricSQL, accessed on
 August 20, 2025,
 [https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db](https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db)
 
@@ -1534,9 +1534,7 @@ accessed on August 21, 2025,
 [https://www.xstateforreactdevelopers.com/](https://www.xstateforreactdevelopers.com/)
 
 [^48] Mastering State Management with XState React: Best Practices for
-Developers
-
-- DhiWise, accessed on August 21, 2025,
+Developers - DhiWise, accessed on August 21, 2025,
 [https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices](https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices)
 
 [^49] This Library Makes State Management So Much Easier - YouTube, accessed on
