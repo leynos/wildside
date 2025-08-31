@@ -47,6 +47,8 @@ config:
 
 # Reference an externally managed Secret; map environment variables to keys.
 existingSecretName: ""
+# Allow rendering to proceed even if the Secret is missing; set to false to fail.
+allowMissingSecret: true
 secretEnvFromKeys: {}
 
 affinity: {}
