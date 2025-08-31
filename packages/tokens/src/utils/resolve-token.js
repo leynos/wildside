@@ -80,13 +80,18 @@ function getTokenValue(tokens, key) {
   return value;
 }
 
+/** Assert that the provided tokens tree is a valid object. */
+function assertValidTokens(tokens) {
+  if (tokens === null || tokens === undefined || typeof tokens !== 'object') {
+    throw new TypeError('tokens must be an object token tree');
+  }
+}
+
 export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {
     throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
   }
-  if (tokens === null || tokens === undefined || typeof tokens !== 'object') {
-    throw new TypeError('tokens must be an object token tree');
-  }
+  assertValidTokens(tokens);
 
   const seen = new Set();
   let current = ref;

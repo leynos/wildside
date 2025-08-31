@@ -19,17 +19,28 @@ const isBinary = (body: unknown): boolean =>
   (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
 const isStringBody = (body: unknown): boolean => typeof body === 'string';
 
+// Decide whether we should add a JSON Content-Type header for this request.
+// Uses early returns to keep branch complexity low and intent obvious.
+const shouldAddJsonContentTypeHeader = (
+  headers: Headers,
+  bodyInfo: { isJson: boolean },
+  rawBody: unknown,
+): boolean => {
+  if (headers.has('Content-Type')) return false;
+  if (bodyInfo.isJson) return true;
+  if (rawBody == null) return false;
+  if (isFormData(rawBody)) return false;
+  if (isBlob(rawBody)) return false;
+  if (isUrlEncoded(rawBody)) return false;
+  if (isBinary(rawBody)) return false;
+  return isStringBody(rawBody);
+};
+
 // (former shouldAddJsonContentType) merged into defaultHeaders to keep logic in one place
 
 /** Predicate: does value represent a native non-JSON body type? */
 const isNativeBodyType = (value: unknown): boolean => {
-  return (
-    (typeof FormData !== 'undefined' && value instanceof FormData) ||
-    (typeof Blob !== 'undefined' && value instanceof Blob) ||
-    (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams) ||
-    (typeof ArrayBuffer !== 'undefined' &&
-      (value instanceof ArrayBuffer || ArrayBuffer.isView(value as ArrayBufferView)))
-  );
+  return isFormData(value) || isBlob(value) || isUrlEncoded(value) || isBinary(value);
 };
 
 /** Predicate: treat POJOs and arrays as JSON serialisable structures. */
@@ -79,17 +90,9 @@ const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boole
 
   // Only set Content-Type if not specified by caller and it's clearly JSON.
   // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
-  if (!headers.has('Content-Type')) {
-    const rawBody = init?.body as unknown;
-    const shouldSetFromString =
-      isStringBody(rawBody) &&
-      !isFormData(rawBody) &&
-      !isBlob(rawBody) &&
-      !isUrlEncoded(rawBody) &&
-      !isBinary(rawBody);
-    if (bodyInfo.isJson || shouldSetFromString) {
-      headers.set('Content-Type', 'application/json; charset=utf-8');
-    }
+  const rawBody = init?.body as unknown;
+  if (shouldAddJsonContentTypeHeader(headers, bodyInfo, rawBody)) {
+    headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
 };
