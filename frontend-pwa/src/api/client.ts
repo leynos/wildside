@@ -12,21 +12,22 @@ import { customFetchParsed } from './fetcher';
  * Query key for user listings.
  *
  * @example
- * useQuery({ queryKey: USERS_QK, queryFn: listUsers });
- * @see usersQK for composed keys
+ * useQuery({ queryKey: usersQueryKey, queryFn: listUsers });
+ * @see usersQueryKeys for composed keys
  */
-export const USERS_QK = ['users'] as const satisfies QueryKey;
+export const usersQueryKey = ['users'] as const satisfies QueryKey;
 // Freeze to guard against accidental mutation at runtime.
-Object.freeze(USERS_QK);
+Object.freeze(usersQueryKey);
 
 /**
  * Helpers for composing user query keys.
  */
-export const usersQK = {
-  all: USERS_QK,
-  byId: (id: User['id']): readonly [...typeof USERS_QK, User['id']] => [...USERS_QK, id] as const,
+export const usersQueryKeys = {
+  all: usersQueryKey,
+  byId: (id: User['id']): readonly [...typeof usersQueryKey, User['id']] =>
+    [...usersQueryKey, id] as const,
 } as const;
-Object.freeze(usersQK);
+Object.freeze(usersQueryKeys);
 
 /**
  * Fetch all registered users.

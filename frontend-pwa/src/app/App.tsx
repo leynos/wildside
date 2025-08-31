@@ -2,11 +2,11 @@
  * @file Root application component.
  */
 import { useQuery } from '@tanstack/react-query';
-import { listUsers, USERS_QK } from '../api/client';
+import { listUsers, usersQueryKey } from '../api/client';
 
 export function App() {
   const { data, isLoading, isError } = useQuery({
-    queryKey: USERS_QK,
+    queryKey: usersQueryKey,
     queryFn: ({ signal }) => listUsers(signal),
     placeholderData: (prev) => prev,
   });
