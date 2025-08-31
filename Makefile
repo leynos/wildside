@@ -39,7 +39,7 @@ fmt:
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-	bun x biome ci frontend-pwa packages/tokens/src packages/tokens/build packages/types/src
+	bun x biome ci frontend-pwa packages
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features

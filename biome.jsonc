@@ -95,7 +95,16 @@
               { "selector": { "kind": "typeLike" }, "formats": ["PascalCase"] },
               { "selector": { "kind": "enum" }, "formats": ["PascalCase"] },
               { "selector": { "kind": "classMember", "modifiers": ["private"] }, "match": "_(.+)" },
-              { "selector": { "kind": "const", "scope": "global" }, "formats": ["CONSTANT_CASE"] }
+              // Global consts: allow camel/Pascal, not CONSTANT_CASE
+              {
+                "selector": { "kind": "const", "scope": "global" },
+                "formats": ["camelCase", "PascalCase"]
+              },
+              // Class static readonly props: force camelCase
+              {
+                "selector": { "kind": "classProperty", "modifiers": ["static", "readonly"] },
+                "formats": ["camelCase"]
+              }
             ]
           }
         },
@@ -195,16 +204,6 @@
         "rules": {
           "style": {
             "noProcessEnv": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["packages/**/*.{js,ts}", "packages/**/index.js"],
-      "linter": {
-        "rules": {
-          "style": {
-            "useNamingConvention": "off"
           }
         }
       }
