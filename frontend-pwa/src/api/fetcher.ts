@@ -8,6 +8,27 @@ import type { z } from 'zod';
 
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
+// Content-type predicates kept small and explicit to reduce complexity
+const isFormData = (body: unknown): boolean =>
+  typeof FormData !== 'undefined' && body instanceof FormData;
+const isBlob = (body: unknown): boolean => typeof Blob !== 'undefined' && body instanceof Blob;
+const isUrlEncoded = (body: unknown): boolean =>
+  typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
+const isBinary = (body: unknown): boolean =>
+  typeof ArrayBuffer !== 'undefined' &&
+  (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
+const isStringBody = (body: unknown): boolean => typeof body === 'string';
+
+// Refactored to use simple predicates while preserving behavior
+const shouldAddJsonContentType = (body: unknown, headers: Headers): boolean => {
+  if (headers.has('Content-Type')) return false;
+  if (isFormData(body)) return false;
+  if (isBlob(body)) return false;
+  if (isUrlEncoded(body)) return false;
+  if (isBinary(body)) return false;
+  return isStringBody(body);
+};
+
 /** Predicate: does value represent a native non-JSON body type? */
 const isNativeBodyType = (value: unknown): boolean => {
   return (
@@ -64,8 +85,13 @@ const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boole
   const headers = new Headers(init?.headers as HeadersInit | undefined);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
 
-  // Only set Content-Type if not specified by caller and we know it's JSON.
-  if (bodyInfo.isJson && !headers.has('Content-Type')) {
+  // Only set Content-Type if not specified by caller and it's clearly JSON.
+  // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
+  const rawBody = init?.body as unknown;
+  if (
+    !headers.has('Content-Type') &&
+    (bodyInfo.isJson || (rawBody != null && shouldAddJsonContentType(rawBody, headers)))
+  ) {
     headers.set('Content-Type', 'application/json');
   }
   return headers;
