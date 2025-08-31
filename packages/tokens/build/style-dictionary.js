@@ -62,9 +62,7 @@ function unwrap(input) {
   if ('value' in input) {
     return input.value;
   }
-  return Object.fromEntries(
-    Object.entries(input).map(([k, v]) => [k, unwrap(v)]),
-  );
+  return Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unwrap(v)]));
 }
 
 const preset = {
@@ -83,9 +81,7 @@ fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};
 
 const themesUrl = new URL('../src/themes/', import.meta.url);
 // Convert the URL to a file-system path via `fileURLToPath` for cross-platform compatibility.
-const themeFiles = fs
-  .readdirSync(fileURLToPath(themesUrl))
-  .filter((f) => f.endsWith('.json'));
+const themeFiles = fs.readdirSync(fileURLToPath(themesUrl)).filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
   const json = readJson(new URL(file, themesUrl));
   const semantic = unwrap(json.semantic ?? {});

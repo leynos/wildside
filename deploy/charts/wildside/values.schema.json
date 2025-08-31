@@ -3,14 +3,14 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "replicaCount": {"type": "integer", "minimum": 1},
-    "nameOverride": {"type": "string"},
-    "fullnameOverride": {"type": "string"},
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
     "image": {
       "type": "object",
       "properties": {
-        "repository": {"type": "string"},
-        "tag": {"type": "string"},
+        "repository": { "type": "string" },
+        "tag": { "type": "string" },
         "pullPolicy": {
           "type": "string",
           "enum": ["Always", "IfNotPresent", "Never"]
@@ -25,16 +25,16 @@
         "requests": {
           "type": "object",
           "properties": {
-            "cpu": {"type": "string"},
-            "memory": {"type": "string"}
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
           },
           "additionalProperties": false
         },
         "limits": {
           "type": "object",
           "properties": {
-            "cpu": {"type": "string"},
-            "memory": {"type": "string"}
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
           },
           "additionalProperties": false
         }
@@ -44,9 +44,9 @@
     "pdb": {
       "type": "object",
       "properties": {
-        "enabled": {"type": "boolean"},
-        "minAvailable": {"type": "integer"},
-        "maxUnavailable": {"type": "integer"}
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": "integer" },
+        "maxUnavailable": { "type": "integer" }
       },
       "allOf": [
         {
@@ -64,20 +64,20 @@
           "type": "string",
           "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
         },
-        "portName": {"type": "string"},
-        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-        "targetPort": {"type": ["integer", "string"]},
-        "annotations": {"type": "object"}
+        "portName": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "targetPort": { "type": ["integer", "string"] },
+        "annotations": { "type": "object" }
       },
       "additionalProperties": false
     },
     "autoscaling": {
       "type": "object",
       "properties": {
-        "enabled": {"type": "boolean"},
-        "minReplicas": {"type": "integer"},
-        "maxReplicas": {"type": "integer"},
-        "targetCPUUtilizationPercentage": {"type": "integer"},
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer" },
+        "maxReplicas": { "type": "integer" },
+        "targetCPUUtilizationPercentage": { "type": "integer" },
         "behavior": {
           "type": "object",
           "additionalProperties": false
@@ -88,25 +88,19 @@
     "ingress": {
       "type": "object",
       "properties": {
-        "enabled": {"type": "boolean"},
-        "className": {"type": "string"},
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
         "hostname": {
           "type": "string",
-          "oneOf": [
-            {"const": ""},
-            {"format": "hostname", "minLength": 1}
-          ]
+          "oneOf": [{ "const": "" }, { "format": "hostname", "minLength": 1 }]
         },
         "tlsSecretName": {
           "type": "string",
-          "oneOf": [
-            {"const": ""},
-            {"minLength": 1}
-          ]
+          "oneOf": [{ "const": "" }, { "minLength": 1 }]
         },
         "annotations": {
           "type": "object",
-          "additionalProperties": {"type": "string"}
+          "additionalProperties": { "type": "string" }
         }
       },
       "allOf": [
@@ -129,27 +123,27 @@
       },
       "additionalProperties": false
     },
-    "existingSecretName": {"type": "string"},
+    "existingSecretName": { "type": "string" },
     "secretEnvFromKeys": {
       "type": "object",
-      "additionalProperties": {"type": "string"}
+      "additionalProperties": { "type": "string" }
     },
-    "affinity": {"type": "object"},
-    "podSecurityContext": {"type": "object"},
-    "securityContext": {"type": "object"},
-    "container": {"type": "object"}
+    "affinity": { "type": "object" },
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "container": { "type": "object" }
   },
   "allOf": [
     {
       "if": {
         "properties": {
-          "secretEnvFromKeys": {"minProperties": 1}
+          "secretEnvFromKeys": { "minProperties": 1 }
         }
       },
       "then": {
         "required": ["existingSecretName"],
         "properties": {
-          "existingSecretName": {"type": "string", "minLength": 1}
+          "existingSecretName": { "type": "string", "minLength": 1 }
         }
       }
     }

@@ -1353,7 +1353,6 @@ an even broader range of applications.
 
 ## Works cited
 
-
 [^1] Local-first software: You own your data, in spite of the cloud, accessed
 on August 20, 2025,
 [https://www.inkandswitch.com/essay/local-first/](https://www.inkandswitch.com/essay/local-first/)
@@ -1444,7 +1443,7 @@ accessed on August 20, 2025,
 [https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query](https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query)
 
 [^24] Behavior of onSuccess and idea for callbacks · TanStack query · Discussion
-#5034 - GitHub, accessed on August 20, 2025,
+\# 5034 - GitHub, accessed on August 20, 2025,
 [https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
 
 [^25] persistQueryClient | TanStack Query React Docs, accessed on August 20,
@@ -1468,7 +1467,8 @@ accessed on August 20, 2025,
 [https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/](https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/)
 
 [^30] Adding Offline Capabilities to React Native Apps with TanStack Query
-| Benoit Paul, accessed on August 20, 2025, [https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/](https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/) |
+| Benoit Paul, accessed on August 20, 2025,
+[https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/](https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/)
 
 [^31] WebSocket vs REST: Key differences and which to use - Ably, accessed on
 August 20, 2025,
@@ -1513,6 +1513,7 @@ accessed on August 20, 2025,
 [https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/](https://www.reddit.com/r/reactnative/comments/1arlfkd/how_do_you_guys_build_offlinefirst_apps_with/)
 
 [^42] TanStack/db: A reactive client store for building super fast apps on sync
+
 - GitHub, accessed on August 20, 2025,
 [https://github.com/TanStack/db](https://github.com/TanStack/db) [^43]
 Local-first sync with TanStack DB and Electric | ElectricSQL, accessed on
@@ -1534,6 +1535,7 @@ accessed on August 21, 2025,
 
 [^48] Mastering State Management with XState React: Best Practices for
 Developers
+
 - DhiWise, accessed on August 21, 2025,
 [https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices](https://www.dhiwise.com/post/mastering-state-management-with-xstate-react-best-practices)
 
@@ -1559,6 +1561,7 @@ Medium, accessed on August 21, 2025,
 
 [^54] How do you use XState with React Query (or other data-fetching/caching
 libs)? Should they even be used together? : r/reactjs
+
 - Reddit, accessed on August 21, 2025,
 [https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/](https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/)
 

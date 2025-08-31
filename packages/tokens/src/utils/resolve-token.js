@@ -38,9 +38,7 @@ function* enumerate(iterable) {
  */
 export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {
-    throw new TypeError(
-      'ref must be a string like "{path.to.token}" or a literal string',
-    );
+    throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
   }
   if (tokens == null || typeof tokens !== 'object') {
     throw new TypeError('tokens must be an object token tree');
@@ -60,25 +58,17 @@ export function resolveToken(ref, tokens) {
     for (const [segmentIndex, segment] of enumerate(pathSegments)) {
       if (cursor?.[segment] == null) {
         const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
-        const siblings =
-          cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
+        const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
         const hint =
-          siblings.length > 0
-            ? ` Available keys: ${siblings.slice(0, 10).join(', ')}`
-            : '';
-        throw new Error(
-          `Token path "${missingPath}" not found (while resolving "${key}").${hint}`,
-        );
+          siblings.length > 0 ? ` Available keys: ${siblings.slice(0, 10).join(', ')}` : '';
+        throw new Error(`Token path "${missingPath}" not found (while resolving "${key}").${hint}`);
       }
       cursor = cursor[segment];
     }
     current = cursor?.value;
     if (current == null || typeof current !== 'string') {
-      throw new TypeError(
-        `Token "${key}" must resolve to an object with a string "value"`,
-      );
+      throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
     }
   }
   return current;
 }
-
