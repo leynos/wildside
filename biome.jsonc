@@ -162,7 +162,7 @@
       "includes": [
         "**/*.{test,spec}.{js,jsx,ts,tsx}",
         "**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
-        "**/{features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
+        "**/{packages,features,step_definitions,steps}/**/*.{js,jsx,ts,tsx}"
       ],
       "linter": {
         "rules": {
