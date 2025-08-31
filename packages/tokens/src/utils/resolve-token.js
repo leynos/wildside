@@ -62,7 +62,7 @@ function resolvePathOrThrow(tokens, key) {
     }
 
     // 3) Segment missing on current object
-    if (!(segment in cursor)) {
+    if (!Object.hasOwn(cursor, segment)) {
       throw new Error(`Token path "${missing}" not found (while resolving "${key}").${hint}`);
     }
 
