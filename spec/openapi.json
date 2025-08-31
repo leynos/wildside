@@ -7,8 +7,14 @@
   },
   "servers": [
     {
-      "url": "https://api.yourdomain.example",
-      "description": "Production API"
+      "url": "https://{env}.api.yourdomain.example",
+      "description": "HTTP API",
+      "variables": {
+        "env": {
+          "default": "api",
+          "enum": ["api", "staging", "dev"]
+        }
+      }
     }
   ],
   "security": [{ "cookieAuth": [] }],
@@ -80,7 +86,8 @@
           "code": {
             "type": "string",
             "description": "Stable error code",
-            "example": "invalid_request"
+            "example": "invalid_request",
+            "pattern": "^[a-z0-9_.:-]+$"
           },
           "message": {
             "type": "string",
@@ -105,12 +112,15 @@
           "display_name": {
             "type": "string",
             "description": "User's display name",
-            "example": "Ada Lovelace"
+            "example": "Ada Lovelace",
+            "minLength": 1,
+            "maxLength": 100
           },
           "id": {
             "type": "string",
             "description": "Stable user identifier",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
+            "example": "123e4567-e89b-12d3-a456-426614174000",
+            "format": "uuid"
           }
         }
       }

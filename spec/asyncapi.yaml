@@ -12,6 +12,8 @@ channels:
 components:
   messages:
     UserCreated:
+      name: UserCreated
+      title: User created event
       payload:
         type: object
         additionalProperties: false
@@ -22,6 +24,8 @@ components:
           id:
             type: string
             description: Unique user identifier
+            examples: ["123e4567-e89b-12d3-a456-426614174000"]
           display_name:
             type: string
             description: User's display name
+            examples: ["Ada Lovelace"]
