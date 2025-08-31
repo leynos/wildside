@@ -297,12 +297,12 @@ function validateThemeJson(json, file) {
   validateBrandAndAccent(json.semantic, fileHint);
 }
 
-const themesDir = new URL('../src/themes/', import.meta.url);
+const themesUrl = new URL('../src/themes/', import.meta.url);
 // Convert the URL to a file-system path for cross-platform compatibility.
 const themeFiles = fs
-  .readdirSync(fileURLToPath(themesDir))
+  .readdirSync(fileURLToPath(themesUrl))
   .filter((f) => f.endsWith('.json'))
-  .map((f) => new URL(f, themesDir));
+  .map((f) => new URL(f, themesUrl));
 
 let allErrors = [];
 for (const file of themeFiles) {
