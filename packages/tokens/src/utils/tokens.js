@@ -23,7 +23,7 @@ const DefaultTokens = Object.freeze(tokensJson);
  * Follows chained references and detects cycles.
  *
  * @param {string} ref - Token reference in `{path.to.token}` form.
- * @param {object} [tokens=TOKENS] - Token tree mirroring the structure of
+ * @param {object} [tokens=DefaultTokens] - Token tree mirroring the structure of
  * `tokens.json`, where leaves contain a `value` string.
  * @returns {string} Token value.
  * @throws {TypeError} If `ref` is not a string or `tokens` is not an object.

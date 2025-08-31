@@ -1,7 +1,10 @@
 /** @file Browser entry for token utilities without the bundled JSON tree. */
 import { resolveToken as baseResolveToken } from './resolve-token.js';
 
-// No default token tree to avoid bundling large JSON payloads in the browser.
+/**
+ * Default token tree for browser builds is intentionally undefined.
+ * Callers must supply a token object at runtime in browser environments.
+ */
 export const DefaultTokens = undefined;
 
 /**
@@ -10,8 +13,8 @@ export const DefaultTokens = undefined;
  * and receive a clear `TypeError` when tokens are not provided.
  *
  * @param {string} ref - Token reference in `{path.to.token}` form.
- * @param {object} [tokens=DEFAULT_TOKENS] - Token tree mirroring `tokens.json`.
- * @returns {string} Token value.
+ * @param {object|undefined} [tokens=DefaultTokens] - Token tree mirroring `tokens.json`.
+ * @returns {string|undefined} Token value.
  * @throws {TypeError} If `ref` is not a string or `tokens` is not an object.
  * @throws {Error} If the token path does not exist or a circular reference is detected.
  */
