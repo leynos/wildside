@@ -1,21 +1,21 @@
 classDiagram
     class Values {
       +int replicaCount
+      +string nameOverride
+      +string fullnameOverride
       +Image image
       +Resources resources
-      +Service service
       +Pdb pdb
+      +Service service
+      +Autoscaling autoscaling
       +Ingress ingress
       +Config config
       +string existingSecretName
       +SecretEnvFromKeys secretEnvFromKeys
       +bool allowMissingSecret
-      +string nameOverride
-      +string fullnameOverride
+      +Affinity affinity
       +PodSecurityContext podSecurityContext
       +SecurityContext securityContext
-      +Autoscaling autoscaling
-      +Affinity affinity
       +Container container
     }
     class Image {

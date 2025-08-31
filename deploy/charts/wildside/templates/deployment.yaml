@@ -65,7 +65,7 @@ spec:
           {{- if and (gt (len $sec) 0) (not $name) }}
           {{- fail "existingSecretName is required when secretEnvFromKeys is set" }}
           {{- end }}
-          {{- if $name }}
+          {{- if and (gt (len $sec) 0) $name }}
           {{- $found := lookup "v1" "Secret" .Release.Namespace $name }}
           {{- if and (not $found) (not $allowMissing) }}
           {{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) }}

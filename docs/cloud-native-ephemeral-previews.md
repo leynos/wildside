@@ -982,7 +982,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: wildside-app
-  namespace: myapp
+  namespace: myapp # Overridden by Kustomize overlays (production, ephemeral)
 spec:
   interval: 5m
   chart:
