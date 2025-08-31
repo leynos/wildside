@@ -45,7 +45,7 @@ test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	# Ensure JavaScript dependencies are present for all workspaces
 	npm ci --workspaces || npm install --workspaces
-	npm test -ws --if-present --silent
+	npm --workspaces run test --if-present --silent --no-audit --no-fund
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

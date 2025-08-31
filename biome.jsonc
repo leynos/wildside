@@ -7,7 +7,9 @@
   "files": {
     "includes": ["**"],
     // Use .biomeignore for ignore patterns; also add scanner ignores for certainty
-    "experimentalScannerIgnores": ["target", "**/target/**"]
+    "experimentalScannerIgnores": ["target", "**/target/**"],
+    // Skip diagnostics for unrecognised file types
+    "ignoreUnknown": true
   },
   "formatter": {
     "enabled": true,
@@ -71,7 +73,6 @@
         "noIrregularWhitespace": "error",
         "noPrototypeBuiltins": "error",
         "noShadowRestrictedNames": "error",
-        "noTsIgnore": "error",
         "noVar": "error",
         "noConstEnum": "error",
         "useGetterReturn": "error",
@@ -159,6 +160,8 @@
         "noFloatingPromises": "error",
         "noImportCycles": "error",
         "noNonNullAssertedOptionalChain": "error",
+        // Require explicit @ts-expect-error instead of @ts-ignore
+        "noTsIgnore": "error",
         "useExhaustiveSwitchCases": "error"
       }
     }
