@@ -73,7 +73,7 @@
         "noVar": "error",
         "noConstEnum": "error",
         "useGetterReturn": "error",
-		// TODO: Remove this when tailwindDirectives is released
+        // TODO: Remove this when tailwindDirectives is released
         "noUnknownAtRules": "off"
       },
       "style": {
