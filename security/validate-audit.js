@@ -1,6 +1,6 @@
 /** @file Validate audit exception entries against schema and expiry. */
-import schema from "./audit-exceptions.schema.json" with { type: "json" };
-import data from "./audit-exceptions.json" with { type: "json" };
+import schema from "./audit-exceptions.schema.json" assert { type: "json" };
+import data from "./audit-exceptions.json" assert { type: "json" };
 
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
