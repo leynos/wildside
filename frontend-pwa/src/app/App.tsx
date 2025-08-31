@@ -32,12 +32,12 @@ export function App() {
   }
 
   return (
-    <div className="p-6 min-h-screen bg-base-200 text-base-content">
-      <div className="navbar bg-base-100 rounded-box mb-6">
+    <main className="p-6 min-h-screen bg-base-200 text-base-content">
+      <nav className="navbar bg-base-100 rounded-box mb-6" aria-label="Primary">
         <a className="btn btn-ghost text-xl" href="/">
           myapp
         </a>
-      </div>
+      </nav>
       <ul className="menu bg-base-100 rounded-box">
         {data && data.length > 0 ? (
           data.map((u) => (
@@ -51,6 +51,6 @@ export function App() {
           </li>
         )}
       </ul>
-    </div>
+    </main>
   );
 }
