@@ -169,6 +169,17 @@
       "linter": { "enabled": false }
     },
     {
+      // Allow `x != null` nullish checks in fetcher for concise header/body logic
+      "includes": ["frontend-pwa/src/api/fetcher.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDoubleEquals": { "level": "error", "options": { "ignoreNull": true } }
+          }
+        }
+      }
+    },
+    {
       // Ignore generated type declaration files and dist outputs.
       "includes": ["**/*.d.ts", "**/dist/**"],
       "formatter": { "enabled": false },
