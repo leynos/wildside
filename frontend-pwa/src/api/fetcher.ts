@@ -19,21 +19,20 @@ const isBinary = (body: unknown): boolean =>
   (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
 const isStringBody = (body: unknown): boolean => typeof body === 'string';
 
-// Decide whether we should add a JSON Content-Type header for this request.
-// Uses early returns to keep branch complexity low and intent obvious.
-const shouldAddJsonContentTypeHeader = (
+// Decide whether we should set JSON Content‑Type for this request.
+const shouldSetJsonContentType = (
   headers: Headers,
   bodyInfo: { isJson: boolean },
   rawBody: unknown,
 ): boolean => {
   if (headers.has('Content-Type')) return false;
   if (bodyInfo.isJson) return true;
-  if (rawBody == null) return false;
+  if (!isStringBody(rawBody)) return false;
   if (isFormData(rawBody)) return false;
   if (isBlob(rawBody)) return false;
   if (isUrlEncoded(rawBody)) return false;
   if (isBinary(rawBody)) return false;
-  return isStringBody(rawBody);
+  return true;
 };
 
 // (former shouldAddJsonContentType) merged into defaultHeaders to keep logic in one place
@@ -91,7 +90,7 @@ const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boole
   // Only set Content-Type if not specified by caller and it's clearly JSON.
   // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
   const rawBody = init?.body as unknown;
-  if (shouldAddJsonContentTypeHeader(headers, bodyInfo, rawBody)) {
+  if (shouldSetJsonContentType(headers, bodyInfo, rawBody)) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
