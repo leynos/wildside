@@ -19,15 +19,7 @@ const isBinary = (body: unknown): boolean =>
   (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
 const isStringBody = (body: unknown): boolean => typeof body === 'string';
 
-// Refactored to use simple predicates while preserving behavior
-const shouldAddJsonContentType = (body: unknown, headers: Headers): boolean => {
-  if (headers.has('Content-Type')) return false;
-  if (isFormData(body)) return false;
-  if (isBlob(body)) return false;
-  if (isUrlEncoded(body)) return false;
-  if (isBinary(body)) return false;
-  return isStringBody(body);
-};
+// (former shouldAddJsonContentType) merged into defaultHeaders to keep logic in one place
 
 /** Predicate: does value represent a native non-JSON body type? */
 const isNativeBodyType = (value: unknown): boolean => {
@@ -87,12 +79,17 @@ const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boole
 
   // Only set Content-Type if not specified by caller and it's clearly JSON.
   // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
-  const rawBody = init?.body as unknown;
-  if (
-    !headers.has('Content-Type') &&
-    (bodyInfo.isJson || (rawBody != null && shouldAddJsonContentType(rawBody, headers)))
-  ) {
-    headers.set('Content-Type', 'application/json; charset=utf-8');
+  if (!headers.has('Content-Type')) {
+    const rawBody = init?.body as unknown;
+    const shouldSetFromString =
+      isStringBody(rawBody) &&
+      !isFormData(rawBody) &&
+      !isBlob(rawBody) &&
+      !isUrlEncoded(rawBody) &&
+      !isBinary(rawBody);
+    if (bodyInfo.isJson || shouldSetFromString) {
+      headers.set('Content-Type', 'application/json; charset=utf-8');
+    }
   }
   return headers;
 };
