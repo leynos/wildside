@@ -169,6 +169,24 @@
       "linter": { "enabled": false }
     },
     {
+      // Ignore generated type declaration files and dist outputs.
+      "includes": ["**/*.d.ts", "**/dist/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      // Allow snake_case object properties in Zod schemas without inline ignores.
+      // These files intentionally mirror API payload shapes.
+      "includes": ["packages/types/**/*.{js,ts}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useNamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "**/*.{test,spec}.{js,jsx,ts,tsx}",
         "**/{__tests__,test,tests}/**/*.{js,jsx,ts,tsx}",
