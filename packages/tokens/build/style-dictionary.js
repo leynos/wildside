@@ -1,5 +1,12 @@
+/** @file Build Style Dictionary outputs and derive framework presets.
+ * Converts design token sources into CSS variables, Tailwind presets, and
+ * daisyUI themes. Shared utilities live in `../build-utils` to keep scripts
+ * small and focused.
+ */
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import StyleDictionary from 'style-dictionary';
+import { readJson } from '../build-utils/read-json.js';
 
 const sd = new StyleDictionary({
   source: ['src/tokens.json', 'src/themes/*.json'],
@@ -25,14 +32,43 @@ const sd = new StyleDictionary({
 sd.buildAllPlatforms();
 
 // Map tokens into Tailwind and DaisyUI presets
-const tokens = JSON.parse(fs.readFileSync('src/tokens.json', 'utf-8'));
-const unwrap = (input) =>
-  Object.fromEntries(
-    Object.entries(input).map(([k, v]) => [
-      k,
-      typeof v === 'object' && 'value' in v ? v.value : unwrap(v),
-    ]),
+/**
+ * Tokens source loaded from disk.
+ *
+ * @type {Record<string, unknown>}
+ */
+const tokens = readJson(new URL('../src/tokens.json', import.meta.url));
+
+/**
+ * Recursively strip `value` wrappers from tokens.
+ *
+ * @param {unknown} input - Token node to unwrap.
+ * @returns {unknown} Unwrapped token tree.
+ * @example
+ * ```js
+ * unwrap({ size: { sm: { value: '1rem' } } });
+ * //=> { size: { sm: '1rem' } }
+ * unwrap([{ value: '1px' }]);
+ * //=> ['1px']
+ * ```
+ */
+function unwrap(input) {
+  if (input === null || typeof input !== 'object') {
+    return input;
+  }
+  if (Array.isArray(input)) {
+    return input.map(unwrap);
+  }
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: using hasOwnProperty via Object.prototype to avoid shadowing issues
+  if (Object.prototype.hasOwnProperty.call(input, 'value')) {
+    return input.value;
+  }
+  return Object.fromEntries(
+    Object.entries(input)
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .map(([key, val]) => [key, unwrap(val)]),
   );
+}
 
 const preset = {
   theme: {
@@ -40,18 +76,25 @@ const preset = {
       spacing: unwrap(tokens.space ?? {}),
       borderRadius: unwrap(tokens.radius ?? {}),
       colors: Object.fromEntries(
-        Object.entries(tokens.color ?? {}).map(([k, v]) => [k, unwrap(v)]),
+        Object.entries(tokens.color ?? {})
+          .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+          .map(([key, val]) => [key, unwrap(val)]),
       ),
     },
   },
 };
 fs.mkdirSync('dist/tw', { recursive: true });
-fs.writeFileSync('dist/tw/preset.js', `export default ${JSON.stringify(preset)};\n`, 'utf-8');
+fs.writeFileSync(
+  'dist/tw/preset.js',
+  `export default ${JSON.stringify(preset, null, 2)};\n`,
+  'utf-8',
+);
 
-const themesDir = 'src/themes';
-const themeFiles = fs.readdirSync(themesDir).filter((f) => f.endsWith('.json'));
+const themesUrl = new URL('../src/themes/', import.meta.url);
+// Convert the URL to a file-system path via `fileURLToPath` for cross-platform compatibility.
+const themeFiles = fs.readdirSync(fileURLToPath(themesUrl)).filter((f) => f.endsWith('.json'));
 const daisyThemes = themeFiles.map((file) => {
-  const json = JSON.parse(fs.readFileSync(`${themesDir}/${file}`, 'utf-8'));
+  const json = readJson(new URL(file, themesUrl));
   const semantic = unwrap(json.semantic ?? {});
   return {
     ...(json.name ? { name: json.name } : {}),
@@ -67,6 +110,6 @@ const daisyThemes = themeFiles.map((file) => {
 fs.mkdirSync('dist/daisy', { recursive: true });
 fs.writeFileSync(
   'dist/daisy/theme.js',
-  `export default {themes: ${JSON.stringify(daisyThemes)}};\n`,
+  `export default ${JSON.stringify({ themes: daisyThemes }, null, 2)};\n`,
   'utf-8',
 );

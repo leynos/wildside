@@ -1,7 +1,9 @@
 name: ci
-"on":
-  push:
+on:
   pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,6 +27,20 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install Mermaid CLI
+        run: |
+          set -euxo pipefail
+          bun install --global @mermaid-js/mermaid-cli@11.9.0
+          bun x puppeteer browsers install chrome-headless-shell
+          mmdc --version
+
+      - name: Debug Bun and Mermaid
+        run: |
+          set -euxo pipefail
+          which mmdc
+          mmdc --version
+          bun --version
 
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie
