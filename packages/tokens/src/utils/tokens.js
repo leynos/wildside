@@ -16,7 +16,7 @@ import { resolveToken as baseResolveToken } from './resolve-token.js';
 const tokensJson = JSON.parse(readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'));
 
 // Freeze to guard against accidental mutation at runtime.
-const TOKENS = Object.freeze(tokensJson);
+const Tokens = Object.freeze(tokensJson);
 
 /**
  * Resolve a `{token.path}` reference to its concrete value.
@@ -32,6 +32,6 @@ const TOKENS = Object.freeze(tokensJson);
  * resolveToken('{color.brand}')
  * resolveToken('{color.brand}', { color: { brand: { value: '#fff' } } })
  */
-export function resolveToken(ref, tokens = TOKENS) {
+export function resolveToken(ref, tokens = Tokens) {
   return baseResolveToken(ref, tokens);
 }
