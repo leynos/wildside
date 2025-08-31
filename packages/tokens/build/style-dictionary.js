@@ -53,7 +53,7 @@ const tokens = readJson(new URL('../src/tokens.json', import.meta.url));
  * ```
  */
 function unwrap(input) {
-  if (input == null || typeof input !== 'object') {
+  if (input === null || typeof input !== 'object') {
     return input;
   }
   if (Array.isArray(input)) {

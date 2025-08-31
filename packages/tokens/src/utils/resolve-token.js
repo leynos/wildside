@@ -40,7 +40,7 @@ export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {
     throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
   }
-  if (tokens == null || typeof tokens !== 'object') {
+  if (tokens === null || typeof tokens !== 'object') {
     throw new TypeError('tokens must be an object token tree');
   }
   let current = ref;
@@ -56,7 +56,7 @@ export function resolveToken(ref, tokens) {
     const pathSegments = key.split('.');
     let cursor = tokens;
     for (const [segmentIndex, segment] of enumerate(pathSegments)) {
-      if (cursor?.[segment] == null) {
+      if (cursor?.[segment] === null) {
         const missingPath = pathSegments.slice(0, segmentIndex + 1).join('.');
         const siblings = cursor && typeof cursor === 'object' ? Object.keys(cursor) : [];
         const hint =
@@ -66,7 +66,7 @@ export function resolveToken(ref, tokens) {
       cursor = cursor[segment];
     }
     current = cursor?.value;
-    if (current == null || typeof current !== 'string') {
+    if (current === null || typeof current !== 'string') {
       throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
     }
   }
