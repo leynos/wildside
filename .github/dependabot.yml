@@ -1,0 +1,71 @@
+version: 2
+updates:
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    schedule:
+      interval: "weekly"
+
+  # Enable version updates for Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "cargo"
+    schedule:
+      interval: "daily"
+
+  # Enable version updates for npm at the repository root
+  - package-ecosystem: "npm"
+    directory: "/"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    schedule:
+      interval: "weekly"
+
+  # Enable version updates for npm in the frontend PWA
+  - package-ecosystem: "npm"
+    directory: "/frontend-pwa"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    schedule:
+      interval: "weekly"
+
+  # Enable version updates for npm in the tokens package
+  - package-ecosystem: "npm"
+    directory: "/packages/tokens"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    schedule:
+      interval: "weekly"
+
+  # Enable version updates for npm in the types package
+  - package-ecosystem: "npm"
+    directory: "/packages/types"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    schedule:
+      interval: "weekly"
+
+  # Enable version updates for Helm charts
+  - package-ecosystem: "helm"
+    directory: "/deploy/charts/wildside"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "helm"
+    schedule:
+      interval: "weekly"
