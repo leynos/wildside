@@ -1467,7 +1467,7 @@ accessed on August 20, 2025,
 [https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/](https://aws.amazon.com/blogs/mobile/offline-caching-with-aws-amplify-tanstack-appsync-and-mongodb-atlas/)
 
 [^30] Adding Offline Capabilities to React Native Apps with TanStack Query
-| Benoit Paul, accessed on August 20, 2025,
+Benoit Paul, accessed on August 20, 2025,
 [https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/](https://www.benoitpaul.com/blog/react-native/offline-first-tanstack-query/)
 
 [^31] WebSocket vs REST: Key differences and which to use - Ably, accessed on
