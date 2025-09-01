@@ -770,7 +770,8 @@ these will lead to a broken or unreliable offline experience.
 
 `gcTime` must be set to a much higher value, such as 24 hours or even
 `Infinity`, to ensure that offline data is preserved indefinitely.[^25]
-2. **Using **`PersistQueryClientProvider`** to Prevent Race Conditions:**
+
+1. **Using **`PersistQueryClientProvider`** to Prevent Race Conditions:**
    Restoring the cache from an asynchronous storage like IndexedDB takes a
    small amount of time. During this hydration process, components may mount
    and trigger `useQuery` hooks, initiating new network requests before the
@@ -1381,7 +1382,7 @@ accessed on August 20, 2025,
 2025,
 [https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/](https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/)
 
-[^8] How to structure Next.js project with Zustand and React Query | by ...,
+[^8] How to structure Next.js project with Zustand and React Query | by …,
 accessed on August 20, 2025,
 [https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe](https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe)
 
@@ -1450,8 +1451,8 @@ accessed on August 20, 2025,
 2025,
 [https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient](https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient)
 
-[^26] Building Offline-First React Native Apps with React Query and ...,
-accessed on August 20, 2025,
+[^26] Building Offline-First React Native Apps with React Query and …, accessed
+on August 20, 2025,
 [https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/](https://www.whitespectre.com/ideas/how-to-build-offline-first-react-native-apps-with-react-query-and-typescript/)
 
 [^27] Cache Persistence in IndexedDB · TanStack query · Discussion #1638 -

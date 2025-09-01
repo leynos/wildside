@@ -348,8 +348,9 @@ impossible by design.
 Consider a component that fetches data. Instead of managing state with multiple
 booleans
 <!-- markdownlint-disable-next-line MD013 -->
-(`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`),
-an FSM approach would use a single state object:
+(
+`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`
+ ), an FSM approach would use a single state object:
 
 ```typescript
 // State definition
@@ -1063,10 +1064,10 @@ but also adaptable and maintainable for the future.
 35. How to Become a TanStack Query God | by Shadi F - Medium, accessed on 17
     August 2025,
     [https://iamshadi.medium.com/how-to-become-a-tanstack-query-god-d5d50f738492](https://iamshadi.medium.com/how-to-become-a-tanstack-query-god-d5d50f738492)
-36. How I Use TypeScript to Design Reliable APIs (Before Writing a ...,
+36. How I Use TypeScript to Design Reliable APIs (Before Writing a …,
     accessed on 17 August 2025,
     [https://javascript.plainenglish.io/how-i-use-typescript-to-design-reliable-apis-before-writing-a-single-line-of-backend-code-1f3e5f3d2e30](https://javascript.plainenglish.io/how-i-use-typescript-to-design-reliable-apis-before-writing-a-single-line-of-backend-code-1f3e5f3d2e30)
-37. minagawah/mini-actix-react-example: A sample app having ... - GitHub,
+37. minagawah/mini-actix-react-example: A sample app having … - GitHub,
     accessed on 17 August 2025,
     [https://github.com/minagawah/mini-actix-react-example](https://github.com/minagawah/mini-actix-react-example)
 38. Responsive design - Core concepts - Tailwind CSS, accessed on 17 August
