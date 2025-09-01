@@ -2,7 +2,7 @@
 
 ## 1. Set Up the Cloudflare Provider
 
-Your `provider "cloudflare"` block configures authentication and connects
+The `provider "cloudflare"` block configures authentication and connects
 OpenTofu to Cloudflare. Use environment variables for credentials to avoid
 leaking secrets:
 
@@ -15,11 +15,11 @@ provider "cloudflare" {
 Set credentials securely:
 
 ```bash
-export CLOUDFLARE_API_TOKEN="your-token"
+export CLOUDFLARE_API_TOKEN="example-token"
 export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
 ```
 
-This ensures that sensitive data never lands in your repository.
+This ensures that sensitive data never lands in the repository.
 
 ## 2. Define and Manage DNS Zones
 
@@ -32,7 +32,7 @@ resource "cloudflare_zone" "example" {
 }
 ```
 
-This gives you access to the `zone_id` required for record management.
+This exposes the `zone_id` required for record management.
 
 ## 3. Configure DNS Records
 
@@ -79,7 +79,7 @@ resource "cloudflare_record" "bulk" {
 }
 ```
 
-Define `dns_records` in your `terraform.tfvars`:
+Define `dns_records` in `terraform.tfvars`:
 
 ```hcl
 dns_records = [
@@ -88,12 +88,12 @@ dns_records = [
 ]
 ```
 
-This keeps your configuration DRY and maintainable.
+This keeps the configuration DRY and maintainable.
 
 ## 5. Import Existing DNS Records
 
-When onboarding existing DNS infrastructure into OpenTofu, you need
-Cloudflare’s record ID (not just name) to import:
+When onboarding existing DNS infrastructure into OpenTofu, Cloudflare record
+IDs (not just names) are required for import:
 
 1. Retrieve via API:
 
@@ -112,7 +112,7 @@ Cloudflare’s record ID (not just name) to import:
    tofu import cloudflare_record.example DNS_ID
    ```
 
-This aligns your existing records with your IaC workflow.
+This aligns existing records with the IaC workflow.
 
 ## 6. Example Project Structure
 
@@ -130,8 +130,8 @@ infra/
 - **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record` blocks
   (static or dynamic).
 - **`outputs.tf`** – Outputs useful values like `name_servers`.
-- **`terraform.tfvars`** – Specifies your actual values: zone name, token,
-  record definitions.
+- **`terraform.tfvars`** – Specifies actual values: zone name, token, record
+  definitions.
 
 ## 7. Workflow Quick Hit List
 
@@ -161,5 +161,4 @@ infra/
 | Structure | Organise by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
 
-Let me know if you'd like actual module scaffolding or integration examples
-with CI/CD systems.
+Further module scaffolding or integration examples can be provided on request.

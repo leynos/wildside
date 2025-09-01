@@ -6,7 +6,7 @@ The plan is divided into distinct phases, each with a set of measurable tasks.
 
 ## Phase 1: Application Delivery and GitOps Strategy (To Do)
 
-This phase covers the design and setup of the repositories that will manage our
+This phase covers the design and setup of the repositories that will manage the
 application and infrastructure deployments via GitOps.
 
 - [ ] **Finalise Application Packaging Strategy**
@@ -70,7 +70,7 @@ modules defined in the wildside-infra repository.
 - [ ] **Instantiate the module**: Create a root OpenTofu configuration that uses
   the `doks` module to provision a "dev" cluster.
 
-- [ ] **Initialise and apply**: Run tofu init and tofu apply to create the
+- [ ] **Initialise and apply**: Run `tofu init` and `tofu apply` to create the
   cluster.
 
 ### 2.2: GitOps Control Plane
