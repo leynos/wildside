@@ -165,3 +165,12 @@ export const customFetchParsed = async <T>(
   const data = await customFetch<unknown>(input, init);
   return schema.parse(data);
 };
+
+export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
+  input: string,
+  schema: Schema,
+  init?: RequestInit,
+): Promise<z.SafeParseReturnType<unknown, z.infer<Schema>>> => {
+  const data = await customFetch<unknown>(input, init);
+  return schema.safeParse(data);
+};
