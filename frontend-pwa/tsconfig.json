@@ -3,13 +3,15 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true
   },
   "include": ["src", "vite.config.ts"]

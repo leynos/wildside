@@ -104,7 +104,6 @@ export function resolveToken(ref, tokens) {
     const key = match[1].trim();
     if (seen.has(key)) throw new Error(`Circular token reference detected: "${key}"`);
     seen.add(key);
-
     current = getTokenValue(tokens, key);
   }
   return current;

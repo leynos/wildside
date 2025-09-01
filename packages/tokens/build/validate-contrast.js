@@ -163,23 +163,16 @@ function calculateColorRatio(fgRef, bgRef) {
 function validateColorPair(colorPair, context) {
   const { label, fgRef, bgRef } = colorPair;
   const { threshold, fileHint } = context;
-  const invalidRef =
-    typeof fgRef !== 'string' ||
-    typeof bgRef !== 'string' ||
-    fgRef.trim() === '' ||
-    bgRef.trim() === '';
-  if (invalidRef) return `${label} in ${fileHint} is missing a value or contrast token`;
+  if (fgRef == null || bgRef == null) {
+    return `${label} in ${fileHint} is missing a value or contrast token`;
+  }
   try {
     const ratio = calculateColorRatio(fgRef, bgRef);
     return ratio < threshold
       ? `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`
       : null;
   } catch (err) {
-    console.error(`Failed to resolve token reference for "${label}" in ${fileHint}.`, {
-      fgRef,
-      bgRef,
-      error: err,
-    });
+    process.stderr.write(`Failed to resolve token reference for "${label}" in ${fileHint}.\n`);
     return `${label} in ${fileHint} failed to resolve token reference: ${
       err instanceof Error ? err.message : String(err)
     }`;
@@ -318,4 +311,3 @@ if (allErrors.length) {
 }
 
 console.log(`Contrast checks passed for themes (threshold: ${contrastThreshold}).`);
-process.exit(0);
