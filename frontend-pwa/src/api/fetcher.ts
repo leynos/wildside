@@ -156,12 +156,19 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
 
 /**
  * Fetch JSON and validate it against a provided Zod schema.
+ *
+ * @example
+ * import { z } from 'zod';
+ * const UserSchema = z.object({ id: z.string() });
+ * // Inferred: z.output<typeof UserSchema>
+ * const user = await customFetchParsed('/api/user', UserSchema);
+ * user.id; // string
  */
-export const customFetchParsed = async <T>(
+export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   input: string,
-  schema: z.ZodType<T>,
+  schema: Schema,
   init?: RequestInit,
-): Promise<T> => {
+): Promise<z.output<Schema>> => {
   const data = await customFetch<unknown>(input, init);
   return schema.parse(data);
 };
@@ -170,7 +177,7 @@ export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
   init?: RequestInit,
-): Promise<z.SafeParseReturnType<unknown, z.infer<Schema>>> => {
+): Promise<z.SafeParseReturnType<unknown, z.output<Schema>>> => {
   const data = await customFetch<unknown>(input, init);
   return schema.safeParse(data);
 };
