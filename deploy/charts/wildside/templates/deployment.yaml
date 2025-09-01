@@ -75,10 +75,11 @@ spec:
             - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                    name: {{ $name | quote }}
-                    key: {{ $secretKey | quote }}
-          {{- end }}
-        {{- end }}
+                  name: {{ $name | quote }}
+                  key: {{ $secretKey | quote }}
+                  optional: {{ .Values.allowMissingSecret | default true }}
+           {{- end }}
+         {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
 {{ toYaml . | replace "drop:\n  -" "drop:\n    -" | nindent 12 }}

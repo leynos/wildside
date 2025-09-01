@@ -56,3 +56,13 @@ Ensure documentation and diagrams remain valid:
 make markdownlint-docs
 make mermaid-lint
 ```
+
+## Helm configuration
+
+The included Helm chart surfaces several values for managing secrets:
+
+| Value | Default | Purpose |
+| ----- | ------- | ------- |
+| `existingSecretName` | `""` | Name of a Secret to source environment variables from. |
+| `secretEnvFromKeys` | `{}` | Map environment variables to keys in `existingSecretName`. |
+| `allowMissingSecret` | `true` | Permit rendering when the Secret is absent. Set to `false` to fail. |

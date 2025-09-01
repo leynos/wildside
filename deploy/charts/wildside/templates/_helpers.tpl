@@ -33,18 +33,39 @@ Validate that secretEnvFromKeys references an existing Secret when set.
 
 - Requires .Values.existingSecretName when secretEnvFromKeys has entries.
 - Optionally fails if the Secret is missing and allowMissingSecret is false.
+- Validates that listed keys exist within the referenced Secret.
 */}}
 {{- define "wildside.validateSecrets" -}}
-{{- $sec := .Values.secretEnvFromKeys | default dict -}}
+{{- $raw := .Values.secretEnvFromKeys -}}
+{{- if and $raw (not (kindIs "map" $raw)) -}}
+{{- fail (printf "secretEnvFromKeys must be a map, got %s" (typeOf $raw)) -}}
+{{- end -}}
+{{- $sec := $raw | default dict -}}
 {{- $name := .Values.existingSecretName -}}
 {{- $allowMissing := .Values.allowMissingSecret | default true -}}
 {{- if and (gt (len $sec) 0) (not $name) -}}
 {{- fail "existingSecretName is required when secretEnvFromKeys is set" -}}
 {{- end -}}
 {{- if and (gt (len $sec) 0) $name -}}
+{{- if not (semverCompare ">=3.2.0" .Capabilities.HelmVersion.Version) -}}
+{{- fail "wildside.validateSecrets requires Helm >= 3.2.0" -}}
+{{- end -}}
 {{- $found := lookup "v1" "Secret" .Release.Namespace $name -}}
 {{- if and (not $found) (not $allowMissing) -}}
 {{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) -}}
+{{- end -}}
+{{- if $found -}}
+{{- $data := $found.data | default dict -}}
+{{- $stringData := $found.stringData | default dict -}}
+{{- $missing := list -}}
+{{- range $k, $secretKey := $sec -}}
+{{- if not (or (hasKey $data $secretKey) (hasKey $stringData $secretKey)) -}}
+{{- $missing = append $missing $secretKey -}}
+{{- end -}}
+{{- end -}}
+{{- if gt (len $missing) 0 -}}
+{{- fail (printf "Secret %q missing keys: %s" $name (join $missing ", ")) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
