@@ -40,7 +40,7 @@ function resolvePathOrThrow(tokens, key) {
   const segments = key.split('.');
   let cursor = tokens;
   for (const [index, segment] of enumerate(segments)) {
-    cursor = validateCursor(cursor, segment, segments, index, key);
+    cursor = validateCursor(cursor, segment, { segments, index, fullKey: key });
   }
   return cursor;
 }
@@ -92,12 +92,12 @@ function createMissingPathError(missing, fullKey, reason, cursor) {
  *
  * @param {unknown} cursor - Current traversal object.
  * @param {string} segment - Path segment to access.
- * @param {string[]} segments - All path segments.
- * @param {number} index - Index of the current segment.
- * @param {string} fullKey - Full token key being resolved.
+ * @param {{segments: string[], index: number, fullKey: string}} pathContext - Context object
+ * containing all path segments, the current index, and the full token key.
  * @returns {unknown} The next cursor value.
  */
-function validateCursor(cursor, segment, segments, index, fullKey) {
+function validateCursor(cursor, segment, pathContext) {
+  const { segments, index, fullKey } = pathContext;
   const missing = segments.slice(0, index + 1).join('.');
   if (!cursor) {
     throw createMissingPathError(missing, fullKey, 'cursor is null/undefined', cursor);
