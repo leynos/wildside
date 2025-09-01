@@ -1,7 +1,11 @@
 asyncapi: 3.0.0
 info:
   title: myapp events
+  description: Events emitted by the wildside backend
   version: 0.1.0
+tags:
+  - name: users
+    description: Events about system users
 servers:
   production:
     host: ws.yourdomain.example
