@@ -9,6 +9,9 @@ updates:
       - "github-actions"
     schedule:
       interval: "weekly"
+      day: "sunday"
+      time: "03:00"
+      timezone: "America/Los_Angeles"
 
   # Enable version updates for Cargo
   - package-ecosystem: "cargo"
@@ -29,6 +32,13 @@ updates:
       - "npm"
     schedule:
       interval: "weekly"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Enable version updates for npm in the frontend PWA
   - package-ecosystem: "npm"
@@ -39,6 +49,13 @@ updates:
       - "npm"
     schedule:
       interval: "weekly"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Enable version updates for npm in the tokens package
   - package-ecosystem: "npm"
@@ -49,6 +66,13 @@ updates:
       - "npm"
     schedule:
       interval: "weekly"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Enable version updates for npm in the types package
   - package-ecosystem: "npm"
@@ -59,6 +83,13 @@ updates:
       - "npm"
     schedule:
       interval: "weekly"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Enable version updates for Helm charts
   - package-ecosystem: "helm"
