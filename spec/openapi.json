@@ -7,10 +7,10 @@
   },
   "servers": [
     {
-      "url": "https://{env}.api.yourdomain.example",
+      "url": "https://{subdomain}.yourdomain.example",
       "description": "HTTP API",
       "variables": {
-        "env": {
+        "subdomain": {
           "default": "api",
           "enum": ["api", "staging", "dev"]
         }
@@ -24,7 +24,11 @@
         "tags": ["users"],
         "operationId": "listUsers",
         "summary": "List users",
-        "description": "Return known users in the system. Pagination is not yet supported; see https://opensource.zalando.com/restful-api-guidelines/#153 for guidance on cursor-based pagination",
+        "description": "Return known users in the system. Pagination is not yet supported.",
+        "externalDocs": {
+          "description": "Cursor-based pagination guideline",
+          "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
+        },
         "responses": {
           "200": {
             "description": "Users (maximum 100 items)",

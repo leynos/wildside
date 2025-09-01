@@ -4,20 +4,26 @@ info:
   version: 0.1.0
 servers:
   production:
-    url: wss://ws.yourdomain.example
-    protocol: wss
+    host: ws.yourdomain.example
+    protocol: ws
+    pathname: /ws
     description: Production WebSocket server
 channels:
   /ws:
-    operations:
+    address: /ws
+    messages:
       userCreated:
-        operationId: userCreated
-        summary: Receive UserCreated events
-        tags:
-          - users
-        action: receive
-        messages:
-          - $ref: '#/components/messages/UserCreated'
+        $ref: '#/components/messages/UserCreated'
+operations:
+  userCreated:
+    summary: Receive UserCreated events
+    action: receive
+    channel:
+      $ref: '#/channels/~1ws'
+    messages:
+      - $ref: '#/channels/~1ws/messages/userCreated'
+    tags:
+      - name: users
 components:
   messages:
     UserCreated:
@@ -35,10 +41,13 @@ components:
             type: string
             description: Unique user identifier
             examples: ["123e4567-e89b-12d3-a456-426614174000"]
+            format: uuid
           display_name:
             type: string
             description: User's display name
             examples: ["Ada Lovelace"]
+            minLength: 1
+            maxLength: 100
       examples:
         - name: minimal
           summary: Minimal valid payload
