@@ -52,7 +52,12 @@ check-fmt:
 	bun x biome format
 
 markdownlint:
-	find . -type f -name '*.md' -not \( -path './backend/target/*' -o -path '*/node_modules/*' \) -print0 | xargs -0 -- markdownlint
+	find . \
+	  -path './backend/target' -prune -o \
+	  -path './target' -prune -o \
+	  -path './.node_modules' -prune -o \
+	  -path '*/node_modules' -prune -o \
+	  -type f -name '*.md' -print0 | xargs -0 -- markdownlint
 
 markdownlint-docs:
 	markdownlint docs/repository-structure.md
