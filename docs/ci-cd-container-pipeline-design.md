@@ -506,7 +506,7 @@ powerful hardware, more intelligent caching, or native build environments.
 
 Blacksmith's core value proposition is providing significantly faster hardware
 for GitHub Actions jobs. It offers runners that run on "bare metal gaming CPUs"
-with high single‑core performance, directly addressing the compute limitations
+with high single-core performance, directly addressing the compute limitations
 of standard runners.16
 
 The integration model for Blacksmith is that of a "drop-in" runner replacement.
