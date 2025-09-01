@@ -200,7 +200,7 @@ be met.8
 - Has an account balance of at least $50.
 - Has spent at least $50 in the last two years.
 
-2. **Enable API Access:**
+1. **Enable API Access:**
 
 - Log in to the Namecheap account.
 - Navigate to `Profile` > `Tools`.
@@ -208,7 +208,7 @@ be met.8
   "Namecheap API Access."
 - Toggle the feature `ON`, accept the terms, and enter the account password.10
 
-3. **Retrieve Credentials:** Once enabled, the system will provide an `APIKey`.
+1. **Retrieve Credentials:** Once enabled, the system will provide an `APIKey`.
    The `API User` is the same as the Namecheap account username. These two
    values are the credentials required for the OpenTofu provider and the
    in-cluster webhook.
@@ -297,7 +297,7 @@ gpg --export-secret-keys --armor <KEY_FINGERPRINT> | \
 
 ```
 
-3. **Create and Encrypt the Namecheap Secret:** A standard Kubernetes `Secret`
+1. **Create and Encrypt the Namecheap Secret:** A standard Kubernetes `Secret`
    manifest is created locally to hold the Namecheap API credentials. The
    `sops` CLI is then used to encrypt the `data` field of this manifest.
 
@@ -320,9 +320,9 @@ sops --encrypt --in-place namecheap-api-credentials.yaml
 
 ```
 
-4. **Commit the Encrypted Secret:** The resulting encrypted file is safe to
+1. **Commit the Encrypted Secret:** The resulting encrypted file is safe to
    commit to the Git repository.
-5. **Configure FluxCD for Decryption:** The `Kustomization` resource in FluxCD
+2. **Configure FluxCD for Decryption:** The `Kustomization` resource in FluxCD
    that points to the directory containing the encrypted secret must be
    configured to enable decryption.
 
@@ -731,7 +731,7 @@ kubectl get certificaterequest -n <namespace>
 
 ```
 
-2. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
+1. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
    resource is created to manage the ACME order process. It tracks the status
    of the required challenges.
 

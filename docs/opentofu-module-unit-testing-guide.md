@@ -133,7 +133,7 @@ differences in the context of OpenTofu.
 | Feature       | Unit Testing                                                                               | Integration Testing                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | Scope         | A single module or resource in isolation.8                                                 | Multiple modules and their interactions.6                                              |
-| Dependencies  | External dependencies are mocked or stubbed.8 Uses                                         | mock_provider, override_resource, etc.                                                 | Uses real or closely replicated services (e.g., real cloud APIs).17 |
+| Dependencies  | External dependencies are mocked or stubbed.8 Uses mock_provider, override_resource, etc.  | Uses real or closely replicated services (e.g., real cloud APIs).17 |
 | Execution     | tofu plan or tofu test with mocks. Very fast.8                                             | tofu apply or tofu test with command=apply. Slower due to real resource provisioning.6 |
 | Bugs Detected | Logic errors, incorrect variable interpolation, invalid inputs, broken conditional logic.7 | Interface errors, permission issues, data flow problems, dependency conflicts.7        |
 | Primary Tools | tofu test (with command=plan and mocks), Terratest (with plan-based checks).               | tofu test (with command=apply), Terratest, Kitchen-Terraform (legacy).                 |
@@ -428,7 +428,7 @@ only known after creation, like an ARN or a resource ID).
 
 This allows tests to run completely offline, without any credentials configured.
 
-**Example: Testing a module without AWS credentials**
+##### Example: Testing a module without AWS credentials
 
 ```terraform
 # In tests/mock_test.tftest.hcl
@@ -647,7 +647,7 @@ dedicated
 
 `run` block for each significant conditional path your module can take.
 
-**Example: Testing a conditionally created resource**
+#### Example: Testing a conditionally created resource
 
 Imagine a module for an Application Load Balancer that can optionally create an
 HTTPS listener if a certificate ARN is provided.
@@ -785,7 +785,13 @@ tofu plan -var="message=hello-world" -out=tfplan.binary
 tofu show -json tfplan.binary > tfplan.json
 
 # Use jq to parse the JSON and find the provisioner command
-COMMAND=$(jq -r '.resource_changes | select(.address == "null_resource.script_trigger") |.change.after.provisioners | select(.type == "local-exec") |.command' tfplan.json)
+COMMAND=$(jq -r \
+  '.resource_changes
+   | map(select(.address == "null_resource.script_trigger"))
+   | .[0].change.after.provisioners
+   | map(select(.type == "local-exec"))
+   | .[0].command' \
+  tfplan.json)
 
 # Assert that the command is what we expect
 EXPECTED_COMMAND="echo hello-world > /tmp/message.txt"
