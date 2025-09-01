@@ -43,7 +43,7 @@ jobs:
           bun --version
 
       - name: Audit exceptions
-        run: make audit
+        run: npm run audit
 
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie

@@ -58,7 +58,7 @@ $(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit:
-	node security/validate-audit.js
+	npm run audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

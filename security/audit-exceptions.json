@@ -1,7 +1,7 @@
 [
   {
-    "addedAt": "2024-01-01",
     "advisory": "GHSA-xxxx-xxxx-xxxx",
+    "addedAt": "2024-01-01",
     "expiresAt": "2030-01-01",
     "id": "EXAMPLE-0001",
     "introducedBy": "dependency@1.2.3",
