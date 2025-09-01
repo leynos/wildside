@@ -15,6 +15,9 @@ Use the Makefile targets to format, lint, and type-check both the Rust backend
 and the TypeScript/JavaScript workspaces:
 
 ```bash
+# Install Bun dependencies
+make deps
+
 # Format all code (Rust + Biome with write)
 make fmt
 
@@ -48,8 +51,8 @@ Notes:
   `vcs.useIgnoreFile`), so build artefacts such as any `target/` directory are
   ignored. There is also an explicit override that disables Biome for
   `**/target/**`.
-- Run `bun install` once in the repo root if Bun tooling is not already set up
-  locally.
+- Run `make deps` once in the repo root if Bun tooling is not already set
+  up locally.
 
 ## Documentation linting
 
