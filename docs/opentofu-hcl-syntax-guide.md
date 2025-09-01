@@ -1,4 +1,3 @@
-<!-- markdownlint-disable -->
 
 # A Comprehensive Developer's Guide to HCL for OpenTofu
 
@@ -301,18 +300,17 @@ correspond to the top-level block types in HCL.16
 
   Terraform
 
-  ```
+  ```hcl
   resource "aws_instance" "example" {
     instance_type = "t2.micro"
   }
-
   ```
 
   **JSON Equivalent:**
 
   JSON
 
-  ```
+  ```json
   {
     "resource": {
       "aws_instance": {
@@ -322,7 +320,6 @@ correspond to the top-level block types in HCL.16
       }
     }
   }
-
   ```
 
 - **Repeated Nested Blocks**: Some nested blocks, like `provisioner` or
@@ -334,7 +331,7 @@ correspond to the top-level block types in HCL.16
 
   Terraform
 
-  ```
+  ```hcl
   resource "aws_instance" "example" {
     provisioner "local-exec" {
       command = "echo first"
@@ -343,14 +340,13 @@ correspond to the top-level block types in HCL.16
       command = "echo second"
     }
   }
-
   ```
 
   **JSON Equivalent:**
 
   JSON
 
-  ```
+  ```json
   {
     "resource": {
       "aws_instance": {
@@ -371,7 +367,6 @@ correspond to the top-level block types in HCL.16
       }
     }
   }
-
   ```
 
 #### The Duality of Syntax: Important Gotchas
@@ -404,16 +399,17 @@ assume a direct, one-to-one translation from the native syntax. Failure to do
 so can result in configurations that are invalid or, worse, are misinterpreted
 by OpenTofu, leading to unintended infrastructure changes.
 
-| Table 1.1: HCL Data Types and Literals |
-| -------------------------------------- | ------------------------------------------- | ------------------------------------- | -------------------------------------------------- |
-| Data Type                              | Description                                 | HCL Literal Example                   | JSON Literal Example                               |
-| string                                 | A sequence of Unicode characters.           | "hello"                               | "hello"                                            |
-| number                                 | A numeric value, integer or fractional.     | 123 or 12.5                           | 123 or 12.5                                        |
-| bool                                   | A boolean value.                            | true                                  | true                                               |
-| list                                   | An ordered sequence of values.              | ["a", "b", "c"]                       | ["a", "b", "c"]                                    |
-| map                                    | An unordered collection of key-value pairs. | { key1 = "val1", key2 = "val2" }      | { "key1": "val1", "key2": "val2" }                 |
-| set                                    | An unordered collection of unique values.   | toset(["a", "b"]) (no literal syntax) | (Not directly representable; converted from array) |
-| null                                   | Represents the absence of a value.          | null                                  | null                                               |
+Table 1.1: HCL Data Types and Literals
+
+| Data type | Description                                | HCL literal example                   | JSON literal example                               |
+| --------- | ------------------------------------------ | ------------------------------------- | -------------------------------------------------- |
+| string    | A sequence of Unicode characters           | "hello"                               | "hello"                                            |
+| number    | A numeric value, integer or fractional     | 123 or 12.5                           | 123 or 12.5                                        |
+| bool      | A boolean value                            | true                                  | true                                               |
+| list      | An ordered sequence of values              | ["a", "b", "c"]                       | ["a", "b", "c"]                                    |
+| map       | An unordered collection of key-value pairs | { key1 = "val1", key2 = "val2" }      | { "key1": "val1", "key2": "val2" }                 |
+| set       | An unordered collection of unique values   | toset(["a", "b"]) (no literal syntax) | (Not directly representable; converted from array) |
+| null      | Represents the absence of a value          | null                                  | null                                               |
 
 ---
 
@@ -910,15 +906,16 @@ must be known at plan time; it cannot depend on computed values from other
 resources. Additionally, the keys of the collection cannot be sensitive, as
 they are used in resource addresses and displayed in the UI.29
 
-| Table 3.1: count vs. for_each - A Comparative Analysis |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Feature                                                | count                                                                                             | for_each                                                                                                 | Recommendation                                                                                                                                                      |
-| Use Case                                               | Creating a fixed number of near-identical resources.                                              | Creating multiple, distinct resources based on a collection.                                             | Use for_each for any collection of resources. Use count for simple duplication or conditional creation of a single resource.                                        |
-| Input Type                                             | Whole Number                                                                                      | Map or Set of Strings                                                                                    | for_each is more flexible for complex data structures.                                                                                                              |
-| Instance Identifier                                    | count.index (numeric, 0-based)                                                                    | each.key, each.value (string key, value)                                                                 | each.key provides a stable, meaningful identifier.                                                                                                                  |
-| Refactoring Impact                                     | High Risk. Removing an element from a source list re-indexes subsequent resources, causing churn. | Low Risk. Instances are tracked by stable keys, so removing an item only affects that specific instance. | for_each is vastly superior for managing dynamic collections.                                                                                                       |
-| Robustness                                             | Fragile for lists.                                                                                | Robust and predictable.                                                                                  | for_each leads to more maintainable and less error-prone code.                                                                                                      |
-| Conditional Creation                                   | count = var.enabled? 1 : 0                                                                        | for_each = var.enabled? { "key" = "value" } : {}                                                         | count provides a simpler syntax for toggling a single resource. for_each can be used for conditional creation of multiple resources by filtering the input map/set. |
+Table 3.1: count vs. for_each - A Comparative Analysis
+
+| Feature              | count                                                                          | for_each                                                                                        | Recommendation                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Use case             | Creating a fixed number of near-identical resources.                           | Creating multiple, distinct resources based on a collection.                                    | Prefer `for_each` for any collection; use `count` for simple duplication or conditional creation of a single resource.       |
+| Input type           | Whole number                                                                   | Map or set of strings                                                                           | `for_each` is more flexible for complex data structures.                                                                     |
+| Instance identifier  | `count.index` (numeric, 0-based)                                               | `each.key`, `each.value` (string key and value)                                                 | `each.key` provides a stable, meaningful identifier.                                                                         |
+| Refactoring impact   | High risk: removing an element re-indexes subsequent resources, causing churn. | Low risk: instances are tracked by stable keys, so removing an item affects only that instance. | `for_each` is superior for managing dynamic collections.                                                                     |
+| Robustness           | Fragile for lists.                                                             | Robust and predictable.                                                                         | `for_each` leads to more maintainable and less error-prone code.                                                             |
+| Conditional creation | `count = var.enabled ? 1 : 0`                                                  | `for_each = var.enabled ? { "key" = "value" } : {}`                                             | `count` toggles a single resource; `for_each` can conditionally create multiple resources by filtering the input map or set. |
 
 ### 3.2 Advanced Expressions and Functions
 
@@ -1285,16 +1282,15 @@ number), and the context (e.g., the specific resource or module that failed).
     Correct the input value so that it conforms to the rule described in the
     `error_message`.
 
-| Table 4.1: Common HCL Parsing and Planning Errors |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Error Message Snippet                             | Likely Cause(s)                                                                                                                           | Recommended Solution(s)                                                                                                         | Relevant Sources |
-| Unresolved reference                              | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., ``) or key (e.g., ["web"]) to the reference.                                 | 30               |
-| Inconsistent conditional result types             | The true and false branches of a ternary operator (? :) return values of incompatible types.                                              | Use explicit type conversion functions (tostring, tolist, etc.) on the results to ensure they are the same type.                | 34               |
-| Provider instance not present                     | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using for_each on both. | Decouple the resource and provider lifecycles. Ensure the provider configuration persists for the destroy operation.            | 44               |
-| checksums... do not match                         | The downloaded provider package does not match the trusted checksum in .terraform.lock.hcl.                                               | Verify provider source. If the change is intentional, run tofu init -upgrade. Use tofu providers lock for multi-platform teams. | 42               |
-| Custom validation failure                         | An input variable's value does not meet the criteria defined in its validation block.                                                     | Read the custom error_message provided in the error output and correct the input value accordingly.                             | 21               |
+Table 4.1: Common HCL Parsing and Planning Errors
 
----
+| Error message snippet                 | Likely cause(s)                                                                                                                             | Recommended solution(s)                                                                                                             | Relevant sources |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Unresolved reference                  | Typo in a reference; missing index/key for a `count`/`for_each` resource.                                                                   | Correct the typo. Add the appropriate index (e.g., `count.index`) or key (e.g., `["web"]`) to the reference.                        | 30               |
+| Inconsistent conditional result types | The true and false branches of a ternary operator return values of incompatible types.                                                      | Use explicit type conversion functions (`tostring`, `tolist`, etc.) on the results to ensure they match.                            | 34               |
+| Provider instance not present         | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using `for_each` on both. | Decouple the resource and provider lifecycles. Ensure the provider configuration persists for the destroy operation.                | 44               |
+| checksums... do not match             | The downloaded provider package does not match the trusted checksum in `.terraform.lock.hcl`.                                               | Verify provider source. If the change is intentional, run `tofu init -upgrade`. Use `tofu providers lock` for multi-platform teams. | 42               |
+| Custom validation failure             | An input variable's value does not meet the criteria defined in its `validation` block.                                                     | Read the custom `error_message` in the output and correct the input value accordingly.                                              | 21               |
 
 ## Section 5: Synthesis and Recommendations
 
@@ -1309,48 +1305,48 @@ Writing professional-grade Infrastructure as Code with OpenTofu is not just
 about knowing the syntax, but about applying a set of core principles that lead
 to configurations that are robust, maintainable, secure, and scalable.
 
-1.  **Embrace Identity, Not Position**: The most critical design principle for
+1. **Embrace Identity, Not Position**: The most critical design principle for
     dynamic infrastructure is to prefer the `for_each` meta-argument over
     `count` when managing any collection of resources. Tying a resource's
     lifecycle to a stable identity key rather than a fragile positional index
     prevents unnecessary churn and makes configurations far more predictable
     and robust.2
 
-2.  **Be Explicit with Versions**: Always pin provider versions using
+2. **Be Explicit with Versions**: Always pin provider versions using
     pessimistic constraints (`~>`) in a `versions.tofu` file. This is the
     single most effective way to prevent unexpected failures caused by breaking
     changes in provider updates.13
 
-3.  **Isolate State**: Never use local state for collaborative or production
+3. **Isolate State**: Never use local state for collaborative or production
     work. Use a remote backend with state locking. Furthermore, split large,
     monolithic state files into smaller, logically-scoped units (e.g.,
     per-environment, per-application) to improve performance and reduce the
     blast radius of potential errors.8
 
-4.  **Keep It DRY with Modules**: Abstract any repeated infrastructure pattern
+4. **Keep It DRY with Modules**: Abstract any repeated infrastructure pattern
     into a reusable, focused module. This reduces code duplication, enforces
     standardization, and improves the overall maintainability of your codebase.8
 
-5.  **Document Your Intent**: Use the `description` field for all variables and
+5. **Document Your Intent**: Use the `description` field for all variables and
     outputs to create a self-documenting interface for your modules. Add
     comments to explain any non-obvious logic, especially for "hidden"
     dependencies that require the use of `depends_on`.8
 
-6.  **Manage Secrets Securely**: Never commit sensitive data like passwords or
+6. **Manage Secrets Securely**: Never commit sensitive data like passwords or
     API keys to version control. Use a dedicated secrets management tool (like
     Vault) or environment variables to inject secrets at runtime.13
 
-7.  **Structure for Clarity**: A consistent file structure (`main`, `variables`,
+7. **Structure for Clarity**: A consistent file structure (`main`, `variables`,
     `outputs`, `versions`) and a clear naming convention for resources and
     variables are not optional; they are essential for long-term
     maintainability and collaboration.8
 
-8.  **Validate Your Inputs**: Create robust module interfaces by using `type`
+8. **Validate Your Inputs**: Create robust module interfaces by using `type`
     constraints and `validation` blocks for your input variables. This catches
     configuration errors early and provides clear, actionable feedback to the
     module's users.11
 
-9.  **Leverage the Ecosystem**: OpenTofu's core language is powerful, but its
+9. **Leverage the Ecosystem**: OpenTofu's core language is powerful, but its
     capabilities are extended by a rich ecosystem of third-party tools.
     Integrate static analysis tools like `tflint` (for best practices and
     style) and `checkov` or `tfsec` (for security scanning) into your CI/CD
@@ -1394,5 +1390,3 @@ expertise, the following resources are highly recommended:
     or env0 provide a collaborative workflow for OpenTofu, integrating with
     version control to automate planning on pull requests and providing
     policy-as-code enforcement.
-
-<!-- markdownlint-enable -->
