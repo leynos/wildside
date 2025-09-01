@@ -156,12 +156,16 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
 
 /**
  * Fetch JSON and validate it against a provided Zod schema.
+ *
+ * @example
+ * const user = await customFetchParsed('/api/user', UserSchema);
+ * user.id;
  */
-export const customFetchParsed = async <T>(
+export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   input: string,
-  schema: z.ZodType<T>,
+  schema: Schema,
   init?: RequestInit,
-): Promise<T> => {
+): Promise<z.infer<Schema>> => {
   const data = await customFetch<unknown>(input, init);
   return schema.parse(data);
 };
