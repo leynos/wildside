@@ -1,24 +1,38 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Declarative allowlist of time-bound dependency audit exceptions.",
   "type": "array",
+  "minItems": 0,
   "items": {
     "type": "object",
-    "required": [
-      "id",
-      "package",
-      "advisory",
-      "reason",
-      "addedAt",
-      "expiresAt"
-    ],
+    "additionalProperties": false,
+    "required": ["id", "package", "advisory", "reason", "addedAt", "expiresAt"],
     "properties": {
-      "id": { "type": "string" },
-      "package": { "type": "string" },
-      "advisory": { "type": "string" },
-      "reason": { "type": "string" },
-      "introducedBy": { "type": "string" },
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[A-Z0-9][A-Z0-9_-]*$"
+      },
+      "package": {
+        "type": "string",
+        "minLength": 1
+      },
+      "advisory": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1
+      },
+      "introducedBy": {
+        "type": "string",
+        "minLength": 1
+      },
       "addedAt": { "type": "string", "format": "date" },
       "expiresAt": { "type": "string", "format": "date" },
-      "reviewer": { "type": "string" }
+      "reviewer": { "type": "string", "format": "email" }
     }
   }
 }

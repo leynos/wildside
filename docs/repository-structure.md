@@ -537,7 +537,8 @@ docker-down:
 ```
 
 Use `make audit` to validate the audit exception allowlist against its schema
-and expiry dates.
+and expiry dates. The target installs its validator with `npx`, so ensure npm is
+available in the CI environment.
 
 ### Docker Compose startup sequence
 
@@ -597,8 +598,9 @@ ______________________________________________________________________
 - CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
 - Secrets: mount via K8s Secrets (consider external secret operator for DO
    Secrets Manager).
-- Dependency audit exceptions: track in `security/audit-exceptions.json`;
-  CI runs `make audit` to reject expired entries.
+- Dependency audit exceptions: track in `security/audit-exceptions.json` with
+  schema in `security/audit-exceptions.schema.json`; CI runs `make audit` to
+  reject expired entries.
 
 ______________________________________________________________________
 

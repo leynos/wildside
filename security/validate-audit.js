@@ -1,12 +1,29 @@
 /** @file Validate audit exception entries against schema and expiry. */
-import schema from "./audit-exceptions.schema.json" assert { type: "json" };
-import data from "./audit-exceptions.json" assert { type: "json" };
+import Ajv from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
+/**
+ * Load a JSON file using the import attribute supported by the current Node
+ * version.
+ *
+ * Node 18 expects `assert { type: 'json' }` while Node ≥20.6 uses
+ * `with { type: 'json' }`.
+ *
+ * @param {string} relPath Path to the JSON module.
+ * @returns {Promise<unknown>} Parsed JSON contents.
+ */
+async function importJson(relPath) {
+  const [major, minor] = process.versions.node.split('.').map(Number);
+  const attrKey = major >= 20 && !(major === 20 && minor < 6) ? 'with' : 'assert';
+  return (await import(relPath, { [attrKey]: { type: 'json' } })).default;
+}
+
+const schema = await importJson('./audit-exceptions.schema.json');
+const data = await importJson('./audit-exceptions.json');
 
 const ajv = new Ajv({ allErrors: true });
 addFormats(ajv); // enable "date" format validation
+const validate = ajv.compile(schema);
 
 /**
  * Validate audit exceptions against the JSON Schema.
@@ -25,12 +42,8 @@ addFormats(ajv); // enable "date" format validation
  * ]);
  */
 function assertValidSchema(entries) {
-  const validate = ajv.compile(schema);
   if (!validate(entries)) {
-    console.error(
-      "Audit exceptions failed schema validation:",
-      validate.errors,
-    );
+    console.error('Audit exceptions failed schema validation:', validate.errors);
     process.exit(1);
   }
 }
@@ -54,10 +67,18 @@ function assertValidSchema(entries) {
 function assertNoExpired(entries) {
   const today = new Date().toISOString().slice(0, 10);
   const expired = entries.filter((e) => e.expiresAt < today);
+  const inverted = entries.filter((e) => e.addedAt > e.expiresAt);
   if (expired.length > 0) {
-    console.error("Audit exceptions have expired:");
+    console.error('Audit exceptions have expired:');
     for (const { id, package: pkg, expiresAt } of expired) {
       console.error(`- ${id} (${pkg}) expired on ${expiresAt}`);
+    }
+    process.exit(1);
+  }
+  if (inverted.length > 0) {
+    console.error('Audit exceptions have invalid date ranges (addedAt > expiresAt):');
+    for (const { id, package: pkg, addedAt, expiresAt } of inverted) {
+      console.error(`- ${id} (${pkg}) addedAt ${addedAt} > expiresAt ${expiresAt}`);
     }
     process.exit(1);
   }
@@ -66,4 +87,4 @@ function assertNoExpired(entries) {
 assertValidSchema(data);
 assertNoExpired(data);
 
-console.log("Audit exceptions valid");
+console.log('Audit exceptions valid');
