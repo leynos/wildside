@@ -3,13 +3,24 @@
  */
 import Color from 'color';
 
+/**
+ * Create a descriptive TypeError for invalid colour inputs, preserving cause.
+ *
+ * @param {string} name - Human-friendly name of the colour argument.
+ * @param {unknown} value - Original value passed by the caller.
+ * @param {unknown} cause - Underlying error thrown by the colour parser.
+ * @returns {TypeError} Error instance with stable message and attached cause.
+ */
+function createInvalidColourError(name, value, cause) {
+  return new TypeError(`Invalid ${name}: ${String(value)}`, { cause });
+}
+
 function parseColour(value, name = 'colour') {
   try {
     return Color(value);
   } catch (err) {
-    const message = `Invalid ${name}: ${String(value)}`;
     // Preserve underlying error details for debugging across runtimes
-    throw new TypeError(message, { cause: err });
+    throw createInvalidColourError(name, value, err);
   }
 }
 

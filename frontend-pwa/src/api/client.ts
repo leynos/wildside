@@ -21,6 +21,7 @@ Object.freeze(usersQueryKey);
 
 /**
  * Helpers for composing user query keys.
+ *
  */
 export const usersQueryKeys = {
   all: usersQueryKey,

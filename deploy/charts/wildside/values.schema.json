@@ -129,11 +129,11 @@
       "propertyNames": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
       "additionalProperties": { "type": "string", "minLength": 1 }
     },
-    "allowMissingSecret": {"type": "boolean", "default": true},
-    "affinity": {"type": "object"},
-    "podSecurityContext": {"type": "object"},
-    "securityContext": {"type": "object"},
-    "container": {"type": "object"}
+    "allowMissingSecret": { "type": "boolean", "default": true },
+    "affinity": { "type": "object" },
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "container": { "type": "object" }
   },
   "allOf": [
     {
