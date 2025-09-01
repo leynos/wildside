@@ -112,7 +112,7 @@ IDs (not just names) are required for import:
    tofu import cloudflare_record.example DNS_ID
    ```
 
-This aligns existing records with the IaC workflow.
+This aligns existing records with the Infrastructure as Code (IaC) workflow.
 
 ## 6. Example Project Structure
 
@@ -138,17 +138,22 @@ infra/
 1. **Init**: `tofu init`
 2. **Preview**: `tofu plan`
 3. **Apply**: `tofu apply -auto-approve`
-4. **Observe**: Check state changes and Dashboard results
+4. **Observe**: Check state changes and dashboard results
 5. **Import** (if migrating): Use the API to find record IDs, then `tofu import`
 6. **Version Control**: Store in Git, exclude secrets
 
-## Additional Levers & Advanced Practices
+## Additional levers and advanced practices
 
-- Refer to the Filador blog for integrating DNS, WAF, mTLS, Pages—all with
-  OpenTofu and Cloudflare. It offers rich sample code for elevated use cases.
+- Refer to the [Filador blog](https://filador.com) for integrating DNS, WAF,
+  mTLS, and Pages with OpenTofu and Cloudflare. It offers sample code for
+  advanced use cases.
 
-- Cloudflare’s Terraform provider supports advanced modularisation. Use the
-  module registry and example repos for better modular design.
+- Cloudflare's Terraform provider supports advanced modularization. Use the
+  official provider registry and example repositories for modular design.
+  - Provider:
+    [Cloudflare Terraform provider](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
+  - Modules:
+    [Terraform module registry](https://registry.terraform.io/browse/modules)
 
 ### Summary Table
 
@@ -158,7 +163,7 @@ infra/
 | Zone      | Define or reference Cloudflare DNS zone     |
 | Record    | Create DNS entries, dynamic via `for_each`  |
 | Import    | Migrate existing records using API + import |
-| Structure | Organise by tf files, use version control   |
+| Structure | Organize by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
 
 Further module scaffolding or integration examples can be provided on request.

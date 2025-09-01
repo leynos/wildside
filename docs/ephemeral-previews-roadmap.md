@@ -1,15 +1,15 @@
-# Ephemeral Previews Infrastructure Roadmap
+# Ephemeral previews infrastructure roadmap
 
 This document outlines the roadmap for building the cloud-native infrastructure
 required to support ephemeral preview environments for the Wildside project.
 The plan is divided into distinct phases, each with a set of measurable tasks.
 
-## Phase 1: Application Delivery and GitOps Strategy (To Do)
+## Phase 1: Application delivery and GitOps strategy (To do)
 
 This phase covers the design and setup of the repositories that will manage the
 application and infrastructure deployments via GitOps.
 
-- [ ] **Finalise Application Packaging Strategy**
+- [ ] **Finalize application packaging strategy**
 
   - [x] **Decision**: Combine Helm for templating with Kustomize for
     environment-specific configuration.
@@ -51,12 +51,12 @@ application and infrastructure deployments via GitOps.
     generated Kustomize overlays for ephemeral preview environments. This
     directory will be managed by the CI/CD pipeline.
 
-## Phase 2: Foundational Infrastructure (To Do)
+## Phase 2: Foundational infrastructure (To do)
 
 This phase focuses on provisioning the core infrastructure using the OpenTofu
 modules defined in the wildside-infra repository.
 
-### 2.1: DigitalOcean Kubernetes Cluster
+### 2.1: DigitalOcean Kubernetes cluster
 
 - [ ] **Create a `doks` OpenTofu module**: This module will be responsible for
   provisioning the Kubernetes cluster.
@@ -70,10 +70,10 @@ modules defined in the wildside-infra repository.
 - [ ] **Instantiate the module**: Create a root OpenTofu configuration that uses
   the `doks` module to provision a "dev" cluster.
 
-- [ ] **Initialise and apply**: Run `tofu init` and `tofu apply` to create the
+- [ ] **Initialize and apply**: Run `tofu init` and `tofu apply` to create the
   cluster.
 
-### 2.2: GitOps Control Plane
+### 2.2: GitOps control plane
 
 - [ ] **Create a `fluxcd` OpenTofu module**: This module will install FluxCD on
   the Kubernetes cluster.
@@ -86,7 +86,7 @@ modules defined in the wildside-infra repository.
 
 - [ ] **Apply the changes**: Run tofu apply to install FluxCD.
 
-### 2.3: Core Cluster Services
+### 2.3: Core cluster services
 
 - [ ] **Create a `traefik` OpenTofu module**: This module will install the
   Traefik ingress controller.
@@ -111,12 +111,12 @@ modules defined in the wildside-infra repository.
 - [ ] **Apply the changes**: Run `tofu apply` to install the core cluster
   services.
 
-## Phase 3: CI/CD Workflow (In Progress)
+## Phase 3: CI/CD workflow (In progress)
 
 This phase focuses on automating the lifecycle of the preview environments by
 updating the wildside-apps repository, which is then actioned by FluxCD.
 
-### 3.1: Ephemeral Environment Automation (GitHub Actions)
+### 3.1: Ephemeral environment automation (GitHub Actions)
 
 - [ ] **Develop a `preview-environment` reusable workflow**: This workflow will
   be triggered by pull requests in the wildside repository.
@@ -166,23 +166,23 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
   - [ ] It will commit and push the removal, triggering FluxCD to decommission
     the environment's resources.
 
-### 3.2: Monitoring and Observability
+### 3.2: Monitoring and observability
 
 - [ ] **Deploy Prometheus and Grafana**: Set up a monitoring stack to scrape
   metrics from all key cluster components.
 
-- [ ] **Create Grafana Dashboards**: Visualise key performance indicators for
+- [ ] **Create Grafana dashboards**: Visualize key performance indicators for
   the application and infrastructure.
 
 - [ ] **Configure Alertmanager**: Set up alerts for critical events.
 
-## Phase 4: Future Scalability (Not Started)
+## Phase 4: Future scalability (Not started)
 
 This phase includes long-term goals for enhancing the platform's capabilities.
 
 - [ ] **Implement Multi-Cluster Management**: Extend the GitOps model to manage
   separate development, staging, and production clusters.
 
-- [ ] **Optimise Ephemeral Database Provisioning**: Investigate and implement a
+- [ ] **Optimize ephemeral database provisioning**: Investigate and implement a
   faster method for provisioning databases for preview environments, such as
   creating a unique database or schema within a shared cluster.
