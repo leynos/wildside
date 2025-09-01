@@ -6,8 +6,7 @@
   "root": true,
   "files": {
     "includes": ["**"],
-    // Use .biomeignore for ignore patterns; also add scanner ignores for certainty
-    "experimentalScannerIgnores": ["target", "**/target/**"],
+    // Use .biomeignore for ignore patterns
     // Skip diagnostics for unrecognised file types
     "ignoreUnknown": true
   },
