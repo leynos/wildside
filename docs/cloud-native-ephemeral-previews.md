@@ -1055,8 +1055,7 @@ patches:
 ```
 
 It applies patches to target the production namespace, increase the replica
-count, set production-level resource requests/limits, and update the
-hostname.
+count, set production-level resource requests/limits, and update the hostname.
 
 YAML
 
@@ -1410,46 +1409,46 @@ The following narrative illustrates the end-to-end flow of the system,
 demonstrating how the individual components interact to create a seamless
 automated experience.
 
- 1. **Developer Pushes Code:** A developer working on a new feature for
+1. **Developer Pushes Code:** A developer working on a new feature for
     "Project Wildside" completes a unit of work, pushes the code to a new
     branch (`feature/new-poi-api`), and opens Pull Request #123 on GitHub.
 
- 2. **CI Pipeline Triggers:** The `pull_request` event with type `opened`
+2. **CI Pipeline Triggers:** The `pull_request` event with type `opened`
     instantly triggers the "Preview Environment" GitHub Actions workflow.
 
- 3. **Build & Push:** The `build-and-push` job begins. It checks out the source
+3. **Build & Push:** The `build-and-push` job begins. It checks out the source
     code, logs into the container registry, and starts building the Rust
     application's Docker image. Leveraging the Docker layer cache, this build
     is significantly faster after the first run. The resulting image is tagged
     with the unique commit SHA (e.g., `sha-a1b2c3d`) and pushed to the registry.
 
- 4. **Manifest Generation:** Upon successful build, the `deploy-preview` job
+4. **Manifest Generation:** Upon successful build, the `deploy-preview` job
     starts. It checks out both the application source code and the
     `wildside-apps` GitOps repository. The script step executes, creating a new
     directory `wildside-apps/overlays/ephemeral/pr-123/`. It generates a
     `kustomization.yaml` and a patch file, populating it with the image tag
     `sha-a1b2c3d` and the unique hostname `pr-123.your-domain.com`.
 
- 5. **Git Commit:** The workflow commits these new manifest files to the `main`
+5. **Git Commit:** The workflow commits these new manifest files to the `main`
     branch of the `wildside-apps` repository with a message like "Deploy
     preview for PR #123".
 
- 6. **FluxCD Reconciliation:** Within a minute, the Flux `source-controller`
+6. **FluxCD Reconciliation:** Within a minute, the Flux `source-controller`
     running in the DOKS cluster detects the new commit in the `wildside-apps`
     repository. It fetches the changes and updates its internal state.
 
- 7. **Kustomize Application:** The Flux `kustomize-controller`, which is
+7. **Kustomize Application:** The Flux `kustomize-controller`, which is
     watching the `wildside-apps` repository for application definitions,
     discovers the new `Kustomization` for `pr-123`. It reads this file, applies
     the specified patches to the `base/helmrelease.yaml`, and generates the
     final `HelmRelease` manifest in memory.
 
- 8. **Helm Deployment:** The Flux `helm-controller` sees the new `HelmRelease`
+8. **Helm Deployment:** The Flux `helm-controller` sees the new `HelmRelease`
     object intended for the `pr-123-ns` namespace. It interprets this as a
     command to install the "Wildside" Helm chart with the values specified in
     the Kustomized manifest.
 
- 9. **Service & Ingress Creation:** The Helm installation proceeds, creating
+9. **Service & Ingress Creation:** The Helm installation proceeds, creating
     the Kubernetes Deployment, Service, and Ingress resources for the `pr-123`
     environment within its isolated namespace. The Ingress resource is
     annotated with the hostname `pr-123.your-domain.com`.
