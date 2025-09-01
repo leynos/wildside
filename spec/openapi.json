@@ -24,7 +24,7 @@
         "tags": ["users"],
         "operationId": "listUsers",
         "summary": "List users",
-        "description": "Return known users in the system",
+        "description": "Return known users in the system. Pagination is not yet supported; see https://opensource.zalando.com/restful-api-guidelines/#153 for guidance on cursor-based pagination",
         "responses": {
           "200": {
             "description": "Users (maximum 100 items)",
@@ -77,6 +77,20 @@
       }
     },
     "schemas": {
+      "ErrorCode": {
+        "title": "Error code",
+        "type": "string",
+        "description": "Stable machine-readable error code",
+        "example": "invalid_request",
+        "pattern": "^[a-z0-9_.:-]+$",
+        "enum": [
+          "invalid_request",
+          "unauthorised",
+          "forbidden",
+          "not_found",
+          "internal_error"
+        ]
+      },
       "Error": {
         "title": "Error",
         "type": "object",
@@ -84,17 +98,7 @@
         "additionalProperties": false,
         "properties": {
           "code": {
-            "type": "string",
-            "description": "Stable error code",
-            "example": "invalid_request",
-            "pattern": "^[a-z0-9_.:-]+$",
-            "enum": [
-              "invalid_request",
-              "unauthorised",
-              "forbidden",
-              "not_found",
-              "internal_error"
-            ]
+            "$ref": "#/components/schemas/ErrorCode"
           },
           "message": {
             "type": "string",
