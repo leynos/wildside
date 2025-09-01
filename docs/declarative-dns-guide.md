@@ -632,9 +632,7 @@ configuration and supplying the necessary credentials.
 
 Create a file named `providers.tf` with the following content:
 
-Code snippet
-
-```
+```hcl
 terraform {
   required_providers {
     cloudflare = {
@@ -666,9 +664,7 @@ itself.
 
 Create a file named `main.tf` to define the zone and any static records:
 
-Code snippet
-
-```
+```hcl
 # Retrieve Cloudflare Account ID from a data source or variable
 variable "cloudflare_account_id" {
   type        = string
@@ -785,16 +781,57 @@ practices.
 
 ### 6.2 Troubleshooting Common Integration Pitfalls
 
-Even in a well-architected system, issues can arise. A systematic approach to
-troubleshooting is key to rapid resolution.
+Even in a well-architected system, issues can arise. A systematic
+approach to troubleshooting is key to rapid resolution.
 
-| Symptom                                                   | Verification Command(s)                                                  | Likely Cause & Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No DNS records are created**                            | `kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns -f` | **Authentication Error:** Look for messages like `Invalid request headers (6003)`. This indicates an issue with the API token. **Resolution:** Verify the token has the correct `Zone:Read` and `DNS:Edit` permissions. Re-create the Kubernetes secret, ensuring there are no invisible characters and that the secret key (e.g., `apiToken`) matches what the Helm chart expects.26                                                                                                             | **RBAC Error:** Check logs for permission denied errors related to reading `Ingress` or `Service` resources. **Resolution:** Ensure the `HelmRelease` has `rbac.create=true` and that the `ClusterRole` has the necessary permissions. |
-| **Stale DNS records are not deleted**                     | `kubectl get helmrelease external-dns -n external-dns -o yaml`           | **Incorrect Policy:** Check the `policy` value in the `HelmRelease`. It must be set to `sync`. If it is `upsert-only`, ExternalDNS will not delete records.31                                                                                                                                                                                                                                                                                                                                     | **Ownership Mismatch:** Verify the `txtOwnerId` in the `HelmRelease`. If this ID was changed after records were created, ExternalDNS will no longer recognize the old records as its own and will not delete them.                     |
-| **Records created but not proxied (“grey cloud”)**        | `kubectl get ingress <ingress-name> -o yaml`                             | **Missing Annotation/Argument:** The Cloudflare proxy must be explicitly enabled. **Resolution:** Either set the default behavior by adding `--cloudflare-proxied=true` to the `extraArgs` in the `HelmRelease`, or add the annotation `external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"` (as a string) to the specific `Ingress` manifest.18                                                                                                                                          |
-| **Flux **`Kustomization`** is not ready**                 | `flux get kustomizations <name>` `kubectl describe kustomization <name>` | **Source Not Ready:** Check the status of the source (`GitRepository` or `HelmRepository`) with `flux get sources git`. **Resolution:** Ensure the repository URL is correct and the deploy key has access. **Manifest Error:** The `describe` command will often show an error from `kustomize build` or `kubectl apply`. **Resolution:** Check for syntax errors in the YAML manifests or missing dependencies (e.g., a `HelmRelease` for a chart whose `HelmRepository` has not been defined). |
-| **Wildcard record does not resolve a specific subdomain** | `dig TXT <subdomain>.<domain>`                                           | **Conflicting Record:** Cloudflare’s DNS logic dictates that a wildcard record (`*`) will not apply to a hostname if any other record type (e.g., `TXT`, `MX`) already exists for that specific hostname. **Resolution:** Remove the conflicting record for the specific hostname to allow the wildcard to take effect.39                                                                                                                                                                         |
+- Symptom: No DNS records are created
+  - Verify: `kubectl logs -n external-dns -l`
+    `app.kubernetes.io/name=external-dns -f`
+  - Causes/Resolution:
+    - Authentication error. Look for `Invalid request headers (6003)`.
+      Ensure the API token has `Zone:Read` and `DNS:Edit` permissions. Re-create
+      the Kubernetes secret, avoiding invisible characters and matching the
+      expected secret key name (for example, `apiToken`).26
+    - RBAC error. Inspect logs for permission denied when reading `Ingress` or
+      `Service` resources. Ensure the `HelmRelease` sets `rbac.create=true` and
+      that the `ClusterRole` grants the required permissions.
+
+- Symptom: Stale DNS records are not deleted
+  - Verify: `kubectl get helmrelease external-dns -n external-dns -o yaml`
+  - Causes/Resolution:
+    - Incorrect policy. The `policy` in the `HelmRelease` must be `sync`. If it
+      is `upsert-only`, ExternalDNS will not delete records.31
+    - Ownership mismatch. If `txtOwnerId` changed since records were created,
+      ExternalDNS will no longer recognise them as its own and will not delete
+      them.
+
+- Symptom: Records created but not proxied (“grey cloud”)
+  - Verify: `kubectl get ingress <ingress-name> -o yaml`
+  - Causes/Resolution:
+    - Missing annotation/argument. Either set the default behaviour with
+      `--cloudflare-proxied=true` in `extraArgs` in the `HelmRelease`, or add
+      the annotation
+      `external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"` (string) to
+      the relevant `Ingress` manifest.18
+
+- Symptom: Flux Kustomization is not ready
+  - Verify: `flux get kustomizations <name>` and
+    `kubectl describe kustomization <name>`
+  - Causes/Resolution:
+    - Source not ready. Check the `GitRepository` or `HelmRepository` status via
+      `flux get sources git`. Ensure the URL is correct and the deploy key has
+      access.
+    - Manifest error. `kubectl describe` may reveal errors from `kustomize
+      build` or `kubectl apply`. Fix YAML syntax issues or missing dependencies
+      (for example, a `HelmRelease` referencing a `HelmRepository` not yet
+      defined).
+
+- Symptom: Wildcard record does not resolve a specific subdomain
+  - Verify: `dig TXT <subdomain>.<domain>`
+  - Causes/Resolution:
+    - Conflicting record. Cloudflare DNS does not apply a wildcard (`*`) to a
+      hostname that already has another record (for example, `TXT`, `MX`).
+      Remove the conflicting record to allow the wildcard to take effect.39
 
 ### 6.3 Comparative Analysis: The GitOps Advantage
 

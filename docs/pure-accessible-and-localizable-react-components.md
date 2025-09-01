@@ -346,11 +346,10 @@ For example, a data-fetching component should not be in both `isLoading` and
 impossible by design.
 
 Consider a component that fetches data. Instead of managing state with multiple
-booleans
-<!-- markdownlint-disable-next-line MD013 -->
-(
-`const [isLoading, setIsLoading] = useState(true); const [isError, setIsError] = useState(false);`
- ), an FSM approach would use a single state object:
+booleans (
+`const [isLoading, setIsLoading] = useState(true);`
+`const [isError, setIsError] = useState(false);`
+), an FSM approach would use a single state object:
 
 ```typescript
 // State definition
