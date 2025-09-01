@@ -163,9 +163,12 @@ function calculateColorRatio(fgRef, bgRef) {
 function validateColorPair(colorPair, context) {
   const { label, fgRef, bgRef } = colorPair;
   const { threshold, fileHint } = context;
-  if (fgRef == null || bgRef == null) {
-    return `${label} in ${fileHint} is missing a value or contrast token`;
-  }
+  const invalidRef =
+    typeof fgRef !== 'string' ||
+    typeof bgRef !== 'string' ||
+    fgRef.trim() === '' ||
+    bgRef.trim() === '';
+  if (invalidRef) return `${label} in ${fileHint} is missing a value or contrast token`;
   try {
     const ratio = calculateColorRatio(fgRef, bgRef);
     return ratio < threshold
