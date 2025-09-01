@@ -27,7 +27,7 @@
         "description": "Return known users in the system",
         "responses": {
           "200": {
-            "description": "Users",
+            "description": "Users (maximum 100 items)",
             "content": {
               "application/json": {
                 "schema": {
@@ -87,7 +87,14 @@
             "type": "string",
             "description": "Stable error code",
             "example": "invalid_request",
-            "pattern": "^[a-z0-9_.:-]+$"
+            "pattern": "^[a-z0-9_.:-]+$",
+            "enum": [
+              "invalid_request",
+              "unauthorised",
+              "forbidden",
+              "not_found",
+              "internal_error"
+            ]
           },
           "message": {
             "type": "string",

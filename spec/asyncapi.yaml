@@ -2,10 +2,19 @@ asyncapi: 3.0.0
 info:
   title: myapp events
   version: 0.1.0
+servers:
+  production:
+    url: wss://ws.yourdomain.example
+    protocol: wss
+    description: Production WebSocket server
 channels:
   /ws:
     operations:
       userCreated:
+        operationId: userCreated
+        summary: Receive UserCreated events
+        tags:
+          - users
         action: receive
         messages:
           - $ref: '#/components/messages/UserCreated'
@@ -14,6 +23,7 @@ components:
     UserCreated:
       name: UserCreated
       title: User created event
+      contentType: application/json
       payload:
         type: object
         additionalProperties: false
@@ -29,3 +39,9 @@ components:
             type: string
             description: User's display name
             examples: ["Ada Lovelace"]
+      examples:
+        - name: minimal
+          summary: Minimal valid payload
+          payload:
+            id: "123e4567-e89b-12d3-a456-426614174000"
+            display_name: "Ada Lovelace"
