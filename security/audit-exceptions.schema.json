@@ -1,5 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wildside.dev/schemas/audit-exceptions.json",
+  "title": "Dependency audit exceptions allowlist",
   "description": "Declarative allowlist of time-bound dependency audit exceptions.",
   "type": "array",
   "minItems": 0,

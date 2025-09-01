@@ -1,12 +1,12 @@
 [
   {
-    "id": "EXAMPLE-0001",
-    "package": "example-package",
-    "advisory": "GHSA-xxxx-xxxx-xxxx",
-    "reason": "Example exception for development",
-    "introducedBy": "dependency@1.2.3",
     "addedAt": "2024-01-01",
+    "advisory": "GHSA-xxxx-xxxx-xxxx",
     "expiresAt": "2030-01-01",
+    "id": "EXAMPLE-0001",
+    "introducedBy": "dependency@1.2.3",
+    "package": "example-package",
+    "reason": "Example exception for development",
     "reviewer": "security@example.com"
   }
 ]

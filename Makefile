@@ -58,7 +58,7 @@ $(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit:
-	npx --yes -p ajv@8.17.1 -p ajv-formats@3.0.1 node security/validate-audit.js
+	node security/validate-audit.js
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
