@@ -695,16 +695,16 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
 
-        - name: Build and push (Default)
-          if: github.event.inputs.builder == 'default'
-          uses: docker/build-push-action@v6
-          with:
-            context: .
-            push: true
-            tags: ${{ steps.meta.outputs.tags }}
-            labels: ${{ steps.meta.outputs.labels }}
-            cache-from: type=gha
-            cache-to: type=gha,mode=max
+      - name: Build and push (Default)
+        if: github.event.inputs.builder == 'default'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push (Depot)
         if: github.event.inputs.builder == 'depot'
