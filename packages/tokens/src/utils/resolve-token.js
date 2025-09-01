@@ -40,33 +40,7 @@ function resolvePathOrThrow(tokens, key) {
   const segments = key.split('.');
   let cursor = tokens;
   for (const [index, segment] of enumerate(segments)) {
-    const missing = segments.slice(0, index + 1).join('.');
-    const hasObjectShape = cursor && typeof cursor === 'object';
-    const siblings = hasObjectShape ? Object.keys(cursor).slice(0, 10) : [];
-    const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
-
-    // 1) Cursor is falsy
-    if (!cursor) {
-      throw new Error(
-        `Token path "${missing}" not found (while resolving "${key}"). ` +
-          `Reason: cursor is null/undefined.${hint}`,
-      );
-    }
-
-    // 2) Cursor is not an object
-    if (typeof cursor !== 'object') {
-      throw new Error(
-        `Token path "${missing}" not found (while resolving "${key}"). ` +
-          `Reason: cursor is not an object.${hint}`,
-      );
-    }
-
-    // 3) Segment missing on current object
-    if (!Object.hasOwn(cursor, segment)) {
-      throw new Error(`Token path "${missing}" not found (while resolving "${key}").${hint}`);
-    }
-
-    cursor = cursor[segment];
+    cursor = validateCursor(cursor, segment, segments, index, key);
   }
   return cursor;
 }
@@ -85,6 +59,84 @@ function assertValidTokens(tokens) {
   if (!isValidTokenTree(tokens)) {
     throw new TypeError('tokens must be an object token tree');
   }
+}
+
+/**
+ * Create an error for a missing token path with optional reason and sibling hint.
+ *
+ * Preserves original wording and formatting used throughout token resolution.
+ *
+ * @param {string} missing - Portion of the path that could not be found.
+ * @param {string} fullKey - Full token key being resolved.
+ * @param {string | null} reason - Optional reason to include after the base message.
+ * @param {unknown} cursor - Current cursor to derive sibling keys for hinting.
+ * @returns {Error} Error instance with a detailed message.
+ */
+function createMissingPathError(missing, fullKey, reason, cursor) {
+  const hasObjectShape = cursor && typeof cursor === 'object';
+  const siblings = hasObjectShape ? Object.keys(cursor).slice(0, 10) : [];
+  const hint = siblings.length ? ` Available keys: ${siblings.join(', ')}` : '';
+  const base = `Token path "${missing}" not found (while resolving "${fullKey}").`;
+  return reason ? new Error(`${base} Reason: ${reason}.${hint}`) : new Error(`${base}${hint}`);
+}
+
+/**
+ * Validate the traversal cursor and return the next cursor.
+ *
+ * - Throws when cursor is null/undefined.
+ * - Throws when cursor is not an object.
+ * - Throws when the segment does not exist on the cursor.
+ * - Otherwise returns the next cursor value.
+ *
+ * Error messages and hints match the original implementation exactly.
+ *
+ * @param {unknown} cursor - Current traversal object.
+ * @param {string} segment - Path segment to access.
+ * @param {string[]} segments - All path segments.
+ * @param {number} index - Index of the current segment.
+ * @param {string} fullKey - Full token key being resolved.
+ * @returns {unknown} The next cursor value.
+ */
+function validateCursor(cursor, segment, segments, index, fullKey) {
+  const missing = segments.slice(0, index + 1).join('.');
+  if (!cursor) {
+    throw createMissingPathError(missing, fullKey, 'cursor is null/undefined', cursor);
+  }
+  if (typeof cursor !== 'object') {
+    throw createMissingPathError(missing, fullKey, 'cursor is not an object', cursor);
+  }
+  if (!Object.hasOwn(cursor, segment)) {
+    throw createMissingPathError(missing, fullKey, null, cursor);
+  }
+  return cursor[segment];
+}
+
+/**
+ * Process a potential token reference string and advance resolution.
+ *
+ * Returns `{ resolved: true, value }` when the value is a non-braced string
+ * (i.e., a literal) or a non-string value (early return). Returns
+ * `{ resolved: false, value }` when a token reference `{...}` was parsed and
+ * dereferenced to the next value.
+ *
+ * Throws on circular references using the same error message as the original.
+ *
+ * @param {unknown} current - Current value being processed.
+ * @param {object} tokens - Token tree for dereferencing.
+ * @param {Set<string>} seen - Set of seen keys for cycle detection.
+ * @returns {{ resolved: boolean, value: unknown }} Step result.
+ */
+function processTokenReference(current, tokens, seen) {
+  if (typeof current !== 'string') return { resolved: true, value: current };
+  const refRe = /^\{(.+)\}$/;
+  const match = refRe.exec(current.trim());
+  if (!match) return { resolved: true, value: current };
+
+  const key = match[1].trim();
+  if (seen.has(key)) throw new Error(`Circular token reference detected: "${key}"`);
+  seen.add(key);
+  const next = getTokenValue(tokens, key);
+  return { resolved: false, value: next };
 }
 
 /**
@@ -129,16 +181,12 @@ export function resolveToken(ref, tokens) {
 
   const seen = new Set();
   let current = ref;
-  const refRe = /^\{(.+)\}$/;
-
-  while (typeof current === 'string') {
-    const match = refRe.exec(current.trim());
-    if (!match) return current;
-
-    const key = match[1].trim();
-    if (seen.has(key)) throw new Error(`Circular token reference detected: "${key}"`);
-    seen.add(key);
-    current = getTokenValue(tokens, key);
+  // Iterate token references until a literal string is reached.
+  // Behaviour and error messages mirror the original implementation.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const step = processTokenReference(current, tokens, seen);
+    if (step.resolved) return step.value;
+    current = step.value;
   }
-  return current;
 }
