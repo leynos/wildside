@@ -74,7 +74,7 @@ function resolvePathOrThrow(tokens, key) {
 function getTokenValue(tokens, key) {
   const node = resolvePathOrThrow(tokens, key);
   const { value } = node ?? {};
-  if (typeof value !== 'string') {
+  if (!hasTokenProperty(node, 'value') || !isValidTokenValue(value)) {
     throw new TypeError(`Token "${key}" must resolve to an object with a string "value"`);
   }
   return value;
@@ -82,9 +82,43 @@ function getTokenValue(tokens, key) {
 
 /** Assert that the provided tokens tree is a valid object. */
 function assertValidTokens(tokens) {
-  if (tokens === null || tokens === undefined || typeof tokens !== 'object') {
+  if (!isValidTokenTree(tokens)) {
     throw new TypeError('tokens must be an object token tree');
   }
+}
+
+/**
+ * Determine whether a tokens tree value is a non-null object.
+ *
+ * @param {unknown} value - Candidate tokens tree.
+ * @returns {boolean} True when value is a valid object tree.
+ */
+function isValidTokenTree(value) {
+  return value !== null && value !== undefined && typeof value === 'object';
+}
+
+/**
+ * Safely check whether a cursor has a non-null/undefined property for a segment.
+ *
+ * This helper mirrors existing semantics that reject null/undefined leaf values
+ * during traversal.
+ *
+ * @param {unknown} cursor - Current object in the token tree.
+ * @param {string} segment - Key to check on the cursor.
+ * @returns {boolean} True when the property exists and is not null/undefined.
+ */
+function hasTokenProperty(cursor, segment) {
+  return cursor?.[segment] !== null && cursor?.[segment] !== undefined;
+}
+
+/**
+ * Validate that a resolved token value is a present string.
+ *
+ * @param {unknown} value - Resolved token leaf value.
+ * @returns {boolean} True when value is a non-null string.
+ */
+function isValidTokenValue(value) {
+  return value !== null && value !== undefined && typeof value === 'string';
 }
 
 export function resolveToken(ref, tokens) {
