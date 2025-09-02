@@ -6,53 +6,32 @@
  */
 import { z } from 'zod';
 /** Runtime schema for a branded user identifier. */
-export declare const UserIdSchema: z.ZodBranded<z.ZodString, 'UserId'>;
+export declare const UserIdSchema: z.ZodBranded<z.ZodString, "UserId">;
 /** Unique identifier for a user. */
 export type UserId = z.infer<typeof UserIdSchema>;
 /** Runtime schema for a user record. */
-export declare const UserSchema: z.ZodObject<
-  {
-    id: z.ZodBranded<z.ZodString, 'UserId'>;
-    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
+export declare const UserSchema: z.ZodObject<{
+    id: z.ZodBranded<z.ZodString, "UserId">;
     display_name: z.ZodString;
-  },
-  'strict',
-  z.ZodTypeAny,
-  {
-    id?: string & z.BRAND<'UserId'>;
-    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
+}, "strict", z.ZodTypeAny, {
+    id?: string & z.BRAND<"UserId">;
     display_name?: string;
-  },
-  {
+}, {
     id?: string;
-    // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
     display_name?: string;
-  }
->;
+}>;
 /** User record returned from the API. */
 export type User = z.infer<typeof UserSchema>;
 /** Runtime schema for a list of user records. */
-export declare const UsersSchema: z.ZodArray<
-  z.ZodObject<
-    {
-      id: z.ZodBranded<z.ZodString, 'UserId'>;
-      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
-      display_name: z.ZodString;
-    },
-    'strict',
-    z.ZodTypeAny,
-    {
-      id?: string & z.BRAND<'UserId'>;
-      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
-      display_name?: string;
-    },
-    {
-      id?: string;
-      // biome-ignore lint/style/useNamingConvention: disabled until snake/camel case conversion
-      display_name?: string;
-    }
-  >,
-  'many'
->;
+export declare const UsersSchema: z.ZodArray<z.ZodObject<{
+    id: z.ZodBranded<z.ZodString, "UserId">;
+    display_name: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    id?: string & z.BRAND<"UserId">;
+    display_name?: string;
+}, {
+    id?: string;
+    display_name?: string;
+}>, "many">;
 /** Collection of user records. */
 export type Users = z.infer<typeof UsersSchema>;

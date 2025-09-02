@@ -163,5 +163,3 @@ infra/
 | Structure | Organise by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
 
-Let me know if you'd like actual module scaffolding or integration examples
-with CI/CD systems.

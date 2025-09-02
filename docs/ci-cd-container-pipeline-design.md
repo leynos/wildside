@@ -439,7 +439,6 @@ jobs:
     concurrency:
       group: doks-deploy-${{ github.ref }}
       cancel-in-progress: true
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -452,6 +451,11 @@ jobs:
       - name: Save Kubeconfig
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.DO_CLUSTER_NAME }}
 
+      - name: Update deployment manifest with new image tag
+        run: |
+          TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          sed -i "s|IMAGE_PLACEHOLDER|$TAGGED_IMAGE|g" ${{ env.K8S_MANIFEST_PATH }}
+          
       - name: Deploy to DOKS
         run: |
           TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
@@ -465,7 +469,6 @@ jobs:
 ```
 
 Note: replace `app` with the container name defined in your Deployment spec.
-
 ______________________________________________________________________
 
 ## Part III: Accelerating Container Builds - A Comparative Analysis

@@ -159,8 +159,7 @@
         "noFloatingPromises": "error",
         "noImportCycles": "error",
         "noNonNullAssertedOptionalChain": "error",
-        // Require explicit @ts-expect-error instead of @ts-ignore
-        "noTsIgnore": "error",
+        // Prefer @ts-expect-error over @ts-ignore (no direct Biome rule in 2.2.2)
         "useExhaustiveSwitchCases": "error"
       }
     }
