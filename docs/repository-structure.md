@@ -416,10 +416,12 @@ mappings under `secretEnvFromKeys`. Cross-field rules in
 `values.schema.json` enforce this wiring by requiring `existingSecretName`
 whenever `secretEnvFromKeys` is populated. The chart defaults
 `allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
-on `envFrom.secretRef`). Set it to `false` in production to fail rendering when
-the Secret is absent.
+on `envFrom.secretRef`). Set it to `false` in production to fail rendering
+when the Secret is absent. The following snippets show the resulting
+`envFrom.secretRef` for both values:
 
 ```yaml
+# allowMissingSecret: true (default)
 apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -430,11 +432,23 @@ spec:
           envFrom:
             - secretRef:
                 name: app-secrets
-                optional: true   # allowMissingSecret: true (default)
+                optional: true
 ```
 
-In production, render with `allowMissingSecret: false` so the chart fails when
-`app-secrets` is absent and the resulting `optional` flag is omitted or false.
+```yaml
+# allowMissingSecret: false (production)
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: false
+```
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
