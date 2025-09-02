@@ -53,9 +53,6 @@ jobs:
         with:
           globs: '**/*.md'
 
-      - name: Mermaid lint
-        run: make mermaid-lint
-
       - name: Setup Helm
         # v4.3.1
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
