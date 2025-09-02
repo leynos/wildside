@@ -160,6 +160,5 @@ infra/
 | Zone      | Define or reference Cloudflare DNS zone     |
 | Record    | Create DNS entries, dynamic via `for_each`  |
 | Import    | Migrate existing records using API + import |
-| Structure | Organise by tf files, use version control   |
+| Structure | Organize by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
-

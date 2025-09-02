@@ -325,7 +325,7 @@ Create a file in the GitOps repository (e.g.,
 comprehensive configuration:
 
 ```yaml
-apiVersion: helm.toolkit.fluxcd.io/v2beta2
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: external-dns

@@ -63,11 +63,8 @@ check-fmt:
 
 markdownlint:
 	find . \
-	  -path './backend/target' -prune -o \
-	  -path './target' -prune -o \
-	  -path './.node_modules' -prune -o \
-	  -path '*/node_modules' -prune -o \
-	  -type f -name '*.md' -print0 | xargs -0 -- markdownlint
+	  \( -path './backend/target' -o -path './target' -o -path './.node_modules' -o -path '*/node_modules' -o -path '*/target' -o -path '*/.venv' \) -prune -o \
+	  -type f -name '*.md' -exec markdownlint {} +
 
 markdownlint-docs:
 	markdownlint docs/repository-structure.md
