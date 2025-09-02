@@ -415,8 +415,9 @@ Secret and reference them by setting `existingSecretName` and providing key
 mappings under `secretEnvFromKeys`. Cross-field rules in
 `values.schema.json` enforce this wiring by requiring `existingSecretName`
 whenever `secretEnvFromKeys` is populated. The chart defaults
-`allowMissingSecret` to `true` for `helm template`. Set it to `false` in
-production to fail rendering when the Secret is absent.
+`allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
+on `envFrom.secretRef`). Set it to `false` in production to fail rendering when
+the Secret is absent.
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.

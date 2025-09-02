@@ -431,6 +431,8 @@ spec:
       resources:
         requests: { cpu: 50m, memory: 64Mi }
         limits:   { cpu: 200m, memory: 128Mi }
+    # When replicaCount > 1, define PodDisruptionBudgets for webhook and cainjector
+    # to maintain availability during voluntary disruptions (drains/evictions).
 
 ```
 

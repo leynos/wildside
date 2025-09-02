@@ -584,7 +584,7 @@ the status of each component in the workflow.
 flux get kustomizations --watch
 
 # Force reconciliation to ensure the latest manifests are applied
-flux reconcile kustomization external-dns --with-source
+flux reconcile kustomization external-dns -n flux-system --with-source
 
 # Check the status of the ExternalDNS HelmRelease
 flux get helmrelease external-dns -n external-dns
