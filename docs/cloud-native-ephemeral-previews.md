@@ -1494,6 +1494,50 @@ automated experience.
     deleted and removes the DNS record from Cloudflare. The environment and all
     its traces are automatically and completely removed from the system.
 
+### Preview workflow sequence
+
+The sequence below summarises the lifecycle of an ephemeral preview environment.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Dev as Developer
+  participant GH as GitHub Actions
+  participant Reg as Container Registry
+  participant GitOps as wildside-apps repo
+  participant Src as Flux source-controller
+  participant Kust as Flux kustomize-controller
+  participant Helm as Flux helm-controller
+  participant K8s as Kubernetes
+  participant DNS as ExternalDNS
+  participant CF as Cloudflare
+  participant CM as cert-manager
+  participant LE as Let's Encrypt
+
+  Dev->>GH: Push commit or open PR
+  GH->>Reg: Build and push image
+  GH->>GitOps: Commit manifests with image tag
+  Src->>GitOps: Detect change
+  Src->>Kust: Notify new Kustomization
+  Kust->>Helm: Emit HelmRelease
+  Helm->>K8s: Deploy resources
+  K8s->>DNS: Create Ingress
+  DNS->>CF: Provision A record
+  CM->>LE: Request certificate
+  CM->>K8s: Store TLS secret
+  GH-->>Dev: Comment preview URL
+  Dev->>GH: Push updates
+  GH->>GitOps: Update image tag
+  Src->>Kust: Reconcile change
+  Helm->>K8s: Roll out update
+  Dev->>GH: Merge PR
+  GH->>GitOps: Remove manifests
+  Src->>Kust: Register removal
+  Helm->>K8s: Prune resources
+  DNS->>CF: Remove DNS record
+  CM->>K8s: Delete certificate
+```
+
 ## Conclusion and Operational Recommendations
 
 This report has detailed a robust, secure, and highly automated architecture
