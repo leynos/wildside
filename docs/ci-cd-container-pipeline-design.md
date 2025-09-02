@@ -435,7 +435,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
-    
+    environment: production
+    concurrency:
+      group: doks-deploy-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -454,13 +457,18 @@ jobs:
           sed -i "s|IMAGE_PLACEHOLDER|$TAGGED_IMAGE|g" ${{ env.K8S_MANIFEST_PATH }}
           
       - name: Deploy to DOKS
-        run: kubectl apply -f ${{ env.K8S_MANIFEST_PATH }} --namespace ${{ env.K8S_NAMESPACE }}
+        run: |
+          TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          kubectl set image deployment/${{ env.K8S_DEPLOYMENT_NAME }} \
+            app=${TAGGED_IMAGE} \
+            --namespace ${{ env.K8S_NAMESPACE }}
 
       - name: Verify deployment
         run: kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT_NAME }} --namespace ${{ env.K8S_NAMESPACE }} --timeout=5m
 
 ```
 
+Note: replace `app` with the container name defined in your Deployment spec.
 ______________________________________________________________________
 
 ## Part III: Accelerating Container Builds - A Comparative Analysis
@@ -528,7 +536,7 @@ changing the `uses` key from `docker/build-push-action` to
 `depot/build-push-action@v1`.7 This is a vertical intervention, targeting a
 specific, known bottleneck. When this action is invoked, the build is not
 executed on the GitHub runner. Instead, it is offloaded to Depot's powerful
-remote builders (e.g., 16 CPUs, 32GB RAM).6
+remote builders (e.g., 16 CPUs, 32 GB RAM).6
 
 This architectural difference enables two key features that directly solve the
 baseline problems:
@@ -694,10 +702,12 @@ jobs:
         if: github.event.inputs.builder == 'default'
         uses: docker/build-push-action@v6
         with:
-          context:.
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push (Depot)
         if: github.event.inputs.builder == 'depot'
@@ -774,7 +784,7 @@ the technological and business needs of tomorrow.
 
 6. Depot - GitHub, [https://github.com/depot](https://github.com/depot)
 
-7. GitHub Actions | Integrations | Depot - [Depot.dev](http://Depot.dev),
+7. GitHub Actions | Integrations | Depot - [Depot.dev](https://depot.dev),
    [https://depot.dev/integrations/github-actions](https://depot.dev/integrations/github-actions)
 
 8. GitHub Actions container builds take forever : r/rust - Reddit,
@@ -819,10 +829,10 @@ the technological and business needs of tomorrow.
 20. GitHub Actions | Container Builds | Depot Documentation,
     [https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions)
 
-21. Remote container builds - [Depot.dev](http://Depot.dev),
+21. Remote container builds - [Depot.dev](https://depot.dev),
     [https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview)
 
-22. Depot | Pricing - [Depot.dev](http://Depot.dev),
+22. Depot | Pricing - [Depot.dev](https://depot.dev),
     [https://depot.dev/pricing](https://depot.dev/pricing)
 
 23. Designing healthy and agnostic CI/CD pipelines | avivace,

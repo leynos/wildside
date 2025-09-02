@@ -127,11 +127,11 @@ infra/
 
 - **`provider.tf`** – Sets Cloudflare provider and auth via variables.
 - **`variables.tf`** – Defines `dns_records`, `cloudflare_zone_id`, etc.
-- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record` blocks
-  (static or dynamic).
+- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record`
+  blocks (static or dynamic).
 - **`outputs.tf`** – Outputs useful values like `name_servers`.
-- **`terraform.tfvars`** – Specifies actual values: zone name, token, record
-  definitions.
+- **`terraform.tfvars`** – Specifies concrete values: zone name, token,
+  and record definitions.
 
 ## 7. Workflow quick-hit list
 
