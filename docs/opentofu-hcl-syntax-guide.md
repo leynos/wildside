@@ -1,4 +1,3 @@
-
 # A comprehensive developer’s guide to HCL for OpenTofu
 
 ______________________________________________________________________

@@ -436,6 +436,37 @@ spec:
 
 ```
 
+Define PodDisruptionBudgets for the webhook and cainjector when scaling above
+a single replica:
+
+```yaml
+# examples/pdb-cert-manager-webhook.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cert-manager-webhook-pdb
+  namespace: cert-manager
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhook
+      app.kubernetes.io/instance: cert-manager
+---
+# examples/pdb-cert-manager-cainjector.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cert-manager-cainjector-pdb
+  namespace: cert-manager
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cainjector
+      app.kubernetes.io/instance: cert-manager
+```
+
 ### 2.3 Deploying the Namecheap DNS-01 Webhook Solver
 
 Cert-manager's core distribution does not include a DNS-01 solver for

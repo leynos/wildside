@@ -419,6 +419,23 @@ whenever `secretEnvFromKeys` is populated. The chart defaults
 on `envFrom.secretRef`). Set it to `false` in production to fail rendering when
 the Secret is absent.
 
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: true   # allowMissingSecret: true (default)
+```
+
+In production, render with `allowMissingSecret: false` so the chart fails when
+`app-secrets` is absent and the resulting `optional` flag is omitted or false.
+
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
 
