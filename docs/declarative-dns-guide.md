@@ -488,7 +488,7 @@ metadata:
   annotations:
     # --- ExternalDNS Annotations ---
     # Specifies the desired DNS hostname. This is the primary trigger.
-    external-dns.alpha.kubernetes.io/hostname: nginx.your-domain.com.
+    external-dns.alpha.kubernetes.io/hostname: nginx.your-domain.com
     
     # Overrides the default proxy setting for this specific record.
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
@@ -583,9 +583,14 @@ the status of each component in the workflow.
 # Check the status of all Kustomizations, watch for updates
 flux get kustomizations --watch
 
+# Force reconciliation to ensure the latest manifests are applied
+flux reconcile kustomization external-dns --with-source
+
 # Check the status of the ExternalDNS HelmRelease
 flux get helmrelease external-dns -n external-dns
 
+# Inspect the resulting Ingress resource
+kubectl get ingress nginx-ingress -n default -o wide
 ```
 
 A `READY` status of `True` indicates success.19 2. **Inspect ExternalDNS

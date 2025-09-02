@@ -960,9 +960,6 @@ are particularly essential for developers:
   - `jsonencode(value)`: Encodes an HCL value into a JSON string. Essential for
     embedding structured data into resource arguments that expect a JSON string.
 
-  - `jsonencode(value)`: Encodes an HCL value into a JSON string. Essential for
-    embedding structured data into resource arguments that expect a JSON string.
-
   - `jsondecode(string)`: Parses a JSON string and returns the corresponding
     HCL value.
 
@@ -981,17 +978,9 @@ are particularly essential for developers:
 - **Type Conversion**:
   - `tostring(value)`, `tonumber(value)`, `tolist(value)`, `toset(value)`:
     Explicitly convert a value to a different type. Useful for resolving
-    conditional type inconsistencies or normalizing module outputs.
-
-  - `tostring(value)`, `tonumber(value)`, `tolist(value)`, `toset(value)`:
-    Explicitly convert a value to a different type. Useful for resolving
-    conditional type inconsistencies or normalizing module outputs.
+    conditional type inconsistencies or normalising module outputs.
 
 - **Error Handling**:
-  - `try(expr1, expr2,...)`: Evaluates expressions in order and returns the
-    result of the first one that succeeds without error. Useful for handling
-    optional attributes in complex objects.
-
   - `try(expr1, expr2,...)`: Evaluates expressions in order and returns the
     result of the first one that succeeds without error. Useful for handling
     optional attributes in complex objects.
@@ -1032,7 +1021,7 @@ of operations for creating, updating, and destroying resources.
   In these "hidden dependency" scenarios, the `depends_on` meta-argument can be
   used to create an explicit dependency.19
 
-  - **Syntax**: `depends_on =`
+  - **Syntax**: `depends_on = [aws_iam_role_policy.example]`
 
   - **Pitfall**: `depends_on` should be used as a last resort. It creates a
     more rigid dependency that can lead to overly conservative plans, as
@@ -1268,12 +1257,6 @@ number), and the context (e.g., the specific resource or module that failed).
     type. For example, one branch returns a `string` and the other returns a
     `list(string)`.34
 
-  - **Likely Cause**: The two result expressions in a ternary conditional
-    (`condition? true_val : false_val`) evaluate to values of incompatible
-    types, and OpenTofu cannot automatically convert them to a single common
-    type. For example, one branch returns a `string` and the other returns a
-    `list(string)`.34
-
   - **Recommended Solution**: Be explicit about the desired type. Use type
     conversion functions like `tostring()`, `tolist()`, or `tomap()` on one or
     both branches of the conditional to ensure they return a consistent type.
@@ -1281,14 +1264,6 @@ number), and the context (e.g., the specific resource or module that failed).
 - **Error:** `Error: Provider instance not present`
   - **Likely Cause**: This error frequently occurs when using `for_each` on both
     a `provider` block (with `alias`) and a `resource` block that uses it,
-    especially if they iterate over the same collection. If an item is removed
-    from the collection, OpenTofu removes both the resource instance *and* its
-    corresponding provider configuration from the plan simultaneously. When it
-    then tries to destroy the resource, it cannot find the provider instance it
-    needs to perform the deletion.44
-
-  - **Likely Cause**: This error frequently occurs when using `for_each` on
-    both a `provider` block (with `alias`) and a `resource` block that uses it,
     especially if they iterate over the same collection. If an item is removed
     from the collection, OpenTofu removes both the resource instance *and* its
     corresponding provider configuration from the plan simultaneously. When it
@@ -1316,7 +1291,7 @@ Table 4.1: Common HCL Parsing and Planning Errors
 
 | Error Message Snippet                 | Likely Cause(s)                                                                                                                           | Recommended Solution(s)                                                                                                         | Relevant Sources |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., ``) or key (e.g., ["web"]) to the reference.                                 | 30               |
+| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., `[0]`) or key (e.g., `["web"]`) to the reference.                                 | 30               |
 | Inconsistent conditional result types | The true and false branches of a ternary operator (? :) return values of incompatible types.                                              | Use explicit type conversion functions (tostring, tolist, etc.) on the results to ensure they are the same type.                | 34               |
 | Provider instance not present         | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using for_each on both. | Decouple the resource and provider lifecycles. Ensure the provider configuration persists for the destroy operation.            | 44               |
 | checksums… do not match               | The downloaded provider package does not match the trusted checksum in .terraform.lock.hcl.                                               | Verify provider source. If the change is intentional, run tofu init -upgrade. Use tofu providers lock for multi-platform teams. | 42               |

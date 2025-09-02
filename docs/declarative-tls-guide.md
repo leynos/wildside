@@ -414,19 +414,23 @@ spec:
 
     # Production-grade settings for high availability
     replicaCount: 3
-    webhook:
-      replicaCount: 3
-    cainjector:
-      replicaCount: 3
-
-    # Resource requests and limits for stability
-    podResources:
+    resources:
       requests:
         cpu: 100m
         memory: 128Mi
       limits:
         cpu: 250m
         memory: 256Mi
+    webhook:
+      replicaCount: 3
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits:   { cpu: 200m, memory: 128Mi }
+    cainjector:
+      replicaCount: 3
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits:   { cpu: 200m, memory: 128Mi }
 
 ```
 
