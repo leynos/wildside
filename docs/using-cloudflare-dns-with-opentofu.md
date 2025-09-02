@@ -1,6 +1,6 @@
 # Using Cloudflare DNS with OpenTofu
 
-## 1. Set Up the Cloudflare Provider
+## 1. Set up the Cloudflare provider
 
 The `provider "cloudflare"` block configures authentication and connects
 OpenTofu to Cloudflare. Use environment variables for credentials to avoid
@@ -21,7 +21,7 @@ export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
 
 This ensures that sensitive data never lands in the repository.
 
-## 2. Define and Manage DNS Zones
+## 2. Define and manage DNS zones
 
 Create or reference a Cloudflare DNS zone with a `cloudflare_zone` resource:
 
@@ -34,7 +34,7 @@ resource "cloudflare_zone" "example" {
 
 This exposes the `zone_id` required for record management.
 
-## 3. Configure DNS Records
+## 3. Configure DNS records
 
 Use `cloudflare_record` resources to define DNS entries:
 
@@ -51,7 +51,7 @@ resource "cloudflare_record" "www" {
 
 This creates a proxied A record pointing to `203.0.113.10`.
 
-## 4. Automate Bulk Records with Variables
+## 4. Automate bulk records with variables
 
 For repeated or multiple record definitions, leverage `for_each` or `count`
 with a structured variable:
@@ -88,9 +88,9 @@ dns_records = [
 ]
 ```
 
-This keeps the configuration DRY and maintainable.
+This keeps the configuration "don't repeat yourself" (DRY) and maintainable.
 
-## 5. Import Existing DNS Records
+## 5. Import existing DNS records
 
 When onboarding existing DNS infrastructure into OpenTofu, Cloudflare record
 IDs (not just names) are required for import:
@@ -114,7 +114,7 @@ IDs (not just names) are required for import:
 
 This aligns existing records with the Infrastructure as Code (IaC) workflow.
 
-## 6. Example Project Structure
+## 6. Example project structure
 
 ```plaintext
 infra/
@@ -133,7 +133,7 @@ infra/
 - **`terraform.tfvars`** – Specifies actual values: zone name, token, record
   definitions.
 
-## 7. Workflow Quick Hit List
+## 7. Workflow quick-hit list
 
 1. **Init**: `tofu init`
 2. **Preview**: `tofu plan`
@@ -155,15 +155,15 @@ infra/
   - Modules:
     [Terraform module registry](https://registry.terraform.io/browse/modules)
 
-### Summary Table
+### Summary table
 
-| Step      | Description                                 |
-| --------- | ------------------------------------------- |
-| Provider  | Set up securely via environment variables   |
-| Zone      | Define or reference Cloudflare DNS zone     |
-| Record    | Create DNS entries, dynamic via `for_each`  |
-| Import    | Migrate existing records using API + import |
-| Structure | Organize by tf files, use version control   |
-| Advanced  | Extend with WAF, mTLS, modules as needed    |
+| Step      | Description                                      |
+| --------- | ------------------------------------------------ |
+| Provider  | Set up securely via environment variables        |
+| Zone      | Define or reference Cloudflare DNS zone          |
+| Record    | Create DNS entries, dynamic via `for_each`       |
+| Import    | Migrate existing records using API + import      |
+| Structure | Organize by Terraform files, use version control |
+| Advanced  | Extend with WAF, mTLS, modules as needed         |
 
 Further module scaffolding or integration examples can be provided on request.

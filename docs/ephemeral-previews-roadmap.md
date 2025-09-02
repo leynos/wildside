@@ -14,13 +14,14 @@ application and infrastructure deployments via GitOps.
   - [x] **Decision**: Combine Helm for templating with Kustomize for
     environment-specific configuration.
 
-- [ ] **Structure the `wildside-infra` Repository**
+- [ ] **Structure the `wildside-infra` repository**
 
   - [ ] Create a `clusters` directory to hold the OpenTofu configurations for
     each Kubernetes cluster (e.g., clusters/dev, clusters/prod).
 
   - [ ] Create a `modules` directory to store reusable OpenTofu modules for
-    provisioning infrastructure components (DOKS, FluxCD, etc.).
+    provisioning infrastructure components (DigitalOcean Kubernetes (DOKS),
+    FluxCD, etc.).
 
   - [ ] Create a `platform` directory containing the Kubernetes manifests (as
     Kustomizations) for core cluster services that FluxCD will manage. This
@@ -35,7 +36,7 @@ application and infrastructure deployments via GitOps.
 
     - `platform/external-dns`: `HelmRelease` for DNS automation.
 
-- [ ] **Structure the `wildside-apps` Repository**
+- [ ] **Structure the `wildside-apps` repository**
 
   - [ ] Create a `base` directory containing the canonical HelmRelease for the
     Wildside application. This defines the default deployment configuration.
@@ -84,7 +85,7 @@ modules defined in the wildside-infra repository.
 - [ ] **Instantiate the module**: Add the fluxcd module to the root OpenTofu
   configuration.
 
-- [ ] **Apply the changes**: Run tofu apply to install FluxCD.
+- [ ] **Apply the changes**: Run `tofu apply` to install FluxCD.
 
 ### 2.3: Core cluster services
 
@@ -121,7 +122,7 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
 - [ ] **Develop a `preview-environment` reusable workflow**: This workflow will
   be triggered by pull requests in the wildside repository.
 
-- [ ] **Build and Push Docker Images**:
+- [ ] **Build and push Docker images**:
 
   - [ ] Add steps to build `backend` and `frontend` Docker images.
 
@@ -130,7 +131,7 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
   - [ ] Push the tagged images to a container registry (e.g., GitHub Container
     Registry).
 
-- [ ] **Generate and Commit Kustomize Overlay**:
+- [ ] **Generate and commit Kustomize overlay**:
 
   - [ ] Add a step to check out the `wildside-apps` repository.
 
@@ -149,12 +150,12 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
     - [ ] Commit and push the new overlay to a branch in the `wildside-apps`
       repository.
 
-- [ ] **Provide Feedback to the Pull Request**:
+- [ ] **Provide feedback to the pull request**:
 
   - [ ] Add a step to post a comment on the wildside pull request with a link to
     the ephemeral preview environment.
 
-- [ ] **Automate Environment Tear Down**:
+- [ ] **Automate environment teardown**:
 
   - [ ] Develop a separate workflow triggered on pull request closure.
 
@@ -180,7 +181,7 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
 
 This phase includes long-term goals for enhancing the platform's capabilities.
 
-- [ ] **Implement Multi-Cluster Management**: Extend the GitOps model to manage
+- [ ] **Implement multi-cluster management**: Extend the GitOps model to manage
   separate development, staging, and production clusters.
 
 - [ ] **Optimize ephemeral database provisioning**: Investigate and implement a
