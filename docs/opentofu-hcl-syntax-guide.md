@@ -1282,7 +1282,7 @@ number), and the context (e.g., the specific resource or module that failed).
   - **Likely Cause**: This error frequently occurs when using `for_each` on both
     a `provider` block (with `alias`) and a `resource` block that uses it,
     especially if they iterate over the same collection. If an item is removed
-    from the collection, OpenTofu removes both the resource instance _and_ its
+    from the collection, OpenTofu removes both the resource instance *and* its
     corresponding provider configuration from the plan simultaneously. When it
     then tries to destroy the resource, it cannot find the provider instance it
     needs to perform the deletion.44
