@@ -127,11 +127,11 @@ infra/
 
 - **`provider.tf`** – Sets Cloudflare provider and auth via variables.
 - **`variables.tf`** – Defines `dns_records`, `cloudflare_zone_id`, etc.
-- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record` blocks
-  (static or dynamic).
+- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record`
+  blocks (static or dynamic).
 - **`outputs.tf`** – Outputs useful values like `name_servers`.
-- **`terraform.tfvars`** – Specifies your actual values: zone name, token,
-  record definitions.
+- **`terraform.tfvars`** – Specifies concrete values: zone name, token,
+  and record definitions.
 
 ## 7. Workflow Quick Hit List
 
@@ -144,11 +144,13 @@ infra/
 
 ## Additional Levers & Advanced Practices
 
-- Refer to the Filador blog for integrating DNS, WAF, mTLS, Pages—all with
-  OpenTofu and Cloudflare. It offers rich sample code for elevated use cases.
+- Refer to the [Filador blog](https://filador.com/blog) for integrating DNS,
+  WAF, and Pages with OpenTofu and Cloudflare. Provide sample code references.
 
-- Cloudflare’s Terraform provider supports advanced modularisation. Use the
-  module registry and example repos for better modular design.
+- Cloudflare’s Terraform provider supports advanced modularization. Use the
+  [module registry](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
+  and [example repositories](https://github.com/cloudflare/terraform-examples)
+  for stronger modular design.
 
 ### Summary Table
 
@@ -161,5 +163,3 @@ infra/
 | Structure | Organise by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
 
-Let me know if you'd like actual module scaffolding or integration examples
-with CI/CD systems.
