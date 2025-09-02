@@ -463,6 +463,8 @@ jobs:
 ```
 
 Note: replace `app` with the container name defined in your Deployment spec.
+This `kubectl set image` invocation updates that container to use `TAGGED_IMAGE`,
+so the correct tag is injected without templating the manifest.
 ______________________________________________________________________
 
 ## Part III: Accelerating Container Builds - A Comparative Analysis
