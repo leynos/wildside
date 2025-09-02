@@ -1,8 +1,10 @@
 # Using Cloudflare DNS with OpenTofu
 
-## 1. Set Up the Cloudflare Provider
+## 1. Set up the Cloudflare provider
 
-Your `provider "cloudflare"` block configures authentication and connects OpenTofu to Cloudflare. Use environment variables for credentials to avoid leaking secrets:
+The `provider "cloudflare"` block configures authentication and connects
+OpenTofu to Cloudflare. Use environment variables for credentials to avoid
+leaking secrets:
 
 ```hcl
 provider "cloudflare" {
@@ -13,13 +15,13 @@ provider "cloudflare" {
 Set credentials securely:
 
 ```bash
-export CLOUDFLARE_API_TOKEN="your-token"
+export CLOUDFLARE_API_TOKEN="example-token"
 export TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
 ```
 
-This ensures that sensitive data never lands in your repository.
+This ensures that sensitive data never lands in the repository.
 
-## 2. Define and Manage DNS Zones
+## 2. Define and manage DNS zones
 
 Create or reference a Cloudflare DNS zone with a `cloudflare_zone` resource:
 
@@ -30,9 +32,9 @@ resource "cloudflare_zone" "example" {
 }
 ```
 
-This gives you access to the `zone_id` required for record management.
+This exposes the `zone_id` required for record management.
 
-## 3. Configure DNS Records
+## 3. Configure DNS records
 
 Use `cloudflare_record` resources to define DNS entries:
 
@@ -49,9 +51,10 @@ resource "cloudflare_record" "www" {
 
 This creates a proxied A record pointing to `203.0.113.10`.
 
-## 4. Automate Bulk Records with Variables
+## 4. Automate bulk records with variables
 
-For repeated or multiple record definitions, leverage `for_each` or `count` with a structured variable:
+For repeated or multiple record definitions, leverage `for_each` or `count`
+with a structured variable:
 
 ```hcl
 variable "dns_records" {
@@ -76,7 +79,7 @@ resource "cloudflare_record" "bulk" {
 }
 ```
 
-Define `dns_records` in your `terraform.tfvars`:
+Define `dns_records` in `terraform.tfvars`:
 
 ```hcl
 dns_records = [
@@ -85,11 +88,12 @@ dns_records = [
 ]
 ```
 
-This keeps your configuration DRY and maintainable.
+This keeps the configuration "don't repeat yourself" (DRY) and maintainable.
 
-## 5. Import Existing DNS Records
+## 5. Import existing DNS records
 
-When onboarding existing DNS infrastructure into OpenTofu, you need Cloudflare’s record ID (not just name) to import:
+When onboarding existing DNS infrastructure into OpenTofu, Cloudflare record
+IDs (not just names) are required for import:
 
 1. Retrieve via API:
 
@@ -108,9 +112,9 @@ When onboarding existing DNS infrastructure into OpenTofu, you need Cloudflare�
    tofu import cloudflare_record.example DNS_ID
    ```
 
-This aligns your existing records with your IaC workflow.
+This aligns existing records with the Infrastructure as Code (IaC) workflow.
 
-## 6. Example Project Structure
+## 6. Example project structure
 
 ```plaintext
 infra/
@@ -123,34 +127,43 @@ infra/
 
 - **`provider.tf`** – Sets Cloudflare provider and auth via variables.
 - **`variables.tf`** – Defines `dns_records`, `cloudflare_zone_id`, etc.
-- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record` blocks (static or dynamic).
+- **`main.tf`** – Contains `cloudflare_zone` and `cloudflare_record` blocks
+  (static or dynamic).
 - **`outputs.tf`** – Outputs useful values like `name_servers`.
-- **`terraform.tfvars`** – Specifies your actual values: zone name, token, record definitions.
+- **`terraform.tfvars`** – Specifies actual values: zone name, token, record
+  definitions.
 
-## 7. Workflow Quick Hit List
+## 7. Workflow quick-hit list
 
 1. **Init**: `tofu init`
 2. **Preview**: `tofu plan`
 3. **Apply**: `tofu apply -auto-approve`
-4. **Observe**: Check state changes and Dashboard results
+4. **Observe**: Check state changes and dashboard results
 5. **Import** (if migrating): Use the API to find record IDs, then `tofu import`
 6. **Version Control**: Store in Git, exclude secrets
 
-## Additional Levers & Advanced Practices
+## Additional levers and advanced practices
 
-- Refer to the Filador blog for integrating DNS, WAF, mTLS, Pages—all with OpenTofu and Cloudflare. It offers rich sample code for elevated use cases.
+- Refer to the [Filador blog](https://filador.com) for integrating DNS, WAF,
+  mTLS, and Pages with OpenTofu and Cloudflare. It offers sample code for
+  advanced use cases.
 
-- Cloudflare’s Terraform provider supports advanced modularisation. Use the module registry and example repos for better modular design.
+- Cloudflare's Terraform provider supports advanced modularization. Use the
+  official provider registry and example repositories for modular design.
+  - Provider:
+    [Cloudflare Terraform provider](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
+  - Modules:
+    [Terraform module registry](https://registry.terraform.io/browse/modules)
 
-### Summary Table
+### Summary table
 
-| Step      | Description                                 |
-| --------- | ------------------------------------------- |
-| Provider  | Set up securely via environment variables   |
-| Zone      | Define or reference Cloudflare DNS zone     |
-| Record    | Create DNS entries, dynamic via `for_each`  |
-| Import    | Migrate existing records using API + import |
-| Structure | Organise by tf files, use version control   |
-| Advanced  | Extend with WAF, mTLS, modules as needed    |
+| Step      | Description                                      |
+| --------- | ------------------------------------------------ |
+| Provider  | Set up securely via environment variables        |
+| Zone      | Define or reference Cloudflare DNS zone          |
+| Record    | Create DNS entries, dynamic via `for_each`       |
+| Import    | Migrate existing records using API + import      |
+| Structure | Organize by Terraform files, use version control |
+| Advanced  | Extend with WAF, mTLS, modules as needed         |
 
-Let me know if you'd like actual module scaffolding or integration examples with CI/CD systems.
+Further module scaffolding or integration examples can be provided on request.
