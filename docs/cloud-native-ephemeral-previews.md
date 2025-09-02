@@ -1496,7 +1496,7 @@ automated experience.
 
 ### Preview workflow sequence
 
-The sequence below summarises the lifecycle of an ephemeral preview environment.
+The sequence below summarizes the lifecycle of an ephemeral preview environment.
 
 ```mermaid
 sequenceDiagram
@@ -1521,10 +1521,12 @@ sequenceDiagram
   Src->>Kust: Notify new Kustomization
   Kust->>Helm: Emit HelmRelease
   Helm->>K8s: Deploy resources
-  K8s->>DNS: Create Ingress
+  K8s-->>DNS: Ingress observed (watch)
   DNS->>CF: Provision A record
-  CM->>LE: Request certificate
-  CM->>K8s: Store TLS secret
+  CM->>LE: Request certificate (ACME DNS-01)
+  CM->>CF: Create _acme-challenge TXT
+  LE-->>CM: Validate challenge and issue cert
+  CM->>K8s: Store TLS Secret
   GH-->>Dev: Comment preview URL
   Dev->>GH: Push updates
   GH->>GitOps: Update image tag
