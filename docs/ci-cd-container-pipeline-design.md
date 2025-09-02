@@ -49,7 +49,7 @@ The following YAML snippet demonstrates a secure login step within a GitHub
 Actions job:
 
 ```yaml
-#.github/workflows/ci.yml
+# .github/workflows/ci.yml
 
 name: CI Pipeline
 
@@ -121,7 +121,7 @@ job, integrating code checkout, login, metadata extraction, and the final
 build-and-push step:
 
 ```yaml
-#.github/workflows/ci.yml
+# .github/workflows/ci.yml
 
 name: CI Pipeline
 
@@ -205,7 +205,7 @@ The following workflow demonstrates a complete, multi-architecture build
 pipeline, incorporating all the necessary setup steps:
 
 ```yaml
-#.github/workflows/ci.yml
+# .github/workflows/ci.yml
 
 name: CI Pipeline
 
@@ -370,7 +370,7 @@ production-ready workflow that builds a multi-architecture image, pushes it to
 GHCR, and deploys it to a DOKS cluster, including verification.
 
 ```yaml
-#.github/workflows/main.yml
+# .github/workflows/build-and-deploy.yml
 
 name: Build and Deploy to DOKS
 
@@ -384,7 +384,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   DO_CLUSTER_NAME: <your-doks-cluster-name>
   K8S_DEPLOYMENT_NAME: <your-deployment-name>
-  K8S_NAMESPACE: default
+  K8S_NAMESPACE: app
   K8S_MANIFEST_PATH: k8s/deployment.yml
 
 jobs:
@@ -394,7 +394,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
+      image_tag: ${{ fromJSON(steps.meta.outputs.json).tags[0].split(':')[1] }}
 
     steps:
       - name: Checkout repository
@@ -450,6 +450,9 @@ jobs:
 
       - name: Save Kubeconfig
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.DO_CLUSTER_NAME }}
+
+      - name: Ensure namespace exists
+        run: kubectl get ns ${{ env.K8S_NAMESPACE }} || kubectl create ns ${{ env.K8S_NAMESPACE }}
 
       - name: Update deployment manifest with new image tag
         run: |
@@ -508,8 +511,8 @@ powerful hardware, more intelligent caching, or native build environments.
 ### Section 3.2: Blacksmith: Raw Compute Power as a Service
 
 Blacksmith's core value proposition is providing significantly faster hardware
-for GitHub Actions jobs. It offers runners that run on "bare metal gaming CPUs"
-with high single-core performance, directly addressing the compute limitations
+for GitHub Actions jobs. It offers runners that run on "bare‑metal gaming CPUs"
+with high single‑core performance, directly addressing the compute limitations
 of standard runners.16
 
 The integration model for Blacksmith is that of a "drop-in" runner replacement.
@@ -657,7 +660,7 @@ The following YAML example demonstrates a workflow that allows a user to choose
 between the `default` Docker builder and the `depot` builder:
 
 ```yaml
-#.github/workflows/manual-build.yml
+# .github/workflows/manual-build.yml
 
 name: Manual Build with Provider Choice
 
@@ -772,11 +775,11 @@ the technological and business needs of tomorrow.
 2. Use GITHUB_TOKEN for authentication in workflows - GitHub Docs,
    [https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)
 
-3. Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR · Actions -
+3. Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR Â· Actions -
    GitHub,
    [https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr)
 
-4. push-to-ghcr · Actions · GitHub Marketplace,
+4. push-to-ghcr Â· Actions Â· GitHub Marketplace,
    [https://github.com/marketplace/actions/push-to-ghcr](https://github.com/marketplace/actions/push-to-ghcr)
 
 5. GitHub Action to build and push Docker images with Buildx,
@@ -797,7 +800,7 @@ the technological and business needs of tomorrow.
     [https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
 
 11. What is the appropriate way to set image pull secrets for images being
-    sourced from github to avoid pull rate limits? · community · Discussion
+    sourced from github to avoid pull rate limits? Â· community Â· Discussion
     #160722,
     [https://github.com/orgs/community/discussions/160722](https://github.com/orgs/community/discussions/160722)
 
@@ -811,7 +814,7 @@ the technological and business needs of tomorrow.
     Kubernetes,
     [https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/](https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/)
 
-15. Enable Push-to-Deploy on DigitalOcean Kubernetes Using GitHub …,
+15. Enable Push-to-Deploy on DigitalOcean Kubernetes Using GitHub â¦,
     [https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/](https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/)
 
 16. Blacksmith: The Fastest Way to Run GitHub Actions,
@@ -851,7 +854,7 @@ the technological and business needs of tomorrow.
 27. Evaluate expressions in workflows and actions - GitHub Docs,
     [https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions](https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions)
 
-28. Advanced Workflow Configurations in GitHub Actions | GitHub …,
+28. Advanced Workflow Configurations in GitHub Actions | GitHub â¦,
     [https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/](https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/)
 
 29. GitHub Actions: Does the IF have an ELSE? - Stack Overflow,

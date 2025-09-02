@@ -165,5 +165,3 @@ infra/
 | Import    | Migrate existing records using API + import      |
 | Structure | Organize by Terraform files, use version control |
 | Advanced  | Extend with WAF, mTLS, modules as needed         |
-
-Further module scaffolding or integration examples can be provided on request.
