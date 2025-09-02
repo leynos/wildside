@@ -1,5 +1,5 @@
 
-# A Comprehensive Developer's Guide to HCL for OpenTofu
+# A comprehensive developer’s guide to HCL for OpenTofu
 
 ______________________________________________________________________
 
@@ -172,9 +172,6 @@ OpenTofu supports a range of data types for its values 10:
   - `bool`: A boolean value, either `true` or `false`.
 
 - **Complex (Collection) Types**:
-  - `list(...)`: An ordered sequence of values, identified by zero-based integer
-    indices, e.g., `["us-west-1a", "us-west-1c"]`.
-
   - `list(...)`: An ordered sequence of values, identified by zero-based
     integer indices, e.g., `["us-west-1a", "us-west-1c"]`.
 
@@ -191,11 +188,6 @@ OpenTofu supports a range of data types for its values 10:
     have different types.
 
 - **The Special** `null` **Value**:
-  - `null` is a special value that represents the absence or omission of a
-    value. Setting a resource argument to `null` is equivalent to not setting
-    it at all, causing OpenTofu to fall back to the argument's default value or
-    raise an error if it's a required argument.10
-
   - `null` is a special value that represents the absence or omission of a
     value. Setting a resource argument to `null` is equivalent to not setting
     it at all, causing OpenTofu to fall back to the argument's default value or
@@ -381,7 +373,7 @@ secondary, special-purpose dialect.
    departure from native HCL where these can be more dynamic.
 
 2. **The "Attributes as Blocks" Limitation**: Some resource types have a
-   special behavior where an argument can be specified using either argument
+   special behaviour where an argument can be specified using either argument
    syntax (`example = [...]`) or nested block syntax (`example {... }`). This
    feature, known as "attributes as blocks," is designed for readability in
    native HCL. However, due to the ambiguity it would create in JSON, this
@@ -415,7 +407,7 @@ ______________________________________________________________________
 
 This section provides a deep dive into each of the fundamental top-level blocks
 used in OpenTofu. It moves beyond basic syntax to cover their specific
-arguments, behaviors, advanced features, and best practices in detail.
+arguments, behaviours, advanced features, and best practices in detail.
 
 ### 2.1 resource: The Heart of Infrastructure Definition
 
@@ -444,7 +436,7 @@ resource. These arguments are primarily divided into two categories:
    include `ami` and `instance_type`.7
 
 2. **Meta-Arguments**: These are defined by the OpenTofu language itself and
-   can be used with any resource type to change its behavior. Key
+   can be used with any resource type to change its behaviour. Key
    meta-arguments include `count`, `for_each`, `provider`, `depends_on`, and
    `lifecycle`.7
 
@@ -486,13 +478,13 @@ features, often configured via nested blocks.
 
 - `timeouts` **Block**: For resources that involve long-running operations
   (like creating a large database), some providers expose a `timeouts` block.
-  This allows you to specify custom time limits for `create`, `update`, and
-  `delete` operations, overriding the provider's defaults.7
+  Custom time limits for `create`, `update`, and `delete` operations can be
+  specified, overriding the provider’s defaults.7
 
 - `removed` **Block**: Introduced to simplify refactoring, the `removed` block
-  allows you to decouple a resource from the OpenTofu state without destroying
-  the actual remote object. If you delete a resource from your configuration,
-  you can replace it with a `removed` block pointing to its address (e.g.,
+  decouples a resource from the OpenTofu state without destroying the actual
+  remote object. If a resource is deleted from the configuration, it can be
+  replaced with a `removed` block pointing to its address (e.g.,
   `removed { from = aws_instance.web }`). On the next apply, OpenTofu will
   remove the resource from its state file but leave the real infrastructure
   intact.7
@@ -507,7 +499,7 @@ features, often configured via nested blocks.
 
 ### 2.2 variable: Parameterizing Configurations
 
-Input variables are the parameters of an OpenTofu module, allowing its behavior
+Input variables are the parameters of an OpenTofu module, allowing its behaviour
 to be customized without modifying its source code. They are analogous to
 function arguments in traditional programming.11 Each input variable is
 declared using a
@@ -518,7 +510,7 @@ declared using a
 
 The basic syntax is `variable "<NAME>" {... }`, where `<NAME>` is the unique
 name for the variable within the module.11 The block body can contain several
-arguments to define the variable's behavior:
+arguments to define the variable's behaviour:
 
 - `type`: This argument enforces type safety by restricting the type of value
   that can be assigned to the variable. While optional, specifying a type is a
@@ -638,7 +630,7 @@ The syntax is `data "<PROVIDER>_<TYPE>" "<NAME>" {... }`.25
   For example, a data source for an AWS AMI might accept filters for the AMI
   name or tags.25
 
-A key aspect of data source behavior is its evaluation timing. OpenTofu
+A key aspect of data source behaviour is its evaluation timing. OpenTofu
 attempts to read data sources during the `plan` phase. However, if any of a
 data source's arguments depend on a value that is not yet known (i.e., a
 "computed value" from a resource that has not been created yet), the reading of
@@ -687,7 +679,7 @@ themselves clean and readable.13
 
 ### 2.6 provider and terraform Blocks: Configuration Metadata
 
-These two blocks are used to configure OpenTofu's own behavior and its
+These two blocks are used to configure OpenTofu's own behaviour and its
 interaction with providers, rather than defining infrastructure resources
 directly.
 
@@ -701,7 +693,7 @@ This top-level block configures core OpenTofu settings.
 - `required_providers`: This nested block is the modern and mandatory way to
   declare all providers used by the module. For each provider, you must specify
   its `source` (e.g., `"hashicorp/aws"`) and a `version` constraint (e.g.,
-  `"~> 5.0"`). This practice is critical for ensuring predictable behavior by
+  `"~> 5.0"`). This practice is critical for ensuring predictable behaviour by
   preventing providers from being upgraded unexpectedly to a new version with
   breaking changes.13
 
@@ -799,11 +791,11 @@ resource "aws_instance" "server" {
 
 In this scenario, OpenTofu associates each instance with its numeric index:
 
-- `aws_instance.server` is tied to `"subnet-abc"`.
+- `aws_instance.server[0]` is tied to `"subnet-abc"`.
 
-- `aws_instance.server` is tied to `"subnet-def"`.
+- `aws_instance.server[1]` is tied to `"subnet-def"`.
 
-- `aws_instance.server` is tied to `"subnet-ghi"`.
+- `aws_instance.server[2]` is tied to `"subnet-ghi"`.
 
 The problem arises if an element is removed from the middle of the `subnet_ids`
 list. If `"subnet-def"` is removed, the list becomes
@@ -818,8 +810,8 @@ evaluates the `subnet_id` for each instance:
 
 The result is that OpenTofu plans to **change** the subnet for the instance at
 index 1 (from `subnet-def` to `subnet-ghi`) and **destroy** the instance at
-index 2. This is often not the desired behavior; the user likely intended only
-to destroy the instance associated with `subnet-def`. This re-indexing behavior
+index 2. This is often not the desired behaviour; the user likely intended only
+to destroy the instance associated with `subnet-def`. This re-indexing behaviour
 makes `count` fragile for managing dynamic collections.2
 
 #### The `for_each` Meta-Argument
@@ -991,7 +983,7 @@ are particularly essential for developers:
 - **Lifecycle Functions**:
   - `timestamp()`: Returns the current time.
 
-  - uuid(): Generates a random UUID.
+  - `uuid()`: Generates a random UUID.
 
     Caution: These functions are "impure," meaning their result changes on
     every run. Using them directly in resource arguments will cause the
@@ -1094,7 +1086,7 @@ ______________________________________________________________________
 ## Section 4: Troubleshooting: Pitfalls, Gotchas, and Error Resolution
 
 Writing HCL is an iterative process, and encountering errors or unexpected
-behavior is a natural part of development. This section provides a practical
+behaviour is a natural part of development. This section provides a practical
 guide to the common challenges, anti-patterns, and error messages that
 developers face when working with OpenTofu.
 
@@ -1130,7 +1122,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 #### State Management
 
-- **Using Local State**: The default behavior of storing the state file locally
+- **Using Local State**: The default behaviour of storing the state file locally
   (`terraform.tfstate`) is only suitable for experimentation. For any
   collaborative or production work, it is a significant anti-pattern. Local
   state makes collaboration impossible, risks accidental deletion, and can lead
@@ -1228,9 +1220,8 @@ number), and the context (e.g., the specific resource or module that failed).
     caused by a simple typo in a variable or resource reference (e.g.,
     `var.iamge_id` instead of `var.image_id`). It can also occur when trying to
     reference an instance of a resource created with `count` or `for_each`
-    without providing its index or key (e.g., trying to use
-    `aws_instance.server.id` when it should be `aws_instance.server.id` or
-    `aws_instance.server["key"].id`).30
+    without providing its index or key (e.g., `aws_instance.server[0].id` for
+    `count`, or `aws_instance.server["key"].id` for `for_each`).30
 
   - **Recommended Solution**: Carefully check the spelling of the reference.
     Ensure that you are using the correct index `[...]` or key `["..."]` syntax

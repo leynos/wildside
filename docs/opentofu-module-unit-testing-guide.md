@@ -794,7 +794,7 @@ COMMAND=$(jq -r \
 
 # Assert that the command is what we expect
 EXPECTED_COMMAND="echo hello-world > /tmp/message.txt"
-if; then
+if [ "$COMMAND" != "$EXPECTED_COMMAND" ]; then
   echo "Assertion failed!"
   echo "Expected: $EXPECTED_COMMAND"
   echo "Got:      $COMMAND"
