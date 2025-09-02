@@ -978,7 +978,7 @@ are particularly essential for developers:
 - **Type Conversion**:
   - `tostring(value)`, `tonumber(value)`, `tolist(value)`, `toset(value)`:
     Explicitly convert a value to a different type. Useful for resolving
-    conditional type inconsistencies or normalising module outputs.
+    conditional type inconsistencies or normalizing module outputs.
 
 - **Error Handling**:
   - `try(expr1, expr2,...)`: Evaluates expressions in order and returns the

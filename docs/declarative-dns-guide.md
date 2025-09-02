@@ -488,7 +488,7 @@ metadata:
   annotations:
     # --- ExternalDNS Annotations ---
     # Specifies the desired DNS hostname. This is the primary trigger.
-    external-dns.alpha.kubernetes.io/hostname: nginx.your-domain.com
+    external-dns.alpha.kubernetes.io/hostname: nginx.example.com
     
     # Overrides the default proxy setting for this specific record.
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
