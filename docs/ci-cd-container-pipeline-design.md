@@ -385,7 +385,6 @@ env:
   DO_CLUSTER_NAME: <your-doks-cluster-name>
   K8S_DEPLOYMENT_NAME: <your-deployment-name>
   K8S_NAMESPACE: default
-  K8S_MANIFEST_PATH: k8s/deployment.yml
 
 jobs:
   build-and-push:
@@ -451,11 +450,6 @@ jobs:
       - name: Save Kubeconfig
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.DO_CLUSTER_NAME }}
 
-      - name: Update deployment manifest with new image tag
-        run: |
-          TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
-          sed -i "s|IMAGE_PLACEHOLDER|$TAGGED_IMAGE|g" ${{ env.K8S_MANIFEST_PATH }}
-          
       - name: Deploy to DOKS
         run: |
           TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"

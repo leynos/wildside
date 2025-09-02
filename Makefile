@@ -67,6 +67,8 @@ markdownlint:
 	  -path './target' -prune -o \
 	  -path './.node_modules' -prune -o \
 	  -path '*/node_modules' -prune -o \
+	  -path './.git' -prune -o \
+	  -path '*/.git' -prune -o \
 	  -type f -name '*.md' -print0 | xargs -0 -- markdownlint
 
 markdownlint-docs:

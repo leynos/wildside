@@ -144,13 +144,11 @@ infra/
 
 ## Additional Levers & Advanced Practices
 
-- Refer to the [Filador blog](https://filador.com/blog) for integrating DNS,
-  WAF, and Pages with OpenTofu and Cloudflare. Provide sample code references.
-
-- Cloudflare’s Terraform provider supports advanced modularization. Use the
-  [module registry](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
-  and [example repositories](https://github.com/cloudflare/terraform-examples)
-  for stronger modular design.
+Consult the [Filador blog](https://filador.com/blog) for integrating DNS, WAF,
+and Pages with OpenTofu and Cloudflare, and use Cloudflare’s Terraform
+provider’s [module registry](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
+and [example repositories](https://github.com/cloudflare/terraform-examples)
+to design modular configurations.
 
 ### Summary Table
 
@@ -162,4 +160,3 @@ infra/
 | Import    | Migrate existing records using API + import |
 | Structure | Organise by tf files, use version control   |
 | Advanced  | Extend with WAF, mTLS, modules as needed    |
-
