@@ -49,21 +49,23 @@ issues before they enter the main development branch or a CI/CD pipeline.
 
 - **Formatting and Syntax Validation**: The most basic checks ensure that the
   code adheres to canonical formatting and is syntactically valid.
-  - `tofu fmt`: This command rewrites OpenTofu configuration files to a standard
-    format and style, eliminating debates over stylistic choices and improving
-    readability.10 Running
+
+  - `tofu fmt`: This command rewrites OpenTofu configuration files to a
+    standard format and style, eliminating debates over stylistic choices and
+    improving readability.10 Running
 
     `tofu fmt -check` in a CI pipeline can enforce this standard.
 
-  - `tofu validate`: This command performs a more thorough check, validating the
-    syntax of the configuration files and the internal consistency of
+  - `tofu validate`: This command performs a more thorough check, validating
+    the syntax of the configuration files and the internal consistency of
     arguments, variable types, and resource attributes.9 It operates without
     accessing remote services like cloud provider APIs, making it an ideal
     candidate for fast pre-commit hooks and CI validation stages.11 For
     advanced tool integration, it can produce machine-readable JSON output.12
 
-- **Linting and Best Practices**: Linters go beyond basic syntax to enforce best
-  practices and identify potential errors.
+- **Linting and Best Practices**: Linters go beyond basic syntax to enforce
+  best practices and identify potential errors.
+
   - `TFLint`: A popular linter that detects issues such as invalid instance
     types for cloud providers (AWS, Azure, GCP), use of deprecated syntax, and
     unused declarations, ensuring cleaner and more efficient code.9
@@ -71,6 +73,7 @@ issues before they enter the main development branch or a CI/CD pipeline.
 - **Security and Compliance Scanning**: These specialized static analysis tools
   focus on identifying security vulnerabilities and compliance violations
   within the IaC definitions.
+
   - `tfsec`, `Checkov`, and `Trivy`: These tools scan OpenTofu code for common
     security misconfigurations, such as overly permissive firewall rules,
     unencrypted storage, or exposed secrets, providing an essential layer of
@@ -126,15 +129,15 @@ different purposes, detect different types of bugs, and are applied at
 different stages of the CI/CD pipeline. The following table synthesizes the key
 differences in the context of OpenTofu.
 
-| Feature       | Unit Testing                                                                             | Integration Testing                                                               |
-| ------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Scope         | A single module or resource in isolation                                                 | Multiple modules and their interactions                                           |
-| Dependencies  | External dependencies mocked or stubbed using `mock_provider`, `override_resource`, etc. | Uses real or closely replicated services such as cloud APIs                       |
-| Execution     | `tofu plan` or `tofu test` with mocks; very fast                                         | `tofu apply` or `tofu test` with `command=apply`; slower due to real provisioning |
-| Bugs Detected | Logic errors, invalid inputs, and broken conditional logic                               | Interface errors, permission issues, data flow problems, dependency conflicts     |
-| Primary Tools | `tofu test` with `command=plan`, Terratest (plan-based checks)                           | `tofu test` with `command=apply`, Terratest, Kitchen-Terraform (legacy)           |
-| Cost          | Low to none; no real infrastructure deployed                                             | Higher; provisions and pays for real resources                                    |
-| CI/CD Stage   | Pre-merge checks on pull requests                                                        | Post-merge checks in a dedicated test environment                                 |
+| Feature       | Unit Testing                                                                               | Integration Testing                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Scope         | A single module or resource in isolation.8                                                 | Multiple modules and their interactions.6                                              |
+| Dependencies  | External dependencies are mocked or stubbed.8 Uses mock_provider, override_resource, etc.  | Uses real or closely replicated services (e.g., real cloud APIs).17 |
+| Execution     | tofu plan or tofu test with mocks. Very fast.8                                             | tofu apply or tofu test with command=apply. Slower due to real resource provisioning.6 |
+| Bugs Detected | Logic errors, incorrect variable interpolation, invalid inputs, broken conditional logic.7 | Interface errors, permission issues, data flow problems, dependency conflicts.7        |
+| Primary Tools | tofu test (with command=plan and mocks), Terratest (with plan-based checks).               | tofu test (with command=apply), Terratest, Kitchen-Terraform (legacy).                 |
+| Cost          | Low to none. No real infrastructure deployed.                                              | Higher, as it involves provisioning (and paying for) real cloud resources.             |
+| CI/CD Stage   | Pre-merge checks on pull requests.                                                         | Post-merge checks in a dedicated test environment.                                     |
 
 ### 1.4 The Blurring Lines and the Importance of Intent
 
@@ -150,20 +153,20 @@ unit test.16 Similarly, a framework like Terratest is most famous for its
 integration testing capabilities but can also be used to validate plan files.
 
 This flexibility means that the tool or command name alone does not define the
-type of test being performed. The crucial differentiator is the _practitioner's
-intent_. The fundamental question an engineer must ask is: "What am I trying to
+type of test being performed. The crucial differentiator is the *practitioner's
+intent*. The fundamental question an engineer must ask is: "What am I trying to
 validate?"
 
 - If the goal is to verify the module's internal logic, its conditional
-  branches, or its variable handling _in isolation_, then it is a **unit
+  branches, or its variable handling *in isolation*, then it is a **unit
   test**. The appropriate technique is to use `command=plan`, leverage mocking
   features, and avoid interaction with real cloud APIs.
 
-- If the goal is to verify that the module correctly interacts with a real cloud
-  provider, that its provisioned resources can communicate with each other, or
-  that it has the necessary permissions to operate, then it is an **integration
-  test**. The appropriate technique is to use `command=apply` and deploy the
-  resources into a controlled test environment.
+- If the goal is to verify that the module correctly interacts with a real
+  cloud provider, that its provisioned resources can communicate with each
+  other, or that it has the necessary permissions to operate, then it is an
+  **integration test**. The appropriate technique is to use `command=apply` and
+  deploy the resources into a controlled test environment.
 
 This shift from a rigid, tool-based definition to a flexible, goal-oriented one
 is central to mastering IaC testing. It empowers engineers to consciously
@@ -203,8 +206,8 @@ options that allow for precise control over test execution 21:
   useful for debugging a single test case. This option can be used multiple
   times.21
 
-- `-var 'foo=bar'` and `-var-file=filename`: Provide input variables to the root
-  module, identical to their usage with `plan` and `apply`.16
+- `-var 'foo=bar'` and `-var-file=filename`: Provide input variables to the
+  root module, identical to their usage with `plan` and `apply`.16
 
 - `-json`: Formats the test output as machine-readable JSON, suitable for
   integration with other tools or CI/CD dashboards.21
@@ -248,9 +251,7 @@ variable.
 
 `main.tf`
 
-Terraform
-
-```hcl
+```terraform
 variable "instance_name" {
   type        = string
   description = "The name for the EC2 instance."
@@ -273,9 +274,7 @@ place this in a `tests/` directory or alongside the `main.tf` file.
 
 `tests/main.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 run "validate_instance_name_tag" {
   # Test configuration will be added here
 }
@@ -290,9 +289,7 @@ necessary input variables.
 
 `tests/main.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 run "validate_instance_name_tag" {
   command = plan
 
@@ -319,9 +316,7 @@ resource, output, or variable from the planned configuration.
 
 `tests/main.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 run "validate_instance_name_tag" {
   command = plan
 
@@ -344,8 +339,6 @@ block.29
 
 To run the test, navigate to the module's directory and execute the following
 commands:
-
-Bash
 
 ```bash
 tofu init
@@ -372,9 +365,7 @@ variable to enforce a naming convention.
 
 `main.tf` **(updated)**
 
-Terraform
-
-```hcl
+```terraform
 variable "instance_name" {
   type        = string
   description = "The name for the EC2 instance."
@@ -392,9 +383,7 @@ provides an invalid name and expects the validation to fail.
 
 `tests/validation.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 run "reject_invalid_instance_name" {
   command = plan
 
@@ -412,7 +401,7 @@ The `expect_failures` attribute takes a list of configuration constructs that
 are expected to produce an error.21 In this case, we expect the validation for
 
 `var.instance_name` to fail. When `tofu test` is run, this test case will
-_pass_ because the expected failure occurred, confirming that the module's
+*pass* because the expected failure occurred, confirming that the module's
 input validation is working as designed.
 
 ### 2.4 Achieving True Isolation: Mocks and Overrides
@@ -440,9 +429,7 @@ This allows tests to run completely offline, without any credentials configured.
 
 ##### Example: Testing a module without AWS credentials
 
-Terraform
-
-```hcl
+```terraform
 # In tests/mock_test.tftest.hcl
 
 # This block replaces the real AWS provider with a mock.
@@ -491,9 +478,7 @@ dependency.
   Suppose a module uses data "aws_ami" "ubuntu". The test can override it as
   follows:
 
-  Terraform
-
-  ```hcl
+  ```terraform
   # In tests/override_test.tftest.hcl
   override_data "aws_ami" "ubuntu" {
     values = {
@@ -544,9 +529,9 @@ instances based on a list or map, using the `count` 34 and
 `for_each` 35 meta-arguments. Testing these constructs requires more than just
 verifying that
 
-_a_ resource is created; it requires validating that the _correct number_ of
-resources are planned and that each instance has the _correct, distinct
-configuration_.
+*a* resource is created; it requires validating that the *correct number* of
+resources are planned and that each instance has the *correct, distinct
+configuration*.
 
 The strategy for testing these iterative resources relies on using
 `command = plan` to avoid the cost and time of deploying multiple real
@@ -571,9 +556,7 @@ bucket for each entry, applying specific tags.
 
 `module/main.tf`
 
-Terraform
-
-```hcl
+```terraform
 variable "buckets" {
   type = map(object({
     enable_versioning = bool
@@ -608,9 +591,7 @@ versioning resource.
 
 `module/tests/s3_test.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 mock_provider "aws" {}
 
 run "validate_multiple_buckets_creation" {
@@ -672,9 +653,7 @@ HTTPS listener if a certificate ARN is provided.
 
 `module/main.tf`
 
-Terraform
-
-```hcl
+```terraform
 variable "alb_arn" {
   type = string
 }
@@ -708,9 +687,7 @@ for the "disabled" case.
 
 `module/tests/alb_listener_test.tftest.hcl`
 
-Terraform
-
-```hcl
+```terraform
 # Using overrides to provide mock values for dependencies
 override_resource "aws_lb" "main" {
   values = {
@@ -762,9 +739,9 @@ introduces side effects and dependencies on the local execution environment,
 which are antithetical to pure unit testing.
 
 A critical distinction must be made: a unit test for an OpenTofu module
-containing a provisioner should not test the _outcome_ of the script itself.
+containing a provisioner should not test the *outcome* of the script itself.
 That is the domain of integration testing. The goal of the unit test is to
-verify that the IaC logic _correctly constructs the command_ that will be
+verify that the IaC logic *correctly constructs the command* that will be
 passed to the provisioner.
 
 The strategy to achieve this involves generating a plan in JSON format and then
@@ -779,9 +756,7 @@ variable.
 
 `module/main.tf`
 
-Terraform
-
-```hcl
+```terraform
 variable "message" {
   type = string
 }
@@ -800,8 +775,6 @@ external script.
 
 `test_runner.sh` **(a helper script for the test)**
 
-Bash
-
 ```bash
 #!/bin/bash
 set -e
@@ -811,11 +784,13 @@ tofu plan -var="message=hello-world" -out=tfplan.binary
 tofu show -json tfplan.binary > tfplan.json
 
 # Use jq to parse the JSON and find the provisioner command
-COMMAND=$(jq -r '.resource_changes |
-  select(.address == "null_resource.script_trigger") |
-  .change.after.provisioners |
-  select(.type == "local-exec") |
-  .command' tfplan.json)
+COMMAND=$(jq -r \
+  '.resource_changes
+   | map(select(.address == "null_resource.script_trigger"))
+   | .[0].change.after.provisioners
+   | map(select(.type == "local-exec"))
+   | .[0].command' \
+  tfplan.json)
 
 # Assert that the command is what we expect
 EXPECTED_COMMAND="echo hello-world > /tmp/message.txt"
@@ -833,7 +808,7 @@ This test runner script would be executed from a CI pipeline. It validates that
 the `var.message` was correctly interpolated into the `command` string,
 confirming the IaC logic is sound.
 
-For testing the _logic of the script itself_ (e.g., the `echo` command or a
+For testing the *logic of the script itself* (e.g., the `echo` command or a
 more complex shell script), a separate, dedicated testing approach should be
 used. Frameworks like `bunit` 43,
 
@@ -875,8 +850,8 @@ Terratest test is a sequence of actions orchestrated by Go code 48:
    API to check resource attributes, or connecting via SSH to run commands on a
    server.48
 
-3. **Destroy**: The test ensures that all infrastructure created during the test
-   is torn down at the end. This is typically accomplished by wrapping the
+3. **Destroy**: The test ensures that all infrastructure created during the
+   test is torn down at the end. This is typically accomplished by wrapping the
    destroy command (e.g., `tofu destroy`) in a Go `defer` statement, which
    guarantees its execution even if the validation steps fail.48
 
@@ -892,8 +867,6 @@ deploys a simple web server demonstrates Terratest's power.
 - **Test Code (**`webserver_test.go`**)**: A typical test file imports the
   `testing` package, Terratest's `terraform` and `http_helper` modules, and an
   assertion library like `testify`.
-
-  Go
 
   ```go
   package test
@@ -959,15 +932,15 @@ on the team's skillset, the specific validation requirements, and the desired
 balance between ease of use and flexibility. The following table provides a
 direct comparison to aid in this decision-making process.
 
-| Dimension      | `tofu test` (Native Framework)                                          | Terratest                                                                           |
-| -------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Language       | HCL; familiar to OpenTofu users                                         | Go (Golang); requires learning a new language and ecosystem                         |
-| Test Scope     | Plan-based unit tests; can handle integration with `command=apply`      | Excels at integration and E2E tests; plan-based unit tests are possible but verbose |
-| Mocking        | Built-in mocking for providers, resources, data, and modules            | No built-in IaC mocking; relies on real resources or custom Go mocks                |
-| Setup          | No dependencies beyond the OpenTofu binary                              | Requires Go tooling and dependency management via `go mod`                          |
-| Flexibility    | Limited by HCL's declarative nature; complex logic needs helper modules | Highly flexible; full power of Go for API calls, file operations, etc.              |
-| Ecosystem      | Integrated into the OpenTofu CLI                                        | Rich helper library for AWS, GCP, Azure, Kubernetes, Docker, SSH, and more          |
-| Learning Curve | Low for existing OpenTofu users                                         | Steeper; needs Go proficiency and familiarity with Terratest                        |
+| Dimension      | tofu test (Native Framework)                                                                              | Terratest                                                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Language       | HCL.23 Familiar to OpenTofu users, lowering the adoption barrier.                                         | Go (Golang).2 Requires learning a new programming language and its ecosystem.                                                         |
+| Test Scope     | Excels at plan-based unit tests. Can perform integration tests with command=apply.21                      | Excels at integration and E2E tests. Can perform plan-based unit tests, but it's less common and more verbose.26                      |
+| Mocking        | Strong, built-in support for mocking providers and overriding resources, data, and modules.24             | No built-in IaC mocking. Relies on deploying real resources or requires complex, custom Go-based mocking of cloud provider SDKs.      |
+| Setup          | No extra dependencies beyond the OpenTofu binary itself.21                                                | Requires a full Go development environment installation and dependency management via go mod.48                                       |
+| Flexibility    | Limited by HCL's declarative nature. Complex logic or external API interactions require helper modules.21 | Highly flexible. Can perform any action possible in Go: complex logic, custom API calls, file manipulation, database queries, etc..49 |
+| Ecosystem      | Fully integrated into the OpenTofu CLI. Part of the core tool.                                            | Large library of helper functions for AWS, GCP, Azure, Kubernetes, Docker, SSH, and more, simplifying common validation tasks.2       |
+| Learning Curve | Low for existing OpenTofu users; the syntax is the same.23                                                | Steeper, requires proficiency in Go, its testing packages, and the Terratest library itself.49                                        |
 
 ### 4.3 Legacy and Niche Tools: Kitchen-Terraform
 
@@ -1006,14 +979,18 @@ A comprehensive module repository should be organized as follows:
     module. For complex modules, it may primarily contain calls to nested
     modules.58
 
+  - `main.tf`: Contains the primary logic and resource definitions of the
+    module. For complex modules, it may primarily contain calls to nested
+    modules.58
+
   - `variables.tf`: Contains all input variable declarations for the module.
 
   - `outputs.tf`: Contains all output value declarations.
 
   - `versions.tf`: Declares required versions for OpenTofu and providers.
 
-  - `README.md`: Essential documentation that explains the module's purpose, its
-    inputs and outputs, and any important usage notes. Tools like
+  - `README.md`: Essential documentation that explains the module's purpose,
+    its inputs and outputs, and any important usage notes. Tools like
     `terraform-docs` can help automate the generation of input/output tables.57
 
   - `LICENSE`: A clear license file, which is critical for adoption, especially
@@ -1022,6 +999,9 @@ A comprehensive module repository should be organized as follows:
 - `examples/` **Directory**:
   - This directory should contain one or more subdirectories, each demonstrating
     a specific use case of the module.57
+
+  - This directory should contain one or more subdirectories, each
+    demonstrating a specific use case of the module.57
 
   - These examples serve as excellent documentation for consumers of the module
     and can also be used as test fixtures for integration tests.58
@@ -1034,14 +1014,19 @@ A comprehensive module repository should be organized as follows:
 
   - For Terratest, it will contain `*_test.go` files.
 
-  - Keeping tests separate from the module logic maintains a clean separation of
-    concerns.
+  - Keeping tests separate from the module logic maintains a clean separation
+    of concerns.
 
 - `modules/` **Directory (for nested modules)**:
   - If the module is complex and composed of smaller, reusable components, these
     components should be structured as nested modules within this directory.57
     This pattern allows for composition, where advanced users can consume the
     smaller components directly.
+
+  - If the module is complex and composed of smaller, reusable components,
+    these components should be structured as nested modules within this
+    directory.57 This pattern allows for composition, where advanced users can
+    consume the smaller components directly.
 
 Adhering to this structure makes modules predictable and easy to work with,
 fostering better collaboration and maintainability.57
@@ -1052,22 +1037,23 @@ Testability is a design characteristic, not an afterthought. The following
 principles should guide the design of OpenTofu modules to ensure they can be
 easily and effectively unit tested.
 
-- **Adhere to the Single Responsibility Principle**: Each module should have one
-  clear, well-defined purpose.60 Avoid creating monolithic modules that attempt
-  to manage disparate parts of an architecture (e.g., a single module for
-  networking, compute, and databases). Small, focused modules are easier to
+- **Adhere to the Single Responsibility Principle**: Each module should have
+  one clear, well-defined purpose.60 Avoid creating monolithic modules that
+  attempt to manage disparate parts of an architecture (e.g., a single module
+  for networking, compute, and databases). Small, focused modules are easier to
   reason about, reuse, and test in isolation.
 
-- **Avoid Thin Wrappers**: A module should provide a meaningful abstraction over
-  a set of resources. Creating a module that is merely a thin wrapper around a
-  single resource type (e.g., a module that only creates an `aws_s3_bucket`
-  with a few variables) often adds unnecessary complexity without providing
-  significant value. In such cases, it is better to use the resource type
-  directly in the calling configuration.60
+- **Avoid Thin Wrappers**: A module should provide a meaningful abstraction
+  over a set of resources. Creating a module that is merely a thin wrapper
+  around a single resource type (e.g., a module that only creates an
+  `aws_s3_bucket` with a few variables) often adds unnecessary complexity
+  without providing significant value. In such cases, it is better to use the
+  resource type directly in the calling configuration.60
 
-- **Define Clear Interfaces**: A module's public interface consists of its input
-  variables and output values. This interface should be clear, concise, and
-  well-documented.
+- **Define Clear Interfaces**: A module's public interface consists of its
+  input variables and output values. This interface should be clear, concise,
+  and well-documented.
+
   - Use descriptive names for variables and outputs.58
 
   - Use specific types (`string`, `number`, `object(...)`) instead of `any` to
@@ -1117,6 +1103,7 @@ strategy is therefore essential for a robust testing pipeline.
   staging, or production. Sharing state would cause tests to interfere with one
   another and could lead to the accidental modification or destruction of
   important infrastructure.
+
   - **Terratest**: Frameworks like Terratest handle this isolation implicitly.
     Each test run typically operates in a temporary directory, resulting in a
     unique, local state file for that specific test execution.
@@ -1147,6 +1134,7 @@ progression of stages, each building confidence in the proposed changes.69
 
 - **Core Workflow Stages**: A typical pipeline for an OpenTofu project includes
   the following automated jobs:
+
   1. **Lint & Format (**`tofu fmt -check`**)**: Ensures code style and
      formatting are consistent.
 
@@ -1199,8 +1187,6 @@ The following is an annotated example of a GitHub Actions workflow that runs
 OpenTofu unit tests on every pull request targeting the `main` branch.
 
 `.github/workflows/test.yml`
-
-YAML
 
 ```yaml
 name: "OpenTofu Module Tests"
@@ -1283,8 +1269,6 @@ The following is an annotated example of a `.gitlab-ci.yml` file that
 configures a pipeline to run OpenTofu unit tests on merge requests.
 
 `.gitlab-ci.yml`
-
-YAML
 
 ```yaml
 stages:
