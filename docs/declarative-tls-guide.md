@@ -414,20 +414,57 @@ spec:
 
     # Production-grade settings for high availability
     replicaCount: 3
-    webhook:
-      replicaCount: 3
-    cainjector:
-      replicaCount: 3
-
-    # Resource requests and limits for stability
-    podResources:
+    resources:
       requests:
         cpu: 100m
         memory: 128Mi
       limits:
         cpu: 250m
         memory: 256Mi
+    webhook:
+      replicaCount: 3
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits:   { cpu: 200m, memory: 128Mi }
+    cainjector:
+      replicaCount: 3
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits:   { cpu: 200m, memory: 128Mi }
+    # When replicaCount > 1, define PodDisruptionBudgets for webhook and cainjector
+    # to maintain availability during voluntary disruptions (drains/evictions).
 
+```
+
+Define PodDisruptionBudgets for the webhook and cainjector when scaling above
+a single replica:
+
+```yaml
+# examples/pdb-cert-manager-webhook.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cert-manager-webhook-pdb
+  namespace: cert-manager
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhook
+      app.kubernetes.io/instance: cert-manager
+---
+# examples/pdb-cert-manager-cainjector.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cert-manager-cainjector-pdb
+  namespace: cert-manager
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cainjector
+      app.kubernetes.io/instance: cert-manager
 ```
 
 ### 2.3 Deploying the Namecheap DNS-01 Webhook Solver

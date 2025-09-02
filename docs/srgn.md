@@ -631,11 +631,11 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 | ----------------------- | ------------------------------------------------------------------------- | --------------------------------------------- |
 | class                   | Selects entire class definitions, from class to the end of the block.     | srgn --py 'class' 'MyClass'                   |
 | function                | Selects entire function definitions, from def to the end of the block.    | srgn --py 'function' 'my_func'                |
-| doc-strings             | Selects the content of docstrings ("""…""" or '''…''').                   | srgn --py 'doc-strings' 'TODO'                |
-| comments                | Selects the content of line comments (#…).                                | srgn --py 'comments' 'FIXME'                  |
+| doc-strings             | Selects the content of docstrings (triple-quoted strings).                | srgn --py 'doc-strings' 'TODO'                |
+| comments                | Selects the content of line comments (#...).                              | srgn --py 'comments' 'FIXME'                  |
 | strings                 | Selects the content of all string literals.                               | srgn --py 'strings' 'hardcoded-secret'        |
 | identifiers             | Selects language identifiers (variable names, function names, etc.).      | srgn --py 'identifiers' '^temp_\w+'           |
-| module-names-in-imports | Selects only the module names in import and from… import statements.      | srgn --py 'module-names-in-imports' 'old_lib' |
+| module-names-in-imports | Selects only module names in `import` and `from ... import` statements.   | srgn --py 'module-names-in-imports' 'old_lib' |
 | call                    | Selects entire function or method call expressions (e.g., foo(bar, baz)). | srgn --py 'call' '^print\('                   |
 
 ### A.[^3] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
@@ -643,16 +643,16 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 | Scope Name                 | Description                                                    | Example Command                                        |
 | -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
 | unsafe                     | Selects unsafe blocks and unsafe function definitions.         | srgn --rs 'unsafe' '.'                                 |
-| comments                   | Selects the content of line (//) and block (/*…*/) comments.   | srgn --rs 'comments' 'HACK'                            |
+| comments                   | Selects line (`//`) and block (`/* ... */`) comments.   | srgn --rs 'comments' 'HACK'                            |
 | strings                    | Selects the content of all string literals.                    | srgn --rs 'strings' 'password'                         |
-| attribute                  | Selects the content of attributes (#[…] and #![…]).            | srgn --rs 'attribute' 'deprecated'                     |
+| attribute                  | Selects attributes (`#[...]` and `#![...]`).            | srgn --rs 'attribute' 'deprecated'                     |
 | names-in-uses-declarations | Selects only the crate/module paths within use statements.     | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
 | pub-enum                   | Selects public enum definitions.                               | srgn --rs 'pub-enum' 'MyEnum'                          |
 | type-identifier            | Selects identifiers that refer to a type.                      | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
 | struct                     | Selects struct definitions.                                    | srgn --rs 'struct' 'RequestPayload'                    |
 | impl                       | Selects impl blocks.                                           | srgn --rs 'impl' 'MyTrait for MyStruct'                |
 | fn                         | Selects function definitions.                                  | srgn --rs 'fn' 'main'                                  |
-| extern-crate               | Selects extern crate…; declarations.                           | srgn --rs 'extern-crate' 'libc'                        |
+| extern-crate               | Selects `extern crate ...;` declarations.                           | srgn --rs 'extern-crate' 'libc'                        |
 
 ## Works Cited
 

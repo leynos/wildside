@@ -412,11 +412,43 @@ Git—manage it with SOPS or an External Secrets operator. If enabled,
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
-mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
-enforce this wiring by requiring `existingSecretName` whenever
-`secretEnvFromKeys` is populated. Set `allowMissingSecret` to `false` to fail
-rendering if the referenced Secret is absent; it defaults to `true` so
-`helm template` can run without a cluster connection.
+mappings under `secretEnvFromKeys`. Cross-field rules in
+`values.schema.json` enforce this wiring by requiring `existingSecretName`
+whenever `secretEnvFromKeys` is populated. The chart defaults
+`allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
+on `envFrom.secretRef`). Set it to `false` in production to fail rendering
+when the Secret is absent. The following snippets show the resulting
+`envFrom.secretRef` for both values:
+
+```yaml
+# allowMissingSecret: true (default)
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: true
+```
+
+```yaml
+# allowMissingSecret: false (production)
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: false
+```
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.

@@ -1,5 +1,4 @@
-
-# A Comprehensive Developer's Guide to HCL for OpenTofu
+# A comprehensive developer’s guide to HCL for OpenTofu
 
 ______________________________________________________________________
 
@@ -172,9 +171,6 @@ OpenTofu supports a range of data types for its values 10:
   - `bool`: A boolean value, either `true` or `false`.
 
 - **Complex (Collection) Types**:
-  - `list(...)`: An ordered sequence of values, identified by zero-based integer
-    indices, e.g., `["us-west-1a", "us-west-1c"]`.
-
   - `list(...)`: An ordered sequence of values, identified by zero-based
     integer indices, e.g., `["us-west-1a", "us-west-1c"]`.
 
@@ -191,11 +187,6 @@ OpenTofu supports a range of data types for its values 10:
     have different types.
 
 - **The Special** `null` **Value**:
-  - `null` is a special value that represents the absence or omission of a
-    value. Setting a resource argument to `null` is equivalent to not setting
-    it at all, causing OpenTofu to fall back to the argument's default value or
-    raise an error if it's a required argument.10
-
   - `null` is a special value that represents the absence or omission of a
     value. Setting a resource argument to `null` is equivalent to not setting
     it at all, causing OpenTofu to fall back to the argument's default value or
@@ -381,7 +372,7 @@ secondary, special-purpose dialect.
    departure from native HCL where these can be more dynamic.
 
 2. **The "Attributes as Blocks" Limitation**: Some resource types have a
-   special behavior where an argument can be specified using either argument
+   special behaviour where an argument can be specified using either argument
    syntax (`example = [...]`) or nested block syntax (`example {... }`). This
    feature, known as "attributes as blocks," is designed for readability in
    native HCL. However, due to the ambiguity it would create in JSON, this
@@ -415,7 +406,7 @@ ______________________________________________________________________
 
 This section provides a deep dive into each of the fundamental top-level blocks
 used in OpenTofu. It moves beyond basic syntax to cover their specific
-arguments, behaviors, advanced features, and best practices in detail.
+arguments, behaviours, advanced features, and best practices in detail.
 
 ### 2.1 resource: The Heart of Infrastructure Definition
 
@@ -444,7 +435,7 @@ resource. These arguments are primarily divided into two categories:
    include `ami` and `instance_type`.7
 
 2. **Meta-Arguments**: These are defined by the OpenTofu language itself and
-   can be used with any resource type to change its behavior. Key
+   can be used with any resource type to change its behaviour. Key
    meta-arguments include `count`, `for_each`, `provider`, `depends_on`, and
    `lifecycle`.7
 
@@ -486,13 +477,13 @@ features, often configured via nested blocks.
 
 - `timeouts` **Block**: For resources that involve long-running operations
   (like creating a large database), some providers expose a `timeouts` block.
-  This allows you to specify custom time limits for `create`, `update`, and
-  `delete` operations, overriding the provider's defaults.7
+  Custom time limits for `create`, `update`, and `delete` operations can be
+  specified, overriding the provider’s defaults.7
 
 - `removed` **Block**: Introduced to simplify refactoring, the `removed` block
-  allows you to decouple a resource from the OpenTofu state without destroying
-  the actual remote object. If you delete a resource from your configuration,
-  you can replace it with a `removed` block pointing to its address (e.g.,
+  decouples a resource from the OpenTofu state without destroying the actual
+  remote object. If a resource is deleted from the configuration, it can be
+  replaced with a `removed` block pointing to its address (e.g.,
   `removed { from = aws_instance.web }`). On the next apply, OpenTofu will
   remove the resource from its state file but leave the real infrastructure
   intact.7
@@ -507,7 +498,7 @@ features, often configured via nested blocks.
 
 ### 2.2 variable: Parameterizing Configurations
 
-Input variables are the parameters of an OpenTofu module, allowing its behavior
+Input variables are the parameters of an OpenTofu module, allowing its behaviour
 to be customized without modifying its source code. They are analogous to
 function arguments in traditional programming.11 Each input variable is
 declared using a
@@ -518,7 +509,7 @@ declared using a
 
 The basic syntax is `variable "<NAME>" {... }`, where `<NAME>` is the unique
 name for the variable within the module.11 The block body can contain several
-arguments to define the variable's behavior:
+arguments to define the variable's behaviour:
 
 - `type`: This argument enforces type safety by restricting the type of value
   that can be assigned to the variable. While optional, specifying a type is a
@@ -638,7 +629,7 @@ The syntax is `data "<PROVIDER>_<TYPE>" "<NAME>" {... }`.25
   For example, a data source for an AWS AMI might accept filters for the AMI
   name or tags.25
 
-A key aspect of data source behavior is its evaluation timing. OpenTofu
+A key aspect of data source behaviour is its evaluation timing. OpenTofu
 attempts to read data sources during the `plan` phase. However, if any of a
 data source's arguments depend on a value that is not yet known (i.e., a
 "computed value" from a resource that has not been created yet), the reading of
@@ -687,7 +678,7 @@ themselves clean and readable.13
 
 ### 2.6 provider and terraform Blocks: Configuration Metadata
 
-These two blocks are used to configure OpenTofu's own behavior and its
+These two blocks are used to configure OpenTofu's own behaviour and its
 interaction with providers, rather than defining infrastructure resources
 directly.
 
@@ -701,7 +692,7 @@ This top-level block configures core OpenTofu settings.
 - `required_providers`: This nested block is the modern and mandatory way to
   declare all providers used by the module. For each provider, you must specify
   its `source` (e.g., `"hashicorp/aws"`) and a `version` constraint (e.g.,
-  `"~> 5.0"`). This practice is critical for ensuring predictable behavior by
+  `"~> 5.0"`). This practice is critical for ensuring predictable behaviour by
   preventing providers from being upgraded unexpectedly to a new version with
   breaking changes.13
 
@@ -799,11 +790,11 @@ resource "aws_instance" "server" {
 
 In this scenario, OpenTofu associates each instance with its numeric index:
 
-- `aws_instance.server` is tied to `"subnet-abc"`.
+- `aws_instance.server[0]` is tied to `"subnet-abc"`.
 
-- `aws_instance.server` is tied to `"subnet-def"`.
+- `aws_instance.server[1]` is tied to `"subnet-def"`.
 
-- `aws_instance.server` is tied to `"subnet-ghi"`.
+- `aws_instance.server[2]` is tied to `"subnet-ghi"`.
 
 The problem arises if an element is removed from the middle of the `subnet_ids`
 list. If `"subnet-def"` is removed, the list becomes
@@ -818,8 +809,8 @@ evaluates the `subnet_id` for each instance:
 
 The result is that OpenTofu plans to **change** the subnet for the instance at
 index 1 (from `subnet-def` to `subnet-ghi`) and **destroy** the instance at
-index 2. This is often not the desired behavior; the user likely intended only
-to destroy the instance associated with `subnet-def`. This re-indexing behavior
+index 2. This is often not the desired behaviour; the user likely intended only
+to destroy the instance associated with `subnet-def`. This re-indexing behaviour
 makes `count` fragile for managing dynamic collections.2
 
 #### The `for_each` Meta-Argument
@@ -960,9 +951,6 @@ are particularly essential for developers:
   - `jsonencode(value)`: Encodes an HCL value into a JSON string. Essential for
     embedding structured data into resource arguments that expect a JSON string.
 
-  - `jsonencode(value)`: Encodes an HCL value into a JSON string. Essential for
-    embedding structured data into resource arguments that expect a JSON string.
-
   - `jsondecode(string)`: Parses a JSON string and returns the corresponding
     HCL value.
 
@@ -983,15 +971,7 @@ are particularly essential for developers:
     Explicitly convert a value to a different type. Useful for resolving
     conditional type inconsistencies or normalizing module outputs.
 
-  - `tostring(value)`, `tonumber(value)`, `tolist(value)`, `toset(value)`:
-    Explicitly convert a value to a different type. Useful for resolving
-    conditional type inconsistencies or normalizing module outputs.
-
 - **Error Handling**:
-  - `try(expr1, expr2,...)`: Evaluates expressions in order and returns the
-    result of the first one that succeeds without error. Useful for handling
-    optional attributes in complex objects.
-
   - `try(expr1, expr2,...)`: Evaluates expressions in order and returns the
     result of the first one that succeeds without error. Useful for handling
     optional attributes in complex objects.
@@ -1002,7 +982,7 @@ are particularly essential for developers:
 - **Lifecycle Functions**:
   - `timestamp()`: Returns the current time.
 
-  - uuid(): Generates a random UUID.
+  - `uuid()`: Generates a random UUID.
 
     Caution: These functions are "impure," meaning their result changes on
     every run. Using them directly in resource arguments will cause the
@@ -1032,7 +1012,7 @@ of operations for creating, updating, and destroying resources.
   In these "hidden dependency" scenarios, the `depends_on` meta-argument can be
   used to create an explicit dependency.19
 
-  - **Syntax**: `depends_on =`
+  - **Syntax**: `depends_on = [aws_iam_role_policy.example]`
 
   - **Pitfall**: `depends_on` should be used as a last resort. It creates a
     more rigid dependency that can lead to overly conservative plans, as
@@ -1105,7 +1085,7 @@ ______________________________________________________________________
 ## Section 4: Troubleshooting: Pitfalls, Gotchas, and Error Resolution
 
 Writing HCL is an iterative process, and encountering errors or unexpected
-behavior is a natural part of development. This section provides a practical
+behaviour is a natural part of development. This section provides a practical
 guide to the common challenges, anti-patterns, and error messages that
 developers face when working with OpenTofu.
 
@@ -1141,7 +1121,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 #### State Management
 
-- **Using Local State**: The default behavior of storing the state file locally
+- **Using Local State**: The default behaviour of storing the state file locally
   (`terraform.tfstate`) is only suitable for experimentation. For any
   collaborative or production work, it is a significant anti-pattern. Local
   state makes collaboration impossible, risks accidental deletion, and can lead
@@ -1239,9 +1219,8 @@ number), and the context (e.g., the specific resource or module that failed).
     caused by a simple typo in a variable or resource reference (e.g.,
     `var.iamge_id` instead of `var.image_id`). It can also occur when trying to
     reference an instance of a resource created with `count` or `for_each`
-    without providing its index or key (e.g., trying to use
-    `aws_instance.server.id` when it should be `aws_instance.server.id` or
-    `aws_instance.server["key"].id`).30
+    without providing its index or key (e.g., `aws_instance.server[0].id` for
+    `count`, or `aws_instance.server["key"].id` for `for_each`).30
 
   - **Recommended Solution**: Carefully check the spelling of the reference.
     Ensure that you are using the correct index `[...]` or key `["..."]` syntax
@@ -1268,12 +1247,6 @@ number), and the context (e.g., the specific resource or module that failed).
     type. For example, one branch returns a `string` and the other returns a
     `list(string)`.34
 
-  - **Likely Cause**: The two result expressions in a ternary conditional
-    (`condition? true_val : false_val`) evaluate to values of incompatible
-    types, and OpenTofu cannot automatically convert them to a single common
-    type. For example, one branch returns a `string` and the other returns a
-    `list(string)`.34
-
   - **Recommended Solution**: Be explicit about the desired type. Use type
     conversion functions like `tostring()`, `tolist()`, or `tomap()` on one or
     both branches of the conditional to ensure they return a consistent type.
@@ -1281,14 +1254,6 @@ number), and the context (e.g., the specific resource or module that failed).
 - **Error:** `Error: Provider instance not present`
   - **Likely Cause**: This error frequently occurs when using `for_each` on both
     a `provider` block (with `alias`) and a `resource` block that uses it,
-    especially if they iterate over the same collection. If an item is removed
-    from the collection, OpenTofu removes both the resource instance *and* its
-    corresponding provider configuration from the plan simultaneously. When it
-    then tries to destroy the resource, it cannot find the provider instance it
-    needs to perform the deletion.44
-
-  - **Likely Cause**: This error frequently occurs when using `for_each` on
-    both a `provider` block (with `alias`) and a `resource` block that uses it,
     especially if they iterate over the same collection. If an item is removed
     from the collection, OpenTofu removes both the resource instance *and* its
     corresponding provider configuration from the plan simultaneously. When it
@@ -1316,7 +1281,7 @@ Table 4.1: Common HCL Parsing and Planning Errors
 
 | Error Message Snippet                 | Likely Cause(s)                                                                                                                           | Recommended Solution(s)                                                                                                         | Relevant Sources |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., ``) or key (e.g., ["web"]) to the reference.                                 | 30               |
+| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., `[0]`) or key (e.g., `["web"]`) to the reference.                                 | 30               |
 | Inconsistent conditional result types | The true and false branches of a ternary operator (? :) return values of incompatible types.                                              | Use explicit type conversion functions (tostring, tolist, etc.) on the results to ensure they are the same type.                | 34               |
 | Provider instance not present         | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using for_each on both. | Decouple the resource and provider lifecycles. Ensure the provider configuration persists for the destroy operation.            | 44               |
 | checksums… do not match               | The downloaded provider package does not match the trusted checksum in .terraform.lock.hcl.                                               | Verify provider source. If the change is intentional, run tofu init -upgrade. Use tofu providers lock for multi-platform teams. | 42               |

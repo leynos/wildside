@@ -777,7 +777,7 @@ external script.
 
 ```bash
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # Generate the plan as JSON
 tofu plan -var="message=hello-world" -out=tfplan.binary
@@ -794,7 +794,7 @@ COMMAND=$(jq -r \
 
 # Assert that the command is what we expect
 EXPECTED_COMMAND="echo hello-world > /tmp/message.txt"
-if; then
+if [ "$COMMAND" != "$EXPECTED_COMMAND" ]; then
   echo "Assertion failed!"
   echo "Expected: $EXPECTED_COMMAND"
   echo "Got:      $COMMAND"
@@ -938,7 +938,7 @@ direct comparison to aid in this decision-making process.
 | Test Scope     | Excels at plan-based unit tests. Can perform integration tests with command=apply.21                      | Excels at integration and E2E tests. Can perform plan-based unit tests, but it's less common and more verbose.26                      |
 | Mocking        | Strong, built-in support for mocking providers and overriding resources, data, and modules.24             | No built-in IaC mocking. Relies on deploying real resources or requires complex, custom Go-based mocking of cloud provider SDKs.      |
 | Setup          | No extra dependencies beyond the OpenTofu binary itself.21                                                | Requires a full Go development environment installation and dependency management via go mod.48                                       |
-| Flexibility    | Limited by HCL's declarative nature. Complex logic or external API interactions require helper modules.21 | Highly flexible. Can perform any action possible in Go: complex logic, custom API calls, file manipulation, database queries, etc..49 |
+| Flexibility    | Limited by HCL's declarative nature. Complex logic or external API interactions require helper modules.21 | Highly flexible. Can perform any action possible in Go: complex logic, custom API calls, file manipulation, database queries, etc.49 |
 | Ecosystem      | Fully integrated into the OpenTofu CLI. Part of the core tool.                                            | Large library of helper functions for AWS, GCP, Azure, Kubernetes, Docker, SSH, and more, simplifying common validation tasks.2       |
 | Learning Curve | Low for existing OpenTofu users; the syntax is the same.23                                                | Steeper, requires proficiency in Go, its testing packages, and the Terratest library itself.49                                        |
 
@@ -979,10 +979,6 @@ A comprehensive module repository should be organized as follows:
     module. For complex modules, it may primarily contain calls to nested
     modules.58
 
-  - `main.tf`: Contains the primary logic and resource definitions of the
-    module. For complex modules, it may primarily contain calls to nested
-    modules.58
-
   - `variables.tf`: Contains all input variable declarations for the module.
 
   - `outputs.tf`: Contains all output value declarations.
@@ -999,10 +995,6 @@ A comprehensive module repository should be organized as follows:
 - `examples/` **Directory**:
   - This directory should contain one or more subdirectories, each demonstrating
     a specific use case of the module.57
-
-  - This directory should contain one or more subdirectories, each
-    demonstrating a specific use case of the module.57
-
   - These examples serve as excellent documentation for consumers of the module
     and can also be used as test fixtures for integration tests.58
 
@@ -1022,11 +1014,6 @@ A comprehensive module repository should be organized as follows:
     components should be structured as nested modules within this directory.57
     This pattern allows for composition, where advanced users can consume the
     smaller components directly.
-
-  - If the module is complex and composed of smaller, reusable components,
-    these components should be structured as nested modules within this
-    directory.57 This pattern allows for composition, where advanced users can
-    consume the smaller components directly.
 
 Adhering to this structure makes modules predictable and easy to work with,
 fostering better collaboration and maintainability.57
