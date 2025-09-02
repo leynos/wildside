@@ -62,13 +62,13 @@ check-fmt:
 	bun x biome format
 
 markdownlint:
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint
-
-markdownlint-docs:
-	markdownlint docs/repository-structure.md
-
-mermaid-lint:
-	npx --yes -p @mermaid-js/mermaid-cli@10.9.0 mmdc -i docs/values-class-diagram.mmd -o /tmp/diagram.svg -p mmdc-puppeteer.json
+	find . \
+          -path './backend/target' -prune -o \
+          -path './target' -prune -o \
+          -path './.node_modules' -prune -o \
+          -path '*/node_modules' -prune -o \
+          -path './.git' -prune -o \
+          -type f -name '*.md' -print0 | xargs -0 -- markdownlint
 
 nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
