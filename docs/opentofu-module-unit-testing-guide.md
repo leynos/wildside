@@ -777,7 +777,7 @@ external script.
 
 ```bash
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # Generate the plan as JSON
 tofu plan -var="message=hello-world" -out=tfplan.binary
