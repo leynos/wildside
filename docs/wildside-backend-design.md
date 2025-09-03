@@ -223,7 +223,7 @@ erDiagram
 
     pois {
         BIGINT id PK
-        GEOGRAPHY(Point_4326) location
+        GEOGRAPHY(Point, 4326) location
         JSONB osm_tags
         TEXT narrative
         REAL popularity_score
@@ -237,7 +237,7 @@ erDiagram
     routes {
         UUID id PK
         UUID user_id FK
-        GEOMETRY(LineString_4326) path
+        GEOMETRY(LineString, 4326) path
         JSONB generation_params
         TIMESTAMPTZ created_at
     }
@@ -321,45 +321,41 @@ specific route.
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
 To balance the need for performance with the challenges of data volume,
-freshness, and relevance, we will adopt a three-layered hybrid strategy for the
-MVP.
+freshness, and relevance, the backend adopts a three-layered hybrid strategy for
+the MVP.
 
-For screen readers: This flowchart shows how routes are generated and cached.
+For screen readers: This flowchart shows how route requests are fulfilled and
+how enrichment improves future results.
 
 ```mermaid
 flowchart TD
-    A[User requests route via POST /routes] --> B{Check Redis for cached route};
-    B -- Yes --> C[Return cached route ID];
-    B -- No --> D[Enqueue GenerateRouteJob];
-    D --> E{Worker picks up GenerateRouteJob};
-    E --> F[Query local PostGIS for POIs];
-    F --> G{Is local data sufficient?};
-    G -- Yes --> H[Generate route from local data];
-    G -- No --> I[Generate best-effort route from local data];
-    I --> J[Enqueue low-priority EnrichmentJob];
-    H --> K[Write route to DB];
-    J --> K;
-    K --> L[Write route to Redis cache];
-    L --> M[Push 'complete' notification via WebSocket];
-
-    subgraph "Low-Priority Background Task"
-    Z[EnrichmentJob] --> Y[Query Overpass API for missing POIs];
-    Y --> X[Upsert new POIs into PostGIS];
-    end
+    A[User requests route via POST /routes] --> B{Check Redis for cached route}
+    B -- Yes --> C[Return cached route ID]
+    B -- No --> D[Enqueue GenerateRouteJob]
+    D --> E{Query local POI DB}
+    E -- Sufficient POIs --> F[Generate route]
+    E -- Sparse POIs --> G[Generate best route]
+    G --> H[Enqueue EnrichmentJob]
+    F --> I[Cache route in Redis]
+    G --> I
+    I --> J[Return route ID]
+    H --> K[Query Overpass API]
+    K --> L[Upsert POIs into DB]
+    L --> M[Future requests benefit from enriched data]
 ```
 
 - **Layer 1: Foundational Pre-Seeding (The "Hot Cache").** The core
   `wildside-engine` requires a fast, local data source for its intensive
-  queries. For the MVP, we will perform a **one-time, geographically scoped
-  data ingestion**.
+  queries. For the MVP, a **one-time, geographically scoped data ingestion**
+  will be performed.
 
-  - **Scope:** A defined polygon covering our initial launch area (e.g., the
+  - **Scope:** A defined polygon covering the initial launch area (e.g., the
     City of Edinburgh).
 
   - **Process:** A script will download a regional OSM extract (e.g., from
     Geofabrik), filter for a comprehensive baseline of common POI tags
     (`amenity`, `historic`, `tourism`, `leisure`, `natural`), and ingest this
-    data into our PostGIS `pois` table.
+    data into the PostGIS `pois` table.
 
   - **Purpose:** This guarantees that the vast majority of route requests
     have a rich, local dataset to draw from, ensuring the "time to first walk"
@@ -367,7 +363,7 @@ flowchart TD
 
 - **Layer 2: On-Demand Enrichment (The "Warm Cache").** This layer addresses
   the "cold start" problem for niche interests and ensures the dataset evolves
-  based on user demand, not just our assumptions.
+  based on user demand rather than initial assumptions.
 
   - **Trigger:** When the `GenerateRouteJob` queries the local database and
     finds a sparse set of results for a user's chosen theme in a given area
@@ -378,9 +374,9 @@ flowchart TD
     low-priority `EnrichmentJob`_. This new job will perform a targeted query
     against an external source (like the Overpass API) for the missing POI
     types in that geographic bounding box. The results are then inserted or
-    updated (`UPSERT`) into our `pois` table.
+    updated (`UPSERT`) into the `pois` table.
 
-  - **Purpose:** This enriches our local dataset precisely where it was found
+  - **Purpose:** This enriches the local dataset precisely where it was found
     lacking. The first user interested in "brutalist architecture" gets a
     reasonable walk immediately, but in doing so, they trigger a process that
     ensures the next user gets a fantastic one. This solves the problems of
@@ -642,16 +638,16 @@ location during an active walk.
 ## 5. Tile Serving Architecture
 
 To deliver a rich, interactive, and highly performant map experience, the
-application will not rely on external third-party map providers for our dynamic
-data. Instead, we will serve our own vector tiles directly from the
-application's PostGIS database. This gives us complete control over map
-styling, data representation, and performance.
+application will not rely on external third-party map providers for dynamic
+data. Instead, the application will serve first-party vector tiles directly from
+the PostGIS database. This provides full control over map styling, data
+representation, and performance.
 
 - **Technology:** [Martin](https://martin.maplibre.org/), a
   high-performance vector tile server written in Rust.
 
 - **Strategy:** Martin will be deployed as a separate, stateless service within
-  our Kubernetes cluster. It will connect directly to the primary PostGIS
+  the Kubernetes cluster. It will connect directly to the primary PostGIS
   database (ideally with a read-only user) and expose tile endpoints that can
   be consumed by the frontend PWA (using a library like MapLibre GL JS).
 
@@ -691,7 +687,7 @@ sources. These sources will be defined in Martin's configuration file
 
 #### 5.2.1. Points of Interest (`pois`)
 
-This layer will expose our curated and enriched POIs, allowing the frontend to
+This layer will expose curated and enriched POIs, allowing the frontend to
 display them dynamically based on zoom level and user context.
 
 - **Source Type:** Table
@@ -709,8 +705,8 @@ display them dynamically based on zoom level and user context.
 #### 5.2.2. Generated Routes (`routes`)
 
 This layer will display a specific, user-generated route on the map. As routes
-are user-specific and generated on demand, we cannot simply serve the entire
-`routes` table. A PostGIS function is the ideal solution.
+are user-specific and generated on demand, the system cannot simply serve the
+entire `routes` table. A PostGIS function is the ideal solution.
 
 - **Source Type:** Function
 
@@ -735,18 +731,19 @@ are user-specific and generated on demand, we cannot simply serve the entire
 #### 5.2.3. Base Network (Optional Post-MVP)
 
 For greater control over styling and to reduce reliance on external providers
-entirely, we could serve our own base layer of roads, paths, and land use
-polygons. This would involve ingesting more comprehensive OSM data (e.g., from
-`planet_osm_line`, `planet_osm_polygon`) and creating table or function sources
-for them. This is not required for the MVP but is a logical next step.
+entirely, the system could serve a first-party base layer of roads, paths, and
+land use polygons. This would involve ingesting more comprehensive OSM data
+(e.g., from `planet_osm_line`, `planet_osm_polygon`) and creating table or
+function sources for them. This is not required for the MVP, but is a logical
+next step.
 
 ### 5.3. Implementation Tasks
 
-- [ ] **Create Martin Docker Image:** Although a pre-built image exists, we may
-  want to build our own to bundle our specific `config.yaml`.
+- [ ] **Create Martin Docker Image:** Although a pre-built image exists, a
+  custom image may be built to bundle the specific `config.yaml`.
 
 - [ ] **Kubernetes Deployment:** Create a new `Deployment` and `Service`
-  manifest for the Martin tile server in our Kubernetes configuration.
+  manifest for the Martin tile server in the Kubernetes configuration.
 
 - [ ] **Ingress Configuration:** Add a new rule to the Traefik `IngressRoute`
   to direct traffic from a subdomain (e.g., `tiles.wildside.app`) or a path

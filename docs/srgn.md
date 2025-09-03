@@ -666,7 +666,7 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
     GitHub, accessed on July 11, 2025,
     <https://github.com/synthesizearrayHSy/generatemonitorGhZ/issues/5>
 
-07. srgn - Rust - [Docs.rs](http://Docs.rs), accessed on July 11, 2025,
+07. srgn - Rust - Docs.rs, accessed on July 11, 2025,
     <https://docs.rs/srgn>
 
 08. Pattern syntax - Semgrep, accessed on July 11, 2025,
@@ -685,12 +685,12 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
     2nd Ed. Klabnik & Nichols) - Stack Overflow, accessed on July 11, 2025,
     <https://stackoverflow.com/questions/77423163/i-cant-understand-the-rust-scope-definition-rust-programming-language-2nd-e>
 
-13. betterletter/[README.md](http://README.md) at main · alexpovel/betterletter
-    · GitHub, accessed on July 11, 2025,
+13. betterletter/README.md at main · alexpovel/betterletter · GitHub,
+    accessed on July 11, 2025,
     <https://github.com/alexpovel/betterletter/blob/main/README.md>
 
-14. srgn - Rust Package Registry - [Crates.io](http://Crates.io), accessed on
-    July 11, 2025, <https://crates.io/crates/srgn/>
+14. srgn - Rust Package Registry - Crates.io, accessed on July 11, 2025,
+    <https://crates.io/crates/srgn/>
 
 15. accessed on January 1, 1970,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
