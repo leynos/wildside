@@ -411,7 +411,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
   Bash
 
   ```sh
-  srgn --py 'call' '^print\((.*)\)$' -- 'logging.info($1)'. --dry-run
+  srgn --py 'call' '^print\((.*)\)$' -- 'logging.info($1)' --dry-run
 
   ```
 
@@ -438,7 +438,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
   Bash
 
   ```sh
-  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"''#\s]'.
+  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"''#\s]'
 
   ```
 
@@ -497,7 +497,7 @@ showcasing `srgn`'s versatility across different languages.
   Bash
 
   ```sh
-  srgn --rs 'unsafe' 'unsafe' -- '// TODO: Justify this unsafe block\nunsafe'.
+  srgn --rs 'unsafe' 'unsafe' -- '// TODO: Justify this unsafe block\nunsafe'
 
   ```
 
@@ -522,7 +522,7 @@ showcasing `srgn`'s versatility across different languages.
   Bash
 
   ```sh
-  srgn --rs 'names-in-uses-declarations' '^old_api' -- 'new_api'.
+  srgn --rs 'names-in-uses-declarations' '^old_api' -- 'new_api'
 
   ```
 
@@ -625,37 +625,21 @@ should be considered comprehensive but potentially subject to change in future
 `srgn` versions. Users can often discover available scopes by providing an
 invalid one, as `srgn` will helpfully list the valid options.[^9]
 
-### A.[^2] Table: Python Grammar Scopes (`--python <SCOPE>` or `--py <SCOPE>`)
+### A.[^2] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-| Scope Name | Description | Example Command |
+| Scope Name                 | Description                                                | Example Command                                        |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
-| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
-| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
-| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
-| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
-| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
-| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
-| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
-| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
-
-### A.[^3] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
-
-| Scope Name | Description | Example Command |
-| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
-| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
-| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
-| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
-| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
-| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
-| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
-| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
-| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
+| unsafe                     | Selects unsafe blocks and unsafe function definitions.     | srgn --rs 'unsafe' '.'                                 |
+| comments                   | Selects line (`//`) and block (`/* ... */`) comments.      | srgn --rs 'comments' 'HACK'                            |
+| strings                    | Selects the content of all string literals.                | srgn --rs 'strings' 'password'                         |
+| attribute                  | Selects attributes (`#[...]` and `#![...]`).               | srgn --rs 'attribute' 'deprecated'                     |
+| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
+| pub-enum                   | Selects public enum definitions.                           | srgn --rs 'pub-enum' 'MyEnum'                          |
+| type-identifier            | Selects identifiers that refer to a type.                  | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
+| struct                     | Selects struct definitions.                                | srgn --rs 'struct' 'RequestPayload'                    |
+| impl                       | Selects impl blocks.                                       | srgn --rs 'impl' 'MyTrait for MyStruct'                |
+| fn                         | Selects function definitions.                              | srgn --rs 'fn' 'main'                                  |
+| extern-crate               | Selects `extern crate ...;` declarations.                  | srgn --rs 'extern-crate' 'libc'                        |
 
 ## Works Cited
 

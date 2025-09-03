@@ -21,7 +21,8 @@ PostgreSQL database with a dedicated tile server, a Redis cache, and an
 observability stack. All components are designed to run within a Kubernetes
 cluster and be managed via a GitOps workflow.
 
-For screen readers: This diagram shows the backend components and their interactions.
+For screen readers: This diagram shows the backend components and their
+interactions.
 
 ```mermaid
 graph TD
@@ -112,8 +113,8 @@ API and WebSocket traffic.
 - **Implementation Tasks:**
 
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use the `actix-session` crate with a cookie-based backend. The signing
-    key must be loaded from an environment variable (`SESSION_KEY`).
+    Use the `actix-session` crate with a cookie-based backend. The signing key
+    must be loaded from an environment variable (`SESSION_KEY`).
 
   - [ ] **Observability:**
 
@@ -131,8 +132,8 @@ API and WebSocket traffic.
       update) under `/api/users`.
 
     - Create a `/api/routes` endpoint to accept route generation requests.
-      This endpoint should validate the input and enqueue a
-      `GenerateRouteJob` (see § 3.4).
+      This endpoint should validate the input and enqueue a `GenerateRouteJob`
+      (see § 3.4).
 
 ### 3.2. Route Generation Engine Integration
 
@@ -260,62 +261,62 @@ erDiagram
 
 **`users`**: Stores user account information.
 
-| Column | Type | Constraints | Description |
+| Column       | Type          | Constraints                                | Description                 |
 | ------------ | ------------- | ------------------------------------------ | --------------------------- |
-| `id` | `UUID` | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier. |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of user creation. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of last update. |
+| `id`         | `UUID`        | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier.     |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of user creation. |
+| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of last update.   |
 
 **`interest_themes`**: A lookup table for available interest themes.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`id`|`UUID`|`PRIMARY KEY`, `DEFAULT gen_random_uuid()`|Unique theme identifier.|
-|`name`|`TEXT`|`NOT NULL`, `UNIQUE`|Display name of the theme (e.g., "Street Art").|
-|`description`|`TEXT`||Short description of the theme.|
+| Column        | Type   | Constraints                                | Description                                     |
+| ------------- | ------ | ------------------------------------------ | ----------------------------------------------- |
+| `id`          | `UUID` | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique theme identifier.                        |
+| `name`        | `TEXT` | `NOT NULL`, `UNIQUE`                       | Display name of the theme (e.g., "Street Art"). |
+| `description` | `TEXT` |                                            | Short description of the theme.                 |
 
 **`user_interest_themes`**: A join table linking users to their selected themes.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`user_id`|`UUID`|`PRIMARY KEY`, `FOREIGN KEY (users.id)`|Foreign key to the `users` table.|
-|`theme_id`|`UUID`|`PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)`|Foreign key to the `interest_themes` table.|
+| Column     | Type   | Constraints                                       | Description                                 |
+| ---------- | ------ | ------------------------------------------------- | ------------------------------------------- |
+| `user_id`  | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (users.id)`           | Foreign key to the `users` table.           |
+| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
 
 **`pois`**: Stores all Points of Interest.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`id`|`BIGINT`|`PRIMARY KEY`|OSM Node/Way/Relation ID.|
-|`location`|`GEOGRAPHY(Point, 4326)`|`NOT NULL`|Geographic coordinate of the POI; GIST indexed.|
-|`osm_tags`|`JSONB`||Key-value store for OSM tags; GIN indexed.|
-|`narrative`|`TEXT`||Engaging description, potentially LLM-generated.|
-|`popularity_score`|`REAL`|`DEFAULT 0.5`|Score from 0.0 (hidden gem) to 1.0 (hotspot).|
+| Column             | Type                     | Constraints   | Description                                        |
+| ------------------ | ------------------------ | ------------- | -------------------------------------------------- |
+| `id`               | `BIGINT`                 | `PRIMARY KEY` | OSM Node/Way/Relation ID.                          |
+| `location`         | `GEOGRAPHY(Point, 4326)` | `NOT NULL`    | Geographic coordinate of the POI; GIST indexed.    |
+| `osm_tags`         | `JSONB`                  |               | Key-value store for OSM tags; GIN indexed.         |
+| `narrative`        | `TEXT`                   |               | Engaging description, potentially LLM-generated.   |
+| `popularity_score` | `REAL`                   | `DEFAULT 0.5` | Score from 0.0 (hidden gem) to 1.0 (hotspot).      |
 
 **`poi_interest_themes`**: A join table linking POIs to relevant themes.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`poi_id`|`BIGINT`|`PRIMARY KEY`, `FOREIGN KEY (pois.id)`|Foreign key to the `pois` table.|
-|`theme_id`|`UUID`|`PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)`|Foreign key to the `interest_themes` table.|
+| Column     | Type     | Constraints                                       | Description                                 |
+| ---------- | -------- | ------------------------------------------------- | ------------------------------------------- |
+| `poi_id`   | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)`            | Foreign key to the `pois` table.            |
+| `theme_id` | `UUID`   | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
 
 **`routes`**: Stores generated walks.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`id`|`UUID`|`PRIMARY KEY`, `DEFAULT gen_random_uuid()`|Unique identifier for the route.|
-|`user_id`|`UUID`|`FOREIGN KEY (users.id)`|User who generated the route (nullable).|
-|`path`|`GEOMETRY(LineString, 4326)`||Full geometric path; GIST indexed.|
-|`generation_params`|`JSONB`||Parameters used to generate this route.|
-|`created_at`|`TIMESTAMPTZ`|`NOT NULL`, `DEFAULT NOW()`|Timestamp of route generation.|
+| Column              | Type                         | Constraints                                | Description                              |
+| ------------------- | ---------------------------- | ------------------------------------------ | ---------------------------------------- |
+| `id`                | `UUID`                       | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique identifier for the route.         |
+| `user_id`           | `UUID`                       | `FOREIGN KEY (users.id)`                   | User who generated the route (nullable). |
+| `path`              | `GEOMETRY(LineString, 4326)` |                                            | Full geometric path; GIST indexed.       |
+| `generation_params` | `JSONB`                      |                                            | Parameters used to generate this route.  |
+| `created_at`        | `TIMESTAMPTZ`                | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of route generation.           |
 
 **`route_pois`**: A join table to store the ordered sequence of POIs for a
 specific route.
 
-|Column|Type|Constraints|Description|
-|------|----|-----------|-----------|
-|`route_id`|`UUID`|`PRIMARY KEY`, `FOREIGN KEY (routes.id)`|Foreign key to the `routes` table.|
-|`poi_id`|`BIGINT`|`PRIMARY KEY`, `FOREIGN KEY (pois.id)`|Foreign key to the `pois` table.|
-|`position`|`INTEGER`|`NOT NULL`|Sequential position of this POI in the walk.|
+| Column     | Type      | Constraints                              | Description                                  |
+| ---------- | --------- | ---------------------------------------- | -------------------------------------------- |
+| `route_id` | `UUID`    | `PRIMARY KEY`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table.           |
+| `poi_id`   | `BIGINT`  | `PRIMARY KEY`, `FOREIGN KEY (pois.id)`   | Foreign key to the `pois` table.             |
+| `position` | `INTEGER` | `NOT NULL`                               | Sequential position of this POI in the walk. |
 
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
@@ -361,8 +362,8 @@ flowchart TD
     data into our PostGIS `pois` table.
 
   - **Purpose:** This guarantees that the vast majority of route requests
-    have a rich, local dataset to draw from, ensuring the "time to first
-    walk" is consistently fast.
+    have a rich, local dataset to draw from, ensuring the "time to first walk"
+    is consistently fast.
 
 - **Layer 2: On-Demand Enrichment (The "Warm Cache").** This layer addresses
   the "cold start" problem for niche interests and ensures the dataset evolves
@@ -390,8 +391,8 @@ flowchart TD
 
   - **Process:** When a route is successfully generated, its full definition
     is cached in Redis. The cache key will be a hash of the precise request
-    parameters (location, duration, themes, etc.). Saved routes will have
-    their cache TTL removed, effectively pinning them.
+    parameters (location, duration, themes, etc.). Saved routes will have their
+    cache TTL removed, effectively pinning them.
 
   - **Purpose:** This prevents re-computation for identical requests,
     providing an instantaneous response for popular or repeated queries.
@@ -449,8 +450,8 @@ processes to avoid blocking the main API server.
       It should now include the logic to trigger the `EnrichmentJob`.
 
     - Define and implement the `EnrichmentJob`. This job's handler will
-      construct and execute a query against the Overpass API and use Diesel
-      to `UPSERT` the results into the `pois` table.
+      construct and execute a query against the Overpass API and use Diesel to
+      `UPSERT` the results into the `pois` table.
 
   - [ ] **Deployment:** Create a second Kubernetes `Deployment` for the
     workers.
@@ -479,8 +480,8 @@ An in-memory cache is used to improve performance and reduce database load.
   - [ ] **Route Caching:**
 
     - Before enqueuing a `GenerateRouteJob`, the API handler must first
-      check Redis for a cached result. The cache key should be a hash of
-      the route request parameters.
+      check Redis for a cached result. The cache key should be a hash of the
+      route request parameters.
 
     - On successful route generation, the background worker must write the
       result to the cache with a reasonable TTL (e.g., 24 hours).
@@ -551,25 +552,25 @@ All REST endpoints are prefixed with `/api/v1`.
 
 #### User & Session Management
 
-| Method | Path | Description | Authentication |
+| Method | Path                  | Description                                           | Authentication |
 | ------ | --------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/users` | Creates a new anonymous user session. | None |
-| `GET` | `/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
-| `PUT` | `/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
+| `POST` | `/users`              | Creates a new anonymous user session.                 | None           |
+| `GET`  | `/users/me`           | Retrieves the current user's profile and preferences. | Session Cookie |
+| `PUT`  | `/users/me/interests` | Updates the current user's selected interest themes.  | Session Cookie |
 
 #### Content
 
-| Method | Path | Description | Authentication |
+| Method | Path               | Description                                          | Authentication |
 | ------ | ------------------ | ---------------------------------------------------- | -------------- |
-| `GET` | `/interest-themes` | Retrieves the list of all available interest themes. | None |
+| `GET`  | `/interest-themes` | Retrieves the list of all available interest themes. | None           |
 
 #### Routes
 
-| Method | Path | Description | Authentication |
+| Method | Path                 | Description                                               | Authentication |
 | ------ | -------------------- | --------------------------------------------------------- | -------------- |
-| `POST` | `/routes` | Submits a request to generate a new walking route. | Session Cookie |
-| `GET` | `/routes/{route_id}` | Retrieves a previously generated route by its ID. | Session Cookie |
-| `GET` | `/users/me/routes` | Retrieves a list of routes generated by the current user. | Session Cookie |
+| `POST` | `/routes`            | Submits a request to generate a new walking route.        | Session Cookie |
+| `GET`  | `/routes/{route_id}` | Retrieves a previously generated route by its ID.         | Session Cookie |
+| `GET`  | `/users/me/routes`   | Retrieves a list of routes generated by the current user. | Session Cookie |
 
 **`POST /routes` Request Body:**
 
@@ -591,8 +592,10 @@ All REST endpoints are prefixed with `/api/v1`.
 }
 ```
 
-On success, this endpoint returns a `202 Accepted` with a body containing the
-`request_id` and the `route_id` for the pending resource.
+On success, this endpoint returns a `202 Accepted` with a body containing a
+`request_id` and a `status_url` for polling the job (for example,
+`/routes/status/{request_id}`). The `route_id` is not available until the
+WebSocket `complete` event supplies it.
 
 ### 4.2. WebSocket API
 
@@ -723,8 +726,8 @@ are user-specific and generated on demand, we cannot simply serve the entire
   3. It will query the `routes` table for the matching `path` geometry.
 
   4. It will use PostGIS functions like `ST_AsMVTGeom` and `ST_AsMVT` to
-     generate the vector tile for the requested `z/x/y` coordinate,
-     containing only the relevant segment of that specific route's linestring.
+     generate the vector tile for the requested `z/x/y` coordinate, containing
+     only the relevant segment of that specific route's linestring.
 
   5. Martin will be configured to call this function, passing in the
      parameters from the request URL.
