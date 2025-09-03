@@ -21,6 +21,8 @@ PostgreSQL database with a dedicated tile server, a Redis cache, and an
 observability stack. All components are designed to run within a Kubernetes
 cluster and be managed via a GitOps workflow.
 
+For screen readers: This diagram shows the backend components and their interactions.
+
 ```mermaid
 graph TD
     subgraph "Internet"
@@ -194,14 +196,14 @@ performance and data relevance.
   - Evolve the local dataset over time by enriching it with new data based on
       user requests.
 
-  - Utilise the PostGIS extension for efficient spatial queries.
+  - Utilize the PostGIS extension for efficient spatial queries.
 
   - Store OSM tags and other flexible data in `JSONB` columns.
 
 #### 3.3.1. Entity-Relationship Diagram
 
-The following diagram illustrates the relationships between the core data
-entities.
+For screen readers: This diagram illustrates the relationships between the core
+data entities.
 
 ```mermaid
 erDiagram
@@ -324,6 +326,8 @@ specific route.
 To balance the need for performance with the challenges of data volume,
 freshness, and relevance, we will adopt a three-layered hybrid strategy for the
 MVP.
+
+For screen readers: This flowchart shows how routes are generated and cached.
 
 ```mermaid
 flowchart TD
@@ -644,7 +648,7 @@ data. Instead, we will serve our own vector tiles directly from the
 application's PostGIS database. This gives us complete control over map
 styling, data representation, and performance.
 
-- **Technology:** [Martin](https://martin.maplibre.org/ "null"), a
+- **Technology:** [Martin](https://martin.maplibre.org/), a
   high-performance vector tile server written in Rust.
 
 - **Strategy:** Martin will be deployed as a separate, stateless service within
@@ -658,6 +662,9 @@ The tile server is a distinct service, separate from the main Wildside backend
 monolith. This separation of concerns is crucial: the backend handles business
 logic, authentication, and orchestration, while Martin's sole responsibility is
 the efficient generation and serving of map tiles.
+
+For screen readers: The flowchart outlines how the tile server interacts with
+the frontend and database.
 
 ```mermaid
 flowchart TD

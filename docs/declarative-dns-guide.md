@@ -790,8 +790,12 @@ Even in a well-architected system, issues can arise. A systematic approach to
 troubleshooting is key to rapid resolution.
 
 - Symptom: No DNS records are created
-  - Verify: `kubectl logs -n external-dns -l`
-    `app.kubernetes.io/name=external-dns -f`
+  - Verify:
+
+    ```bash
+    kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns -f
+    ```
+
   - Causes/Resolution:
     - Authentication error. Look for `Invalid request headers (6003)`.
       Ensure the API token has `Zone:Read` and `DNS:Edit` permissions.
@@ -826,10 +830,9 @@ troubleshooting is key to rapid resolution.
     - Source not ready. Check the `GitRepository` or `HelmRepository` status via
       `flux get sources git`. Ensure the URL is correct and the deploy key has
       access.
-    - Manifest error. `kubectl describe` may reveal errors from `kustomize
-      build` or `kubectl
-      apply`. Fix YAML syntax issues or missing dependencies (for example, a `
-      HelmRelease` referencing a `HelmRepository` not yet defined).
+    - Manifest error. `kubectl describe` may reveal errors from `kustomize build`
+      or `kubectl apply`. Fix YAML syntax issues or missing dependencies (for
+      example, a `HelmRelease` referencing a `HelmRepository` not yet defined).
 
 - Symptom: Wildcard record does not resolve a specific subdomain
   - Verify: `dig TXT <subdomain>.<domain>`
