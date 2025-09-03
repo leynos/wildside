@@ -436,8 +436,8 @@ spec:
 
 ```
 
-Define PodDisruptionBudgets for the webhook and cainjector when scaling above
-a single replica:
+Define PodDisruptionBudgets for the webhook and cainjector when scaling above a
+single replica:
 
 ```yaml
 # examples/pdb-cert-manager-webhook.yaml

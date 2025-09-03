@@ -132,7 +132,7 @@ differences in the context of OpenTofu.
 | Feature       | Unit Testing                                                                               | Integration Testing                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | Scope         | A single module or resource in isolation.8                                                 | Multiple modules and their interactions.6                                              |
-| Dependencies  | External dependencies are mocked or stubbed.8 Uses mock_provider, override_resource, etc.  | Uses real or closely replicated services (e.g., real cloud APIs).17 |
+| Dependencies  | External dependencies are mocked or stubbed.8 Uses mock_provider, override_resource, etc.  | Uses real or closely replicated services (e.g., real cloud APIs).17                    |
 | Execution     | tofu plan or tofu test with mocks. Very fast.8                                             | tofu apply or tofu test with command=apply. Slower due to real resource provisioning.6 |
 | Bugs Detected | Logic errors, incorrect variable interpolation, invalid inputs, broken conditional logic.7 | Interface errors, permission issues, data flow problems, dependency conflicts.7        |
 | Primary Tools | tofu test (with command=plan and mocks), Terratest (with plan-based checks).               | tofu test (with command=apply), Terratest, Kitchen-Terraform (legacy).                 |
@@ -932,15 +932,15 @@ on the team's skillset, the specific validation requirements, and the desired
 balance between ease of use and flexibility. The following table provides a
 direct comparison to aid in this decision-making process.
 
-| Dimension      | tofu test (Native Framework)                                                                              | Terratest                                                                                                                             |
-| -------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Language       | HCL.23 Familiar to OpenTofu users, lowering the adoption barrier.                                         | Go (Golang).2 Requires learning a new programming language and its ecosystem.                                                         |
-| Test Scope     | Excels at plan-based unit tests. Can perform integration tests with command=apply.21                      | Excels at integration and E2E tests. Can perform plan-based unit tests, but it's less common and more verbose.26                      |
-| Mocking        | Strong, built-in support for mocking providers and overriding resources, data, and modules.24             | No built-in IaC mocking. Relies on deploying real resources or requires complex, custom Go-based mocking of cloud provider SDKs.      |
-| Setup          | No extra dependencies beyond the OpenTofu binary itself.21                                                | Requires a full Go development environment installation and dependency management via go mod.48                                       |
+| Dimension      | tofu test (Native Framework)                                                                              | Terratest                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Language       | HCL.23 Familiar to OpenTofu users, lowering the adoption barrier.                                         | Go (Golang).2 Requires learning a new programming language and its ecosystem.                                                        |
+| Test Scope     | Excels at plan-based unit tests. Can perform integration tests with command=apply.21                      | Excels at integration and E2E tests. Can perform plan-based unit tests, but it's less common and more verbose.26                     |
+| Mocking        | Strong, built-in support for mocking providers and overriding resources, data, and modules.24             | No built-in IaC mocking. Relies on deploying real resources or requires complex, custom Go-based mocking of cloud provider SDKs.     |
+| Setup          | No extra dependencies beyond the OpenTofu binary itself.21                                                | Requires a full Go development environment installation and dependency management via go mod.48                                      |
 | Flexibility    | Limited by HCL's declarative nature. Complex logic or external API interactions require helper modules.21 | Highly flexible. Can perform any action possible in Go: complex logic, custom API calls, file manipulation, database queries, etc.49 |
-| Ecosystem      | Fully integrated into the OpenTofu CLI. Part of the core tool.                                            | Large library of helper functions for AWS, GCP, Azure, Kubernetes, Docker, SSH, and more, simplifying common validation tasks.2       |
-| Learning Curve | Low for existing OpenTofu users; the syntax is the same.23                                                | Steeper, requires proficiency in Go, its testing packages, and the Terratest library itself.49                                        |
+| Ecosystem      | Fully integrated into the OpenTofu CLI. Part of the core tool.                                            | Large library of helper functions for AWS, GCP, Azure, Kubernetes, Docker, SSH, and more, simplifying common validation tasks.2      |
+| Learning Curve | Low for existing OpenTofu users; the syntax is the same.23                                                | Steeper, requires proficiency in Go, its testing packages, and the Terratest library itself.49                                       |
 
 ### 4.3 Legacy and Niche Tools: Kitchen-Terraform
 

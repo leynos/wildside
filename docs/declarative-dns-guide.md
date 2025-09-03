@@ -786,17 +786,17 @@ practices.
 
 ### 6.2 Troubleshooting Common Integration Pitfalls
 
-Even in a well-architected system, issues can arise. A systematic
-approach to troubleshooting is key to rapid resolution.
+Even in a well-architected system, issues can arise. A systematic approach to
+troubleshooting is key to rapid resolution.
 
 - Symptom: No DNS records are created
   - Verify: `kubectl logs -n external-dns -l`
     `app.kubernetes.io/name=external-dns -f`
   - Causes/Resolution:
     - Authentication error. Look for `Invalid request headers (6003)`.
-      Ensure the API token has `Zone:Read` and `DNS:Edit` permissions. Re-create
-      the Kubernetes secret, avoiding invisible characters and matching the
-      expected secret key name (for example, `apiToken`).26
+      Ensure the API token has `Zone:Read` and `DNS:Edit` permissions.
+      Re-create the Kubernetes secret, avoiding invisible characters and
+      matching the expected secret key name (for example, `apiToken`).26
     - RBAC error. Inspect logs for permission denied when reading `Ingress` or
       `Service` resources. Ensure the `HelmRelease` sets `rbac.create=true` and
       that the `ClusterRole` grants the required permissions.
@@ -827,9 +827,9 @@ approach to troubleshooting is key to rapid resolution.
       `flux get sources git`. Ensure the URL is correct and the deploy key has
       access.
     - Manifest error. `kubectl describe` may reveal errors from `kustomize
-      build` or `kubectl apply`. Fix YAML syntax issues or missing dependencies
-      (for example, a `HelmRelease` referencing a `HelmRepository` not yet
-      defined).
+      build` or `kubectl
+      apply`. Fix YAML syntax issues or missing dependencies (for example, a `
+      HelmRelease` referencing a `HelmRepository` not yet defined).
 
 - Symptom: Wildcard record does not resolve a specific subdomain
   - Verify: `dig TXT <subdomain>.<domain>`

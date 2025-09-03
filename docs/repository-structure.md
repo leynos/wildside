@@ -412,13 +412,12 @@ Git—manage it with SOPS or an External Secrets operator. If enabled,
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
-mappings under `secretEnvFromKeys`. Cross-field rules in
-`values.schema.json` enforce this wiring by requiring `existingSecretName`
-whenever `secretEnvFromKeys` is populated. The chart defaults
-`allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
-on `envFrom.secretRef`). Set it to `false` in production to fail rendering
-when the Secret is absent. The following snippets show the resulting
-`envFrom.secretRef` for both values:
+mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
+enforce this wiring by requiring `existingSecretName` whenever
+`secretEnvFromKeys` is populated. The chart defaults `allowMissingSecret` to
+`true` for `helm template` (maps to `optional: true` on `envFrom.secretRef`).
+Set it to `false` in production to fail rendering when the Secret is absent.
+The following snippets show the resulting `envFrom.secretRef` for both values:
 
 ```yaml
 # allowMissingSecret: true (default)

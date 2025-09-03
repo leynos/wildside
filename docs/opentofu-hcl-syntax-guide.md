@@ -498,10 +498,10 @@ features, often configured via nested blocks.
 
 ### 2.2 variable: Parameterizing Configurations
 
-Input variables are the parameters of an OpenTofu module, allowing its behaviour
-to be customized without modifying its source code. They are analogous to
-function arguments in traditional programming.11 Each input variable is
-declared using a
+Input variables are the parameters of an OpenTofu module, allowing its
+behaviour to be customized without modifying its source code. They are
+analogous to function arguments in traditional programming.11 Each input
+variable is declared using a
 
 `variable` block.11
 
@@ -810,8 +810,8 @@ evaluates the `subnet_id` for each instance:
 The result is that OpenTofu plans to **change** the subnet for the instance at
 index 1 (from `subnet-def` to `subnet-ghi`) and **destroy** the instance at
 index 2. This is often not the desired behaviour; the user likely intended only
-to destroy the instance associated with `subnet-def`. This re-indexing behaviour
-makes `count` fragile for managing dynamic collections.2
+to destroy the instance associated with `subnet-def`. This re-indexing
+behaviour makes `count` fragile for managing dynamic collections.2
 
 #### The `for_each` Meta-Argument
 
@@ -1281,7 +1281,7 @@ Table 4.1: Common HCL Parsing and Planning Errors
 
 | Error Message Snippet                 | Likely Cause(s)                                                                                                                           | Recommended Solution(s)                                                                                                         | Relevant Sources |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., `[0]`) or key (e.g., `["web"]`) to the reference.                                 | 30               |
+| Unresolved reference                  | Typo in a reference; missing index/key for a count/for_each resource.                                                                     | Correct the typo. Add the appropriate index (e.g., `[0]`) or key (e.g., `["web"]`) to the reference.                            | 30               |
 | Inconsistent conditional result types | The true and false branches of a ternary operator (? :) return values of incompatible types.                                              | Use explicit type conversion functions (tostring, tolist, etc.) on the results to ensure they are the same type.                | 34               |
 | Provider instance not present         | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using for_each on both. | Decouple the resource and provider lifecycles. Ensure the provider configuration persists for the destroy operation.            | 44               |
 | checksums… do not match               | The downloaded provider package does not match the trusted checksum in .terraform.lock.hcl.                                               | Verify provider source. If the change is intentional, run tofu init -upgrade. Use tofu providers lock for multi-platform teams. | 42               |
