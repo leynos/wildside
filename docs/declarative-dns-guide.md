@@ -86,13 +86,13 @@ reacts in real-time to the application lifecycle. This decoupling is a
 significant architectural advantage that enhances both operational stability
 and development velocity.
 
-| Component       | Primary Role                | Scope of Control                                                                | Managed By                             |
+| Component | Primary Role | Scope of Control | Managed By |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
-| **Kubernetes**  | Application Orchestration   | Manages the lifecycle of containers, Pods, Services, and Ingresses.             | Platform/Application Teams             |
-| **Cloudflare**  | Authoritative DNS Provider  | Hosts and resolves public DNS records; provides edge network services.          | OpenTofu (Zone), ExternalDNS (Records) |
-| **ExternalDNS** | DNS Automation Controller   | Translates Kubernetes resources into Cloudflare DNS records.                    | FluxCD                                 |
-| **FluxCD**      | GitOps Operator             | Synchronizes the entire Kubernetes cluster state with a Git repository.         | Platform Team                          |
-| **OpenTofu**    | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team                          |
+| **Kubernetes** | Application Orchestration | Manages the lifecycle of containers, Pods, Services, and Ingresses. | Platform/Application Teams |
+| **Cloudflare** | Authoritative DNS Provider | Hosts and resolves public DNS records; provides edge network services. | OpenTofu (Zone), ExternalDNS (Records) |
+| **ExternalDNS** | DNS Automation Controller | Translates Kubernetes resources into Cloudflare DNS records. | FluxCD |
+| **FluxCD** | GitOps Operator | Synchronizes the entire Kubernetes cluster state with a Git repository. | Platform Team |
+| **OpenTofu** | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team |
 
 ### 1.3 The End-to-End Data and Control Flow
 
@@ -194,18 +194,21 @@ To create a token for ExternalDNS:
 
 1. Log in to the Cloudflare dashboard and navigate to “My Profile” -> “API
    Tokens”.
+
 2. Click “Create Token” and select a custom token template.
+
 3. Configure the token with the following exact permissions:
 
    - `Zone` -> `Zone` -> `Read`: Allows ExternalDNS to list and read details of
-      the DNS zones in the account.
+     the DNS zones in the account.
    - `Zone` -> `DNS` -> `Edit`: Allows ExternalDNS to create, update, and delete
-      DNS records within a zone.
+     DNS records within a zone.
 
 4. Under “Zone Resources,” scope the token to the specific zone(s) that will be
    managed by this Kubernetes cluster (e.g., `Include` -> `Specific zone` ->
    `example.com`). This prevents the token from being able to modify other
    domains in the account.
+
 5. Create the token and securely copy the generated value. It will only be
    displayed once.1
 
@@ -790,6 +793,7 @@ Even in a well-architected system, issues can arise. A systematic approach to
 troubleshooting is key to rapid resolution.
 
 - Symptom: No DNS records are created
+
   - Verify:
 
     ```bash
@@ -797,6 +801,7 @@ troubleshooting is key to rapid resolution.
     ```
 
   - Causes/Resolution:
+
     - Authentication error. Look for `Invalid request headers (6003)`.
       Ensure the API token has `Zone:Read` and `DNS:Edit` permissions.
       Re-create the Kubernetes secret, avoiding invisible characters and
@@ -806,15 +811,17 @@ troubleshooting is key to rapid resolution.
       that the `ClusterRole` grants the required permissions.
 
 - Symptom: Stale DNS records are not deleted
+
   - Verify: `kubectl get helmrelease external-dns -n external-dns -o yaml`
   - Causes/Resolution:
     - Incorrect policy. The `policy` in the `HelmRelease` must be `sync`. If it
       is `upsert-only`, ExternalDNS will not delete records.31
     - Ownership mismatch. If `txtOwnerId` changed since records were created,
-      ExternalDNS will no longer recognise them as its own and will not delete
+      ExternalDNS will no longer recognize them as its own and will not delete
       them.
 
 - Symptom: Records created but not proxied (“grey cloud”)
+
   - Verify: `kubectl get ingress <ingress-name> -o yaml`
   - Causes/Resolution:
     - Missing annotation/argument. Either set the default behaviour with
@@ -824,6 +831,7 @@ troubleshooting is key to rapid resolution.
       the relevant `Ingress` manifest.18
 
 - Symptom: Flux Kustomization is not ready
+
   - Verify: `flux get kustomizations <name>` and
     `kubectl describe kustomization <name>`
   - Causes/Resolution:
@@ -835,6 +843,7 @@ troubleshooting is key to rapid resolution.
       example, a `HelmRelease` referencing a `HelmRepository` not yet defined).
 
 - Symptom: Wildcard record does not resolve a specific subdomain
+
   - Verify: `dig TXT <subdomain>.<domain>`
   - Causes/Resolution:
     - Conflicting record. Cloudflare DNS does not apply a wildcard (`*`) to a
@@ -934,34 +943,36 @@ declarative solution for modern application delivery on Kubernetes.
 
 ## Works cited
 
-1. Automating DNS Management in Kubernetes with External-DNS …,
-   [https://containerinfra.nl/blog/2024/10/09/automating-dns-management-in-kubernetes-with-external-dns-and-cloudflare/](https://containerinfra.nl/blog/2024/10/09/automating-dns-management-in-kubernetes-with-external-dns-and-cloudflare/)
+01. Automating DNS Management in Kubernetes with External-DNS …,
+    [https://containerinfra.nl/blog/2024/10/09/automating-dns-management-in-kubernetes-with-external-dns-and-cloudflare/](https://containerinfra.nl/blog/2024/10/09/automating-dns-management-in-kubernetes-with-external-dns-and-cloudflare/)
 
-2. Simplifying DNS Management with ExternalDNS in Kubernetes - Develeap,
-   [https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/](https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/)
+02. Simplifying DNS Management with ExternalDNS in Kubernetes - Develeap,
+    [https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/](https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/)
 
-3. GitOps for Azure Kubernetes Service - Azure Architecture Center | Microsoft
-   Learn,
-   [https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks)
-4. 8 Advantages of GitOps Kubernetes Deployment - Rafay,
-   [https://rafay.co/ai-and-cloud-native-blog/8-advantages-of-gitops-kubernetes-deployment/](https://rafay.co/ai-and-cloud-native-blog/8-advantages-of-gitops-kubernetes-deployment/)
+03. GitOps for Azure Kubernetes Service - Azure Architecture Center | Microsoft
+    Learn,
+    [https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks)
 
-5. GitOps and Kubernetes: The Rising Star of The Cloud World - vCluster,
-   [https://www.vcluster.com/blog/gitops-and-kubernetes-the-rising-star-of-the-cloud-world](https://www.vcluster.com/blog/gitops-and-kubernetes-the-rising-star-of-the-cloud-world)
+04. 8 Advantages of GitOps Kubernetes Deployment - Rafay,
+    [https://rafay.co/ai-and-cloud-native-blog/8-advantages-of-gitops-kubernetes-deployment/](https://rafay.co/ai-and-cloud-native-blog/8-advantages-of-gitops-kubernetes-deployment/)
 
-6. External DNS - Funky Penguin’s Geek Cookbook,
-   [https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/](https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/)
+05. GitOps and Kubernetes: The Rising Star of The Cloud World - vCluster,
+    [https://www.vcluster.com/blog/gitops-and-kubernetes-the-rising-star-of-the-cloud-world](https://www.vcluster.com/blog/gitops-and-kubernetes-the-rising-star-of-the-cloud-world)
 
-7. Configure external DNS servers dynamically from Kubernetes resources -
-   GitHub,
-   [https://github.com/kubernetes-sigs/external-dns](https://github.com/kubernetes-sigs/external-dns)
+06. External DNS - Funky Penguin’s Geek Cookbook,
+    [https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/](https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/)
 
-8. external-dns/docs/tutorials/[cloudflare.md](http://cloudflare.md) at master
-   - GitHub,
-   [https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md)
+07. Configure external DNS servers dynamically from Kubernetes resources -
+    GitHub,
+    [https://github.com/kubernetes-sigs/external-dns](https://github.com/kubernetes-sigs/external-dns)
 
-9. Onboard a domain · Cloudflare Fundamentals docs,
-   [https://developers.cloudflare.com/fundamentals/manage-domains/add-site/](https://developers.cloudflare.com/fundamentals/manage-domains/add-site/)
+08. external-dns/docs/tutorials/[cloudflare.md](http://cloudflare.md) at master
+
+    - GitHub,
+      [https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md)
+
+09. Onboard a domain · Cloudflare Fundamentals docs,
+    [https://developers.cloudflare.com/fundamentals/manage-domains/add-site/](https://developers.cloudflare.com/fundamentals/manage-domains/add-site/)
 
 10. DNS setups - Cloudflare Docs,
     [https://developers.cloudflare.com/dns/zone-setups/](https://developers.cloudflare.com/dns/zone-setups/)
@@ -1047,11 +1058,13 @@ declarative solution for modern application delivery on Kubernetes.
 
 35. flux get helmreleases - Flux CD,
     [https://fluxcd.io/flux/cmd/flux_get_helmreleases/](https://fluxcd.io/flux/cmd/flux_get_helmreleases/)
+
 36. Chapter 6: External DNS - Kubernetes Guides - Apptio,
     [https://www.apptio.com/topics/kubernetes/multi-cloud/external-dns/](https://www.apptio.com/topics/kubernetes/multi-cloud/external-dns/)
 
 37. external-dns not adding records · Issue #393 - GitHub,
     [https://github.com/kubernetes-sigs/external-dns/issues/393](https://github.com/kubernetes-sigs/external-dns/issues/393)
+
 38. Manage Helm Releases - Flux CD,
     [https://fluxcd.io/flux/guides/helmreleases/](https://fluxcd.io/flux/guides/helmreleases/)
 

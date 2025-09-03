@@ -10,7 +10,7 @@ of actionable tasks to guide development from the current state to the complete
 MVP.
 
 The backend is a monolithic Rust application built with Actix Web, designed to
-be deployed as a containerised service on Kubernetes. It provides a RESTful API
+be deployed as a containerized service on Kubernetes. It provides a RESTful API
 and a WebSocket interface for real-time communication, with computationally
 intensive tasks offloaded to a separate pool of background workers.
 
@@ -33,25 +33,21 @@ graph TD
         Ingress[Traefik Ingress]
 
         subgraph "Wildside Backend"
-            style "Wildside Backend" fill:#f9f,stroke:#333,stroke-width:2px
             API[Actix Web API/WS Server]
             Worker[Background Worker Pool]
         end
-        
+
         subgraph "Tile Service"
-            style "Tile Service" fill:#e9f,stroke:#333,stroke-width:2px
             Martin[Martin Tile Server]
         end
 
         subgraph "Data Services"
-            style "Data Services" fill:#ccf,stroke:#333,stroke-width:2px
             DB[(PostgreSQL w/ PostGIS)]
             Cache[(Redis)]
             ExternalAPI[External: Overpass API]
         end
 
         subgraph "Observability"
-            style Observability fill:#cfc,stroke:#333,stroke-width:2px
             Prometheus --> Grafana
             API -- Metrics & Logs --> FluentBit --> Loki & Prometheus
             Worker -- Metrics & Logs --> FluentBit
@@ -102,7 +98,7 @@ API and WebSocket traffic.
 - **Key Responsibilities:**
 
   - Expose a RESTful API for all application functionality (user management,
-      route requests, etc.).
+    route requests, etc.).
 
   - Manage WebSocket connections for real-time client communication.
 
@@ -111,32 +107,32 @@ API and WebSocket traffic.
   - Enqueue jobs for the background workers to process.
 
   - Serve a `/metrics` endpoint for Prometheus and a `/healthz` endpoint for
-      Kubernetes probes.
+    Kubernetes probes.
 
 - **Implementation Tasks:**
 
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-      Use the `actix-session` crate with a cookie-based backend. The signing
-      key must be loaded from an environment variable (`SESSION_KEY`).
+    Use the `actix-session` crate with a cookie-based backend. The signing
+    key must be loaded from an environment variable (`SESSION_KEY`).
 
   - [ ] **Observability:**
 
     - Integrate the `actix-web-prom` crate as middleware to expose default
-          Prometheus metrics on a `/metrics` endpoint.
+      Prometheus metrics on a `/metrics` endpoint.
 
     - Implement a `/healthz` endpoint that returns a `200 OK` response.
 
     - Ensure all request handlers have `tracing` spans with a unique
-          `request_id`.
+      `request_id`.
 
   - [ ] **API Endpoints:**
 
     - Implement the full suite of user management endpoints (create, read,
-          update) under `/api/users`.
+      update) under `/api/users`.
 
     - Create a `/api/routes` endpoint to accept route generation requests.
-          This endpoint should validate the input and enqueue a
-          `GenerateRouteJob` (see § 3.4).
+      This endpoint should validate the input and enqueue a
+      `GenerateRouteJob` (see § 3.4).
 
 ### 3.2. Route Generation Engine Integration
 
@@ -152,26 +148,26 @@ and managing its execution.
 - **Key Responsibilities:**
 
   - The backend must provide the engine with the necessary inputs: user
-      preferences, geographical boundaries, and time constraints.
+    preferences, geographical boundaries, and time constraints.
 
   - The backend must handle the output from the engine (a structured route)
-      and persist it to the database.
+    and persist it to the database.
 
   - Execution of the engine must not block the main server threads.
 
 - **Implementation Tasks:**
 
   - [ ] **Dependency:** Add `wildside-engine` to `backend/Cargo.toml` as a
-      local path dependency for development, to be replaced by a Git dependency
-      in CI.
+    local path dependency for development, to be replaced by a Git dependency
+    in CI.
 
   - [ ] **Execution:** The `GenerateRouteJob` handled by the background
-      worker (see § 3.4) will be the primary point of integration. The worker
-      will call the main `wildside_engine::generate_route()` function.
+    worker (see § 3.4) will be the primary point of integration. The worker
+    will call the main `wildside_engine::generate_route()` function.
 
   - [ ] **Data Access:** The engine requires access to POI data. The worker
-      will pass a database connection or a pre-fetched dataset to the engine as
-      required by its interface.
+    will pass a database connection or a pre-fetched dataset to the engine as
+    required by its interface.
 
 ### 3.3. Data Persistence
 
@@ -191,10 +187,10 @@ performance and data relevance.
   - Store user data, including preferences and saved routes.
 
   - Store a performant, locally cached mirror of geospatial data (Points of
-      Interest, road networks) for the routing engine.
+    Interest, road networks) for the routing engine.
 
   - Evolve the local dataset over time by enriching it with new data based on
-      user requests.
+    user requests.
 
   - Utilize the PostGIS extension for efficient spatial queries.
 
@@ -226,8 +222,8 @@ erDiagram
 
     pois {
         BIGINT id PK
-        GEOGRAPHY(Point, 4326) location "GIST index"
-        JSONB osm_tags "GIN index"
+        GEOGRAPHY(Point_4326) location
+        JSONB osm_tags
         TEXT narrative
         REAL popularity_score
     }
@@ -240,7 +236,7 @@ erDiagram
     routes {
         UUID id PK
         UUID user_id FK
-        GEOMETRY(LineString, 4326) path "GIST index"
+        GEOMETRY(LineString_4326) path
         JSONB generation_params
         TIMESTAMPTZ created_at
     }
@@ -248,7 +244,7 @@ erDiagram
     route_pois {
         UUID route_id PK, FK
         BIGINT poi_id PK, FK
-        INTEGER "order"
+        INTEGER position
     }
 
     users ||--o{ user_interest_themes : "has"
@@ -264,11 +260,11 @@ erDiagram
 
 **`users`**: Stores user account information.
 
-| Column       | Type          | Constraints                                | Description                 |
+| Column | Type | Constraints | Description |
 | ------------ | ------------- | ------------------------------------------ | --------------------------- |
-| `id`         | `UUID`        | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier.     |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of user creation. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of last update.   |
+| `id` | `UUID` | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier. |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of user creation. |
+| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of last update. |
 
 **`interest_themes`**: A lookup table for available interest themes.
 
@@ -319,7 +315,7 @@ specific route.
 |------|----|-----------|-----------|
 |`route_id`|`UUID`|`PRIMARY KEY`, `FOREIGN KEY (routes.id)`|Foreign key to the `routes` table.|
 |`poi_id`|`BIGINT`|`PRIMARY KEY`, `FOREIGN KEY (pois.id)`|Foreign key to the `pois` table.|
-|`order`|`INTEGER`|`NOT NULL`|Sequential position of this POI in the walk.|
+|`position`|`INTEGER`|`NOT NULL`|Sequential position of this POI in the walk.|
 
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
@@ -357,48 +353,48 @@ flowchart TD
   data ingestion**.
 
   - **Scope:** A defined polygon covering our initial launch area (e.g., the
-      City of Edinburgh).
+    City of Edinburgh).
 
   - **Process:** A script will download a regional OSM extract (e.g., from
-      Geofabrik), filter for a comprehensive baseline of common POI tags
-      (`amenity`, `historic`, `tourism`, `leisure`, `natural`), and ingest this
-      data into our PostGIS `pois` table.
+    Geofabrik), filter for a comprehensive baseline of common POI tags
+    (`amenity`, `historic`, `tourism`, `leisure`, `natural`), and ingest this
+    data into our PostGIS `pois` table.
 
   - **Purpose:** This guarantees that the vast majority of route requests
-      have a rich, local dataset to draw from, ensuring the "time to first
-      walk" is consistently fast.
+    have a rich, local dataset to draw from, ensuring the "time to first
+    walk" is consistently fast.
 
 - **Layer 2: On-Demand Enrichment (The "Warm Cache").** This layer addresses
   the "cold start" problem for niche interests and ensures the dataset evolves
   based on user demand, not just our assumptions.
 
   - **Trigger:** When the `GenerateRouteJob` queries the local database and
-      finds a sparse set of results for a user's chosen theme in a given area
-      (e.g., fewer than a threshold of `N` POIs), it triggers this process.
+    finds a sparse set of results for a user's chosen theme in a given area
+    (e.g., fewer than a threshold of `N` POIs), it triggers this process.
 
   - **Process:** The worker proceeds to generate the best route it can with
-      the limited local data. Crucially, it also enqueues a _separate,
-      low-priority `EnrichmentJob`_. This new job will perform a targeted query
-      against an external source (like the Overpass API) for the missing POI
-      types in that geographic bounding box. The results are then inserted or
-      updated (`UPSERT`) into our `pois` table.
+    the limited local data. Crucially, it also enqueues a _separate,
+    low-priority `EnrichmentJob`_. This new job will perform a targeted query
+    against an external source (like the Overpass API) for the missing POI
+    types in that geographic bounding box. The results are then inserted or
+    updated (`UPSERT`) into our `pois` table.
 
   - **Purpose:** This enriches our local dataset precisely where it was found
-      lacking. The first user interested in "brutalist architecture" gets a
-      reasonable walk immediately, but in doing so, they trigger a process that
-      ensures the next user gets a fantastic one. This solves the problems of
-      data sparseness and making incorrect assumptions about user taste.
+    lacking. The first user interested in "brutalist architecture" gets a
+    reasonable walk immediately, but in doing so, they trigger a process that
+    ensures the next user gets a fantastic one. This solves the problems of
+    data sparseness and making incorrect assumptions about user taste.
 
 - **Layer 3: Route Output Caching.** This concerns the _results_ of the
   computation, not the source data.
 
   - **Process:** When a route is successfully generated, its full definition
-      is cached in Redis. The cache key will be a hash of the precise request
-      parameters (location, duration, themes, etc.). Saved routes will have
-      their cache TTL removed, effectively pinning them.
+    is cached in Redis. The cache key will be a hash of the precise request
+    parameters (location, duration, themes, etc.). Saved routes will have
+    their cache TTL removed, effectively pinning them.
 
   - **Purpose:** This prevents re-computation for identical requests,
-      providing an instantaneous response for popular or repeated queries.
+    providing an instantaneous response for popular or repeated queries.
 
 #### 3.3.4. Implementation Tasks
 
@@ -431,7 +427,7 @@ processes to avoid blocking the main API server.
   - Perform data enrichment tasks (`EnrichmentJob`).
 
   - Perform periodic maintenance tasks (e.g., refreshing data from external
-      sources).
+    sources).
 
 - **Implementation Tasks:**
 
@@ -440,24 +436,24 @@ processes to avoid blocking the main API server.
     - Add `apalis` to `backend/Cargo.toml`.
 
     - Configure Apalis to use Redis as the job queue broker, with separate
-          queues for high-priority (e.g., `route_generation`) and low-priority
-          (`enrichment`) tasks.
+      queues for high-priority (e.g., `route_generation`) and low-priority
+      (`enrichment`) tasks.
 
   - [ ] **Worker Binary:** Modify `main.rs` to launch in "worker" mode based
-      on a CLI flag or environment variable (`WILDSIDE_MODE=worker`). In this
-      mode, it should start the Apalis worker pool.
+    on a CLI flag or environment variable (`WILDSIDE_MODE=worker`). In this
+    mode, it should start the Apalis worker pool.
 
   - [ ] **Job Definitions:**
 
     - Define and implement the `GenerateRouteJob` as previously described.
-          It should now include the logic to trigger the `EnrichmentJob`.
+      It should now include the logic to trigger the `EnrichmentJob`.
 
     - Define and implement the `EnrichmentJob`. This job's handler will
-          construct and execute a query against the Overpass API and use Diesel
-          to `UPSERT` the results into the `pois` table.
+      construct and execute a query against the Overpass API and use Diesel
+      to `UPSERT` the results into the `pois` table.
 
   - [ ] **Deployment:** Create a second Kubernetes `Deployment` for the
-      workers.
+    workers.
 
 ### 3.5. Caching Layer
 
@@ -470,24 +466,24 @@ An in-memory cache is used to improve performance and reduce database load.
 - **Key Responsibilities:**
 
   - Cache the results of expensive, deterministic operations, such as route
-      generation for common parameters.
+    generation for common parameters.
 
   - Cache frequently accessed, slow-changing data from the database (e.g.,
-      popular POIs).
+    popular POIs).
 
 - **Implementation Tasks:**
 
   - [ ] **Integration:** Add the `redis` crate and configure a Redis
-      connection pool available to the Actix application state.
+    connection pool available to the Actix application state.
 
   - [ ] **Route Caching:**
 
     - Before enqueuing a `GenerateRouteJob`, the API handler must first
-          check Redis for a cached result. The cache key should be a hash of
-          the route request parameters.
+      check Redis for a cached result. The cache key should be a hash of
+      the route request parameters.
 
     - On successful route generation, the background worker must write the
-          result to the cache with a reasonable TTL (e.g., 24 hours).
+      result to the cache with a reasonable TTL (e.g., 24 hours).
 
 ### 3.6. Observability
 
@@ -502,48 +498,48 @@ reliability, and user behaviour.
 - **Key Responsibilities:**
 
   - **Metrics (Prometheus):** Expose key operational metrics for monitoring
-      and alerting.
+    and alerting.
 
   - **Logging (Loki):** Output structured, correlated logs for debugging.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
-      funnels.
+    funnels.
 
 - **Implementation Tasks:**
 
   - [ ] **Metrics:** In addition to the `actix-web-prom` metrics, implement
-      the following custom application metrics:
+    the following custom application metrics:
 
     - A histogram (`route_generation_duration_seconds`) to track the
-          execution time of the `GenerateRouteJob`.
+      execution time of the `GenerateRouteJob`.
 
     - A counter (`jobs_total{type,status}`) to track the number of
-          background jobs processed (e.g., type=`GenerateRoute`,
-          status=`success|failure`).
+      background jobs processed (e.g., type=`GenerateRoute`,
+      status=`success|failure`).
 
     - A gauge (`websocket_connections_active`) for the number of connected
-          WebSocket clients.
+      WebSocket clients.
 
     - A counter (`enrichment_jobs_total{status}`) to track the
-          success/failure of data enrichment jobs.
+      success/failure of data enrichment jobs.
 
     - A gauge (`pois_total`) for the total number of POIs in the local
-          database, to observe growth over time.
+      database, to observe growth over time.
 
   - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
-      include the `trace_id` propagated from the initial API request, even into
-      the background jobs.
+    include the `trace_id` propagated from the initial API request, even into
+    the background jobs.
 
   - [ ] **Analytics:**
 
     - Integrate the PostHog Rust client.
 
     - Send a `RouteComputed` event from the background worker upon
-          successful route generation, including properties like
-          `route_duration_minutes` and `poi_count`.
+      successful route generation, including properties like
+      `route_duration_minutes` and `poi_count`.
 
     - Send `UserSignup` and `UserLogin` events from the relevant API
-          endpoints.
+      endpoints.
 
 ## 4. API and WebSocket Specification
 
@@ -555,25 +551,25 @@ All REST endpoints are prefixed with `/api/v1`.
 
 #### User & Session Management
 
-| Method | Path                  | Description                                           | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | --------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/users`              | Creates a new anonymous user session.                 | None           |
-| `GET`  | `/users/me`           | Retrieves the current user's profile and preferences. | Session Cookie |
-| `PUT`  | `/users/me/interests` | Updates the current user's selected interest themes.  | Session Cookie |
+| `POST` | `/users` | Creates a new anonymous user session. | None |
+| `GET` | `/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
+| `PUT` | `/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
 
 #### Content
 
-| Method | Path               | Description                                          | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | ------------------ | ---------------------------------------------------- | -------------- |
-| `GET`  | `/interest-themes` | Retrieves the list of all available interest themes. | None           |
+| `GET` | `/interest-themes` | Retrieves the list of all available interest themes. | None |
 
 #### Routes
 
-| Method | Path                 | Description                                               | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | -------------------- | --------------------------------------------------------- | -------------- |
-| `POST` | `/routes`            | Submits a request to generate a new walking route.        | Session Cookie |
-| `GET`  | `/routes/{route_id}` | Retrieves a previously generated route by its ID.         | Session Cookie |
-| `GET`  | `/users/me/routes`   | Retrieves a list of routes generated by the current user. | Session Cookie |
+| `POST` | `/routes` | Submits a request to generate a new walking route. | Session Cookie |
+| `GET` | `/routes/{route_id}` | Retrieves a previously generated route by its ID. | Session Cookie |
+| `GET` | `/users/me/routes` | Retrieves a list of routes generated by the current user. | Session Cookie |
 
 **`POST /routes` Request Body:**
 
@@ -615,15 +611,15 @@ Pushed to the client to provide real-time updates on a route generation job.
 - **Payload**:
 
   - `request_id` (string): Correlates with the ID returned from
-      `POST /routes`.
+    `POST /routes`.
 
   - `status` (string): One of `pending`, `in_progress`, `complete`, `failed`.
 
   - `route_id` (string, optional): The ID of the final route, present when
-      status is `complete`.
+    status is `complete`.
 
   - `error` (string, optional): An error message, present when status is
-      `failed`.
+    `failed`.
 
 #### Client-to-Server Messages
 
@@ -673,7 +669,7 @@ flowchart TD
     end
 
     subgraph "Kubernetes Cluster"
-        B[Ingress<br>/tiles/{source}/{z}/{x}/{y}] --> C[Martin Service];
+        B[Ingress<br>/tiles/&#123;source&#125;/&#123;z&#125;/&#123;x&#125;/&#123;y&#125;] --> C[Martin Service];
         C -- SQL / Function Call --> D[(PostGIS Database)];
         D -- Tables, Views, Functions --> C;
         C -- Vector Tile (PBF) --> B;
@@ -719,19 +715,19 @@ are user-specific and generated on demand, we cannot simply serve the entire
 
 - **Implementation:**
 
-    1. Create a PostGIS function, e.g.,
-       `get_route_tile(route_id UUID, z integer, x integer, y integer)`.
+  1. Create a PostGIS function, e.g.,
+     `get_route_tile(route_id UUID, z integer, x integer, y integer)`.
 
-    2. This function will take the `route_id` from the URL path as a parameter.
+  2. This function will take the `route_id` from the URL path as a parameter.
 
-    3. It will query the `routes` table for the matching `path` geometry.
+  3. It will query the `routes` table for the matching `path` geometry.
 
-    4. It will use PostGIS functions like `ST_AsMVTGeom` and `ST_AsMVT` to
-       generate the vector tile for the requested `z/x/y` coordinate,
-       containing only the relevant segment of that specific route's linestring.
+  4. It will use PostGIS functions like `ST_AsMVTGeom` and `ST_AsMVT` to
+     generate the vector tile for the requested `z/x/y` coordinate,
+     containing only the relevant segment of that specific route's linestring.
 
-    5. Martin will be configured to call this function, passing in the
-       parameters from the request URL.
+  5. Martin will be configured to call this function, passing in the
+     parameters from the request URL.
 
 #### 5.2.3. Base Network (Optional Post-MVP)
 
