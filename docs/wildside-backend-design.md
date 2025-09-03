@@ -223,7 +223,7 @@ erDiagram
 
     pois {
         BIGINT id PK
-        GEOGRAPHY(Point, 4326) location
+        GEOGRAPHY location
         JSONB osm_tags
         TEXT narrative
         REAL popularity_score
@@ -237,7 +237,7 @@ erDiagram
     routes {
         UUID id PK
         UUID user_id FK
-        GEOMETRY(LineString, 4326) path
+        GEOMETRY path
         JSONB generation_params
         TIMESTAMPTZ created_at
     }
@@ -257,6 +257,9 @@ erDiagram
     pois ||--o{ route_pois : "is part of"
 ```
 
+`location` stores a `Point` in SRID 4326, and `path` stores a `LineString` in
+SRID 4326.
+
 #### 3.3.2. Detailed Schema Design
 
 **`users`**: Stores user account information.
@@ -269,11 +272,11 @@ erDiagram
 
 **`interest_themes`**: A lookup table for available interest themes.
 
-| Column        | Type   | Constraints                                | Description                                     |
-| ------------- | ------ | ------------------------------------------ | ----------------------------------------------- |
-| `id`          | `UUID` | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique theme identifier.                        |
-| `name`        | `TEXT` | `NOT NULL`, `UNIQUE`                       | Display name of the theme (e.g., "Street Art"). |
-| `description` | `TEXT` |                                            | Short description of the theme.                 |
+| Column        | Type   | Notes                                         |
+| ------------- | ------ | --------------------------------------------- |
+| `id`          | `UUID` | PK; default `gen_random_uuid()`               |
+| `name`        | `TEXT` | NN; unique; display name (e.g., "Street Art") |
+| `description` | `TEXT` | Optional short description                    |
 
 **`user_interest_themes`**: A join table linking users to their selected themes.
 
@@ -284,13 +287,13 @@ erDiagram
 
 **`pois`**: Stores all Points of Interest.
 
-| Column             | Type                     | Constraints   | Description                                        |
-| ------------------ | ------------------------ | ------------- | -------------------------------------------------- |
-| `id`               | `BIGINT`                 | `PRIMARY KEY` | OSM Node/Way/Relation ID.                          |
-| `location`         | `GEOGRAPHY(Point, 4326)` | `NOT NULL`    | Geographic coordinate of the POI; GIST indexed.    |
-| `osm_tags`         | `JSONB`                  |               | Key-value store for OSM tags; GIN indexed.         |
-| `narrative`        | `TEXT`                   |               | Engaging description, potentially LLM-generated.   |
-| `popularity_score` | `REAL`                   | `DEFAULT 0.5` | Score from 0.0 (hidden gem) to 1.0 (hotspot).      |
+| Column             | Type                     | Notes                                       |
+| ------------------ | ------------------------ | ------------------------------------------- |
+| `id`               | `BIGINT`                 | PK; OSM element ID                          |
+| `location`         | `GEOGRAPHY(Point, 4326)` | NN; GIST index                              |
+| `osm_tags`         | `JSONB`                  | OSM tags; GIN index                         |
+| `narrative`        | `TEXT`                   | Optional engaging description               |
+| `popularity_score` | `REAL`                   | Default 0.5; 0.0 hidden gem – 1.0 hotspot   |
 
 **`poi_interest_themes`**: A join table linking POIs to relevant themes.
 
@@ -301,13 +304,13 @@ erDiagram
 
 **`routes`**: Stores generated walks.
 
-| Column              | Type                         | Constraints                                | Description                              |
-| ------------------- | ---------------------------- | ------------------------------------------ | ---------------------------------------- |
-| `id`                | `UUID`                       | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique identifier for the route.         |
-| `user_id`           | `UUID`                       | `FOREIGN KEY (users.id)`                   | User who generated the route (nullable). |
-| `path`              | `GEOMETRY(LineString, 4326)` |                                            | Full geometric path; GIST indexed.       |
-| `generation_params` | `JSONB`                      |                                            | Parameters used to generate this route.  |
-| `created_at`        | `TIMESTAMPTZ`                | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of route generation.           |
+| Column              | Type                         | Notes                                 |
+| ------------------- | ---------------------------- | ------------------------------------- |
+| `id`                | `UUID`                       | PK; default `gen_random_uuid()`       |
+| `user_id`           | `UUID`                       | FK `users.id`; nullable               |
+| `path`              | `GEOMETRY(LineString, 4326)` | Full path; GIST index                 |
+| `generation_params` | `JSONB`                      | Parameters used to generate the route |
+| `created_at`        | `TIMESTAMPTZ`                | NN; default `NOW()`                   |
 
 **`route_pois`**: A join table to store the ordered sequence of POIs for a
 specific route.
@@ -321,8 +324,8 @@ specific route.
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
 To balance the need for performance with the challenges of data volume,
-freshness, and relevance, the backend adopts a three-layered hybrid strategy for
-the MVP.
+freshness, and relevance, the backend adopts a three-layered hybrid strategy
+for the MVP.
 
 For screen readers: This flowchart shows how route requests are fulfilled and
 how enrichment improves future results.
@@ -639,8 +642,8 @@ location during an active walk.
 
 To deliver a rich, interactive, and highly performant map experience, the
 application will not rely on external third-party map providers for dynamic
-data. Instead, the application will serve first-party vector tiles directly from
-the PostGIS database. This provides full control over map styling, data
+data. Instead, the application will serve first-party vector tiles directly
+from the PostGIS database. This provides full control over map styling, data
 representation, and performance.
 
 - **Technology:** [Martin](https://martin.maplibre.org/), a
@@ -696,11 +699,11 @@ display them dynamically based on zoom level and user context.
 
 - **Endpoint:** `/tiles/pois/{z}/{x}/{y}.pbf`
 
-- **Implementation:** Martin can serve this directly. We will select which
-  columns from the `pois` table are included as properties in the tile features
-  (e.g., `id`, `popularity_score`) to keep the tile size minimal. Full POI
-  details will be fetched from the main REST API when a user interacts with a
-  point.
+- **Implementation:** Martin can serve this directly. The configuration will
+  determine which columns from the `pois` table are included as properties in
+  the tile features (e.g., `id`, `popularity_score`) to keep the tile size
+  minimal. Full POI details are fetched from the main REST API when a user
+  interacts with a point.
 
 #### 5.2.2. Generated Routes (`routes`)
 

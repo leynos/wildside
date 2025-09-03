@@ -647,7 +647,7 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
     allows for manipulation in addition to search - GitHub, accessed on July
     11, 2025, <https://github.com/alexpovel/srgn>
 
-02. srgn/[README.md](http://README.md) at main · alexpovel/srgn · GitHub,
+02. srgn/README.md at main · alexpovel/srgn · GitHub,
     accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/blob/main/README.md>
 
