@@ -217,14 +217,14 @@ To create a token for ExternalDNS:
 The generated API token must be stored securely within the Kubernetes cluster
 for ExternalDNS to use. The standard method is to use a Kubernetes `Secret`.
 
-Execute the following command, replacing `<YOUR_API_TOKEN>` with the token
-copied from Cloudflare and `<namespace>` with the namespace where ExternalDNS
-will be deployed (e.g., `external-dns`):
+Execute the following command, replacing `<CF_API_TOKEN>` with the token copied
+from Cloudflare and `<NAMESPACE>` with the namespace where ExternalDNS will be
+deployed (e.g., `external-dns`):
 
 ```bash
 kubectl create secret generic cloudflare-api-token \
-  --from-literal=apiToken=<YOUR_API_TOKEN> \
-  -n <namespace>
+  --from-literal=apiToken=<CF_API_TOKEN> \
+  -n <NAMESPACE>
 
 ```
 
@@ -247,8 +247,8 @@ configures a deploy key to allow the cluster to pull subsequent changes.
 Example command for GitHub:
 
 ```bash
-export GITHUB_USER="<your-github-username>"
-export GITHUB_TOKEN="<your-github-pat>"
+export GITHUB_USER="<github-username>"
+export GITHUB_TOKEN="<github-pat>"
 
 flux bootstrap github \
   --owner=$GITHUB_USER \
@@ -353,29 +353,29 @@ spec:
   releaseName: external-dns
   targetNamespace: external-dns
   values:
-    # -- RBAC Configuration --
+      # -- Role-Based Access Control (RBAC) configuration --
     rbac:
       create: true
-    
+
     # -- DNS Provider Configuration --
     provider: cloudflare
-    
+
     # -- Cloudflare Specific Settings --
     cloudflare:
       # Reference the secret containing the API token
       secretName: cloudflare-api-token
       # The key within the secret that holds the token value
-      secretKey: apiToken 
-      
-    # -- Core ExternalDNS Behavior --
+      secretKey: apiToken
+
+      # -- Core ExternalDNS behaviour --
     policy: sync # Allows create, update, and delete operations
-    
+
     # -- Scoping and Ownership --
     domainFilters:
-      - "your-domain.com" # Restrict management to this domain
-    
+      - "example.com" # Restrict management to this domain
+
     txtOwnerId: "production-cluster-01" # Unique ID for this instance
-    
+
     # -- Additional Arguments for Fine-Tuning --
     extraArgs:
       - --cloudflare-proxied=true # Enable Cloudflare proxy by default
@@ -396,10 +396,10 @@ This `HelmRelease` manifest contains several critical configuration points:
 - `domainFilters`: This is a crucial security and safety feature. It constrains
   the controller to only manage records within the specified domains,
   preventing it from accidentally modifying records in other zones.7
-- `policy: sync`: This setting authorizes ExternalDNS to perform create,
-  update, and delete operations. The alternative, `upsert-only`, would not
-  remove DNS records when the corresponding Kubernetes resource is deleted,
-  leading to stale and potentially insecure records.31
+  - `policy: sync`: This setting authorises ExternalDNS to perform create,
+    update, and delete operations. The alternative, `upsert-only`, would not
+    remove DNS records when the corresponding Kubernetes resource is deleted,
+    leading to stale and potentially insecure records.31
 - `extraArgs`: This array allows for passing command-line arguments directly to
   the ExternalDNS container. Here, it is used to enable the Cloudflare proxy by
   default and to configure a high records-per-page value to avoid hitting
@@ -491,17 +491,17 @@ metadata:
   annotations:
     # --- ExternalDNS Annotations ---
     # Specifies the desired DNS hostname. This is the primary trigger.
-    external-dns.alpha.kubernetes.io/hostname: nginx.your-domain.com
-    
+    external-dns.alpha.kubernetes.io/hostname: nginx.example.com
+
     # Overrides the default proxy setting for this specific record.
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-    
+
     # Sets a custom Time-To-Live (TTL) for the DNS record in seconds.
     external-dns.alpha.kubernetes.io/ttl: "120"
 spec:
   ingressClassName: nginx # Assumes an NGINX Ingress Controller is installed
   rules:
-  - host: "nginx.your-domain.com"
+  - host: "nginx.example.com"
     http:
       paths:
       - path: /
@@ -532,8 +532,8 @@ spec:
 
 When these manifests are committed to the GitOps repository, FluxCD applies
 them. ExternalDNS detects the new `Ingress` with the `hostname` annotation and
-proceeds to create the `nginx.your-domain.com` `A` record in Cloudflare,
-pointing to the external IP address of the cluster’s ingress controller.
+proceeds to create the `nginx.example.com` `A` record in Cloudflare, pointing
+to the external IP address of the cluster’s ingress controller.
 
 ### 4.2 An Alternative Approach: The DNSEndpoint CRD
 
@@ -559,7 +559,7 @@ metadata:
   namespace: default
 spec:
   endpoints:
-    - dnsName: static.your-domain.com
+    - dnsName: static.example.com
       recordType: A
       recordTTL: 300
       targets:
@@ -568,9 +568,9 @@ spec:
 ```
 
 This manifest instructs ExternalDNS to create an `A` record for
-`static.your-domain.com` pointing to the IP address `192.0.2.100`. This
-provides a flexible, Kubernetes-native way to manage any DNS record
-declaratively through the same GitOps workflow.6
+`static.example.com` pointing to the IP address `192.0.2.100`. This provides a
+flexible, Kubernetes-native way to manage any DNS record declaratively through
+the same GitOps workflow.6
 
 ### 4.3 Verification and Validation Workflow
 
@@ -582,44 +582,46 @@ the status of each component in the workflow.
    `Kustomization` and `HelmRelease` to ensure the manifests have been
    successfully applied to the cluster.
 
-```bash
-# Check the status of all Kustomizations, watch for updates
-flux get kustomizations --watch
+   ```bash
+   # Check the status of all Kustomizations, watch for updates
+   flux get kustomizations --watch
 
-# Force reconciliation to ensure the latest manifests are applied
-flux reconcile kustomization external-dns -n flux-system --with-source
+   # Force reconciliation to ensure the latest manifests are applied
+   flux reconcile kustomization external-dns -n flux-system --with-source
 
-# Check the status of the ExternalDNS HelmRelease
-flux get helmrelease external-dns -n external-dns
+   # Check the status of the ExternalDNS HelmRelease
+   flux get helmrelease external-dns -n external-dns
 
-# Inspect the resulting Ingress resource
-kubectl get ingress nginx-ingress -n default -o wide
-```
+   # Inspect the resulting Ingress resource
+   kubectl get ingress nginx-ingress -n default -o wide
+   ```
 
-A `READY` status of `True` indicates success.19
+   A `READY` status of `True` indicates success.19
 
-1. **Inspect ExternalDNS Logs:** The logs of the ExternalDNS pod are the
-   primary source for debugging its behavior. They will show whether it has
+2. **Inspect ExternalDNS Logs:** The logs of the ExternalDNS pod are the
+   primary source for debugging its behaviour. They will show whether it has
    detected the new resource and what actions it is taking with the Cloudflare
    API.
 
-```bash
-# Tail the logs of the ExternalDNS pod(s)
-kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns -f
+   ```bash
+   # Tail the logs of the ExternalDNS pod(s)
+   kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns -f
+   ```
 
-```
+   Look for log entries mentioning the creation or update of the desired DNS
+   record.[^23]
 
-Look for log entries mentioning the creation or update of the desired DNS
-record.23 3. **Check Cloudflare Dashboard:** Log in to the Cloudflare dashboard
-and navigate to the DNS records page for the domain. Verify that the new `A` or
-`CNAME` record has been created, along with its corresponding `TXT` ownership
-record. 4. **Confirm Public DNS Resolution:** Use a command-line tool like
-`dig` to query a public DNS resolver and confirm that the record resolves
-correctly to the expected IP address.
+3. **Check Cloudflare dashboard:** Log in to the Cloudflare dashboard and
+   navigate to the DNS records page for the domain. Verify that the new `A` or
+   `CNAME` record has been created, along with its corresponding `TXT`
+   ownership record.
+4. **Confirm public DNS resolution:** Use a command-line tool like `dig` to
+   query a public DNS resolver and confirm that the record resolves correctly
+   to the expected IP address.
 
 ```bash
 # Query for the A record
-dig A nginx.your-domain.com +short
+dig A nginx.example.com +short
 
 ```
 
@@ -684,14 +686,14 @@ variable "cloudflare_account_id" {
 # Manage the DNS Zone itself
 resource "cloudflare_zone" "primary" {
   account_id = var.cloudflare_account_id
-  zone       = "your-domain.com"
+  zone       = "example.com"
   plan       = "free" # Or "pro", "business", etc.
 }
 
 # Manage a static MX record for email
 resource "cloudflare_record" "mx_google" {
   zone_id = cloudflare_zone.primary.id
-  name    = "your-domain.com"
+  name    = "example.com"
   type    = "MX"
   value   = "aspmx.l.google.com"
   priority = 1
@@ -701,7 +703,7 @@ resource "cloudflare_record" "mx_google" {
 # Manage a static SPF record
 resource "cloudflare_record" "spf" {
   zone_id = cloudflare_zone.primary.id
-  name    = "your-domain.com"
+  name    = "example.com"
   type    = "TXT"
   value   = "v=spf1 include:_spf.google.com ~all"
   ttl     = 3600
@@ -709,7 +711,7 @@ resource "cloudflare_record" "spf" {
 
 ```
 
-This OpenTofu code declaratively manages the existence of the `your-domain.com`
+This OpenTofu code declaratively manages the existence of the `example.com`
 zone and ensures that essential static records, such as those for email (MX,
 SPF), are always present and correctly configured.9
 
@@ -717,7 +719,7 @@ SPF), are always present and correctly configured.9
 
 The combination of OpenTofu and ExternalDNS creates a powerful, two-tiered
 management system that aligns with the different operational cadences and
-responsibilities within a modern engineering organization.
+responsibilities within a modern engineering organisation.
 
 - **OpenTofu’s Responsibility (The Platform Layer):** OpenTofu is used by the
   Platform or Infrastructure team to manage the core, stable infrastructure.
@@ -739,13 +741,13 @@ responsibilities within a modern engineering organization.
 - Changes at this layer are frequent, automated, and self-service, enabling
   high development velocity.
 
-This clear demarcation prevents tooling conflicts and organizational
+This clear demarcation prevents tooling conflicts and organisational
 bottlenecks. The platform team provides a stable foundation (the zone) and a
 safe, automated tool (ExternalDNS, constrained by `domainFilters` and
 `txtOwnerId`). Application teams can then operate with autonomy within these
 established guardrails, managing their own DNS needs as part of their standard
 development workflow. This model is not just a technical architecture; it is an
-effective organizational pattern that balances central control with delegated
+effective organisational pattern that balances central control with delegated
 authority, optimizing for both stability and agility.
 
 ## Part 6: Operational Excellence and Advanced Strategies
@@ -774,11 +776,12 @@ practices.
   within `etcd` by default. For a more robust security posture, secrets stored
   in the Git repository should be encrypted. FluxCD has native integration with
   Mozilla SOPS (Secrets OPerationS), which allows for encrypting YAML values
-  using keys from cloud KMS services (like AWS KMS, GCP KMS) or PGP keys. With
-  SOPS, the `HelmRelease` can reference an encrypted secret, and Flux’s
-  `kustomize-controller` will decrypt it on-the-fly just before applying it to
-  the cluster. This ensures that sensitive data like the Cloudflare API token
-  remains encrypted end-to-end, from the Git repository to the cluster.28
+  using keys from cloud Key Management Service (KMS) systems (for example, AWS
+  KMS, GCP KMS) or PGP keys. With SOPS, the `HelmRelease` can reference an
+  encrypted secret, and Flux’s `kustomize-controller` will decrypt it
+  on-the-fly just before applying it to the cluster. This ensures that
+  sensitive data like the Cloudflare API token remains encrypted end-to-end,
+  from the Git repository to the cluster.28
 - **API Rate Limiting:** Cloudflare imposes a global API rate limit of 1,200
   requests per five minutes for most accounts. In a large or highly dynamic
   cluster, a naive ExternalDNS configuration could easily exceed this limit,
@@ -819,7 +822,7 @@ troubleshooting is key to rapid resolution.
     - Incorrect policy. The `policy` in the `HelmRelease` must be `sync`. If it
       is `upsert-only`, ExternalDNS will not delete records.31
     - Ownership mismatch. If `txtOwnerId` changed since records were created,
-      ExternalDNS will no longer recognize them as its own and will not delete
+      ExternalDNS will no longer recognise them as its own and will not delete
       them.
 
 - Symptom: Records created but not proxied (“grey cloud”)
@@ -1016,7 +1019,6 @@ declarative solution for modern application delivery on Kubernetes.
 
 22. Flux bootstrap for GitHub - Flux CD,
     [https://fluxcd.io/flux/installation/bootstrap/github/](https://fluxcd.io/flux/installation/bootstrap/github/)
-
 23. Manage your Cloudflare domains automatically with an Nginx Ingress
     controller and External DNS, together with SSL Certificates through Cert
     Manager - Xavier Geerinck,
@@ -1074,3 +1076,8 @@ declarative solution for modern application delivery on Kubernetes.
 39. Comparative Analysis of GitOps vs. Traditional Infrastructure Management
     Approaches,
     [https://www.researchgate.net/publication/388068285_Comparative_Analysis_of_GitOps_vs_Traditional_Infrastructure_Management_Approaches](https://www.researchgate.net/publication/388068285_Comparative_Analysis_of_GitOps_vs_Traditional_Infrastructure_Management_Approaches)
+
+[^23]: Manage your Cloudflare domains automatically with an Nginx Ingress
+controller and External DNS, together with SSL Certificates through Cert
+Manager - Xavier Geerinck,
+<https://xaviergeerinck.com/2025/01/28/manage-your-cloudflare-domains-automatically-with-an-nginx-ingress-controller-and-external-dns-together-with-ssl-certificates-through-cert-manager/>
