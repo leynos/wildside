@@ -113,8 +113,35 @@ API and WebSocket traffic.
 - **Implementation Tasks:**
 
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use the `actix-session` crate with a cookie-based backend. The signing key
-    must be loaded from an environment variable (`SESSION_KEY`).
+    Use the `actix-session` crate with a cookie-based backend. Load the signing
+    key from a secret store (for example, a Kubernetes Secret or Vault) and
+    mount or inject it for the service at runtime. Configure the session cookie
+    with `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and
+    explicit `domain` and `path`.
+
+    ```rust
+    use actix_session::{SessionMiddleware, storage::CookieSessionStore};
+    use actix_web::cookie::{CookieBuilder, Key, SameSite};
+
+    let key = Key::from(std::fs::read("/var/run/secrets/session_key")?);
+    let session_middleware = SessionMiddleware::builder(
+        CookieSessionStore::default(),
+        key,
+    )
+    .cookie_builder(
+        CookieBuilder::new("wildside", "")
+            .secure(true)
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .domain("example.com")
+            .path("/"),
+    )
+    .build();
+    ```
+
+    Deployment manifests in `deploy/k8s/` should mount the secret and expose its
+    path to the service (for instance, via a `SESSION_KEY_FILE` environment
+    variable).
 
   - [ ] **Observability:**
 
@@ -272,62 +299,62 @@ Null (NN), and Generalized Search Tree (GiST).
 
 **`users`**: Stores user account information.
 
-| Column       | Type          | Constraints                                | Description                 |
+| Column | Type | Constraints | Description |
 | ------------ | ------------- | ------------------------------------------ | --------------------------- |
-| `id`         | `UUID`        | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier.     |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of user creation. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()`                | Timestamp of last update.   |
+| `id` | `UUID` | `PRIMARY KEY`, `DEFAULT gen_random_uuid()` | Unique user identifier. |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of user creation. |
+| `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT NOW()` | Timestamp of last update. |
 
 **`interest_themes`**: A lookup table for available interest themes.
 
-| Column        | Type   | Notes                                         |
+| Column | Type | Notes |
 | ------------- | ------ | --------------------------------------------- |
-| `id`          | `UUID` | PK; default `gen_random_uuid()`               |
-| `name`        | `TEXT` | NN; unique; display name (e.g., "Street Art") |
-| `description` | `TEXT` | Optional short description                    |
+| `id` | `UUID` | PK; default `gen_random_uuid()` |
+| `name` | `TEXT` | NN; unique; display name (e.g., "Street Art") |
+| `description` | `TEXT` | Optional short description |
 
 **`user_interest_themes`**: A join table linking users to their selected themes.
 
-| Column     | Type   | Constraints                                       | Description                                 |
+| Column | Type | Constraints | Description |
 | ---------- | ------ | ------------------------------------------------- | ------------------------------------------- |
-| `user_id`  | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (users.id)`           | Foreign key to the `users` table.           |
+| `user_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (users.id)` | Foreign key to the `users` table. |
 | `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
 
 **`pois`**: Stores all Points of Interest.
 
-| Column             | Type                     | Notes                                       |
+| Column | Type | Notes |
 | ------------------ | ------------------------ | ------------------------------------------- |
-| `id`               | `BIGINT`                 | PK; OSM element ID                          |
-| `location`         | `GEOGRAPHY(Point, 4326)` | NN; GIST index                              |
-| `osm_tags`         | `JSONB`                  | OSM tags; GIN index                         |
-| `narrative`        | `TEXT`                   | Optional engaging description               |
-| `popularity_score` | `REAL`                   | Default 0.5; 0.0 hidden gem – 1.0 hotspot   |
+| `id` | `BIGINT` | PK; OSM element ID |
+| `location` | `GEOGRAPHY(Point, 4326)` | NN; GIST index |
+| `osm_tags` | `JSONB` | OSM tags; GIN index |
+| `narrative` | `TEXT` | Optional engaging description |
+| `popularity_score` | `REAL` | Default 0.5; 0.0 hidden gem – 1.0 hotspot |
 
 **`poi_interest_themes`**: A join table linking POIs to relevant themes.
 
-| Column     | Type     | Constraints                                       | Description                                 |
+| Column | Type | Constraints | Description |
 | ---------- | -------- | ------------------------------------------------- | ------------------------------------------- |
-| `poi_id`   | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)`            | Foreign key to the `pois` table.            |
-| `theme_id` | `UUID`   | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
+| `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
+| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
 
 **`routes`**: Stores generated walks.
 
-| Column              | Type                         | Notes                                 |
+| Column | Type | Notes |
 | ------------------- | ---------------------------- | ------------------------------------- |
-| `id`                | `UUID`                       | PK; default `gen_random_uuid()`       |
-| `user_id`           | `UUID`                       | FK `users.id`; nullable               |
-| `path`              | `GEOMETRY(LineString, 4326)` | Full path; GIST index                 |
-| `generation_params` | `JSONB`                      | Parameters used to generate the route |
-| `created_at`        | `TIMESTAMPTZ`                | NN; default `NOW()`                   |
+| `id` | `UUID` | PK; default `gen_random_uuid()` |
+| `user_id` | `UUID` | FK `users.id`; nullable |
+| `path` | `GEOMETRY(LineString, 4326)` | Full path; GIST index |
+| `generation_params` | `JSONB` | Parameters used to generate the route |
+| `created_at` | `TIMESTAMPTZ` | NN; default `NOW()` |
 
 **`route_pois`**: A join table to store the ordered sequence of POIs for a
 specific route.
 
-| Column     | Type      | Constraints                                   | Description                                  |
+| Column | Type | Constraints | Description |
 | ---------- | --------- | --------------------------------------------- | -------------------------------------------- |
-| `route_id` | `UUID`    | `PK (with poi_id)`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table.           |
-| `poi_id`   | `BIGINT`  | `PK (with route_id)`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table.             |
-| `position` | `INTEGER` | `NOT NULL`, `UNIQUE (route_id, position)`     | Sequential position of this POI in the walk. |
+| `route_id` | `UUID` | `PK (with poi_id)`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table. |
+| `poi_id` | `BIGINT` | `PK (with route_id)`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
+| `position` | `INTEGER` | `NOT NULL`, `UNIQUE (route_id, position)` | Sequential position of this POI in the walk. |
 
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
@@ -563,25 +590,25 @@ All REST endpoints are prefixed with `/api/v1`.
 
 #### User & Session Management
 
-| Method | Path                         | Description                                           | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | ---------------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/api/v1/users`              | Creates a new anonymous user session.                 | None           |
-| `GET`  | `/api/v1/users/me`           | Retrieves the current user's profile and preferences. | Session Cookie |
-| `PUT`  | `/api/v1/users/me/interests` | Updates the current user's selected interest themes.  | Session Cookie |
+| `POST` | `/api/v1/users` | Creates a new anonymous user session. | None |
+| `GET` | `/api/v1/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
+| `PUT` | `/api/v1/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
 
 #### Content
 
-| Method | Path                      | Description                                          | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | ------------------------- | ---------------------------------------------------- | -------------- |
-| `GET`  | `/api/v1/interest-themes` | Retrieves the list of all available interest themes. | None           |
+| `GET` | `/api/v1/interest-themes` | Retrieves the list of all available interest themes. | None |
 
 #### Routes
 
-| Method | Path                        | Description                                               | Authentication |
+| Method | Path | Description | Authentication |
 | ------ | --------------------------- | --------------------------------------------------------- | -------------- |
-| `POST` | `/api/v1/routes`            | Submits a request to generate a new walking route.        | Session Cookie |
-| `GET`  | `/api/v1/routes/{route_id}` | Retrieves a previously generated route by its ID.         | Session Cookie |
-| `GET`  | `/api/v1/users/me/routes`   | Retrieves a list of routes generated by the current user. | Session Cookie |
+| `POST` | `/api/v1/routes` | Submits a request to generate a new walking route. | Session Cookie |
+| `GET` | `/api/v1/routes/{route_id}` | Retrieves a previously generated route by its ID. | Session Cookie |
+| `GET` | `/api/v1/users/me/routes` | Retrieves a list of routes generated by the current user. | Session Cookie |
 
 **`POST /api/v1/routes` Request Body:**
 

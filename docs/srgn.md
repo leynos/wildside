@@ -42,8 +42,8 @@ overloaded across different domains. This guide is exclusively dedicated to
 `alexpovel/srgn`, the command-line code search and manipulation utility.[^1]
 Other projects bearing a similar name are unrelated to the tool discussed here.
 These include, but are not limited to, SRGAN, a Generative Adversarial Network
-for image super-resolution 3; SRGN, a high-energy physics technique for
-parameter estimation 4; and SRGN (SolRagon), a cryptocurrency token.[^6] This
+for image super-resolution[^3]; SRGN, a high-energy physics technique for
+parameter estimation[^4]; and SRGN (SolRagon), a cryptocurrency token.[^6] This
 report focuses solely on the code refactoring tool.
 
 ### 1.3 Core Philosophy: Scopes, Actions, and Intentional Simplicity
@@ -61,7 +61,7 @@ are working with, you are good to go".[^2] This philosophy distinguishes
 
 `srgn` from other advanced code-querying tools. While tools like Semgrep use a
 declarative, template-based syntax with metavariables (`$X`) and ellipses
-(`...`) to find code that matches an abstract pattern 8,
+(`...`) to find code that matches an abstract pattern[^8],
 
 `srgn` employs a more direct approach.
 
@@ -451,7 +451,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
 
   2. `'def\s+\w+\(.*\):\n\s+[^"''#\s]'`: This multi-line regex is then applied.
      It looks for a `def` signature followed by a newline and indentation
-     (`\n\s+`). The crucial part is the negative character class `[^"''#\s]`,
+      (`\n\s+`). The crucial part is the negative character class `[^"''#\s]`,
      which matches any character that is *not* a double quote, a single quote,
      a comment hash, or whitespace. If this pattern matches the first
      non-whitespace character after the function signature, it means the first
@@ -612,81 +612,71 @@ ______________________________________________________________________
 
 ## Appendix: Grammar Scope Reference
 
-### A.[^1] A Note on This List
+### A. Note on this list
+
+[^1]
 
 The following tables list the known language grammar scopes for Python and
 Rust. This reference has been meticulously compiled from the official `srgn`
 documentation, README examples, and GitHub release notes.[^2] As direct
 inspection of the
 
-`PreparedQuery` source enum was not possible during research 15, this list
+`PreparedQuery` source enum was not possible during research[^15], this list
 should be considered comprehensive but potentially subject to change in future
 
 `srgn` versions. Users can often discover available scopes by providing an
 invalid one, as `srgn` will helpfully list the valid options.[^9]
 
-### A.2 Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
+### A. Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-| Scope Name                 | Description                                                | Example Command                                        |
+[^2]
+
+| Scope Name | Description | Example Command |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe                     | Selects unsafe blocks and unsafe function definitions.     | srgn --rs 'unsafe' '.'                                 |
-| comments                   | Selects line (`//`) and block (`/* ... */`) comments.      | srgn --rs 'comments' 'HACK'                            |
-| strings                    | Selects the content of all string literals.                | srgn --rs 'strings' 'password'                         |
-| attribute                  | Selects attributes (`#[...]` and `#![...]`).               | srgn --rs 'attribute' 'deprecated'                     |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
-| pub-enum                   | Selects public enum definitions.                           | srgn --rs 'pub-enum' 'MyEnum'                          |
-| type-identifier            | Selects identifiers that refer to a type.                  | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct                     | Selects struct definitions.                                | srgn --rs 'struct' 'RequestPayload'                    |
-| impl                       | Selects impl blocks.                                       | srgn --rs 'impl' 'MyTrait for MyStruct'                |
-| fn                         | Selects function definitions.                              | srgn --rs 'fn' 'main'                                  |
-| extern-crate               | Selects `extern crate ...;` declarations.                  | srgn --rs 'extern-crate' 'libc'                        |
+| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
+| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
+| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
+| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
+| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
+| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
+| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
+| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
+| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
+| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
+| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
 
 ## Works Cited
 
-1. alexpovel/srgn: A grep-like tool which understands source code syntax and
-    allows for manipulation in addition to search - GitHub, accessed on July
-    11, 2025, <https://github.com/alexpovel/srgn>
+[^1]: alexpovel/srgn: A grep-like tool which understands source code syntax and
+allows for manipulation in addition to search - GitHub, accessed on July
+11, 2025, <https://github.com/alexpovel/srgn>
 
-2. srgn/README.md at main · alexpovel/srgn · GitHub,
-    accessed on July 11, 2025,
-    <https://github.com/alexpovel/srgn/blob/main/README.md>
+[^2]: srgn/README.md at main · alexpovel/srgn · GitHub, accessed on July 11,
+2025, <https://github.com/alexpovel/srgn/blob/main/README.md>
 
-3. Lornatang/SRGAN-PyTorch: A simple and complete implementation of
-    super-resolution paper. - GitHub, accessed on July 11, 2025,
-    <https://github.com/Lornatang/SRGAN-PyTorch>
+[^3]: Lornatang/SRGAN-PyTorch: A simple and complete implementation of
+super-resolution paper. - GitHub, accessed on July 11, 2025,
+<https://github.com/Lornatang/SRGAN-PyTorch>
 
-4. hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
-    <https://github.com/hep-lbdl/SRGN>
+[^4]: hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
+<https://github.com/hep-lbdl/SRGN>
 
-5. Security - hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
-    <https://github.com/hep-lbdl/SRGN/security>
-
-6. How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
-    Beginner's Tutorial · Issue #5 · synthesizearrayHSy/generatemonitorGhZ -
-    GitHub, accessed on July 11, 2025,
+[^6]: How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
+    Beginner's Tutorial · Issue #5 ·
+    synthesizearrayHSy/generatemonitorGhZ - GitHub, accessed on July 11, 2025,
     <https://github.com/synthesizearrayHSy/generatemonitorGhZ/issues/5>
 
-7. srgn - Rust - Docs.rs, accessed on July 11, 2025,
-    <https://docs.rs/srgn>
+[^7]: srgn - Rust - Docs.rs, accessed on July 11, 2025,
+<https://docs.rs/srgn>
 
-8. Pattern syntax - Semgrep, accessed on July 11, 2025,
-    <https://semgrep.dev/docs/writing-rules/pattern-syntax>
+[^8]: Pattern syntax - Semgrep, accessed on July 11, 2025,
+<https://semgrep.dev/docs/writing-rules/pattern-syntax>
 
-9. Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
-    <https://github.com/alexpovel/srgn/releases>
-10. Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
+[^9]: Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
+<https://github.com/alexpovel/srgn/releases>
+
+[^10]: Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
     July 11, 2025, <https://realpython.com/python-scope-legb-rule/>
-11. Scopes - The Rust Reference, accessed on July 11, 2025,
-    <https://doc.rust-lang.org/reference/names/scopes.html>
-12. I can't understand the Rust "scope" definition (Rust Programming Language,
-    2nd Ed. Klabnik & Nichols) - Stack Overflow, accessed on July 11, 2025,
-    <https://stackoverflow.com/questions/77423163/i-cant-understand-the-rust-scope-definition-rust-programming-language-2nd-e>
-13. betterletter/README.md at main · alexpovel/betterletter · GitHub,
-    accessed on July 11, 2025,
-    <https://github.com/alexpovel/betterletter/blob/main/README.md>
-14. srgn - Rust Package Registry - Crates.io, accessed on July 11, 2025,
-    <https://crates.io/crates/srgn/>
-15. srgn language scopes, accessed on July 11, 2025,
+
+[^15]: srgn language scopes, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
-16. Rust scope definition, accessed on July 11, 2025,
-    <https://github.com/alexpovel/srgn/blob/main/src/scoping/langs/rust.rs>
