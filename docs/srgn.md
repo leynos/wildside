@@ -627,19 +627,19 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 
 ### A.[^2] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-| Scope Name                 | Description                                                | Example Command                                        |
+| Scope Name | Description | Example Command |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe                     | Selects unsafe blocks and unsafe function definitions.     | srgn --rs 'unsafe' '.'                                 |
-| comments                   | Selects line (`//`) and block (`/* ... */`) comments.      | srgn --rs 'comments' 'HACK'                            |
-| strings                    | Selects the content of all string literals.                | srgn --rs 'strings' 'password'                         |
-| attribute                  | Selects attributes (`#[...]` and `#![...]`).               | srgn --rs 'attribute' 'deprecated'                     |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
-| pub-enum                   | Selects public enum definitions.                           | srgn --rs 'pub-enum' 'MyEnum'                          |
-| type-identifier            | Selects identifiers that refer to a type.                  | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct                     | Selects struct definitions.                                | srgn --rs 'struct' 'RequestPayload'                    |
-| impl                       | Selects impl blocks.                                       | srgn --rs 'impl' 'MyTrait for MyStruct'                |
-| fn                         | Selects function definitions.                              | srgn --rs 'fn' 'main'                                  |
-| extern-crate               | Selects `extern crate ...;` declarations.                  | srgn --rs 'extern-crate' 'libc'                        |
+| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
+| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
+| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
+| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
+| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
+| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
+| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
+| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
+| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
+| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
+| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
 
 ## Works Cited
 

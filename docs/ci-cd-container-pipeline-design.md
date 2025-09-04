@@ -337,9 +337,9 @@ minimizing the window of exposure.[^15]
 Ensuring the Kubernetes deployment uses the newly built image tag is crucial
 for automated release. Instead of editing manifests, `kubectl set image` can
 patch the running deployment directly with
-`kubectl set image deployment/${K8S_DEPLOYMENT_NAME} ${K8S_CONTAINER_NAME}=${TAGGED_IMAGE}`
- .[^15] For more complex applications, tools like Kustomize or Helm can provide
-more structured manifest management.
+`kubectl set image deployment/${K8S_DEPLOYMENT_NAME} app=${TAGGED_IMAGE}`.[^15]
+For more complex applications, tools like Kustomize or Helm can provide more
+structured manifest management.
 
 With the image updated and the `kubeconfig` in place, the deployment rolls out
 immediately. This entire sequence demonstrates that a CI/CD pipeline is
@@ -465,6 +465,7 @@ jobs:
 ```
 
 Note: replace `app` with the container name defined in your Deployment spec.
+
 ______________________________________________________________________
 
 ## Part III: Accelerating Container Builds - A Comparative Analysis
@@ -562,14 +563,14 @@ is essential to making the correct architectural choice.
 The following table provides a direct comparison to aid in this decision-making
 process.
 
-| Feature                | Standard GitHub Runner                             | Blacksmith                                                      | Depot                                                                                      |
+| Feature | Standard GitHub Runner | Blacksmith | Depot |
 | ---------------------- | -------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Integration Method** | Default (`runs-on: ubuntu-latest`)                 | Runner Replacement (`runs-on: blacksmith-runner`)               | Action Replacement (`uses: depot/build-push-action`)                                       |
-| **Primary Benefit**    | Convenience, no extra cost                         | Faster general-purpose compute (all job steps)                  | Specialized `docker build` acceleration                                                    |
-| **Caching Mechanism**  | Slow I/O with `actions/cache` (tarball-based)      | Faster dependency caching; Docker layer cache is an add-on      | Instant, persistent SSD cache for Docker layers                                            |
-| **Multi-Arch Support** | Slow (QEMU Emulation)                              | Faster hardware, but still relies on slow QEMU emulation        | Fast (Native Compilation on dedicated ARM/x86 builders)                                    |
-| **Pricing Model**      | Included minutes, then per-minute                  | Per-minute (lower rate, faster execution)                       | Tiered plans (build minutes + storage)                                                     |
-| **Ideal Use Case**     | Simple, infrequent builds; cost-sensitive projects | Workflows where the entire job is slow (e.g., long test suites) | Workflows where `docker build` is the primary bottleneck, especially with multi-arch needs |
+| **Integration Method** | Default (`runs-on: ubuntu-latest`) | Runner Replacement (`runs-on: blacksmith-runner`) | Action Replacement (`uses: depot/build-push-action`) |
+| **Primary Benefit** | Convenience, no extra cost | Faster general-purpose compute (all job steps) | Specialized `docker build` acceleration |
+| **Caching Mechanism** | Slow I/O with `actions/cache` (tarball-based) | Faster dependency caching; Docker layer cache is an add-on | Instant, persistent SSD cache for Docker layers |
+| **Multi-Arch Support** | Slow (QEMU Emulation) | Faster hardware, but still relies on slow QEMU emulation | Fast (Native Compilation on dedicated ARM/x86 builders) |
+| **Pricing Model** | Included minutes, then per-minute | Per-minute (lower rate, faster execution) | Tiered plans (build minutes + storage) |
+| **Ideal Use Case** | Simple, infrequent builds; cost-sensitive projects | Workflows where the entire job is slow (e.g., long test suites) | Workflows where `docker build` is the primary bottleneck, especially with multi-arch needs |
 
 **Decision Guidance:**
 
@@ -750,69 +751,69 @@ efficient approach to CI/CD resource management.
 The appropriate level of abstraction depends on the project's context. The
 following matrix provides guidance on selecting a strategy.
 
-| Project Complexity                         | Recommended Agnostic Strategy                   | Rationale                                                                                            |
+| Project Complexity | Recommended Agnostic Strategy | Rationale |
 | ------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Solo Project, Single Cloud**             | Minimal Abstraction (Platform-Specific Actions) | Speed of development is paramount; the cost of abstraction outweighs the low risk of vendor lock-in. |
-| **Team Project, Multi-Environment**        | Script-Based Abstraction                        | Encapsulating logic in scripts ensures consistency between dev/staging/prod and is easily portable.  |
-| **Enterprise, Strict Portability Mandate** | Advanced Abstraction (Dagger Engine or similar) | Guarantees true portability and satisfies strict governance requirements for CI/CD infrastructure.   |
+| **Solo Project, Single Cloud** | Minimal Abstraction (Platform-Specific Actions) | Speed of development is paramount; the cost of abstraction outweighs the low risk of vendor lock-in. |
+| **Team Project, Multi-Environment** | Script-Based Abstraction | Encapsulating logic in scripts ensures consistency between dev/staging/prod and is easily portable. |
+| **Enterprise, Strict Portability Mandate** | Advanced Abstraction (Dagger Engine or similar) | Guarantees true portability and satisfies strict governance requirements for CI/CD infrastructure. |
 
 By adopting these principles, teams can build CI/CD pipelines that are not only
 powerful and efficient today but also flexible and resilient enough to adapt to
 the technological and business needs of tomorrow.
 
-[^1]: Publishing and installing a package with GitHub Actions - GitHub Docs,
-      [https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions](https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions)
-[^2]: Use GITHUB_TOKEN for authentication in workflows - GitHub Docs,
-      [https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)
-[^3]: Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR Â· Actions -
-      GitHub,
-      [https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr)
-      [https://github.com/marketplace/actions/push-to-ghcr](https://github.com/marketplace/actions/push-to-ghcr)
-[^5]: GitHub Action to build and push Docker images with Buildx,
-      [https://github.com/docker/build-push-action](https://github.com/docker/build-push-action)
-[^6]: Depot - GitHub, [https://github.com/depot](https://github.com/depot)
-[^7]: GitHub Actions | Integrations | Depot - [Depot.dev](https://depot.dev),
-      [https://depot.dev/integrations/github-actions](https://depot.dev/integrations/github-actions)
-[^8]: GitHub Actions container builds take forever : r/rust - Reddit,
-      [https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/](https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/)
-      [https://docs.docker.com/build/ci/github-actions/multi-platform/](https://docs.docker.com/build/ci/github-actions/multi-platform/)
-[^10]: Pull an Image from a Private Registry | Kubernetes,
-       [https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
-[^11]: What is the appropriate way to set image pull secrets for images being
-       sourced from github to avoid pull rate limits? Â· community Â·
-       Discussion #160722,
-       [https://github.com/orgs/community/discussions/160722](https://github.com/orgs/community/discussions/160722)
-       [https://www.deploykf.org/guides/platform/image-pull-secrets/](https://www.deploykf.org/guides/platform/image-pull-secrets/)
-       [https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/)
-[^14]: How to Use Your Private DigitalOcean Container Registry with Docker and
-       Kubernetes,
-       [https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/](https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/)
-[^15]: Enable Push-to-Deploy on DigitalOcean Kubernetes Using GitHub â¦,
-       [https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/](https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/)
-[^16]: Blacksmith: The Fastest Way to Run GitHub Actions,
-       [https://www.blacksmith.sh/](https://www.blacksmith.sh/)
-       [https://www.blacksmith.sh/github-actions-cost-reduction](https://www.blacksmith.sh/github-actions-cost-reduction)
-[^18]: Blacksmith Pricing | Fast GitHub Actions with Up to 75% Cost Savings,
-       [https://www.blacksmith.sh/pricing](https://www.blacksmith.sh/pricing)
-       [https://github.com/depot/build-push-action](https://github.com/depot/build-push-action)
-[^20]: GitHub Actions | Container Builds | Depot Documentation,
-       [https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions)
-       [https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview)
-        [https://depot.dev/pricing](https://depot.dev/pricing)
-[^23]: Designing healthy and agnostic CI/CD pipelines | avivace,
-       [https://avivace.com/posts/agnostic-cicd/](https://avivace.com/posts/agnostic-cicd/)
-       [https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally](https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally)
-[^25]: CICD Patterns with GitHub Actions and Docker - Hosting Data Apps -
-       Analythium Solutions,
-       [https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/](https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/)
-[^26]: Becoming CI Provider Agnostic With Dagger | Arsh Sharma,
-       [https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/](https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/)
-[^27]: Evaluate expressions in workflows and actions - GitHub Docs,
-       [https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions](https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions)
-       [https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/](https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/)
-[^29]: GitHub Actions: Does the IF have an ELSE? - Stack Overflow,
-       [https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else](https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else)
-       [https://hungvu.tech/advanced-github-actions-conditional-workflow/](https://hungvu.tech/advanced-github-actions-conditional-workflow/)
-[^31]: Using jobs in a workflow - GitHub Docs,
-       [https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow](https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow)
-       [https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow)
+\[^1\]: Publishing and installing a package with GitHub Actions - GitHub Docs,
+[https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions](https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions)
+\[^2\]: Use GITHUB_TOKEN for authentication in workflows - GitHub Docs,
+[https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)
+\[^3\]: Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR Â· Actions -
+GitHub,
+[https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr)
+[https://github.com/marketplace/actions/push-to-ghcr](https://github.com/marketplace/actions/push-to-ghcr)
+\[^5\]: GitHub Action to build and push Docker images with Buildx,
+[https://github.com/docker/build-push-action](https://github.com/docker/build-push-action)
+\[^6\]: Depot - GitHub, [https://github.com/depot](https://github.com/depot)
+\[^7\]: GitHub Actions | Integrations | Depot - [Depot.dev](https://depot.dev),
+[https://depot.dev/integrations/github-actions](https://depot.dev/integrations/github-actions)
+\[^8\]: GitHub Actions container builds take forever : r/rust - Reddit,
+[https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/](https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/)
+[https://docs.docker.com/build/ci/github-actions/multi-platform/](https://docs.docker.com/build/ci/github-actions/multi-platform/)
+\[^10\]: Pull an Image from a Private Registry | Kubernetes,
+[https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
+\[^11\]: What is the appropriate way to set image pull secrets for images being
+sourced from github to avoid pull rate limits? Â· community Â·
+Discussion #160722,
+[https://github.com/orgs/community/discussions/160722](https://github.com/orgs/community/discussions/160722)
+[https://www.deploykf.org/guides/platform/image-pull-secrets/](https://www.deploykf.org/guides/platform/image-pull-secrets/)
+[https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/)
+\[^14\]: How to Use Your Private DigitalOcean Container Registry with Docker and
+Kubernetes,
+[https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/](https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/)
+\[^15\]: Enable Push-to-Deploy on DigitalOcean Kubernetes Using GitHub â¦,
+[https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/](https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/)
+\[^16\]: Blacksmith: The Fastest Way to Run GitHub Actions,
+[https://www.blacksmith.sh/](https://www.blacksmith.sh/)
+[https://www.blacksmith.sh/github-actions-cost-reduction](https://www.blacksmith.sh/github-actions-cost-reduction)
+\[^18\]: Blacksmith Pricing | Fast GitHub Actions with Up to 75% Cost Savings,
+[https://www.blacksmith.sh/pricing](https://www.blacksmith.sh/pricing)
+[https://github.com/depot/build-push-action](https://github.com/depot/build-push-action)
+\[^20\]: GitHub Actions | Container Builds | Depot Documentation,
+[https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions)
+[https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview)
+[https://depot.dev/pricing](https://depot.dev/pricing)
+\[^23\]: Designing healthy and agnostic CI/CD pipelines | avivace,
+[https://avivace.com/posts/agnostic-cicd/](https://avivace.com/posts/agnostic-cicd/)
+[https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally](https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally)
+\[^25\]: CICD Patterns with GitHub Actions and Docker - Hosting Data Apps -
+Analythium Solutions,
+[https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/](https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/)
+\[^26\]: Becoming CI Provider Agnostic With Dagger | Arsh Sharma,
+[https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/](https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/)
+\[^27\]: Evaluate expressions in workflows and actions - GitHub Docs,
+[https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions](https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions)
+[https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/](https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/)
+\[^29\]: GitHub Actions: Does the IF have an ELSE? - Stack Overflow,
+[https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else](https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else)
+[https://hungvu.tech/advanced-github-actions-conditional-workflow/](https://hungvu.tech/advanced-github-actions-conditional-workflow/)
+\[^31\]: Using jobs in a workflow - GitHub Docs,
+[https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow](https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow)
+[https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow)
