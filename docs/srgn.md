@@ -627,73 +627,66 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 
 ### A.2 Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-| Scope Name | Description | Example Command |
+| Scope Name                 | Description                                                | Example Command                                        |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
-| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
-| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
-| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
-| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
-| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
-| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
-| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
-| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
+| unsafe                     | Selects unsafe blocks and unsafe function definitions.     | srgn --rs 'unsafe' '.'                                 |
+| comments                   | Selects line (`//`) and block (`/* ... */`) comments.      | srgn --rs 'comments' 'HACK'                            |
+| strings                    | Selects the content of all string literals.                | srgn --rs 'strings' 'password'                         |
+| attribute                  | Selects attributes (`#[...]` and `#![...]`).               | srgn --rs 'attribute' 'deprecated'                     |
+| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
+| pub-enum                   | Selects public enum definitions.                           | srgn --rs 'pub-enum' 'MyEnum'                          |
+| type-identifier            | Selects identifiers that refer to a type.                  | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
+| struct                     | Selects struct definitions.                                | srgn --rs 'struct' 'RequestPayload'                    |
+| impl                       | Selects impl blocks.                                       | srgn --rs 'impl' 'MyTrait for MyStruct'                |
+| fn                         | Selects function definitions.                              | srgn --rs 'fn' 'main'                                  |
+| extern-crate               | Selects `extern crate ...;` declarations.                  | srgn --rs 'extern-crate' 'libc'                        |
 
 ## Works Cited
 
-01. alexpovel/srgn: A grep-like tool which understands source code syntax and
+1. alexpovel/srgn: A grep-like tool which understands source code syntax and
     allows for manipulation in addition to search - GitHub, accessed on July
     11, 2025, <https://github.com/alexpovel/srgn>
 
-02. srgn/README.md at main · alexpovel/srgn · GitHub,
+2. srgn/README.md at main · alexpovel/srgn · GitHub,
     accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/blob/main/README.md>
 
-03. Lornatang/SRGAN-PyTorch: A simple and complete implementation of
+3. Lornatang/SRGAN-PyTorch: A simple and complete implementation of
     super-resolution paper. - GitHub, accessed on July 11, 2025,
     <https://github.com/Lornatang/SRGAN-PyTorch>
 
-04. hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
+4. hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
     <https://github.com/hep-lbdl/SRGN>
 
-05. Security - hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
+5. Security - hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
     <https://github.com/hep-lbdl/SRGN/security>
 
-06. How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
+6. How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
     Beginner's Tutorial · Issue #5 · synthesizearrayHSy/generatemonitorGhZ -
     GitHub, accessed on July 11, 2025,
     <https://github.com/synthesizearrayHSy/generatemonitorGhZ/issues/5>
 
-07. srgn - Rust - Docs.rs, accessed on July 11, 2025,
+7. srgn - Rust - Docs.rs, accessed on July 11, 2025,
     <https://docs.rs/srgn>
 
-08. Pattern syntax - Semgrep, accessed on July 11, 2025,
+8. Pattern syntax - Semgrep, accessed on July 11, 2025,
     <https://semgrep.dev/docs/writing-rules/pattern-syntax>
 
-09. Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
+9. Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/releases>
-
 10. Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
     July 11, 2025, <https://realpython.com/python-scope-legb-rule/>
-
 11. Scopes - The Rust Reference, accessed on July 11, 2025,
     <https://doc.rust-lang.org/reference/names/scopes.html>
-
 12. I can't understand the Rust "scope" definition (Rust Programming Language,
     2nd Ed. Klabnik & Nichols) - Stack Overflow, accessed on July 11, 2025,
     <https://stackoverflow.com/questions/77423163/i-cant-understand-the-rust-scope-definition-rust-programming-language-2nd-e>
-
 13. betterletter/README.md at main · alexpovel/betterletter · GitHub,
     accessed on July 11, 2025,
     <https://github.com/alexpovel/betterletter/blob/main/README.md>
-
 14. srgn - Rust Package Registry - Crates.io, accessed on July 11, 2025,
     <https://crates.io/crates/srgn/>
-
 15. srgn language scopes, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
-
 16. Rust scope definition, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/blob/main/src/scoping/langs/rust.rs>

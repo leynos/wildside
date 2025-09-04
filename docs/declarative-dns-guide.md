@@ -86,13 +86,13 @@ reacts in real-time to the application lifecycle. This decoupling is a
 significant architectural advantage that enhances both operational stability
 and development velocity.
 
-| Component | Primary Role | Scope of Control | Managed By |
+| Component       | Primary Role                | Scope of Control                                                                | Managed By                             |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
-| **Kubernetes** | Application Orchestration | Manages the lifecycle of containers, Pods, Services, and Ingresses. | Platform/Application Teams |
-| **Cloudflare** | Authoritative DNS Provider | Hosts and resolves public DNS records; provides edge network services. | OpenTofu (Zone), ExternalDNS (Records) |
-| **ExternalDNS** | DNS Automation Controller | Translates Kubernetes resources into Cloudflare DNS records. | FluxCD |
-| **FluxCD** | GitOps Operator | Synchronizes the entire Kubernetes cluster state with a Git repository. | Platform Team |
-| **OpenTofu** | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team |
+| **Kubernetes**  | Application Orchestration   | Manages the lifecycle of containers, Pods, Services, and Ingresses.             | Platform/Application Teams             |
+| **Cloudflare**  | Authoritative DNS Provider  | Hosts and resolves public DNS records; provides edge network services.          | OpenTofu (Zone), ExternalDNS (Records) |
+| **ExternalDNS** | DNS Automation Controller   | Translates Kubernetes resources into Cloudflare DNS records.                    | FluxCD                                 |
+| **FluxCD**      | GitOps Operator             | Synchronizes the entire Kubernetes cluster state with a Git repository.         | Platform Team                          |
+| **OpenTofu**    | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team                          |
 
 ### 1.3 The End-to-End Data and Control Flow
 
@@ -957,8 +957,7 @@ declarative solution for modern application delivery on Kubernetes.
 [https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/](https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/)
 
 [^3]: GitOps for Azure Kubernetes Service - Azure Architecture Center |
-Microsoft
-Learn,
+Microsoft Learn,
 [https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks)
 
 [^6]: External DNS - Funky Penguin’s Geek Cookbook,
@@ -1022,8 +1021,7 @@ kubernetes-sigs/external-dns,
 [https://github.com/kubernetes-sigs/external-dns/issues/3956](https://github.com/kubernetes-sigs/external-dns/issues/3956)
 
 [^33]: Automated DNS Record Management for Kubernetes Resources using
-external-dns
-and AWS Route53 - DEV Community,
+external-dns and AWS Route53 - DEV Community,
 [https://dev.to/suin/automated-dns-record-management-for-kubernetes-resources-using-external-dns-and-aws-route53-cnm](https://dev.to/suin/automated-dns-record-management-for-kubernetes-resources-using-external-dns-and-aws-route53-cnm)
 
 [^39]: Comparative Analysis of GitOps vs. Traditional Infrastructure Management

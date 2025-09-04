@@ -196,19 +196,20 @@ be met.8
 1. **Meet Prerequisites:** Ensure the account meets at least one of the
    following criteria:
 
-- Has at least 20 domains registered.
-- Has an account balance of at least $50.
-- Has spent at least $50 in the last two years.
+   - Has at least 20 domains registered.
+   - Has an account balance of at least $50.
+   - Has spent at least $50 in the last two years.
 
-1. **Enable API Access:**
+2. **Enable API Access:**
 
-- Log in to the Namecheap account.
-- Navigate to `Profile` > `Tools`.
-- Scroll to the "Business & Dev Tools" section and click `MANAGE` next to
-  "Namecheap API Access."
-- Toggle the feature `ON`, accept the terms, and enter the account password.10
+   - Log in to the Namecheap account.
+   - Navigate to `Profile` > `Tools`.
+   - Scroll to the "Business & Dev Tools" section and click `MANAGE` next to
+     "Namecheap API Access."
+   - Toggle the feature `ON`, accept the terms, and enter the account
+     password.10
 
-1. **Retrieve Credentials:** Once enabled, the system will provide an `APIKey`.
+3. **Retrieve Credentials:** Once enabled, the system will provide an `APIKey`.
    The `API User` is the same as the Namecheap account username. These two
    values are the credentials required for the OpenTofu provider and the
    in-cluster webhook.
@@ -288,59 +289,59 @@ The SOPS workflow proceeds as follows:
    typically in the `flux-system` namespace. This allows the FluxCD
    `kustomize-controller` to access it for decryption.18
 
-```bash
-# (Assuming GPG key is already generated)
-gpg --export-secret-keys --armor <KEY_FINGERPRINT> | \
-  kubectl create secret generic sops-gpg \
-  --namespace=flux-system \
-  --from-file=sops.asc=/dev/stdin
+    ```bash
+    # (Assuming GPG key is already generated)
+    gpg --export-secret-keys --armor <KEY_FINGERPRINT> | \
+      kubectl create secret generic sops-gpg \
+      --namespace=flux-system \
+      --from-file=sops.asc=/dev/stdin
 
-```
+    ```
 
-1. **Create and Encrypt the Namecheap Secret:** A standard Kubernetes `Secret`
+3. **Create and Encrypt the Namecheap Secret:** A standard Kubernetes `Secret`
    manifest is created locally to hold the Namecheap API credentials. The
    `sops` CLI is then used to encrypt the `data` field of this manifest.
 
-```yaml
-# namecheap-api-credentials.yaml (before encryption)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: namecheap-api-credentials
-  namespace: cert-manager
-stringData:
-  api-key: "YOUR_NAMECHEAP_API_KEY"
-  api-user: "YOUR_NAMECHEAP_USERNAME"
+    ```yaml
+    # namecheap-api-credentials.yaml (before encryption)
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: namecheap-api-credentials
+      namespace: cert-manager
+    stringData:
+      api-key: "YOUR_NAMECHEAP_API_KEY"
+      api-user: "YOUR_NAMECHEAP_USERNAME"
 
-```
+    ```
 
-```bash
-# Encrypt the secret in-place
-sops --encrypt --in-place namecheap-api-credentials.yaml
+    ```bash
+    # Encrypt the secret in-place
+    sops --encrypt --in-place namecheap-api-credentials.yaml
 
-```
+    ```
 
-1. **Commit the Encrypted Secret:** The resulting encrypted file is safe to
+4. **Commit the Encrypted Secret:** The resulting encrypted file is safe to
    commit to the Git repository.
-2. **Configure FluxCD for Decryption:** The `Kustomization` resource in FluxCD
+5. **Configure FluxCD for Decryption:** The `Kustomization` resource in FluxCD
    that points to the directory containing the encrypted secret must be
    configured to enable decryption.
 
-```yaml
-# infrastructure/controllers/kustomization.yaml
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: cert-manager-stack
-  namespace: flux-system
-spec:
-  #... other settings
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-gpg
+    ```yaml
+    # infrastructure/controllers/kustomization.yaml
+    apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    metadata:
+      name: cert-manager-stack
+      namespace: flux-system
+    spec:
+      #... other settings
+      decryption:
+        provider: sops
+        secretRef:
+          name: sops-gpg
 
-```
+    ```
 
 This setup ensures that sensitive credentials remain encrypted at rest in Git
 and are only handled in plain text within the secure confines of the cluster's
@@ -763,19 +764,19 @@ Look for a `Ready` condition with a status of `True` and an event of
    attempt to obtain a certificate. A new one is created for each issuance or
    renewal.
 
-```bash
-kubectl get certificaterequest -n <namespace>
+    ```bash
+    kubectl get certificaterequest -n <namespace>
 
-```
+    ```
 
-1. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
+2. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
    resource is created to manage the ACME order process. It tracks the status
    of the required challenges.
 
-```bash
-kubectl describe order <order-name> -n <namespace>
+    ```bash
+    kubectl describe order <order-name> -n <namespace>
 
-```
+    ```
 
 The output will list the associated `Challenge` resources and their current
 state.38

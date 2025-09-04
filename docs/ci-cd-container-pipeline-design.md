@@ -343,8 +343,7 @@ suited to ad-hoc fixes or development clusters.
 In a GitOps workflow managed by Flux, avoid direct cluster edits. Commit the
 new image tag to the `HelmRelease` in the Git repository and let Flux reconcile
 the change into the cluster. For more complex applications, tools like
-Kustomize or Helm provide structured
-manifest management.
+Kustomize or Helm provide structured manifest management.
 
 With the image updated and the `kubeconfig` in place, the deployment rolls out
 immediately. This entire sequence demonstrates that a CI/CD pipeline is
@@ -568,14 +567,14 @@ is essential to making the correct architectural choice.
 The following table provides a direct comparison to aid in this decision-making
 process.
 
-| Feature | Standard GitHub Runner | Blacksmith | Depot |
+| Feature                | Standard GitHub Runner                             | Blacksmith                                                      | Depot                                                                                      |
 | ---------------------- | -------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Integration Method** | Default (`runs-on: ubuntu-latest`) | Runner Replacement (`runs-on: blacksmith-runner`) | Action Replacement (`uses: depot/build-push-action`) |
-| **Primary Benefit** | Convenience, no extra cost | Faster general-purpose compute (all job steps) | Specialized `docker build` acceleration |
-| **Caching Mechanism** | Slow I/O with `actions/cache` (tarball-based) | Faster dependency caching; Docker layer cache is an add-on | Instant, persistent SSD cache for Docker layers |
-| **Multi-Arch Support** | Slow (QEMU Emulation) | Faster hardware, but still relies on slow QEMU emulation | Fast (Native Compilation on dedicated ARM/x86 builders) |
-| **Pricing Model** | Included minutes, then per-minute | Per-minute (lower rate, faster execution) | Tiered plans (build minutes + storage) |
-| **Ideal Use Case** | Simple, infrequent builds; cost-sensitive projects | Workflows where the entire job is slow (e.g., long test suites) | Workflows where `docker build` is the primary bottleneck, especially with multi-arch needs |
+| **Integration Method** | Default (`runs-on: ubuntu-latest`)                 | Runner Replacement (`runs-on: blacksmith-runner`)               | Action Replacement (`uses: depot/build-push-action`)                                       |
+| **Primary Benefit**    | Convenience, no extra cost                         | Faster general-purpose compute (all job steps)                  | Specialized `docker build` acceleration                                                    |
+| **Caching Mechanism**  | Slow I/O with `actions/cache` (tarball-based)      | Faster dependency caching; Docker layer cache is an add-on      | Instant, persistent SSD cache for Docker layers                                            |
+| **Multi-Arch Support** | Slow (QEMU Emulation)                              | Faster hardware, but still relies on slow QEMU emulation        | Fast (Native Compilation on dedicated ARM/x86 builders)                                    |
+| **Pricing Model**      | Included minutes, then per-minute                  | Per-minute (lower rate, faster execution)                       | Tiered plans (build minutes + storage)                                                     |
+| **Ideal Use Case**     | Simple, infrequent builds; cost-sensitive projects | Workflows where the entire job is slow (e.g., long test suites) | Workflows where `docker build` is the primary bottleneck, especially with multi-arch needs |
 
 **Decision Guidance:**
 
@@ -756,11 +755,11 @@ efficient approach to CI/CD resource management.
 The appropriate level of abstraction depends on the project's context. The
 following matrix provides guidance on selecting a strategy.
 
-| Project Complexity | Recommended Agnostic Strategy | Rationale |
+| Project Complexity                         | Recommended Agnostic Strategy                   | Rationale                                                                                            |
 | ------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Solo Project, Single Cloud** | Minimal Abstraction (Platform-Specific Actions) | Speed of development is paramount; the cost of abstraction outweighs the low risk of vendor lock-in. |
-| **Team Project, Multi-Environment** | Script-Based Abstraction | Encapsulating logic in scripts ensures consistency between dev/staging/prod and is easily portable. |
-| **Enterprise, Strict Portability Mandate** | Advanced Abstraction (Dagger Engine or similar) | Guarantees true portability and satisfies strict governance requirements for CI/CD infrastructure. |
+| **Solo Project, Single Cloud**             | Minimal Abstraction (Platform-Specific Actions) | Speed of development is paramount; the cost of abstraction outweighs the low risk of vendor lock-in. |
+| **Team Project, Multi-Environment**        | Script-Based Abstraction                        | Encapsulating logic in scripts ensures consistency between dev/staging/prod and is easily portable.  |
+| **Enterprise, Strict Portability Mandate** | Advanced Abstraction (Dagger Engine or similar) | Guarantees true portability and satisfies strict governance requirements for CI/CD infrastructure.   |
 
 By adopting these principles, teams can build CI/CD pipelines that are not only
 powerful and efficient today but also flexible and resilient enough to adapt to
@@ -803,7 +802,7 @@ Kubernetes,
 [^20]: GitHub Actions | Container Builds | Depot Documentation,
 [https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions)
 [https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview)
-[https://depot.dev/pricing](https://depot.dev/pricing)
+ [https://depot.dev/pricing](https://depot.dev/pricing)
 [^23]: Designing healthy and agnostic CI/CD pipelines | avivace,
 [https://avivace.com/posts/agnostic-cicd/](https://avivace.com/posts/agnostic-cicd/)
 [https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally](https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally)
