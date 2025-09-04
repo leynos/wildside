@@ -66,3 +66,6 @@ The included Helm chart surfaces several values for managing secrets:
 | `existingSecretName` | `""` | Name of a Secret to source environment variables from. |
 | `secretEnvFromKeys` | `{}` | Map environment variables to keys in `existingSecretName`. |
 | `allowMissingSecret` | `true` | Permit rendering when the Secret is absent. Set to `false` to fail. |
+
+Note: Helm client version 3.2.0 or later is required when `secretEnvFromKeys`
+is used, as the chart invokes `lookup` during template rendering.

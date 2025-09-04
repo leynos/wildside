@@ -77,7 +77,7 @@ spec:
                 secretKeyRef:
                   name: {{ $name | quote }}
                   key: {{ $secretKey | quote }}
-                  optional: {{ .Values.allowMissingSecret | default true }}
+                  optional: {{ $.Values.allowMissingSecret | default true }}
            {{- end }}
          {{- end }}
 {{- with .Values.securityContext }}

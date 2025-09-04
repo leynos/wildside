@@ -56,16 +56,22 @@ Validate that secretEnvFromKeys references an existing Secret when set.
   {{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) -}}
   {{- end -}}
   {{- if not $missingSecret -}}
-{{- $data := $found.data | default dict -}}
-{{- $stringData := $found.stringData | default dict -}}
+{{- $data := (get $found "data") | default dict -}}
+{{- $stringData := (get $found "stringData") | default dict -}}
 {{- $missing := list -}}
 {{- range $k, $secretKey := $sec -}}
+{{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" $k) -}}
+{{- fail (printf "secretEnvFromKeys has invalid env var name %q (must match ^[A-Za-z_][A-Za-z0-9_]*$)" $k) -}}
+{{- end -}}
+{{- if not $secretKey -}}
+{{- fail (printf "secretEnvFromKeys maps %q to an empty secret key" $k) -}}
+{{- end -}}
 {{- if not (or (hasKey $data $secretKey) (hasKey $stringData $secretKey)) -}}
 {{- $missing = append $missing $secretKey -}}
 {{- end -}}
 {{- end -}}
 {{- if gt (len $missing) 0 -}}
-{{- fail (printf "Secret %q missing keys: %s" $name (join $missing ", ")) -}}
+{{- fail (printf "Secret %q missing keys: %s" $name (join ", " $missing)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
