@@ -24,7 +24,7 @@ configured=(
 
 mapfile -t all_npm_arr <<<"$all_npm"
 for p in "${all_npm_arr[@]}"; do
-  if [[ ! " ${configured[*]} " =~ " ${p} " ]]; then
+  if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
     echo "UNCONFIGURED npm package.json: $p"
   fi
 done

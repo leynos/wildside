@@ -36,7 +36,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "02:10"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -56,7 +56,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "02:20"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -76,7 +76,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "02:30"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -96,7 +96,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "02:40"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     groups:
       npm-minor-patch:
         patterns:
