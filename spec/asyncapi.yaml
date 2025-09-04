@@ -10,7 +10,7 @@ servers:
   production:
     host: ws.yourdomain.example
     protocol: ws
-    pathname: /ws
+    pathname: /
     description: Production WebSocket server
 channels:
   /ws:
