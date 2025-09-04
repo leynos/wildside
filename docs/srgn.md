@@ -42,8 +42,8 @@ overloaded across different domains. This guide is exclusively dedicated to
 `alexpovel/srgn`, the command-line code search and manipulation utility.[^1]
 Other projects bearing a similar name are unrelated to the tool discussed here.
 These include, but are not limited to, SRGAN, a Generative Adversarial Network
-for image super-resolution 3; SRGN, a high-energy physics technique for
-parameter estimation 4; and SRGN (SolRagon), a cryptocurrency token.[^6] This
+for image super-resolution[^3]; SRGN, a high-energy physics technique for
+parameter estimation[^4]; and SRGN (SolRagon), a cryptocurrency token.[^6] This
 report focuses solely on the code refactoring tool.
 
 ### 1.3 Core Philosophy: Scopes, Actions, and Intentional Simplicity
@@ -61,7 +61,7 @@ are working with, you are good to go".[^2] This philosophy distinguishes
 
 `srgn` from other advanced code-querying tools. While tools like Semgrep use a
 declarative, template-based syntax with metavariables (`$X`) and ellipses
-(`...`) to find code that matches an abstract pattern 8,
+(`...`) to find code that matches an abstract pattern[^8],
 
 `srgn` employs a more direct approach.
 
@@ -101,7 +101,7 @@ supported 1:
   cargo install cargo-binstall
   # Finally, install srgn
   cargo binstall srgn
-  
+
   ```
 
 - `cargo install`: The traditional method of compiling from source using Rust's
@@ -112,7 +112,7 @@ supported 1:
 
   ```sh
   cargo install srgn
-  
+
   ```
 
 - **Package Managers**: `srgn` is available through several system package
@@ -180,7 +180,7 @@ For instance, to find all class definitions in a Python project, one could run:
 Bash
 
 ```sh
-srgn --python 'class'.
+srgn --python 'class'
 ```
 
 The output mimics `grep` and `ripgrep`, prepending the file name and line
@@ -190,7 +190,7 @@ workflows.[^2]
 This mode is not only precise but also exceptionally fast. A benchmark cited in
 the documentation demonstrates its performance: `srgn` can find approximately
 140,000 occurrences of a regex pattern within Go string literals across the
-entire Kubernetes codebase (\~3 million lines of code) in under 3 seconds on a
+entire Kubernetes codebase (~3 million lines of code) in under 3 seconds on a
 modern multi-core machine.[^1] This combination of speed and syntactic
 precision makes search mode a formidable tool for code exploration and auditing.
 
@@ -233,7 +233,7 @@ Consider the following command:
 Bash
 
 ```sh
-# Find all occurrences of 'github.com' but only inside docstrings of Python classes.
+# Find all occurrences of 'github.com' but only inside docstrings of Python classes
 srgn --python 'class' --python 'doc-strings' 'github\.com' my_project/
 ```
 
@@ -269,7 +269,7 @@ A practical example from the release notes demonstrates its utility 9:
 Bash
 
 ```sh
-# Find all TODOs, whether they are in comments or docstrings.
+# Find all TODOs, whether they are in comments or docstrings
 srgn -j --python comments --python doc-strings 'TODO:' src/
 ```
 
@@ -387,7 +387,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
 
   ```sh
   srgn --py 'module-names-in-imports' '^old_utils$' -- 'new_core_utils' src/
-  
+
   ```
 
 - **Explanation**: This command's precision comes from the
@@ -411,8 +411,8 @@ challenges by combining `srgn`'s scoping and action capabilities.
   Bash
 
   ```sh
-  srgn --py 'call' '^print\((.*)\)$' -- 'logging.info($1)'. --dry-run
-  
+  srgn --py 'call' '^print\((.*)\)$' -- 'logging.info($1)' --dry-run
+
   ```
 
 - **Explanation**: This recipe leverages the `'call'` grammar scope to identify
@@ -438,8 +438,8 @@ challenges by combining `srgn`'s scoping and action capabilities.
   Bash
 
   ```sh
-  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"''#\s]'.
-  
+  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"'"'"'#\s]'
+
   ```
 
 - **Explanation**: This sophisticated search-only operation, based on an
@@ -451,7 +451,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
 
   2. `'def\s+\w+\(.*\):\n\s+[^"''#\s]'`: This multi-line regex is then applied.
      It looks for a `def` signature followed by a newline and indentation
-     (`\n\s+`). The crucial part is the negative character class `[^"''#\s]`,
+      (`\n\s+`). The crucial part is the negative character class `[^"''#\s]`,
      which matches any character that is *not* a double quote, a single quote,
      a comment hash, or whitespace. If this pattern matches the first
      non-whitespace character after the function signature, it means the first
@@ -478,7 +478,7 @@ showcasing `srgn`'s versatility across different languages.
 
   ```sh
   srgn --rs 'attribute' 'allow\((clippy::some_lint)\)' -- 'expect($1)' src/
-  
+
   ```
 
 - **Explanation**: This recipe uses the `'attribute'` scope to focus the search
@@ -497,8 +497,8 @@ showcasing `srgn`'s versatility across different languages.
   Bash
 
   ```sh
-  srgn --rs 'unsafe' 'unsafe' -- '// TODO: Justify this unsafe block\nunsafe'.
-  
+  srgn --rs 'unsafe' 'unsafe' -- '// TODO: Justify this unsafe block\nunsafe'
+
   ```
 
 - **Explanation**: This demonstrates a replacement that prepends text. The
@@ -522,8 +522,8 @@ showcasing `srgn`'s versatility across different languages.
   Bash
 
   ```sh
-  srgn --rs 'names-in-uses-declarations' '^old_api' -- 'new_api'.
-  
+  srgn --rs 'names-in-uses-declarations' '^old_api' -- 'new_api'
+
   ```
 
 - **Explanation**: This operation's surgical precision is enabled by the
@@ -612,101 +612,71 @@ ______________________________________________________________________
 
 ## Appendix: Grammar Scope Reference
 
-### A.[^1] A Note on This List
+### A. Note on this list
+
+[^1]
 
 The following tables list the known language grammar scopes for Python and
 Rust. This reference has been meticulously compiled from the official `srgn`
 documentation, README examples, and GitHub release notes.[^2] As direct
 inspection of the
 
-`PreparedQuery` source enum was not possible during research 15, this list
+`PreparedQuery` source enum was not possible during research[^15], this list
 should be considered comprehensive but potentially subject to change in future
 
 `srgn` versions. Users can often discover available scopes by providing an
 invalid one, as `srgn` will helpfully list the valid options.[^9]
 
-### A.[^2] Table: Python Grammar Scopes (`--python <SCOPE>` or `--py <SCOPE>`)
+### A. Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-| Scope Name              | Description                                                               | Example Command                               |
-| ----------------------- | ------------------------------------------------------------------------- | --------------------------------------------- |
-| class                   | Selects entire class definitions, from class to the end of the block.     | srgn --py 'class' 'MyClass'                   |
-| function                | Selects entire function definitions, from def to the end of the block.    | srgn --py 'function' 'my_func'                |
-| doc-strings             | Selects the content of docstrings (triple-quoted strings).                | srgn --py 'doc-strings' 'TODO'                |
-| comments                | Selects the content of line comments (#...).                              | srgn --py 'comments' 'FIXME'                  |
-| strings                 | Selects the content of all string literals.                               | srgn --py 'strings' 'hardcoded-secret'        |
-| identifiers             | Selects language identifiers (variable names, function names, etc.).      | srgn --py 'identifiers' '^temp_\w+'           |
-| module-names-in-imports | Selects only module names in `import` and `from ... import` statements.   | srgn --py 'module-names-in-imports' 'old_lib' |
-| call                    | Selects entire function or method call expressions (e.g., foo(bar, baz)). | srgn --py 'call' '^print\('                   |
+[^2]
 
-### A.[^3] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
-
-| Scope Name                 | Description                                                    | Example Command                                        |
-| -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
-| unsafe                     | Selects unsafe blocks and unsafe function definitions.         | srgn --rs 'unsafe' '.'                                 |
-| comments                   | Selects line (`//`) and block (`/* ... */`) comments.   | srgn --rs 'comments' 'HACK'                            |
-| strings                    | Selects the content of all string literals.                    | srgn --rs 'strings' 'password'                         |
-| attribute                  | Selects attributes (`#[...]` and `#![...]`).            | srgn --rs 'attribute' 'deprecated'                     |
-| names-in-uses-declarations | Selects only the crate/module paths within use statements.     | srgn --rs 'names-in-uses-declarations' 'old_crate'     |
-| pub-enum                   | Selects public enum definitions.                               | srgn --rs 'pub-enum' 'MyEnum'                          |
-| type-identifier            | Selects identifiers that refer to a type.                      | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
-| struct                     | Selects struct definitions.                                    | srgn --rs 'struct' 'RequestPayload'                    |
-| impl                       | Selects impl blocks.                                           | srgn --rs 'impl' 'MyTrait for MyStruct'                |
-| fn                         | Selects function definitions.                                  | srgn --rs 'fn' 'main'                                  |
-| extern-crate               | Selects `extern crate ...;` declarations.                           | srgn --rs 'extern-crate' 'libc'                        |
+| Scope Name | Description | Example Command |
+| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| unsafe | Selects unsafe blocks and unsafe function definitions. | srgn --rs 'unsafe' '.' |
+| comments | Selects line (`//`) and block (`/* ... */`) comments. | srgn --rs 'comments' 'HACK' |
+| strings | Selects the content of all string literals. | srgn --rs 'strings' 'password' |
+| attribute | Selects attributes (`#[...]` and `#![...]`). | srgn --rs 'attribute' 'deprecated' |
+| names-in-uses-declarations | Selects only the crate/module paths within use statements. | srgn --rs 'names-in-uses-declarations' 'old_crate' |
+| pub-enum | Selects public enum definitions. | srgn --rs 'pub-enum' 'MyEnum' |
+| type-identifier | Selects identifiers that refer to a type. | srgn --rs 'pub-enum' --rs 'type-identifier' 'Subgenre' |
+| struct | Selects struct definitions. | srgn --rs 'struct' 'RequestPayload' |
+| impl | Selects impl blocks. | srgn --rs 'impl' 'MyTrait for MyStruct' |
+| fn | Selects function definitions. | srgn --rs 'fn' 'main' |
+| extern-crate | Selects `extern crate ...;` declarations. | srgn --rs 'extern-crate' 'libc' |
 
 ## Works Cited
 
- 1. alexpovel/srgn: A grep-like tool which understands source code syntax and
-    allows for manipulation in addition to search - GitHub, accessed on July
-    11, 2025, <https://github.com/alexpovel/srgn>
+[^1]: alexpovel/srgn: A grep-like tool which understands source code syntax and
+allows for manipulation in addition to search - GitHub, accessed on July
+11, 2025, <https://github.com/alexpovel/srgn>
 
- 2. srgn/[README.md](http://README.md) at main · alexpovel/srgn · GitHub,
-    accessed on July 11, 2025,
-    <https://github.com/alexpovel/srgn/blob/main/README.md>
+[^2]: srgn/README.md at main · alexpovel/srgn · GitHub, accessed on July 11,
+2025, <https://github.com/alexpovel/srgn/blob/main/README.md>
 
- 3. Lornatang/SRGAN-PyTorch: A simple and complete implementation of
-    super-resolution paper. - GitHub, accessed on July 11, 2025,
-    <https://github.com/Lornatang/SRGAN-PyTorch>
+[^3]: Lornatang/SRGAN-PyTorch: A simple and complete implementation of
+super-resolution paper. - GitHub, accessed on July 11, 2025,
+<https://github.com/Lornatang/SRGAN-PyTorch>
 
- 4. hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
-    <https://github.com/hep-lbdl/SRGN>
+[^4]: hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
+<https://github.com/hep-lbdl/SRGN>
 
- 5. Security - hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
-    <https://github.com/hep-lbdl/SRGN/security>
-
- 6. How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
-    Beginner's Tutorial · Issue #5 · synthesizearrayHSy/generatemonitorGhZ -
-    GitHub, accessed on July 11, 2025,
+[^6]: How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
+    Beginner's Tutorial · Issue #5 ·
+    synthesizearrayHSy/generatemonitorGhZ - GitHub, accessed on July 11, 2025,
     <https://github.com/synthesizearrayHSy/generatemonitorGhZ/issues/5>
 
- 7. srgn - Rust - [Docs.rs](http://Docs.rs), accessed on July 11, 2025,
-    <https://docs.rs/srgn>
+[^7]: srgn - Rust - Docs.rs, accessed on July 11, 2025,
+<https://docs.rs/srgn>
 
- 8. Pattern syntax - Semgrep, accessed on July 11, 2025,
-    <https://semgrep.dev/docs/writing-rules/pattern-syntax>
+[^8]: Pattern syntax - Semgrep, accessed on July 11, 2025,
+<https://semgrep.dev/docs/writing-rules/pattern-syntax>
 
- 9. Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
-    <https://github.com/alexpovel/srgn/releases>
+[^9]: Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
+<https://github.com/alexpovel/srgn/releases>
 
- 10. Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
+[^10]: Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
     July 11, 2025, <https://realpython.com/python-scope-legb-rule/>
 
- 11. Scopes - The Rust Reference, accessed on July 11, 2025,
-    <https://doc.rust-lang.org/reference/names/scopes.html>
-
- 12. I can't understand the Rust "scope" definition (Rust Programming Language,
-    2nd Ed. Klabnik & Nichols) - Stack Overflow, accessed on July 11, 2025,
-    <https://stackoverflow.com/questions/77423163/i-cant-understand-the-rust-scope-definition-rust-programming-language-2nd-e>
-
- 13. betterletter/[README.md](http://README.md) at main · alexpovel/betterletter
-    · GitHub, accessed on July 11, 2025,
-    <https://github.com/alexpovel/betterletter/blob/main/README.md>
-
- 14. srgn - Rust Package Registry - [Crates.io](http://Crates.io), accessed on
-    July 11, 2025, <https://crates.io/crates/srgn/>
-
- 15. accessed on January 1, 1970,
+[^15]: srgn language scopes, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
-
- 16. accessed on January 1, 1970,
-    <https://github.com/alexpovel/srgn/blob/main/src/scoping/langs/rust.rs>
