@@ -10,8 +10,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
-      time: "03:00"
-      timezone: "America/Los_Angeles"
+      time: "02:00"
+      timezone: "Etc/UTC"
 
   # Enable version updates for Cargo
   - package-ecosystem: "cargo"
@@ -100,3 +100,6 @@ updates:
       - "helm"
     schedule:
       interval: "weekly"
+      day: "sunday"
+      time: "03:00"
+      timezone: "Etc/UTC"
