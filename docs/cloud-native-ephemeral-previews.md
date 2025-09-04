@@ -1493,6 +1493,63 @@ automated experience.
     deleted and removes the DNS record from Cloudflare. The environment and all
     its traces are automatically and completely removed from the system.
 
+### Preview workflow sequence
+
+The sequence below summarizes the lifecycle of an ephemeral preview environment.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Dev as Developer
+  participant GH as GitHub Actions
+  participant Reg as Container Registry
+  participant GitOps as wildside-apps repo
+  participant Src as Flux source-controller
+  participant Kust as Flux kustomize-controller
+  participant Helm as Flux helm-controller
+  participant K8s as Kubernetes
+  participant DNS as ExternalDNS
+  participant CF as Cloudflare
+  participant CM as cert-manager
+  participant LE as Let's Encrypt
+
+  Dev->>GH: Push commit or open PR
+  GH->>Reg: Build and push image
+  GH->>GitOps: Commit manifests with image tag
+  Src->>GitOps: Publish new artifact (revision)
+  Kust->>Src: Pull artifact and reconcile Kustomization
+  Kust->>Helm: Reconcile HelmRelease
+  Helm->>K8s: Deploy resources
+  K8s-->>DNS: Ingress observed (watch)
+  DNS->>CF: Provision A record
+  CM->>LE: Request certificate (ACME DNS-01)
+  CM->>CF: Create _acme-challenge TXT
+  LE-->>CM: Validate challenge and issue cert
+  CM->>K8s: Store TLS Secret
+  GH-->>Dev: Comment preview URL
+  Dev->>GH: Push updates
+  GH->>GitOps: Update image tag
+  Kust->>Src: Pull new artifact and reconcile
+  Helm->>K8s: Roll out update
+  Dev->>GH: Merge PR
+  GH->>GitOps: Remove manifests
+  Src->>Kust: Register removal
+  Helm->>K8s: Prune resources
+  DNS->>CF: Remove DNS record
+  Helm->>K8s: Delete Certificate
+  K8s-->>K8s: GC TLS Secret (ownerRef)
+```
+
+The diagram depicts the following high-level steps:
+
+- A developer pushes code, triggering GitHub Actions to build and publish a
+  container image.
+- Flux controllers reconcile the change, deploy resources, and expose them via
+  Kubernetes, ExternalDNS, and cert-manager.
+- GitHub comments the preview URL for quick feedback.
+- When the pull request is merged, Flux prunes the deployment and supporting
+  infrastructure, including DNS records and TLS assets.
+
 ## Conclusion and Operational Recommendations
 
 This report has detailed a robust, secure, and highly automated architecture
