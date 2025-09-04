@@ -17,21 +17,34 @@ channels:
         $ref: '#/components/messages/UserCreated'
 operations:
   userCreated:
+    x-operationId: userCreated
     summary: Receive UserCreated events
     action: receive
     channel:
       $ref: '#/channels/~1ws'
     messages:
-      - $ref: '#/channels/~1ws/messages/userCreated'
+      - $ref: '#/components/messages/UserCreated'
     tags:
       - name: users
         description: Events about system users
 components:
+  messageTraits:
+    Correlated:
+      headers:
+        type: object
+        additionalProperties: false
+        properties:
+          trace_id:
+            type: string
+            description: Correlation identifier for tracing across systems
+        required: []
   messages:
     UserCreated:
       name: UserCreated
       title: User created event
       contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/Correlated'
       payload:
         type: object
         additionalProperties: false

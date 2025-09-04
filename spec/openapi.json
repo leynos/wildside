@@ -93,6 +93,13 @@
           "forbidden",
           "not_found",
           "internal_error"
+        ],
+        "x-enumDescriptions": [
+          "The request is malformed or fails validation",
+          "Authentication failed or is missing",
+          "Authenticated but not permitted to perform this action",
+          "The requested resource does not exist",
+          "An unexpected error occurred on the server"
         ]
       },
       "Error": {
@@ -108,6 +115,11 @@
             "type": "string",
             "description": "Human-readable error message",
             "example": "Something went wrong"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Correlation identifier for tracing this error across systems",
+            "example": "01HZY8B2W6X5Y7Z9ABCD1234"
           },
           "details": {
             "type": "object",
