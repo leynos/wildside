@@ -139,6 +139,32 @@ cross-field rules (for example, requiring `existingSecretName` when
 > (for example, enabling `seccompProfile` and setting `fsGroup`).
 > Container-specific controls remain under `securityContext`.
 
+#### Deployment secret resolution flow
+
+The deployment template uses the following logic to resolve secrets:
+
+```mermaid
+flowchart TD
+    A[Start Deployment Template Rendering]
+    B{secretEnvFromKeys set?}
+    C{existingSecretName set?}
+    D{Secret exists in namespace?}
+    E[Fail: existingSecretName required]
+    F[Fail: Secret not found]
+    G[Continue rendering]
+    H[allowMissingSecret is true?]
+
+    A --> B
+    B -- No --> G
+    B -- Yes --> C
+    C -- No --> E
+    C -- Yes --> D
+    D -- Yes --> G
+    D -- No --> H
+    H -- Yes --> G
+    H -- No --> F
+```
+
 ---
 
 ## 2) Contracts & Code Generation Hand‑offs
