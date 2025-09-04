@@ -23,7 +23,7 @@ operations:
     channel:
       $ref: '#/channels/~1ws'
     messages:
-      - $ref: '#/components/messages/UserCreated'
+      - $ref: '#/channels/~1ws/messages/userCreated'
     tags:
       - name: users
         description: Events about system users

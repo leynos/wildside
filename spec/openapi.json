@@ -40,34 +40,28 @@
                     "$ref": "#/components/schemas/User"
                   },
                   "maxItems": 100
+                },
+                "examples": {
+                  "twoUsers": {
+                    "summary": "Two users",
+                    "value": [
+                      {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "display_name": "Ada Lovelace"
+                      },
+                      {
+                        "id": "123e4567-e89b-12d3-a456-426614174001",
+                        "display_name": "Alan Turing"
+                      }
+                    ]
+                  }
                 }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          }
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
     }
@@ -78,6 +72,26 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "session"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "InternalServerError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
       }
     },
     "schemas": {
