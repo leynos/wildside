@@ -25,8 +25,8 @@ sequenceDiagram
   Browser->>CDN: GET /
   CDN-->>Browser: index.html + assets
 
-  Browser->>Ingress: GET /api/users
-  Ingress->>Backend: proxy /api/users
+  Browser->>Ingress: GET /api/v1/users
+  Ingress->>Backend: proxy /api/v1/users
   Backend-->>Ingress: 200 [User[]]
   Ingress-->>Browser: 200 [User[]]
 
@@ -131,8 +131,7 @@ cross-field rules (for example, requiring `existingSecretName` when
 
 > The chart converts keys under `.Values.config` into environment
 > variables (see the env block in
-> [`deploy/charts/wildside/templates/deployment.yaml`](
-> ../deploy/charts/wildside/templates/deployment.yaml)).
+> [`deploy/charts/wildside/templates/deployment.yaml`](../deploy/charts/wildside/templates/deployment.yaml)).
 > Setting `APP_ENV` in `config` exposes it to the container.
 >
 > Apply pod-wide security defaults with `podSecurityContext`
@@ -185,12 +184,12 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 
 **Flow:**
 
-  ```text
-  Rust event payloads (serde + schemars)
-    → AsyncAPI (YAML)
-    → Docs & stubs
-    → Frontend WS client + TanStack Query/SWR
-  ```
+```text
+Rust event payloads (serde + schemars)
+  → AsyncAPI (YAML)
+  → Docs & stubs
+  → Frontend WS client + TanStack Query/SWR
+```
 
 > Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
 > message payloads; derive JSON Schema via `schemars` if you want runtime
@@ -287,13 +286,16 @@ from layer caching. The final stage uses `nginx:alpine` to serve the compiled
 
 - Version pins for Bun, Nginx, and Alpine are exposed via `BUN_VERSION`,
   `NGINX_VERSION`, and `ALPINE_VERSION` build arguments.
+
 - Health checks can be tailored using `HEALTHCHECK_PORT`, `HEALTHCHECK_PATH`,
   `HEALTHCHECK_INTERVAL`, `HEALTHCHECK_TIMEOUT`, and `HEALTHCHECK_RETRIES`.
 
 - In CI, extract `/usr/share/nginx/html` and upload to **DOKS Spaces** (object
   storage) behind a CDN.
+
 - The backend serves only the API; static assets come from CDN or the Nginx
   runtime image.
+
 - For local development, running `vite dev` remains possible for HMR.
 
 ### 6.3 Docker Compose for Local Dev
@@ -412,13 +414,12 @@ Git—manage it with SOPS or an External Secrets operator. If enabled,
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
-mappings under `secretEnvFromKeys`. Cross-field rules in
-`values.schema.json` enforce this wiring by requiring `existingSecretName`
-whenever `secretEnvFromKeys` is populated. The chart defaults
-`allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
-on `envFrom.secretRef`). Set it to `false` in production to fail rendering
-when the Secret is absent. The following snippets show the resulting
-`envFrom.secretRef` for both values:
+mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
+enforce this wiring by requiring `existingSecretName` whenever
+`secretEnvFromKeys` is populated. The chart defaults `allowMissingSecret` to
+`true` for `helm template` (maps to `optional: true` on `envFrom.secretRef`).
+Set it to `false` in production to fail rendering when the Secret is absent.
+The following snippets show the resulting `envFrom.secretRef` for both values:
 
 ```yaml
 # allowMissingSecret: true (default)
@@ -530,11 +531,11 @@ ______________________________________________________________________
 ## 9) Observability & Operations Hooks
 
 - **Health endpoints**: `/health/live` and `/health/ready` in backend for
-   probes.
+  probes.
 - **Structured logs** (JSON) with request IDs; propagate over WS too.
 - **Prometheus** metrics (expose `/metrics`) and scrape via ServiceMonitor.
 - **Feature flags**: sealed behind env/config; surfaced in OpenAPI as headers
-   where relevant.
+  where relevant.
 
 ### WebSocket heartbeat sequence
 
@@ -560,21 +561,21 @@ ______________________________________________________________________
 
 - Minimal base images (distroless). Non‑root user.
 - SBOMs for backend images (e.g., `syft`); sign images (cosign) and verify in
-   cluster (policy‑controller/Kyverno).
+  cluster (policy‑controller/Kyverno).
 - CORS: restrict to CDN/public hostnames. Set HSTS and sensible CSP on static.
 - Secrets: mount via K8s Secrets (consider external secret operator for DO
-   Secrets Manager).
+  Secrets Manager).
 
 ______________________________________________________________________
 
 ## 11) Summary of Hand‑offs
 
 - **HTTP:** Actix + utoipa → `spec/openapi.json` → orval → typed TS client →
-   React + TanStack.
+  React + TanStack.
 - **Events:** Actix WS (or Kafka, etc.) → `spec/asyncapi.yaml` → generator → WS
-   clients/docs.
+  clients/docs.
 - **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
-   daisyUI theme.
+  daisyUI theme.
 - **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
   CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster. This
   structure keeps contracts central, isolates platform concerns, and allows
