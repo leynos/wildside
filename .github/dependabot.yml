@@ -22,16 +22,21 @@ updates:
       - "cargo"
     schedule:
       interval: "daily"
+      time: "02:00"
+      timezone: "Etc/UTC"
 
   # Enable version updates for npm at the repository root
   - package-ecosystem: "npm"
     directory: "/"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "npm"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "02:10"
+      timezone: "UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -43,12 +48,15 @@ updates:
   # Enable version updates for npm in the frontend PWA
   - package-ecosystem: "npm"
     directory: "/frontend-pwa"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "npm"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "02:20"
+      timezone: "UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -60,12 +68,15 @@ updates:
   # Enable version updates for npm in the tokens package
   - package-ecosystem: "npm"
     directory: "/packages/tokens"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "npm"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "02:30"
+      timezone: "UTC"
     groups:
       npm-minor-patch:
         patterns:
@@ -77,12 +88,15 @@ updates:
   # Enable version updates for npm in the types package
   - package-ecosystem: "npm"
     directory: "/packages/types"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "npm"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "02:40"
+      timezone: "UTC"
     groups:
       npm-minor-patch:
         patterns:
