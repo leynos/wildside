@@ -334,22 +334,21 @@ accomplishes this. For enhanced security, it is critical to use the
 `--expiry-seconds` flag to generate short-lived credentials for the cluster,
 minimizing the window of exposure.15
 
-A crucial part of automated deployment is updating the Kubernetes manifest to
-use the newly built image tag. A common and effective method within a shell
-environment is to use a tool like `sed` to find and replace a placeholder in
-the manifest file with the dynamic image tag generated in Part I.15 For more
-complex applications, tools like Kustomize or Helm can provide more structured
-manifest management.
+Ensuring the Kubernetes deployment uses the newly built image tag is crucial
+for automated release. Instead of editing manifests, `kubectl set image` can
+patch the running deployment directly with
+`kubectl set image deployment/app app=${TAGGED_IMAGE}`.15 For more complex
+applications, tools like Kustomize or Helm can provide more structured manifest
+management.
 
-Finally, with the updated manifest and the `kubeconfig` in place, the
-deployment is executed with a standard `kubectl apply` command. This entire
-sequence demonstrates that a CI/CD pipeline is fundamentally a chain of
-authenticated operations across distributed systems. The workflow runner acts
-as a trusted orchestrator, using one set of credentials (the DO token) to gain
-access to a second system (the Kubernetes cluster), which in turn uses a
-provisioned credential (the `imagePullSecret`) to access a third system (GHCR).
-Securely managing these credential boundaries is the most critical aspect of
-pipeline security.
+With the image updated and the `kubeconfig` in place, the deployment rolls out
+immediately. This entire sequence demonstrates that a CI/CD pipeline is
+fundamentally a chain of authenticated operations across distributed systems.
+The workflow runner acts as a trusted orchestrator, using one set of
+credentials (the DO token) to gain access to a second system (the Kubernetes
+cluster), which in turn uses a provisioned credential (the `imagePullSecret`)
+to access a third system (GHCR). Securely managing these credential boundaries
+is the most critical aspect of pipeline security.
 
 ### Section 2.3: Verifying and Finalizing the Deployment
 
@@ -385,7 +384,6 @@ env:
   DO_CLUSTER_NAME: <your-doks-cluster-name>
   K8S_DEPLOYMENT_NAME: <your-deployment-name>
   K8S_NAMESPACE: app
-  K8S_MANIFEST_PATH: k8s/deployment.yml
 
 jobs:
   build-and-push:
@@ -454,11 +452,6 @@ jobs:
       - name: Ensure namespace exists
         run: kubectl get ns ${{ env.K8S_NAMESPACE }} || kubectl create ns ${{ env.K8S_NAMESPACE }}
 
-      - name: Update deployment manifest with new image tag
-        run: |
-          TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
-          sed -i "s|IMAGE_PLACEHOLDER|$TAGGED_IMAGE|g" ${{ env.K8S_MANIFEST_PATH }}
-          
       - name: Deploy to DOKS
         run: |
           TAGGED_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
