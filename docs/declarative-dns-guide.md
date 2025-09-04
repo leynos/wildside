@@ -86,13 +86,13 @@ reacts in real-time to the application lifecycle. This decoupling is a
 significant architectural advantage that enhances both operational stability
 and development velocity.
 
-| Component       | Primary Role                | Scope of Control                                                                | Managed By                             |
+| Component | Primary Role | Scope of Control | Managed By |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
-| **Kubernetes**  | Application Orchestration   | Manages the lifecycle of containers, Pods, Services, and Ingresses.             | Platform/Application Teams             |
-| **Cloudflare**  | Authoritative DNS Provider  | Hosts and resolves public DNS records; provides edge network services.          | OpenTofu (Zone), ExternalDNS (Records) |
-| **ExternalDNS** | DNS Automation Controller   | Translates Kubernetes resources into Cloudflare DNS records.                    | FluxCD                                 |
-| **FluxCD**      | GitOps Operator             | Synchronizes the entire Kubernetes cluster state with a Git repository.         | Platform Team                          |
-| **OpenTofu**    | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team                          |
+| **Kubernetes** | Application Orchestration | Manages the lifecycle of containers, Pods, Services, and Ingresses. | Platform/Application Teams |
+| **Cloudflare** | Authoritative DNS Provider | Hosts and resolves public DNS records; provides edge network services. | OpenTofu (Zone), ExternalDNS (Records) |
+| **ExternalDNS** | DNS Automation Controller | Translates Kubernetes resources into Cloudflare DNS records. | FluxCD |
+| **FluxCD** | GitOps Operator | Synchronizes the entire Kubernetes cluster state with a Git repository. | Platform Team |
+| **OpenTofu** | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team |
 
 ### 1.3 The End-to-End Data and Control Flow
 
@@ -823,7 +823,7 @@ troubleshooting is key to rapid resolution.
     - Incorrect policy. The `policy` in the `HelmRelease` must be `sync`. If it
       is `upsert-only`, ExternalDNS will not delete records.[^31]
     - Ownership mismatch. If `txtOwnerId` changed since records were created,
-      ExternalDNS will no longer recognise them as its own and will not delete
+      ExternalDNS will no longer recognize them as its own and will not delete
       them.
 
 - Symptom: Records created but not proxied (“grey cloud”)
@@ -845,9 +845,9 @@ troubleshooting is key to rapid resolution.
       `flux get sources git`. Ensure the URL is correct and the deploy key has
       access.
     - Manifest error. `kubectl describe` may reveal errors from
-      `kustomize build` or `kubectl apply`. Fix YAML syntax issues or
-      missing dependencies (for example, a `HelmRelease` referencing a
-      `HelmRepository` not yet defined).
+      `kustomize build` or `kubectl apply`. Fix YAML syntax issues or missing
+      dependencies (for example, a `HelmRelease` referencing a `HelmRepository`
+      not yet defined).
 
 - Symptom: Wildcard record does not resolve a specific subdomain
 
@@ -956,18 +956,19 @@ declarative solution for modern application delivery on Kubernetes.
 [^2]: Simplifying DNS Management with ExternalDNS in Kubernetes - Develeap,
 [https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/](https://www.develeap.com/Simplifying-DNS-Management-with-ExternalDNS-in-Kubernetes/)
 
-[^3]: GitOps for Azure Kubernetes Service - Azure Architecture Center | Microsoft
+[^3]: GitOps for Azure Kubernetes Service - Azure Architecture Center |
+Microsoft
 Learn,
 [https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/gitops-aks/gitops-blueprint-aks)
 
 [^6]: External DNS - Funky Penguin’s Geek Cookbook,
-    <https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/>
+<https://geek-cookbook.funkypenguin.co.nz/kubernetes/external-dns/>
 
 [^7]: Configure external DNS servers dynamically from Kubernetes resources -
 GitHub,
 [https://github.com/kubernetes-sigs/external-dns](https://github.com/kubernetes-sigs/external-dns)
 
-[^8]: external-dns/docs/tutorials/[cloudflare.md](http://cloudflare.md) at master - GitHub,
+[^8]: external-dns/docs/tutorials/cloudflare.md (GitHub),
 [https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/cloudflare.md)
 
 [^9]: Onboard a domain · Cloudflare Fundamentals docs,
@@ -998,7 +999,7 @@ Ritik Kesharwani | Jul, 2025 | AWS in Plain English,
 [^23]: Manage your Cloudflare domains automatically with an Nginx Ingress
 controller and External DNS, together with SSL Certificates through Cert
 Manager - Xavier Geerinck,
-    <https://xaviergeerinck.com/2025/01/28/manage-your-cloudflare-domains-automatically-with-an-nginx-ingress-controller-and-external-dns-together-with-ssl-certificates-through-cert-manager/>
+<https://xaviergeerinck.com/2025/01/28/manage-your-cloudflare-domains-automatically-with-an-nginx-ingress-controller-and-external-dns-together-with-ssl-certificates-through-cert-manager/>
 
 [^25]: Automatically set home-lab DNS records to Cloudflare using External DNS |
 by 楠 - Medium,
@@ -1020,7 +1021,8 @@ by 楠 - Medium,
 kubernetes-sigs/external-dns,
 [https://github.com/kubernetes-sigs/external-dns/issues/3956](https://github.com/kubernetes-sigs/external-dns/issues/3956)
 
-[^33]: Automated DNS Record Management for Kubernetes Resources using external-dns
+[^33]: Automated DNS Record Management for Kubernetes Resources using
+external-dns
 and AWS Route53 - DEV Community,
 [https://dev.to/suin/automated-dns-record-management-for-kubernetes-resources-using-external-dns-and-aws-route53-cnm](https://dev.to/suin/automated-dns-record-management-for-kubernetes-resources-using-external-dns-and-aws-route53-cnm)
 

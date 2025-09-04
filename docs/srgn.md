@@ -438,7 +438,7 @@ challenges by combining `srgn`'s scoping and action capabilities.
   Bash
 
   ```sh
-  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"''#\s]'
+  srgn --py 'function' 'def\s+\w+\(.*\):\n\s+[^"'"'"'#\s]'
 
   ```
 
@@ -625,7 +625,7 @@ should be considered comprehensive but potentially subject to change in future
 `srgn` versions. Users can often discover available scopes by providing an
 invalid one, as `srgn` will helpfully list the valid options.[^9]
 
-### A.[^2] Table: Rust Grammar Scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
+### A.2 Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
 | Scope Name | Description | Example Command |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
