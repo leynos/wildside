@@ -86,13 +86,13 @@ reacts in real-time to the application lifecycle. This decoupling is a
 significant architectural advantage that enhances both operational stability
 and development velocity.
 
-| Component | Primary Role | Scope of Control | Managed By |
+| Component       | Primary Role                | Scope of Control                                                                | Managed By                             |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
-| **Kubernetes** | Application Orchestration | Manages the lifecycle of containers, Pods, Services, and Ingresses. | Platform/Application Teams |
-| **Cloudflare** | Authoritative DNS Provider | Hosts and resolves public DNS records; provides edge network services. | OpenTofu (Zone), ExternalDNS (Records) |
-| **ExternalDNS** | DNS Automation Controller | Translates Kubernetes resources into Cloudflare DNS records. | FluxCD |
-| **FluxCD** | GitOps Operator | Synchronizes the entire Kubernetes cluster state with a Git repository. | Platform Team |
-| **OpenTofu** | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team |
+| **Kubernetes**  | Application Orchestration   | Manages the lifecycle of containers, Pods, Services, and Ingresses.             | Platform/Application Teams             |
+| **Cloudflare**  | Authoritative DNS Provider  | Hosts and resolves public DNS records; provides edge network services.          | OpenTofu (Zone), ExternalDNS (Records) |
+| **ExternalDNS** | DNS Automation Controller   | Translates Kubernetes resources into Cloudflare DNS records.                    | FluxCD                                 |
+| **FluxCD**      | GitOps Operator             | Synchronizes the entire Kubernetes cluster state with a Git repository.         | Platform Team                          |
+| **OpenTofu**    | Infrastructure as Code Tool | Provisions and manages the foundational Cloudflare DNS zone and static records. | Platform Team                          |
 
 ### 1.3 The End-to-End Data and Control Flow
 
@@ -491,7 +491,7 @@ metadata:
   annotations:
     # --- ExternalDNS Annotations ---
     # Specifies the desired DNS hostname. This is the primary trigger.
-    external-dns.alpha.kubernetes.io/hostname: nginx.example.com
+    external-dns.alpha.kubernetes.io/hostname: nginx.your-domain.com
     
     # Overrides the default proxy setting for this specific record.
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
@@ -596,10 +596,12 @@ flux get helmrelease external-dns -n external-dns
 kubectl get ingress nginx-ingress -n default -o wide
 ```
 
-A `READY` status of `True` indicates success.19 2. **Inspect ExternalDNS
-Logs:** The logs of the ExternalDNS pod are the primary source for debugging
-its behavior. They will show whether it has detected the new resource and what
-actions it is taking with the Cloudflare API.
+A `READY` status of `True` indicates success.19
+
+1. **Inspect ExternalDNS Logs:** The logs of the ExternalDNS pod are the
+   primary source for debugging its behavior. They will show whether it has
+   detected the new resource and what actions it is taking with the Cloudflare
+   API.
 
 ```bash
 # Tail the logs of the ExternalDNS pod(s)
@@ -644,7 +646,7 @@ Create a file named `providers.tf` with the following content:
 terraform {
   required_providers {
     cloudflare = {
-      source  = "cloudflare/cloudflare"
+      source  = "opentofu/cloudflare"
       version = "~> 4.0"
     }
   }
@@ -838,9 +840,10 @@ troubleshooting is key to rapid resolution.
     - Source not ready. Check the `GitRepository` or `HelmRepository` status via
       `flux get sources git`. Ensure the URL is correct and the deploy key has
       access.
-    - Manifest error. `kubectl describe` may reveal errors from `kustomize build`
-      or `kubectl apply`. Fix YAML syntax issues or missing dependencies (for
-      example, a `HelmRelease` referencing a `HelmRepository` not yet defined).
+    - Manifest error. `kubectl describe` may reveal errors from `kustomize
+      build` or `kubectl
+      apply`. Fix YAML syntax issues or missing dependencies (for example, a `
+      HelmRelease` referencing a `HelmRepository` not yet defined).
 
 - Symptom: Wildcard record does not resolve a specific subdomain
 

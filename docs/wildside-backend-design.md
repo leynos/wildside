@@ -129,7 +129,7 @@ API and WebSocket traffic.
   - [ ] **API Endpoints:**
 
     - Implement the full suite of user management endpoints (create, read,
-      update) under `/api/users`.
+      update) under `/api/v1/users`.
 
     - Create a `/api/v1/routes` endpoint to accept route generation requests.
       This endpoint should validate the input and enqueue a `GenerateRouteJob`
@@ -202,10 +202,8 @@ performance and data relevance.
 For screen readers: This diagram illustrates the relationships between the core
 data entities.
 
-Note: The ER diagram uses placeholder type tokens to satisfy Mermaid parsing
-rules (for example, GEOGRAPHY_Point_4326, GEOMETRY_LineString_4326). Refer to
-the schema tables below for canonical PostGIS types (for example,
-GEOGRAPHY(Point, 4326), GEOMETRY(LineString, 4326)).
+The ER diagram uses canonical PostGIS type notation (for example,
+`GEOGRAPHY(Point, 4326)` and `GEOMETRY(LineString, 4326)`).
 
 ```mermaid
 erDiagram
@@ -228,7 +226,7 @@ erDiagram
 
     pois {
         BIGINT id PK
-        GEOGRAPHY_Point_4326 location
+        GEOGRAPHY location "Point, 4326"
         JSONB osm_tags
         TEXT narrative
         REAL popularity_score
@@ -242,7 +240,7 @@ erDiagram
     routes {
         UUID id PK
         UUID user_id FK
-        GEOMETRY_LineString_4326 path
+        GEOMETRY path "LineString, 4326"
         JSONB generation_params
         TIMESTAMPTZ created_at
     }
