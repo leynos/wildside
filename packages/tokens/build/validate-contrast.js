@@ -175,11 +175,7 @@ function validateColorPair(colorPair, context) {
       ? `${label} in ${fileHint} fails contrast: ${ratio.toFixed(2)} (threshold: ${threshold})`
       : null;
   } catch (err) {
-    console.error(`Failed to resolve token reference for "${label}" in ${fileHint}.`, {
-      fgRef,
-      bgRef,
-      error: err,
-    });
+    process.stderr.write(`Failed to resolve token reference for "${label}" in ${fileHint}.\n`);
     return `${label} in ${fileHint} failed to resolve token reference: ${
       err instanceof Error ? err.message : String(err)
     }`;
@@ -318,4 +314,3 @@ if (allErrors.length) {
 }
 
 console.log(`Contrast checks passed for themes (threshold: ${contrastThreshold}).`);
-process.exit(0);

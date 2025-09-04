@@ -1,7 +1,7 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test \
-	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 all: fmt lint test
 
 clean:
@@ -43,19 +43,32 @@ lint:
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+	# Ensure JavaScript dependencies are present for all workspaces
+	npm ci --workspaces || npm install --workspaces
+	npm --workspaces run test --if-present --silent --no-audit --no-fund
+
+TS_WORKSPACES := frontend-pwa packages/tokens packages/types
+BUN_LOCK_HASH := $(shell sha256sum bun.lock | awk '{print $$1}')
+NODE_MODULES_STAMP := node_modules/.bun-install-$(BUN_LOCK_HASH)
+
+deps: $(NODE_MODULES_STAMP)
+
+$(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
+
+typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
 	bun x biome format
 
 markdownlint:
-	find . -type f -name '*.md' -not -path './target/*' -print0 | xargs -0 -- markdownlint
-
-markdownlint-docs:
-	markdownlint docs/repository-structure.md
-
-mermaid-lint:
-	npx --yes -p @mermaid-js/mermaid-cli@10.9.0 mmdc -i docs/values-class-diagram.mmd -o /tmp/diagram.svg -p mmdc-puppeteer.json
+	find . \
+          -path './backend/target' -prune -o \
+          -path './target' -prune -o \
+          -path './.node_modules' -prune -o \
+          -path '*/node_modules' -prune -o \
+          -path './.git' -prune -o \
+          -type f -name '*.md' -print0 | xargs -0 -- markdownlint
 
 nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
@@ -69,4 +82,3 @@ yamllint:
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
 	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
-

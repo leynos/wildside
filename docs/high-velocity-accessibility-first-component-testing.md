@@ -1043,7 +1043,7 @@ quality to be built in from the very first line of code.
 
 ## Works cited
 
-1. dequelabs/axe-core: Accessibility engine for automated ... - GitHub,
+1. dequelabs/axe-core: Accessibility engine for automated … - GitHub,
    accessed on 17 August 2025,
    [https://github.com/dequelabs/axe-core](https://github.com/dequelabs/axe-core)
 2. axe-core - NPM, accessed on 17 August 2025,
@@ -1057,10 +1057,10 @@ quality to be built in from the very first line of code.
 6. Incompatible with happy-dom · Issue #47 · nzbin/photoviewer - GitHub,
    accessed on 17 August 2025,
    [https://github.com/nzbin/photoviewer/issues/47](https://github.com/nzbin/photoviewer/issues/47)
-7. TypeError: Attempted to assign to readonly property · Issue ... - GitHub,
+7. TypeError: Attempted to assign to readonly property · Issue … - GitHub,
    accessed on 17 August 2025,
    [https://github.com/capricorn86/happy-dom/issues/1188](https://github.com/capricorn86/happy-dom/issues/1188)
-8. chaance/vitest-axe: Custom Vitest matcher for testing ... - GitHub, accessed
+8. chaance/vitest-axe: Custom Vitest matcher for testing … - GitHub, accessed
    on 17 August 2025,
    [https://github.com/chaance/vitest-axe](https://github.com/chaance/vitest-axe)
 9. Support JSDOM · Issue #3554 · oven-sh/bun - GitHub, accessed on 17 August
@@ -1187,7 +1187,7 @@ quality to be built in from the very first line of code.
     [https://playwright.dev/docs/debug](https://playwright.dev/docs/debug)
 60. Debugging with Playwright - Martioli, accessed on 17 August 2025,
     [https://blog.martioli.com/debugging-tests-with-playwright/](https://blog.martioli.com/debugging-tests-with-playwright/)
-61. Merging Vitest Coverage Reports from Sharded Tests for Codecov ...,
+61. Merging Vitest Coverage Reports from Sharded Tests for Codecov …,
     accessed on 17 August 2025,
     [https://akshaykale12.medium.com/merging-vitest-coverage-reports-from-sharded-tests-for-codecov-ae831d55fc5f](https://akshaykale12.medium.com/merging-vitest-coverage-reports-from-sharded-tests-for-codecov-ae831d55fc5f)
 62. Improving Performance - Vitest, accessed on 17 August 2025,

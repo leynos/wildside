@@ -265,7 +265,7 @@ personalized urban tours. The competitive battle will not be won by having the
 largest database of static routes, but by consistently generating the single
 best, most delightful route for a given user at a given moment.
 
----
+______________________________________________________________________
 
 ### Table 1: Competitive Feature Matrix
 
@@ -280,7 +280,7 @@ best, most delightful route for a given user at a given moment.
 | Community Content   | Post-MVP (Ratings, Sharing)     | Yes (Reviews, Photos, Conditions)     | Yes (Reviews, Photos)           | Yes (Segments, Social Feed)    | No                          |
 | Monetization Model  | Freemium (Subscription)         | Freemium (Subscription)               | Freemium (Region Packs/Sub)     | Freemium (Subscription)        | Freemium (IAP/Subscription) |
 
----
+______________________________________________________________________
 
 ## Core Product Experience & Feature Set (MVP & Beyond)
 
@@ -869,7 +869,7 @@ is proposed to balance these requirements.
     outside world as an untrusted user, a fundamental principle of secure
     system design[^36]
 
----
+______________________________________________________________________
 
 ### Table 2: Technology Stack Recommendation
 
@@ -888,7 +888,7 @@ is proposed to balance these requirements.
 | LLM (Intent)       | Local 7B Model (e.g., Mistral)      | Fast, private, and offline-capable intent recognition on the user's device.                          | High performance for simple tasks, no network latency, preserves user privacy.                     | Limited to simpler tasks; requires sufficient device hardware; model management on client.           |
 | LLM (Narrative)    | Cloud API (e.g., Claude 3.5 Sonnet) | Access to state-of-the-art creative generation without prohibitive hardware costs.                   | High-quality output, scalable, no infrastructure maintenance.                                      | Pay-per-token cost can become significant; data privacy concerns; network dependency.                |
 
----
+______________________________________________________________________
 
 ## Data Strategy: Sourcing, Processing, and Management
 
@@ -1158,7 +1158,7 @@ The following table provides a realistic, line-item estimate of the monthly
 operational costs for the Wildside MVP, broken down into low, medium, and high
 usage scenarios for the first year of operation.
 
----
+______________________________________________________________________
 
 ### Table 3: Detailed MVP Monthly Cost Estimation
 
@@ -1177,7 +1177,7 @@ costs are highly variable and represent the largest financial risk; the
 estimate assumes an average of 2 walks/month per user, 10 POIs per walk, and
 1,000 tokens per POI description at an average cost of $10/M tokens.
 
----
+______________________________________________________________________
 
 ### Scalability Roadmap
 
@@ -1355,7 +1355,7 @@ Wildside and proposes concrete strategies for their mitigation.
      bloggers and local interest groups will be more effective than competing
      for fitness-related keywords.
 
----
+______________________________________________________________________
 
 ### Table 4: Risk Assessment Matrix
 
@@ -1369,7 +1369,7 @@ Wildside and proposes concrete strategies for their mitigation.
 | Market        | Low Conversion to Premium: Users are unwilling to pay for a subscription, limiting revenue and long-term viability.        | Medium     | High   | Make high-value, recognized premium features like Offline Maps the core of the subscription offering; ensure the free tier clearly demonstrates the app's value. |
 | Legal/Privacy | User Data Mismanagement: Improper handling of user location data leads to privacy breaches and regulatory fines.           | Low        | High   | Adhere to a "privacy-by-design" philosophy; store location data on-device by default; anonymize all analytics data; ensure no PII is sent to third-party APIs.   |
 
----
+______________________________________________________________________
 
 ## Conclusions and Recommendations
 

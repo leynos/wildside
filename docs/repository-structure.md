@@ -48,7 +48,7 @@ sequenceDiagram
   Note over Browser, CDN: Prod serves assets via CDN. Locally, Nginx may serve dist/ (Section 6.3)
 ```
 
----
+______________________________________________________________________
 
 ## 1) Monorepo Layout
 
@@ -165,7 +165,7 @@ flowchart TD
     H -- No --> F
 ```
 
----
+______________________________________________________________________
 
 ## 2) Contracts & Code Generation Hand‑offs
 
@@ -222,7 +222,7 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
 > message payloads; derive JSON Schema via `schemars` if you want runtime
 > validation or to feed generator pipelines.
 
----
+______________________________________________________________________
 
 ## 3) Design Tokens as a First‑Class Package
 
@@ -251,7 +251,7 @@ Tailwind/daisyUI and any future native shells.
 This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 (Capacitor) shells.
 
----
+______________________________________________________________________
 
 ## 4) Environment Strategy & Ports/Adapters
 
@@ -262,7 +262,7 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 - Use `.env` + `env_file` in Docker Compose for local dev and
   ConfigMaps/Secrets in K8s.
 
----
+______________________________________________________________________
 
 ## 5) Bun‑first Workspace Plumbing
 
@@ -286,7 +286,7 @@ This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 }
 ```
 
----
+______________________________________________________________________
 
 ## 6) Docker‑Friendly Build System
 
@@ -348,7 +348,7 @@ services:
 > For an even faster local loop, run `cargo watch -x run` natively and
 > `bun dev` for the PWA; keep Docker for parity and CI.
 
----
+______________________________________________________________________
 
 ## 7) Kubernetes (DOKS) Deployment Strategy
 
@@ -438,11 +438,43 @@ Git—manage it with SOPS or an External Secrets operator. If enabled,
 
 `config` is for non‑secret settings. Place confidential keys in an external
 Secret and reference them by setting `existingSecretName` and providing key
-mappings under `secretEnvFromKeys`. Cross-field rules in `values.schema.json`
-enforce this wiring by requiring `existingSecretName` whenever
-`secretEnvFromKeys` is populated. Set `allowMissingSecret` to `false` to fail
-rendering if the referenced Secret is absent; it defaults to `true` so `helm
-template` can run without a cluster connection.
+mappings under `secretEnvFromKeys`. Cross-field rules in
+`values.schema.json` enforce this wiring by requiring `existingSecretName`
+whenever `secretEnvFromKeys` is populated. The chart defaults
+`allowMissingSecret` to `true` for `helm template` (maps to `optional: true`
+on `envFrom.secretRef`). Set it to `false` in production to fail rendering
+when the Secret is absent. The following snippets show the resulting
+`envFrom.secretRef` for both values:
+
+```yaml
+# allowMissingSecret: true (default)
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: true
+```
+
+```yaml
+# allowMissingSecret: false (production)
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          envFrom:
+            - secretRef:
+                name: app-secrets
+                optional: false
+```
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
 > Flux HelmRelease values (e.g., the production overlay) when exposing the API.
@@ -467,7 +499,7 @@ with **Kustomize overlays** that patch `spec.values` (e.g., production).
    - Invalidate CDN (only for `index.html`), or rely on cache busting for
      hashed assets.
 
----
+______________________________________________________________________
 
 ## 8) Local DX (Makefile targets)
 
@@ -519,7 +551,7 @@ sequenceDiagram
   DC->>WEB: Start web after FB completed and BE healthy
 ```
 
----
+______________________________________________________________________
 
 ## 9) Observability & Operations Hooks
 
@@ -548,7 +580,7 @@ sequenceDiagram
     end
 ```
 
----
+______________________________________________________________________
 
 ## 10) Security & Hardening Notes
 
@@ -559,7 +591,7 @@ sequenceDiagram
 - Secrets: mount via K8s Secrets (consider external secret operator for DO
    Secrets Manager).
 
----
+______________________________________________________________________
 
 ## 11) Summary of Hand‑offs
 
