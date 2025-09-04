@@ -20,6 +20,7 @@ channels:
         $ref: '#/components/messages/UserCreated'
 operations:
   userCreated:
+    operationId: userCreated
     summary: Receive UserCreated events
     action: receive
     channel:

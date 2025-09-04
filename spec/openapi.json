@@ -24,7 +24,7 @@
         "tags": ["users"],
         "operationId": "listUsers",
         "summary": "List users",
-        "description": "Return known users in the system. Pagination is not yet supported.",
+        "description": "Return up to 100 known users in the system. The server enforces this temporary limit until cursor-based pagination is introduced.",
         "externalDocs": {
           "description": "Cursor-based pagination guideline",
           "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
@@ -89,7 +89,7 @@
         "pattern": "^[a-z0-9_.:-]+$",
         "enum": [
           "invalid_request",
-          "unauthorised",
+          "unauthorized",
           "forbidden",
           "not_found",
           "internal_error"
