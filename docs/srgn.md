@@ -180,7 +180,7 @@ For instance, to find all class definitions in a Python project, one could run:
 Bash
 
 ```sh
-srgn --python 'class'.
+srgn --python 'class'
 ```
 
 The output mimics `grep` and `ripgrep`, prepending the file name and line
@@ -233,7 +233,7 @@ Consider the following command:
 Bash
 
 ```sh
-# Find all occurrences of 'github.com' but only inside docstrings of Python classes.
+# Find all occurrences of 'github.com' but only inside docstrings of Python classes
 srgn --python 'class' --python 'doc-strings' 'github\.com' my_project/
 ```
 
@@ -269,7 +269,7 @@ A practical example from the release notes demonstrates its utility 9:
 Bash
 
 ```sh
-# Find all TODOs, whether they are in comments or docstrings.
+# Find all TODOs, whether they are in comments or docstrings
 srgn -j --python comments --python doc-strings 'TODO:' src/
 ```
 
@@ -692,8 +692,8 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 14. srgn - Rust Package Registry - Crates.io, accessed on July 11, 2025,
     <https://crates.io/crates/srgn/>
 
-15. accessed on January 1, 1970,
+15. srgn language scopes, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
 
-16. accessed on January 1, 1970,
+16. Rust scope definition, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/blob/main/src/scoping/langs/rust.rs>
