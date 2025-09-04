@@ -50,11 +50,12 @@ Validate that secretEnvFromKeys references an existing Secret when set.
 {{- if not (semverCompare ">=3.2.0" .Capabilities.HelmVersion.Version) -}}
 {{- fail "wildside.validateSecrets requires Helm >= 3.2.0" -}}
 {{- end -}}
-{{- $found := lookup "v1" "Secret" .Release.Namespace $name -}}
-{{- if and (not $found) (not $allowMissing) -}}
-{{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) -}}
-{{- end -}}
-{{- if $found -}}
+  {{- $found := lookup "v1" "Secret" .Release.Namespace $name -}}
+  {{- $missingSecret := or (not $found) (and (kindIs "slice" $found) (eq (len $found) 0)) -}}
+  {{- if and $missingSecret (not $allowMissing) -}}
+  {{- fail (printf "Secret %q not found in namespace %q" $name .Release.Namespace) -}}
+  {{- end -}}
+  {{- if not $missingSecret -}}
 {{- $data := $found.data | default dict -}}
 {{- $stringData := $found.stringData | default dict -}}
 {{- $missing := list -}}
