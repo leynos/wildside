@@ -612,7 +612,7 @@ ______________________________________________________________________
 
 ## Appendix: Grammar Scope Reference
 
-### A. Note on this list
+### A. A note on this list
 
 [^1]
 

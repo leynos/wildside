@@ -353,7 +353,9 @@ spec:
   releaseName: external-dns
   targetNamespace: external-dns
   values:
-      # -- Role-Based Access Control (RBAC) configuration --
+    crd:
+      create: true
+    # -- Role-Based Access Control (RBAC) configuration --
     rbac:
       create: true
 
@@ -616,7 +618,7 @@ the status of each component in the workflow.
    `CNAME` record has been created, along with its corresponding `TXT`
    ownership record.
 
-4. **Confirm public DNS resolution:** Use a command-line tool like `dig` to
+4. **Confirm public DNS resolution:** Use a command-line tool such as `dig` to
    query a public DNS resolver and confirm that the record resolves correctly
    to the expected IP address.
 
@@ -627,7 +629,7 @@ dig A nginx.example.com +short
 ```
 
 The command should return the external IP address of your Kubernetes cluster’s
-ingress controller.[^33]
+Ingress Controller.[^33]
 
 ## Part 5: Managing Foundational DNS with OpenTofu
 

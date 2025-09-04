@@ -6,13 +6,13 @@ The modern cloud-native landscape, orchestrated by platforms like Kubernetes,
 demands a paradigm shift from imperative, manual operations to declarative,
 automated workflows. A foundational element of this shift, detailed in the
 complementary guide "Declarative DNS," is the automation of DNS management
-using a GitOps-centric architecture.1 This approach establishes a Git
+using a GitOps-centric architecture.[^1] This approach establishes a Git
 repository as the single source of truth (SSOT), with controllers like FluxCD
 and ExternalDNS continuously reconciling the cluster's state to match the
 declarative configurations committed to Git. This model successfully decouples
 application deployment from the once-manual process of creating public DNS
 records, dramatically increasing development velocity and operational
-reliability.1
+reliability.[^1]
 
 However, a publicly accessible endpoint is incomplete without robust security.
 The logical and necessary next step in this automation journey is to apply the
@@ -25,7 +25,7 @@ and untrusted by clients until a valid TLS certificate is in place.
 This report details a comprehensive, production-grade architecture for
 achieving "TLS-as-Code." By integrating cert-manager, the de-facto standard for
 certificate automation in Kubernetes, into the existing GitOps ecosystem, we
-can complete the application exposure pipeline.2 The architectural vision is to
+can complete the application exposure pipeline.[^2] The architectural vision is to
 enable a seamless, end-to-end workflow where a single
 
 `git push` of a standard Kubernetes Ingress manifest triggers a chain of
@@ -67,7 +67,7 @@ declaratively. OpenTofu, as the Infrastructure as Code (IaC) tool, is
 responsible for managing these long-lived, foundational resources. This ensures
 a clear separation of concerns between the underlying infrastructure managed by
 the platform team and the dynamic, in-cluster resources managed by the GitOps
-workflow.1
+workflow.[^1]
 
 ### 1.1 OpenTofu Provider Configuration
 
@@ -75,12 +75,12 @@ To interact with the APIs of DigitalOcean and Namecheap, OpenTofu requires the
 configuration of their respective providers. This is defined within a
 `terraform` block, which specifies the required providers, their source
 addresses, and version constraints to ensure predictable and repeatable
-deployments.3
+deployments.[^3]
 
 It is a critical security best practice to manage API credentials outside of
 version-controlled configuration files. The DigitalOcean and Namecheap
 providers can be configured to read credentials from environment variables,
-which is the recommended approach.5
+which is the recommended approach.[^5]
 
 **OpenTofu Provider Configuration (**`providers.tf`**):**
 
@@ -139,7 +139,7 @@ constraint that will be addressed later in this report.
 The DOKS cluster is the heart of the platform. Using the
 `digitalocean_kubernetes_cluster` resource, its entire configuration can be
 managed as code. For a production environment, it is essential to configure the
-cluster for high availability and resilience.7
+cluster for high availability and resilience.[^7]
 
 **DOKS Cluster Configuration (**`doks.tf`**):**
 
@@ -180,7 +180,7 @@ This configuration defines a cluster with a high-availability control plane
 (`ha = true`), which mitigates the risk of a single-point-of-failure for the
 Kubernetes API server. It also enables automatic patch upgrades
 (`auto_upgrade = true`) during a non-critical maintenance window, ensuring the
-cluster remains secure and up-to-date with minimal operational overhead.7
+cluster remains secure and up-to-date with minimal operational overhead.[^7]
 
 ### 1.3 Managing the Namecheap Domain and API
 
@@ -191,7 +191,7 @@ automation.
 
 To enable programmatic access, API access must be activated within the
 Namecheap account dashboard. This process has specific prerequisites that must
-be met.8
+be met.[^8]
 
 1. **Meet Prerequisites:** Ensure the account meets at least one of the
    following criteria:
@@ -207,7 +207,7 @@ be met.8
    - Scroll to the "Business & Dev Tools" section and click `MANAGE` next to
      "Namecheap API Access."
    - Toggle the feature `ON`, accept the terms, and enter the account
-     password.10
+     password.[^10]
 
 3. **Retrieve Credentials:** Once enabled, the system will provide an `APIKey`.
    The `API User` is the same as the Namecheap account username. These two
@@ -223,12 +223,12 @@ like DOKS, where egress IPs are non-deterministic.
 
 - **The Requirement:** The Namecheap API will only accept requests from IP
   addresses that have been explicitly added to a whitelist in the account's API
-  settings.13
+  settings.[^13]
 - **The Limitations:** This whitelist has several restrictive limitations:
 
 - It only supports single, static IPv4 addresses. CIDR ranges are not
-  permitted.16
-- A maximum of 20 IP addresses can be whitelisted.16
+  permitted.[^16]
+- A maximum of 20 IP addresses can be whitelisted.[^16]
 - The process of adding an IP to the whitelist is manual, via the Namecheap
   dashboard.
 - **The Conflict:** The `cert-manager-webhook-namecheap` pod, which is
@@ -241,7 +241,7 @@ like DOKS, where egress IPs are non-deterministic.
   be on the whitelist, causing all API calls from the webhook to fail until an
   operator manually intervenes to update the whitelist. This breaks the core
   principle of automation and makes any direct integration inherently brittle
-  and unsuitable for production.9
+  and unsuitable for production.[^9]
 
 This constraint is the single most significant technical challenge in this
 architecture. A robust, production-grade solution _must_ incorporate a strategy
@@ -252,12 +252,12 @@ to mitigate this issue, which will be the focus of Part 5.
 While dynamic, application-specific DNS records will be managed by in-cluster
 controllers, foundational records (like those for email) or the nameserver
 delegation itself can be managed via OpenTofu using the
-`namecheap_domain_records` resource.17
+`namecheap_domain_records` resource.[^17]
 
 A crucial detail of this resource is that the `record` and `nameservers`
 arguments are mutually exclusive. A single `namecheap_domain_records` resource
 block cannot be used to set both custom nameservers and other record types like
-`A` or `TXT` simultaneously.17 This is an important consideration for the DNS
+`A` or `TXT` simultaneously.[^17] This is an important consideration for the DNS
 delegation strategy discussed in Part 5, as it implies that managing the
 delegation will require a dedicated resource block separate from any other
 record management.
@@ -268,26 +268,26 @@ With the foundational infrastructure in place, the focus shifts to deploying
 the in-cluster controllers that will perform the TLS automation. Adhering to
 GitOps principles, the entire lifecycle of these components—installation,
 configuration, and upgrades—will be managed declaratively through Kubernetes
-manifests stored in the Git repository and reconciled by FluxCD.1
+manifests stored in the Git repository and reconciled by FluxCD.[^1]
 
 ### 2.1 Secure Credential Management with Mozilla SOPS
 
 The Namecheap API credentials are highly sensitive and must never be stored in
 plain text in the Git repository. Mozilla SOPS (Secrets OPerationS) is a
 powerful tool that integrates seamlessly with FluxCD to enable end-to-end
-encryption for secrets.18 The workflow ensures that secrets are encrypted
+encryption for secrets.[^18] The workflow ensures that secrets are encrypted
 before being committed to Git and are only decrypted by the FluxCD controller
-in-memory just before being applied to the cluster.18
+in-memory just before being applied to the cluster.[^18]
 
 The SOPS workflow proceeds as follows:
 
 1. **Generate an Encryption Key:** A GPG key (or an alternative like Age) is
    generated locally. This key will be used to encrypt and decrypt the
-   secrets.20
+   secrets.[^20]
 2. **Store the Decryption Key in the Cluster:** The private portion of the GPG
    key is stored in the Kubernetes cluster as a standard `Secret` resource,
    typically in the `flux-system` namespace. This allows the FluxCD
-   `kustomize-controller` to access it for decryption.18
+   `kustomize-controller` to access it for decryption.[^18]
 
     ```bash
     # (Assuming GPG key is already generated)
@@ -345,7 +345,7 @@ The SOPS workflow proceeds as follows:
 
 This setup ensures that sensitive credentials remain encrypted at rest in Git
 and are only handled in plain text within the secure confines of the cluster's
-control plane.18
+control plane.[^18]
 
 | Key in Secret | Description                                                   | Example Value                     |
 | ------------- | ------------------------------------------------------------- | --------------------------------- |
@@ -356,11 +356,11 @@ control plane.18
 
 FluxCD manages Helm chart deployments declaratively using the `HelmRepository`
 and `HelmRelease` custom resources. This approach treats Helm releases as
-version-controlled artifacts, enabling automated, repeatable deployments.21
+version-controlled artifacts, enabling automated, repeatable deployments.[^21]
 
 First, a `HelmRepository` source is defined to tell FluxCD where to find the
 cert-manager charts. The official OCI registry provided by Jetstack is the
-recommended source.22
+recommended source.[^22]
 
 `HelmRepository`**for cert-manager (**`infrastructure/sources/helm.yaml`**):**
 
@@ -381,7 +381,7 @@ Next, a `HelmRelease` manifest is created to deploy cert-manager. This manifest
 specifies the chart version, release configuration, and values that override
 the chart's defaults. For a production deployment, it is crucial to configure
 for high availability by increasing the replica counts for the controller and
-webhook components.23
+webhook components.[^23]
 
 `HelmRelease`**for cert-manager
 (**`infrastructure/controllers/cert-manager.yaml`**):**
@@ -454,7 +454,6 @@ spec:
       app.kubernetes.io/name: webhook
       app.kubernetes.io/instance: cert-manager
 ---
-# examples/pdb-cert-manager-cainjector.yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -468,18 +467,28 @@ spec:
       app.kubernetes.io/instance: cert-manager
 ```
 
+Reference these manifests in the controllers' kustomization to apply them with FluxCD:
+
+```yaml
+# infrastructure/controllers/kustomization.yaml
+resources:
+  - cert-manager.yaml
+  - pdb-cert-manager-webhook.yaml
+  - pdb-cert-manager-cainjector.yaml
+```
+
 ### 2.3 Deploying the Namecheap DNS-01 Webhook Solver
 
 Cert-manager's core distribution does not include a DNS-01 solver for
 Namecheap. To integrate with Namecheap, a third-party webhook solver is
 required. This webhook is an external service that cert-manager calls to
 fulfill the DNS-01 challenge by creating and deleting the necessary TXT records
-via the Namecheap API.25
+via the Namecheap API.[^25]
 
 A critical security assessment of the available community-provided webhooks is
 necessary. The options available on public repositories like ArtifactHub and
 GitHub are often several years old, are not signed by their authors, and come
-from unverified publishers.26 Deploying an unmaintained and untrusted container
+from unverified publishers.[^26] Deploying an unmaintained and untrusted container
 image directly into a production cluster, especially one that handles API
 credentials, represents a significant supply chain security risk.
 
@@ -535,9 +544,9 @@ With the cert-manager controller and the Namecheap webhook deployed, the next
 step is to configure the resources that define how certificates will be issued.
 The `ClusterIssuer` resource is the central point of this configuration, acting
 as a certificate authority that can be used to sign certificate requests from
-any namespace in the cluster.30
+any namespace in the cluster.[^30]
 
-### 3.1 Crafting the Let's Encrypt ,`ClusterIssuer`
+### 3.1 Crafting the Let's Encrypt `ClusterIssuer`
 
 It is a crucial best practice to use the Let's Encrypt staging environment for
 all development and testing. The staging API has much higher rate limits and
@@ -617,9 +626,9 @@ spec:
 
 The `solvers` block is the most critical part of the `ClusterIssuer`
 configuration. It instructs cert-manager on how to satisfy the ACME challenges
-required to prove domain ownership.31 For the Namecheap integration, the
+required to prove domain ownership.[^31] For the Namecheap integration, the
 
-`dns01` solver is configured to use the deployed webhook.25
+`dns01` solver is configured to use the deployed webhook.[^25]
 
 - `dns01`: Specifies that the DNS-01 challenge type will be used. This involves
   creating a specific TXT record in the domain's DNS zone.
@@ -659,7 +668,7 @@ To enable automated TLS, two key sections are added to the Ingress manifest:
    `letsencrypt-production`).
 2. **TLS Block:** The `spec.tls` block defines which hosts on the Ingress
    should be secured and provides the name of the Kubernetes `Secret` where the
-   signed certificate and private key will be stored.33
+   signed certificate and private key will be stored.[^33]
 
 **Example Ingress with TLS Automation (**`my-app/ingress.yaml`**):**
 
@@ -709,7 +718,7 @@ any number of subdomains like `api.your-domain.com`,
 `dashboard.your-domain.com`, etc.
 
 A critical requirement from Let's Encrypt is that wildcard certificates can
-**only** be issued using the DNS-01 challenge method.34 The HTTP-01 challenge,
+**only** be issued using the DNS-01 challenge method.[^34] The HTTP-01 challenge,
 which involves serving a file from a web server, cannot prove control over an
 entire domain and is therefore not supported for wildcards. This makes the
 successful integration of the DNS-01 webhook solver a mandatory prerequisite
@@ -752,55 +761,50 @@ by inspecting the custom resources that cert-manager creates.
 1. **Check the **`Certificate`**:** This is the top-level resource representing
    the user's request. Its status provides a high-level overview of the process.
 
-```bash
-kubectl describe certificate <cert-name> -n <namespace>
+   ```bash
+   kubectl describe certificate <cert-name> -n <namespace>
+   ```
 
-```
+   Look for a `Ready` condition with a status of `True` and an event of
+   `Certificate issued successfully`.[^36]
 
-Look for a `Ready` condition with a status of `True` and an event of
-`Certificate issued successfully`.36
-
-1. **Check the **`CertificateRequest`**:** This resource represents a single
+2. **Check the **`CertificateRequest`**:** This resource represents a single
    attempt to obtain a certificate. A new one is created for each issuance or
    renewal.
 
-    ```bash
-    kubectl get certificaterequest -n <namespace>
+   ```bash
+   kubectl get certificaterequest -n <namespace>
+   ```
 
-    ```
-
-2. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
+3. **Check the **`Order`**:** For ACME issuers like Let's Encrypt, an `Order`
    resource is created to manage the ACME order process. It tracks the status
    of the required challenges.
 
-    ```bash
-    kubectl describe order <order-name> -n <namespace>
+   ```bash
+   kubectl describe order <order-name> -n <namespace>
+   ```
 
-    ```
+   The output will list the associated `Challenge` resources and their current
+   state.[^38]
 
-The output will list the associated `Challenge` resources and their current
-state.38
-
-1. **Check the **`Challenge`**:** This is the most critical resource for
+4. **Check the **`Challenge`**:** This is the most critical resource for
    debugging DNS-01 issues. It represents the specific ACME challenge (e.g.,
    creating a TXT record). Its events and status will contain detailed error
    messages from the webhook or the ACME server.
 
-```bash
-kubectl describe challenge <challenge-name> -n <namespace>
+   ```bash
+   kubectl describe challenge <challenge-name> -n <namespace>
+   ```
 
-```
+   Look for messages like `Presented the DNS01 challenge for domain...` or error
+   messages indicating API failures.[^38]
 
-Look for messages like `Presented the DNS01 challenge for domain...` or error
-messages indicating API failures.38
-
-1. **Check the Webhook Logs:** The logs from the Namecheap webhook pod are the
+5. **Check the Webhook Logs:** The logs from the Namecheap webhook pod are the
    final source of truth for API interactions.
 
-```bash
-kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager-webhook-namecheap -f
-
-```
+   ```bash
+   kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager-webhook-namecheap -f
+   ```
 
 These logs will show if the webhook is receiving challenge requests from
 cert-manager and the outcome of its API calls to Namecheap.
@@ -827,7 +831,7 @@ architecting solutions to inherent platform limitations.
   `cert-manager` namespace. These policies should enforce rules such as:
 
 - Allowing ingress to the webhook pod only from the Kubernetes API server on
-  its designated port (typically 10250).24
+  its designated port (typically 10250).[^24]
 - Allowing egress from the controller and webhook pods only to the Kubernetes
   API server and the required external endpoints (Let's Encrypt API and
   Namecheap API on TCP port 443).
@@ -842,7 +846,7 @@ architecting solutions to inherent platform limitations.
 
 A systematic approach to troubleshooting is key to minimizing downtime. The
 following table provides a guide for diagnosing common issues in the TLS
-issuance pipeline.38
+issuance pipeline.[^38]
 
 | Symptom                                                                       | Diagnostic Command(s)                                                                                                                                                 | Likely Cause & Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -886,19 +890,19 @@ strategies provide robust solutions to this problem.
   DigitalOcean DNS or Cloudflare).
 - **Implementation:**
 
-1. **Create a DNS Zone:** In the secondary provider (e.g., DigitalOcean),
-   create a DNS zone for `your-domain.com`.
-2. **Delegate with NS Records:** In Namecheap, using the
-   `namecheap_domain_records` OpenTofu resource, create `NS` (nameserver)
-   records for the hostname `_acme-challenge`, pointing to the nameservers of
-   the secondary provider.
-3. **Configure a Second **`ClusterIssuer`**:** In cert-manager, create a new
-   `ClusterIssuer` (e.g., `letsencrypt-digitalocean`). This issuer will use the
-   native `digitalocean` solver, configured with DigitalOcean API credentials.
-4. **Use a **`selector`**:** In the primary `Certificate` resource, use a
-   `selector` in the `dns01` configuration to instruct cert-manager to use the
-   `letsencrypt-digitalocean` issuer specifically for challenges involving
-   `your-domain.com`.
+  1. **Create a DNS Zone:** In the secondary provider (e.g., DigitalOcean),
+     create a DNS zone for `your-domain.com`.
+  2. **Delegate with NS Records:** In Namecheap, using the
+     `namecheap_domain_records` OpenTofu resource, create `NS` (nameserver)
+     records for the hostname `_acme-challenge`, pointing to the nameservers of
+     the secondary provider.
+  3. **Configure a Second **`ClusterIssuer`**:** In cert-manager, create a new
+     `ClusterIssuer` (e.g., `letsencrypt-digitalocean`). This issuer will use the
+     native `digitalocean` solver, configured with DigitalOcean API credentials.
+  4. **Use a `selector`:** In the primary `Certificate` resource, use a
+     `selector` in the `dns01` configuration to instruct cert-manager to use the
+     `letsencrypt-digitalocean` issuer specifically for challenges involving
+     `your-domain.com`.
 
 - **Analysis:** This is an elegant, cloud-native solution. It has no additional
   infrastructure cost and aligns well with microservice principles by
@@ -974,162 +978,92 @@ for a production environment. By implementing this strategy, the organization
 can achieve a truly automated, secure, and operationally excellent application
 delivery platform.
 
-## Works cited
+[^1]: Kubernetes Dynamic DNS With Cloudflare
 
-1. Kubernetes Dynamic DNS With Cloudflare
-
-2. cert-manager/cert-manager: Automatically provision and manage TLS
+[^2]: cert-manager/cert-manager: Automatically provision and manage TLS
    certificates in Kubernetes - GitHub, accessed on 1 September 2025,
    [https://github.com/cert-manager/cert-manager](https://github.com/cert-manager/cert-manager)
 
-3. Providers - OpenTofu, accessed on 1 September 2025,
+[^3]: Providers - OpenTofu, accessed on 1 September 2025,
    [https://opentofu.org/docs/language/providers/](https://opentofu.org/docs/language/providers/)
 
-4. Provider Requirements | OpenTofu, accessed on 1 September 2025,
-   [https://opentofu.org/docs/language/providers/requirements/](https://opentofu.org/docs/language/providers/requirements/)
-
-5. Provider: DigitalOcean - OpenTofu Registry, accessed on 1 September 2025,
+[^5]: Provider: DigitalOcean - OpenTofu Registry, accessed on 1 September 2025,
    [https://search.opentofu.org/provider/opentofu/digitalocean/latest](https://search.opentofu.org/provider/opentofu/digitalocean/latest)
 
-6. Namecheap provider - OpenTofu Registry, accessed on 1 September 2025,
-   [https://search.opentofu.org/provider/namecheap/namecheap/v2.2.0](https://search.opentofu.org/provider/namecheap/namecheap/v2.2.0)
-
-7. digitalocean_kubernetes_cluster | Resources | digitalocean …, accessed on
+[^7]: digitalocean_kubernetes_cluster | Resources | digitalocean …, accessed on
    1 September 2025,
    [https://docs.digitalocean.com/reference/terraform/reference/resources/kubernetes_cluster/](https://docs.digitalocean.com/reference/terraform/reference/resources/kubernetes_cluster/)
 
-8. Namecheap Terraform Provider - Domains, accessed on 1 September 2025,
+[^8]: Namecheap Terraform Provider - Domains, accessed on 1 September 2025,
    [https://www.namecheap.com/support/knowledgebase/article.aspx/10502/2208/namecheap-terraform-provider/](https://www.namecheap.com/support/knowledgebase/article.aspx/10502/2208/namecheap-terraform-provider/)
 
-9. A warning about Namecheap when using dynamic DNS, Let's Encrypt and DNS
+[^9]: A warning about Namecheap when using dynamic DNS, Let's Encrypt and DNS
    challenge : r/selfhosted - Reddit, accessed on 1 September 2025,
    [https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/](https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/)
 
-10. Obtaining an API key from Namecheap | Yunohost, accessed on 1 September
+[^10]: Obtaining an API key from Namecheap | Yunohost, accessed on 1 September
     2025,
     [https://doc.yunohost.org/admin/get_started/providers/registrar/namecheap/](https://doc.yunohost.org/admin/get_started/providers/registrar/namecheap/)
 
-11. Intro to API for Developers | [Namecheap.com](http://Namecheap.com),
-    accessed on 1 September 2025,
-    [https://www.namecheap.com/support/api/intro/](https://www.namecheap.com/support/api/intro/)
-
-12. Obtaining an API key from Namecheap - Yunohost, accessed on 1 September
-    2025,
-    [https://doc.yunohost.org/oc/admin/self_hosting/providers/registrar/namecheap/](https://doc.yunohost.org/oc/admin/self_hosting/providers/registrar/namecheap/)
-
-13. [www.namecheap.com](http://www.namecheap.com), accessed on 1 September
+[^13]: [www.namecheap.com](http://www.namecheap.com), accessed on 1 September
     2025,
     [https://www.namecheap.com/support/api/intro/](https://www.namecheap.com/support/api/intro/)
 
-14. Namecheap API Integration - Peerclick Help Center, accessed on 1 September
-    2025,
-    [https://help-center.peerclick.com/en/articles/10305681-namecheap-api-integration](https://help-center.peerclick.com/en/articles/10305681-namecheap-api-integration)
-
-15. API Documentation - Global Parameters - Namecheap, accessed on 1 September
-    2025,
-    [https://www.namecheap.com/support/api/global-parameters/](https://www.namecheap.com/support/api/global-parameters/)
-
-16. Any way around the API whitelisting yet? : r/NameCheap - Reddit, accessed
+[^16]: Any way around the API whitelisting yet? : r/NameCheap - Reddit, accessed
     on 1 September 2025,
     [https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/](https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/)
 
-17. namecheap_domain_records | resources | namecheap/namecheap | Providers |
+[^17]: namecheap_domain_records | resources | namecheap/namecheap | Providers |
     OpenTofu and Terraform Registry - [Library.tf](http://Library.tf), accessed
     on 1 September 2025,
     [https://library.tf/providers/namecheap/namecheap/latest/docs/resources/domain_records](https://library.tf/providers/namecheap/namecheap/latest/docs/resources/domain_records)
 
-18. Manage Kubernetes secrets with SOPS | Flux - Flux CD, accessed on 1
+[^18]: Manage Kubernetes secrets with SOPS | Flux - Flux CD, accessed on 1
     September 2025,
     [https://fluxcd.io/flux/guides/mozilla-sops/](https://fluxcd.io/flux/guides/mozilla-sops/)
 
-19. Secrets Management - Flux CD, accessed on 1 September 2025,
-    [https://fluxcd.io/flux/security/secrets-management/](https://fluxcd.io/flux/security/secrets-management/)
-
-20. Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. - Medium,
+[^20]: Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. - Medium,
     accessed on 1 September 2025,
     [https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468](https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468)
 
-21. Manage Helm Releases - Flux CD, accessed on 1 September 2025,
+[^21]: Manage Helm Releases - Flux CD, accessed on 1 September 2025,
     [https://fluxcd.io/flux/guides/helmreleases/](https://fluxcd.io/flux/guides/helmreleases/)
 
-22. Helm - cert-manager Documentation, accessed on 1 September 2025,
+[^22]: Helm - cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/installation/helm/](https://cert-manager.io/docs/installation/helm/)
 
-23. cert-manager 1.18.2 - Artifact Hub, accessed on 1 September 2025,
+[^23]: cert-manager 1.18.2 - Artifact Hub, accessed on 1 September 2025,
     [https://artifacthub.io/packages/helm/cert-manager/cert-manager](https://artifacthub.io/packages/helm/cert-manager/cert-manager)
 
-24. Best Practice - cert-manager Documentation, accessed on 1 September 2025,
+[^24]: Best Practice - cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/installation/best-practice/](https://cert-manager.io/docs/installation/best-practice/)
 
-25. Webhook - cert-manager Documentation, accessed on 1 September 2025,
+[^25]: Webhook - cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/configuration/acme/dns01/webhook/](https://cert-manager.io/docs/configuration/acme/dns01/webhook/)
 
-26. jamesgoodhouse/cert-manager-webhook-namecheap: A … - GitHub, accessed on
+[^26]: jamesgoodhouse/cert-manager-webhook-namecheap: A … - GitHub, accessed on
     1 September 2025,
     [https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap](https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap)
 
-27. cert-manager-webhook-namecheap 0.1.2 - Artifact Hub, accessed on 1
-    September 2025,
-    [https://artifacthub.io/packages/helm/cert-manager-webhook-namecheap/cert-manager-webhook-namecheap](https://artifacthub.io/packages/helm/cert-manager-webhook-namecheap/cert-manager-webhook-namecheap)
-
-28. letsencrypt-namecheap-issuer 0.1.1 ·
-    zvonimirbedi/cert-manager-webhook-namecheap, accessed on 1 September 2025,
-    [https://artifacthub.io/packages/helm/cert-manager-webhook-namecheap/letsencrypt-namecheap-issuer](https://artifacthub.io/packages/helm/cert-manager-webhook-namecheap/letsencrypt-namecheap-issuer)
-
-29. kelvie/cert-manager-webhook-namecheap: A cert-manager … - GitHub,
-    accessed on 1 September 2025,
-    [https://github.com/kelvie/cert-manager-webhook-namecheap](https://github.com/kelvie/cert-manager-webhook-namecheap)
-
-30. Issuer Configuration - cert-manager Documentation, accessed on 1 September
+[^30]: Issuer Configuration - cert-manager Documentation, accessed on 1 September
     2025,
     [https://cert-manager.io/docs/configuration/](https://cert-manager.io/docs/configuration/)
 
-31. DNS01 - cert-manager Documentation, accessed on 1 September 2025,
+[^31]: DNS01 - cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/configuration/acme/dns01/](https://cert-manager.io/docs/configuration/acme/dns01/)
 
-32. cert-manager adding my domain to DNS lookup of
-    [acme-v02.api.letsencrypt.org](http://acme-v02.api.letsencrypt.org) causing
-    failures : r/kubernetes - Reddit, accessed on 1 September 2025,
-    [https://www.reddit.com/r/kubernetes/comments/16ji2l0/certmanager_adding_my_domain_to_dns_lookup_of/](https://www.reddit.com/r/kubernetes/comments/16ji2l0/certmanager_adding_my_domain_to_dns_lookup_of/)
-
-33. Certificate resource - cert-manager Documentation, accessed on 1 September
+[^33]: Certificate resource - cert-manager Documentation, accessed on 1 September
     2025,
     [https://cert-manager.io/docs/usage/certificate/](https://cert-manager.io/docs/usage/certificate/)
 
-34. DNS Domain Validation (dns-01) | Certify The Web Docs, accessed on 1
+[^34]: DNS Domain Validation (dns-01) | Certify The Web Docs, accessed on 1
     September 2025,
     [https://docs.certifytheweb.com/docs/dns/validation/](https://docs.certifytheweb.com/docs/dns/validation/)
 
-35. Automation of certificate renewal with manual dns-01 and NameCheap -
-    Reddit, accessed on 1 September 2025,
-    [https://www.reddit.com/r/letsencrypt/comments/1dyq5gw/automation_of_certificate_renewal_with_manual/](https://www.reddit.com/r/letsencrypt/comments/1dyq5gw/automation_of_certificate_renewal_with_manual/)
-
-36. Verifying the Installation - cert-manager Documentation, accessed on 1
+[^36]: Verifying the Installation - cert-manager Documentation, accessed on 1
     September 2025,
     [https://cert-manager.io/v1.6-docs/installation/verify/](https://cert-manager.io/v1.6-docs/installation/verify/)
 
-37. Kubectl plugin - cert-manager Documentation, accessed on 1 September 2025,
-    [https://cert-manager.io/v1.0-docs/usage/kubectl-plugin/](https://cert-manager.io/v1.0-docs/usage/kubectl-plugin/)
-
-38. Troubleshooting Issuing ACME Certificates - cert-manager Documentation,
+[^38]: Troubleshooting Issuing ACME Certificates - cert-manager Documentation,
     accessed on 1 September 2025,
     [https://cert-manager.io/v1.0-docs/faq/acme/](https://cert-manager.io/v1.0-docs/faq/acme/)
-
-39. Creating an ACME resolver webhook for responses to DNS01 checks - Yandex
-    Cloud, accessed on 1 September 2025,
-    [https://yandex.cloud/en/docs/tutorials/infrastructure-management/cert-manager-webhook](https://yandex.cloud/en/docs/tutorials/infrastructure-management/cert-manager-webhook)
-
-40. Troubleshooting Certificate Manager | Google Cloud, accessed on 1 September
-    2025,
-    [https://cloud.google.com/certificate-manager/docs/troubleshooting](https://cloud.google.com/certificate-manager/docs/troubleshooting)
-
-41. Cert Manager Troubleshooting - Giant Swarm Handbook, accessed on 1
-    September 2025,
-    [https://handbook.giantswarm.io/docs/support-and-ops/ops-recipes/troubleshooting-cert-manager/](https://handbook.giantswarm.io/docs/support-and-ops/ops-recipes/troubleshooting-cert-manager/)
-
-42. FAQ - cert-manager Documentation, accessed on 1 September 2025,
-    [https://cert-manager.io/v1.9-docs/faq/](https://cert-manager.io/v1.9-docs/faq/)
-
-43. Troubleshooting certificate management service - IBM, accessed on 1
-    September 2025,
-    [https://www.ibm.com/docs/en/cloud-private/3.2.0?topic=service-troubleshooting-certificate-management](https://www.ibm.com/docs/en/cloud-private/3.2.0?topic=service-troubleshooting-certificate-management)

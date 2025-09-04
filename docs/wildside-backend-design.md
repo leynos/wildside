@@ -61,7 +61,7 @@ graph TD
     end
 
     User -- HTTPS/WSS --> Ingress
-    Ingress -- /api, /ws --> API
+    Ingress -- /api/v1, /ws --> API
     Ingress -- /tiles --> Martin
 
     API -- CRUD Ops --> DB
@@ -113,11 +113,11 @@ API and WebSocket traffic.
 - **Implementation Tasks:**
 
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use the `actix-session` crate with a cookie-based backend. Load the signing
-    key from a secret store (for example, a Kubernetes Secret or Vault) and
-    mount or inject it for the service at runtime. Configure the session cookie
-    with `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and
-    explicit `domain` and `path`.
+    Use `actix-session` with a cookie backend configured as:
+    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and explicit
+    `domain` and `path`. Load the signing key from a managed secret (for
+    example, a Kubernetes `Secret` or Vault) and mount or inject it for the
+    service at runtime—avoid sourcing it from a plain environment variable.
 
     ```rust
     use actix_session::{SessionMiddleware, storage::CookieSessionStore};
