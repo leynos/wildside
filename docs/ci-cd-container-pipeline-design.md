@@ -337,9 +337,9 @@ minimizing the window of exposure.15
 Ensuring the Kubernetes deployment uses the newly built image tag is crucial
 for automated release. Instead of editing manifests, `kubectl set image` can
 patch the running deployment directly with
-`kubectl set image deployment/app app=${TAGGED_IMAGE}`.15 For more complex
-applications, tools like Kustomize or Helm can provide more structured manifest
-management.
+`kubectl set image deployment/${K8S_DEPLOYMENT_NAME} ${K8S_CONTAINER_NAME}=${TAGGED_IMAGE}`
+.15 For more complex applications, tools like Kustomize or Helm can provide
+more structured manifest management.
 
 With the image updated and the `kubeconfig` in place, the deployment rolls out
 immediately. This entire sequence demonstrates that a CI/CD pipeline is

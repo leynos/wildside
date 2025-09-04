@@ -202,8 +202,10 @@ performance and data relevance.
 For screen readers: This diagram illustrates the relationships between the core
 data entities.
 
-The ER diagram uses canonical PostGIS type notation (for example,
-`GEOGRAPHY(Point, 4326)` and `GEOMETRY(LineString, 4326)`).
+The ER diagram encodes PostGIS types as display labels to satisfy Mermaid
+parsing rules (for example, GEOGRAPHY location "Point, 4326" and GEOMETRY path
+"LineString, 4326"). The schema tables below use the canonical PostGIS types
+(for example, `GEOGRAPHY(Point, 4326)` and `GEOMETRY(LineString, 4326)`).
 
 ```mermaid
 erDiagram
@@ -713,13 +715,18 @@ display them dynamically based on zoom level and user context.
 
 #### 5.2.2. Generated Routes (`routes`)
 
-This layer will display a specific, user-generated route on the map. As routes
-are user-specific and generated on demand, the system cannot simply serve the
-entire `routes` table. A PostGIS function is the ideal solution.
+This layer will display a specific, user-generated route on the map. Requests
+hit the cluster Ingress at `/tiles/...`, which forwards them directly to
+Martin. As routes are user-specific and generated on demand, the system cannot
+simply serve the entire `routes` table. A PostGIS function is the ideal
+solution.
 
 - **Source Type:** Function
 
-- **Endpoint:** `/api/v1/tiles/routes/{route_id}/{z}/{x}/{y}.pbf`
+- **Endpoint:** `/tiles/routes/{route_id}/{z}/{x}/{y}.pbf`
+- **Authentication:** Requests must include a short-lived signed token,
+  validated by Martin via `pgjwt`, to ensure that only the requesting user can
+  fetch tiles for a generated route.
 
 - **Implementation:**
 
