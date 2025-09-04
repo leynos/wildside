@@ -1517,9 +1517,9 @@ sequenceDiagram
   Dev->>GH: Push commit or open PR
   GH->>Reg: Build and push image
   GH->>GitOps: Commit manifests with image tag
-  Src->>GitOps: Detect change
-  Src->>Kust: Notify new Kustomization
-  Kust->>Helm: Emit HelmRelease
+  Src->>GitOps: Publish new artifact (revision)
+  Kust->>Src: Pull artifact and reconcile Kustomization
+  Kust->>Helm: Reconcile HelmRelease
   Helm->>K8s: Deploy resources
   K8s-->>DNS: Ingress observed (watch)
   DNS->>CF: Provision A record
@@ -1530,14 +1530,15 @@ sequenceDiagram
   GH-->>Dev: Comment preview URL
   Dev->>GH: Push updates
   GH->>GitOps: Update image tag
-  Src->>Kust: Reconcile change
+  Kust->>Src: Pull new artifact and reconcile
   Helm->>K8s: Roll out update
   Dev->>GH: Merge PR
   GH->>GitOps: Remove manifests
   Src->>Kust: Register removal
   Helm->>K8s: Prune resources
   DNS->>CF: Remove DNS record
-  CM->>K8s: Delete certificate
+  Helm->>K8s: Delete Certificate
+  K8s-->>K8s: GC TLS Secret (ownerRef)
 ```
 
 The diagram depicts the following high-level steps:
