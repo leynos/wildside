@@ -1540,6 +1540,16 @@ sequenceDiagram
   CM->>K8s: Delete certificate
 ```
 
+The diagram depicts the following high-level steps:
+
+- A developer pushes code, triggering GitHub Actions to build and publish a
+  container image.
+- Flux controllers reconcile the change, deploy resources, and expose them via
+  Kubernetes, ExternalDNS, and cert-manager.
+- GitHub comments the preview URL for quick feedback.
+- When the pull request is merged, Flux prunes the deployment and supporting
+  infrastructure, including DNS records and TLS assets.
+
 ## Conclusion and Operational Recommendations
 
 This report has detailed a robust, secure, and highly automated architecture
