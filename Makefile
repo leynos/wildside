@@ -1,7 +1,7 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit
 all: fmt lint test
 
 clean:
@@ -56,6 +56,9 @@ deps: $(NODE_MODULES_STAMP)
 $(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
+
+audit:
+	npm run audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
