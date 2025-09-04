@@ -14,19 +14,27 @@ spec:
   ingressClassName: {{ . | quote }}
   {{- end }}
   {{- with .Values.ingress.hostname }}
-  {{- with $.Values.ingress.tlsSecretName }}
+  {{- if $.Values.ingress.tlsSecretName }}
   tls:
     - hosts:
-        - {{ $.Values.ingress.hostname | quote }}
-      secretName: {{ . | quote }}
+        - {{ . | quote }}
+      secretName: {{ $.Values.ingress.tlsSecretName | quote }}
   {{- end }}
-  {{- end }}
+  rules:
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wildside.fullname" $ }}
+                port:
+                  name: {{ $.Values.service.portName | default "http" | quote }}
+  {{- else }}
   # Leave host unset to apply the rule to all hosts
   rules:
-    - {{- with .Values.ingress.hostname }}
-      host: {{ . | quote }}
-      {{- end }}
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
@@ -35,4 +43,5 @@ spec:
                 name: {{ include "wildside.fullname" . }}
                 port:
                   name: {{ .Values.service.portName | default "http" | quote }}
+  {{- end }}
 {{- end }}
