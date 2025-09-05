@@ -116,37 +116,41 @@ API and WebSocket traffic.
     Use `actix-session` with a cookie backend configured as:
     `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and explicit
     `domain` and `path`. Set a bounded `Max-Age` to limit session lifetime.
-    Load the signing key from a managed secret (for example, a Kubernetes
-    `Secret` or Vault) and mount or inject it for the service at runtime—avoid
-    sourcing it from a plain environment variable. Rotate the key regularly by
-    rolling the secret and reloading it so stale cookies are invalidated.
+    Load the signing key from a high-entropy (≥64-byte), read-only managed
+    secret (for example, a Kubernetes `Secret` or Vault) and mount or inject it
+    for the service at runtime—avoid sourcing it from a plain environment
+    variable. Rotate the key regularly by rolling the secret and reloading it so
+    stale cookies are invalidated.
 
     ```rust
-    use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-    use actix_web::cookie::{time::Duration, CookieBuilder, Key, SameSite};
+    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+    use actix_web::cookie::{time::Duration, Key, SameSite};
+    use std::{env, fs};
 
-    let key = Key::from(std::fs::read("/var/run/secrets/session_key")?);
-    let session_middleware = SessionMiddleware::builder(
-        CookieSessionStore::default(),
-        key,
-    )
-    .cookie_builder(
-        CookieBuilder::new("wildside", "")
-            .secure(true)
-            .http_only(true)
-            .same_site(SameSite::Lax)
-            .domain("example.com")
-            .path("/")
-            .max_age(Duration::hours(2)),
-    )
-    .build();
+    let key_path = env::var("SESSION_KEY_FILE")
+        .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key_bytes = fs::read(key_path)?;
+    let key = Key::derive_from(&key_bytes);
+
+    let session_middleware =
+        SessionMiddleware::builder(CookieSessionStore::default(), key)
+            .cookie_name("wildside")
+            .cookie_secure(true)
+            .cookie_http_only(true)
+            .cookie_same_site(SameSite::Lax)
+            // Set at deploy time if required:
+            //.cookie_domain(Some("example.com".into()))
+            .cookie_path("/")
+            .cookie_max_age(Duration::hours(2))
+            .build();
     ```
 
-    Deployment manifests in `deploy/k8s/` should mount the secret and expose its
-    path to the service (for instance, via a `SESSION_KEY_FILE` environment
-    variable). To support key rotation, deploy versioned secrets and reload the
-    service so the new key takes effect while the previous key remains available
-    for validating existing sessions during the rollout.
+    Deployment manifests in `deploy/k8s/` should mount the secret read-only and
+    expose its path to the service (for instance, via a `SESSION_KEY_FILE`
+    environment variable). Use high-entropy (≥64-byte) keys and rotate them by
+    deploying new secrets and reloading the service so the fresh key takes
+    effect while the previous key remains available for validating existing
+    sessions during the rollout.
 
   - [ ] **Observability:**
 
