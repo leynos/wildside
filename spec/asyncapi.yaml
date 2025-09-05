@@ -12,6 +12,9 @@ servers:
 channels:
   /ws:
     address: /ws
+    messages:
+      userCreated:
+        $ref: '#/components/messages/UserCreated'
 operations:
   userCreated:
     x-operationId: userCreated  # AsyncAPI 3 uses vendor field for stable codegen identifier
@@ -20,7 +23,8 @@ operations:
     channel:
       $ref: '#/channels/~1ws'
     messages:
-      - $ref: '#/components/messages/UserCreated'
+      # Operation messages must reference channel-scoped names for validation
+      - $ref: '#/channels/~1ws/messages/userCreated'
     tags:
       - name: users
         description: Events about system users
