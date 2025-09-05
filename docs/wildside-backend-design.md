@@ -152,6 +152,8 @@ API and WebSocket traffic.
     path to the service (for instance, via a `SESSION_KEY_FILE` environment
     variable). Scope the middleware to routes that require authentication.
 
+  - [ ] **Login endpoint:** Add `POST /api/login` to validate credentials and initialise sessions.
+
   - [ ] **Observability:**
 
     - Integrate the `actix-web-prom` crate as middleware to expose default
@@ -601,7 +603,7 @@ All REST endpoints are prefixed with `/api/v1`.
 
 | Method | Path | Description | Authentication |
 | ------ | ---------------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/api/v1/users` | Creates a new anonymous user session. | None |
+| `POST` | `/api/login` | Establishes a user session from credentials. | None |
 | `GET` | `/api/v1/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
 | `PUT` | `/api/v1/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
 
