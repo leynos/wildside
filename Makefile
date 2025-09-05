@@ -86,16 +86,37 @@ yamllint:
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
+
+
+.PHONY: doks-policy
+doks-policy:
+	command -v conftest >/dev/null
+	# Create a binary plan, accept exit code 0 or 2 only
+	tofu -chdir=infra/modules/doks/examples/basic plan \
+	-detailed-exitcode -out=tfplan.binary -input=false -lock=false \
+	-var cluster_name=test \
+	-var region=nyc1 \
+	-var kubernetes_version=1.28.0-do.0 \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
+	|| test $$? -eq 2
+	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary \
+	> infra/modules/doks/examples/basic/plan.json
+	conftest test infra/modules/doks/examples/basic/plan.json \
+	--policy infra/modules/doks/policy
+
+
 .PHONY: doks-test
 doks-test:
 	tofu fmt -check infra/modules/doks
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
 	cd infra/modules/doks && tflint --init && tflint
-	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
+	$(MAKE) doks-policy
 	cd infra/modules/doks/tests && go test -v
+	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
 	-var kubernetes_version=1.28.0-do.0 \
-	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' || true
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
+	|| test $$? -eq 2

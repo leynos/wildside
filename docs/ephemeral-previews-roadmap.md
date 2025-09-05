@@ -65,8 +65,8 @@ modules defined in the wildside-infra repository.
 - [x] **Define input variables**: The module should accept variables for the
   cluster name, region, version, and node pool configuration.
 
-- [x] **Define outputs**: The module should output the cluster's kubeconfig and
-  other relevant details.
+- [x] **Define outputs**: The module should output the cluster identifier,
+  API endpoint and kubeconfig (sensitive).
 
 - [ ] **Instantiate the module**: Create a root OpenTofu configuration that uses
   the `doks` module to provision a "dev" cluster.

@@ -19,7 +19,8 @@ cluster lifecycle.
   (`ha = true`). A policy test enforces this to guard against accidental
   downgrades.
 - **Minimal outputs.** Only the cluster identifier, API endpoint and raw
-  kubeconfig are exposed. Consumers can derive further details from the
+  kubeconfig are exposed. The kubeconfig output is marked sensitive to avoid
+  accidental disclosure. Consumers can derive further details from the
   kubeconfig as needed.
 - **Testing strategy.** Terratest validates module syntax and exercises plan
   and apply flows. The apply step is skipped when a valid
