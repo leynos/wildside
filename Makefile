@@ -92,6 +92,10 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
 	cd infra/modules/doks && tflint --init && tflint
-	conftest test infra/modules/doks --policy infra/modules/doks/policy
+	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
 	cd infra/modules/doks/tests && go test -v
-	tofu plan -detailed-exitcode infra/modules/doks/examples/basic || true
+	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
+	-var cluster_name=test \
+	-var region=nyc1 \
+	-var kubernetes_version=1.28.0-do.0 \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' || true
