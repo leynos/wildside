@@ -17,7 +17,8 @@ channels:
         $ref: '#/components/messages/UserCreated'
 operations:
   userCreated:
-    x-operationId: userCreated
+    x-operationId: userCreated  # AsyncAPI 3 uses vendor field for stable codegen identifier
+    # Validator requires channel-scoped messages; direct component refs fail
     summary: Receive UserCreated events
     action: receive
     channel:
