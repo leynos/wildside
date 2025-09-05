@@ -2,9 +2,11 @@
 
 use std::time::{Duration, Instant};
 
-use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
+use crate::ws::messages::{UserCreated, UserCreatedMessage};
+use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 /// Time between heartbeats to the client.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -50,7 +52,18 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
                 self.last_heartbeat = Instant::now();
                 ctx.pong(&payload);
             }
-            Ok(Message::Pong(_)) | Ok(Message::Text(_)) | Ok(Message::Binary(_)) => {
+            Ok(Message::Text(name)) => {
+                self.last_heartbeat = Instant::now();
+                let payload = UserCreated {
+                    id: Uuid::new_v4().to_string(),
+                    display_name: name.to_string(),
+                };
+                let msg = UserCreatedMessage::new(payload);
+                if let Ok(body) = serde_json::to_string(&msg) {
+                    ctx.text(body);
+                }
+            }
+            Ok(Message::Pong(_)) | Ok(Message::Binary(_)) => {
                 self.last_heartbeat = Instant::now();
             }
             Ok(Message::Close(reason)) => {
@@ -63,6 +76,17 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
                 warn!(error = %err, "WebSocket protocol error");
                 ctx.stop();
             }
+        }
+    }
+}
+
+impl Handler<UserCreatedMessage> for UserSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: UserCreatedMessage, ctx: &mut Self::Context) {
+        match serde_json::to_string(&msg) {
+            Ok(body) => ctx.text(body),
+            Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
         }
     }
 }
