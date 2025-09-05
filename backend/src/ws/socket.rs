@@ -2,9 +2,10 @@
 
 use std::time::{Duration, Instant};
 
-use crate::ws::messages::{UserCreated, UserCreatedMessage};
+use crate::ws::messages::UserCreated;
 use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
+use regex::Regex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -12,6 +13,12 @@ use uuid::Uuid;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// Maximum allowed time between messages from the client before considering it disconnected.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn validate_display_name(name: &str) -> bool {
+    // Only allow alphanumeric, spaces, and underscores. Length 3-32.
+    let re = Regex::new(r"^[A-Za-z0-9_ ]{3,32}$").unwrap();
+    re.is_match(name)
+}
 
 pub struct UserSocket {
     last_heartbeat: Instant,
@@ -54,13 +61,16 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
             }
             Ok(Message::Text(name)) => {
                 self.last_heartbeat = Instant::now();
-                let payload = UserCreated {
-                    id: Uuid::new_v4().to_string(),
-                    display_name: name.to_string(),
-                };
-                let msg = UserCreatedMessage::new(payload);
-                if let Ok(body) = serde_json::to_string(&msg) {
-                    ctx.text(body);
+                if validate_display_name(&name) {
+                    let event = UserCreated::new(Uuid::new_v4().to_string(), name.to_string());
+                    if let Ok(body) = serde_json::to_string(&event) {
+                        ctx.text(body);
+                    }
+                } else {
+                    let error_msg = serde_json::json!({
+                        "error": "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters."
+                    });
+                    ctx.text(error_msg.to_string());
                 }
             }
             Ok(Message::Pong(_)) | Ok(Message::Binary(_)) => {
@@ -80,10 +90,10 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
     }
 }
 
-impl Handler<UserCreatedMessage> for UserSocket {
+impl Handler<UserCreated> for UserSocket {
     type Result = ();
 
-    fn handle(&mut self, msg: UserCreatedMessage, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: UserCreated, ctx: &mut Self::Context) {
         match serde_json::to_string(&msg) {
             Ok(body) => ctx.text(body),
             Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
