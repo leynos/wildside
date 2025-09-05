@@ -5,7 +5,11 @@
 //! serialisation contracts (serde) in each type's Rustdoc.
 //!
 //! Public surface:
+//! - Error (alias to `error::Error`) — API error response payload.
+//! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier.
 //! - User (alias to `user::User`) — domain user identity and display name.
 
+pub mod error;
 pub mod user;
+pub use self::error::{Error, ErrorCode};
 pub use self::user::User;
