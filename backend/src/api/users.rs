@@ -15,7 +15,7 @@ pub struct LoginRequest {
 /// Authenticate user and establish a session.
 #[utoipa::path(
     post,
-    path = "/api/login",
+    path = "/api/v1/login",
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login success"),
@@ -38,7 +38,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
 /// List known users.
 #[utoipa::path(
     get,
-    path = "/api/users",
+    path = "/api/v1/users",
     responses(
         (status = 200, description = "Users", body = [User]),
         (status = 401, description = "Unauthorised"),
