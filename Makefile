@@ -40,6 +40,9 @@ fmt:
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
+	bun x -y @asyncapi/cli@latest validate spec/asyncapi.yaml
+	checkmake Makefile
+	mbake validate Makefile
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
@@ -66,12 +69,10 @@ check-fmt:
 
 markdownlint:
 	find . \
-	  -path './backend/target' -prune -o \
-	  -path './target' -prune -o \
-	  -path './.node_modules' -prune -o \
-	  -path '*/node_modules' -prune -o \
-	  -name '.git' -type d -prune -o \
-	  -type f -name '*.md' -print0 | xargs -0 -- markdownlint
+	  ( -path './backend/target' -o -path './target' -o \
+	     -path './.node_modules' -o -path '*/node_modules' -o \
+	     -name '.git' \) -prune -o -type f -name '*.md' -print0 | \
+	     xargs -0 -- markdownlint
 
 nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
@@ -83,5 +84,4 @@ yamllint:
 	command -v yamllint >/dev/null
 	command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
-	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
-	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+	if [ -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ]; then set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -; fi
