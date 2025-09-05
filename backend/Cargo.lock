@@ -302,11 +302,17 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "actix-web-actors",
+<<<<<<< HEAD
  "insta",
  "regex",
  "rstest",
+||||||| parent of 2ea98fb (Add request trace IDs and error helpers)
+=======
+ "futures-util",
+>>>>>>> 2ea98fb (Add request trace IDs and error helpers)
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "utoipa",
@@ -622,6 +628,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
 
 [[package]]
+<<<<<<< HEAD
 name = "futures-executor"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -639,6 +646,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6"
 
 [[package]]
+||||||| parent of 2ea98fb (Add request trace IDs and error helpers)
+=======
+>>>>>>> 2ea98fb (Add request trace IDs and error helpers)
 name = "futures-macro"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -675,9 +685,14 @@ checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
 dependencies = [
  "futures-channel",
  "futures-core",
+<<<<<<< HEAD
  "futures-io",
  "futures-macro",
  "futures-sink",
+||||||| parent of 2ea98fb (Add request trace IDs and error helpers)
+=======
+ "futures-macro",
+>>>>>>> 2ea98fb (Add request trace IDs and error helpers)
  "futures-task",
  "memchr",
  "pin-project-lite",
@@ -1702,7 +1717,19 @@ dependencies = [
  "signal-hook-registry",
  "slab",
  "socket2 0.6.0",
+ "tokio-macros",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
