@@ -21,7 +21,6 @@
       }
     }
   ],
-  "security": [{ "cookieAuth": [] }],
   "paths": {
     "/api/users": {
       "get": {
@@ -33,6 +32,7 @@
           "description": "Cursor-based pagination guideline",
           "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
         },
+          "security": [{ "cookieAuth": [] }],
         "responses": {
           "200": {
             "description": "Users (maximum 100 items)",
