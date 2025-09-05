@@ -460,7 +460,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:latest
+        image: nginx:1.25.5
         ports:
         - containerPort: 80
 ---
@@ -618,9 +618,9 @@ the status of each component in the workflow.
    `CNAME` record has been created, along with its corresponding `TXT`
    ownership record.
 
-4. **Confirm public DNS resolution:** Use a command-line tool like `dig` to
-   query a public DNS resolver and confirm that the record resolves to the
-   expected IP address.
+4. **Confirm public DNS resolution:** A command-line tool such as `dig` can be
+   used to query a public DNS resolver and confirm that the record resolves to
+   the expected IP address.
 
 ```bash
 # Query for the A record

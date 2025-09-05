@@ -82,7 +82,7 @@ line.
 
 `srgn` can be installed across various platforms, catering to the diverse
 environments of command-line users. The following methods are officially
-supported 1:
+supported.[^1]
 
 - **Prebuilt Binaries**: The most straightforward method is to download a
   prebuilt binary for your specific architecture directly from the project's
@@ -96,10 +96,10 @@ supported 1:
   Bash
 
   ```sh
-  # Install the Rust toolchain if you haven't already
-  # Then, install cargo-binstall
+  # Install the Rust toolchain if not already present.
+  # Then install cargo-binstall.
   cargo install cargo-binstall
-  # Finally, install srgn
+  # Finally install srgn.
   cargo binstall srgn
 
   ```
@@ -137,8 +137,8 @@ tools, making it intuitive for experienced users. The general syntax is:
 
 `srgn '' -- ''`
 
-Each component has a distinct role, as illustrated by the canonical `tr`-like
-example from the documentation 1:
+Each component has a distinct role, as illustrated by the canonical `tr`‑like
+example from the documentation.[^1]
 
 Bash
 
