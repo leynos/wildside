@@ -92,14 +92,14 @@ yamllint:
 doks-policy:
 	command -v conftest >/dev/null
 	# Create a binary plan, accept exit code 0 or 2 only
-	tofu -chdir=infra/modules/doks/examples/basic plan \
+	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/doks/examples/basic plan \
 	-detailed-exitcode -out=tfplan.binary -input=false -lock=false \
 	-var cluster_name=test \
 	-var region=nyc1 \
 	-var kubernetes_version=1.28.0-do.0 \
 	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
 	|| test $$? -eq 2
-	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary \
+	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary \
 	> infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json \
 	--policy infra/modules/doks/policy
@@ -112,14 +112,12 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic validate
 	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint
-	command -v conftest >/dev/null
-	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
 	$(MAKE) doks-policy
 	cd infra/modules/doks/tests && go test -v
 	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
-	-var kubernetes_version=1.28.0-do.0 \
-	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
-	|| test $$? -eq 2
+		-var kubernetes_version=1.28.0-do.0 \
+		-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
+		|| test $$? -eq 2
