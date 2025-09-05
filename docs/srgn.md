@@ -42,14 +42,14 @@ overloaded across different domains. This guide is exclusively dedicated to
 `alexpovel/srgn`, the command-line code search and manipulation utility.[^1]
 Other projects bearing a similar name are unrelated to the tool discussed here.
 These include, but are not limited to, SRGAN, a Generative Adversarial Network
-for image super-resolution[^3]; SRGN, a high-energy physics technique for
-parameter estimation[^4]; and SRGN (SolRagon), a cryptocurrency token.[^6] This
+for image super-resolution[^2]; SRGN, a high-energy physics technique for
+parameter estimation[^3]; and SRGN (SolRagon), a cryptocurrency token.[^4] This
 report focuses solely on the code refactoring tool.
 
 ### 1.3 Core Philosophy: Scopes, Actions, and Intentional Simplicity
 
 The design of `srgn` is built upon two foundational pillars: **Scopes** and
-**Actions**.[^2] Scopes define
+**Actions**.[^5] Scopes define
 
 *where* in the code an operation should take place, while Actions define *what*
 should be done to the text within that scope. This separation of concerns is
@@ -57,11 +57,11 @@ central to the tool's power and usability.
 
 A core tenet of `srgn` is its intentional simplicity. The documentation states
 its design goal clearly: "if you know regex and the basics of the language you
-are working with, you are good to go".[^2] This philosophy distinguishes
+are working with, you are good to go".[^5] This philosophy distinguishes
 
 `srgn` from other advanced code-querying tools. While tools like Semgrep use a
 declarative, template-based syntax with metavariables (`$X`) and ellipses
-(`...`) to find code that matches an abstract pattern[^8],
+(`...`) to find code that matches an abstract pattern[^6],
 
 `srgn` employs a more direct approach.
 
@@ -173,7 +173,7 @@ When a language flag (e.g., `--python` or its shorthand `--py` 9) is provided
 without any accompanying actions or a replacement string,
 
 `srgn` enters search mode.[^1] The documentation describes this mode as
-"'ripgrep but with syntactical language elements'".[^2]
+"'ripgrep but with syntactical language elements'".[^5]
 
 For instance, to find all class definitions in a Python project, one could run:
 
@@ -185,7 +185,7 @@ srgn --python 'class'
 
 The output mimics `grep` and `ripgrep`, prepending the file name and line
 number to each match, making it easy to integrate into standard command-line
-workflows.[^2]
+workflows.[^5]
 
 This mode is not only precise but also exceptionally fast. A benchmark cited in
 the documentation demonstrates its performance: `srgn` can find approximately
@@ -201,14 +201,14 @@ precision makes search mode a formidable tool for code exploration and auditing.
 The term "scope" carries significant weight in programming, often referring to
 semantic concepts of visibility and lifetime, such as Python's LEGB rule
 (Local, Enclosing, Global, Built-in) or Rust's complex ownership and lifetime
-scopes.[^10] A critical step in mastering
+scopes.[^7] A critical step in mastering
 
 `srgn` is understanding that its use of the term is different.
 
 In `srgn`, a "language grammar-aware scope" does not refer to a semantic
 namespace but to a **textual region** of the source code that corresponds to a
 specific node in its Abstract Syntax Tree (AST), as parsed by
-`tree-sitter`.[^2] For example, the
+`tree-sitter`.[^5] For example, the
 
 `--python 'function'` scope selects the entire block of text that constitutes a
 function definition, from the `def` keyword to the end of its body. It does not
@@ -224,7 +224,7 @@ of its capabilities.
 ### 3.2 The Scoping Pipeline: Layering with Logical AND
 
 The precision of `srgn` comes from its default mechanism of combining scopes: a
-left-to-right, progressively narrowing filter that acts as a logical AND.[^2]
+left-to-right, progressively narrowing filter that acts as a logical AND.[^5]
 Each subsequent scope operates only on the text that was passed through by the
 previous one.
 
@@ -260,7 +260,7 @@ intersectional pipeline.
 
 While the default AND logic is excellent for drilling down, some tasks require
 a broader search across different types of syntax. For this, `srgn` provides
-the `--join-language-scopes` flag (or its shorthand, `-j`).[^2] This flag
+the `--join-language-scopes` flag (or its shorthand, `-j`).[^5] This flag
 alters the behavior for language scopes, changing the operation from
 intersection (AND) to a union (OR).
 
@@ -293,7 +293,7 @@ scopes:
 2. **Regular Expression Scope**: This is the mandatory, positional argument
    that provides the final, fine-grained pattern matching. It is always the
    last filter applied in the pipeline, operating only on the text selected by
-   the preceding language scopes.[^2]
+   the preceding language scopes.[^5]
 
 ## Part 4: Taking Action - Manipulation and Refactoring
 
@@ -303,7 +303,7 @@ The simplest action in `srgn` is replacement, specified with the
 `-- 'replacement'` syntax. However, for any meaningful refactoring, dynamic
 replacements are essential. `srgn` supports this through regex capture groups
 (`$1`, `$2`, etc.), which substitute parts of the matched text into the
-replacement string.[^2]
+replacement string.[^5]
 
 A rich example from the documentation showcases several advanced features at
 once 2:
@@ -331,16 +331,16 @@ This command deconstructs as follows:
 
 Beyond simple replacement, `srgn` offers a suite of built-in actions specified
 via command-line flags. These actions are applied in a defined order *after*
-the main replacement has occurred.[^2]
+the main replacement has occurred.[^5]
 
 The command `srgn --upper '[wW]orld' -- 'you'` illustrates this two-stage
 process. First, the regex match `World` is replaced with `you`. Second, the
-`--upper` action is applied to that result, yielding the final output `YOU`.[^2]
+`--upper` action is applied to that result, yielding the final output `YOU`.[^5]
 
 Common built-in action flags include:
 
 - `--upper`, `--lower`, `--titlecase`: For changing the case of matched
-  text.[^2]
+  text.[^5]
 
 - `--delete`: Removes the matched text. As a safety measure, this action will
   produce an error if no scope is specified, preventing the accidental deletion
@@ -351,7 +351,7 @@ Common built-in action flags include:
 
 - `--german`: A specialized action that correctly handles German orthography,
   such as converting "Ueberflieger" to "Überflieger," demonstrating the
-  potential for domain-specific transformations.[^7]
+  potential for domain-specific transformations.[^8]
 
 ### 4.3 In-place File Modification and Operational Safety
 
@@ -470,7 +470,7 @@ showcasing `srgn`'s versatility across different languages.
   `#[expect(some_lint)]`. This ensures that if the underlying code is fixed and
   no longer triggers the lint, the build will fail, forcing the removal of the
   now-unnecessary attribute. This exact use case is mentioned as an example in
-  the `srgn` documentation.[^2]
+  the `srgn` documentation.[^5]
 
 - **Command**:
 
@@ -544,7 +544,7 @@ showcasing `srgn`'s versatility across different languages.
 
 For the most demanding refactoring tasks, `srgn` offers an escape hatch beyond
 the command line. It is a dual-use tool, available not only as a binary but
-also as a Rust library that can be added to a project with `cargo add srgn`.[^7]
+also as a Rust library that can be added to a project with `cargo add srgn`.[^8]
 
 This library interface provides the ultimate level of control for power users.
 For extremely complex, multi-pass, or stateful refactoring scenarios where the
@@ -618,10 +618,10 @@ ______________________________________________________________________
 
 The following tables list the known language grammar scopes for Python and
 Rust. This reference has been meticulously compiled from the official `srgn`
-documentation, README examples, and GitHub release notes.[^2] As direct
+documentation, README examples, and GitHub release notes.[^5] As direct
 inspection of the
 
-`PreparedQuery` source enum was not possible during research[^15], this list
+`PreparedQuery` source enum was not possible during research[^10], this list
 should be considered comprehensive but potentially subject to change in future
 
 `srgn` versions. Users can often discover available scopes by providing an
@@ -629,7 +629,7 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 
 ### A. Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 
-[^2]
+[^5]
 
 | Scope Name | Description | Example Command |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
@@ -651,32 +651,32 @@ invalid one, as `srgn` will helpfully list the valid options.[^9]
 allows for manipulation in addition to search - GitHub, accessed on July
 11, 2025, <https://github.com/alexpovel/srgn>
 
-[^2]: srgn/README.md at main · alexpovel/srgn · GitHub, accessed on July 11,
-2025, <https://github.com/alexpovel/srgn/blob/main/README.md>
-
-[^3]: Lornatang/SRGAN-PyTorch: A simple and complete implementation of
+[^2]: Lornatang/SRGAN-PyTorch: A simple and complete implementation of
 super-resolution paper. - GitHub, accessed on July 11, 2025,
 <https://github.com/Lornatang/SRGAN-PyTorch>
 
-[^4]: hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
+[^3]: hep-lbdl/SRGN - GitHub, accessed on July 11, 2025,
 <https://github.com/hep-lbdl/SRGN>
 
-[^6]: How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
+[^4]: How to Open and Manage Leveraged $SRGN (SolRagon) Trades on Hyperliquid: A
     Beginner's Tutorial · Issue #5 ·
     synthesizearrayHSy/generatemonitorGhZ - GitHub, accessed on July 11, 2025,
     <https://github.com/synthesizearrayHSy/generatemonitorGhZ/issues/5>
 
-[^7]: srgn - Rust - Docs.rs, accessed on July 11, 2025,
-<https://docs.rs/srgn>
+[^5]: srgn/README.md at main · alexpovel/srgn · GitHub, accessed on July 11,
+2025, <https://github.com/alexpovel/srgn/blob/main/README.md>
 
-[^8]: Pattern syntax - Semgrep, accessed on July 11, 2025,
+[^6]: Pattern syntax - Semgrep, accessed on July 11, 2025,
 <https://semgrep.dev/docs/writing-rules/pattern-syntax>
+
+[^7]: Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
+    July 11, 2025, <https://realpython.com/python-scope-legb-rule/>
+
+[^8]: srgn - Rust - Docs.rs, accessed on July 11, 2025,
+<https://docs.rs/srgn>
 
 [^9]: Releases · alexpovel/srgn - GitHub, accessed on July 11, 2025,
 <https://github.com/alexpovel/srgn/releases>
 
-[^10]: Python Scope & the LEGB Rule: Resolving Names in Your Code, accessed on
-    July 11, 2025, <https://realpython.com/python-scope-legb-rule/>
-
-[^15]: srgn language scopes, accessed on July 11, 2025,
+[^10]: srgn language scopes, accessed on July 11, 2025,
     <https://github.com/alexpovel/srgn/tree/main/src/scoping/langs>
