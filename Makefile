@@ -40,26 +40,26 @@ fmt:
 	bun x biome format --write
 
 lint:
-    	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-    	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
-    	$(MAKE) lint-asyncapi
-    	$(MAKE) lint-openapi
-    	$(MAKE) lint-makefile
+	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
+	$(MAKE) lint-asyncapi
+	$(MAKE) lint-openapi
+	$(MAKE) lint-makefile
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-    	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
-    	bun x -y @redocly/cli@latest lint spec/openapi.json
+	bun x -y @redocly/cli@latest lint spec/openapi.json
 
 # Validate Makefile style and structure
 lint-makefile:
-    	command -v checkmake >/dev/null || { echo "checkmake is not installed" >&2; exit 1; }
-    	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
-    	checkmake Makefile
-    	mbake validate Makefile
+	command -v checkmake >/dev/null || { echo "checkmake is not installed" >&2; exit 1; }
+	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
+	checkmake Makefile
+	mbake validate Makefile
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
