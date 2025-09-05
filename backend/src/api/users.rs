@@ -16,7 +16,7 @@ use actix_web::{error::ErrorUnauthorized, get, web, Result};
     tags = ["Users"],
     operation_id = "listUsers"
 )]
-#[get("/api/users")]
+#[get("/users")]
 pub async fn list_users(session: Session) -> Result<web::Json<Vec<User>>> {
     if session.get::<String>("user_id")?.is_none() {
         return Err(ErrorUnauthorized("unauthorised"));
