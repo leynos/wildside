@@ -29,30 +29,22 @@ operations:
       - name: users
         description: Events about system users
 components:
-  messageTraits:
-    Correlated:
-      headers:
-        type: object
-        additionalProperties: false
-        properties:
-          trace_id:
-            type: string
-            description: Correlation identifier for tracing across systems
-        required: []
   messages:
     UserCreated:
       name: UserCreated
       title: User created event
       contentType: application/json
-      traits:
-        - $ref: '#/components/messageTraits/Correlated'
       payload:
         type: object
         additionalProperties: false
         required:
+          - trace_id
           - id
           - display_name
         properties:
+          trace_id:
+            type: string
+            description: Correlation identifier for tracing across systems
           id:
             type: string
             description: Unique user identifier
@@ -68,5 +60,6 @@ components:
         - name: minimal
           summary: Minimal valid payload
           payload:
+            trace_id: "01234567-89ab-cdef-0123-456789abcdef"
             id: "123e4567-e89b-12d3-a456-426614174000"
             display_name: "Ada Lovelace"
