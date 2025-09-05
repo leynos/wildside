@@ -71,7 +71,9 @@ impl ResponseError for Error {
         match self.code {
             ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
             ErrorCode::Forbidden => StatusCode::FORBIDDEN,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorCode::NotFound => StatusCode::NOT_FOUND,
+            ErrorCode::InvalidRequest => StatusCode::BAD_REQUEST,
+            ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
