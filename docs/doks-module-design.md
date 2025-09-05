@@ -15,6 +15,9 @@ cluster lifecycle.
 - **Explicit inputs.** The module requires a cluster name, region and a
   `kubernetes_version` value plus an explicit list of node pools. This keeps
   the interface predictable and avoids hidden defaults.
+- **Fail-fast validation.** Inputs for the region slug and Kubernetes version
+  are validated against expected patterns to catch typos before contacting the
+  provider.
 - **High availability.** The cluster resource always enables high availability
   (`ha = true`). A policy test enforces this to guard against accidental
   downgrades.
