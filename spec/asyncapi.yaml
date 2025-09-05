@@ -23,7 +23,8 @@ operations:
     channel:
       $ref: '#/channels/~1ws'
     messages:
-      - $ref: '#/components/messages/UserCreated'
+      - $ref: '#/channels/~1ws/messages/userCreated'
+        # AsyncAPI CLI requires operation messages to reference the channel message
     tags:
       - name: users
         description: Events about system users
