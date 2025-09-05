@@ -34,7 +34,7 @@
     "audit": "node security/validate-audit.js"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "vite": "7.1.4"
