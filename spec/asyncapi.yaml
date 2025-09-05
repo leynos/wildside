@@ -54,8 +54,8 @@ components:
             type: string
             description: User's display name
             examples: ["Ada Lovelace"]
-            minLength: 1
-            maxLength: 100
+            minLength: 3
+            maxLength: 32
       examples:
         - name: minimal
           summary: Minimal valid payload

@@ -25,6 +25,8 @@ utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 
 [dev-dependencies]
 actix-rt = "2"
+rstest = "0.18"
+insta = { version = "1", features = ["json", "redactions"] }
 
 [profile.release]
 codegen-units = 1
