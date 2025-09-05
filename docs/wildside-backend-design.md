@@ -80,6 +80,33 @@ graph TD
     EngineLib -- Requires data from --> DB
 ```
 
+For screen readers: This sequence diagram traces a request from browser to
+backend, including how the service reads its signing key and manages session
+cookies.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Browser
+  participant Ingress
+  participant Backend
+  participant SecretStore as Mounted_Secret_File
+
+  rect rgb(235,245,255)
+    note right of Ingress: Routes updated to /api/v1 and /ws
+  end
+
+  Browser->>Ingress: HTTPS request to /api/v1/endpoint
+  Ingress->>Backend: Proxy request
+  Backend->>SecretStore: Read signing key from mounted file (startup / refresh)
+  Backend->>Backend: Sign/validate session cookie\n(Secure, HttpOnly, SameSite, Max-Age)
+  Backend-->>Browser: Response (+Set-Cookie)
+
+  Browser->>Ingress: WS upgrade to /ws
+  Ingress->>Backend: Upgrade proxy
+  Backend-->>Browser: WebSocket messages
+```
+
 ## 3. Core Components & Implementation Plan
 
 This section details each functional component of the backend, its current
