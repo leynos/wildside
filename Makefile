@@ -112,6 +112,8 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic validate
 	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint
+	command -v conftest >/dev/null
+	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
 	$(MAKE) doks-policy
 	cd infra/modules/doks/tests && go test -v
 	# Optional: surface "changes pending" in logs without failing CI
