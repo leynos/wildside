@@ -3,7 +3,11 @@
   "info": {
     "title": "backend",
     "description": "HTTP interface for the wildside backend",
-    "version": "0.1.0"
+    "version": "0.1.0",
+    "license": {
+      "name": "ISC",
+      "url": "https://opensource.org/license/isc-license"
+    }
   },
   "servers": [
     {
