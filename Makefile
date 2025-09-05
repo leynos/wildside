@@ -84,4 +84,14 @@ yamllint:
 	command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
-	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+        (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+
+.PHONY: doks-test
+doks-test:
+	tofu fmt -check infra/modules/doks
+	tofu -chdir=infra/modules/doks/examples/basic init
+	tofu -chdir=infra/modules/doks/examples/basic validate
+	cd infra/modules/doks && tflint --init && tflint
+	conftest test infra/modules/doks --policy infra/modules/doks/policy
+	cd infra/modules/doks/tests && go test -v
+	tofu plan -detailed-exitcode infra/modules/doks/examples/basic || true
