@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node build/style-dictionary.js",
-    "postinstall": "node build/style-dictionary.js",
+    "postinstall": "node -e \"try { require.resolve('style-dictionary'); } catch { process.exit(0); }\" && node build/style-dictionary.js",
     "validate:contrast": "node build/validate-contrast.js",
     "test": "npm run validate:contrast"
   },
