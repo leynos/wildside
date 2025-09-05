@@ -105,13 +105,7 @@
         "description": "Stable machine-readable error code",
         "example": "invalid_request",
         "pattern": "^[a-z0-9_.:-]+$",
-        "enum": [
-          "invalid_request",
-          "unauthorized",
-          "forbidden",
-          "not_found",
-          "internal_error"
-        ],
+        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"],
         "x-enumDescriptions": [
           "The request is malformed or fails validation",
           "Authentication failed or is missing",
