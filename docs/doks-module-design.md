@@ -18,9 +18,10 @@ cluster lifecycle.
 - **Fail-fast validation.** Inputs for the region slug, Kubernetes version and
   node pool sizing are validated against expected patterns to catch typos and
   sizing errors before contacting the provider.
-- **High availability.** The cluster resource always enables high availability
-  (`ha = true`). A policy test enforces this to guard against accidental
-  downgrades.
+ - **High availability.** The cluster resource always enables high availability
+   (`ha = true`). The module pins the DigitalOcean provider to v2.36+, where the
+   `ha` argument is available, and a policy test guards against accidental
+   downgrades.
 - **Minimal outputs.** Only the cluster identifier, API endpoint and raw
   kubeconfig are exposed. The kubeconfig output is marked sensitive to avoid
   accidental disclosure. Consumers can derive further details from the

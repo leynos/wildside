@@ -55,22 +55,15 @@ func TestDoksModuleValidate(t *testing.T) {
 }
 
 func TestDoksModulePlanUnauthenticated(t *testing.T) {
-	t.Parallel()
+        t.Parallel()
 
-	vars := testVars()
-	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{})
+        vars := testVars()
+        vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+       _, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
 
-	_, err := terraform.InitAndPlanE(t, opts)
-	if os.Getenv("DIGITALOCEAN_TOKEN") == "" {
-		if err == nil {
-			t.Skip("plan succeeded without DIGITALOCEAN_TOKEN")
-		}
-		require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
-		require.Contains(t, err.Error(), "DIGITALOCEAN_TOKEN", "error message should mention missing DIGITALOCEAN_TOKEN")
-	} else {
-		require.NoError(t, err)
-	}
+       _, err := terraform.InitAndPlanE(t, opts)
+       require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
+       require.Contains(t, err.Error(), "DIGITALOCEAN_TOKEN", "error message should mention missing DIGITALOCEAN_TOKEN")
 }
 
 func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
