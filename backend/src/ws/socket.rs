@@ -15,7 +15,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn validate_display_name(name: &str) -> bool {
-    // Only allow alphanumeric, spaces, and underscores. Length 3-32.
+    // Only allow alphanumeric, spaces, and underscores. Length 3–32.
     let re = Regex::new(r"^[A-Za-z0-9_ ]{3,32}$").unwrap();
     re.is_match(name)
 }
@@ -98,5 +98,20 @@ impl Handler<UserCreated> for UserSocket {
             Ok(body) => ctx.text(body),
             Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_display_name;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(String::from("ab"), false)]
+    #[case("a".repeat(33), false)]
+    #[case(String::from("Alice_Bob 123"), true)]
+    #[case(String::from("bad$char"), false)]
+    fn validate_display_name_cases(#[case] name: String, #[case] expected: bool) {
+        assert_eq!(validate_display_name(&name), expected);
     }
 }
