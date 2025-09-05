@@ -15,10 +15,10 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "zod": "^3"
+    "zod": "^4"
   },
   "devDependencies": {
-    "zod": "^3"
+    "zod": "^4"
   },
   "scripts": {
     "build": "tsc src/user.ts --declaration --emitDeclarationOnly --outDir dist/src",
