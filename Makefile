@@ -44,6 +44,7 @@ lint:
 	command -v checkmake >/dev/null || { echo "checkmake is not installed" >&2; exit 1; }
 	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
 	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+	bun x -y @redocly/cli@latest lint spec/openapi.json
 	checkmake Makefile
 	mbake validate Makefile
 
