@@ -11,6 +11,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use backend::api::users::list_users;
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
+use backend::middleware::Trace;
 use backend::ws;
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
@@ -38,6 +39,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         let app = App::new()
+            .wrap(Trace)
             .service(list_users)
             .service(ws::ws_entry)
             .service(ready)

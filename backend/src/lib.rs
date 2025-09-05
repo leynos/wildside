@@ -2,6 +2,7 @@
 
 pub mod api;
 pub mod doc;
+pub mod middleware;
 pub mod models;
 pub mod ws;
 
