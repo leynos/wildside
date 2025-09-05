@@ -77,7 +77,7 @@ configuration of their respective providers. This is defined within a
 addresses, and version constraints to ensure predictable and repeatable
 deployments.[^3]
 
-It is a critical security best practice to manage API credentials outside of
+It is a critical security best practice to manage API credentials outside
 version-controlled configuration files. The DigitalOcean and Namecheap
 providers can be configured to read credentials from environment variables,
 which is the recommended approach.[^4]
