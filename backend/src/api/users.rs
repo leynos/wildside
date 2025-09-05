@@ -22,7 +22,7 @@ pub struct LoginRequest {
         (status = 401, description = "Invalid credentials"),
         (status = 500, description = "Internal server error")
     ),
-    tags = ["Users"],
+    tags = ["users"],
     operation_id = "login"
 )]
 #[post("/login")]

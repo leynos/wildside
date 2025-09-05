@@ -52,6 +52,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let session_middleware =
             SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                .cookie_name("session".to_owned())
                 .cookie_secure(true)
                 .cookie_http_only(true)
                 .cookie_same_site(SameSite::Lax)

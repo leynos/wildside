@@ -185,6 +185,10 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
+    `CookieSessionStore` keeps session state entirely in the cookie. Browsers
+    cap individual cookies at roughly 4 KB, so session payloads must remain
+    well under this limit.
+
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`
     environment variable). Use high-entropy (≥64-byte) keys and rotate them by
