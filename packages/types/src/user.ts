@@ -7,7 +7,8 @@
 import { z } from 'zod';
 
 /** Runtime schema for a branded user identifier. */
-export const UserIdSchema = z.string().brand<'UserId'>();
+/* biome-ignore lint/style/useNamingConvention: PascalCase aids readability for schema identifiers */
+export const UserIdSchema = z.string().uuid().brand<'UserId'>();
 /** Unique identifier for a user. */
 export type UserId = z.infer<typeof UserIdSchema>;
 
