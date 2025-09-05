@@ -622,7 +622,7 @@ documentation, README examples, and GitHub release notes.[^5] As direct
 inspection of the
 
 `PreparedQuery` source enum was not possible during research[^10], this list
-should be considered comprehensive but potentially subject to change in future
+should be considered comprehensive but potentially subject to change in future.
 
 `srgn` versions. Users can often discover available scopes by providing an
 invalid one, as `srgn` will helpfully list the valid options.[^9]

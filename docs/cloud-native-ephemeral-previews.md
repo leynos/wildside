@@ -1222,7 +1222,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
-            file:./Dockerfile # Path to the application's Dockerfile
+            file: ./Dockerfile # Path to the application's Dockerfile
             push: true
             tags: your-registry/wildside-app:${{ github.sha }}
             cache-from: type=gha

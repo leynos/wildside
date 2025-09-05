@@ -473,8 +473,8 @@ Reference these manifests in the controllers' kustomization to apply them with F
 # infrastructure/controllers/kustomization.yaml
 resources:
   - cert-manager.yaml
-  - pdb-cert-manager-webhook.yaml
-  - pdb-cert-manager-cainjector.yaml
+  - examples/pdb-cert-manager-webhook.yaml
+  - examples/pdb-cert-manager-cainjector.yaml
 ```
 
 ### 2.3 Deploying the Namecheap DNS-01 Webhook Solver
@@ -627,8 +627,7 @@ spec:
 The `solvers` block is the most critical part of the `ClusterIssuer`
 configuration. It instructs cert-manager on how to satisfy the ACME challenges
 required to prove domain ownership.[^20] For the Namecheap integration, the
-
-`dns01` solver is configured to use the deployed webhook.[^17]
+`dns01` solver is configured to use the deployed webhook.[^17].
 
 - `dns01`: Specifies that the DNS-01 challenge type will be used. This involves
   creating a specific TXT record in the domain's DNS zone.
@@ -803,7 +802,9 @@ by inspecting the custom resources that cert-manager creates.
    final source of truth for API interactions.
 
    ```bash
-   kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager-webhook-namecheap -f
+   kubectl logs -n cert-manager -l \
+     app.kubernetes.io/name=cert-manager-webhook-namecheap,app.kubernetes.io/instance=cert-manager \
+     -f
    ```
 
 These logs will show if the webhook is receiving challenge requests from
@@ -848,13 +849,15 @@ A systematic approach to troubleshooting is key to minimizing downtime. The
 following table provides a guide for diagnosing common issues in the TLS
 issuance pipeline.[^24]
 
+<!-- markdownlint-disable MD013 -->
+
 | Symptom                                                                       | Diagnostic Command(s)                                                                                                                                                 | Likely Cause & Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Certificate` is stuck in `Issuing` state for a long time.                    | `kubectl describe certificate <cert-name>` `kubectl describe order <order-name>`                                                                                      | **Stalled ACME Order:** The `Order` is likely waiting for a `Challenge` to complete. Use the `describe order` command to find the name of the pending `Challenge` resource and investigate it further.                                                                                                                                                                                                                                                                           |
-| `Challenge` fails with DNS propagation error.                                 | `kubectl describe challenge <challenge-name>` `kubectl logs -n cert-manager -l app=cert-manager-webhook-namecheap` `dig TXT _acme-challenge.your-domain.com @8.8.8.8` | **Webhook API Failure:** Check the webhook logs for authentication errors (invalid credentials) or connection errors (IP not whitelisted). **Slow DNS Propagation:** The DNS provider may be slow to propagate the TXT record. Some webhooks allow configuring a longer propagation delay. **Incorrect Nameservers:** cert-manager's self-check may be failing. Consider configuring recursive nameservers for the controller via Helm values (`--dns01-recursive-nameservers`). |
+| `Challenge` fails with DNS propagation error.                                 | `kubectl describe challenge <challenge-name>` `kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager-webhook-namecheap,app.kubernetes.io/instance=cert-manager` `dig TXT _acme-challenge.your-domain.com @8.8.8.8` | **Webhook API Failure:** Check the webhook logs for authentication errors (invalid credentials) or connection errors (IP not whitelisted). **Slow DNS Propagation:** The DNS provider may be slow to propagate the TXT record. Some webhooks allow configuring a longer propagation delay. **Incorrect Nameservers:** cert-manager's self-check may be failing. Consider configuring recursive nameservers for the controller via Helm values (`--dns01-recursive-nameservers`). |
 | Webhook pod is in `CrashLoopBackOff`.                                         | `kubectl logs -n cert-manager <webhook-pod-name> --previous` `kubectl describe pod -n cert-manager <webhook-pod-name>`                                                | **Missing Secret:** The pod cannot find the Kubernetes secret containing the API credentials. Verify the secret exists in the correct namespace and its name matches the `ClusterIssuer` configuration. **RBAC Permissions:** The webhook's `ServiceAccount` may lack the necessary permissions to read secrets or interact with the Kubernetes API. Check the `ClusterRole` associated with it.                                                                                 |
 | `kubectl` commands fail with `x509: certificate signed by unknown authority`. | `kubectl get apiservice v1.webhook.cert-manager.io`                                                                                                                   | **Webhook Not Ready:** This is common immediately after installation. The cert-manager webhook needs time to generate its self-signed CA and inject it into the `APIService` resource. Wait a few minutes and retry. If it persists, the `cainjector` component may be failing.                                                                                                                                                                                                  |
-| `ClusterIssuer` is not `Ready`.                                               | `kubectl describe clusterissuer <issuer-name>`                                                                                                                        | **ACME Account Registration Failed:** The issuer failed to create an account with Let's Encrypt. The error message will provide details, often related to network connectivity to the ACME server or an invalid `privateKeySecretRef`.                                                                                                                                                                                                                                           |
+<!-- markdownlint-enable MD013 -->
 
 ### 5.3 Advanced Architecture: Mitigating the IP Whitelisting Constraint
 
@@ -924,12 +927,15 @@ strategies provide robust solutions to this problem.
 The following table provides a strategic comparison of these mitigation
 approaches.
 
+<!-- markdownlint-disable MD013 -->
+
 | Strategy                | Implementation Complexity                                                     | Ongoing Cost                                  | Operational Overhead                                        | Reliability/Scalability                                      | Recommendation                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
 | **NAT Gateway**         | Medium (Requires VPC and NAT Gateway configuration in OpenTofu)               | Moderate (Recurring cost for the NAT Gateway) | Low (Set-and-forget once configured)                        | High (Reliable and scales with the cluster)                  | **Viable.** Best if a static egress IP is needed for other cluster services.            |
 | **DNS Delegation**      | High (Requires managing two DNS providers and complex cert-manager selectors) | Low (No additional infrastructure cost)       | Low (Set-and-forget once configured)                        | Very High (Most flexible and resilient cloud-native pattern) | **Highly Recommended.** The superior architectural choice for a dedicated TLS solution. |
 | **Manual Whitelisting** | Low (Manual UI interaction)                                                   | None                                          | Very High (Constant monitoring and manual updates required) | Very Low (Guaranteed to fail in a dynamic environment)       | **Not Recommended.** Unsuitable for production or any automated workflow.               |
 
+<!-- markdownlint-enable MD013 -->
 ## Conclusion: Achieving a Fully Automated, Secure Application Endpoint
 
 The architecture detailed in this report successfully extends the principles of
@@ -981,20 +987,20 @@ delivery platform.
 [^1]: Kubernetes Dynamic DNS With Cloudflare
 
 [^2]: cert-manager/cert-manager: Automatically provision and manage TLS
-   certificates in Kubernetes - GitHub, accessed on 1 September 2025,
+   certificates in Kubernetes — GitHub, accessed on 1 September 2025,
    [https://github.com/cert-manager/cert-manager](https://github.com/cert-manager/cert-manager)
 
-[^3]: Providers - OpenTofu, accessed on 1 September 2025,
+[^3]: Providers — OpenTofu, accessed on 1 September 2025,
    [https://opentofu.org/docs/language/providers/](https://opentofu.org/docs/language/providers/)
 
-[^4]: Provider: DigitalOcean - OpenTofu Registry, accessed on 1 September 2025,
+[^4]: Provider: DigitalOcean — OpenTofu Registry, accessed on 1 September 2025,
    [https://search.opentofu.org/provider/opentofu/digitalocean/latest](https://search.opentofu.org/provider/opentofu/digitalocean/latest)
 
 [^5]: digitalocean_kubernetes_cluster | Resources | digitalocean …, accessed on
    1 September 2025,
    [https://docs.digitalocean.com/reference/terraform/reference/resources/kubernetes_cluster/](https://docs.digitalocean.com/reference/terraform/reference/resources/kubernetes_cluster/)
 
-[^6]: Namecheap Terraform Provider - Domains, accessed on 1 September 2025,
+[^6]: Namecheap Terraform Provider — Domains, accessed on 1 September 2025,
    [https://www.namecheap.com/support/knowledgebase/article.aspx/10502/2208/namecheap-terraform-provider/](https://www.namecheap.com/support/knowledgebase/article.aspx/10502/2208/namecheap-terraform-provider/)
 
 [^7]: Obtaining an API key from Namecheap | Yunohost, accessed on 1 September
@@ -1005,51 +1011,51 @@ delivery platform.
     2025,
     [https://www.namecheap.com/support/api/intro/](https://www.namecheap.com/support/api/intro/)
 
-[^9]: Any way around the API whitelisting yet? : r/NameCheap - Reddit, accessed
+[^9]: Any way around the API whitelisting yet? : r/NameCheap — Reddit, accessed
     on 1 September 2025,
     [https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/](https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/)
 
 [^10]: A warning about Namecheap when using dynamic DNS, Let's Encrypt and DNS
-   challenge : r/selfhosted - Reddit, accessed on 1 September 2025,
+   challenge : r/selfhosted — Reddit, accessed on 1 September 2025,
    [https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/](https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/)
 
 [^11]: namecheap_domain_records | resources | namecheap/namecheap | Providers |
-    OpenTofu and Terraform Registry - [Library.tf](http://Library.tf), accessed
+    OpenTofu and Terraform Registry — [Library.tf](http://Library.tf), accessed
     on 1 September 2025,
     [https://library.tf/providers/namecheap/namecheap/latest/docs/resources/domain_records](https://library.tf/providers/namecheap/namecheap/latest/docs/resources/domain_records)
 
-[^12]: Manage Kubernetes secrets with SOPS | Flux - Flux CD, accessed on 1
+[^12]: Manage Kubernetes secrets with SOPS | Flux — Flux CD, accessed on 1
     September 2025,
     [https://fluxcd.io/flux/guides/mozilla-sops/](https://fluxcd.io/flux/guides/mozilla-sops/)
 
-[^13]: Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. - Medium,
+[^13]: Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. — Medium,
     accessed on 1 September 2025,
     [https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468](https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468)
 
-[^14]: Manage Helm Releases - Flux CD, accessed on 1 September 2025,
+[^14]: Manage Helm Releases — Flux CD, accessed on 1 September 2025,
     [https://fluxcd.io/flux/guides/helmreleases/](https://fluxcd.io/flux/guides/helmreleases/)
 
-[^15]: Helm - cert-manager Documentation, accessed on 1 September 2025,
+[^15]: Helm — cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/installation/helm/](https://cert-manager.io/docs/installation/helm/)
 
-[^16]: cert-manager 1.18.2 - Artifact Hub, accessed on 1 September 2025,
+[^16]: cert-manager 1.18.2 — Artifact Hub, accessed on 1 September 2025,
     [https://artifacthub.io/packages/helm/cert-manager/cert-manager](https://artifacthub.io/packages/helm/cert-manager/cert-manager)
 
-[^17]: Webhook - cert-manager Documentation, accessed on 1 September 2025,
+[^17]: Webhook — cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/configuration/acme/dns01/webhook/](https://cert-manager.io/docs/configuration/acme/dns01/webhook/)
 
-[^18]: jamesgoodhouse/cert-manager-webhook-namecheap: A … - GitHub, accessed on
+[^18]: jamesgoodhouse/cert-manager-webhook-namecheap: A … — GitHub, accessed on
     1 September 2025,
     [https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap](https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap)
 
-[^19]: Issuer Configuration - cert-manager Documentation, accessed on 1 September
+[^19]: Issuer Configuration — cert-manager Documentation, accessed on 1 September
     2025,
     [https://cert-manager.io/docs/configuration/](https://cert-manager.io/docs/configuration/)
 
-[^20]: DNS01 - cert-manager Documentation, accessed on 1 September 2025,
+[^20]: DNS01 — cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/configuration/acme/dns01/](https://cert-manager.io/docs/configuration/acme/dns01/)
 
-[^21]: Certificate resource - cert-manager Documentation, accessed on 1 September
+[^21]: Certificate resource — cert-manager Documentation, accessed on 1 September
     2025,
     [https://cert-manager.io/docs/usage/certificate/](https://cert-manager.io/docs/usage/certificate/)
 
@@ -1057,12 +1063,12 @@ delivery platform.
     September 2025,
     [https://docs.certifytheweb.com/docs/dns/validation/](https://docs.certifytheweb.com/docs/dns/validation/)
 
-[^23]: Verifying the Installation - cert-manager Documentation, accessed on 1
+[^23]: Verifying the Installation — cert-manager Documentation, accessed on 1
     September 2025,
     [https://cert-manager.io/v1.6-docs/installation/verify/](https://cert-manager.io/v1.6-docs/installation/verify/)
 
-[^24]: Troubleshooting Issuing ACME Certificates - cert-manager Documentation,
+[^24]: Troubleshooting Issuing ACME Certificates — cert-manager Documentation,
     accessed on 1 September 2025,
     [https://cert-manager.io/v1.0-docs/faq/acme/](https://cert-manager.io/v1.0-docs/faq/acme/)
-[^25]: Best Practice - cert-manager Documentation, accessed on 1 September 2025,
+[^25]: Best Practice — cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/installation/best-practice/](https://cert-manager.io/docs/installation/best-practice/)

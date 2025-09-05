@@ -398,7 +398,7 @@ This `HelmRelease` manifest contains several critical configuration points:
 - `domainFilters`: This is a crucial security and safety feature. It constrains
   the controller to only manage records within the specified domains,
   preventing it from accidentally modifying records in other zones.[^8]
-  - `policy: sync`: This setting authorises ExternalDNS to perform create,
+  - `policy: sync`: This setting authorizes ExternalDNS to perform create,
     update, and delete operations. The alternative, `upsert-only`, would not
     remove DNS records when the corresponding Kubernetes resource is deleted,
     leading to stale and potentially insecure records.[^15]

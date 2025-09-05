@@ -112,10 +112,11 @@ API and WebSocket traffic.
 
 - **Implementation Tasks:**
 
-  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use `actix-session` with a cookie backend configured as:
-    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and explicit
-    `domain` and `path`. Set a bounded `Max-Age` to limit session lifetime.
+  - [ ] **Session Management:** Implement stateless, encrypted, authenticated
+    cookie sessions. Use `actix-session` with a cookie backend configured as:
+    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), an explicit
+    `path`, and set `domain` only when sharing across subdomains. Set a bounded
+    `Max-Age` to limit session lifetime.
     Load the signing key from a high-entropy (≥64-byte), read-only managed
     secret (for example, a Kubernetes `Secret` or Vault) and mount or inject it
     for the service at runtime—avoid sourcing it from a plain environment
@@ -151,6 +152,11 @@ API and WebSocket traffic.
     deploying new secrets and reloading the service so the fresh key takes
     effect while the previous key remains available for validating existing
     sessions during the rollout.
+
+    For seamless rotation, run at least two replicas and perform a rolling
+    update so pods with the prior key continue to validate existing cookies
+    until expiry. A single-replica restart replaces the key atomically and will
+    invalidate all existing sessions immediately.
 
   - [ ] **Observability:**
 
