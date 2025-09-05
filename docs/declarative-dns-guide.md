@@ -619,8 +619,8 @@ the status of each component in the workflow.
    ownership record.
 
 4. **Confirm public DNS resolution:** Use a command-line tool like `dig` to
-   query a public DNS resolver and confirm the record resolves to the expected
-   IP address.
+   query a public DNS resolver and confirm that the record resolves to the
+   expected IP address.
 
 ```bash
 # Query for the A record

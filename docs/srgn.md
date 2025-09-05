@@ -619,13 +619,11 @@ ______________________________________________________________________
 The following tables list the known language grammar scopes for Python and
 Rust. This reference has been meticulously compiled from the official `srgn`
 documentation, README examples, and GitHub release notes.[^5] As direct
-inspection of the
-
-`PreparedQuery` source enum was not possible during research[^10], this list
-should be considered comprehensive but potentially subject to change in future.
-
-`srgn` versions. Users can often discover available scopes by providing an
-invalid one, as `srgn` will helpfully list the valid options.[^9]
+inspection of the `PreparedQuery` source enum was not possible during
+research[^10], this list should be considered comprehensive but
+potentially subject to change in future `srgn` versions. Users can often
+discover available scopes by providing an invalid one, as `srgn` will
+helpfully list the valid options.[^9]
 
 ### A. Table: Rust grammar scopes (`--rust <SCOPE>` or `--rs <SCOPE>`)
 

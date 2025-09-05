@@ -226,11 +226,10 @@ like DOKS, where egress IPs are non-deterministic.
   settings.[^8]
 - **The Limitations:** This whitelist has several restrictive limitations:
 
-- It only supports single, static IPv4 addresses. CIDR ranges are not
-  permitted.[^9]
-- A maximum of 20 IP addresses can be whitelisted.[^9]
-- The process of adding an IP to the whitelist is manual, via the Namecheap
-  dashboard.
+  - It only supports single, static IPv4 addresses, and only a limited number of
+    IPs may be whitelisted.[^9]
+  - The process of adding an IP to the whitelist is manual, via the Namecheap
+    dashboard.
 - **The Conflict:** The `cert-manager-webhook-namecheap` pod, which is
   responsible for making these API calls, will be scheduled on any of the
   worker nodes in the DOKS cluster. The public IP address used for its outbound
@@ -831,8 +830,8 @@ architecting solutions to inherent platform limitations.
   should be deployed to control ingress and egress traffic for the
   `cert-manager` namespace. These policies should enforce rules such as:
 
-- Allowing ingress to the webhook pod only from the Kubernetes API server on
-  its designated port (typically 10250).[^25]
+  - Allowing ingress to the webhook Service only from the Kubernetes API server
+    on TCP 443 (or the configured webhook Service port).[^25]
 - Allowing egress from the controller and webhook pods only to the Kubernetes
   API server and the required external endpoints (Let's Encrypt API and
   Namecheap API on TCP port 443).
@@ -899,13 +898,30 @@ strategies provide robust solutions to this problem.
      `namecheap_domain_records` OpenTofu resource, create `NS` (nameserver)
      records for the hostname `_acme-challenge`, pointing to the nameservers of
      the secondary provider.
-  3. **Configure a Second **`ClusterIssuer`**:** In cert-manager, create a new
-     `ClusterIssuer` (e.g., `letsencrypt-digitalocean`). This issuer will use the
-     native `digitalocean` solver, configured with DigitalOcean API credentials.
-  4. **Use a `selector`:** In the primary `Certificate` resource, use a
-     `selector` in the `dns01` configuration to instruct cert-manager to use the
-     `letsencrypt-digitalocean` issuer specifically for challenges involving
-     `your-domain.com`.
+  3. **Configure solvers on one issuer:** Define multiple `dns01` solvers on a
+     single `ClusterIssuer`, using a `selector` (for example,
+     `dnsZones: ["your-domain.com"]`) to route challenges for
+     `_acme-challenge.your-domain.com` to the DigitalOcean solver.
+  4. **Alternative:** Create two issuers and reference the intended issuer
+     explicitly on each `Certificate`/Ingress via `cert-manager.io/cluster-issuer`.
+
+    Example fragment in the issuer:
+
+    ```yaml
+    spec:
+      acme:
+        solvers:
+          - dns01:
+              webhook: { ... Namecheap ... }
+          - selector:
+              dnsZones:
+                - your-domain.com
+            dns01:
+              digitalocean:
+                tokenSecretRef:
+                  name: do-dns-credentials
+                  key: token
+    ```
 
 - **Analysis:** This is an elegant, cloud-native solution. It has no additional
   infrastructure cost and aligns well with microservice principles by
@@ -1011,13 +1027,11 @@ delivery platform.
     2025,
     [https://www.namecheap.com/support/api/intro/](https://www.namecheap.com/support/api/intro/)
 
-[^9]: Any way around the API whitelisting yet? : r/NameCheap — Reddit, accessed
-    on 1 September 2025,
-    [https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/](https://www.reddit.com/r/NameCheap/comments/19b0dek/any_way_around_the_api_whitelisting_yet/)
+  [^9]: Namecheap API introduction, accessed on 1 September 2025,
+    <https://www.namecheap.com/support/api/intro/>
 
-[^10]: A warning about Namecheap when using dynamic DNS, Let's Encrypt and DNS
-   challenge : r/selfhosted — Reddit, accessed on 1 September 2025,
-   [https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/](https://www.reddit.com/r/selfhosted/comments/184fhrv/a_warning_about_namecheap_when_using_dynamic_dns/)
+  [^10]: Enable Dynamic DNS for your domain — Namecheap Knowledgebase, accessed on 1 September 2025,
+    <https://www.namecheap.com/support/knowledgebase/article.aspx/29/11/enable-dynamic-dns>
 
 [^11]: namecheap_domain_records | resources | namecheap/namecheap | Providers |
     OpenTofu and Terraform Registry — [Library.tf](http://Library.tf), accessed

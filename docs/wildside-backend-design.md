@@ -120,8 +120,8 @@ API and WebSocket traffic.
     Load the signing key from a high-entropy (≥64-byte), read-only managed
     secret (for example, a Kubernetes `Secret` or Vault) and mount or inject it
     for the service at runtime—avoid sourcing it from a plain environment
-    variable. Rotate the key regularly by rolling the secret and reloading it so
-    stale cookies are invalidated.
+      variable. Rotate the key regularly by rolling the secret and reloading it,
+      so stale cookies are invalidated.
 
     ```rust
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
@@ -149,14 +149,14 @@ API and WebSocket traffic.
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`
     environment variable). Use high-entropy (≥64-byte) keys and rotate them by
-    deploying new secrets and reloading the service so the fresh key takes
-    effect while the previous key remains available for validating existing
-    sessions during the rollout.
+      deploying new secrets and reloading the service, so the fresh key takes
+      effect while the previous key remains available for validating existing
+      sessions during the rollout.
 
     For seamless rotation, run at least two replicas and perform a rolling
-    update so pods with the prior key continue to validate existing cookies
-    until expiry. A single-replica restart replaces the key atomically and will
-    invalidate all existing sessions immediately.
+      update, so pods with the prior key continue to validate existing cookies
+      until expiry. A single-replica restart replaces the key atomically and will
+      invalidate all existing sessions immediately.
 
   - [ ] **Observability:**
 
