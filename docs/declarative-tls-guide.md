@@ -89,7 +89,7 @@ which is the recommended approach.[^4]
 terraform {
   required_providers {
     digitalocean = {
-      source  = "digitalocean/digitalocean"
+      source  = "opentofu/digitalocean"
       version = "~> 2.0"
     }
     namecheap = {
@@ -1010,7 +1010,7 @@ delivery platform.
    [https://opentofu.org/docs/language/providers/](https://opentofu.org/docs/language/providers/)
 
 [^4]: Provider: DigitalOcean — OpenTofu Registry, accessed on 1 September 2025,
-   [https://search.opentofu.org/provider/opentofu/digitalocean/latest](https://search.opentofu.org/provider/opentofu/digitalocean/latest)
+   <https://registry.opentofu.org/providers/opentofu/digitalocean/latest>
 
 [^5]: digitalocean_kubernetes_cluster | Resources | digitalocean …, accessed on
    1 September 2025,
