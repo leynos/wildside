@@ -115,13 +115,15 @@ API and WebSocket traffic.
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
     Use `actix-session` with a cookie backend configured as:
     `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and explicit
-    `domain` and `path`. Load the signing key from a managed secret (for
-    example, a Kubernetes `Secret` or Vault) and mount or inject it for the
-    service at runtime—avoid sourcing it from a plain environment variable.
+    `domain` and `path`. Set a bounded `Max-Age` to limit session lifetime.
+    Load the signing key from a managed secret (for example, a Kubernetes
+    `Secret` or Vault) and mount or inject it for the service at runtime—avoid
+    sourcing it from a plain environment variable. Rotate the key regularly by
+    rolling the secret and reloading it so stale cookies are invalidated.
 
     ```rust
     use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-    use actix_web::cookie::{CookieBuilder, Key, SameSite};
+    use actix_web::cookie::{time::Duration, CookieBuilder, Key, SameSite};
 
     let key = Key::from(std::fs::read("/var/run/secrets/session_key")?);
     let session_middleware = SessionMiddleware::builder(
@@ -134,14 +136,17 @@ API and WebSocket traffic.
             .http_only(true)
             .same_site(SameSite::Lax)
             .domain("example.com")
-            .path("/"),
+            .path("/")
+            .max_age(Duration::hours(2)),
     )
     .build();
     ```
 
     Deployment manifests in `deploy/k8s/` should mount the secret and expose its
     path to the service (for instance, via a `SESSION_KEY_FILE` environment
-    variable).
+    variable). To support key rotation, deploy versioned secrets and reload the
+    service so the new key takes effect while the previous key remains available
+    for validating existing sessions during the rollout.
 
   - [ ] **Observability:**
 
