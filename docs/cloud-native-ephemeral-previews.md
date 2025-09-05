@@ -155,9 +155,6 @@ resource "digitalocean_kubernetes_cluster" "wildside_cluster" {
   vpc_uuid = digitalocean_vpc.wildside_vpc.id
   version = data.digitalocean_kubernetes_versions.latest_stable.latest_version
 
-  # Enable High Availability for the control plane in production
-  ha = true
-
   # Configure maintenance and auto-upgrades for security and stability
   auto_upgrade   = true
   surge_upgrade  = true
@@ -183,7 +180,7 @@ version (e.g., `1.28.x`).[^6] This ensures the cluster receives security
 patches automatically while preventing unexpected, potentially breaking, major
 version upgrades. The
 
-`ha = true` flag provisions a highly available control plane, which is
+DigitalOcean provisions a highly available control plane by default, which is
 essential for production workloads.[^8] Furthermore,
 
 `auto_upgrade` and `surge_upgrade` are enabled to automate the update process

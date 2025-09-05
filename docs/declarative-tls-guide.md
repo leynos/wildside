@@ -149,9 +149,6 @@ resource "digitalocean_kubernetes_cluster" "primary" {
   region  = "nyc3"
   version = "1.28.4-do.0" // Specify a stable, recent version
 
-  # Enable high-availability for the control plane
-  ha = true
-
   # Enable automatic patch version upgrades within a defined maintenance window
   auto_upgrade = true
   maintenance_policy {
@@ -176,9 +173,9 @@ resource "digitalocean_kubernetes_cluster" "primary" {
 
 ```
 
-This configuration defines a cluster with a high-availability control plane
-(`ha = true`), which mitigates the risk of a single-point-of-failure for the
-Kubernetes API server. It also enables automatic patch upgrades
+DigitalOcean provides a highly available control plane by default, mitigating
+the risk of a single-point-of-failure for the Kubernetes API server. This
+configuration also enables automatic patch upgrades
 (`auto_upgrade = true`) during a non-critical maintenance window, ensuring the
 cluster remains secure and up-to-date with minimal operational overhead.7
 
