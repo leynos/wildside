@@ -110,6 +110,7 @@ doks-test:
 	tofu fmt -check infra/modules/doks
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
+	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint
 	$(MAKE) doks-policy
 	cd infra/modules/doks/tests && go test -v

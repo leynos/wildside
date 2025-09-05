@@ -2,7 +2,8 @@ resource "digitalocean_kubernetes_cluster" "this" {
   name    = var.cluster_name
   region  = var.region
   version = var.kubernetes_version
-  ha      = true
+  # Provider v2.36+ exposes the `ha` argument; keep enabled for production resilience
+  ha = true
 
   dynamic "node_pool" {
     for_each = var.node_pools
