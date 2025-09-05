@@ -1,6 +1,9 @@
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
-use actix_web::{get, App, HttpResponse, HttpServer};
+use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+use actix_web::cookie::{Key, SameSite};
+use actix_web::{get, web, App, HttpResponse, HttpServer};
+use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 #[cfg(debug_assertions)]
@@ -36,9 +39,30 @@ async fn main() -> std::io::Result<()> {
         warn!(error = %e, "tracing init failed");
     }
 
-    HttpServer::new(|| {
+    let key_path =
+        env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key = match std::fs::read(&key_path) {
+        Ok(bytes) => Key::from(&bytes),
+        Err(e) => {
+            warn!(path = %key_path, error = %e, "failed to read session key; using temporary key");
+            Key::generate()
+        }
+    };
+
+    HttpServer::new(move || {
+        let session_middleware =
+            SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                .cookie_secure(true)
+                .cookie_http_only(true)
+                .cookie_same_site(SameSite::Lax)
+                .build();
+
+        let api = web::scope("/api")
+            .wrap(session_middleware)
+            .service(list_users);
+
         let app = App::new()
-            .service(list_users)
+            .service(api)
             .service(ws::ws_entry)
             .service(ready)
             .service(live);

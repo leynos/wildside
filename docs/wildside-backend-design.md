@@ -116,32 +116,41 @@ API and WebSocket traffic.
     Use the `actix-session` crate with a cookie-based backend. Load the signing
     key from a secret store (for example, a Kubernetes Secret or Vault) and
     mount or inject it for the service at runtime. Configure the session cookie
-    with `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and
-    explicit `domain` and `path`.
+    with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax` (or `Strict`).
 
     ```rust
     use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-    use actix_web::cookie::{CookieBuilder, Key, SameSite};
+    use actix_web::cookie::{Key, SameSite};
+    use actix_web::web;
+    use tracing::warn;
 
-    let key = Key::from(std::fs::read("/var/run/secrets/session_key")?);
+    let key_path = std::env::var("SESSION_KEY_FILE")
+        .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key = match std::fs::read(&key_path) {
+        Ok(bytes) => Key::from(&bytes),
+        Err(e) => {
+            warn!(path = %key_path, error = %e, "using temporary session key");
+            Key::generate()
+        }
+    };
+
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
     )
-    .cookie_builder(
-        CookieBuilder::new("wildside", "")
-            .secure(true)
-            .http_only(true)
-            .same_site(SameSite::Lax)
-            .domain("example.com")
-            .path("/"),
-    )
+    .cookie_secure(true)
+    .cookie_http_only(true)
+    .cookie_same_site(SameSite::Lax)
     .build();
+
+    let api = web::scope("/api")
+        .wrap(session_middleware)
+        .service(list_users);
     ```
 
     Deployment manifests in `deploy/k8s/` should mount the secret and expose its
     path to the service (for instance, via a `SESSION_KEY_FILE` environment
-    variable).
+    variable). Scope the middleware to routes that require authentication.
 
   - [ ] **Observability:**
 
