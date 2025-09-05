@@ -2,179 +2,137 @@
   "openapi": "3.1.0",
   "info": {
     "title": "backend",
-    "description": "HTTP interface for the wildside backend",
-    "version": "0.1.0",
+    "description": "",
     "license": {
-      "name": "ISC",
-      "url": "https://opensource.org/license/isc-license"
-    }
+      "name": ""
+    },
+    "version": "0.1.0"
   },
-  "servers": [
-    {
-      "url": "https://{subdomain}.yourdomain.example",
-      "description": "HTTP API",
-      "variables": {
-        "subdomain": {
-          "default": "api",
-          "enum": ["api", "staging", "dev"]
-        }
-      }
-    }
-  ],
-  "security": [{ "cookieAuth": [] }],
   "paths": {
     "/api/users": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "Users"
+        ],
+        "summary": "List known users.",
         "operationId": "listUsers",
-        "summary": "List users",
-        "description": "Return up to 100 known users in the system. The server enforces this temporary limit until cursor-based pagination is introduced.",
-        "externalDocs": {
-          "description": "Cursor-based pagination guideline",
-          "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
-        },
         "responses": {
           "200": {
-            "description": "Users (maximum 100 items)",
+            "description": "Users",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/User"
-                  },
-                  "maxItems": 100
-                },
-                "examples": {
-                  "twoUsers": {
-                    "summary": "Two users",
-                    "value": [
-                      {
-                        "id": "123e4567-e89b-12d3-a456-426614174000",
-                        "display_name": "Ada Lovelace"
-                      },
-                      {
-                        "id": "123e4567-e89b-12d3-a456-426614174001",
-                        "display_name": "Alan Turing"
-                      }
-                    ]
                   }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "500": { "$ref": "#/components/responses/InternalServerError" }
+          "401": {
+            "description": "Unauthorised",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "cookieAuth": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "session"
-      }
-    },
-    "responses": {
-      "Unauthorized": {
-        "description": "Unauthorized",
-        "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
-        }
-      },
-      "Forbidden": {
-        "description": "Forbidden",
-        "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
-        }
-      },
-      "InternalServerError": {
-        "description": "Internal server error",
-        "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
-        }
-      }
-    },
     "schemas": {
+      "Error": {
+        "type": "object",
+        "title": "Error",
+        "description": "An error response",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode",
+            "description": "Stable machine readable error code."
+          },
+          "details": {
+            "description": "Supplementary error details."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message."
+          },
+          "trace_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Correlation identifier to trace this error across systems."
+          }
+        }
+      },
       "ErrorCode": {
-        "title": "Error code",
         "type": "string",
-        "description": "Stable machine-readable error code",
-        "example": "invalid_request",
-        "pattern": "^[a-z0-9_.:-]+$",
+        "description": "Known error categories.",
         "enum": [
           "invalid_request",
           "unauthorized",
           "forbidden",
           "not_found",
           "internal_error"
-        ],
-        "x-enumDescriptions": [
-          "The request is malformed or fails validation",
-          "Authentication failed or is missing",
-          "Authenticated but not permitted to perform this action",
-          "The requested resource does not exist",
-          "An unexpected error occurred on the server"
         ]
       },
-      "Error": {
-        "title": "Error",
-        "type": "object",
-        "description": "An error response",
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "$ref": "#/components/schemas/ErrorCode"
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable error message",
-            "example": "Something went wrong"
-          },
-          "trace_id": {
-            "type": "string",
-            "description": "Correlation identifier for tracing this error across systems",
-            "example": "01HZY8B2W6X5Y7Z9ABCD1234"
-          },
-          "details": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Supplementary error details"
-          }
-        },
-        "required": ["code", "message"]
-      },
       "User": {
-        "title": "User",
         "type": "object",
-        "description": "A user of the system",
-        "additionalProperties": false,
-        "required": ["id", "display_name"],
+        "description": "Application user.",
+        "required": [
+          "id",
+          "display_name"
+        ],
         "properties": {
           "display_name": {
             "type": "string",
-            "description": "User's display name",
-            "example": "Ada Lovelace",
-            "minLength": 1,
-            "maxLength": 100
+            "description": "Display name shown to other users",
+            "example": "Ada"
           },
           "id": {
             "type": "string",
             "description": "Stable user identifier",
-            "example": "123e4567-e89b-12d3-a456-426614174000",
-            "format": "uuid"
+            "example": "u_1"
           }
-        }
+        },
+        "additionalProperties": false
       }
     }
   },
   "tags": [
     {
       "name": "users",
-      "description": "Operations about system users"
+      "description": "Operations related to users"
     }
   ]
 }

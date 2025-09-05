@@ -1,6 +1,6 @@
 //! OpenAPI documentation setup.
 
-use crate::models::User;
+use crate::models::{Error, ErrorCode, User};
 use utoipa::OpenApi;
 
 /// OpenAPI document for the REST API.
@@ -8,7 +8,7 @@ use utoipa::OpenApi;
 #[derive(OpenApi)]
 #[openapi(
     paths(crate::api::users::list_users),
-    components(schemas(User)),
+    components(schemas(User, Error, ErrorCode)),
     tags((name = "users", description = "Operations related to users"))
 )]
 pub struct ApiDoc;
