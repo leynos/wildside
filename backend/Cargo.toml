@@ -12,6 +12,8 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 
+uuid = { version = "1", features = ["serde", "v4"] }
+
 # OpenAPI
 utoipa = { version = "5", features = ["macros", "uuid", "yaml", "actix_extras"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }

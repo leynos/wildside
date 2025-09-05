@@ -50,11 +50,11 @@
                     "summary": "Two users",
                     "value": [
                       {
-                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "id": "00000000-0000-0000-0000-000000000000",
                         "display_name": "Ada Lovelace"
                       },
                       {
-                        "id": "123e4567-e89b-12d3-a456-426614174001",
+                        "id": "00000000-0000-0000-0000-000000000001",
                         "display_name": "Alan Turing"
                       }
                     ]
@@ -164,7 +164,7 @@
           "id": {
             "type": "string",
             "description": "Stable user identifier",
-            "example": "123e4567-e89b-12d3-a456-426614174000",
+            "example": "00000000-0000-0000-0000-000000000000",
             "format": "uuid"
           }
         }

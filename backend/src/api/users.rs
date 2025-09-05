@@ -2,6 +2,7 @@
 
 use crate::models::User;
 use actix_web::{get, web, Result};
+use uuid::Uuid;
 
 /// List known users.
 #[utoipa::path(
@@ -18,7 +19,7 @@ use actix_web::{get, web, Result};
 #[get("/api/users")]
 pub async fn list_users() -> Result<web::Json<Vec<User>>> {
     let data = vec![User {
-        id: "u_1".into(),
+        id: Uuid::nil(),
         display_name: "Ada".into(),
     }];
     Ok(web::Json(data))
