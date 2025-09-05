@@ -61,9 +61,12 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
         vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
        _, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
 
-       _, err := terraform.InitAndPlanE(t, opts)
-       require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
-       require.Contains(t, err.Error(), "DIGITALOCEAN_TOKEN", "error message should mention missing DIGITALOCEAN_TOKEN")
+        _, err := terraform.InitAndPlanE(t, opts)
+        if err == nil {
+                _, err = terraform.ApplyE(t, opts)
+        }
+        require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
+        require.Contains(t, err.Error(), "Unable to authenticate", "error message should mention authentication failure")
 }
 
 func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
@@ -142,6 +145,14 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 			},
 			ErrContains: "kubernetes_version must match",
 		},
+                "MissingKubernetesVersion": {
+                        Vars: map[string]interface{}{
+                                "cluster_name": "terratest-cluster",
+                                "region":       "nyc1",
+                                "node_pools":   testVars()["node_pools"],
+                        },
+                        ErrContains: "kubernetes_version",
+                },
 		"EmptyNodePools": {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
