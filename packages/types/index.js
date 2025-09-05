@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 /** Runtime schema for a branded user identifier. */
-export const UserIdSchema = z.string().brand();
+export const UserIdSchema = z.string().uuid().brand();
 /** Runtime schema for a user record. */
 export const UserSchema = z
   .object({

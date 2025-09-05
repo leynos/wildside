@@ -13,13 +13,13 @@ use uuid::Uuid;
         (status = 401, description = "Unauthorised"),
         (status = 500, description = "Internal server error")
     ),
-    tags = ["Users"],
+    tags = ["users"],
     operation_id = "listUsers"
 )]
 #[get("/api/users")]
 pub async fn list_users() -> Result<web::Json<Vec<User>>> {
     let data = vec![User {
-        id: Uuid::nil(),
+        id: Uuid::new_v4(),
         display_name: "Ada".into(),
     }];
     Ok(web::Json(data))
