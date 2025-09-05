@@ -1,6 +1,9 @@
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
+use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+use actix_web::cookie::{Key, SameSite};
 use actix_web::{get, App, HttpResponse, HttpServer};
+use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 #[cfg(debug_assertions)]
@@ -36,8 +39,20 @@ async fn main() -> std::io::Result<()> {
         warn!(error = %e, "tracing init failed");
     }
 
-    HttpServer::new(|| {
+    let key_path =
+        env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key = Key::from(&std::fs::read(key_path).expect("reading session key"));
+
+    HttpServer::new(move || {
+        let session_middleware =
+            SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                .cookie_secure(true)
+                .cookie_http_only(true)
+                .cookie_same_site(SameSite::Lax)
+                .build();
+
         let app = App::new()
+            .wrap(session_middleware)
             .service(list_users)
             .service(ws::ws_entry)
             .service(ready)
