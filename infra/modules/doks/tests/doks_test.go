@@ -15,21 +15,22 @@ import (
 )
 
 func testVars() map[string]interface{} {
-	return map[string]interface{}{
-		"cluster_name":       "terratest-cluster",
-		"region":             "nyc1",
-		"kubernetes_version": "1.28.0-do.0",
-		"node_pools": []map[string]interface{}{
-			{
-				"name":       "default",
-				"size":       "s-2vcpu-2gb",
-				"node_count": 1,
-				"auto_scale": false,
-				"min_nodes":  1,
-				"max_nodes":  1,
-			},
-		},
-	}
+        return map[string]interface{}{
+                "cluster_name":       "terratest-cluster",
+                "region":             "nyc1",
+                "kubernetes_version": "1.28.0-do.0",
+                "node_pools": []map[string]interface{}{
+                        {
+                                "name":       "default",
+                                "size":       "s-2vcpu-2gb",
+                                "node_count": 1,
+                                "auto_scale": false,
+                                "min_nodes":  1,
+                                "max_nodes":  1,
+                        },
+                },
+                "tags": []string{"terratest"},
+        }
 }
 
 func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]string) (string, *terraform.Options) {

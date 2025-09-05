@@ -94,7 +94,8 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
 	command -v tflint >/dev/null
-	cd infra/modules/doks && tflint --init && tflint
+	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
 	cd infra/modules/doks/tests && go test -v
 	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \

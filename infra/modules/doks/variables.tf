@@ -25,6 +25,12 @@ variable "kubernetes_version" {
   }
 }
 
+variable "tags" {
+  description = "Tags applied to the Kubernetes cluster"
+  type        = list(string)
+  default     = []
+}
+
 variable "node_pools" {
   description = "Configuration for cluster node pools"
   type = list(object({
