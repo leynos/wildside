@@ -16,7 +16,11 @@
       "variables": {
         "subdomain": {
           "default": "api",
-          "enum": ["api", "staging", "dev"]
+          "enum": [
+            "api",
+            "staging",
+            "dev"
+          ]
         }
       }
     }
@@ -24,7 +28,9 @@
   "paths": {
     "/api/users": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "operationId": "listUsers",
         "summary": "List users",
         "description": "Return up to 100 known users in the system. The server enforces this temporary limit until cursor-based pagination is introduced.",
@@ -32,7 +38,11 @@
           "description": "Cursor-based pagination guideline",
           "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
         },
-          "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Users (maximum 100 items)",
@@ -63,9 +73,45 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "500": { "$ref": "#/components/responses/InternalServerError" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "operationId": "login",
+        "summary": "Log in",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       }
     }
@@ -82,19 +128,31 @@
       "Unauthorized": {
         "description": "Unauthorized",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "Forbidden": {
         "description": "Forbidden",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "InternalServerError": {
         "description": "Internal server error",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       }
     },
@@ -139,14 +197,20 @@
             "description": "Supplementary error details"
           }
         },
-        "required": ["code", "message"]
+        "required": [
+          "code",
+          "message"
+        ]
       },
       "User": {
         "title": "User",
         "type": "object",
         "description": "A user of the system",
         "additionalProperties": false,
-        "required": ["id", "display_name"],
+        "required": [
+          "id",
+          "display_name"
+        ],
         "properties": {
           "display_name": {
             "type": "string",
@@ -160,6 +224,28 @@
             "description": "Stable user identifier",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "format": "uuid"
+          }
+        }
+      },
+      "LoginRequest": {
+        "title": "LoginRequest",
+        "type": "object",
+        "description": "User login request",
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Username",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "description": "Password",
+            "example": "password"
           }
         }
       }

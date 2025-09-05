@@ -11,7 +11,7 @@ use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
-use backend::api::users::list_users;
+use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
@@ -59,6 +59,7 @@ async fn main() -> std::io::Result<()> {
 
         let api = web::scope("/api")
             .wrap(session_middleware)
+            .service(login)
             .service(list_users);
 
         let app = App::new()
