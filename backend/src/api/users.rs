@@ -1,7 +1,8 @@
 //! Users API handlers.
 
 use crate::models::User;
-use actix_web::{get, web, Result};
+use actix_session::Session;
+use actix_web::{error::ErrorUnauthorized, get, web, Result};
 use uuid::Uuid;
 
 /// List known users.
@@ -17,7 +18,11 @@ use uuid::Uuid;
     operation_id = "listUsers"
 )]
 #[get("/api/users")]
-pub async fn list_users() -> Result<web::Json<Vec<User>>> {
+pub async fn list_users(session: Session) -> Result<web::Json<Vec<User>>> {
+    if session.get::<String>("user_id")?.is_none() {
+        return Err(ErrorUnauthorized("unauthorised"));
+    }
+
     let data = vec![User {
         id: Uuid::new_v4(),
         display_name: "Ada".into(),
