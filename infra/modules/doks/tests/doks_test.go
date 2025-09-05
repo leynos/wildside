@@ -107,10 +107,12 @@ func TestDoksModulePolicy(t *testing.T) {
 	require.NoError(t, err)
 	jsonPath := filepath.Join(tfDir, "plan.json")
 	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
-	cmd := exec.Command("conftest", "test", jsonPath, "--policy", filepath.Join("..", "..", "policy"))
-	cmd.Dir = tfDir
-	output, err := cmd.CombinedOutput()
-	require.NoErrorf(t, err, "conftest failed: %s", string(output))
+        policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
+        require.NoError(t, err)
+        cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+        cmd.Dir = tfDir
+        output, err := cmd.CombinedOutput()
+        require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
 func TestDoksModuleInvalidInputs(t *testing.T) {
