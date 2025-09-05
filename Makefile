@@ -1,5 +1,6 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
+ASYNCAPI_CLI_VERSION ?= 3.4.2
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit
 all: fmt lint test
@@ -40,7 +41,9 @@ fmt:
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
-	bun x -y @asyncapi/cli@latest validate spec/asyncapi.yaml
+	command -v checkmake >/dev/null || { echo "checkmake is not installed" >&2; exit 1; }
+	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
+	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
 	checkmake Makefile
 	mbake validate Makefile
 
@@ -69,9 +72,9 @@ check-fmt:
 
 markdownlint:
 	find . \
-	  ( -path './backend/target' -o -path './target' -o \
-	     -path './.node_modules' -o -path '*/node_modules' -o \
-	     -name '.git' \) -prune -o -type f -name '*.md' -print0 | \
+	  \( -path './backend/target' -o -path './target' -o \
+	     -path './node_modules' -o -path '*/node_modules' -o \
+	     -path '*/.git' \) -prune -o -type f -name '*.md' -print0 | \
 	     xargs -0 -- markdownlint
 
 nixie:
@@ -84,4 +87,4 @@ yamllint:
 	command -v yamllint >/dev/null
 	command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
-	if [ -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ]; then set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -; fi
+	if [ -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] && yq e -e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml >/dev/null; then set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -; fi
