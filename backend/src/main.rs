@@ -58,7 +58,7 @@ async fn main() -> std::io::Result<()> {
                 .cookie_same_site(SameSite::Lax)
                 .build();
 
-        let api = web::scope("/api")
+        let api = web::scope("/api/v1")
             .wrap(session_middleware)
             .service(login)
             .service(list_users);

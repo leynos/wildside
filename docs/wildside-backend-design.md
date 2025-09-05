@@ -156,7 +156,7 @@ API and WebSocket traffic.
     path to the service (for instance, via a `SESSION_KEY_FILE` environment
     variable). Scope the middleware to routes that require authentication.
 
-  - [ ] **Login endpoint:** Add `POST /api/login` to validate credentials and initialise sessions.
+  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials and initialise sessions.
 
   - [ ] **Observability:**
 
@@ -607,7 +607,7 @@ All REST endpoints are prefixed with `/api/v1`.
 
 | Method | Path | Description | Authentication |
 | ------ | ---------------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/api/login` | Establishes a user session from credentials. | None |
+| `POST` | `/api/v1/login` | Establishes a user session from credentials. | None |
 | `GET` | `/api/v1/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
 | `PUT` | `/api/v1/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
 
