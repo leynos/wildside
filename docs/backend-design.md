@@ -311,6 +311,7 @@ worker** component. The main backend enqueues jobs, and one or more worker
 processes dequeue and execute them in the background. This decouples heavy
 lifting from user-facing request latency.
 
+<<<<<<< HEAD
 For implementation, Wildside will use
 [Apalis](https://docs.rs/apalis) backed by Redis. Apalis supports retries,
 scheduling (cron jobs) and concurrency limits. Workers can run as a separate
@@ -322,7 +323,20 @@ concerns: use `route_generation` for CPU-intensive path-planning jobs and
 periodic enrichments. Apalis’s cron-like scheduling triggers regular
 maintenance tasks without adding extra services. Define a clear reliability
 policy:
+||||||| parent of ccc12a3 (Wrap background worker docs lines)
+For implementation the project uses **Apalis** for background job processing. Apalis supports multiple backends and we will adopt **Redis** as the queue store. Workers run the same codebase in “worker mode” and process jobs from named queues. Two queues isolate workloads: `route_generation` handles CPU-intensive path-planning jobs, while `enrichment` manages fetching supplementary point-of-interest data. Apalis provides retries, concurrency limits and cron-like scheduling, letting us trigger periodic maintenance tasks without extra services.
+=======
+For implementation the project uses **Apalis** for background job processing.
+Apalis supports multiple backends and we will adopt **Redis** as the queue
+store. Workers run the same codebase in "worker mode" and process jobs from
+named queues. Two queues isolate workloads: `route_generation` handles
+CPU-intensive path-planning jobs, while `enrichment` manages fetching
+supplementary point-of-interest data. Apalis provides retries, concurrency
+limits and cron-like scheduling, letting us trigger periodic maintenance tasks
+without extra services.
+>>>>>>> ccc12a3 (Wrap background worker docs lines)
 
+<<<<<<< HEAD
 - use bounded exponential backoff with a maximum retry count;
 - route exhausted jobs to a dead-letter queue for inspection;
 - require idempotency per job type (e.g., a deduplication key) so retries do
@@ -338,6 +352,23 @@ notified (perhaps the web server checks the DB or the worker triggers a
 WebSocket message when done). Scheduled tasks like refreshing OSM data nightly
 are queued on `enrichment` and triggered on a schedule (Apalis supports
 cron-like scheduling).
+||||||| parent of ccc12a3 (Wrap background worker docs lines)
+Within this design, the architecture pattern remains: the **Actix Web
+server produces tasks**, and **worker(s) consume them**. For example, when a
+user requests a route, the server might enqueue a
+`GenerateRouteJob(user_id, start_point, prefs, etc)` on the `route_generation` queue. A worker running the same codebase (but started in worker mode) will pick it up, execute the wildside-engine to compute the route, then store the result in the database or cache. The user is then notified (perhaps the web server checks the DB or the worker triggers a WebSocket message when done). Similarly, scheduled tasks like refreshing OSM data nightly could be queued on `enrichment` and triggered on a schedule (Apalis supports cron-like scheduling).
+=======
+Within this design, the architecture pattern remains: the **Actix Web server
+produces tasks**, and **worker(s) consume them**. For example, when a user
+requests a route, the server might enqueue a `GenerateRouteJob`
+`(user_id, start_point, prefs, etc)` on the `route_generation` queue. A worker
+running the same codebase (but started in worker mode) will pick it up, execute
+the wildside-engine to compute the route, then store the result in the database
+or cache. The user is then notified (perhaps the web server checks the DB or
+the worker triggers a WebSocket message when done). Similarly, scheduled tasks
+like refreshing OSM data nightly could be queued on `enrichment` and triggered
+on a schedule (Apalis supports cron-like scheduling).
+>>>>>>> ccc12a3 (Wrap background worker docs lines)
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
