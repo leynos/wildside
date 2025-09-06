@@ -45,6 +45,7 @@ components:
           trace_id:
             type: string
             description: Correlation identifier for tracing across systems
+            format: uuid
           id:
             type: string
             description: Unique user identifier
