@@ -571,7 +571,8 @@ An in-memory cache is used to improve performance and reduce database load.
 The system must be fully instrumented to provide insight into its performance,
 reliability, and user behaviour.
 
-- **Technology:** Prometheus, Grafana, Loki, PostHog, `tracing` crate.
+- **Technology:** Prometheus, Grafana, Loki, PostHog, `tracing` crate,
+  `postgres_exporter`, `redis_exporter`.
 
 - **Current Status:** `tracing` is integrated for basic logging. The Kubernetes
   manifests are configured to support the Prometheus Operator.
@@ -606,6 +607,15 @@ reliability, and user behaviour.
 
     - A gauge (`pois_total`) for the total number of POIs in the local
       database, to observe growth over time.
+
+  - [ ] **Database metrics:** Deploy `postgres_exporter` and scrape
+    `pg_up`, `pg_database_size_bytes`, and
+    `pg_stat_database_xact_commit_total` to monitor database health and
+    growth.
+
+  - [ ] **Cache metrics:** Deploy `redis_exporter` and track
+    `redis_keyspace_hits_total` and `redis_keyspace_misses_total` to measure
+    Redis cache hit ratios.
 
   - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
     include the `trace_id` propagated from the initial API request, even into
