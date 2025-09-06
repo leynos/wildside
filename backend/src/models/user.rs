@@ -8,9 +8,9 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields)]
 pub struct User {
     /// Stable user identifier
-    #[schema(example = "u_1")]
+    #[schema(example = "123e4567-e89b-12d3-a456-426614174000")]
     pub id: String,
     /// Display name shown to other users
-    #[schema(example = "Ada")]
+    #[schema(example = "Ada Lovelace")]
     pub display_name: String,
 }

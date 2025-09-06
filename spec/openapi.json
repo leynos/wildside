@@ -104,7 +104,13 @@
         },
         "responses": {
           "200": {
-            "description": "Login successful"
+            "description": "Login successful",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Session cookie",
+                "schema": { "type": "string" }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

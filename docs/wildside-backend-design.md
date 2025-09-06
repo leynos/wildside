@@ -134,11 +134,14 @@ API and WebSocket traffic.
         }
     };
 
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE").map(|v| v != "0").unwrap_or(true);
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
     )
-    .cookie_secure(true)
+    .cookie_name("session")
+    .cookie_path("/")
+    .cookie_secure(cookie_secure)
     .cookie_http_only(true)
     .cookie_same_site(SameSite::Lax)
     .build();
@@ -148,9 +151,12 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-    `CookieSessionStore` keeps session state entirely in the cookie. Browsers cap
-    individual cookies at roughly 4 KB, so session payloads must remain well
-    under this limit.
+    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    external store such as Redis. Browsers cap individual cookies at roughly 4
+    KB, so session payloads must remain well under this limit.
+
+    Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
+    plain HTTP; production deployments should leave this unset to enforce HTTPS.
 
     Deployment manifests in `deploy/k8s/` should mount the secret and expose its
     path to the service (for instance, via a `SESSION_KEY_FILE` environment

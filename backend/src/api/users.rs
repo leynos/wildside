@@ -17,7 +17,7 @@ pub struct LoginRequest {
     path = "/api/v1/login",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Login success"),
+        (status = 200, description = "Login success", headers(("Set-Cookie" = String, description = "Session cookie"))),
         (status = 401, description = "Invalid credentials"),
         (status = 500, description = "Internal server error")
     ),
@@ -27,7 +27,7 @@ pub struct LoginRequest {
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
     if payload.username == "admin" && payload.password == "password" {
-        session.insert("user_id", "u_1")?;
+        session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
         Ok(HttpResponse::Ok().finish())
     } else {
         Err(ErrorUnauthorized("invalid credentials"))
@@ -53,8 +53,8 @@ pub async fn list_users(session: Session) -> Result<web::Json<Vec<User>>> {
     }
 
     let data = vec![User {
-        id: "u_1".into(),
-        display_name: "Ada".into(),
+        id: "123e4567-e89b-12d3-a456-426614174000".into(),
+        display_name: "Ada Lovelace".into(),
     }];
     Ok(web::Json(data))
 }
