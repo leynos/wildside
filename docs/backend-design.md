@@ -66,6 +66,16 @@ the frontend could send them) to record user actions (e.g. “RouteGenerated”,
 will have robust logging and metrics: Prometheus for low-level performance and
 error monitoring, and PostHog for high-level user behavior tracking.
 
+## Martin Tile Server
+
+To deliver map tiles without burdening the core API, Wildside deploys the
+**Martin** tile server as a distinct service. Martin connects to the same
+PostGIS database as the main backend and exposes vector tiles on `/tiles`.
+Running it separately allows independent scaling, caching and availability
+controls. Requests such as `/tiles/{z}/{x}/{y}.pbf` are served directly from
+PostGIS, enabling clients to fetch map data while the monolith focuses on
+business logic.
+
 ## Route Generation Engine Integration
 
 At the heart of Wildside is the **route recommendation engine**, provided by
