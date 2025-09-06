@@ -225,7 +225,8 @@ API and WebSocket traffic.
     - Implement a `/healthz` endpoint that returns a `200 OK` response.
 
     - Ensure all request handlers have `tracing` spans with a unique
-      `request_id`.
+      `request_id`, propagating it via a `Trace-Id` response header for
+      client correlation.
 
   - [ ] **API Endpoints:**
 
@@ -235,6 +236,34 @@ API and WebSocket traffic.
     - Create a `/api/v1/routes` endpoint to accept route generation requests.
       This endpoint should validate the input and enqueue a `GenerateRouteJob`
       (see § 3.4).
+
+The flow for request handling and trace propagation is shown below:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Client
+  participant Actix as Actix Server
+  participant TraceMW as Trace Middleware
+  participant Handler as list_users()
+  participant ErrorModel as models::Error
+
+  Client->>Actix: HTTP GET /users
+  Actix->>TraceMW: pass ServiceRequest
+  TraceMW->>TraceMW: generate UUID trace_id\ninsert into req.extensions & task-local
+  TraceMW->>Handler: invoke handler within trace span
+  alt Success
+    Handler-->>TraceMW: Ok(Json<Vec<User>>)
+    TraceMW-->>Actix: 200 OK + users JSON
+    Actix-->>Client: 200 OK + users JSON
+  else Error
+    Handler-->>TraceMW: Err(Error)
+    TraceMW->>ErrorModel: ResponseError::error_response()
+    ErrorModel-->>TraceMW: HttpResponse(status + JSON body with trace_id)
+    TraceMW-->>Actix: 4xx/5xx + Error JSON
+    Actix-->>Client: 4xx/5xx + Error JSON
+  end
+```
 
 ### 3.2. Route Generation Engine Integration
 

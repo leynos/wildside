@@ -71,6 +71,14 @@ where
 /// Service wrapper produced by [`Trace`].
 ///
 /// Applications should not use this type directly.
+///
+/// # Examples
+/// ```
+/// use actix_web::App;
+/// use backend::Trace;
+///
+/// let _app = App::new().wrap(Trace);
+/// ```
 pub struct TraceMiddleware<S> {
     service: S,
 }
@@ -105,5 +113,40 @@ where
             );
             Ok(res)
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, web, App, HttpResponse};
+
+    #[actix_web::test]
+    async fn adds_trace_id_header() {
+        let app = test::init_service(
+            App::new()
+                .wrap(Trace)
+                .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/").to_request();
+        let res = test::call_service(&app, req).await;
+        assert!(res.headers().contains_key("trace-id"));
+    }
+
+    #[actix_web::test]
+    async fn propagates_trace_id_in_error() {
+        use crate::models::{ApiResult, Error};
+
+        let app = test::init_service(App::new().wrap(Trace).route(
+            "/",
+            web::get().to(|| async { ApiResult::<HttpResponse>::Err(Error::internal("boom")) }),
+        ))
+        .await;
+        let req = test::TestRequest::get().uri("/").to_request();
+        let res = test::call_service(&app, req).await;
+        assert!(res.headers().contains_key("trace-id"));
+        let body: Error = test::read_body_json(res).await;
+        assert!(body.trace_id.is_some());
     }
 }
