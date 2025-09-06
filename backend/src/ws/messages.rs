@@ -1,3 +1,4 @@
+//! WebSocket message types for user events.
 use actix::Message;
 use serde::Serialize;
 use uuid::Uuid;

@@ -303,6 +303,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "insta",
+ "once_cell",
  "regex",
  "rstest",
  "serde",
