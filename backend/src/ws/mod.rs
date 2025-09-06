@@ -5,6 +5,7 @@ use actix_web::{get, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use tracing::error;
 
+pub mod messages;
 pub mod socket;
 
 /// Handle WebSocket upgrade for the `/ws` endpoint.
