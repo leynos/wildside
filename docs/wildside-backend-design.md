@@ -572,7 +572,8 @@ The system must be fully instrumented to provide insight into its performance,
 reliability, and user behaviour.
 
 - **Technology:** Prometheus, Grafana, Loki, PostHog, `tracing` crate,
-  `postgres_exporter`, `redis_exporter`.
+  [`postgres_exporter`](https://github.com/prometheus-community/postgres_exporter),
+  [`redis_exporter`](https://github.com/oliver006/redis_exporter).
 
 - **Current Status:** `tracing` is integrated for basic logging. The Kubernetes
   manifests are configured to support the Prometheus Operator.
@@ -586,6 +587,10 @@ reliability, and user behaviour.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
     funnels.
+
+- **Scrape configuration:** Use Prometheus Operator ServiceMonitors to
+  scrape exporters every 15 seconds with consistent `job` and `instance`
+  labels.
 
 - **Implementation Tasks:**
 
@@ -609,13 +614,54 @@ reliability, and user behaviour.
       database, to observe growth over time.
 
   - [ ] **Database metrics:** Deploy `postgres_exporter` and scrape
-    `pg_up`, `pg_database_size_bytes`, and
-    `pg_stat_database_xact_commit_total` to monitor database health and
-    growth.
+    `pg_up`, `pg_database_size_bytes`, `pg_stat_database_xact_commit`,
+    `pg_stat_activity_count`, and `pg_stat_statements_total_time` to monitor
+    write throughput, connection usage, and slow queries. ServiceMonitors
+    should scrape every 15 seconds with consistent `job` and `instance`
+    labels.
+
+    ```yaml
+    # prometheus-rule.yaml (postgres)
+    groups:
+    - name: postgres.rules
+      rules:
+      - record: pg:db_write_tps:rate5m
+        expr: sum by (datname) (rate(pg_stat_database_xact_commit[5m]))
+      - record: pg:db_total_size_bytes
+        expr: sum(pg_database_size_bytes)
+      - alert: PostgresReplicationLagHigh
+        expr: max(pg_replication_lag_bytes) > 134217728
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "PostgreSQL replication lag high"
+          description: "Replica is {{ $value }} bytes behind."
+    ```
 
   - [ ] **Cache metrics:** Deploy `redis_exporter` and track
-    `redis_keyspace_hits_total` and `redis_keyspace_misses_total` to measure
-    Redis cache hit ratios.
+    `redis_keyspace_hits_total`, `redis_keyspace_misses_total`,
+    `redis_evicted_keys_total`, `redis_memory_used_bytes`, and
+    `redis_command_duration_seconds` to surface cache efficiency, pressure,
+    and latency.
+
+    ```yaml
+    # prometheus-rule.yaml (redis)
+    groups:
+    - name: redis.rules
+      rules:
+      - record: redis:cache_hit_ratio:rate5m
+        expr: |
+          sum(rate(redis_keyspace_hits_total[5m])) /
+          (sum(rate(redis_keyspace_hits_total[5m])) +
+           sum(rate(redis_keyspace_misses_total[5m])))
+      - alert: RedisEvictionsOccurring
+        expr: rate(redis_evicted_keys_total[5m]) > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Redis evictions occurring"
+          description: "Evictions indicate memory pressure or suboptimal TTLs."
+    ```
 
   - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
     include the `trace_id` propagated from the initial API request, even into
