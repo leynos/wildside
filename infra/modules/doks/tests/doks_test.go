@@ -23,13 +23,14 @@ func testVars() map[string]interface{} {
                         {
                                 "name":       "default",
                                 "size":       "s-2vcpu-2gb",
-                                "node_count": 1,
+                                "node_count": 2,
                                 "auto_scale": false,
-                                "min_nodes":  1,
-                                "max_nodes":  1,
+                                "min_nodes":  2,
+                                "max_nodes":  2,
                         },
                 },
                 "tags": []string{"terratest"},
+                "expose_kubeconfig": true,
         }
 }
 

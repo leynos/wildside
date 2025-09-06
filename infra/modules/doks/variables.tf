@@ -52,3 +52,9 @@ variable "node_pools" {
     error_message = "each node pool requires at least one node with min_nodes >= 1 and max_nodes >= min_nodes"
   }
 }
+
+variable "expose_kubeconfig" {
+  description = "Expose kubeconfig via outputs (stores credentials in state). Use only for local/dev."
+  type        = bool
+  default     = false
+}

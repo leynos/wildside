@@ -112,7 +112,7 @@ doks-test:
 	-var cluster_name=test \
 	-var region=nyc1 \
 	-var kubernetes_version=1.28.0-do.0 \
-	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
@@ -122,7 +122,7 @@ doks-policy: conftest tofu
 	-var cluster_name=test \
 	-var region=nyc1 \
 	-var kubernetes_version=1.28.0-do.0 \
-	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=1,"auto_scale"=false,"min_nodes"=1,"max_nodes"=1}]' \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy

@@ -5,6 +5,7 @@ module "doks" {
   kubernetes_version = var.kubernetes_version
   node_pools         = var.node_pools
   tags               = var.tags
+  expose_kubeconfig  = var.expose_kubeconfig
 }
 
 variable "cluster_name" {
@@ -41,12 +42,24 @@ variable "tags" {
   default     = []
 }
 
-output "example_cluster_id" {
+variable "expose_kubeconfig" {
+  type        = bool
+  description = "Expose kubeconfig via module outputs (stores credentials in state)"
+  default     = false
+}
+
+output "cluster_id" {
   description = "Cluster ID from module"
   value       = module.doks.cluster_id
 }
 
-output "example_cluster_endpoint" {
+output "endpoint" {
   description = "Cluster API endpoint from module"
   value       = module.doks.endpoint
+}
+
+output "kubeconfig" {
+  description = "Kubeconfig from module"
+  value       = module.doks.kubeconfig
+  sensitive   = true
 }

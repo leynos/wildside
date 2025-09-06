@@ -2,7 +2,6 @@ resource "digitalocean_kubernetes_cluster" "this" {
   name    = var.cluster_name
   region  = var.region
   version = var.kubernetes_version
-  ha      = true
   tags    = var.tags
 
   dynamic "node_pool" {

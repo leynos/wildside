@@ -18,14 +18,14 @@ cluster lifecycle.
 - **Fail-fast validation.** Inputs for the region slug, Kubernetes version and
   node pool sizing are validated against expected patterns to catch typos and
   sizing errors before contacting the provider.
-- **High availability.** The module pins the DigitalOcean provider at v2.36+
-  and sets `ha = true`. A policy test ensures the flag cannot be disabled.
+- **High availability.** Policy checks deny any node pool with fewer than two
+  nodes, ensuring the cluster maintains a highly available control plane and
+  worker set without relying on provider-specific flags.
 - **Tagging.** Cluster-level tags can be supplied via the `tags` input, and
   node pool objects accept optional `tags` for cost allocation.
-- **Minimal outputs.** Only the cluster identifier, API endpoint and raw
-  kubeconfig are exposed. The kubeconfig output is marked sensitive to avoid
-  accidental disclosure. Consumers can derive further details from the
-  kubeconfig as needed.
+- **Minimal outputs.** Only the cluster identifier and API endpoint are
+  exported by default. A `expose_kubeconfig` input gates the kubeconfig output,
+  allowing credentials to be surfaced only when explicitly requested.
 - **Testing strategy.** Terratest validates module syntax and exercises plan
   and apply flows. The apply step is skipped when a valid
   `DIGITALOCEAN_TOKEN` is absent, enabling local and CI execution without cloud

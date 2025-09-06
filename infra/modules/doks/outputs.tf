@@ -11,5 +11,5 @@ output "endpoint" {
 output "kubeconfig" {
   description = "Raw kubeconfig for the cluster"
   sensitive   = true
-  value       = digitalocean_kubernetes_cluster.this.kube_config[0].raw_config
+  value       = var.expose_kubeconfig ? digitalocean_kubernetes_cluster.this.kube_config[0].raw_config : null
 }
