@@ -42,17 +42,19 @@ variable "node_pools" {
     max_nodes  = number
     tags       = optional(list(string))
   }))
+
   validation {
-    condition = length(var.node_pools) > 0 && alltrue([
+    condition     = length(var.node_pools) > 0
+    error_message = "node_pools must not be empty"
+  }
+  validation {
+    condition = alltrue([
       for np in var.node_pools :
-      (
-        np.auto_scale ?
-        (np.min_nodes >= 2 && np.max_nodes >= np.min_nodes)
-        :
-        (np.node_count >= 2)
-      )
+      np.auto_scale ?
+      (np.min_nodes >= 2 && np.max_nodes >= np.min_nodes) :
+      (np.node_count >= 2)
     ])
-    error_message = "node_pools must not be empty and each node pool must have node_count >= 2 when auto_scale is false, or min_nodes >= 2 and max_nodes >= min_nodes when auto_scale is true"
+    error_message = "each node pool must have node_count >= 2 when auto_scale is false, or min_nodes >= 2 and max_nodes >= min_nodes when auto_scale is true"
   }
 }
 

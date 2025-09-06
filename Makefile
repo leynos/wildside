@@ -114,10 +114,10 @@ yamllint:
 
 .PHONY: conftest tofu doks-test
 conftest:
-        $(call ensure_tool,conftest)
+	$(call ensure_tool,conftest)
 
 tofu:
-        $(call ensure_tool,tofu)
+	$(call ensure_tool,tofu)
 
 doks-test:
 	tofu fmt -check infra/modules/doks
