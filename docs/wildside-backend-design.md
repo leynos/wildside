@@ -166,12 +166,21 @@ API and WebSocket traffic.
         }
     };
 
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE").map(|v| v != "0").unwrap_or(true);
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
     )
+<<<<<<< HEAD
     .cookie_name("wildside")
     .cookie_secure(true)
+||||||| parent of c3970be (Gate secure cookies and use UUID user IDs)
+    .cookie_secure(true)
+=======
+    .cookie_name("session")
+    .cookie_path("/")
+    .cookie_secure(cookie_secure)
+>>>>>>> c3970be (Gate secure cookies and use UUID user IDs)
     .cookie_http_only(true)
     .cookie_same_site(SameSite::Lax)
     // Set at deploy time if required:
@@ -185,9 +194,22 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
+<<<<<<< HEAD
     `CookieSessionStore` keeps session state entirely in the cookie. Browsers
     cap individual cookies at roughly 4 KB, so session payloads must remain
     well under this limit.
+||||||| parent of c3970be (Gate secure cookies and use UUID user IDs)
+    `CookieSessionStore` keeps session state entirely in the cookie. Browsers cap
+    individual cookies at roughly 4 KB, so session payloads must remain well
+    under this limit.
+=======
+    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    external store such as Redis. Browsers cap individual cookies at roughly 4
+    KB, so session payloads must remain well under this limit.
+
+    Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
+    plain HTTP; production deployments should leave this unset to enforce HTTPS.
+>>>>>>> c3970be (Gate secure cookies and use UUID user IDs)
 
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`

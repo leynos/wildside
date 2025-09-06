@@ -49,11 +49,16 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
+        .map(|v| v != "0")
+        .unwrap_or(true);
+
     HttpServer::new(move || {
         let session_middleware =
             SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
                 .cookie_name("session".to_owned())
-                .cookie_secure(true)
+                .cookie_path("/".to_owned())
+                .cookie_secure(cookie_secure)
                 .cookie_http_only(true)
                 .cookie_same_site(SameSite::Lax)
                 .build();
