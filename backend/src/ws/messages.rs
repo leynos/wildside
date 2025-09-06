@@ -3,21 +3,54 @@ use actix::Message;
 use serde::Serialize;
 use uuid::Uuid;
 
-/// Event emitted when a new user is created.
-#[derive(Debug, Serialize, Message)]
-#[rtype(result = "()")]
-pub struct UserCreated {
+/// Trait for messages that carry a correlation identifier.
+pub trait Correlated {
+    fn trace_id(&self) -> &str;
+}
+
+/// Envelope wrapping a payload with a trace identifier.
+#[derive(Debug, Serialize)]
+pub struct Envelope<T> {
     #[serde(rename = "trace_id")]
-    pub trace_id: String,
+    trace_id: String,
+    #[serde(flatten)]
+    payload: T,
+}
+
+impl<T> Envelope<T> {
+    /// Wrap a payload with a fresh trace identifier.
+    pub fn new(payload: T) -> Self {
+        Self {
+            trace_id: Uuid::new_v4().to_string(),
+            payload,
+        }
+    }
+}
+
+impl<T> Correlated for Envelope<T> {
+    fn trace_id(&self) -> &str {
+        &self.trace_id
+    }
+}
+
+impl<T: 'static> Message for Envelope<T> {
+    type Result = ();
+}
+
+/// Event emitted when a new user is created.
+#[derive(Debug, Serialize)]
+pub struct UserCreated {
     pub id: String,
     pub display_name: String,
 }
 
+/// Type alias for the enveloped message sent over the socket.
+pub type UserCreatedMessage = Envelope<UserCreated>;
+
 impl UserCreated {
-    /// Construct with a fresh trace identifier.
+    /// Construct a new user payload.
     pub fn new(id: impl Into<String>, display_name: impl Into<String>) -> Self {
         Self {
-            trace_id: Uuid::new_v4().to_string(),
             id: id.into(),
             display_name: display_name.into(),
         }
@@ -32,8 +65,9 @@ mod tests {
 
     #[rstest]
     fn serializes_user_created() {
-        let event = UserCreated::new("123", "Alice");
-        let value = serde_json::to_value(&event).unwrap();
+        let payload = UserCreated::new("123", "Alice");
+        let msg = UserCreatedMessage::new(payload);
+        let value = serde_json::to_value(&msg).unwrap();
         assert!(value.get("trace_id").is_some());
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(

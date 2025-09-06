@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::ws::messages::UserCreated;
+use crate::ws::messages::{UserCreated, UserCreatedMessage};
 use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use once_cell::sync::Lazy;
@@ -15,6 +15,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// Maximum allowed time between messages from the client before considering it disconnected.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Return true if the display name matches policy.
 fn is_valid_display_name(name: &str) -> bool {
     // Only allow alphanumeric characters, underscores, and spaces (3–32).
     static RE: Lazy<Regex> =
@@ -64,8 +65,12 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
             Ok(Message::Text(name)) => {
                 self.last_heartbeat = Instant::now();
                 if is_valid_display_name(&name) {
-                    let event = UserCreated::new(Uuid::new_v4().to_string(), name);
-                    ctx.address().do_send(event);
+                    let payload = UserCreated {
+                        id: Uuid::new_v4().to_string(),
+                        display_name: name.to_string(),
+                    };
+                    let msg = UserCreatedMessage::new(payload);
+                    ctx.address().do_send(msg);
                 } else {
                     warn!(display_name = %name, "Rejected invalid display name");
                     let error_msg = serde_json::json!({
@@ -91,10 +96,10 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
     }
 }
 
-impl Handler<UserCreated> for UserSocket {
+impl Handler<UserCreatedMessage> for UserSocket {
     type Result = ();
 
-    fn handle(&mut self, msg: UserCreated, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: UserCreatedMessage, ctx: &mut Self::Context) {
         match serde_json::to_string(&msg) {
             Ok(body) => ctx.text(body),
             Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
