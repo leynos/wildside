@@ -59,14 +59,14 @@ modules defined in the wildside-infra repository.
 
 ### 2.1: DigitalOcean Kubernetes cluster
 
-- [ ] **Create a `doks` OpenTofu module**: This module will be responsible for
+- [x] **Create a `doks` OpenTofu module**: This module will be responsible for
   provisioning the Kubernetes cluster.
 
-- [ ] **Define input variables**: The module should accept variables for the
+- [x] **Define input variables**: The module should accept variables for the
   cluster name, region, version, and node pool configuration.
 
-- [ ] **Define outputs**: The module should output the cluster's kubeconfig and
-  other relevant details.
+- [x] **Define outputs**: The module outputs the cluster ID and API endpoint.
+  The kubeconfig can be optionally exposed for local use.
 
 - [ ] **Instantiate the module**: Create a root OpenTofu configuration that uses
   the `doks` module to provision a "dev" cluster.

@@ -1,5 +1,13 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
+
+define ensure_tool
+	@command -v $(1) >/dev/null 2>&1 || { \
+	  printf "Error: '%s' is required, but not installed\n" "$(1)" >&2; \
+	  exit 1; \
+	}
+endef
+
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
@@ -101,4 +109,37 @@ yamllint:
 	command -v yamllint >/dev/null
 	command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
-	if [ -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] && yq e -e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml >/dev/null; then set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -; fi
+	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
+        (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+
+.PHONY: conftest tofu doks-test
+conftest tofu:
+	$(call ensure_tool,$@)
+
+doks-test:
+	tofu fmt -check infra/modules/doks
+	tofu -chdir=infra/modules/doks/examples/basic init
+	tofu -chdir=infra/modules/doks/examples/basic validate
+	command -v tflint >/dev/null
+	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
+	cd infra/modules/doks/tests && go test -v
+	# Optional: surface "changes pending" in logs without failing CI
+	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
+	-var cluster_name=test \
+	-var region=nyc1 \
+	-var kubernetes_version=1.28.0-do.0 \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
+	|| test $$? -eq 2
+	$(MAKE) doks-policy
+
+.PHONY: doks-policy
+doks-policy: conftest tofu
+	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+	-var cluster_name=test \
+	-var region=nyc1 \
+	-var kubernetes_version=1.28.0-do.0 \
+	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
+	|| test $$? -eq 2
+	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
+	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
