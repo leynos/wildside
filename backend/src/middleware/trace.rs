@@ -13,7 +13,7 @@ use tokio::task_local;
 use tracing::info_span;
 use uuid::Uuid;
 
-// Task-local storage for the current request's trace identifier.
+/// Task-local storage for the current request's trace identifier.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct TraceId(pub String);
@@ -38,7 +38,16 @@ pub(crate) fn current_trace_id_ref() -> Option<&'static str> {
         .ok()
 }
 
-/// Middleware initialiser.
+/// Tracing middleware attaching a request-scoped UUID and
+/// adding a `Trace-Id` header to every response.
+///
+/// # Examples
+/// ```
+/// use actix_web::App;
+/// use backend::Trace;
+///
+/// let app = App::new().wrap(Trace);
+/// ```
 #[derive(Clone)]
 pub struct Trace;
 
@@ -59,6 +68,9 @@ where
     }
 }
 
+/// Service wrapper produced by [`Trace`].
+///
+/// Applications should not use this type directly.
 pub struct TraceMiddleware<S> {
     service: S,
 }

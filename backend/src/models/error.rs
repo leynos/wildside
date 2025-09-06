@@ -119,6 +119,16 @@ impl ResponseError for Error {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(self)
+        let mut builder = HttpResponse::build(self.status_code());
+        if let Some(id) = &self.trace_id {
+            builder.insert_header(("Trace-Id", id.clone()));
+        }
+        if matches!(self.code, ErrorCode::InternalError) {
+            let mut redacted = self.clone();
+            redacted.message = "Internal server error".to_string();
+            redacted.details = None;
+            return builder.json(redacted);
+        }
+        builder.json(self)
     }
 }
