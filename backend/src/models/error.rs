@@ -1,13 +1,15 @@
 //! Error response types.
 
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use crate::middleware::trace;
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::error;
 use utoipa::ToSchema;
 
 /// Stable machine-readable error code.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[non_exhaustive]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     /// The request is malformed or fails validation.
@@ -48,13 +50,26 @@ pub struct Error {
 }
 
 impl Error {
-    fn new(code: ErrorCode, message: impl Into<String>) -> Self {
+    /// Create a new error with the current trace identifier.
+    pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
             trace_id: trace::current_trace_id(),
             details: None,
         }
+    }
+
+    /// Attach a trace identifier to the error.
+    pub fn with_trace_id(mut self, id: impl Into<String>) -> Self {
+        self.trace_id = Some(id.into());
+        self
+    }
+
+    /// Attach structured details to the error.
+    pub fn with_details(mut self, details: Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     pub fn unauthorized(message: impl Into<String>) -> Self {
@@ -72,7 +87,9 @@ impl Error {
 
 impl From<actix_web::Error> for Error {
     fn from(err: actix_web::Error) -> Self {
-        Error::internal(err.to_string())
+        // Do not leak implementation details to clients.
+        error!(error = %err, "actix error promoted to API error");
+        Error::internal("Internal server error")
     }
 }
 

@@ -11,8 +11,8 @@ use utoipa_swagger_ui::SwaggerUi;
 use backend::api::users::list_users;
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
-use backend::middleware::Trace;
 use backend::ws;
+use backend::Trace;
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
 #[get("/health/ready")]

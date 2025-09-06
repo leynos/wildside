@@ -2,7 +2,8 @@
 
 pub mod api;
 pub mod doc;
-pub mod middleware;
+mod middleware;
+pub use middleware::Trace;
 pub mod models;
 pub mod ws;
 
