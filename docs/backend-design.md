@@ -176,11 +176,12 @@ results). On the analytics side, database operations themselves aren’t directl
 in PostHog, but we might use PostHog to track high-level outcomes (e.g.
 “UserSavedRoute” event when a user saves a generated route to the DB).
 
-## Caching Layer (Redis/Memcached)
+## Caching and Job Queue Layer (Redis)
 
 To further improve responsiveness and reduce load, a caching layer will be
-introduced, likely backed by **Redis** (or Memcached as an alternative). The
-cache serves a few purposes in the Wildside backend:
+introduced, backed by **Redis**. Redis also serves as the job-queue backend,
+powering background workers through Apalis. The cache serves a few purposes in
+the Wildside backend:
 
 - **API Response Caching:** For expensive requests with identical inputs, the
   system can cache the results. For example, if two users request a walking
@@ -208,16 +209,12 @@ cache serves a few purposes in the Wildside backend:
   remains an option for any transient data that doesn’t warrant a database
   write.
 
-In a Kubernetes deployment, Redis can be run as an in-cluster service or use a
-managed Redis. For a lightweight start, a single small Redis instance (or even
-just using an in-memory cache within the app process for non-critical data)
+In a Kubernetes deployment, Redis can be run as an in-cluster service or as a
+managed offering. For a lightweight start, a single small Redis instance (or
+even using an in-memory cache within the app process for non-critical data)
 suffices. The cost analysis for MVP even budgets a small Redis Cloud instance
-for
-caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
- underlining its role. Memcached could alternatively be used for simple
-key-value caching if we prefer an even simpler, stateless cache layer; however,
-Redis offers more features (persistence, pub/sub, etc.) that could be handy
-(for example, using Redis as the job queue backend in Apalis).
+for caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
+underlining its role as both cache and queue.
 
 *Observability:* The caching layer will be monitored to ensure it’s effectively
 improving performance. We’ll track **cache hit rates and misses** for critical
@@ -543,8 +540,8 @@ we can confidently develop, deploy, and scale Wildside.
 
 The above design provides a detailed blueprint for Wildside’s backend MVP: a
 Rust/Actix web application augmented by background workers, a PostGIS-enabled
-PostgreSQL database, and supportive infrastructure like Redis cache and
-comprehensive observability. It favors a simple, monolithic
+PostgreSQL database, and supportive infrastructure like the Redis cache and job
+queue, alongside comprehensive observability. It favours a simple, monolithic
 core([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L65-L70))
  that is easier to build and iterate on quickly, while applying modular design
 internally for
