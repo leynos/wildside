@@ -230,14 +230,6 @@ cache serves a few purposes in the Wildside backend:
   for every route, the backend can load it at startup or cache it on first use
   for quick reuse.
 
-- **Session Caching (if needed):** Although we plan to use signed cookies for
-  session info (see below), if we needed to store session state server-side
-  (e.g. to track active sessions or more data per session), a cache like Redis
-  could be used. This would keep session lookups fast and avoid hitting the
-  primary database for ephemeral session reads. In our design, we try to keep
-  the server stateless by not requiring server-side session storage. But Redis
-  remains an option for any transient data that doesn’t warrant a database
-  write.
 
 In a Kubernetes deployment, Redis can be run as an in-cluster service or as a
 managed offering. For a lightweight start, a single small Redis instance (or
@@ -419,37 +411,27 @@ and logs.
 
 ## Session Management and Security
 
-Wildside will manage user sessions using **secure signed cookies**, inspired by
-the Python itsdangerous approach. Rather than storing session state on the
-server, the server will issue the client a cookie that contains the session
-data (for example, a user identifier and maybe a timestamp or some
-preferences), along with a cryptographic signature. The signature (HMAC-SHA256
-or similar, using a secret key) ensures the cookie’s integrity – the client
-cannot tamper with it without invalidating the signature. When the browser
-sends the cookie back on each request, the Actix backend will verify the
-signature and decode the session info. This approach keeps the backend
-**stateless** with respect to sessions: no in-memory or database session lookup
-is needed for each request, which simplifies scaling (any instance can validate
-the cookie on its own). It also reduces latency, since checking an HMAC is fast
-compared to a database hit.
+Wildside manages user sessions with `actix-session`’s `SessionMiddleware`
+using `CookieSessionStore`. Session state lives entirely in the cookie,
+allowing any backend instance to validate requests without a central store.
+The middleware signs and encrypts the cookie with an `actix_web::cookie::Key`
+loaded at startup from a secret file mounted into the container (for example
+`/run/secrets/session.key`). The file may contain multiple base64‑encoded
+64‑byte keys: the first issues new cookies while later entries validate old
+sessions during rotation.
 
-In practice, on login or session creation, the server will generate a cookie
-like `session=<base64_payload>.<signature>`. The payload might be minimal (e.g.
-just a user ID and expiration time). The signature is computed using a secret
-key known only to the backend (we’ll store this in a Kubernetes Secret or
-Vault). Actix Web has support for cookie values and we can implement signing
-using a crate (there are Rust crates for JWT or for itsdangerous-like tokens,
-or we can manually use HMAC). By including an expiry timestamp in the payload
-and in the signature, we can also ensure sessions expire.
+On login the server sets a cookie such as `session=<payload>` and
+`actix-session` handles serialisation and integrity checks automatically.
+Cookies are marked `HttpOnly`, `Secure` and use an appropriate `SameSite`
+policy. To rotate keys, generate a new value, prepend it to the secret file,
+restart the pods, then remove the obsolete key after existing sessions expire.
+This keeps the session layer self-contained without any server-side cache or
+database lookup.
 
-**Security considerations:** The cookie will be marked HttpOnly and Secure (and
-SameSite as appropriate) so that it’s not accessible to JS and not sent in
-cross-site contexts. This helps prevent XSS and CSRF issues. Because the
-session is stateless, if a user logs out, we cannot “kill” the cookie on the
-server side – we just instruct the client to delete it. If we needed immediate
-revocation (e.g. for a compromised account), we might maintain a server-side
-denylist of session IDs or use short-lived tokens. For MVP, this simple
-approach is likely sufficient.
+**Security considerations:** Because the session is stateless, logging out
+cannot invalidate an existing cookie on the server; the client is simply told
+to delete it. Immediate revocation would require a denylist or short‑lived
+tokens, but for the MVP this approach is acceptable.
 
 *Observability:* Session management itself doesn’t produce a lot of metrics,
 but we can track things like **active user count** or login frequency. For
