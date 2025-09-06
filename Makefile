@@ -1,5 +1,12 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
+
+define ensure_tool
+	@command -v $(1) >/dev/null 2>&1 || { \
+	  printf "Error: '%s' is required, but not installed\n" "$(1)" >&2; \
+	  exit 1; \
+	}
+endef
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit
 all: fmt lint test
@@ -88,7 +95,10 @@ yamllint:
 
 
 
-.PHONY: doks-test
+.PHONY: conftest tofu doks-test
+conftest tofu:
+	$(call ensure_tool,$@)
+
 doks-test:
 	tofu fmt -check infra/modules/doks
 	tofu -chdir=infra/modules/doks/examples/basic init
@@ -107,7 +117,7 @@ doks-test:
 	$(MAKE) doks-policy
 
 .PHONY: doks-policy
-doks-policy:
+doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
