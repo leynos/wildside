@@ -230,7 +230,6 @@ cache serves a few purposes in the Wildside backend:
   for every route, the backend can load it at startup or cache it on first use
   for quick reuse.
 
-
 In a Kubernetes deployment, Redis can be run as an in-cluster service or as a
 managed offering. For a lightweight start, a single small Redis instance (or
 even using an in-memory cache within the app process for non-critical data)
