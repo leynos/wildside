@@ -166,7 +166,7 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 			},
 			ErrContains: "node_pools must not be empty",
 		},
-		"ZeroNodes": {
+		"OneNode": {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
@@ -175,14 +175,68 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 					{
 						"name":       "default",
 						"size":       "s-2vcpu-2gb",
-						"node_count": 0,
+						"node_count": 1,
 						"auto_scale": false,
-						"min_nodes":  0,
-						"max_nodes":  0,
+						"min_nodes":  1,
+						"max_nodes":  1,
 					},
 				},
 			},
 			ErrContains: "node_count >= 2",
+		},
+		"MinNodesZero": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 2,
+						"auto_scale": false,
+						"min_nodes":  0,
+						"max_nodes":  2,
+					},
+				},
+			},
+			ErrContains: "min_nodes >= 1",
+		},
+		"MaxLessThanNodeCount": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 3,
+						"auto_scale": false,
+						"min_nodes":  1,
+						"max_nodes":  2,
+					},
+				},
+			},
+			ErrContains: "min_nodes <= node_count <=",
+		},
+		"MinGreaterThanNodeCount": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 2,
+						"auto_scale": false,
+						"min_nodes":  3,
+						"max_nodes":  5,
+					},
+				},
+			},
+			ErrContains: "min_nodes <= node_count <=",
 		},
 	}
 
