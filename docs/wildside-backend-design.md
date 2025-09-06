@@ -542,9 +542,9 @@ flowchart TD
 
 #### 3.3.4. Implementation Tasks
 
-- [ ] **Initial Data Seeding:** Create a standalone data ingestion script
-  (e.g., using Python with `osmium`) that performs the one-time pre-seeding of
-  the database for a defined geographic area (Edinburgh).
+- [ ] **Initial Data Seeding:** Build a Rust-based ingestion tool using the
+  `osmpbf` crate, as outlined in the backend design, to perform the one-time
+  pre-seeding of the database for a defined geographic area (Edinburgh).
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result

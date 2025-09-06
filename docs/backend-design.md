@@ -275,20 +275,35 @@ with a single database instance for everything.
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
-K8s[^4]). Key metrics include query throughput, slow query counts, connections in
-use, and cache hit rates. From the application side, Diesel’s query logging
-detects slow queries and instruments timings for critical ones (for instance,
-wrap certain calls to measure their duration). The Prometheus operator scrapes
-database metrics (if using an operator or a managed DB with metrics)[^4]. In
-Grafana, dashboards plot DB metrics like CPU, I/O, and number of queries per
-second, as recommended by the deployment guide[^4]. If any query regularly takes
-too long (impacting route generation latency), alerts highlight the slow part
-for optimisation (adding indexes or caching results). On the analytics side,
-database operations themselves aren’t directly in PostHog, but PostHog can
-track high-level outcomes (e.g. “UserSavedRoute” event when a user saves a
-generated route to the DB).
+K8s[^4]). Key metrics include query throughput, slow query counts, connections
+in use, and cache hit rates. From the application side, Diesel’s query
+logging detects slow queries and instruments timings for critical ones (for
+instance, wrap certain calls to measure their duration). The Prometheus
+operator scrapes database metrics (if using an operator or a managed DB with
+metrics)[^4]. In Grafana, dashboards plot DB metrics like CPU, I/O, and number
+of queries per second, as recommended by the deployment guide[^4]. If any query
+regularly takes too long (impacting route generation latency), alerts
+highlight the slow part for optimisation (adding indexes or caching results).
+On the analytics side, database operations themselves aren’t directly in
+PostHog, but PostHog can track high-level outcomes (e.g. “UserSavedRoute”
+event when a user saves a generated route to the DB).
 
-## Caching and job queue layer (Redis)
+## Data Seeding, Enrichment, and Route Caching
+
+- Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
+  `.osm.pbf` extracts and load nodes, ways, and relations into PostgreSQL. This
+  bootstraps the POI dataset before the API is exposed, ensuring the backend
+  operates on consistent local data.
+- On-demand enrichment: When a requested area lacks sufficient nearby POIs, a
+  background `EnrichmentJob` queries the Overpass API for additional amenities.
+  Newly found items are inserted into the database so subsequent requests
+  benefit from richer coverage.
+- Route output caching: Completed route responses are stored in Redis using a
+  hash of the request parameters as the cache key. If a later request hashes to
+  the same value, the cached route is returned immediately, reducing
+  computation and latency.
+
+## Caching Layer (Redis/Memcached)
 
 To further improve responsiveness and reduce load, a caching layer will be
 introduced, backed by **Redis**. Redis will serve as both the cache and the
