@@ -1,4 +1,9 @@
 //! Users API handlers.
+//!
+//! ```text
+//! POST /api/v1/login {"username":"admin","password":"password"}
+//! GET /api/v1/users
+//! ```
 
 use crate::models::User;
 use actix_session::Session;
