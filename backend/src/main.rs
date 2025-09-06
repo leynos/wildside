@@ -42,10 +42,17 @@ async fn main() -> std::io::Result<()> {
     let key_path =
         env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
-        Ok(bytes) => Key::from(&bytes),
+        Ok(bytes) => Key::derive_from(&bytes),
         Err(e) => {
-            warn!(path = %key_path, error = %e, "failed to read session key; using temporary key");
-            Key::generate()
+            let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
+            if cfg!(debug_assertions) || allow_dev {
+                warn!(path = %key_path, error = %e, "using temporary session key (dev only)");
+                Key::generate()
+            } else {
+                return Err(std::io::Error::other(format!(
+                    "failed to read session key at {key_path}: {e}"
+                )));
+            }
         }
     };
 

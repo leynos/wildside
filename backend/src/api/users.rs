@@ -2,13 +2,44 @@
 
 use crate::models::User;
 use actix_session::Session;
-use actix_web::{error::ErrorUnauthorized, get, post, web, HttpResponse, Result};
-use serde::Deserialize;
+use actix_web::{get, http::StatusCode, post, web, HttpResponse, ResponseError, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ErrorResponse {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+
+impl ErrorResponse {
+    pub fn unauthorized(message: &'static str) -> Self {
+        Self {
+            code: "unauthorized",
+            message,
+        }
+    }
+}
+
+impl std::fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
+    }
+}
+
+impl ResponseError for ErrorResponse {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::UNAUTHORIZED
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::Unauthorized().json(self)
+    }
 }
 
 /// Authenticate user and establish a session.
@@ -18,7 +49,7 @@ pub struct LoginRequest {
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login success", headers(("Set-Cookie" = String, description = "Session cookie"))),
-        (status = 401, description = "Invalid credentials"),
+        (status = 401, description = "Invalid credentials", body = ErrorResponse),
         (status = 500, description = "Internal server error")
     ),
     tags = ["users"],
@@ -30,7 +61,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
         session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
         Ok(HttpResponse::Ok().finish())
     } else {
-        Err(ErrorUnauthorized("invalid credentials"))
+        Err(ErrorResponse::unauthorized("invalid credentials").into())
     }
 }
 
@@ -40,7 +71,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
     path = "/api/v1/users",
     responses(
         (status = 200, description = "Users", body = [User]),
-        (status = 401, description = "Unauthorised"),
+        (status = 401, description = "Unauthorised", body = ErrorResponse),
         (status = 500, description = "Internal server error")
     ),
     tags = ["users"],
@@ -49,7 +80,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
 #[get("/users")]
 pub async fn list_users(session: Session) -> Result<web::Json<Vec<User>>> {
     if session.get::<String>("user_id")?.is_none() {
-        return Err(ErrorUnauthorized("unauthorised"));
+        return Err(ErrorResponse::unauthorized("login required").into());
     }
 
     let data = vec![User {
