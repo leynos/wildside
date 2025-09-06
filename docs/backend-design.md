@@ -316,7 +316,12 @@ For implementation, Wildside will use
 scheduling (cron jobs) and concurrency limits. Workers can run as a separate
 binary or as part of the main binary launched in "worker mode". Redis
 durability and metrics considerations from the caching section also apply to
-the queue configuration. Define a clear reliability policy:
+the queue configuration. Workers process jobs from named queues to separate
+concerns: use `route_generation` for CPU-intensive path-planning jobs and
+`enrichment` for fetching supplementary point-of-interest data and other
+periodic enrichments. Apalis’s cron-like scheduling triggers regular
+maintenance tasks without adding extra services. Define a clear reliability
+policy:
 
 - use bounded exponential backoff with a maximum retry count;
 - route exhausted jobs to a dead-letter queue for inspection;
@@ -325,13 +330,14 @@ the queue configuration. Define a clear reliability policy:
 
 With Apalis, the **Actix Web server produces tasks** and **worker(s) consume
 them**. For example, when a user requests a route, the server enqueues a
-`GenerateRouteJob(user_id, start_point, prefs, etc)` in the queue. A worker
-running the same codebase (but started in worker mode) will pick it up, execute
-the wildside-engine to compute the route, then store the result in the database
-or cache. The user is then notified (perhaps the web server checks the DB or
-the worker triggers a WebSocket message when done). Scheduled tasks like
-refreshing OSM data nightly can also be scheduled through Apalis’s cron
-support.
+`GenerateRouteJob(user_id, start_point, prefs, etc)` on the
+`route_generation` queue. A worker running the same codebase (but started in
+worker mode) will pick it up, execute the wildside-engine to compute the
+route, then store the result in the database or cache. The user is then
+notified (perhaps the web server checks the DB or the worker triggers a
+WebSocket message when done). Scheduled tasks like refreshing OSM data nightly
+are queued on `enrichment` and triggered on a schedule (Apalis supports
+cron-like scheduling).
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
