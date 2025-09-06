@@ -1,15 +1,72 @@
 asyncapi: 3.0.0
 info:
   title: myapp events
+  description: Events emitted by the wildside backend
   version: 0.1.0
+servers:
+  production:
+    host: ws.yourdomain.example
+    protocol: ws
+    pathname: /
+    description: Production WebSocket server
 channels:
   /ws:
+    address: /ws
     messages:
-      UserCreated:
-        payload:
-          type: object
-          properties:
-            id:
-              type: string
-            display_name:
-              type: string
+      userCreated:
+        $ref: '#/components/messages/UserCreated'
+operations:
+  userCreated:
+    x-operationId: userCreated  # AsyncAPI 3 uses vendor field for stable codegen identifier
+    summary: Receive UserCreated events
+    action: receive
+    channel:
+      $ref: '#/channels/~1ws'
+    messages:
+      # Operation messages must reference channel-scoped names for validation
+      - $ref: '#/channels/~1ws/messages/userCreated'
+    tags:
+      - name: users
+        description: Events about system users
+components:
+  messageTraits:
+    Correlated:
+      headers:
+        type: object
+        additionalProperties: false
+        properties:
+          trace_id:
+            type: string
+            description: Correlation identifier for tracing across systems
+        required: []
+  messages:
+    UserCreated:
+      name: UserCreated
+      title: User created event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/Correlated'
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+          - id
+          - display_name
+        properties:
+          id:
+            type: string
+            description: Unique user identifier
+            examples: ["123e4567-e89b-12d3-a456-426614174000"]
+            format: uuid
+          display_name:
+            type: string
+            description: User's display name
+            examples: ["Ada Lovelace"]
+            minLength: 1
+            maxLength: 100
+      examples:
+        - name: minimal
+          summary: Minimal valid payload
+          payload:
+            id: "123e4567-e89b-12d3-a456-426614174000"
+            display_name: "Ada Lovelace"

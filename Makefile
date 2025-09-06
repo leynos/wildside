@@ -7,8 +7,11 @@ define ensure_tool
 	  exit 1; \
 	}
 endef
+
+ASYNCAPI_CLI_VERSION ?= 3.4.2
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+        lint-asyncapi lint-openapi lint-makefile
 all: fmt lint test
 
 clean:
@@ -47,6 +50,24 @@ fmt:
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
+	$(MAKE) lint-asyncapi
+	$(MAKE) lint-openapi
+	$(MAKE) lint-makefile
+
+# Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
+lint-asyncapi:
+	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+
+# Lint OpenAPI spec with Redocly CLI
+lint-openapi:
+	bun x -y @redocly/cli@latest lint spec/openapi.json
+
+# Validate Makefile style and structure
+lint-makefile:
+	command -v checkmake >/dev/null || { echo "checkmake is not installed" >&2; exit 1; }
+	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
+	checkmake Makefile
+	mbake validate Makefile
 
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
@@ -73,12 +94,10 @@ check-fmt:
 
 markdownlint:
 	find . \
-	  -path './backend/target' -prune -o \
-	  -path './target' -prune -o \
-	  -path './.node_modules' -prune -o \
-	  -path '*/node_modules' -prune -o \
-	  -name '.git' -type d -prune -o \
-	  -type f -name '*.md' -print0 | xargs -0 -- markdownlint
+	  \( -path './backend/target' -o -path './target' -o \
+	     -path './node_modules' -o -path '*/node_modules' -o \
+	     -path '*/.git' \) -prune -o -type f -name '*.md' -print0 | \
+	     xargs -0 -- markdownlint
 
 nixie:
 	# CI currently requires --no-sandbox; remove once nixie supports
@@ -92,8 +111,6 @@ yamllint:
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
-
-
 
 .PHONY: conftest tofu doks-test
 conftest tofu:

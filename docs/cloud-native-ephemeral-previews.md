@@ -1214,16 +1214,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v5
-        with:
-          context:.
-          file:./Dockerfile # Path to the application's Dockerfile
-          push: true
-          tags: your-registry/wildside-app:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        - name: Build and push Docker image
+          id: build-and-push
+          uses: docker/build-push-action@v5
+          with:
+            context: .
+            file: ./Dockerfile # Path to the application's Dockerfile
+            push: true
+            tags: your-registry/wildside-app:${{ github.sha }}
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
 ```
 
 This job uses official Docker actions to handle login, build, and push

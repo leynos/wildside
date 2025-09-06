@@ -8,16 +8,14 @@ import { z } from 'zod';
 
 /** Runtime schema for a branded user identifier. */
 /* biome-ignore lint/style/useNamingConvention: PascalCase aids readability for schema identifiers */
-export const UserIdSchema = z.string().brand<'UserId'>();
+export const UserIdSchema = z.string().uuid().brand<'UserId'>();
 /** Unique identifier for a user. */
 export type UserId = z.infer<typeof UserIdSchema>;
 
 /** Runtime schema for a user record. */
-/* biome-ignore lint/style/useNamingConvention: PascalCase aids readability for schema identifiers */
 export const UserSchema = z
   .object({
     id: UserIdSchema,
-    /* biome-ignore lint/style/useNamingConvention: API field uses snake_case */
     display_name: z.string().trim().min(1, 'display_name must not be empty'),
   })
   .strict();
@@ -25,7 +23,6 @@ export const UserSchema = z
 export type User = z.infer<typeof UserSchema>;
 
 /** Runtime schema for a list of user records. */
-/* biome-ignore lint/style/useNamingConvention: PascalCase aids readability for schema identifiers */
 export const UsersSchema = z.array(UserSchema);
 /** Collection of user records. */
 export type Users = z.infer<typeof UsersSchema>;

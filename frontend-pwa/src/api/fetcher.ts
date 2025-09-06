@@ -133,8 +133,6 @@ function getContentTypeForBody(body: unknown): string | null {
   if (isBinary(body)) return null;
   return 'application/json';
 }
-
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complexity reduced via helper function
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const url = new URL(input, apiBase());
 

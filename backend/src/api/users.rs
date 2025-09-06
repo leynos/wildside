@@ -2,6 +2,7 @@
 
 use crate::models::User;
 use actix_web::{get, web, Result};
+use uuid::Uuid;
 
 /// List known users.
 #[utoipa::path(
@@ -12,13 +13,13 @@ use actix_web::{get, web, Result};
         (status = 401, description = "Unauthorised"),
         (status = 500, description = "Internal server error")
     ),
-    tags = ["Users"],
+    tags = ["users"],
     operation_id = "listUsers"
 )]
 #[get("/api/users")]
 pub async fn list_users() -> Result<web::Json<Vec<User>>> {
     let data = vec![User {
-        id: "u_1".into(),
+        id: Uuid::new_v4(),
         display_name: "Ada".into(),
     }];
     Ok(web::Json(data))

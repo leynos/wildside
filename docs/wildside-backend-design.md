@@ -61,7 +61,7 @@ graph TD
     end
 
     User -- HTTPS/WSS --> Ingress
-    Ingress -- /api, /ws --> API
+    Ingress -- /api/v1, /ws --> API
     Ingress -- /tiles --> Martin
 
     API -- CRUD Ops --> DB
@@ -78,6 +78,33 @@ graph TD
     Worker -- On-demand Enrichment --> ExternalAPI
 
     EngineLib -- Requires data from --> DB
+```
+
+For screen readers: This sequence diagram traces a request from browser to
+backend, including how the service reads its signing key and manages session
+cookies.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Browser
+  participant Ingress
+  participant Backend
+  participant SecretStore as Mounted_Secret_File
+
+  rect rgb(235,245,255)
+    note right of Ingress: Routes updated to /api/v1 and /ws
+  end
+
+  Browser->>Ingress: HTTPS request to /api/v1/endpoint
+  Ingress->>Backend: Proxy request
+  Backend->>SecretStore: Read signing key from mounted file (startup / refresh)
+  Backend->>Backend: Sign/validate session cookie\n(Secure, HttpOnly, SameSite, Max-Age)
+  Backend-->>Browser: Response (+Set-Cookie)
+
+  Browser->>Ingress: WS upgrade to /ws
+  Ingress->>Backend: Upgrade proxy
+  Backend-->>Browser: WebSocket messages
 ```
 
 ## 3. Core Components & Implementation Plan
@@ -112,36 +139,51 @@ API and WebSocket traffic.
 
 - **Implementation Tasks:**
 
-  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use the `actix-session` crate with a cookie-based backend. Load the signing
-    key from a secret store (for example, a Kubernetes Secret or Vault) and
-    mount or inject it for the service at runtime. Configure the session cookie
-    with `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and
-    explicit `domain` and `path`.
+  - [ ] **Session Management:** Implement stateless, encrypted, authenticated
+    cookie sessions. Use `actix-session` with a cookie backend configured as:
+    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), an explicit
+    `path`, and set `domain` only when sharing across subdomains. Set a bounded
+    `Max-Age` to limit session lifetime.
+    Load the signing key from a high-entropy (≥64-byte), read-only managed
+    secret (for example, a Kubernetes `Secret` or Vault) and mount or inject it
+    for the service at runtime—avoid sourcing it from a plain environment
+      variable. Rotate the key regularly by rolling the secret and reloading it,
+      so stale cookies are invalidated.
 
     ```rust
-    use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-    use actix_web::cookie::{CookieBuilder, Key, SameSite};
+    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+    use actix_web::cookie::{time::Duration, Key, SameSite};
+    use std::{env, fs};
 
-    let key = Key::from(std::fs::read("/var/run/secrets/session_key")?);
-    let session_middleware = SessionMiddleware::builder(
-        CookieSessionStore::default(),
-        key,
-    )
-    .cookie_builder(
-        CookieBuilder::new("wildside", "")
-            .secure(true)
-            .http_only(true)
-            .same_site(SameSite::Lax)
-            .domain("example.com")
-            .path("/"),
-    )
-    .build();
+    let key_path = env::var("SESSION_KEY_FILE")
+        .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key_bytes = fs::read(key_path)?;
+    let key = Key::derive_from(&key_bytes);
+
+    let session_middleware =
+        SessionMiddleware::builder(CookieSessionStore::default(), key)
+            .cookie_name("wildside")
+            .cookie_secure(true)
+            .cookie_http_only(true)
+            .cookie_same_site(SameSite::Lax)
+            // Set at deploy time if required:
+            //.cookie_domain(Some("example.com".into()))
+            .cookie_path("/")
+            .cookie_max_age(Duration::hours(2))
+            .build();
     ```
 
-    Deployment manifests in `deploy/k8s/` should mount the secret and expose its
-    path to the service (for instance, via a `SESSION_KEY_FILE` environment
-    variable).
+    Deployment manifests in `deploy/k8s/` should mount the secret read-only and
+    expose its path to the service (for instance, via a `SESSION_KEY_FILE`
+    environment variable). Use high-entropy (≥64-byte) keys and rotate them by
+      deploying new secrets and reloading the service, so the fresh key takes
+      effect while the previous key remains available for validating existing
+      sessions during the rollout.
+
+    For seamless rotation, run at least two replicas and perform a rolling
+      update, so pods with the prior key continue to validate existing cookies
+      until expiry. A single-replica restart replaces the key atomically and will
+      invalidate all existing sessions immediately.
 
   - [ ] **Observability:**
 
