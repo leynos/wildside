@@ -189,7 +189,7 @@ API and WebSocket traffic.
     .cookie_max_age(Duration::hours(2))
     .build();
 
-    let api = web::scope("/api")
+    let api = web::scope("/api/v1")
         .wrap(session_middleware)
         .service(list_users);
     ```
