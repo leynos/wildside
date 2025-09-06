@@ -13,3 +13,6 @@ pub mod error;
 pub mod user;
 pub use self::error::{Error, ErrorCode};
 pub use self::user::User;
+
+/// Convenient API result alias.
+pub type ApiResult<T> = Result<T, Error>;

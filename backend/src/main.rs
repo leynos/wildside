@@ -14,8 +14,8 @@ use utoipa_swagger_ui::SwaggerUi;
 use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
-use backend::middleware::Trace;
 use backend::ws;
+use backend::Trace;
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
 #[get("/health/ready")]
@@ -77,14 +77,8 @@ async fn main() -> std::io::Result<()> {
             .service(list_users);
 
         let app = App::new()
-<<<<<<< HEAD
-            .service(api)
-||||||| parent of 2ea98fb (Add request trace IDs and error helpers)
-            .service(list_users)
-=======
             .wrap(Trace)
-            .service(list_users)
->>>>>>> 2ea98fb (Add request trace IDs and error helpers)
+            .service(api)
             .service(ws::ws_entry)
             .service(ready)
             .service(live);

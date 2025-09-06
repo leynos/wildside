@@ -6,6 +6,7 @@
 use std::task::{Context, Poll};
 
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
+use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::{Error, HttpMessage};
 use futures_util::future::{ready, LocalBoxFuture, Ready};
 use tokio::task_local;
@@ -13,6 +14,10 @@ use tracing::info_span;
 use uuid::Uuid;
 
 // Task-local storage for the current request's trace identifier.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct TraceId(pub String);
+
 task_local! {
     static TRACE_ID: String;
 }
@@ -20,6 +25,17 @@ task_local! {
 /// Retrieve the trace identifier for the current task if set.
 pub fn current_trace_id() -> Option<String> {
     TRACE_ID.try_with(|id| id.clone()).ok()
+}
+
+/// Borrow the current trace identifier without allocation (internal use).
+#[allow(dead_code)]
+pub(crate) fn current_trace_id_ref() -> Option<&'static str> {
+    TRACE_ID
+        .try_with(|id| unsafe {
+            // SAFETY: TRACE_ID lives for the duration of the task scope.
+            std::mem::transmute::<&str, &'static str>(id.as_str())
+        })
+        .ok()
 }
 
 /// Middleware initialiser.
@@ -63,13 +79,18 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let trace_id = Uuid::new_v4().to_string();
-        req.extensions_mut().insert(trace_id.clone());
-        let span = info_span!("request", trace_id = %trace_id, method = %req.method(), path = %req.path());
+        req.extensions_mut().insert(TraceId(trace_id.clone()));
+        let span =
+            info_span!("request", trace_id = %trace_id, method = %req.method(), path = %req.path());
         let fut = self.service.call(req);
 
-        Box::pin(TRACE_ID.scope(trace_id, async move {
+        Box::pin(TRACE_ID.scope(trace_id.clone(), async move {
             let _enter = span.enter();
-            let res = fut.await?;
+            let mut res = fut.await?;
+            res.response_mut().headers_mut().insert(
+                HeaderName::from_static("trace-id"),
+                HeaderValue::from_str(&trace_id).expect("valid Trace-Id header value"),
+            );
             Ok(res)
         }))
     }

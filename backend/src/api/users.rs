@@ -5,7 +5,7 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::models::{Error, ErrorCode, User};
+use crate::models::{ApiResult, Error, ErrorCode, User};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::Deserialize;
@@ -49,6 +49,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
         .into())
     }
 }
+//
 
 /// List known users.
 #[utoipa::path(
@@ -56,22 +57,19 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
     path = "/api/v1/users",
     responses(
         (status = 200, description = "Users", body = [User]),
+        (status = 400, description = "Invalid request", body = Error),
         (status = 401, description = "Unauthorised", body = Error),
         (status = 403, description = "Forbidden", body = Error),
+        (status = 404, description = "Not found", body = Error),
         (status = 500, description = "Internal server error", body = Error)
     ),
     tags = ["users"],
     operation_id = "listUsers"
 )]
 #[get("/users")]
-pub async fn list_users(session: Session) -> Result<web::Json<Vec<User>>, Error> {
+pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     if session.get::<String>("user_id")?.is_none() {
-        return Err(Error {
-            code: ErrorCode::Unauthorized,
-            message: "login required".into(),
-            trace_id: None,
-            details: None,
-        });
+        return Err(Error::unauthorized("login required"));
     }
     let data = vec![User {
         id: "3fa85f64-5717-4562-b3fc-2c963f66afa6".into(),

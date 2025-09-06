@@ -616,8 +616,8 @@ reliability, and user behaviour.
     and alerting.
 
   - **Logging (Loki):** Output structured, correlated logs for debugging.
-    Each request is wrapped by tracing middleware that assigns a UUID
-    `trace_id`, propagated to logs and error responses.
+  Each request is wrapped by tracing middleware that assigns a UUID
+  `trace_id`, propagated to logs and error responses.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
     funnels.
