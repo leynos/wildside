@@ -45,11 +45,14 @@ variable "node_pools" {
   validation {
     condition = length(var.node_pools) > 0 && alltrue([
       for np in var.node_pools :
-      np.node_count >= 1 &&
-      np.min_nodes >= 1 &&
-      np.max_nodes >= np.min_nodes
+      (
+        np.auto_scale ?
+        (np.min_nodes >= 2 && np.max_nodes >= np.min_nodes)
+        :
+        (np.node_count >= 2)
+      )
     ])
-    error_message = "each node pool requires at least one node with min_nodes >= 1 and max_nodes >= min_nodes"
+    error_message = "node_pools must not be empty and each node pool must have node_count >= 2 when auto_scale is false, or min_nodes >= 2 and max_nodes >= min_nodes when auto_scale is true"
   }
 }
 
