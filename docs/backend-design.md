@@ -111,10 +111,10 @@ block the responsive handling of requests.
 
 For the MVP, a simple approach is to perform route generation within a separate
 worker thread or via a background task job, rather than on the main async
-thread. For example, when an HTTP request to `/api/generate_route` comes in,
-the handler can quickly validate input and then enqueue a **background job** to
-compute the route. The client could either poll for the result or receive it
-via WebSocket when ready. This prevents long CPU-bound work from stalling the
+thread. For example, when a client calls `/api/v1/routes`, the handler validates
+input, enqueues a `GenerateRouteJob`, and returns a `request_id`. Status updates
+are pushed to the client as `route_generation_status` WebSocket messages. This
+pattern prevents long CPU-bound work from stalling the
 Actix event loop. If the computation is fast enough for MVP, it could also be
 done synchronously with careful use of `spawn_blocking`, but the architecture
 anticipates heavier loads where a true background job is safer. Once the engine
