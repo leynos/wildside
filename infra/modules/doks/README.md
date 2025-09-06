@@ -2,22 +2,26 @@
 
 Provision a DigitalOcean Kubernetes (DOKS) cluster.
 
+Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
+
 ## Quick start
 
-Set the DigitalOcean token so the provider can authenticate:
+Set the `DIGITALOCEAN_TOKEN` environment variable to allow provider authentication:
 
 ```sh
-export DIGITALOCEAN_TOKEN="your-token"
+export DIGITALOCEAN_TOKEN="<DIGITALOCEAN_TOKEN>"
 ```
 
-Configure the provider and call the module:
+Configure the provider, call the module, and expose outputs:
 
 ```hcl
 terraform {
+  required_version = ">= 1.6.0"
+
   required_providers {
     digitalocean = {
-      source  = "digitalocean/digitalocean"
-      version = "~> 2.0"
+      source  = "opentofu/digitalocean"
+      version = "~> 2.36"
     }
   }
 }
@@ -39,6 +43,28 @@ module "doks" {
     min_nodes  = 1
     max_nodes  = 3
   }]
+
+  expose_kubeconfig = true
+}
+
+output "endpoint" {
+  value = module.doks.cluster_endpoint
+}
+
+output "kubeconfig" {
+  value     = module.doks.kubeconfig
+  sensitive = true
 }
 ```
+
+Retrieve the kubeconfig and cluster endpoint after applying the configuration:
+
+```sh
+terraform output -raw kubeconfig > kubeconfig.yaml
+terraform output endpoint
+```
+
+For advanced provider configuration, consult the [DigitalOcean provider documentation](https://registry.terraform.io/providers/opentofu/digitalocean/latest/docs).
+
+For modules published under a different account, substitute `OWNER` with the GitHub account name that hosts the repository.
 
