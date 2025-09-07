@@ -250,8 +250,8 @@ sequenceDiagram
 
   Client->>Actix: HTTP GET /users
   Actix->>TraceMW: pass ServiceRequest
-  TraceMW->>TraceMW: generate UUID trace_id\ninsert into req.extensions & task-local
-  TraceMW->>Handler: invoke handler within trace span
+  TraceMW->>TraceMW: generate UUID trace_id\ninsert into req.extensions
+  TraceMW->>Handler: invoke handler
   alt Success
     Handler-->>TraceMW: Ok(Json<Vec<User>>)
     TraceMW-->>Actix: 200 OK + users JSON

@@ -1,6 +1,5 @@
 //! Error response types.
 
-use crate::middleware::trace;
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,7 +57,7 @@ pub struct Error {
 }
 
 impl Error {
-    /// Create a new error with the current trace identifier.
+    /// Create a new error.
     ///
     /// # Examples
     /// ```
@@ -70,7 +69,7 @@ impl Error {
         Self {
             code,
             message: message.into(),
-            trace_id: trace::current_trace_id(),
+            trace_id: None,
             details: None,
         }
     }
