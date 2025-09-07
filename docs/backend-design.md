@@ -415,8 +415,9 @@ using `CookieSessionStore`. Session state lives entirely in the cookie,
 allowing any backend instance to validate requests without a central store.
 The middleware signs and encrypts the cookie with an `actix_web::cookie::Key`
 loaded at startup from a secret file mounted into the container (for example
-`/run/secrets/session.key`). The file holds a single base64‑encoded 64‑byte key.
-Rotating it requires replacing the file and restarting the pods, which
+`/run/secrets/session.key`). The file holds a single base64‑encoded 64‑byte key;
+`SessionMiddleware` accepts only one key, so any extra entries are ignored.
+Rotating the key requires replacing the file and restarting the pods, which
 invalidates all existing cookies because `actix-session` does not check older
 keys.
 
