@@ -548,9 +548,9 @@ flowchart TD
    - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
    - Mapping: Nodes → POIs; Ways/Relations → POIs via centroid; persist `id`
      (OSM element id), `location` (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
-   - Write path: UPSERT by `id` in batches with transactions; ensure GiST on
-     `location` and GIN on `osm_tags` exist before bulk load; ensure a UNIQUE
-     constraint on `id` backs the upsert.
+   - Write path: UPSERT by `id` in batches with transactions; ensure a UNIQUE
+     constraint on `id` backs the upsert. Create GiST on `location` and GIN on
+     `osm_tags` after the initial bulk load to maximise ingest throughput.
    - Determinism: Canonicalise tag keys/values; record import provenance
      (source URL, timestamp, bbox) for audit.
    - CLI:
@@ -560,6 +560,11 @@ flowchart TD
        --tags amenity,historic,tourism,leisure,natural
      ```
    - Performance: Stream with bounded memory; parallel decode when CPU > 1.
+   - Acceptance criteria:
+     - CLI runs against an Edinburgh extract and completes within a bounded time.
+     - Idempotent re-runs do not duplicate POIs (UPSERT-by-id verified).
+     - UNIQUE(id), GiST(location), and GIN(osm_tags) exist post-load.
+     - Import provenance (source URL, timestamp, bbox) recorded.
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result

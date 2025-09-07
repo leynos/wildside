@@ -326,11 +326,12 @@ Operational details:
 
 - **Overpass quotas:**
   - Send a descriptive `User-Agent` and `Contact` header (email or URL);
-    expose both via config.
+    include a per-tenant token in the `User-Agent` for tracing abuse; expose
+    both via config.
   - Enforce rate limits (≤ 10 000 requests/day; transfer < 1 GB/day), default
     timeout 180 s, and `maxsize` 512 MiB.
-  - Limit concurrent requests per endpoint with a semaphore or worker pool
-    (default 1–4, configurable).
+  - Cap concurrent Overpass requests with a global semaphore or worker pool
+    (default ≤ 2, configurable).
   - Retry HTTP 429 responses with jittered backoff.
   - Guard with a circuit breaker that tracks failures/timeouts and opens for a
     configurable cooldown before probing again; fall back to mirrored or
@@ -339,15 +340,17 @@ Operational details:
     knobs for headers, concurrency, thresholds, and cooldown.
   ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
   [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html))
-  - **Cache keys:** Canonicalise request parameters before hashing (stable
-    JSON encoding, sorted keys, normalised floats with fixed precision for
-    coordinates, normalised theme ordering). Use namespaced key format such
-    as `route:v1:9f1ae8cc` where the suffix is a SHA-256 digest of the
-    canonical payload.
+  - **Cache keys:** Canonicalise request parameters before hashing:
+    - Stable JSON (UTF-8, sorted keys, no whitespace).
+    - Coordinates rounded to 5 decimal places (~1.1 m); themes sorted.
+    - Hash: lowercase hex SHA-256 of the canonical payload.
+    - Key: `route:v1:` (optionally truncate to first 32 hex chars; document
+      truncation).
 - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
-  small jitter (±5 min) to avoid stampedes; skip TTL for saved routes.
-  Invalidate on schema/engine version bumps by rotating namespace suffix
-  (e.g. `v2`).
+  jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate on
+  schema/engine version bumps by rotating namespace suffix (e.g. `v2`).
+- **Eviction:** Configure `maxmemory` and `maxmemory-policy allkeys-lfu`; set
+  per-namespace memory budgets and alert on `evicted_keys` > 0.
 - **Attribution & provenance:** Store enrichment provenance (source URL,
   timestamp, bbox) and enforce OSM attribution requirements in UI/docs.
 
