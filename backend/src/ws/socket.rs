@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::ws::messages::{UserCreated, UserCreatedMessage};
+use crate::ws::messages::UserCreated;
 use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use once_cell::sync::Lazy;
@@ -65,11 +65,7 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
             Ok(Message::Text(name)) => {
                 self.last_heartbeat = Instant::now();
                 if is_valid_display_name(&name) {
-                    let payload = UserCreated {
-                        id: Uuid::new_v4().to_string(),
-                        display_name: name.to_string(),
-                    };
-                    let msg = UserCreatedMessage::new(payload);
+                    let msg = UserCreated::new(Uuid::new_v4().to_string(), name.to_string());
                     ctx.address().do_send(msg);
                 } else {
                     warn!(display_name = %name, "Rejected invalid display name");
@@ -96,10 +92,10 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
     }
 }
 
-impl Handler<UserCreatedMessage> for UserSocket {
+impl Handler<UserCreated> for UserSocket {
     type Result = ();
 
-    fn handle(&mut self, msg: UserCreatedMessage, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: UserCreated, ctx: &mut Self::Context) {
         match serde_json::to_string(&msg) {
             Ok(body) => ctx.text(body),
             Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
