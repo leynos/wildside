@@ -330,37 +330,74 @@ sequenceDiagram
 
 ## Background task workers
 
-Certain operations in Wildside are best handled asynchronously by **background
-workers** rather than directly in the web request/response cycle. Examples
-include: generating a complex route (if we choose to fully offload it),
-pre-processing map data, sending notification emails or push messages, and
-periodic maintenance tasks (like refreshing the POI database or pruning old
-data). To facilitate this, the architecture includes a **task queue and
-worker** component. The main backend enqueues jobs, and one or more worker
-processes dequeue and execute them in the background. This decouples heavy
-lifting from user-facing request latency.
+Certain operations in Wildside are best handled asynchronously by
+background workers rather than directly in the web request/response
+cycle. Examples include: generating a complex route (if we choose to fully
+offload it), pre-processing map data, sending notification emails or push
+messages, and periodic maintenance tasks (like refreshing the POI
+database or pruning old data). To facilitate this, the architecture
+includes a task queue and worker component. The main backend enqueues
+jobs, and one or more worker processes dequeue and execute them in the
+background. This decouples heavy lifting from user-facing request
+latency.
 
-For implementation, Wildside will use
-[Apalis](https://docs.rs/apalis) backed by Redis. Apalis supports retries,
-scheduling (cron jobs) and concurrency limits. Workers can run as a separate
-binary or as part of the main binary launched in "worker mode". Redis
-durability and metrics considerations from the caching section also apply to
-the queue configuration. Define a clear reliability policy:
+For implementation, Wildside uses Apalis backed by Redis. Apalis supports
+retries, cron-like scheduling, and concurrency limits. Workers can run as
+a separate binary or as part of the main binary launched in worker mode.
+Redis durability and metrics considerations from the caching section also
+apply to the queue configuration. Workers process jobs from
+named queues to separate concerns: use `route_generation` for
+CPU-intensive path-planning jobs and `enrichment` for fetching
+supplementary point-of-interest data and other periodic enrichments.
+With `apalis-redis`, each queue uses a distinct namespace; configure
+separate prefixes for `route_generation` and `enrichment`. Prefer a
+dedicated Redis instance for queues, or at least different database
+indices and key prefixes, rather than sharing the application cache to
+avoid head-of-line blocking and key collisions. Define a clear
+reliability policy:
 
 - use bounded exponential backoff with a maximum retry count;
-- route exhausted jobs to a dead-letter queue for inspection;
-- require idempotency per job type (e.g., a deduplication key) so retries do
-  not duplicate work.
+- route exhausted jobs to a dead-letter queue (DLQ) for inspection;
+- require idempotency per job type (for example, a deduplication key), so
+  retries do not duplicate work.
 
-With Apalis, the **Actix Web server produces tasks** and **worker(s) consume
-them**. For example, when a user requests a route, the server enqueues a
-`GenerateRouteJob(user_id, start_point, prefs, etc)` in the queue. A worker
-running the same codebase (but started in worker mode) will pick it up, execute
-the wildside-engine to compute the route, then store the result in the database
-or cache. The user is then notified (perhaps the web server checks the DB or
-the worker triggers a WebSocket message when done). Scheduled tasks like
-refreshing OSM data nightly can also be scheduled through Apalis’s cron
-support.
+With Apalis, the Actix Web server produces tasks and worker(s) consume
+them. Delivery is at least once, so each handler must be idempotent.
+Workers persist job status—result, error, and progress—and do not write
+directly to WebSockets; the API layer observes this state and notifies
+clients when it changes. For example, when a user requests a route, the
+server enqueues a `GenerateRouteJob (user_id, start_point, prefs, etc)`
+on the `route_generation` queue. A worker running the same codebase (but
+started in worker mode) will pick it up, execute the wildside-engine to
+compute the route, then store the result in the database or cache. The
+user is then notified (perhaps the web server checks the DB or the worker
+triggers a WebSocket message when done). Similarly, scheduled tasks like
+refreshing OSM data nightly are queued on `enrichment` and triggered on a
+schedule.
+
+`GenerateRouteJob` is the primary task on `route_generation`. Suggested
+schema:
+
+- `request_id` (UUID) – correlates logs for a single request;
+- `idempotency_key` (string) – deduplicates retries;
+- `user_id` (UUID) – identifies the requester;
+- `start_point` (GeoPoint) – origin coordinates;
+- `prefs` (RoutePrefs) – routing preferences.
+
+```rust
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GenerateRouteJob {
+    request_id: uuid::Uuid,      // trace correlation
+    idempotency_key: String,     // dedup across retries
+    user_id: uuid::Uuid,
+    start_point: GeoPoint,
+    prefs: RoutePrefs,
+}
+```
+
+Scheduled jobs, such as refreshing OpenStreetMap data, run on
+`enrichment` under the same at-least-once, idempotent, retry-with-backoff,
+and DLQ semantics.
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
