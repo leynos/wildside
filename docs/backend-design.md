@@ -333,15 +333,30 @@ reliability policy:
   do not duplicate work.
 
 With Apalis, the Actix Web server produces tasks and worker(s) consume
-them. For example, when a user requests a route, the server enqueues a
-`GenerateRouteJob (user_id, start_point, prefs, etc)` on the
-`route_generation` queue. A worker running the same codebase (but started
-in worker mode) will pick it up, execute the wildside-engine to compute
-the route, then store the result in the database or cache. The user is
-then notified (perhaps the web server checks the DB or the worker
+them. Delivery is at least once, so each handler must be idempotent.
+Workers persist job status—result, error, and progress—and do not write
+directly to WebSockets; the API layer observes this state and notifies
+clients when it changes. For example, when a user requests a route, the
+server enqueues a `GenerateRouteJob (user_id, start_point, prefs, etc)`
+on the `route_generation` queue. A worker running the same codebase (but
+started in worker mode) will pick it up, execute the wildside-engine to
+compute the route, then store the result in the database or cache. The
+user is then notified (perhaps the web server checks the DB or the worker
 triggers a WebSocket message when done). Similarly, scheduled tasks like
 refreshing OSM data nightly are queued on `enrichment` and triggered on a
 schedule.
+
+`GenerateRouteJob` is the primary task on `route_generation`. Suggested
+schema:
+
+- `request_id` (UUID) – correlates logs for a single request;
+- `idempotency_key` (string) – deduplicates retries;
+- `user_id` (UUID) – identifies the requester;
+- `start_point` (GeoPoint) – origin coordinates;
+- `prefs` (RoutePrefs) – routing preferences.
+
+Scheduled jobs, such as refreshing OpenStreetMap data, run on
+`enrichment` under the same semantics.
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
