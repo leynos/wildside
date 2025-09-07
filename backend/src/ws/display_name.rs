@@ -1,6 +1,6 @@
 //! Utilities for validating user display names.
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
 /// Minimum allowed length for a display name.
 pub const DISPLAY_NAME_MIN: usize = 3;
@@ -15,10 +15,11 @@ pub const DISPLAY_NAME_MAX: usize = 32;
 /// assert!(wildside::ws::display_name::is_valid_display_name("Alice"));
 /// assert!(!wildside::ws::display_name::is_valid_display_name("bad$char"));
 /// ```
+static DISPLAY_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
+    let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
+    Regex::new(&pattern).expect("valid regex")
+});
+
 pub fn is_valid_display_name(name: &str) -> bool {
-    static RE: Lazy<Regex> = Lazy::new(|| {
-        let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
-        Regex::new(&pattern).expect("valid regex")
-    });
-    RE.is_match(name)
+    DISPLAY_NAME_RE.is_match(name)
 }

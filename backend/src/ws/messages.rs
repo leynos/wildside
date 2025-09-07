@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[rtype(result = "()")]
 pub struct UserCreated {
     /// Correlation identifier for cross-service tracing.
-    pub trace_id: String,
+    pub trace_id: Uuid,
     /// The user's unique identifier.
     pub id: String,
     /// The user's chosen display name.
@@ -24,7 +24,7 @@ impl UserCreated {
     /// ```
     pub fn new(id: impl Into<String>, display_name: impl Into<String>) -> Self {
         Self {
-            trace_id: Uuid::new_v4().to_string(),
+            trace_id: Uuid::new_v4(),
             id: id.into(),
             display_name: display_name.into(),
         }
@@ -33,16 +33,18 @@ impl UserCreated {
     /// Construct with the provided trace identifier.
     ///
     /// ```
-    /// let msg = UserCreated::with_trace_id("trace", "id", "Alice");
-    /// assert_eq!(msg.trace_id, "trace");
+    /// use uuid::Uuid;
+    /// let trace = Uuid::nil();
+    /// let msg = UserCreated::with_trace_id(trace, "id", "Alice");
+    /// assert_eq!(msg.trace_id, trace);
     /// ```
     pub fn with_trace_id(
-        trace_id: impl Into<String>,
+        trace_id: Uuid,
         id: impl Into<String>,
         display_name: impl Into<String>,
     ) -> Self {
         Self {
-            trace_id: trace_id.into(),
+            trace_id,
             id: id.into(),
             display_name: display_name.into(),
         }
@@ -54,11 +56,12 @@ mod tests {
     use super::*;
     use rstest::rstest;
     use serde_json::Value;
+    use uuid::Uuid;
 
     #[rstest]
     fn serializes_user_created() {
         let msg = UserCreated::new("123", "Alice");
-        let value = serde_json::to_value(&msg).unwrap();
+        let value = serde_json::to_value(&msg).expect("serialises UserCreated to JSON");
         assert!(value.get("trace_id").is_some());
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(
@@ -69,9 +72,14 @@ mod tests {
     }
     #[rstest]
     fn serializes_user_created_with_trace() {
-        let msg = UserCreated::with_trace_id("trace", "123", "Alice");
-        let value = serde_json::to_value(&msg).unwrap();
-        assert_eq!(value.get("trace_id").and_then(Value::as_str), Some("trace"));
+        let trace = Uuid::nil();
+        let msg = UserCreated::with_trace_id(trace, "123", "Alice");
+        let value = serde_json::to_value(&msg).expect("serialises UserCreated to JSON");
+        let trace_str = trace.to_string();
+        assert_eq!(
+            value.get("trace_id").and_then(Value::as_str),
+            Some(trace_str.as_str())
+        );
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(
             value.get("display_name").and_then(Value::as_str),

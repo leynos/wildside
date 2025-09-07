@@ -34,6 +34,8 @@ components:
       name: UserCreated
       title: User created event
       contentType: application/json
+      correlationId:
+        location: "$message.payload#/trace_id"
       payload:
         type: object
         additionalProperties: false
@@ -49,7 +51,7 @@ components:
           id:
             type: string
             description: Unique user identifier
-            examples: ["123e4567-e89b-12d3-a456-426614174000"]
+            examples: ["123e4567-e89b-42d3-a456-426614174001"]
             format: uuid
           display_name:
             type: string
@@ -58,10 +60,11 @@ components:
             # Keep in sync with backend/src/ws/display_name.rs
             minLength: 3
             maxLength: 32
+            pattern: '^[A-Za-z0-9_ ]{3,32}$'
       examples:
         - name: minimal
           summary: Minimal valid payload
           payload:
-            trace_id: "01234567-89ab-cdef-0123-456789abcdef"
-            id: "123e4567-e89b-12d3-a456-426614174000"
+            trace_id: "123e4567-e89b-42d3-a456-426614174000"
+            id: "123e4567-e89b-42d3-a456-426614174001"
             display_name: "Ada Lovelace"
