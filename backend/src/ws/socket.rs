@@ -2,11 +2,10 @@
 
 use std::time::{Duration, Instant};
 
+use crate::ws::display_name::{is_valid_display_name, DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
 use crate::ws::messages::UserCreated;
 use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
-use once_cell::sync::Lazy;
-use regex::Regex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -14,14 +13,6 @@ use uuid::Uuid;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// Maximum allowed time between messages from the client before considering it disconnected.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Return true if the display name matches policy.
-fn is_valid_display_name(name: &str) -> bool {
-    // Only allow alphanumeric characters, underscores, and spaces (3–32).
-    static RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^[A-Za-z0-9_ ]{3,32}$").expect("valid regex"));
-    RE.is_match(name)
-}
 
 pub struct UserSocket {
     last_heartbeat: Instant,
@@ -70,7 +61,7 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
                 } else {
                     warn!(display_name = %name, "Rejected invalid display name");
                     let error_msg = serde_json::json!({
-                        "error": "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters."
+                        "error": format!("Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between {} and {} characters.", DISPLAY_NAME_MIN, DISPLAY_NAME_MAX)
                     });
                     ctx.text(error_msg.to_string());
                 }
@@ -105,7 +96,7 @@ impl Handler<UserCreated> for UserSocket {
 
 #[cfg(test)]
 mod tests {
-    use super::is_valid_display_name;
+    use crate::ws::display_name::is_valid_display_name;
     use rstest::rstest;
 
     #[rstest]
