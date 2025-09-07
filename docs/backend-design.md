@@ -316,10 +316,11 @@ Operational details:
   mirrored or self-hosted endpoints at scale.
   ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
   [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html))
-- **Cache keys:** Canonicalise request parameters before hashing (stable
-  JSON encoding, sorted keys, normalised floats with fixed precision for
-  coordinates, normalised theme ordering). Use namespaced key format
-  `route:v1:<hash>` where `<hash>` is a digest of the canonical payload.
+  - **Cache keys:** Canonicalise request parameters before hashing (stable
+    JSON encoding, sorted keys, normalised floats with fixed precision for
+    coordinates, normalised theme ordering). Use namespaced key format such
+    as `route:v1:9f1ae8cc` where the suffix is a SHA-256 digest of the
+    canonical payload.
 - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
   small jitter (±5 min) to avoid stampedes; skip TTL for saved routes.
   Invalidate on schema/engine version bumps by rotating namespace suffix
