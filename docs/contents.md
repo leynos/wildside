@@ -16,8 +16,8 @@
 
 ## Frontend development
 
-- [Pure, accessible, and localisable React components][pure-react-components]
-  – building accessible, localised components with Radix, TanStack and
+- [Pure, accessible, and localizable React components][pure-react-components]
+  – building accessible, localized components with Radix, TanStack, and
   DaisyUI. *Audience: frontend developers.*
 - [Architecting resilient local-first applications in React][local-first]
   – strategies for offline-first apps using Zustand and TanStack Query.
@@ -33,7 +33,7 @@
 - [Guide to ergonomic and DRY Rust doctests][rust-doctest] – patterns for
   maintainable doctests. *Audience: Rust developers.*
 - [Mastering test fixtures in Rust with `rstest`][rust-rstest] – fixture and
-  parameterised testing techniques. *Audience: Rust developers.*
+  parameterized testing techniques. *Audience: Rust developers.*
 
 ## Infrastructure and delivery
 
@@ -45,7 +45,7 @@
 - [Architecting a modern CI/CD pipeline](ci-cd-container-pipeline-design.md) –
   GitHub Actions to Kubernetes workflow. *Audience: DevOps engineers.*
 - [Declarative DNS guide](declarative-dns-guide.md) –
-  automating Cloudflare DNS with FluxCD, ExternalDNS and OpenTofu. *Audience:
+  automating Cloudflare DNS with FluxCD, ExternalDNS, and OpenTofu. *Audience:
   platform engineers.*
 - [Declarative TLS guide](declarative-tls-guide.md) – automating certificate
   management with cert-manager. *Audience: platform engineers.*
