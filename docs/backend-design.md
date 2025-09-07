@@ -422,34 +422,40 @@ invalidates all existing cookies because `actix-session` does not check older
 keys.
 
 ```rust
-use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-use actix_web::cookie::Key;
+use actix_session::{SessionMiddleware, storage::CookieSessionStore, config::CookieContentSecurity};
+use actix_web::cookie::{Key, SameSite};
 
 let key_bytes = base64::decode(std::fs::read_to_string("/run/secrets/session.key")?)?;
 let key = Key::from(&key_bytes);
 
 let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
     .cookie_name("session")
+    .cookie_content_security(CookieContentSecurity::Private) // encrypt + sign
+    .cookie_secure(true)
+    .cookie_http_only(true)
+    .cookie_same_site(SameSite::Lax)
     .build();
 ```
 
-On login, the server sets a cookie named `session` such as `session=<payload>`
+On login, the server sets a cookie named `session`, such as `session=<payload>`,
 and `actix-session` handles serialization and integrity checks automatically.
-Cookies are marked `HttpOnly`, `Secure` and use an appropriate `SameSite`
-policy. To rotate the key, generate a new value, replace the secret file, and
-restart the pods; the framework cannot validate cookies issued with a previous
-key, so all existing sessions are dropped. This keeps the session layer
-self-contained without any server-side cache or database lookup.
+Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` unless a
+cross-site flow is required. To rotate the key, generate a new value, replace
+the secret file, and restart the pods; the framework cannot validate cookies
+issued with a previous key, so all existing sessions are dropped. This keeps the
+session layer self-contained without any server-side cache or database lookup.
 
 **Security considerations:** Browser cookies are limited to 4 KiB, so the
-serialized session payload must stay within that bound. Short‑lived workflows
-can use session cookies that vanish when the browser closes; persistent
-sessions should set an explicit `max-age` and refresh it on activity. Sensitive
-actions benefit from short TTLs, whereas a longer TTL (for example, seven days)
-improves convenience when paired with token rotation. Because the session is
-stateless, logging out cannot invalidate an existing cookie on the server; the
-client is simply told to delete it. Immediate revocation would require a
-denylist or short‑lived tokens, but for the MVP this approach is acceptable.
+serialized session payload must stay within that bound. For non‑persistent
+usage, rely on the browser session; for persistence, configure
+`PersistentSession` with an explicit TTL (for example, seven days). If a
+rolling expiry is required, issue a fresh cookie on write or implement a policy
+that renews the TTL explicitly. Sensitive actions benefit from short TTLs,
+whereas a longer TTL (for example, seven days) improves convenience when paired
+with token rotation. Because the session is stateless, logging out cannot
+invalidate an existing cookie on the server; the client is simply told to
+delete it. Immediate revocation would require a denylist or short‑lived tokens,
+but for the MVP this approach is acceptable.
 
 *Observability:* Session management itself doesn’t produce a lot of metrics,
 but we can track things like **active user count** or login frequency. For
