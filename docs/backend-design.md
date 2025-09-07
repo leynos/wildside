@@ -180,7 +180,7 @@ in PostHog, but we might use PostHog to track high-level outcomes (e.g.
 
 To further improve responsiveness and reduce load, a caching layer will be
 introduced, backed by **Redis**. Redis will serve as both the cache and the
-job‑queue backend via [Apalis](https://docs.rs/apalis). When used as a queue,
+job-queue backend via [Apalis](https://docs.rs/apalis). When used as a queue,
 configure Redis for durability (enable AOF) to avoid job loss on restarts. The
 cache serves a few purposes in the Wildside backend:
 
@@ -218,10 +218,14 @@ if it is also the queue backend. When Redis serves both cache and queue:
 
 - enable AOF for durability (e.g., `appendonly yes; appendfsync everysec`);
 - if sharing one instance, set an eviction policy safe for queues (e.g., prefer
-  `noeviction`) and bound cache keys with TTLs; or run separate instances/dbs;
-- expose metrics via the Redis exporter.
+  `noeviction`) and bound cache keys with TTLs; or run separate instances/DBs;
+- set an explicit Apalis key prefix/namespace (e.g., `apalis:`) to avoid key
+  collisions with cache keys;
+- expose metrics via the Redis exporter, and enable the `prometheus` feature
+  for the Apalis Redis integration to export queue metrics.
 
-When using the Bitnami Redis Helm chart, enable the Prometheus exporter:
+When using the Bitnami Redis Helm chart, enable the Prometheus exporter and
+alerting:
 
 values.yaml
 
@@ -229,6 +233,8 @@ values.yaml
 metrics:
   enabled: true
   serviceMonitor:
+    enabled: true
+  prometheusRule:
     enabled: true
 ```
 
@@ -310,7 +316,12 @@ For implementation, Wildside will use
 scheduling (cron jobs) and concurrency limits. Workers can run as a separate
 binary or as part of the main binary launched in "worker mode". Redis
 durability and metrics considerations from the caching section also apply to
-the queue configuration.
+the queue configuration. Define a clear reliability policy:
+
+- use bounded exponential backoff with a maximum retry count;
+- route exhausted jobs to a dead-letter queue for inspection;
+- require idempotency per job type (e.g., a deduplication key) so retries do
+  not duplicate work.
 
 With Apalis, the **Actix Web server produces tasks** and **worker(s) consume
 them**. For example, when a user requests a route, the server enqueues a
