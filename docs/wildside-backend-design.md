@@ -139,24 +139,6 @@ API and WebSocket traffic.
 
 - **Implementation Tasks:**
 
-<<<<<<< HEAD
-  - [ ] **Session Management:** Implement stateless, encrypted, authenticated
-    cookie sessions. Use `actix-session` with a cookie backend configured as:
-    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and an
-    explicit `path`. Set `domain` only when sharing across subdomains. Set a
-    bounded `Max-Age` to limit session lifetime. Load the signing key from a
-    high-entropy (≥64-byte), read-only managed secret (for example, a
-    Kubernetes `Secret` or Vault) and mount or inject it for the service at
-    runtime—avoid sourcing it from a plain environment variable. Rotate the
-    key regularly by rolling the secret and reloading it, so stale cookies are
-    invalidated. Scope the middleware to routes that require authentication.
-||||||| parent of e4f5671 (Document session key fallback)
-  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
-    Use the `actix-session` crate with a cookie-based backend. Load the signing
-    key from a secret store (for example, a Kubernetes Secret or Vault) and
-    mount or inject it for the service at runtime. Configure the session cookie
-    with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax` (or `Strict`).
-=======
   - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
     Use the `actix-session` crate with a cookie-based backend. Load the signing
     key from a secret store (for example, a Kubernetes Secret or Vault) and
