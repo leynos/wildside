@@ -176,10 +176,12 @@ results). On the analytics side, database operations themselves aren’t directl
 in PostHog, but we might use PostHog to track high-level outcomes (e.g.
 “UserSavedRoute” event when a user saves a generated route to the DB).
 
-## Caching Layer (Redis/Memcached)
+## Caching and job queue layer (Redis)
 
 To further improve responsiveness and reduce load, a caching layer will be
-introduced, likely backed by **Redis** (or Memcached as an alternative). The
+introduced, backed by **Redis**. Redis will serve as both the cache and the
+job-queue backend via [Apalis](https://docs.rs/apalis). When used as a queue,
+configure Redis for durability (enable AOF) to avoid job loss on restarts. The
 cache serves a few purposes in the Wildside backend:
 
 - **API Response Caching:** For expensive requests with identical inputs, the
@@ -208,16 +210,37 @@ cache serves a few purposes in the Wildside backend:
   remains an option for any transient data that doesn’t warrant a database
   write.
 
-In a Kubernetes deployment, Redis can be run as an in-cluster service or use a
-managed Redis. For a lightweight start, a single small Redis instance (or even
-just using an in-memory cache within the app process for non-critical data)
-suffices. The cost analysis for MVP even budgets a small Redis Cloud instance
-for
+In a Kubernetes deployment, Redis can be run as an in-cluster service or as a
+managed offering. For a lightweight start, a single small Redis instance (or
+even using an in-memory cache within the app process for non-critical data)
+can suffice for cache-only use. Do not replace Redis with an in-process cache
+if it is also the queue backend. When Redis serves both cache and queue:
+
+- enable AOF for durability (e.g., `appendonly yes; appendfsync everysec`);
+- if sharing one instance, set an eviction policy safe for queues (e.g., prefer
+  `noeviction`) and bound cache keys with TTLs; or run separate instances/DBs;
+- set an explicit Apalis key prefix/namespace (e.g., `apalis:`) to avoid key
+  collisions with cache keys;
+- expose metrics via the Redis exporter, and enable the `prometheus` feature
+  for the Apalis Redis integration to export queue metrics.
+
+When using the Bitnami Redis Helm chart, enable the Prometheus exporter and
+alerting:
+
+values.yaml
+
+```yaml
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+```
+
+The cost analysis for MVP even budgets a small Redis Cloud instance for
 caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
- underlining its role. Memcached could alternatively be used for simple
-key-value caching if we prefer an even simpler, stateless cache layer; however,
-Redis offers more features (persistence, pub/sub, etc.) that could be handy
-(for example, using Redis as the job queue backend in Apalis).
+underlining its role as both cache and queue.
 
 *Observability:* The caching layer will be monitored to ensure it’s effectively
 improving performance. We’ll track **cache hit rates and misses** for critical
@@ -232,7 +255,51 @@ not directly relevant to PostHog events, but a successful cache hit does
 indirectly improve user experience (faster response) which could reflect in
 user retention metrics over time.
 
-## Background Task Workers
+### Cache and job queue flow
+
+The sequence below illustrates how a route lookup is cached, how jobs move
+through Redis as the Apalis queue, and how Prometheus gathers telemetry.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant API as Backend Service
+    participant R as Redis (Cache + Queue)
+    participant W as Apalis Worker
+    participant M as Prometheus
+
+    rect rgb(235, 245, 255)
+    User->>API: Request needing route lookup
+    API->>R: GET cache:route_lookup:<key>
+    alt Cache hit
+        R-->>API: Value
+        API-->>User: Respond
+        API->>M: cache_route_lookup_hits_total++
+    else Cache miss
+        R-->>API: MISS
+        API->>API: Compute route
+        API->>R: SET cache:route_lookup:<key>=value (TTL)
+        API-->>User: Respond
+        API->>M: cache_route_lookup_misses_total++
+    end
+    end
+
+    rect rgb(240, 255, 240)
+    API->>R: ENQUEUE job (Apalis queue)
+    Note over R,W: Redis acts as job-queue backend
+    W->>R: DEQUEUE job
+    W->>W: Process job
+    W->>R: ACK/Result
+    end
+
+    rect rgb(255, 248, 230)
+    R-->>M: Export Redis metrics (via exporter)
+    Note over M: Scrape for cache/queue telemetry
+    end
+```
+
+## Background task workers
 
 Certain operations in Wildside are best handled asynchronously by **background
 workers** rather than directly in the web request/response cycle. Examples
@@ -244,52 +311,27 @@ worker** component. The main backend enqueues jobs, and one or more worker
 processes dequeue and execute them in the background. This decouples heavy
 lifting from user-facing request latency.
 
-For implementation, we have several **Rust-based job frameworks** available and
-no strict preference has been chosen yet. We can consider:
+For implementation, Wildside will use
+[Apalis](https://docs.rs/apalis) backed by Redis. Apalis supports retries,
+scheduling (cron jobs) and concurrency limits. Workers can run as a separate
+binary or as part of the main binary launched in "worker mode". Redis
+durability and metrics considerations from the caching section also apply to
+the queue configuration. Define a clear reliability policy:
 
-- **Apalis:** A Rust library for background job processing that supports
-  multiple backends (memory, Redis, PostgreSQL, etc.). It allows defining job
-  types and provides features like retries, scheduling (cron jobs), and
-  concurrency limits. Apalis would run inside our project (perhaps as a
-  separate binary or part of the main binary launched in “worker mode”) and
-  could use Postgres or Redis to store job state. This fits well with our stack
-  since we have those
-  systems([5](https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=I%20used%20this%20for%20a,ended%20up%20using%20NATS%20instead))([5](https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features)).
+- use bounded exponential backoff with a maximum retry count;
+- route exhausted jobs to a dead-letter queue for inspection;
+- require idempotency per job type (e.g., a deduplication key) so retries do
+  not duplicate work.
 
-- **Underway:** A simpler job framework that uses Postgres as a durable store
-  for tasks (using SQL for coordination). This might be attractive if we want
-  to avoid introducing another service; jobs would be recorded in the existing
-  Postgres, and workers poll the DB. Underway supports multi-step workflows and
-  scheduling via the database (essentially acting like a built-in task
-  table)([6](https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management))([7](https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step)).
-   This keeps everything in Rust+Postgres without needing Redis or external
-  brokers.
-
-- **Faktory:** An external job server (by ContribSys, creator of Sidekiq) that
-  allows multi-language workers. We could push jobs to a Faktory queue; Rust
-  workers (via a Faktory client crate) or even other language workers could
-  handle them. Faktory is proven technology, but it introduces another service
-  to run/maintain. Given our MVP’s focus on minimal components, Faktory might
-  be more than needed unless we foresee using other languages for workers.
-
-- **NATS:** A lightweight message broker that can be used for a pub/sub or work
-  queue (with NATS Streaming or JetStream). Using NATS would mean each worker
-  subscribes to a subject (topic) and receives tasks. NATS is extremely fast
-  and scalable, but it doesn’t inherently provide persistence or retries unless
-  using its JetStream persistence layer. Some Rust ecosystems use NATS for
-  event-driven arch. If chosen, we’d run a NATS server (possibly in the
-  cluster) and have the Actix app publish messages and a worker subscribe.
-
-Regardless of the library, the architecture pattern remains: the **Actix Web
-server produces tasks**, and **worker(s) consume them**. For example, when a
-user requests a route, the server might enqueue a
+With Apalis, the **Actix Web server produces tasks** and **worker(s) consume
+them**. For example, when a user requests a route, the server enqueues a
 `GenerateRouteJob(user_id, start_point, prefs, etc)` in the queue. A worker
 running the same codebase (but started in worker mode) will pick it up, execute
 the wildside-engine to compute the route, then store the result in the database
 or cache. The user is then notified (perhaps the web server checks the DB or
-the worker triggers a WebSocket message when done). Similarly, scheduled tasks
-like refreshing OSM data nightly could be jobs in the queue triggered on a
-schedule (Apalis and Underway both support cron-like scheduling).
+the worker triggers a WebSocket message when done). Scheduled tasks like
+refreshing OSM data nightly can also be scheduled through Apalis’s cron
+support.
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
@@ -543,8 +585,8 @@ we can confidently develop, deploy, and scale Wildside.
 
 The above design provides a detailed blueprint for Wildside’s backend MVP: a
 Rust/Actix web application augmented by background workers, a PostGIS-enabled
-PostgreSQL database, and supportive infrastructure like Redis cache and
-comprehensive observability. It favors a simple, monolithic
+PostgreSQL database, and supportive infrastructure like the Redis cache and job
+queue, alongside comprehensive observability. It favours a simple, monolithic
 core([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L65-L70))
  that is easier to build and iterate on quickly, while applying modular design
 internally for
