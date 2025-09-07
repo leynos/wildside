@@ -226,4 +226,36 @@ mod tests {
         let err = Error::not_found("missing");
         assert_eq!(err.code, ErrorCode::NotFound);
     }
+    #[test]
+    fn status_code_matches_error_code() {
+        use actix_web::http::StatusCode;
+        let cases = [
+            (Error::invalid_request("bad"), StatusCode::BAD_REQUEST),
+            (Error::unauthorized("no auth"), StatusCode::UNAUTHORIZED),
+            (Error::forbidden("denied"), StatusCode::FORBIDDEN),
+            (Error::not_found("missing"), StatusCode::NOT_FOUND),
+            (Error::internal("boom"), StatusCode::INTERNAL_SERVER_ERROR),
+        ];
+        for (err, status) in cases {
+            assert_eq!(err.status_code(), status);
+        }
+    }
+
+    #[actix_web::test]
+    async fn internal_error_response_is_redacted() {
+        use actix_web::body::to_bytes;
+        use actix_web::http::StatusCode;
+        use serde_json::json;
+        let err = Error::internal("boom")
+            .with_trace_id("abc")
+            .with_details(json!({"secret": "x"}));
+        let res = err.error_response();
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
+        let bytes = to_bytes(res.into_body()).await.unwrap();
+        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(payload.message, "Internal server error");
+        assert!(payload.details.is_none());
+        assert_eq!(payload.trace_id.as_deref(), Some("abc"));
+    }
 }
