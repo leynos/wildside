@@ -9,9 +9,9 @@ use uuid::Uuid;
 pub struct UserCreated {
     /// Correlation identifier for cross-service tracing.
     pub trace_id: String,
-    /// Unique user identifier.
+    /// The user's unique identifier.
     pub id: String,
-    /// User’s display name.
+    /// The user's chosen display name.
     pub display_name: String,
 }
 
