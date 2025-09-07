@@ -314,9 +314,9 @@ latency.
 
 For implementation, Wildside uses Apalis backed by Redis. Apalis supports
 retries, cron-like scheduling, and concurrency limits. Workers can run as
-a separate binary or as part of the main binary launched in "worker
-mode". Redis durability and metrics considerations from the caching
-section also apply to the queue configuration. Workers process jobs from
+a separate binary or as part of the main binary launched in worker mode.
+Redis durability and metrics considerations from the caching section also
+apply to the queue configuration. Workers process jobs from
 named queues to separate concerns: use `route_generation` for
 CPU-intensive path-planning jobs and `enrichment` for fetching
 supplementary point-of-interest data and other periodic enrichments.
@@ -328,9 +328,9 @@ avoid head-of-line blocking and key collisions. Define a clear
 reliability policy:
 
 - use bounded exponential backoff with a maximum retry count;
-- route exhausted jobs to a dead-letter queue for inspection;
-- require idempotency per job type (e.g., a deduplication key) so retries
-  do not duplicate work.
+- route exhausted jobs to a dead-letter queue (DLQ) for inspection;
+- require idempotency per job type (for example, a deduplication key), so
+  retries do not duplicate work.
 
 With Apalis, the Actix Web server produces tasks and worker(s) consume
 them. Delivery is at least once, so each handler must be idempotent.
@@ -355,8 +355,20 @@ schema:
 - `start_point` (GeoPoint) – origin coordinates;
 - `prefs` (RoutePrefs) – routing preferences.
 
+```rust
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GenerateRouteJob {
+    request_id: uuid::Uuid,      // trace correlation
+    idempotency_key: String,     // dedup across retries
+    user_id: uuid::Uuid,
+    start_point: GeoPoint,
+    prefs: RoutePrefs,
+}
+```
+
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
-`enrichment` under the same semantics.
+`enrichment` under the same at-least-once, idempotent, retry-with-backoff,
+and DLQ semantics.
 
 *Observability:* The task worker system will be instrumented so we can ensure
 it’s running smoothly. Key metrics include the **queue length** (number of
