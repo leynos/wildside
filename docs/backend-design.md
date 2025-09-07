@@ -70,11 +70,27 @@ error monitoring, and PostHog for high-level user behavior tracking.
 
 To deliver map tiles without burdening the core API, Wildside deploys the
 **Martin** tile server as a distinct service. Martin connects to the same
-PostGIS database as the main backend and exposes vector tiles on `/tiles`.
-Running it separately allows independent scaling, caching and availability
-controls. Requests such as `/tiles/{z}/{x}/{y}.pbf` are served directly from
-PostGIS, enabling clients to fetch map data while the monolith focuses on
-business logic.
+PostGIS database as the main backend and exposes TileJSON and vector tiles under
+the `/tiles` base path[^1]. Running it separately allows independent scaling,
+caching, and availability controls. Requests such as
+`/tiles/{source}/{z}/{x}/{y}.pbf` are served directly from PostGIS (with sources
+auto-discovered), and TileJSON is available at `/tiles/{source}.json`[^2],
+enabling clients to fetch map data while the monolith focuses on business
+logic.
+
+Operational notes:
+
+- Use a read-only Postgres role and a separate connection string for Martin.
+- Set a distinct ingress route to forward `/tiles/*` to the Martin service,
+  avoiding Actix handlers.
+- Configure `--base-path /tiles`, connection pool size, worker processes, and
+  in-memory cache size; enable Brotli or Gzip.
+- Enforce CORS for tile endpoints, and apply rate limits or CDN caching at the
+  edge.
+
+[^1]: <https://maplibre.org/martin/config-file.html> – `base_path` option.
+[^2]: <https://maplibre.org/martin/using.html#martin-endpoints> – Tile and
+    TileJSON endpoints.
 
 ## Route Generation Engine Integration
 
