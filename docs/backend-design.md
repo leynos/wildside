@@ -146,6 +146,7 @@ unbounded growth.
 #### Responses
 
 - `202 Accepted` — `{ "request_id": "uuid" }`
+- Headers: `Location: /api/v1/routes/{request_id}` (optional)
 - Errors: `400 Bad Request`, `401 Unauthorized`, `429 Too Many Requests`,
   `500 Internal Server Error`, `504 Gateway Timeout`.
 
@@ -167,7 +168,13 @@ unbounded growth.
 ```
 
 WebSocket `route_generation_status` messages mirror these states and report
-timeouts or failures.
+timeouts or failures. Each message includes:
+
+- `type` — literal `"route_generation_status"`
+- `request_id` — string UUID for the job
+- `status` — `"queued" | "running" | "succeeded" | "failed"`
+- `progress` — integer from 0–100
+- `error` — optional string describing the failure or timeout
 
 Example `route_generation_status` event (JSON over WebSocket):
 
