@@ -288,7 +288,7 @@ side, database operations themselves aren’t directly in PostHog, but PostHog
 can track high-level outcomes (e.g. “UserSavedRoute” event when a user saves a
 generated route to the DB).
 
-## Data Seeding, Enrichment, and Route Caching
+## Data seeding, enrichment, and route caching
 
  
 - Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
@@ -314,12 +314,12 @@ Operational details:
   requests/day; transfer < 1 GB/day), default timeout 180 s and maxsize
   512 MiB; handle HTTP 429 with jittered retries and backoff; prefer
   mirrored or self-hosted endpoints at scale.
-  ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html?utm_source=openai),
-  [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html?utm_source=openai))
+  ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
+  [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html))
 - **Cache keys:** Canonicalise request parameters before hashing (stable
   JSON encoding, sorted keys, normalised floats with fixed precision for
   coordinates, normalised theme ordering). Use namespaced key format
-  `route:v1:`.
+  `route:v1:<hash>` where `<hash>` is a digest of the canonical payload.
 - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
   small jitter (±5 min) to avoid stampedes; skip TTL for saved routes.
   Invalidate on schema/engine version bumps by rotating namespace suffix
