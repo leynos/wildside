@@ -60,8 +60,8 @@ output "kubeconfig" {
 Retrieve the kubeconfig and cluster endpoint after applying the configuration:
 
 ```sh
-terraform output -raw kubeconfig > kubeconfig.yaml
-terraform output endpoint
+tofu output -raw kubeconfig > kubeconfig.yaml
+tofu output endpoint
 ```
 
 Consult the DigitalOcean provider docs for advanced configuration:
