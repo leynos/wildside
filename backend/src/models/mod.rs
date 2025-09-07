@@ -15,4 +15,14 @@ pub use self::error::{Error, ErrorCode};
 pub use self::user::User;
 
 /// Convenient API result alias.
+///
+/// # Examples
+/// ```
+/// use actix_web::HttpResponse;
+/// use backend::models::{ApiResult, Error};
+///
+/// fn handler() -> ApiResult<HttpResponse> {
+///     Err(Error::forbidden("nope"))
+/// }
+/// ```
 pub type ApiResult<T> = Result<T, Error>;

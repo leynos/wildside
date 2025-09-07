@@ -25,6 +25,14 @@ pub enum ErrorCode {
 }
 
 /// API error response payload.
+///
+/// # Examples
+/// ```
+/// use backend::models::{Error, ErrorCode};
+///
+/// let err = Error::new(ErrorCode::NotFound, "missing");
+/// assert_eq!(err.code, ErrorCode::NotFound);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Error {
@@ -51,6 +59,13 @@ pub struct Error {
 
 impl Error {
     /// Create a new error with the current trace identifier.
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::{Error, ErrorCode};
+    /// let err = Error::new(ErrorCode::InvalidRequest, "bad");
+    /// assert_eq!(err.code, ErrorCode::InvalidRequest);
+    /// ```
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
@@ -61,25 +76,65 @@ impl Error {
     }
 
     /// Attach a trace identifier to the error.
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::{Error, ErrorCode};
+    /// let err = Error::new(ErrorCode::Forbidden, "nope").with_trace_id("abc");
+    /// assert_eq!(err.trace_id.as_deref(), Some("abc"));
+    /// ```
     pub fn with_trace_id(mut self, id: impl Into<String>) -> Self {
         self.trace_id = Some(id.into());
         self
     }
 
     /// Attach structured details to the error.
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::{Error, ErrorCode};
+    /// use serde_json::json;
+    /// let err = Error::new(ErrorCode::InvalidRequest, "bad")
+    ///     .with_details(json!({ "field": "name" }));
+    /// assert!(err.details.is_some());
+    /// ```
     pub fn with_details(mut self, details: Value) -> Self {
         self.details = Some(details);
         self
     }
 
+    /// Convenience constructor for [`ErrorCode::Unauthorized`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::Error;
+    ///
+    /// let err = Error::unauthorized("no token");
+    /// ```
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message)
     }
 
+    /// Convenience constructor for [`ErrorCode::Forbidden`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::Error;
+    ///
+    /// let err = Error::forbidden("nope");
+    /// ```
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Forbidden, message)
     }
 
+    /// Convenience constructor for [`ErrorCode::InternalError`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::Error;
+    ///
+    /// let err = Error::internal("boom");
+    /// ```
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InternalError, message)
     }

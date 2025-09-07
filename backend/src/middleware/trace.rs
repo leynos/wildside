@@ -14,6 +14,18 @@ use tracing::info_span;
 use uuid::Uuid;
 
 /// Task-local storage for the current request's trace identifier.
+///
+/// # Examples
+/// ```
+/// use actix_web::HttpRequest;
+/// use backend::middleware::trace::TraceId;
+///
+/// fn handler(req: HttpRequest) {
+///     if let Some(id) = req.extensions().get::<TraceId>() {
+///         println!("trace id: {}", id.0);
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct TraceId(pub String);
@@ -23,6 +35,15 @@ task_local! {
 }
 
 /// Retrieve the trace identifier for the current task if set.
+///
+/// # Examples
+/// ```
+/// use backend::middleware::trace::current_trace_id;
+///
+/// if let Some(id) = current_trace_id() {
+///     println!("{}", id);
+/// }
+/// ```
 pub fn current_trace_id() -> Option<String> {
     TRACE_ID.try_with(|id| id.clone()).ok()
 }
@@ -40,6 +61,8 @@ pub(crate) fn current_trace_id_ref() -> Option<&'static str> {
 
 /// Tracing middleware attaching a request-scoped UUID and
 /// adding a `Trace-Id` header to every response.
+///
+/// Call [`current_trace_id`] in a handler to read the identifier.
 ///
 /// # Examples
 /// ```

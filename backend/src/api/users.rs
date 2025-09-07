@@ -52,6 +52,14 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
 //
 
 /// List known users.
+///
+/// # Examples
+/// ```
+/// use actix_web::App;
+/// use backend::api::users::list_users;
+///
+/// let app = App::new().service(list_users);
+/// ```
 #[utoipa::path(
     get,
     path = "/api/v1/users",
