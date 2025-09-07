@@ -109,17 +109,62 @@ Problem)([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65d
  Because this computation can be intensive, the design must ensure it doesn’t
 block the responsive handling of requests.
 
-For the MVP, a simple approach is to perform route generation within a separate
-worker thread or via a background task job, rather than on the main async
-thread. For example, when a client calls `/api/v1/routes`, the handler validates
-input, enqueues a `GenerateRouteJob`, and returns a `request_id`. Status updates
-are pushed to the client as `route_generation_status` WebSocket messages. This
-pattern prevents long CPU-bound work from stalling the
-Actix event loop. If the computation is fast enough for MVP, it could also be
-done synchronously with careful use of `spawn_blocking`, but the architecture
-anticipates heavier loads where a true background job is safer. Once the engine
-produces a route (an ordered list of POIs with a path), the result can be
-stored (e.g. in Postgres or an in-memory cache) and returned to the user.
+For the MVP, route generation runs in a worker rather than on the Actix runtime.
+When a client POSTs to `/api/v1/routes`, the handler validates input, enqueues a
+`GenerateRouteJob`, and returns a `request_id` straight away. `spawn_blocking`
+is suitable only for short, bounded CPU-bound work and must not be used for
+long-running route generation. Instead, offload unbounded work to a dedicated
+background worker using an enqueue/worker pattern. This prevents CPU-heavy
+computation from stalling the Actix event loop.
+
+The HTTP handler enforces both a request timeout and a job-level timeout before
+returning. The worker honours its own execution timeout, cancels and cleans up
+on timeout or client cancellation, and reports progress, timeout, or failure via
+`route_generation_status` WebSocket messages. When the worker finishes, it
+stores the route (e.g. in Postgres or an in-memory cache) for retrieval.
+
+#### `/api/v1/routes` API contract
+
+- **Method:** `POST`
+- **Authentication:** Bearer token required.
+- **Idempotency:** Optional `Idempotency-Key` header; repeated requests with the
+  same key return the original `request_id`.
+- **Rate limits:** Subject to per-user quota (for example, 60 requests per
+  minute).
+
+##### Request body
+
+```json
+{
+  "start": {"lat": 53.3498, "lng": -6.2603},
+  "duration_minutes": 90,
+  "preferences": ["history", "nature"]
+}
+```
+
+##### Responses
+
+- `202 Accepted` — `{ "request_id": "uuid" }`
+- Errors: `400 Bad Request`, `401 Unauthorized`, `429 Too Many Requests`,
+  `500 Internal Server Error`.
+
+##### Retrieve result
+
+- `GET /api/v1/routes/{request_id}` returns the final route:
+
+```json
+{
+  "request_id": "uuid",
+  "status": "completed",
+  "route": {
+    "points": [{"lat": 53.3498, "lng": -6.2603, "name": "Trinity"}],
+    "distance_m": 1200
+  }
+}
+```
+
+WebSocket `route_generation_status` messages mirror these states and report
+timeouts or failures.
 
 The engine will rely on **OpenStreetMap (OSM) data and Wikidata** for rich POI
 info([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L58-L67)).
