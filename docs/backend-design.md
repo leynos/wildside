@@ -8,10 +8,9 @@ approach[^1].
 etc.) runs in a single codebase/binary for simplicity, but with clear internal
 module
 boundaries[^1].
- The code can be organized into domains (e.g. user accounts, POI data, routing
+ The code can be organised into domains (e.g. user accounts, POI data, routing
 engine) within one project (as a “modular monolith”). This yields fast
-development and easier debugging during early stages, avoiding the complexity
-of
+development and easier debugging during early stages, avoiding the complexity of
 microservices[^1].
  As load and features grow, these modules could be split out into services if
 needed, but initially everything is contained in one deployable unit. The only
@@ -39,15 +38,15 @@ efficiency[^1].
 
 Alongside HTTP, **Actix WS** (WebSockets) enables real-time bidirectional
 communication. Clients upgrade the connection via `GET /ws`, authenticate with
-the same bearer token used for HTTP requests (for example, supplied as a query
-parameter or cookie), and subscribe to `route_generation_status` events for a
-`request_id`. The server pushes updates asynchronously, which is useful for
+the same bearer token used for HTTP requests (for example, via the
+`Sec-WebSocket-Protocol` header or a cookie; avoid query parameters), and
+subscribe to `route_generation_status` events for a `request_id`. The server pushes updates asynchronously, which is useful for
 long-running processes and live features. For example, when a user requests a
 personalised route, the server immediately acknowledges the request, then
 pushes progress or completion events via WebSocket once the route is computed.
 Similarly, if a user is actively walking, the client can send location updates
 and the server can push contextual tips or next-step guidance in real time.
-Actix’s actor system is well-suited for managing these concurrent websocket
+Actix’s actor system is well-suited for managing these concurrent WebSocket
 sessions.
 
 *Observability:* The web layer is instrumented for visibility. An Actix
@@ -153,7 +152,7 @@ unbounded growth.
 #### Retrieve result
 
 - `GET /api/v1/routes/{request_id}`:
-  - returns `202 Accepted` while pending (include `Retry-After` seconds),
+  - returns `202 Accepted` with `Retry-After: <seconds>` while pending,
   - returns the final route on completion:
 
 ```json
