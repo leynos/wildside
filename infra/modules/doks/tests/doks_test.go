@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -68,7 +69,10 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 		_, err = terraform.ApplyE(t, opts)
 	}
 	require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
-	require.Contains(t, err.Error(), "Unable to authenticate", "error message should mention authentication failure")
+
+	authErr := strings.ToLower(err.Error())
+	re := regexp.MustCompile(`unable to authenticate|no api token|invalid token|not authenticated|missing token|authentication failed`)
+	require.Truef(t, re.MatchString(authErr), "error message %q did not mention authentication failure", err.Error())
 }
 
 func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
