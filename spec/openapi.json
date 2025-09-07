@@ -21,9 +21,8 @@
       }
     }
   ],
-  "security": [{ "cookieAuth": [] }],
   "paths": {
-    "/api/users": {
+    "/api/v1/users": {
       "get": {
         "tags": ["users"],
         "operationId": "listUsers",
@@ -33,6 +32,11 @@
           "description": "Cursor-based pagination guideline",
           "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
         },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Users (maximum 100 items)",
@@ -63,9 +67,50 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "500": { "$ref": "#/components/responses/InternalServerError" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/v1/login": {
+      "post": {
+        "tags": ["users"],
+        "operationId": "login",
+        "summary": "Log in",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Session cookie",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       }
     }
@@ -82,19 +127,31 @@
       "Unauthorized": {
         "description": "Unauthorized",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "Forbidden": {
         "description": "Forbidden",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "InternalServerError": {
         "description": "Internal server error",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       }
     },
@@ -160,6 +217,25 @@
             "description": "Stable user identifier",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "format": "uuid"
+          }
+        }
+      },
+      "LoginRequest": {
+        "title": "LoginRequest",
+        "type": "object",
+        "description": "User login request",
+        "additionalProperties": false,
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Username",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "description": "Password",
+            "example": "password"
           }
         }
       }

@@ -139,51 +139,83 @@ API and WebSocket traffic.
 
 - **Implementation Tasks:**
 
-  - [ ] **Session Management:** Implement stateless, encrypted, authenticated
-    cookie sessions. Use `actix-session` with a cookie backend configured as:
-    `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), an explicit
-    `path`, and set `domain` only when sharing across subdomains. Set a bounded
-    `Max-Age` to limit session lifetime.
-    Load the signing key from a high-entropy (≥64-byte), read-only managed
-    secret (for example, a Kubernetes `Secret` or Vault) and mount or inject it
-    for the service at runtime—avoid sourcing it from a plain environment
-      variable. Rotate the key regularly by rolling the secret and reloading it,
-      so stale cookies are invalidated.
+  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
+    Use the `actix-session` crate with a cookie-based backend. Load the signing
+    key from a secret store (for example, a Kubernetes Secret or Vault) and
+    mount or inject it for the service at runtime. Name the cookie `session`
+    and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
+    (or `Strict`). Startup must abort in production if the key file cannot be
+    read; a temporary key is permitted only in development when
+    `SESSION_ALLOW_EPHEMERAL=1`.
 
     ```rust
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::{time::Duration, Key, SameSite};
-    use std::{env, fs};
+    use actix_web::web;
+    use std::env;
+    use std::io;
+    use tracing::warn;
 
     let key_path = env::var("SESSION_KEY_FILE")
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
-    let key_bytes = fs::read(key_path)?;
-    let key = Key::derive_from(&key_bytes);
+    let key = match std::fs::read(&key_path) {
+        Ok(bytes) => Key::from(&bytes),
+        Err(e) => {
+            let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
+            if cfg!(debug_assertions) || allow_dev {
+                warn!(path = %key_path, error = %e, "using temporary session key (dev only)");
+                Key::generate()
+            } else {
+                return Err(io::Error::other(format!(
+                    "failed to read session key at {key_path}: {e}"
+                )));
+            }
+        }
+    };
 
-    let session_middleware =
-        SessionMiddleware::builder(CookieSessionStore::default(), key)
-            .cookie_name("wildside")
-            .cookie_secure(true)
-            .cookie_http_only(true)
-            .cookie_same_site(SameSite::Lax)
-            // Set at deploy time if required:
-            //.cookie_domain(Some("example.com".into()))
-            .cookie_path("/")
-            .cookie_max_age(Duration::hours(2))
-            .build();
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
+        .map(|v| v != "0")
+        .unwrap_or(true);
+    let session_middleware = SessionMiddleware::builder(
+        CookieSessionStore::default(),
+        key,
+    )
+    .cookie_name("session")
+    .cookie_path("/")
+    .cookie_secure(cookie_secure)
+    .cookie_http_only(true)
+    .cookie_same_site(SameSite::Lax)
+    // Set at deploy time if required:
+    //.cookie_domain(Some("example.com".into()))
+    .cookie_max_age(Duration::hours(2))
+    .build();
+
+    let api = web::scope("/api/v1")
+        .wrap(session_middleware)
+        .service(list_users);
     ```
+
+    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    external store such as Redis. Browsers cap individual cookies at roughly 4
+    KB, so session payloads must remain well under this limit.
+
+    Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
+    plain HTTP; production deployments should leave this unset to enforce HTTPS.
 
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`
     environment variable). Use high-entropy (≥64-byte) keys and rotate them by
-      deploying new secrets and reloading the service, so the fresh key takes
-      effect while the previous key remains available for validating existing
-      sessions during the rollout.
+    deploying new secrets and reloading the service, so the fresh key takes
+    effect while the previous key remains available for validating existing
+    sessions during the rollout. For seamless rotation, run at least two
+    replicas and perform a rolling update, so pods with the prior key continue
+    to validate existing cookies until expiry. Scope the middleware to routes
+    that require authentication. Developers can opt into an ephemeral session
+    key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
+    unset so startup fails if the key file is unreadable.
 
-    For seamless rotation, run at least two replicas and perform a rolling
-      update, so pods with the prior key continue to validate existing cookies
-      until expiry. A single-replica restart replaces the key atomically and will
-      invalidate all existing sessions immediately.
+  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
+        and initialise sessions.
 
   - [ ] **Observability:**
 
@@ -690,7 +722,7 @@ All REST endpoints are prefixed with `/api/v1`.
 
 | Method | Path | Description | Authentication |
 | ------ | ---------------------------- | ----------------------------------------------------- | -------------- |
-| `POST` | `/api/v1/users` | Creates a new anonymous user session. | None |
+| `POST` | `/api/v1/login` | Establishes a user session from credentials. | None |
 | `GET` | `/api/v1/users/me` | Retrieves the current user's profile and preferences. | Session Cookie |
 | `PUT` | `/api/v1/users/me/interests` | Updates the current user's selected interest themes. | Session Cookie |
 

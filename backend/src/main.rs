@@ -1,6 +1,9 @@
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
-use actix_web::{get, App, HttpResponse, HttpServer};
+use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+use actix_web::cookie::{Key, SameSite};
+use actix_web::{get, web, App, HttpResponse, HttpServer};
+use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 #[cfg(debug_assertions)]
@@ -8,7 +11,7 @@ use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
-use backend::api::users::list_users;
+use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
@@ -36,9 +39,44 @@ async fn main() -> std::io::Result<()> {
         warn!(error = %e, "tracing init failed");
     }
 
-    HttpServer::new(|| {
+    let key_path =
+        env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
+    let key = match std::fs::read(&key_path) {
+        Ok(bytes) => Key::derive_from(&bytes),
+        Err(e) => {
+            let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
+            if cfg!(debug_assertions) || allow_dev {
+                warn!(path = %key_path, error = %e, "using temporary session key (dev only)");
+                Key::generate()
+            } else {
+                return Err(std::io::Error::other(format!(
+                    "failed to read session key at {key_path}: {e}"
+                )));
+            }
+        }
+    };
+
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
+        .map(|v| v != "0")
+        .unwrap_or(true);
+
+    HttpServer::new(move || {
+        let session_middleware =
+            SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                .cookie_name("session".to_owned())
+                .cookie_path("/".to_owned())
+                .cookie_secure(cookie_secure)
+                .cookie_http_only(true)
+                .cookie_same_site(SameSite::Lax)
+                .build();
+
+        let api = web::scope("/api/v1")
+            .wrap(session_middleware)
+            .service(login)
+            .service(list_users);
+
         let app = App::new()
-            .service(list_users)
+            .service(api)
             .service(ws::ws_entry)
             .service(ready)
             .service(live);
