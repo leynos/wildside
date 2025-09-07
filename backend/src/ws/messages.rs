@@ -34,7 +34,7 @@ impl UserCreated {
     ///
     /// ```
     /// use uuid::Uuid;
-    /// let trace = Uuid::nil();
+    /// let trace = Uuid::parse_str("123e4567-e89b-42d3-a456-426614174000").expect("valid UUID");
     /// let msg = UserCreated::with_trace_id(trace, "id", "Alice");
     /// assert_eq!(msg.trace_id, trace);
     /// ```
@@ -61,7 +61,7 @@ mod tests {
     #[rstest]
     fn serializes_user_created() {
         let msg = UserCreated::new("123", "Alice");
-        let value = serde_json::to_value(&msg).expect("serialises UserCreated to JSON");
+        let value = serde_json::to_value(&msg).expect("failed to convert message to JSON value");
         assert!(value.get("trace_id").is_some());
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(
@@ -72,9 +72,9 @@ mod tests {
     }
     #[rstest]
     fn serializes_user_created_with_trace() {
-        let trace = Uuid::nil();
+        let trace = Uuid::parse_str("123e4567-e89b-42d3-a456-426614174000").expect("valid UUID");
         let msg = UserCreated::with_trace_id(trace, "123", "Alice");
-        let value = serde_json::to_value(&msg).expect("serialises UserCreated to JSON");
+        let value = serde_json::to_value(&msg).expect("failed to convert message to JSON value");
         let trace_str = trace.to_string();
         assert_eq!(
             value.get("trace_id").and_then(Value::as_str),
