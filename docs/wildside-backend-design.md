@@ -543,8 +543,18 @@ flowchart TD
 #### 3.3.4. Implementation Tasks
 
 - [ ] **Initial Data Seeding:** Build a Rust-based ingestion tool using the
-  `osmpbf` crate, as outlined in the backend design, to perform the one-time
-  pre-seeding of the database for a defined geographic area (Edinburgh).
+  `osmpbf` crate to perform the one-time pre-seeding of the database for a
+  defined geographic area (Edinburgh).
+   - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
+   - Mapping: Nodes → POIs; Ways/Relations → POIs via centroid; persist `id`
+     (OSM element id), `location` (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
+   - Write path: UPSERT by `id` in batches with transactions; ensure GIST on
+     `location` and GIN on `osm_tags` exist before bulk load.
+   - Determinism: Canonicalise tag keys/values; record import provenance
+     (source URL, timestamp, bbox) for audit.
+   - CLI: `ingest-osm --pbf edinburgh.osm.pbf --bbox  --tags
+     amenity,historic,tourism,leisure,natural`.
+   - Performance: Stream with bounded memory; parallel decode when CPU>1.
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result
