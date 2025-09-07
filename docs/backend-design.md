@@ -84,7 +84,7 @@ Operational notes:
 - Set a distinct ingress route to forward `/tiles/*` to the Martin service,
   avoiding Actix handlers.
 - Configure `--base-path /tiles`, connection pool size, worker processes, and
-  in-memory cache size; enable Brotli or Gzip.
+  in-memory cache size; enable Brotli or gzip compression.
 - Enforce CORS for tile endpoints, and apply rate limits or CDN caching at the
   edge.
 
