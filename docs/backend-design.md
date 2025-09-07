@@ -127,8 +127,12 @@ unbounded growth.
 
 - **Method:** `POST`
 - **Authentication:** Bearer token required.
-- **Idempotency:** Optional `Idempotency-Key` header; repeated requests with the
-  same key return the original `request_id`.
+- **Idempotency:** Optional `Idempotency-Key` header honoured for 24 hours by
+  default. Repeated requests with the same key and identical payload return the
+  original `request_id` and stored response. Submitting a different payload with
+  the same key within the window results in `409 Conflict` with an explicit
+  `Idempotency key conflict` error. The TTL is configurable and keys persist in
+  PostgreSQL to survive restarts.
 - **Rate limits:** Subject to per-user quota (for example, 60 requests per
   minute).
 
