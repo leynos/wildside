@@ -124,7 +124,7 @@ stores the route in PostgreSQL for up to 24 hours. A scheduled cleanup task
 removes expired records and their associated `request_id`s to prevent
 unbounded growth.
 
-#### `/api/v1/routes` API contract
+### `/api/v1/routes` API contract
 
 - **Method:** `POST`
 - **Authentication:** Bearer token required.
@@ -133,7 +133,7 @@ unbounded growth.
 - **Rate limits:** Subject to per-user quota (for example, 60 requests per
   minute).
 
-##### Request body
+#### Request body
 
 ```json
 {
@@ -143,20 +143,22 @@ unbounded growth.
 }
 ```
 
-##### Responses
+#### Responses
 
 - `202 Accepted` — `{ "request_id": "uuid" }`
 - Errors: `400 Bad Request`, `401 Unauthorized`, `429 Too Many Requests`,
-  `500 Internal Server Error`.
+  `500 Internal Server Error`, `504 Gateway Timeout`.
 
-##### Retrieve result
+#### Retrieve result
 
-- `GET /api/v1/routes/{request_id}` returns the final route:
+- `GET /api/v1/routes/{request_id}`:
+  - returns `202 Accepted` while pending (include `Retry-After` seconds),
+  - returns the final route on completion:
 
 ```json
 {
   "request_id": "uuid",
-  "status": "completed",
+  "status": "succeeded",
   "route": {
     "points": [{"lat": 53.3498, "lng": -6.2603, "name": "Trinity"}],
     "distance_m": 1200
@@ -166,6 +168,23 @@ unbounded growth.
 
 WebSocket `route_generation_status` messages mirror these states and report
 timeouts or failures.
+
+Example `route_generation_status` event (JSON over WebSocket):
+
+```json
+{
+  "type": "route_generation_status",
+  "request_id": "uuid",
+  "status": "queued",
+  "progress": 0
+}
+```
+
+Status transitions:
+
+- `queued` → `running` → `succeeded`
+- `running` → `failed` (with `"error": "string"`)
+- On timeout, emit `failed` with `"error": "timeout"`. Progress is 0–100.
 
 The engine will rely on **OpenStreetMap (OSM) data and Wikidata** for rich POI
 info[^1].
@@ -610,7 +629,6 @@ Here’s how these tools work with the application components:
   – mostly IDs or hashes if needed. Over time, this analytic data guides UX
   improvements and identifies drop-off points (for instance, if many users
   start route generation but fail to complete it).
-  generation but few finish, that’s a red flag to investigate).
 
 - **Integration of O11y with Components:** Each major component is wired with
   observability:
