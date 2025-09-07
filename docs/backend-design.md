@@ -528,14 +528,13 @@ strict preference has been chosen yet. Options include:
 
 Certain operations in Wildside are best handled asynchronously by
 background workers rather than directly in the web request/response
-cycle. Examples include: generating a complex route (if we choose to fully
-offload it), pre-processing map data, sending notification emails or push
-messages, and periodic maintenance tasks (like refreshing the POI
-database or pruning old data). To facilitate this, the architecture
-includes a task queue and worker component. The main backend enqueues
-jobs, and one or more worker processes dequeue and execute them in the
-background. This decouples heavy lifting from user-facing request
-latency.
+cycle. Examples include generating a complex route (if fully offloaded),
+preprocessing map data, sending email or push notifications, and periodic
+maintenance tasks such as refreshing the POI database or pruning old
+data. The architecture therefore includes a task queue and worker
+component. The main backend enqueues jobs, and one or more worker
+processes dequeue and execute them in the background. This decouples
+heavy lifting from user-facing request latency.
 
 For implementation, Wildside uses Apalis backed by Redis. Apalis supports
 retries, cron-like scheduling, and concurrency limits. Workers can run as
@@ -549,12 +548,27 @@ With `apalis-redis`, each queue uses a distinct namespace; configure
 separate prefixes for `route_generation` and `enrichment`. Prefer a
 dedicated Redis instance for queues, or at least different database
 indices and key prefixes, rather than sharing the application cache to
-avoid head-of-line blocking and key collisions. Define a clear
-reliability policy:
+avoid head-of-line blocking and key collisions. Example configuration:
 
-- use bounded exponential backoff with a maximum retry count;
-- route exhausted jobs to a dead-letter queue (DLQ) for inspection;
-- require idempotency per job type (for example, a deduplication key), so
+```rust
+use apalis_redis::{Config, RedisStorage};
+use redis::Client;
+
+fn setup_queues(redis: Client) {
+    // Route generation queue
+    let rg_cfg = Config::default().set_namespace("route_generation");
+    let _rg = RedisStorage::new_with_config(redis.clone(), rg_cfg);
+    // Enrichment queue
+    let en_cfg = Config::default().set_namespace("enrichment");
+    let _en = RedisStorage::new_with_config(redis, en_cfg);
+}
+```
+
+Define a clear reliability policy:
+
+- use bounded exponential backoff with a maximum retry count.
+- route exhausted jobs to a dead-letter queue (DLQ) for inspection.
+- require idempotency per job type (for example, a deduplication key) so
   retries do not duplicate work.
 
 With Apalis, the Actix Web server produces tasks and worker(s) consume
@@ -574,18 +588,34 @@ schedule.
 `GenerateRouteJob` is the primary task on `route_generation`. Suggested
 schema:
 
-- `request_id` (UUID) – correlates logs for a single request;
-- `idempotency_key` (string) – deduplicates retries;
-- `user_id` (UUID) – identifies the requester;
-- `start_point` (GeoPoint) – origin coordinates;
+- `request_id` (UUID) – correlates logs for a single request.
+- `idempotency_key` (string) – deduplicates retries.
+- `user_id` (UUID) – identifies the requester.
+- `start_point` (GeoPoint) – origin coordinates.
 - `prefs` (RoutePrefs) – routing preferences.
 
 ```rust
-#[derive(serde::Serialize, serde::Deserialize)]
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GeoPoint {
+    lat: f64,
+    lon: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RoutePrefs {
+    // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GenerateRouteJob {
-    request_id: uuid::Uuid,      // trace correlation
-    idempotency_key: String,     // dedup across retries
-    user_id: uuid::Uuid,
+    // trace correlation
+    request_id: Uuid,
+    // dedup across retries
+    idempotency_key: String,
+    user_id: Uuid,
     start_point: GeoPoint,
     prefs: RoutePrefs,
 }
@@ -595,21 +625,19 @@ Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at-least-once, idempotent, retry-with-backoff,
 and DLQ semantics.
 
-*Observability:* The task worker system is instrumented to ensure it runs
-smoothly. Key metrics include the **queue length** (number of pending jobs),
-job throughput, and job success/failure counts. If using Apalis or similar,
-hooks can increment Prometheus counters (e.g. `jobs_success_total`,
-`jobs_failed_total`) and gauge how many jobs are in-flight. **Job execution
-time** per job type is also measured to detect consistently slow tasks. In
-K8s, if the workers are separate pods, each can expose a `/metrics` endpoint so
-Prometheus can scrape worker-specific stats. Additionally, any exceptions or
-failed tasks should be logged with details (and possibly sent to an error
-tracking system). From the user analytics side, background jobs aren’t tracked
-directly in PostHog (since those are internal), but their outcomes affect user
-experience. For instance, if a route generation job fails, the user might
-receive an error – that could trigger a PostHog event like
-“RouteGenerationFailed” for analysis of how often and where it happens.
-Overall, the background workers are transparent to the user but carefully
+*Observability:* Instrument the task worker system to ensure smooth
+operation. Track the **queue length** (pending jobs), throughput, and
+success/failure counts. When using Apalis or similar, hook into their
+events to increment Prometheus counters (for example,
+`jobs_success_total`, `jobs_failed_total`) and gauge how many jobs are
+in‑flight. Measure **job execution time** per job type to identify
+consistently slow tasks. In Kubernetes, expose a `/metrics` endpoint on
+worker pods so Prometheus can scrape worker‑specific stats. Log
+exceptions and failed tasks with enough context for diagnosis (and feed
+an error tracker if available). Background jobs are internal, but their
+outcomes affect user experience; emit analytics for notable outcomes
+(for example, a “RouteGenerationFailed” event) to understand frequency
+and impact. Overall, keep workers transparent to users but closely
 monitored via metrics and logs.
 
 ## Session Management and Security
