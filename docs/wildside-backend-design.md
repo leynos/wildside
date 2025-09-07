@@ -214,7 +214,8 @@ API and WebSocket traffic.
     key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
     unset so startup fails if the key file is unreadable.
 
-  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials and initialise sessions.
+  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
+        and initialise sessions.
 
   - [ ] **Observability:**
 
