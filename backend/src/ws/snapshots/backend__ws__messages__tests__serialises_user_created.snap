@@ -4,6 +4,5 @@ expression: value
 ---
 {
   "display_name": "Alice",
-  "id": "123",
-  "trace_id": "[trace_id]"
+  "id": "123"
 }

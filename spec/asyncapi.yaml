@@ -35,19 +35,24 @@ components:
       title: User created event
       contentType: application/json
       correlationId:
-        location: "$message.payload#/trace_id"
-      payload:
+        location: "$message.header#/trace_id"
+      headers:
         type: object
         additionalProperties: false
         required:
           - trace_id
-          - id
-          - display_name
         properties:
           trace_id:
             type: string
             description: Correlation identifier for tracing across systems
             format: uuid
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+          - id
+          - display_name
+        properties:
           id:
             type: string
             description: Unique user identifier
@@ -63,8 +68,9 @@ components:
             pattern: '^[A-Za-z0-9_ ]{3,32}$'
       examples:
         - name: minimal
-          summary: Minimal valid payload
-          payload:
+          summary: Minimal valid message
+          headers:
             trace_id: "123e4567-e89b-42d3-a456-426614174000"
+          payload:
             id: "123e4567-e89b-42d3-a456-426614174001"
             display_name: "Ada Lovelace"

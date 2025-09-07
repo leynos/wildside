@@ -3,87 +3,73 @@ use actix::Message;
 use serde::Serialize;
 use uuid::Uuid;
 
+/// Trait for correlated messages that expose a trace identifier.
+pub trait Correlated {
+    fn trace_id(&self) -> &Uuid;
+}
+
+/// Generic envelope that attaches a correlation identifier.
+#[derive(Debug, Serialize, Message)]
+#[rtype(result = "()")]
+pub struct Envelope<T> {
+    #[serde(rename = "trace_id")]
+    trace_id: Uuid,
+    #[serde(flatten)]
+    payload: T,
+}
+
+impl<T> Envelope<T> {
+    /// Construct with a fresh trace identifier.
+    pub fn new(payload: T) -> Self {
+        Self {
+            trace_id: Uuid::new_v4(),
+            payload,
+        }
+    }
+
+    /// Construct with the provided trace identifier.
+    pub fn with_trace_id(trace_id: Uuid, payload: T) -> Self {
+        Self { trace_id, payload }
+    }
+}
+
+impl<T> Correlated for Envelope<T> {
+    fn trace_id(&self) -> &Uuid {
+        &self.trace_id
+    }
+}
+
 /// Payload emitted when a new user is created.
 #[derive(Debug, Serialize, Message)]
 #[rtype(result = "()")]
 pub struct UserCreated {
-    /// Correlation identifier for cross-service tracing.
-    pub trace_id: Uuid,
     /// The user's unique identifier.
     pub id: String,
     /// The user's chosen display name.
     pub display_name: String,
 }
 
-impl UserCreated {
-    /// Construct with a fresh trace identifier.
-    ///
-    /// ```
-    /// let msg = UserCreated::new("id", "Alice");
-    /// assert_eq!(msg.display_name, "Alice");
-    /// ```
-    pub fn new(id: impl Into<String>, display_name: impl Into<String>) -> Self {
-        Self {
-            trace_id: Uuid::new_v4(),
-            id: id.into(),
-            display_name: display_name.into(),
-        }
-    }
-
-    /// Construct with the provided trace identifier.
-    ///
-    /// ```
-    /// use uuid::Uuid;
-    /// let trace = Uuid::parse_str("123e4567-e89b-42d3-a456-426614174000").expect("valid UUID");
-    /// let msg = UserCreated::with_trace_id(trace, "id", "Alice");
-    /// assert_eq!(msg.trace_id, trace);
-    /// ```
-    pub fn with_trace_id(
-        trace_id: Uuid,
-        id: impl Into<String>,
-        display_name: impl Into<String>,
-    ) -> Self {
-        Self {
-            trace_id,
-            id: id.into(),
-            display_name: display_name.into(),
-        }
-    }
-}
+/// Actix message variant carrying `UserCreated`.
+pub type UserCreatedMessage = Envelope<UserCreated>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use rstest::rstest;
     use serde_json::Value;
-    use uuid::Uuid;
 
     #[rstest]
-    fn serializes_user_created() {
-        let msg = UserCreated::new("123", "Alice");
+    fn serialises_user_created() {
+        let msg = UserCreated {
+            id: "123".into(),
+            display_name: "Alice".into(),
+        };
         let value = serde_json::to_value(&msg).expect("failed to convert message to JSON value");
-        assert!(value.get("trace_id").is_some());
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(
             value.get("display_name").and_then(Value::as_str),
             Some("Alice")
         );
-        insta::assert_json_snapshot!(value, { ".trace_id" => "[trace_id]" });
-    }
-    #[rstest]
-    fn serializes_user_created_with_trace() {
-        let trace = Uuid::parse_str("123e4567-e89b-42d3-a456-426614174000").expect("valid UUID");
-        let msg = UserCreated::with_trace_id(trace, "123", "Alice");
-        let value = serde_json::to_value(&msg).expect("failed to convert message to JSON value");
-        let trace_str = trace.to_string();
-        assert_eq!(
-            value.get("trace_id").and_then(Value::as_str),
-            Some(trace_str.as_str())
-        );
-        assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
-        assert_eq!(
-            value.get("display_name").and_then(Value::as_str),
-            Some("Alice")
-        );
+        insta::assert_json_snapshot!(value);
     }
 }
