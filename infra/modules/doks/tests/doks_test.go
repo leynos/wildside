@@ -111,6 +111,9 @@ func TestDoksModulePolicy(t *testing.T) {
 	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
 	policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
 	require.NoError(t, err)
+	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
+		t.Skip("conftest not found; skipping policy test")
+	}
 	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
 	cmd.Dir = tfDir
 	output, err := cmd.CombinedOutput()
