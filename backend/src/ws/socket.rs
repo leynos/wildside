@@ -56,7 +56,7 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
             Ok(Message::Text(name)) => {
                 self.last_heartbeat = Instant::now();
                 if is_valid_display_name(&name) {
-                    let msg = UserCreated::new(Uuid::new_v4().to_string(), name.to_string());
+                    let msg = UserCreated::new(Uuid::new_v4().to_string(), name);
                     ctx.address().do_send(msg);
                 } else {
                     warn!(display_name = %name, "Rejected invalid display name");
@@ -104,6 +104,8 @@ mod tests {
     #[case("a".repeat(33), false)]
     #[case(String::from("Alice_Bob 123"), true)]
     #[case(String::from("bad$char"), false)]
+    #[case(String::from("abc"), true)]
+    #[case("a".repeat(32), true)]
     fn is_valid_display_name_cases(#[case] name: String, #[case] expected: bool) {
         assert_eq!(is_valid_display_name(&name), expected);
     }
