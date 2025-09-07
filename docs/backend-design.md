@@ -8,7 +8,7 @@ approach[^1].
 etc.) runs in a single codebase/binary for simplicity, but with clear internal
 module
 boundaries[^1].
- The code can be organised into domains (e.g. user accounts, POI data, routing
+ The code can be organized into domains (e.g. user accounts, POI data, routing
 engine) within one project (as a “modular monolith”). This yields fast
 development and easier debugging during early stages, avoiding the complexity of
 microservices[^1].
