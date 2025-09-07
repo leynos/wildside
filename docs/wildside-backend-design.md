@@ -545,26 +545,29 @@ flowchart TD
 - [ ] **Initial Data Seeding:** Build a Rust-based ingestion tool using the
   `osmpbf` crate to perform the one-time pre-seeding of the database for a
   defined geographic area (Edinburgh).
-   - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
-   - Mapping: Nodes → POIs; Ways/Relations → POIs via centroid; persist `id`
-     (OSM element id), `location` (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
-   - Write path: UPSERT by `id` in batches with transactions; ensure a UNIQUE
-     constraint on `id` backs the upsert. Create GiST on `location` and GIN on
-     `osm_tags` after the initial bulk load to maximise ingest throughput.
-   - Determinism: Canonicalise tag keys/values; record import provenance
-     (source URL, timestamp, bbox) for audit.
-   - CLI:
-     ```bash
-     ingest-osm --pbf edinburgh.osm.pbf \
-       --bbox <minLon,minLat,maxLon,maxLat> \
-       --tags amenity,historic,tourism,leisure,natural
-     ```
-   - Performance: Stream with bounded memory; parallel decode when CPU > 1.
-   - Acceptance criteria:
-     - CLI runs against an Edinburgh extract and completes within a bounded time.
-     - Idempotent re-runs do not duplicate POIs (UPSERT-by-id verified).
-     - UNIQUE(id), GiST(location), and GIN(osm_tags) exist post-load.
-     - Import provenance (source URL, timestamp, bbox) recorded.
+
+  - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
+  - Mapping: Nodes → POIs; Ways/Relations → POIs via centroid; persist `id`
+    (OSM element id), `location` (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
+  - Write path: UPSERT by `id` in batches with transactions; ensure a UNIQUE
+    constraint on `id` backs the upsert. Create GiST on `location` and GIN on
+    `osm_tags` after the initial bulk load to maximise ingest throughput.
+  - Determinism: Canonicalise tag keys/values; record import provenance
+    (source URL, timestamp, bbox) for audit.
+  - CLI:
+
+    ```bash
+    ingest-osm --pbf edinburgh.osm.pbf \
+      --bbox <minLon,minLat,maxLon,maxLat> \
+      --tags amenity,historic,tourism,leisure,natural
+    ```
+
+  - Performance: Stream with bounded memory; parallel decode when CPU > 1.
+  - Acceptance criteria:
+    - CLI runs against an Edinburgh extract and completes within a bounded time.
+    - Idempotent re-runs do not duplicate POIs (UPSERT-by-id verified).
+    - UNIQUE(id), GiST(location), and GIN(osm_tags) exist post-load.
+    - Import provenance (source URL, timestamp, bbox) recorded.
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result
@@ -580,46 +583,31 @@ Asynchronous and long-running tasks are executed by a separate pool of worker
 processes to avoid blocking the main API server.
 
 - **Technology:** Apalis (with a Redis or Postgres backend).
-
 - **Current Status:** This component is purely at the design stage. No
   implementation exists.
-
 - **Key Responsibilities:**
-
   - Execute computationally intensive jobs (`GenerateRouteJob`).
-
   - Perform data enrichment tasks (`EnrichmentJob`).
-
   - Perform periodic maintenance tasks (e.g., refreshing data from external
     sources).
-
 - **Implementation Tasks:**
-
   - [ ] **Integration:**
-
     - Add `apalis` to `backend/Cargo.toml`.
-
     - Configure Apalis to use Redis as the job queue broker, with separate
       queues for high-priority (e.g., `route_generation`) and low-priority
       (`enrichment`) tasks.
-
     - Enforce bounded retries with exponential backoff and per-job timeouts,
       sending exhausted jobs to a dead-letter queue.
-
   - [ ] **Worker Binary:** Modify `main.rs` to launch in "worker" mode based
     on a CLI flag or environment variable (`WILDSIDE_MODE=worker`). In this
     mode, it should start the Apalis worker pool.
-
   - [ ] **Job Definitions:**
-
     - Define and implement the `GenerateRouteJob` as previously described.
       It should now include the logic to trigger the `EnrichmentJob`.
-
     - Define and implement the `EnrichmentJob`. This job's handler will
       construct and execute a query against the Overpass API with an HTTP
       client that enforces network timeouts. It will use Diesel to `UPSERT` the
       results into the `pois` table.
-
   - [ ] **Deployment:** Create a second Kubernetes `Deployment` for the
     workers.
 
@@ -628,28 +616,19 @@ processes to avoid blocking the main API server.
 An in-memory cache is used to improve performance and reduce database load.
 
 - **Technology:** Redis
-
 - **Current Status:** This component is purely at the design stage.
-
 - **Key Responsibilities:**
-
   - Cache the results of expensive, deterministic operations, such as route
     generation for common parameters.
-
   - Cache frequently accessed, slow-changing data from the database (e.g.,
     popular POIs).
-
 - **Implementation Tasks:**
-
   - [ ] **Integration:** Add the `redis` crate and configure a Redis
     connection pool available to the Actix application state.
-
   - [ ] **Route Caching:**
-
     - Before enqueuing a `GenerateRouteJob`, the API handler must first
       check Redis for a cached result. The cache key should be a hash of the
       route request parameters.
-
     - On successful route generation, the background worker must write the
       result to the cache with a reasonable TTL (e.g., 24 hours).
 
