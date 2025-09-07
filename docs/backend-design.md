@@ -66,7 +66,7 @@ the frontend could send them) to record user actions (e.g. “RouteGenerated”,
 will have robust logging and metrics: Prometheus for low-level performance and
 error monitoring, and PostHog for high-level user behavior tracking.
 
-## Martin Tile Server
+## Martin tile server
 
 To deliver map tiles without burdening the core API, Wildside deploys the
 **Martin** tile server as a distinct service. Martin connects to the same
@@ -80,11 +80,14 @@ logic.
 
 Operational notes:
 
-- Use a read-only Postgres role and a separate connection string for Martin.
+- Use a read-only Postgres role (SELECT on required schemas/tables only) and a
+  separate connection string for Martin.
 - Set a distinct ingress route to forward `/tiles/*` to the Martin service,
   avoiding Actix handlers.
 - Configure `--base-path /tiles`, connection pool size, worker processes, and
   in-memory cache size; enable Brotli or gzip compression.
+- Ensure geometries are in EPSG:3857 (Web Mercator), or set Martin’s
+  `default_srid` accordingly to avoid empty tiles.
 - Enforce CORS for tile endpoints, and apply rate limits or CDN caching at the
   edge.
 
