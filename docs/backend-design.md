@@ -249,6 +249,50 @@ not directly relevant to PostHog events, but a successful cache hit does
 indirectly improve user experience (faster response) which could reflect in
 user retention metrics over time.
 
+### Cache and job queue flow
+
+The sequence below illustrates how a route lookup is cached, how jobs move
+through Redis as the Apalis queue, and how Prometheus gathers telemetry.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant API as Backend Service
+    participant R as Redis (Cache + Queue)
+    participant W as Apalis Worker
+    participant M as Prometheus
+
+    rect rgb(235, 245, 255)
+    User->>API: Request needing route lookup
+    API->>R: GET cache:route_lookup:<key>
+    alt Cache hit
+        R-->>API: Value
+        API-->>User: Respond
+        API->>M: cache_route_lookup_hits_total++
+    else Cache miss
+        R-->>API: MISS
+        API->>API: Compute route
+        API->>R: SET cache:route_lookup:<key>=value (TTL)
+        API-->>User: Respond
+        API->>M: cache_route_lookup_misses_total++
+    end
+    end
+
+    rect rgb(240, 255, 240)
+    API->>R: ENQUEUE job (Apalis queue)
+    Note over R,W: Redis acts as job-queue backend
+    W->>R: DEQUEUE job
+    W->>W: Process job
+    W->>R: ACK/Result
+    end
+
+    rect rgb(255, 248, 230)
+    R-->>M: Export Redis metrics (via exporter)
+    Note over M: Scrape for cache/queue telemetry
+    end
+```
+
 ## Background task workers
 
 Certain operations in Wildside are best handled asynchronously by **background
