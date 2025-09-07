@@ -3,16 +3,16 @@
 ## Monolithic Backend with Modular Design
 
 For the Wildside MVP, a **monolithic Rust backend** is the recommended
-approach[1].
+approach[^1].
  This means all core server functionality (API, WebSockets, business logic,
 etc.) runs in a single codebase/binary for simplicity, but with clear internal
 module
-boundaries[1].
+boundaries[^1].
  The code can be organized into domains (e.g. user accounts, POI data, routing
 engine) within one project (as a “modular monolith”). This yields fast
 development and easier debugging during early stages, avoiding the complexity
 of
-microservices[1].
+microservices[^1].
  As load and features grow, these modules could be split out into services if
 needed, but initially everything is contained in one deployable unit. The only
 exception is **background task workers**, which will run as separate
@@ -24,18 +24,18 @@ distributed architecture in the future.
 
 **Actix Web** will serve as the HTTP API framework for Wildside. Actix is a
 mature, high-performance asynchronous web framework in
-Rust[1].
+Rust[^1].
  It uses an actor model under the hood, enabling excellent concurrency for
 handling many simultaneous
-requests[1].
+requests[^1].
  The backend will expose RESTful endpoints for core features (e.g. generating a
 walking route, retrieving points of interest, user profile actions). These
 endpoints are defined in Actix Web and can be documented via OpenAPI (using
 tools like `utoipa` as noted in the
-repo)[2].
+repo)[^2].
  Each request is handled swiftly and safely thanks to Rust’s memory safety and
 Actix’s
-efficiency[1].
+efficiency[^1].
 
 Alongside HTTP, **Actix WS** (WebSockets) enables real-time bidirectional
 communication. Clients upgrade the connection via `GET /ws`, authenticate with
@@ -55,7 +55,7 @@ middleware tracks **HTTP request metrics** (counts, latency, error rates) and
 exposes them to Prometheus. Each API endpoint hit increments a counter (e.g.
 `http_requests_total{path,method,status}`) and records the response time
 histogram. A Prometheus scrape endpoint (e.g. `GET /metrics`) is provided on
-the Actix server to collect these metrics[2]. WebSocket events are also
+the Actix server to collect these metrics[^2]. WebSocket events are also
 monitored – for example, tracking active connection counts and messages sent or
 received. Additionally, hooks in request handlers log important events (such as
 “route generation requested”) to **PostHog** for product analytics. The backend
@@ -104,7 +104,7 @@ current location. In the backend architecture, the Wildside engine is used as a
 routes. The engine handles heavy data processing: parsing geospatial data,
 scoring points of interest (POIs), and solving the optimal route (an NP-hard
 Orienteering
-Problem)[1].
+Problem)[^1].
  Because this computation can be intensive, the design must ensure it doesn’t
 block the responsive handling of requests.
 
@@ -168,17 +168,17 @@ WebSocket `route_generation_status` messages mirror these states and report
 timeouts or failures.
 
 The engine will rely on **OpenStreetMap (OSM) data and Wikidata** for rich POI
-info[1].
+info[^1].
  Likely, an offline data pipeline will ingest OSM PBF files (using the `osmpbf`
 crate as per engine
-design[3])
+design[^3])
  into a database or efficient data structure. The backend can then query this
 data via Diesel (or the engine may handle it internally if it uses its own data
 store). For MVP simplicity, storing POIs in PostgreSQL with PostGIS is ideal,
 so the engine can fetch nearby POIs or graph data via SQL and then perform
 scoring/routing in Rust. The design document indeed suggests using PostgreSQL
 with PostGIS for geospatial queries and JSONB for OSM
-tags[1]
+tags[^1]
  – the engine can leverage that through Diesel models.
 
 *Observability:* The route engine component is instrumented to measure its
@@ -187,7 +187,7 @@ number of POIs considered, and success/failure counts are tracked. For example,
 a custom Prometheus histogram `wildside_engine_route_duration_seconds` records
 how long the algorithm runs for each request. If an external routing service or
 solver (like Valhalla) is used under the hood, those calls are monitored as
-well. The system sets a safe time limit on route calculations[1]; if the engine
+well. The system sets a safe time limit on route calculations[^1]; if the engine
 exceeds it, it aborts or returns a partial result. Such timeouts and any errors
 are logged (and potentially sent to an alerting system). Moreover, high-level
 events can be sent to PostHog, e.g. an event “RouteGenerated” with properties
@@ -203,12 +203,12 @@ application data and geospatial data. The database will include tables for
 users, their saved preferences or past routes, and the geospatial dataset of
 POIs/roads. Leveraging **PostGIS**, the Postgres DB can store location
 coordinates and enable spatial queries (e.g. find POIs within X
-meters)[1].
+meters)[^1].
  This is crucial for filtering and querying the map data efficiently. Each OSM
 feature’s tags (descriptive attributes) can be stored in a JSONB column, giving
 flexible schema-less ability to query things like `amenity=cafe` or
 `historic=yes` without a fixed schema for every
-tag[1].
+tag[^1].
  The design uses JSONB to accommodate OSM’s extensible tagging system while
 still benefiting from indexes and relational integrity.
 
@@ -216,7 +216,7 @@ still benefiting from indexes and relational integrity.
 database queries. Diesel was chosen for its compile-time guarantees – it will
 catch SQL errors (wrong column names, type mismatches) during compilation,
 reducing runtime
-errors[1].
+errors[^1].
  Using Diesel, the backend defines Rust structs for each table and uses them to
 execute queries. This ensures that as the schema evolves, the code won’t
 compile if it’s out of sync, which adds robustness to our data layer. Diesel
@@ -233,13 +233,13 @@ with a single database instance for everything.
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
-K8s[4]). Key metrics include query throughput, slow query counts, connections in
+K8s[^4]). Key metrics include query throughput, slow query counts, connections in
 use, and cache hit rates. From the application side, Diesel’s query logging
 detects slow queries and instruments timings for critical ones (for instance,
 wrap certain calls to measure their duration). The Prometheus operator scrapes
-database metrics (if using an operator or a managed DB with metrics)[4]. In
+database metrics (if using an operator or a managed DB with metrics)[^4]. In
 Grafana, dashboards plot DB metrics like CPU, I/O, and number of queries per
-second, as recommended by the deployment guide[4]. If any query regularly takes
+second, as recommended by the deployment guide[^4]. If any query regularly takes
 too long (impacting route generation latency), alerts highlight the slow part
 for optimisation (adding indexes or caching results). On the analytics side,
 database operations themselves aren’t directly in PostHog, but PostHog can
@@ -259,7 +259,7 @@ cache serves a few purposes in the Wildside backend:
   tour of the **same area with the exact same parameters**, the first
   computation’s result could be stored in cache so the second can be served
   instantly from
-  cache[1].
+  cache[^1].
    This is particularly useful if route generation is computationally heavy –
   caching common routes (or common subpaths) avoids recomputation,
   significantly speeding up responses in those cases.
@@ -309,7 +309,7 @@ In a Kubernetes deployment, Redis can run as an in-cluster service or use a
 managed Redis. For a lightweight start, a single small Redis instance (or even
 an in-memory cache within the app process for non-critical data) suffices. The
 cost analysis for the MVP even budgets a small Redis Cloud instance for
-caching[1], underlining its role. Memcached could alternatively be used for
+caching[^1], underlining its role. Memcached could alternatively be used for
 simple key-value caching if an even simpler, stateless cache layer is desired;
 however, Redis offers more features (persistence, pub/sub, etc.) that could be
 handy (for example, using Redis as the job queue backend in Apalis).
@@ -379,14 +379,13 @@ strict preference has been chosen yet. Options include:
   concurrency limits. Apalis would run inside the project (perhaps as a
   separate binary or part of the main binary launched in “worker mode”) and
   could use Postgres or Redis to store job state. This fits well with the stack
-  since those systems are already in use
-  ([5](https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=I%20used%20this%20for%20a,ended%20up%20using%20NATS%20instead))([5](https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features)).
+  since those systems are already in use[^5][^6].
 - **Underway:** A simpler job framework that uses Postgres as a durable store
   for tasks (using SQL for coordination). This approach avoids introducing
   another service; jobs are recorded in the existing Postgres, and workers poll
   the DB. Underway supports multi-step workflows and scheduling via the
-  database (essentially acting like a built-in task
-  table)([6](https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management))([7](https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step)). This keeps everything in Rust+Postgres without needing Redis or external brokers.
+  database (essentially acting like a built-in task table)[^7][^8]. This keeps
+  everything in Rust+Postgres without needing Redis or external brokers.
 - **Faktory:** An external job server (by ContribSys, creator of Sidekiq) that
   allows multi-language workers. Jobs can be pushed to a Faktory queue; Rust
   workers (via a Faktory client crate) or even other language workers could
@@ -567,25 +566,25 @@ Here’s how these tools work with the application components:
 - **Prometheus Metrics & Grafana Dashboards:** The backend exposes a `/metrics`
   endpoint (in Prometheus text format) that aggregates metrics from all parts
   of the
-  application[2].
+  application[^2].
    In Kubernetes, a ServiceMonitor (via Prometheus Operator) will be set up to
   scrape this endpoint
-  periodically[2].
+  periodically[^2].
    Metrics include request rates, error counts (e.g. HTTP 500s), database query
   timings, cache hits, job queue depths, and system resource
   usage. The Kubernetes cluster itself will also be monitored (Traefik ingress,
   Postgres operator,
-  etc.)[4],
+  etc.)[^4],
    but focusing on the app, Grafana dashboards visualise
   KPIs such as average route generation time, 95th percentile API latency,
   WebSocket connected clients, and memory/CPU usage per pod. The design doc
   explicitly recommends monitoring request latency, error rates, DB pool usage,
   etc., via
-  Prom/Grafana[4].
+  Prom/Grafana[^4].
    Additionally, Alertmanager can be configured to trigger alerts (email/Slack)
   on certain conditions – for instance, if error rate spikes or if route
   latency exceeds a threshold
-  consistently[4].
+  consistently[^4].
    This approach provides feedback loops to catch issues early.
 
 - **Tracing and Logging:** While not explicitly asked, as part of observability
@@ -642,7 +641,7 @@ Here’s how these tools work with the application components:
   counting usage and latencies. Caching layers mitigate cost, and monitoring
   ensures the frequency of external API calls is known (to control costs as
   mentioned in design
-  plans[1]).
+  plans[^1]).
 
 In summary, the MVP backend is not only designed to perform well but also to be
 **transparent about its performance and usage**. By baking in observability
@@ -665,12 +664,12 @@ independently – for example, two replicas of the web server for high
 availability and a couple of worker pods for throughput, adjusting as needed.
 
 Kubernetes best practices are used, such as a **Traefik Ingress** (as per the
-repo’s manifests) to route external traffic to the Actix Web service[2],
+repo’s manifests) to route external traffic to the Actix Web service[^2],
 configured with TLS (Let’s Encrypt via cert-manager). The static frontend (PWA)
 can be served via a CDN or object storage, as indicated by the design (the
 sequence diagram shows the browser fetching assets from CDN and API calls
 hitting
-backend)[2].
+backend)[^2].
  The backend containers mount config (like database DSN, secrets for cookie
 signing, API keys) via K8s Secrets and ConfigMaps. Readiness/liveness probes for
 the Actix Web app (e.g. an endpoint `/healthz`) allow Kubernetes to detect if a
@@ -678,7 +677,7 @@ pod is unresponsive and restart it.
 
 Database options include a managed Postgres (e.g. DigitalOcean Managed DB) or
 running a cluster via an operator like **CloudNativePG**. The design documents
-lean toward using a managed database for MVP to reduce ops burden[1], which
+lean toward using a managed database for MVP to reduce ops burden[^1], which
 allows the app to connect via a secure connection string. If self-hosting
 Postgres in K8s (less likely for MVP), CloudNativePG or Bitnami charts would be
 used with persistent volume storage, etc. In either case, the **PostGIS
@@ -688,15 +687,15 @@ The deployment strategy follows a GitOps model (as described in the
 cloud-native architecture doc) – meaning our Kubernetes manifests (for
 deployments, services, etc.) are in a repo and an operator (FluxCD) applies
 them to the
-cluster[4].
+cluster[^4].
  This allows us to have **ephemeral preview environments** for each feature
 branch: a temporary deployment of the whole stack on a subdomain for
-testing[4].
+testing[^4].
  In those ephemeral envs, the same architecture applies, just spun up
 on-demand. This gives confidence that our k8s configs and observability scale
 to multiple instances. Each preview would have its own isolated DB, etc., as
 noted in the design doc (possibly using separate schemas per
-environment)[4].
+environment)[^4].
 
 For **scalability**, even though the architecture is monolithic, the app is designed to
 handle concurrent loads. Actix is highly concurrent, and Rust’s performance
@@ -707,7 +706,7 @@ be scaled out if the queue of tasks grows – they’ll all compete for jobs fro
 the queue. Resource requests/limits should be set on these pods based on
 profiling (the design doc suggests adhering to resource management best
 practices in
-k8s)[4].
+k8s)[^4].
  In the future, if certain components become bottlenecks, they might be split
 off (for instance, a dedicated microservice for the route engine if needed).
 But for MVP, this single backend should suffice, and the infrastructure is
@@ -716,11 +715,11 @@ ready to support growth.
 Finally, all observability components will run in K8s as well: the **Prometheus
 Operator and Grafana** will be installed (the design explicitly calls for
 deploying them via
-HelmRelease)[4].
+HelmRelease)[^4].
  Prometheus will be configured to scrape our pods’ metrics; Grafana will have
 dashboards for our app. **Alertmanager** integrated with Prom Operator will
 handle alerting on
-thresholds[4].
+thresholds[^4].
  If self-hosting PostHog, it runs in the cluster too (PostHog provides a chart
  or Docker compose). Otherwise, PostHog Cloud is used and events are sent over
  the internet. Logging can be handled by the cluster’s logging stack (if any) or
@@ -730,7 +729,7 @@ In summary, the Kubernetes deployment ties all pieces together: our Rust
 backend (API + WS) and worker processes run in containers, leveraging Postgres
 and Redis services, all observable through Prometheus/Grafana. The **MVP
 remains a monolithic app** (plus a worker) for
-simplicity[1],
+simplicity[^1],
  but the entire setup is built with **cloud-native principles** –
 infrastructure as code, declarative config, and robust monitoring – so the team
 can confidently develop, deploy, and scale Wildside.
@@ -741,10 +740,10 @@ The above design provides a detailed blueprint for Wildside’s backend MVP: a
 Rust/Actix web application augmented by background workers, a PostGIS-enabled
 PostgreSQL database, and supportive infrastructure like the Redis cache and job
 queue, alongside comprehensive observability. It favours a simple, monolithic
-core[1]
+core[^1]
  that is easier to build and iterate on quickly, while applying modular design
 internally for
-clarity[1].
+clarity[^1].
  This foundation is **lightweight to start** yet prepared for growth – for
 instance, by adding more workers, enabling caching for heavy computations, and
 eventually splitting out services if needed. Instrumentation with Prometheus
@@ -758,14 +757,18 @@ production.
 
 **Sources:** The design is informed by the Wildside project’s high-level design
 documents and repository guides, which emphasise a Rust Actix backend,
-Postgres/PostGIS data store, and monolithic MVP approach[1][2]. Observability
+Postgres/PostGIS data store, and monolithic MVP approach[^1][^2]. Observability
 and cloud deployment strategies follow the cloud-native architecture
-recommendations[4]. Caching and optimisation considerations derive from the
-technical risk analysis[1]. All these pieces coalesce into the architecture
+recommendations[^4]. Caching and optimisation considerations derive from the
+technical risk analysis[^1]. All these pieces coalesce into the architecture
 detailed above, setting the stage for Wildside’s successful implementation and
 growth.
 
-[1]: https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md
-[2]: https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md
-[3]: https://github.com/leynos/wildside-engine/blob/5f30edbcb69bd5dd7f99eaeefccfb60abb9871c4/docs/wildside-engine-design.md
-[4]: https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md
+[^1]: <https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md>
+[^2]: <https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md>
+[^3]: <https://github.com/leynos/wildside-engine/blob/5f30edbcb69bd5dd7f99eaeefccfb60abb9871c4/docs/wildside-engine-design.md>
+[^4]: <https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md>
+[^5]: <https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=I%20used%20this%20for%20a,ended%20up%20using%20NATS%20instead>
+[^6]: <https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features>
+[^7]: <https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management>
+[^8]: <https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step>
