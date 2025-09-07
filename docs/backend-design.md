@@ -80,14 +80,14 @@ logic.
 
 Operational notes:
 
-- Use a read-only Postgres role (SELECT on required schemas/tables only) and a
-  separate connection string for Martin.
+- Use a read-only Postgres role limited to `SELECT` on the schemas and tables
+  Martin serves, and supply a separate connection string.
 - Set a distinct ingress route to forward `/tiles/*` to the Martin service,
-  avoiding Actix handlers.
+  bypassing Actix handlers.
 - Configure `--base-path /tiles`, connection pool size, worker processes, and
   in-memory cache size; enable Brotli or gzip compression.
-- Ensure geometries are in EPSG:3857 (Web Mercator), or set Martin’s
-  `default_srid` accordingly to avoid empty tiles.
+- Ensure geometries are stored in EPSG:3857 (Web Mercator) or set Martin’s
+  `default_srid` to match to avoid empty tiles.
 - Enforce CORS for tile endpoints, and apply rate limits or CDN caching at the
   edge.
 
