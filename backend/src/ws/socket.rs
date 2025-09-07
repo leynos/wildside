@@ -2,9 +2,12 @@
 
 use std::time::{Duration, Instant};
 
-use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
+use crate::ws::display_name::{is_valid_display_name, DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
+use crate::ws::messages::{UserCreated, UserCreatedMessage};
+use actix::{Actor, ActorContext, AsyncContext, Handler, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 /// Time between heartbeats to the client.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -50,7 +53,25 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
                 self.last_heartbeat = Instant::now();
                 ctx.pong(&payload);
             }
-            Ok(Message::Pong(_)) | Ok(Message::Text(_)) | Ok(Message::Binary(_)) => {
+            Ok(Message::Text(name)) => {
+                self.last_heartbeat = Instant::now();
+                let name = name.to_string();
+                if is_valid_display_name(&name) {
+                    let payload = UserCreated {
+                        id: Uuid::new_v4().to_string(),
+                        display_name: name,
+                    };
+                    let msg = UserCreatedMessage::new(payload);
+                    ctx.address().do_send(msg);
+                } else {
+                    warn!(display_name = %name, "Rejected invalid display name");
+                    let error_msg = serde_json::json!({
+                        "error": format!("Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between {} and {} characters.", DISPLAY_NAME_MIN, DISPLAY_NAME_MAX)
+                    });
+                    ctx.text(error_msg.to_string());
+                }
+            }
+            Ok(Message::Pong(_)) | Ok(Message::Binary(_)) => {
                 self.last_heartbeat = Instant::now();
             }
             Ok(Message::Close(reason)) => {
@@ -64,5 +85,33 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
                 ctx.stop();
             }
         }
+    }
+}
+
+impl Handler<UserCreatedMessage> for UserSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: UserCreatedMessage, ctx: &mut Self::Context) {
+        match serde_json::to_string(&msg) {
+            Ok(body) => ctx.text(body),
+            Err(err) => warn!(error = %err, "Failed to serialise UserCreated event"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ws::display_name::is_valid_display_name;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(String::from("ab"), false)]
+    #[case("a".repeat(33), false)]
+    #[case(String::from("Alice_Bob 123"), true)]
+    #[case(String::from("bad$char"), false)]
+    #[case(String::from("abc"), true)]
+    #[case("a".repeat(32), true)]
+    fn is_valid_display_name_cases(#[case] name: String, #[case] expected: bool) {
+        assert_eq!(is_valid_display_name(&name), expected);
     }
 }

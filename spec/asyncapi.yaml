@@ -29,23 +29,23 @@ operations:
       - name: users
         description: Events about system users
 components:
-  messageTraits:
-    Correlated:
-      headers:
-        type: object
-        additionalProperties: false
-        properties:
-          trace_id:
-            type: string
-            description: Correlation identifier for tracing across systems
-        required: []
   messages:
     UserCreated:
       name: UserCreated
       title: User created event
       contentType: application/json
-      traits:
-        - $ref: '#/components/messageTraits/Correlated'
+      correlationId:
+        location: "$message.header#/trace_id"
+      headers:
+        type: object
+        additionalProperties: false
+        required:
+          - trace_id
+        properties:
+          trace_id:
+            type: string
+            description: Correlation identifier for tracing across systems
+            format: uuid
       payload:
         type: object
         additionalProperties: false
@@ -56,17 +56,21 @@ components:
           id:
             type: string
             description: Unique user identifier
-            examples: ["123e4567-e89b-12d3-a456-426614174000"]
+            examples: ["123e4567-e89b-42d3-a456-426614174001"]
             format: uuid
           display_name:
             type: string
             description: User's display name
             examples: ["Ada Lovelace"]
-            minLength: 1
-            maxLength: 100
+            # Keep in sync with backend/src/ws/display_name.rs
+            minLength: 3
+            maxLength: 32
+            pattern: '^[A-Za-z0-9_ ]{3,32}$'
       examples:
         - name: minimal
-          summary: Minimal valid payload
+          summary: Minimal valid message
+          headers:
+            trace_id: "123e4567-e89b-42d3-a456-426614174000"
           payload:
-            id: "123e4567-e89b-12d3-a456-426614174000"
+            id: "123e4567-e89b-42d3-a456-426614174001"
             display_name: "Ada Lovelace"
