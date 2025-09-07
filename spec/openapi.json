@@ -16,11 +16,7 @@
       "variables": {
         "subdomain": {
           "default": "api",
-          "enum": [
-            "api",
-            "staging",
-            "dev"
-          ]
+          "enum": ["api", "staging", "dev"]
         }
       }
     }
@@ -28,9 +24,7 @@
   "paths": {
     "/api/v1/users": {
       "get": {
-        "tags": [
-          "users"
-        ],
+        "tags": ["users"],
         "operationId": "listUsers",
         "summary": "List users",
         "description": "Return up to 100 known users in the system. The server enforces this temporary limit until cursor-based pagination is introduced.",
@@ -76,6 +70,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
@@ -84,11 +81,10 @@
     },
     "/api/v1/login": {
       "post": {
-        "tags": [
-          "users"
-        ],
+        "tags": ["users"],
         "operationId": "login",
         "summary": "Log in",
+        "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -200,20 +196,14 @@
             "description": "Supplementary error details"
           }
         },
-        "required": [
-          "code",
-          "message"
-        ]
+        "required": ["code", "message"]
       },
       "User": {
         "title": "User",
         "type": "object",
         "description": "A user of the system",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "display_name"
-        ],
+        "required": ["id", "display_name"],
         "properties": {
           "display_name": {
             "type": "string",
@@ -235,10 +225,7 @@
         "type": "object",
         "description": "User login request",
         "additionalProperties": false,
-        "required": [
-          "username",
-          "password"
-        ],
+        "required": ["username", "password"],
         "properties": {
           "username": {
             "type": "string",
