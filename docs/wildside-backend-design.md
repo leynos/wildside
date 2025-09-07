@@ -139,6 +139,7 @@ API and WebSocket traffic.
 
 - **Implementation Tasks:**
 
+<<<<<<< HEAD
   - [ ] **Session Management:** Implement stateless, encrypted, authenticated
     cookie sessions. Use `actix-session` with a cookie backend configured as:
     `Secure=true`, `HttpOnly=true`, `SameSite=Lax` (or `Strict`), and an
@@ -149,43 +150,61 @@ API and WebSocket traffic.
     runtime—avoid sourcing it from a plain environment variable. Rotate the
     key regularly by rolling the secret and reloading it, so stale cookies are
     invalidated. Scope the middleware to routes that require authentication.
+||||||| parent of e4f5671 (Document session key fallback)
+  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
+    Use the `actix-session` crate with a cookie-based backend. Load the signing
+    key from a secret store (for example, a Kubernetes Secret or Vault) and
+    mount or inject it for the service at runtime. Configure the session cookie
+    with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax` (or `Strict`).
+=======
+  - [ ] **Session Management:** Implement stateless, signed-cookie sessions.
+    Use the `actix-session` crate with a cookie-based backend. Load the signing
+    key from a secret store (for example, a Kubernetes Secret or Vault) and
+    mount or inject it for the service at runtime. Name the cookie `session`
+    and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
+    (or `Strict`). Startup must abort in production if the key file cannot be
+    read; a temporary key is permitted only in development when
+    `SESSION_ALLOW_EPHEMERAL=1`.
 
     ```rust
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::{time::Duration, Key, SameSite};
     use actix_web::web;
+    use std::env;
+    use std::io;
     use tracing::warn;
 
-    let key_path = std::env::var("SESSION_KEY_FILE")
+    let key_path = env::var("SESSION_KEY_FILE")
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
         Ok(bytes) => Key::from(&bytes),
         Err(e) => {
-            warn!(path = %key_path, error = %e, "using temporary session key");
-            Key::generate()
+            let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
+            if cfg!(debug_assertions) || allow_dev {
+                warn!(path = %key_path, error = %e, "using temporary session key (dev only)");
+                Key::generate()
+            } else {
+                return Err(io::Error::other(format!(
+                    "failed to read session key at {key_path}: {e}"
+                )));
+            }
         }
     };
 
-    let cookie_secure = env::var("SESSION_COOKIE_SECURE").map(|v| v != "0").unwrap_or(true);
+    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
+        .map(|v| v != "0")
+        .unwrap_or(true);
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
     )
-<<<<<<< HEAD
-    .cookie_name("wildside")
-    .cookie_secure(true)
-||||||| parent of c3970be (Gate secure cookies and use UUID user IDs)
-    .cookie_secure(true)
-=======
     .cookie_name("session")
     .cookie_path("/")
     .cookie_secure(cookie_secure)
->>>>>>> c3970be (Gate secure cookies and use UUID user IDs)
     .cookie_http_only(true)
     .cookie_same_site(SameSite::Lax)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
-    .cookie_path("/")
     .cookie_max_age(Duration::hours(2))
     .build();
 
@@ -194,22 +213,12 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-<<<<<<< HEAD
-    `CookieSessionStore` keeps session state entirely in the cookie. Browsers
-    cap individual cookies at roughly 4 KB, so session payloads must remain
-    well under this limit.
-||||||| parent of c3970be (Gate secure cookies and use UUID user IDs)
-    `CookieSessionStore` keeps session state entirely in the cookie. Browsers cap
-    individual cookies at roughly 4 KB, so session payloads must remain well
-    under this limit.
-=======
     `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
     KB, so session payloads must remain well under this limit.
 
     Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
     plain HTTP; production deployments should leave this unset to enforce HTTPS.
->>>>>>> c3970be (Gate secure cookies and use UUID user IDs)
 
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`
@@ -219,7 +228,9 @@ API and WebSocket traffic.
     sessions during the rollout. For seamless rotation, run at least two
     replicas and perform a rolling update, so pods with the prior key continue
     to validate existing cookies until expiry. Scope the middleware to routes
-    that require authentication.
+    that require authentication. Developers can opt into an ephemeral session
+    key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
+    unset so startup fails if the key file is unreadable.
 
   - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials and initialise sessions.
 
