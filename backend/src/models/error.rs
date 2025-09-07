@@ -103,6 +103,18 @@ impl Error {
         self
     }
 
+    /// Convenience constructor for [`ErrorCode::InvalidRequest`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::Error;
+    ///
+    /// let err = Error::invalid_request("bad input");
+    /// ```
+    pub fn invalid_request(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::InvalidRequest, message)
+    }
+
     /// Convenience constructor for [`ErrorCode::Unauthorized`].
     ///
     /// # Examples
@@ -125,6 +137,18 @@ impl Error {
     /// ```
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Forbidden, message)
+    }
+
+    /// Convenience constructor for [`ErrorCode::NotFound`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::models::Error;
+    ///
+    /// let err = Error::not_found("missing");
+    /// ```
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::NotFound, message)
     }
 
     /// Convenience constructor for [`ErrorCode::InternalError`].
@@ -185,5 +209,21 @@ impl ResponseError for Error {
             return builder.json(redacted);
         }
         builder.json(self)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_request_constructor_sets_code() {
+        let err = Error::invalid_request("bad");
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn not_found_constructor_sets_code() {
+        let err = Error::not_found("missing");
+        assert_eq!(err.code, ErrorCode::NotFound);
     }
 }
