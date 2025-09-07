@@ -434,7 +434,7 @@ Null (NN), and Generalized Search Tree (GiST).
 | Column | Type | Notes |
 | ------------------ | ------------------------ | ------------------------------------------- |
 | `id` | `BIGINT` | PK; OSM element ID |
-| `location` | `GEOGRAPHY(Point, 4326)` | NN; GIST index |
+| `location` | `GEOGRAPHY(Point, 4326)` | NN; GiST index |
 | `osm_tags` | `JSONB` | OSM tags; GIN index |
 | `narrative` | `TEXT` | Optional engaging description |
 | `popularity_score` | `REAL` | Default 0.5; 0.0 hidden gem – 1.0 hotspot |
@@ -452,7 +452,7 @@ Null (NN), and Generalized Search Tree (GiST).
 | ------------------- | ---------------------------- | ------------------------------------- |
 | `id` | `UUID` | PK; default `gen_random_uuid()` |
 | `user_id` | `UUID` | FK `users.id`; nullable |
-| `path` | `GEOMETRY(LineString, 4326)` | Full path; GIST index |
+| `path` | `GEOMETRY(LineString, 4326)` | Full path; GiST index |
 | `generation_params` | `JSONB` | Parameters used to generate the route |
 | `created_at` | `TIMESTAMPTZ` | NN; default `NOW()` |
 

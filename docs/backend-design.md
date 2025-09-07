@@ -275,45 +275,68 @@ with a single database instance for everything.
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
-K8s[^4]). Key metrics include query throughput, slow query counts, connections
-in use, and cache hit rates. From the application side, Diesel’s query logging
-detects slow queries and instruments timings for critical ones (for instance,
-wrap certain calls to measure their duration). The Prometheus operator scrapes
-database metrics (if using an operator or a managed DB with metrics)[^4]. In
-Grafana, dashboards plot DB metrics like CPU, I/O, and number of queries per
-second, as recommended by the deployment guide[^4]. If any query regularly
-takes too long (impacting route generation latency), alerts highlight the slow
-part for optimisation (adding indexes or caching results). On the analytics
-side, database operations themselves aren’t directly in PostHog, but PostHog
-can track high-level outcomes (e.g. “UserSavedRoute” event when a user saves a
-generated route to the DB).
-
-## Data seeding, enrichment, and route caching
-
- 
-- Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
-  `.osm.pbf` extracts and load nodes, ways, and relations into PostgreSQL. This
-  bootstraps the POI dataset before the API is exposed, ensuring the backend
-  operates on consistent local data.
-  - Convert ways/relations that represent POIs to point features via centroid
-    (`GEOGRAPHY(Point, 4326)`) before insert to avoid geometry mismatches.
-  - Ingest in batches (for example, 5k–20k features per transaction) to balance
-    throughput and lock times, keeping transactions short.
-- On-demand enrichment: When a requested area lacks sufficient nearby POIs, a
-  background `EnrichmentJob` queries the Overpass API for additional amenities.
-  Newly found items are inserted into the database so subsequent requests
-  benefit from richer coverage.
-- Route output caching: Completed route responses are stored in Redis using a
-  hash of the request parameters as the cache key. If a later request hashes to
-  the same value, the cached route is returned immediately, reducing
- 
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include `pg_stat_activity`-derived gauges (connections in use),
+`pg_stat_database_blks_hit/blk_read` (cache hit rate), and slow query counts.
+From the application side, enable Diesel’s query logging and instrument
+timings for critical queries (for instance, wrap certain calls to measure their
+duration). The Prometheus operator will scrape database metrics (if using an
+operator or a managed DB with metrics). In Grafana, dashboards will plot DB
+metrics like CPU, I/O, number of queries per second, etc., as recommended by
+the deployment guide. Example alert:
+- `pg_connections{db=\"app\"} / pg_max_connections > 0.8` for 5m → page SRE.
+If any query regularly takes too long (impacting route generation latency),
+alert and optimise that part (adding indexes or caching results). On the
+analytics side, database operations themselves aren’t directly in PostHog, but
+PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
+saves a generated route to the DB).
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include query throughput, slow query counts, connections in use,
+and cache hit rates. From the application side, enable Diesel’s query
+logging to detect slow queries and instrument timings for critical queries (for
+instance, wrap certain calls to measure their duration). The Prometheus
+operator will scrape database metrics (if using an operator or a managed DB
+with
+metrics)([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ In Grafana, dashboards will plot DB metrics like CPU, I/O, number of queries
+per second, etc., as recommended by the deployment
+guide([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ If any query regularly takes too long (impacting route generation latency),
+alert and optimise that part (adding indexes or caching
+results). On the analytics side, database operations themselves aren’t directly
+in PostHog, but PostHog may track high-level outcomes (e.g.
+“UserSavedRoute” event when a user saves a generated route to the DB).
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include `pg_stat_activity`-derived gauges (connections in use),
+`pg_stat_database_blks_hit/blk_read` (cache hit rate), and slow query counts.
+From the application side, enable Diesel’s query logging and instrument
+timings for critical queries (for instance, wrap certain calls to measure their
+duration). The Prometheus operator will scrape database metrics (if using an
+operator or a managed DB with metrics). In Grafana, dashboards will plot DB
+metrics like CPU, I/O, number of queries per second, etc., as recommended by
+the deployment guide. Example alert:
+- `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
+If any query regularly takes too long (impacting route generation latency),
+alert and optimise that part (adding indexes or caching results). On the
+analytics side, database operations themselves aren’t directly in PostHog, but
+PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
+saves a generated route to the DB).
 
 Operational details:
 
-- **Overpass quotas:** Enforce client-side rate limiting (≤ 10 000
-  requests/day; transfer < 1 GB/day), default timeout 180 s and maxsize
-  512 MiB; handle HTTP 429 with jittered retries and backoff; prefer
-  mirrored or self-hosted endpoints at scale.
+- **Overpass quotas:**
+  - Send a descriptive `User-Agent` and `Contact` header (email or URL);
+    expose both via config.
+  - Enforce rate limits (≤ 10 000 requests/day; transfer < 1 GB/day), default
+    timeout 180 s, and `maxsize` 512 MiB.
+  - Limit concurrent requests per endpoint with a semaphore or worker pool
+    (default 1–4, configurable).
+  - Retry HTTP 429 responses with jittered backoff.
+  - Guard with a circuit breaker that tracks failures/timeouts and opens for a
+    configurable cooldown before probing again; fall back to mirrored or
+    self-hosted endpoints while open.
+  - Surface metrics and logs for requests, failures, and breaker state with
+    knobs for headers, concurrency, thresholds, and cooldown.
   ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
   [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html))
   - **Cache keys:** Canonicalise request parameters before hashing (stable
