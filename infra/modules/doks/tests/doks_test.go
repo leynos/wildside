@@ -117,8 +117,14 @@ func TestDoksModulePolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
-func TestDoksModuleInvalidInputs(t *testing.T) {
-	cases := map[string]struct {
+func getInvalidInputTestCases() map[string]struct {
+	Vars        map[string]interface{}
+	ErrContains string
+} {
+	// Each case represents an invalid configuration expected to fail
+	// module validation. The cases mirror policy enforcement to catch
+	// mistakes early.
+	return map[string]struct {
 		Vars        map[string]interface{}
 		ErrContains string
 	}{
@@ -239,8 +245,10 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 			ErrContains: "min_nodes <= node_count <=",
 		},
 	}
+}
 
-	for name, tc := range cases {
+func TestDoksModuleInvalidInputs(t *testing.T) {
+	for name, tc := range getInvalidInputTestCases() {
 		t.Run(name, func(t *testing.T) {
 			_, opts := setupTerraform(t, tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 			_, err := terraform.InitAndPlanE(t, opts)
