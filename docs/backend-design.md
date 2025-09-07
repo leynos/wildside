@@ -272,13 +272,34 @@ transactionally updates user-specific info. Heavy geospatial reads can be
 isolated by using read replicas or a separate schema, but the MVP can start
 with a single database instance for everything.
 
+<<<<<<< HEAD
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
+||||||| parent of 824436e (Use en-GB spelling in DB monitoring section)
+*Observability:* The database and ORM layer will be monitored to ensure healthy
+performance. We will enable Postgres metrics collection (for example, running a
+=======
+*Observability:* The database and ORM layer will be monitored to ensure healthy
+performance. Enable Postgres metrics collection (for example, running a
+>>>>>>> 824436e (Use en-GB spelling in DB monitoring section)
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
+<<<<<<< HEAD
 K8s[^4]). Key metrics include query throughput, slow query counts, connections
 in use, and cache hit rates. From the application side, Diesel’s query
 logging detects slow queries and instruments timings for critical ones (for
+||||||| parent of 824436e (Use en-GB spelling in DB monitoring section)
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include query throughput, slow query counts, connections in use,
+and cache hit rates. From the application side, we can use Diesel’s query
+logging to detect slow queries and instrument timings for critical queries (for
+=======
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include query throughput, slow query counts, connections in use,
+and cache hit rates. From the application side, enable Diesel’s query
+logging to detect slow queries and instrument timings for critical queries (for
+>>>>>>> 824436e (Use en-GB spelling in DB monitoring section)
 instance, wrap certain calls to measure their duration). The Prometheus
+<<<<<<< HEAD
 operator scrapes database metrics (if using an operator or a managed DB with
 metrics)[^4]. In Grafana, dashboards plot DB metrics like CPU, I/O, and number
 of queries per second, as recommended by the deployment guide[^4]. If any query
@@ -287,6 +308,31 @@ highlight the slow part for optimisation (adding indexes or caching results).
 On the analytics side, database operations themselves aren’t directly in
 PostHog, but PostHog can track high-level outcomes (e.g. “UserSavedRoute”
 event when a user saves a generated route to the DB).
+||||||| parent of 824436e (Use en-GB spelling in DB monitoring section)
+operator will scrape database metrics (if using an operator or a managed DB
+with
+metrics)([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ In Grafana, dashboards will plot DB metrics like CPU, I/O, number of queries
+per second, etc., as recommended by the deployment
+guide([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ If any query regularly takes too long (impacting route generation latency),
+we’ll get alerted and can optimize that part (adding indexes or caching
+results). On the analytics side, database operations themselves aren’t directly
+in PostHog, but we might use PostHog to track high-level outcomes (e.g.
+“UserSavedRoute” event when a user saves a generated route to the DB).
+=======
+operator will scrape database metrics (if using an operator or a managed DB
+with
+metrics)([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ In Grafana, dashboards will plot DB metrics like CPU, I/O, number of queries
+per second, etc., as recommended by the deployment
+guide([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513)).
+ If any query regularly takes too long (impacting route generation latency),
+alert and optimise that part (adding indexes or caching
+results). On the analytics side, database operations themselves aren’t directly
+in PostHog, but PostHog may track high-level outcomes (e.g.
+“UserSavedRoute” event when a user saves a generated route to the DB).
+>>>>>>> 824436e (Use en-GB spelling in DB monitoring section)
 
 ## Data Seeding, Enrichment, and Route Caching
 
@@ -362,6 +408,7 @@ The cost analysis for MVP even budgets a small Redis Cloud instance for
 caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
 underlining its role as both cache and queue.
 
+<<<<<<< HEAD
 In a Kubernetes deployment, Redis can run as an in-cluster service or use a
 managed Redis. For a lightweight start, a single small Redis instance (or even
 an in-memory cache within the app process for non-critical data) suffices. The
@@ -370,6 +417,33 @@ caching[^1], underlining its role. Memcached could alternatively be used for
 simple key-value caching if an even simpler, stateless cache layer is desired;
 however, Redis offers more features (persistence, pub/sub, etc.) that could be
 handy (for example, using Redis as the job queue backend in Apalis).
+||||||| parent of 824436e (Use en-GB spelling in DB monitoring section)
+*Observability:* The caching layer will be monitored to ensure it’s effectively
+improving performance. We’ll track **cache hit rates and misses** for critical
+caches. For instance, a Prometheus metric `cache_route_lookup_hits_total` vs
+`cache_route_lookup_misses_total` can be recorded to measure how often a route
+result was served from cache versus had to be recomputed. Redis itself provides
+stats like memory usage, eviction counts, connections, which can be exposed via
+a Redis exporter and scraped by Prometheus. In Grafana, we’d include panels for
+cache performance (high miss rates might indicate we can optimize caching
+strategy). From an analytics perspective, caching is transparent to users, so
+not directly relevant to PostHog events, but a successful cache hit does
+indirectly improve user experience (faster response) which could reflect in
+user retention metrics over time.
+=======
+*Observability:* The caching layer will be monitored to ensure it’s effectively
+improving performance. We’ll track **cache hit rates and misses** for critical
+caches. For instance, a Prometheus metric `cache_route_lookup_hits_total` vs
+`cache_route_lookup_misses_total` can be recorded to measure how often a route
+result was served from cache versus had to be recomputed. Redis itself provides
+stats like memory usage, eviction counts, connections, which can be exposed via
+a Redis exporter and scraped by Prometheus. In Grafana, we’d include panels for
+cache performance (high miss rates might indicate we can optimise caching
+strategy). From an analytics perspective, caching is transparent to users, so
+not directly relevant to PostHog events, but a successful cache hit does
+indirectly improve user experience (faster response) which could reflect in
+user retention metrics over time.
+>>>>>>> 824436e (Use en-GB spelling in DB monitoring section)
 
 *Observability:* The caching layer is monitored to ensure it’s effectively
 improving performance. **Cache hit rates and misses** for critical caches are
@@ -812,6 +886,7 @@ for urban explorers, but also is stable, scalable, and well-monitored in
 production.
 
 **Sources:** The design is informed by the Wildside project’s high-level design
+<<<<<<< HEAD
 documents and repository guides, which emphasise a Rust Actix backend,
 Postgres/PostGIS data store, and monolithic MVP approach[^1][^2]. Observability
 and cloud deployment strategies follow the cloud-native architecture
@@ -828,3 +903,26 @@ growth.
 [^6]: <https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features>
 [^7]: <https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management>
 [^8]: <https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step>
+||||||| parent of 824436e (Use en-GB spelling in DB monitoring section)
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+ and caching and optimization considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.
+=======
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+ and caching and optimisation considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.
+>>>>>>> 824436e (Use en-GB spelling in DB monitoring section)
