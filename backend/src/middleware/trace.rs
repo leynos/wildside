@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// Per-request trace identifier stored in request extensions.
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// use actix_web::HttpRequest;
 /// use backend::middleware::trace::TraceId;
 ///

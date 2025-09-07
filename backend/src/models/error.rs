@@ -257,4 +257,22 @@ mod tests {
         assert!(payload.details.is_none());
         assert_eq!(payload.trace_id.as_deref(), Some("abc"));
     }
+    #[actix_web::test]
+    async fn error_response_includes_details_and_header() {
+        use actix_web::body::to_bytes;
+        use actix_web::http::StatusCode;
+        use serde_json::json;
+        let err = Error::invalid_request("bad")
+            .with_trace_id("abc")
+            .with_details(json!({"field": "name"}));
+        let res = err.error_response();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
+        let bytes = to_bytes(res.into_body()).await.unwrap();
+        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(payload.code, ErrorCode::InvalidRequest);
+        assert_eq!(payload.message, "bad");
+        assert_eq!(payload.details, Some(json!({"field": "name"})));
+        assert_eq!(payload.trace_id.as_deref(), Some("abc"));
+    }
 }
