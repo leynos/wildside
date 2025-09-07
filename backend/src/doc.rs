@@ -10,6 +10,8 @@ use utoipa::OpenApi;
     paths(
         crate::api::users::list_users,
         crate::api::users::login,
+        crate::api::health::ready,
+        crate::api::health::live,
     ),
     components(schemas(User, Error, ErrorCode)),
     tags((name = "users", description = "Operations related to users"))

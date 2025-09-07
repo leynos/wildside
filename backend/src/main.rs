@@ -2,7 +2,7 @@
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::cookie::{Key, SameSite};
-use actix_web::{get, web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpServer};
 use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -11,23 +11,12 @@ use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
+use backend::api::health::{live, ready};
 use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
 use backend::Trace;
-
-/// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
-#[get("/health/ready")]
-async fn ready() -> HttpResponse {
-    HttpResponse::Ok().finish()
-}
-
-/// Liveness probe. Return 200 when the process is alive.
-#[get("/health/live")]
-async fn live() -> HttpResponse {
-    HttpResponse::Ok().finish()
-}
 
 /// Application bootstrap.
 #[actix_web::main]
