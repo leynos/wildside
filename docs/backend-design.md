@@ -425,7 +425,17 @@ keys.
 use actix_session::{SessionMiddleware, storage::CookieSessionStore, config::CookieContentSecurity};
 use actix_web::cookie::{Key, SameSite};
 
-let key_bytes = base64::decode(std::fs::read_to_string("/run/secrets/session.key")?)?;
+let key_bytes = {
+    let raw = std::fs::read_to_string("/run/secrets/session.key")?;
+    let bytes = base64::decode(raw.trim_end())?;
+    if bytes.len() != 64 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "session key must be 64 bytes",
+        ));
+    }
+    bytes
+};
 let key = Key::from(&key_bytes);
 
 let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
