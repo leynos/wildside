@@ -230,15 +230,6 @@ cache serves a few purposes in the Wildside backend:
   for every route, the backend can load it at startup or cache it on first use
   for quick reuse.
 
-- **Session Caching (if needed):** Although we plan to use signed cookies for
-  session info (see below), if we needed to store session state server-side
-  (e.g. to track active sessions or more data per session), a cache like Redis
-  could be used. This would keep session lookups fast and avoid hitting the
-  primary database for ephemeral session reads. In our design, we try to keep
-  the server stateless by not requiring server-side session storage. But Redis
-  remains an option for any transient data that doesn’t warrant a database
-  write.
-
 In a Kubernetes deployment, Redis can be run as an in-cluster service or as a
 managed offering. For a lightweight start, a single small Redis instance (or
 even using an in-memory cache within the app process for non-critical data)
@@ -419,37 +410,62 @@ and logs.
 
 ## Session Management and Security
 
-Wildside will manage user sessions using **secure signed cookies**, inspired by
-the Python itsdangerous approach. Rather than storing session state on the
-server, the server will issue the client a cookie that contains the session
-data (for example, a user identifier and maybe a timestamp or some
-preferences), along with a cryptographic signature. The signature (HMAC-SHA256
-or similar, using a secret key) ensures the cookie’s integrity – the client
-cannot tamper with it without invalidating the signature. When the browser
-sends the cookie back on each request, the Actix backend will verify the
-signature and decode the session info. This approach keeps the backend
-**stateless** with respect to sessions: no in-memory or database session lookup
-is needed for each request, which simplifies scaling (any instance can validate
-the cookie on its own). It also reduces latency, since checking an HMAC is fast
-compared to a database hit.
+Wildside manages user sessions with `actix-session`’s `SessionMiddleware`
+using `CookieSessionStore`. Session state lives entirely in the cookie,
+allowing any backend instance to validate requests without a central store.
+The middleware signs and encrypts the cookie with an `actix_web::cookie::Key`
+loaded at startup from a secret file mounted into the container (for example
+`/run/secrets/session.key`). The file holds a single base64‑encoded 64‑byte key;
+`SessionMiddleware` accepts only one key, so any extra entries are ignored.
+Rotating the key requires replacing the file and restarting the pods, which
+invalidates all existing cookies because `actix-session` does not check older
+keys.
 
-In practice, on login or session creation, the server will generate a cookie
-like `session=<base64_payload>.<signature>`. The payload might be minimal (e.g.
-just a user ID and expiration time). The signature is computed using a secret
-key known only to the backend (we’ll store this in a Kubernetes Secret or
-Vault). Actix Web has support for cookie values and we can implement signing
-using a crate (there are Rust crates for JWT or for itsdangerous-like tokens,
-or we can manually use HMAC). By including an expiry timestamp in the payload
-and in the signature, we can also ensure sessions expire.
+```rust
+use actix_session::{SessionMiddleware, storage::CookieSessionStore, config::CookieContentSecurity};
+use actix_web::cookie::{Key, SameSite};
 
-**Security considerations:** The cookie will be marked HttpOnly and Secure (and
-SameSite as appropriate) so that it’s not accessible to JS and not sent in
-cross-site contexts. This helps prevent XSS and CSRF issues. Because the
-session is stateless, if a user logs out, we cannot “kill” the cookie on the
-server side – we just instruct the client to delete it. If we needed immediate
-revocation (e.g. for a compromised account), we might maintain a server-side
-denylist of session IDs or use short-lived tokens. For MVP, this simple
-approach is likely sufficient.
+let key_bytes = {
+    let raw = std::fs::read_to_string("/run/secrets/session.key")?;
+    let bytes = base64::decode(raw.trim_end())?;
+    if bytes.len() != 64 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "session key must be 64 bytes",
+        ));
+    }
+    bytes
+};
+let key = Key::from(&key_bytes);
+
+let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
+    .cookie_name("session")
+    .cookie_content_security(CookieContentSecurity::Private) // encrypt + sign
+    .cookie_secure(true)
+    .cookie_http_only(true)
+    .cookie_same_site(SameSite::Lax)
+    .build();
+```
+
+On login, the server sets a cookie named `session`, such as `session=<payload>`,
+and `actix-session` handles serialization and integrity checks automatically.
+Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` unless a
+cross-site flow is required. To rotate the key, generate a new value, replace
+the secret file, and restart the pods; the framework cannot validate cookies
+issued with a previous key, so all existing sessions are dropped. This keeps the
+session layer self-contained without any server-side cache or database lookup.
+
+**Security considerations:** Browser cookies are limited to 4 KiB, so the
+serialized session payload must stay within that bound. For non‑persistent
+usage, rely on the browser session; for persistence, configure
+`PersistentSession` with an explicit TTL (for example, seven days). If a
+rolling expiry is required, issue a fresh cookie on write or implement a policy
+that renews the TTL explicitly. Sensitive actions benefit from short TTLs,
+whereas a longer TTL (for example, seven days) improves convenience when paired
+with token rotation. Because the session is stateless, logging out cannot
+invalidate an existing cookie on the server; the client is simply told to
+delete it. Immediate revocation would require a denylist or short‑lived tokens,
+but for the MVP this approach is acceptable.
 
 *Observability:* Session management itself doesn’t produce a lot of metrics,
 but we can track things like **active user count** or login frequency. For
