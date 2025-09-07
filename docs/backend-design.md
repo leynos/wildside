@@ -290,14 +290,15 @@ generated route to the DB).
 
 ## Data Seeding, Enrichment, and Route Caching
 
+ 
 - Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
   `.osm.pbf` extracts and load nodes, ways, and relations into PostgreSQL. This
   bootstraps the POI dataset before the API is exposed, ensuring the backend
   operates on consistent local data.
   - Convert ways/relations that represent POIs to point features via centroid
-    (`GEOGRAPHY(Point, 4326)`) before insert.
+    (`GEOGRAPHY(Point, 4326)`) before insert to avoid geometry mismatches.
   - Ingest in batches (for example, 5k–20k features per transaction) to balance
-    throughput and lock times.
+    throughput and lock times, keeping transactions short.
 - On-demand enrichment: When a requested area lacks sufficient nearby POIs, a
   background `EnrichmentJob` queries the Overpass API for additional amenities.
   Newly found items are inserted into the database so subsequent requests
@@ -305,7 +306,7 @@ generated route to the DB).
 - Route output caching: Completed route responses are stored in Redis using a
   hash of the request parameters as the cache key. If a later request hashes to
   the same value, the cached route is returned immediately, reducing
-  computation and latency.
+ 
 
 Operational details:
 
@@ -319,9 +320,10 @@ Operational details:
   JSON encoding, sorted keys, normalised floats with fixed precision for
   coordinates, normalised theme ordering). Use namespaced key format
   `route:v1:`.
-- **TTLs:** Set a default TTL (24 h) for anonymous route results; skip TTL
-  for saved routes. Invalidate on schema/engine version bumps by rotating
-  namespace suffix (e.g. `v2`).
+- **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
+  small jitter (±5 min) to avoid stampedes; skip TTL for saved routes.
+  Invalidate on schema/engine version bumps by rotating namespace suffix
+  (e.g. `v2`).
 - **Attribution & provenance:** Store enrichment provenance (source URL,
   timestamp, bbox) and enforce OSM attribution requirements in UI/docs.
 
