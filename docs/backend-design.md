@@ -416,8 +416,9 @@ allowing any backend instance to validate requests without a central store.
 The middleware signs and encrypts the cookie with an `actix_web::cookie::Key`
 loaded at startup from a secret file mounted into the container (for example
 `/run/secrets/session.key`). The file holds a single base64‑encoded 64‑byte key.
-Rotating it requires replacing the file and restarting the pods; existing
-cookies are invalidated unless additional logic tries old keys.
+Rotating it requires replacing the file and restarting the pods, which
+invalidates all existing cookies because `actix-session` does not check older
+keys.
 
 ```rust
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
@@ -435,9 +436,9 @@ On login, the server sets a cookie named `session` such as `session=<payload>`
 and `actix-session` handles serialization and integrity checks automatically.
 Cookies are marked `HttpOnly`, `Secure` and use an appropriate `SameSite`
 policy. To rotate the key, generate a new value, replace the secret file, and
-restart the pods. Existing cookies will become invalid unless the application
-tries old keys explicitly. This keeps the session layer self-contained without
-any server-side cache or database lookup.
+restart the pods; the framework cannot validate cookies issued with a previous
+key, so all existing sessions are dropped. This keeps the session layer
+self-contained without any server-side cache or database lookup.
 
 **Security considerations:** Browser cookies are limited to 4 KiB, so the
 serialized session payload must stay within that bound. Short‑lived workflows
