@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -15,23 +16,23 @@ import (
 )
 
 func testVars() map[string]interface{} {
-        return map[string]interface{}{
-                "cluster_name":       "terratest-cluster",
-                "region":             "nyc1",
-                "kubernetes_version": "1.28.0-do.0",
-                "node_pools": []map[string]interface{}{
-                        {
-                                "name":       "default",
-                                "size":       "s-2vcpu-2gb",
-                                "node_count": 2,
-                                "auto_scale": false,
-                                "min_nodes":  2,
-                                "max_nodes":  2,
-                        },
-                },
-                "tags": []string{"terratest"},
-                "expose_kubeconfig": true,
-        }
+	return map[string]interface{}{
+		"cluster_name":       "terratest-cluster",
+		"region":             "nyc1",
+		"kubernetes_version": "1.28.0-do.0",
+		"node_pools": []map[string]interface{}{
+			{
+				"name":       "default",
+				"size":       "s-2vcpu-2gb",
+				"node_count": 2,
+				"auto_scale": false,
+				"min_nodes":  2,
+				"max_nodes":  2,
+			},
+		},
+		"tags":              []string{"terratest"},
+		"expose_kubeconfig": true,
+	}
 }
 
 func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]string) (string, *terraform.Options) {
@@ -57,18 +58,21 @@ func TestDoksModuleValidate(t *testing.T) {
 }
 
 func TestDoksModulePlanUnauthenticated(t *testing.T) {
-        t.Parallel()
+	t.Parallel()
 
-        vars := testVars()
-        vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-       _, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
+	vars := testVars()
+	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
 
-        _, err := terraform.InitAndPlanE(t, opts)
-        if err == nil {
-                _, err = terraform.ApplyE(t, opts)
-        }
-        require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
-        require.Contains(t, err.Error(), "Unable to authenticate", "error message should mention authentication failure")
+	_, err := terraform.InitAndPlanE(t, opts)
+	if err == nil {
+		_, err = terraform.ApplyE(t, opts)
+	}
+	require.Error(t, err, "expected error when DIGITALOCEAN_TOKEN is missing")
+
+	authErr := strings.ToLower(err.Error())
+	re := regexp.MustCompile(`unable to authenticate|no api token|invalid token|not authenticated|missing token|authentication failed`)
+	require.Truef(t, re.MatchString(authErr), "error message %q did not mention authentication failure", err.Error())
 }
 
 func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
@@ -109,16 +113,25 @@ func TestDoksModulePolicy(t *testing.T) {
 	require.NoError(t, err)
 	jsonPath := filepath.Join(tfDir, "plan.json")
 	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
-        policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
-        require.NoError(t, err)
-        cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
-        cmd.Dir = tfDir
-        output, err := cmd.CombinedOutput()
-        require.NoErrorf(t, err, "conftest failed: %s", string(output))
+	policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
+	require.NoError(t, err)
+	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
+		t.Skip("conftest not found; skipping policy test")
+	}
+	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+	cmd.Dir = tfDir
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
-func TestDoksModuleInvalidInputs(t *testing.T) {
-	cases := map[string]struct {
+func getInvalidInputTestCases() map[string]struct {
+	Vars        map[string]interface{}
+	ErrContains string
+} {
+	// Each case represents an invalid configuration expected to fail
+	// module validation. The cases mirror policy enforcement to catch
+	// mistakes early.
+	return map[string]struct {
 		Vars        map[string]interface{}
 		ErrContains string
 	}{
@@ -149,14 +162,14 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 			},
 			ErrContains: "kubernetes_version must match",
 		},
-                "MissingKubernetesVersion": {
-                        Vars: map[string]interface{}{
-                                "cluster_name": "terratest-cluster",
-                                "region":       "nyc1",
-                                "node_pools":   testVars()["node_pools"],
-                        },
-                        ErrContains: "kubernetes_version",
-                },
+		"MissingKubernetesVersion": {
+			Vars: map[string]interface{}{
+				"cluster_name": "terratest-cluster",
+				"region":       "nyc1",
+				"node_pools":   testVars()["node_pools"],
+			},
+			ErrContains: "kubernetes_version",
+		},
 		"EmptyNodePools": {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
@@ -164,9 +177,9 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 				"kubernetes_version": "1.28.0-do.0",
 				"node_pools":         []map[string]interface{}{},
 			},
-			ErrContains: "each node pool requires at least one node",
+			ErrContains: "node_pools must not be empty",
 		},
-		"ZeroNodes": {
+		"OneNode": {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
@@ -175,18 +188,74 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 					{
 						"name":       "default",
 						"size":       "s-2vcpu-2gb",
-						"node_count": 0,
+						"node_count": 1,
 						"auto_scale": false,
-						"min_nodes":  0,
-						"max_nodes":  0,
+						"min_nodes":  1,
+						"max_nodes":  1,
 					},
 				},
 			},
-			ErrContains: "each node pool requires at least one node",
+			ErrContains: "node_count >= 2",
+		},
+		"MinNodesZero": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 2,
+						"auto_scale": false,
+						"min_nodes":  0,
+						"max_nodes":  2,
+					},
+				},
+			},
+			ErrContains: "min_nodes >= 1",
+		},
+		"MaxLessThanNodeCount": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 3,
+						"auto_scale": false,
+						"min_nodes":  1,
+						"max_nodes":  2,
+					},
+				},
+			},
+			ErrContains: "min_nodes <= node_count <=",
+		},
+		"MinGreaterThanNodeCount": {
+			Vars: map[string]interface{}{
+				"cluster_name":       "terratest-cluster",
+				"region":             "nyc1",
+				"kubernetes_version": "1.28.0-do.0",
+				"node_pools": []map[string]interface{}{
+					{
+						"name":       "default",
+						"size":       "s-2vcpu-2gb",
+						"node_count": 2,
+						"auto_scale": false,
+						"min_nodes":  3,
+						"max_nodes":  5,
+					},
+				},
+			},
+			ErrContains: "min_nodes <= node_count <=",
 		},
 	}
+}
 
-	for name, tc := range cases {
+func TestDoksModuleInvalidInputs(t *testing.T) {
+	for name, tc := range getInvalidInputTestCases() {
 		t.Run(name, func(t *testing.T) {
 			_, opts := setupTerraform(t, tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 			_, err := terraform.InitAndPlanE(t, opts)

@@ -113,8 +113,11 @@ yamllint:
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
 .PHONY: conftest tofu doks-test
-conftest tofu:
-	$(call ensure_tool,$@)
+conftest:
+	$(call ensure_tool,conftest)
+
+tofu:
+	$(call ensure_tool,tofu)
 
 doks-test:
 	tofu fmt -check infra/modules/doks
