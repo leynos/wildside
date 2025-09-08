@@ -287,7 +287,7 @@ the deployment guide. Example alert:
 - `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
 
 If any query regularly takes too long (impacting route generation latency),
-alert and optimise that part (adding indexes or caching results). On the
+alert and optimize that part (adding indexes or caching results). On the
 analytics side, database operations themselves aren’t directly in PostHog, but
 PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
 saves a generated route to the DB).
@@ -352,8 +352,8 @@ Operational details:
   - Send a descriptive `User-Agent` and `Contact` header (email or URL);
     include a per-tenant token in the `User-Agent` for tracing abuse; expose
     both via config.
-  - Enforce rate limits (≤ 10 000 requests/day; transfer < 1 GB/day), default
-    timeout 180 s, and `maxsize` 512 MiB.
+  - Enforce rate limits (≤ 10 000 requests/day; transfer < 1 GB/day; as of
+    2025-09-08), default timeout 180 s, and `maxsize` 512 MiB.
   - Cap concurrent Overpass requests with a global semaphore or worker pool
     (default ≤ 2, configurable).
   - Retry HTTP 429 responses with jittered backoff.
@@ -370,13 +370,13 @@ Operational details:
     - Hash: lowercase hex SHA-256 of the canonical payload.
     - Key: `route:v1:<hash>` (optionally truncate to first 32 hex chars;
       document truncation).
-- **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
-  jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate on
-  schema/engine version bumps by rotating namespace suffix (e.g. `v2`).
-- **Eviction:** Configure `maxmemory` and `maxmemory-policy allkeys-lfu`; set
-  per-namespace memory budgets and alert on `evicted_keys` > 0.
-- **Attribution & provenance:** Store enrichment provenance (source URL,
-  timestamp, bbox) and enforce OSM attribution requirements in UI/docs.
+    - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
+      jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate
+      on schema/engine version bumps by rotating namespace suffix (e.g. `v2`).
+    - **Eviction:** Configure `maxmemory` and `maxmemory-policy allkeys-lfu`;
+      set per-namespace memory budgets and alert on `evicted_keys` > 0.
+    - **Attribution & provenance:** Store enrichment provenance (source URL,
+      timestamp, bbox) and enforce OSM attribution requirements in UI/docs.
 
 ## Caching Layer (Redis/Memcached)
 
@@ -437,14 +437,7 @@ The cost analysis for MVP even budgets a small Redis Cloud instance for
 caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
 underlining its role as both cache and queue.
 
-In a Kubernetes deployment, Redis can run as an in-cluster service or use a
-managed Redis. For a lightweight start, a single small Redis instance (or even
-an in-memory cache within the app process for non-critical data) suffices. The
-cost analysis for the MVP even budgets a small Redis Cloud instance for
-caching[^1], underlining its role. Memcached could alternatively be used for
-simple key-value caching if an even simpler, stateless cache layer is desired;
-however, Redis offers more features (persistence, pub/sub, etc.) that could be
-handy (for example, using Redis as the job queue backend in Apalis).
+ 
 
 *Observability:* The caching layer is monitored to ensure it’s effectively
 improving performance. **Cache hit rates and misses** for critical caches are
@@ -887,6 +880,7 @@ for urban explorers, but also is stable, scalable, and well-monitored in
 production.
 
 **Sources:** The design is informed by the Wildside project’s high-level design
+ 
 documents and repository guides, which emphasise a Rust Actix backend,
 Postgres/PostGIS data store, and monolithic MVP approach[^1][^2]. Observability
 and cloud deployment strategies follow the cloud-native architecture
@@ -903,3 +897,23 @@ growth.
 [^6]: <https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features>
 [^7]: <https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management>
 [^8]: <https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step>
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+ and caching and optimisation considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+and caching and optimization considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.

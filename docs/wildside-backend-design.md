@@ -565,7 +565,7 @@ flowchart TD
       --bbox <minLon,minLat,maxLon,maxLat> \
       --tags amenity,historic,tourism,leisure,natural \
       --batch-size 10000 \
-      --threads 4
+      --threads 4   # number of decode/ingest worker threads (document scope)
     ```
 
   - Performance: Stream with bounded memory; parallel decode when CPU > 1.
