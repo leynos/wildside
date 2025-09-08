@@ -33,7 +33,7 @@ module "doks" {
 
   cluster_name       = "example"
   region             = "nyc1"
-  kubernetes_version = "1.33.4-do.0"
+  kubernetes_version = "<1.33.x-do.0>" # choose a supported release
 
   node_pools = [{
     name       = "default"
@@ -55,6 +55,10 @@ output "kubeconfig" {
 }
 ```
 
+Select a supported Kubernetes version (1.33.x, 1.32.x, or 1.31.x). See the
+DigitalOcean version table for current releases:
+<https://docs.digitalocean.com/products/kubernetes/details/supported-releases/>.
+
 Marking the `kubeconfig` output as `sensitive` hides it in the CLI but not in
 state. Store state in an encrypted, access‑controlled backend and rotate the
 DigitalOcean token and cluster credentials if exposure is suspected.
@@ -66,6 +70,7 @@ Retrieve the kubeconfig and cluster endpoint after applying the configuration:
 
 ```sh
 tofu output -raw kubeconfig > kubeconfig.yaml
+chmod 600 kubeconfig.yaml
 tofu output endpoint
 ```
 
