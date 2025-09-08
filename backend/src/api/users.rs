@@ -76,7 +76,11 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
 )]
 #[get("/users")]
 pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
-    if session.get::<String>("user_id")?.is_none() {
+    if session
+        .get::<String>("user_id")
+        .map_err(actix_web::Error::from)?
+        .is_none()
+    {
         return Err(Error::unauthorized("login required"));
     }
     let data = vec![User {
