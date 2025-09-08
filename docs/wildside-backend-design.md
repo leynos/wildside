@@ -363,6 +363,7 @@ erDiagram
     }
 
     pois {
+        TEXT element_type PK
         BIGINT id PK
         GEOGRAPHY location "Point, 4326"
         JSONB osm_tags
@@ -371,6 +372,7 @@ erDiagram
     }
 
     poi_interest_themes {
+        TEXT poi_element_type PK, FK
         BIGINT poi_id PK, FK
         UUID theme_id PK, FK
     }
@@ -385,6 +387,7 @@ erDiagram
 
     route_pois {
         UUID route_id PK, FK
+        TEXT poi_element_type PK, FK
         BIGINT poi_id PK, FK
         INTEGER position
     }
@@ -447,6 +450,7 @@ Null (NN), and Generalized Search Tree (GiST).
 | `poi_element_type` | `TEXT` | `PRIMARY KEY`, `FOREIGN KEY (pois.element_type)` | POI element type. |
 | `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | POI element ID. |
 | `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
+|  |  | PK: `(poi_element_type, poi_id, theme_id)`; FK: `(poi_element_type, poi_id)` → `pois(element_type, id)` |  |
 
 **`routes`**: Stores generated walks.
 
@@ -463,9 +467,11 @@ specific route.
 
 | Column | Type | Constraints | Description |
 | ---------- | --------- | --------------------------------------------- | -------------------------------------------- |
-| `route_id` | `UUID` | `PK (with poi_id)`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table. |
-| `poi_id` | `BIGINT` | `PK (with route_id)`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
+| `route_id` | `UUID` | `PK`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table. |
+| `poi_element_type` | `TEXT` | `PK`, `FOREIGN KEY (pois.element_type)` | POI element type. |
+| `poi_id` | `BIGINT` | `PK`, `FOREIGN KEY (pois.id)` | POI element ID. |
 | `position` | `INTEGER` | `NOT NULL`, `UNIQUE (route_id, position)` | Sequential position of this POI in the walk. |
+|  |  | FK: `(poi_element_type, poi_id)` → `pois(element_type, id)` |  |
 
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
@@ -555,7 +561,7 @@ flowchart TD
   - Write path: UPSERT by `(element_type, id)` in batches with transactions;
     ensure a UNIQUE constraint on `(element_type, id)` backs the upsert. Create
     GiST on `location` and GIN on `osm_tags` after the initial bulk load to
-    maximise ingest throughput.
+    maximize ingest throughput.
   - Determinism: Canonicalise tag keys/values; record import provenance
     (source URL, timestamp, bbox) for audit.
   - CLI:

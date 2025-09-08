@@ -277,7 +277,7 @@ performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
 K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
 Key metrics include `pg_stat_activity`-derived gauges (connections in use),
-`pg_stat_database_blks_hit/blk_read` (cache hit rate), and slow query counts.
+`pg_stat_database_blks_hit/blks_read` (cache hit rate), and slow query counts.
 From the application side, enable Diesel’s query logging and instrument
 timings for critical queries (for instance, wrap certain calls to measure their
 duration). The Prometheus operator will scrape database metrics (if using an
@@ -285,9 +285,10 @@ operator or a managed DB with metrics). In Grafana, dashboards will plot DB
 metrics like CPU, I/O, number of queries per second, etc., as recommended by
 the deployment guide. Example alert:
 - `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
+  Note: metric names are exporter‑dependent; adjust to your exporter.
 
 If any query regularly takes too long (impacting route generation latency),
-alert and optimize that part (adding indexes or caching results). On the
+alert and optimise that part (adding indexes or caching results). On the
 analytics side, database operations themselves aren’t directly in PostHog, but
 PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
 saves a generated route to the DB).
