@@ -556,10 +556,10 @@ use redis::Client;
 
 fn setup_queues(redis: Client) {
     // Route generation queue
-    let rg_cfg = Config::default().set_namespace("route_generation");
+    let rg_cfg = Config::default().set_namespace("apalis:route_generation");
     let _rg = RedisStorage::new_with_config(redis.clone(), rg_cfg);
     // Enrichment queue
-    let en_cfg = Config::default().set_namespace("enrichment");
+    let en_cfg = Config::default().set_namespace("apalis:enrichment");
     let _en = RedisStorage::new_with_config(redis, en_cfg);
 }
 ```
@@ -570,6 +570,31 @@ Define a clear reliability policy:
 - route exhausted jobs to a dead-letter queue (DLQ) for inspection.
 - require idempotency per job type (for example, a deduplication key) so
   retries do not duplicate work.
+
+```rust
+use std::time::Duration;
+use apalis::{prelude::*, layers::retry::{RetryLayer, RetryPolicy}};
+// Worker with bounded immediate retries
+let worker = WorkerBuilder::new("route_generation")
+    .layer(RetryLayer::new(RetryPolicy::retries(3))) // cap attempts
+    .build(rg_storage.clone(), route_generation_handler);
+
+// Inside the handler, on failure, reschedule with backoff (persisting attempts):
+async fn route_generation_handler(job: GenerateRouteJob, ctx: JobContext) -> Result<(), anyhow::Error> {
+    if let Err(err) = do_work(job.clone()).await {
+        let attempt = ctx.attempt().unwrap_or(1);
+        let delay = Duration::from_secs((2_u64).saturating_pow(attempt.min(5)) * 5); // bounded exponential
+        if attempt >= 5 {
+            // send to DLQ
+            ctx.storage().send_to("apalis:dlq:route_generation", job).await?;
+        } else {
+            ctx.storage().reschedule(job, delay).await?;
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+```
 
 With Apalis, the Actix Web server produces tasks and worker(s) consume
 them. Delivery is at least once, so each handler must be idempotent.
@@ -598,13 +623,13 @@ schema:
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct GeoPoint {
     lat: f64,
     lon: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct RoutePrefs {
     // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
 }
@@ -620,11 +645,13 @@ struct GenerateRouteJob {
     prefs: RoutePrefs,
 }
 ```
+// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and -180.0 < lon ≤ 180.0 at enqueue time.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at-least-once, idempotent, retry-with-backoff,
 and DLQ semantics.
 
+<<<<<<< HEAD
 *Observability:* Instrument the task worker system to ensure smooth
 operation. Track the **queue length** (pending jobs), throughput, and
 success/failure counts. When using Apalis or similar, hook into their
@@ -639,6 +666,37 @@ outcomes affect user experience; emit analytics for notable outcomes
 (for example, a “RouteGenerationFailed” event) to understand frequency
 and impact. Overall, keep workers transparent to users but closely
 monitored via metrics and logs.
+||||||| parent of 27e5562 (Document Apalis queue prefixes and retries)
+*Observability:* The task worker system will be instrumented to ensure
+smooth operation. Key metrics include the **queue length** (number of
+pending jobs), job throughput, and job success/failure counts. When using
+Apalis or similar, hook into their events to increment Prometheus
+counters (e.g. `jobs_success_total`, `jobs_failed_total`) and gauge how
+many jobs are in-flight. Measure **job execution time** per job type to
+detect consistently slow tasks. In K8s, worker pods can expose a
+`/metrics` endpoint so Prometheus can scrape worker-specific stats.
+Exceptions or failed tasks should be logged with details (and possibly
+sent to an error tracking system). From the analytics side, background
+jobs may emit events such as “RouteGenerationFailed” for analysis of how
+often and where it happens. Overall, background workers are transparent
+to users but should be closely monitored by the devops team via metrics
+and logs.
+=======
+*Observability:* The task worker system will be instrumented to ensure
+smooth operation. Key metrics include the **queue length** (number of
+pending jobs), job throughput, and job success/failure counts. When using
+Apalis or similar, hook into their events to increment Prometheus
+counters (e.g. `jobs_success_total`, `jobs_failed_total`) and gauge how
+many jobs are in-flight. Measure **job execution time** per job type to
+detect consistently slow tasks. In Kubernetes (K8s), worker pods can expose a
+`/metrics` endpoint so Prometheus can scrape worker-specific stats.
+Exceptions or failed tasks should be logged with details (and possibly
+sent to an error tracking system). From the analytics side, background
+jobs may emit events such as “RouteGenerationFailed” for analysis of how
+often and where it happens. Overall, background workers are transparent
+to users but should be closely monitored by the DevOps team via metrics
+and logs.
+>>>>>>> 27e5562 (Document Apalis queue prefixes and retries)
 
 ## Session Management and Security
 
