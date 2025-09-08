@@ -40,8 +40,6 @@ module "doks" {
     size       = "s-2vcpu-4gb"
     node_count = 3
     auto_scale = false
-    min_nodes  = 1
-    max_nodes  = 3
   }]
 
   expose_kubeconfig = true
@@ -56,6 +54,9 @@ output "kubeconfig" {
   sensitive = true
 }
 ```
+
+Enable `auto_scale` and define `min_nodes` and `max_nodes` to scale between
+bounds. These settings have no effect when `auto_scale` is `false`.
 
 Retrieve the kubeconfig and cluster endpoint after applying the configuration:
 
