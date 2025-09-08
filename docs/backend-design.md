@@ -712,10 +712,21 @@ sequence diagram shows the browser fetching assets from CDN and API calls
 hitting
 backend)([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L26-L34)).
  The backend containers will mount config (like database DSN, secrets for
+<<<<<<< HEAD
 cookie signing, API keys) via K8s Secrets and ConfigMaps. Include readiness and
 liveness probes for the Actix Web app (endpoints `/health/ready` and
 `/health/live`) so Kubernetes can detect if a pod is unresponsive and restart
 it.
+||||||| parent of a3395ac (Document HealthState and wrap health docs)
+cookie signing, API keys) via K8s Secrets and ConfigMaps. We’ll also include
+readiness and liveness probes for the Actix Web app (e.g. endpoints `/health/ready` and `/health/live`)
+so Kubernetes can detect if a pod is unresponsive and restart it.
+=======
+cookie signing, API keys) via K8s Secrets and ConfigMaps. We’ll also include
+readiness and liveness probes for the Actix Web app (e.g. endpoints
+`/health/ready` and `/health/live`) so Kubernetes can detect if a pod
+is unresponsive and restart it.
+>>>>>>> a3395ac (Document HealthState and wrap health docs)
 
 Database options include a managed Postgres (e.g. DigitalOcean Managed DB) or
 running a cluster via an operator like **CloudNativePG**. The design documents

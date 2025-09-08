@@ -3,6 +3,7 @@
 use actix_web::{get, web, HttpResponse};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Shared readiness state for health checks.
 #[derive(Default)]
 pub struct HealthState {
     ready: AtomicBool,
