@@ -272,6 +272,7 @@ transactionally updates user-specific info. Heavy geospatial reads can be
 isolated by using read replicas or a separate schema, but the MVP can start
 with a single database instance for everything.
 
+ 
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
@@ -286,6 +287,8 @@ metrics like CPU, I/O, number of queries per second, etc., as recommended by
 the deployment guide. Example alert:
 - `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
   Note: metric names are exporter‑dependent; adjust to your exporter.
+ 
+ 
 
 If any query regularly takes too long (impacting route generation latency),
 alert and optimise that part (adding indexes or caching results). On the
@@ -369,7 +372,7 @@ Operational details:
     - Stable JSON (UTF-8, sorted keys, no whitespace).
     - Coordinates rounded to 5 decimal places (~1.1 m); themes sorted.
     - Hash: lowercase hex SHA-256 of the canonical payload.
-    - Key: `route:v1:<hash>` (optionally truncate to first 32 hex chars;
+    - Key: `route:v1:<sha256>` (optionally truncate to first 32 hex chars;
       document truncation).
     - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
       jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate
