@@ -43,5 +43,6 @@ coverage/
 *.sublime-workspace
 *.sublime-project
 .history/
+.crush/
 
 deploy/k8s/backend/secret.env
