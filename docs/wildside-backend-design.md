@@ -449,8 +449,7 @@ Null (NN), and Generalized Search Tree (GiST).
 | ---------- | -------- | ------------------------------------------------- | ------------------------------------------- |
 | `poi_element_type` | `TEXT` | `PRIMARY KEY`, `FOREIGN KEY (pois.element_type)` | POI element type. |
 | `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | POI element ID. |
-| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
-|  |  | PK: `(poi_element_type, poi_id, theme_id)`; FK: `(poi_element_type, poi_id)` → `pois(element_type, id)` |  |
+| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)`; PK `(poi_element_type, poi_id, theme_id)`; FK `(poi_element_type, poi_id)` → `pois(element_type, id)` | Foreign key to the `interest_themes` table. |
 
 **`routes`**: Stores generated walks.
 
@@ -562,7 +561,7 @@ flowchart TD
     ensure a UNIQUE constraint on `(element_type, id)` backs the upsert. Create
     GiST on `location` and GIN on `osm_tags` after the initial bulk load to
     maximize ingest throughput.
-  - Determinism: Canonicalise tag keys/values; record import provenance
+  - Determinism: Canonicalize tag keys/values; record import provenance
     (source URL, timestamp, bbox) for audit.
   - CLI:
 

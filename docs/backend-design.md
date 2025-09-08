@@ -291,7 +291,7 @@ the deployment guide. Example alert:
  
 
 If any query regularly takes too long (impacting route generation latency),
-alert and optimise that part (adding indexes or caching results). On the
+alert and optimize that part (adding indexes or caching results). On the
 analytics side, database operations themselves aren’t directly in PostHog, but
 PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
 saves a generated route to the DB).
