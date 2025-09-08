@@ -246,7 +246,7 @@ browser‑only runtime.
 - `build`: `vite build`
 - `preview`: `vite preview`
 - `test`: `vitest run --coverage`
-- `audit`: `bun x npm@latest audit`
+- `audit`: `bun x pnpm@latest audit`
 - `audit:snyk`: `bun x snyk test`
 - Note: `audit` requires a committed `bun.lock`; `audit:snyk` requires
       installed dependencies—run `bun install` before invoking it.

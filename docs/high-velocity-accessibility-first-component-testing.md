@@ -763,7 +763,7 @@ For an accessibility failure, the workflow is as follows:
 1. A test fails in the CI pipeline.
 2. The CI job artifacts will include a `trace.zip` file.
 3. Download and open this file locally using the command
-   `npx playwright show-trace trace.zip`.
+   `pnpm exec playwright show-trace trace.zip`.
 4. The Trace Viewer opens. Navigate to the failed
    `expect(accessibilityScanResults)` assertion.
 5. Select the action immediately preceding the scan (e.g., `page.click()`).
@@ -845,13 +845,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Run Vitest shard
-        run: npx vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        run: pnpm exec vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
 
       - name: Upload blob report artifact
         if: always()
@@ -875,10 +875,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
-          
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Download all blob reports
         uses: actions/download-artifact@v4
@@ -888,7 +888,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge blob reports into a single HTML report
-        run: npx vitest run --merge-reports
+        run: pnpm exec vitest run --merge-reports
 
       - name: Upload final HTML report
         uses: actions/upload-artifact@v4

@@ -31,7 +31,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "pnpm -r run build",
     "audit": "node security/validate-audit.js"
   },
   "engines": {

@@ -75,8 +75,8 @@ lint-makefile:
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	# Ensure JavaScript dependencies are present for all workspaces
-	npm ci --workspaces || npm install --workspaces
-	npm --workspaces run test --if-present --silent --no-audit --no-fund
+	pnpm install --frozen-lockfile || pnpm install
+	pnpm -r --if-present --silent test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 BUN_LOCK_HASH := $(shell sha256sum bun.lock | awk '{print $$1}')
@@ -89,7 +89,7 @@ $(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit:
-	npm run audit
+	pnpm run audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

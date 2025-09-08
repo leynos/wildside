@@ -12,9 +12,9 @@ check packages/tokens/package.json
 check packages/types/package.json
 check deploy/charts/wildside/Chart.yaml
 
-echo "---- Scan for unconfigured npm packages ----"
+echo "---- Scan for unconfigured pnpm packages ----"
 # Find all package.json, strip leading ./, ignore node_modules
-all_npm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
+all_pnpm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
 configured=(
   "package.json"
   "frontend-pwa/package.json"
@@ -22,10 +22,10 @@ configured=(
   "packages/types/package.json"
 )
 
-mapfile -t all_npm_arr <<<"$all_npm"
-for p in "${all_npm_arr[@]}"; do
+mapfile -t all_pnpm_arr <<<"$all_pnpm"
+for p in "${all_pnpm_arr[@]}"; do
   if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
-    echo "UNCONFIGURED npm package.json: $p"
+    echo "UNCONFIGURED pnpm package.json: $p"
   fi
 done
 

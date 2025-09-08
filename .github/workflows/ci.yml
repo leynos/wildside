@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Enable Corepack
+        run: corepack enable
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
         with:
           bun-version: '1.2.20'
@@ -43,7 +45,7 @@ jobs:
           bun --version
 
       - name: Audit exceptions
-        run: npm run audit
+        run: pnpm run audit
 
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie
