@@ -15,6 +15,7 @@ use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
+use backend::Trace;
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
 #[get("/health/ready")]
@@ -76,6 +77,7 @@ async fn main() -> std::io::Result<()> {
             .service(list_users);
 
         let app = App::new()
+            .wrap(Trace)
             .service(api)
             .service(ws::ws_entry)
             .service(ready)

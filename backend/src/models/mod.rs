@@ -5,7 +5,24 @@
 //! serialisation contracts (serde) in each type's Rustdoc.
 //!
 //! Public surface:
+//! - Error (alias to `error::Error`) — API error response payload.
+//! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier.
 //! - User (alias to `user::User`) — domain user identity and display name.
 
+pub mod error;
 pub mod user;
+pub use self::error::{Error, ErrorCode};
 pub use self::user::User;
+
+/// Convenient API result alias.
+///
+/// # Examples
+/// ```
+/// use actix_web::HttpResponse;
+/// use backend::models::{ApiResult, Error};
+///
+/// fn handler() -> ApiResult<HttpResponse> {
+///     Err(Error::forbidden("nope"))
+/// }
+/// ```
+pub type ApiResult<T> = Result<T, Error>;
