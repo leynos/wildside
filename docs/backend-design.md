@@ -170,16 +170,30 @@ unbounded growth.
 }
 ```
 
-WebSocket `route_generation_status` messages mirror these states and report
-timeouts or failures. Each message includes:
+#### WebSocket status messages
 
-- `type` — literal `"route_generation_status"`
-- `request_id` — string UUID for the job
-- `status` — `"queued" | "running" | "succeeded" | "failed"`
-- `progress` — integer from 0–100
-- `error` — optional string describing the failure or timeout
+Clients subscribe to `route_generation_status` updates for a `request_id`.
+Messages conform to this JSON schema:
 
-Example `route_generation_status` event (JSON over WebSocket):
+```json
+{
+  "type": "object",
+  "required": ["type", "request_id", "status", "progress"],
+  "properties": {
+    "type": {"type": "string", "const": "route_generation_status"},
+    "request_id": {"type": "string", "format": "uuid"},
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "succeeded", "failed"]
+    },
+    "progress": {"type": "integer", "minimum": 0, "maximum": 100},
+    "error": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  }
+}
+```
+
+Example message:
 
 ```json
 {
@@ -190,11 +204,13 @@ Example `route_generation_status` event (JSON over WebSocket):
 }
 ```
 
-Status transitions:
+Allowed transitions:
 
 - `queued` → `running` → `succeeded`
 - `running` → `failed` (with `"error": "string"`)
-- On timeout, emit `failed` with `"error": "timeout"`. Progress is 0–100.
+
+On timeout the worker emits `failed` with `"error": "timeout"`. `progress`
+represents completion from 0 to 100.
 
 The engine will rely on **OpenStreetMap (OSM) data and Wikidata** for rich POI
 info[^1].
