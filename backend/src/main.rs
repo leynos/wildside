@@ -83,10 +83,11 @@ async fn main() -> std::io::Result<()> {
 
             app
         }
-    });
+    })
+    .bind(("0.0.0.0", 8080))?;
 
     // Mark the application as ready after initialisation completes.
     health_state.mark_ready();
 
-    server.bind(("0.0.0.0", 8080))?.run().await
+    server.run().await
 }

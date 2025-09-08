@@ -1,6 +1,6 @@
 //! Health endpoints: liveness & readiness probes for orchestration and load balancers.
 //! Document endpoints in OpenAPI via Utoipa.
-use actix_web::{get, web, HttpResponse};
+use actix_web::{get, http::header, web, HttpResponse};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Shared readiness state for health checks.
@@ -38,9 +38,13 @@ impl HealthState {
 #[get("/health/ready")]
 pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
     if state.is_ready() {
-        HttpResponse::Ok().finish()
+        HttpResponse::Ok()
+            .insert_header((header::CACHE_CONTROL, "no-store"))
+            .finish()
     } else {
-        HttpResponse::ServiceUnavailable().finish()
+        HttpResponse::ServiceUnavailable()
+            .insert_header((header::CACHE_CONTROL, "no-store"))
+            .finish()
     }
 }
 
@@ -54,5 +58,7 @@ pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
 )]
 #[get("/health/live")]
 pub async fn live() -> HttpResponse {
-    HttpResponse::Ok().finish()
+    HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .finish()
 }
