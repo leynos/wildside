@@ -11,7 +11,7 @@ use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
-use backend::api::health::{live, ready};
+use backend::api::health::{live, ready, HealthState};
 use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
@@ -50,35 +50,43 @@ async fn main() -> std::io::Result<()> {
         .map(|v| v != "0")
         .unwrap_or(true);
 
-    HttpServer::new(move || {
-        let session_middleware =
-            SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
-                .cookie_name("session".to_owned())
-                .cookie_path("/".to_owned())
-                .cookie_secure(cookie_secure)
-                .cookie_http_only(true)
-                .cookie_same_site(SameSite::Lax)
-                .build();
+    // Health readiness state shared with handlers
+    let health_state = web::Data::new(HealthState::new());
+    let server = HttpServer::new({
+        let health_state = health_state.clone();
+        move || {
+            let session_middleware =
+                SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                    .cookie_name("session".to_owned())
+                    .cookie_path("/".to_owned())
+                    .cookie_secure(cookie_secure)
+                    .cookie_http_only(true)
+                    .cookie_same_site(SameSite::Lax)
+                    .build();
 
-        let api = web::scope("/api/v1")
-            .wrap(session_middleware)
-            .service(login)
-            .service(list_users);
+            let api = web::scope("/api/v1")
+                .wrap(session_middleware)
+                .service(login)
+                .service(list_users);
 
-        let app = App::new()
-            .wrap(Trace)
-            .service(api)
-            .service(ws::ws_entry)
-            .service(ready)
-            .service(live);
+            let app = App::new()
+                .app_data(health_state.clone())
+                .wrap(Trace)
+                .service(api)
+                .service(ws::ws_entry)
+                .service(ready)
+                .service(live);
 
-        #[cfg(debug_assertions)]
-        let app =
-            app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+            #[cfg(debug_assertions)]
+            let app = app
+                .service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
-        app
-    })
-    .bind(("0.0.0.0", 8080))?
-    .run()
-    .await
+            app
+        }
+    });
+
+    // Mark the application as ready after initialisation completes.
+    health_state.mark_ready();
+
+    server.bind(("0.0.0.0", 8080))?.run().await
 }

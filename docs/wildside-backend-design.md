@@ -134,7 +134,7 @@ API and WebSocket traffic.
 
   - Enqueue jobs for the background workers to process.
 
-  - Serve a `/metrics` endpoint for Prometheus and a `/healthz` endpoint for
+  - Serve a `/metrics` endpoint for Prometheus and `/health/ready` and `/health/live` endpoints for
     Kubernetes probes.
 
 - **Implementation Tasks:**
@@ -222,7 +222,7 @@ API and WebSocket traffic.
     - Integrate the `actix-web-prom` crate as middleware to expose default
       Prometheus metrics on a `/metrics` endpoint.
 
-    - Implement a `/healthz` endpoint that returns a `200 OK` response.
+    - Implement `/health/ready` and `/health/live` endpoints. `/health/ready` returns `200 OK` once dependencies are initialised and `503` otherwise.
 
     - Ensure all request handlers have `tracing` spans with a unique
       `request_id`, propagating it via a `Trace-Id` response header for
