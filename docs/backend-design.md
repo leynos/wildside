@@ -40,7 +40,8 @@ Alongside HTTP, **Actix WS** (WebSockets) enables real-time bidirectional
 communication. Clients upgrade the connection via `GET /ws`, authenticate with
 the same bearer token used for HTTP requests (for example, via the
 `Sec-WebSocket-Protocol` header or a cookie; avoid query parameters), and
-subscribe to `route_generation_status` events for a `request_id`. The server pushes updates asynchronously, which is useful for
+subscribe to `route_generation_status` events for a `request_id`.
+The server pushes updates asynchronously, which is useful for
 long-running processes and live features. For example, when a user requests a
 personalised route, the server immediately acknowledges the request, then
 pushes progress or completion events via WebSocket once the route is computed.
@@ -88,10 +89,6 @@ Operational notes:
   `default_srid` to match to avoid empty tiles.
 - Enforce CORS for tile endpoints, and apply rate limits or CDN caching at the
   edge.
-
-[^1]: <https://maplibre.org/martin/config-file.html> – `base_path` option.
-[^2]: <https://maplibre.org/martin/using.html#martin-endpoints> – Tile and
-    TileJSON endpoints.
 
 ## Route Generation Engine Integration
 
@@ -741,7 +738,8 @@ to multiple instances. Each preview would have its own isolated DB, etc., as
 noted in the design doc (possibly using separate schemas per
 environment)[^4].
 
-For **scalability**, even though the architecture is monolithic, the app is designed to
+For **scalability**, even though the architecture is monolithic, the app is
+ designed to
 handle concurrent loads. Actix is highly concurrent, and Rust’s performance
 means the system utilises CPU efficiently. If traffic grows, the web
 Deployment horizontally (add more pods). Thanks to stateless design (sessions
