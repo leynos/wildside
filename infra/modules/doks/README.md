@@ -65,8 +65,8 @@ tofu output -raw kubeconfig > kubeconfig.yaml
 tofu output endpoint
 ```
 
-Consult the DigitalOcean provider docs for advanced configuration:
-<https://registry.terraform.io/providers/opentofu/digitalocean/latest/docs>
+Consult the DigitalOcean provider documentation for advanced configuration:
+<https://search.opentofu.org/provider/opentofu/digitalocean/latest>
 
 For modules published under a different account, substitute `OWNER`
 with the GitHub account name that hosts the repository.
