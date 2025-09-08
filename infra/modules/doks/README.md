@@ -29,11 +29,12 @@ terraform {
 provider "digitalocean" {}
 
 module "doks" {
-  source = "git::https://github.com/OWNER/wildside.git//infra/modules/doks?ref=v0.1.0"
+  # Prefer a released tag or a commit SHA for reproducibility
+  source = "git::https://github.com/OWNER/wildside.git//infra/modules/doks?ref=<TAG_OR_SHA>"
 
   cluster_name       = "example"
   region             = "nyc1"
-  kubernetes_version = "<1.33.x-do.0>" # choose a supported release
+  kubernetes_version = "<SUPPORTED_DOKS_VERSION>"
 
   node_pools = [{
     name       = "default"
@@ -55,13 +56,15 @@ output "kubeconfig" {
 }
 ```
 
-Select a supported Kubernetes version (1.33.x, 1.32.x, or 1.31.x). See the
-DigitalOcean version table for current releases:
-<https://docs.digitalocean.com/products/kubernetes/details/supported-releases/>.
-
-Marking the `kubeconfig` output as `sensitive` hides it in the CLI but not in
-state. Store state in an encrypted, access‑controlled backend and rotate the
-DigitalOcean token and cluster credentials if exposure is suspected.
+> Note: Select a supported Kubernetes version from DigitalOcean's current list
+> of DOKS releases (typically the latest three minor versions). See the version
+> table for current releases:
+> <https://docs.digitalocean.com/products/kubernetes/details/supported-releases/>.
+>
+> Caution: Sensitive outputs persist in state. Store state in an encrypted,
+> access‑controlled backend and restrict state access to authorised
+> principals. Rotate the DigitalOcean token and cluster credentials if state
+> exposure is suspected.
 
 Enable `auto_scale` and define `min_nodes` and `max_nodes` to scale between
 bounds. These settings have no effect when `auto_scale` is `false`.
@@ -77,5 +80,5 @@ tofu output endpoint
 Consult the DigitalOcean provider documentation for advanced configuration:
 <https://search.opentofu.org/provider/opentofu/digitalocean/latest>
 
-Substitute `OWNER` with the GitHub account name and `v0.1.0` with the tagged
-release or commit to use.
+Substitute `OWNER` with the GitHub account name and `<TAG_OR_SHA>` with the
+tagged release or commit to use.
