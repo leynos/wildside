@@ -433,7 +433,8 @@ Null (NN), and Generalized Search Tree (GiST).
 
 | Column | Type | Notes |
 | ------------------ | ------------------------ | ------------------------------------------- |
-| `id` | `BIGINT` | PK; OSM element ID |
+| `element_type` | `TEXT` | NN; one of `node\|way\|relation` |
+| `id` | `BIGINT` | NN; OSM element ID (unique with `element_type`) |
 | `location` | `GEOGRAPHY(Point, 4326)` | NN; GiST index |
 | `osm_tags` | `JSONB` | OSM tags; GIN index |
 | `narrative` | `TEXT` | Optional engaging description |
@@ -443,7 +444,8 @@ Null (NN), and Generalized Search Tree (GiST).
 
 | Column | Type | Constraints | Description |
 | ---------- | -------- | ------------------------------------------------- | ------------------------------------------- |
-| `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
+| `poi_element_type` | `TEXT` | `PRIMARY KEY`, `FOREIGN KEY (pois.element_type)` | POI element type. |
+| `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | POI element ID. |
 | `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
 
 **`routes`**: Stores generated walks.
@@ -547,11 +549,13 @@ flowchart TD
   defined geographic area (Edinburgh).
 
   - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
-  - Mapping: Nodes → POIs; Ways/Relations → POIs via centroid; persist `id`
-    (OSM element id), `location` (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
-  - Write path: UPSERT by `id` in batches with transactions; ensure a UNIQUE
-    constraint on `id` backs the upsert. Create GiST on `location` and GIN on
-    `osm_tags` after the initial bulk load to maximise ingest throughput.
+  - Mapping: Nodes → POIs; Ways/Relations → POIs via point-on-surface; persist
+    `element_type` (`node\|way\|relation`), `id` (OSM element ID), `location`
+    (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
+  - Write path: UPSERT by `(element_type, id)` in batches with transactions;
+    ensure a UNIQUE constraint on `(element_type, id)` backs the upsert. Create
+    GiST on `location` and GIN on `osm_tags` after the initial bulk load to
+    maximise ingest throughput.
   - Determinism: Canonicalise tag keys/values; record import provenance
     (source URL, timestamp, bbox) for audit.
   - CLI:
@@ -559,15 +563,21 @@ flowchart TD
     ```bash
     ingest-osm --pbf edinburgh.osm.pbf \
       --bbox <minLon,minLat,maxLon,maxLat> \
-      --tags amenity,historic,tourism,leisure,natural
+      --tags amenity,historic,tourism,leisure,natural \
+      --batch-size 10000 \
+      --threads 4
     ```
 
   - Performance: Stream with bounded memory; parallel decode when CPU > 1.
   - Acceptance criteria:
     - CLI runs against an Edinburgh extract and completes within a bounded time.
-    - Idempotent re-runs do not duplicate POIs (UPSERT-by-id verified).
-    - UNIQUE(id), GiST(location), and GIN(osm_tags) exist post-load.
+    - Idempotent re-runs do not duplicate POIs (UPSERT by `(element_type, id)`
+      verified).
+    - UNIQUE(element_type,id), GiST(location), and GIN(osm_tags) exist
+      post-load.
     - Import provenance (source URL, timestamp, bbox) recorded.
+    - Runtime reports inserted/updated counts per element_type and effective
+      batch size/threads.
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result

@@ -292,6 +292,27 @@ analytics side, database operations themselves aren’t directly in PostHog, but
 PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
 saves a generated route to the DB).
 
+## Data seeding, enrichment, and route caching
+
+- Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
+  `.osm.pbf` extracts and load nodes, ways, and relations into PostgreSQL. This
+  bootstraps the POI dataset before the API is exposed, ensuring the backend
+  operates on consistent local data.
+  - Convert ways/relations that represent POIs to point features via
+    point-on-surface (`GEOGRAPHY(Point, 4326)`) before insert to avoid geometry
+    mismatches.
+  - Idempotency: Use `ON CONFLICT (element_type, id) DO UPDATE` to avoid
+    duplicates.
+  - Batching: Commit 5k–20k features per transaction to bound locks and WAL.
+  - Verification: Report inserted/updated counts and elapsed time at exit.
+- On-demand enrichment: When a requested area lacks sufficient nearby POIs, a
+  background `EnrichmentJob` queries the Overpass API for additional amenities.
+  Newly found items are inserted into the database so subsequent requests
+  benefit from richer coverage.
+- Route output caching: Completed route responses are stored in Redis using a
+  hash of the request parameters as the cache key. If a later request hashes to
+  the same value, the cached route is returned immediately, reducing
+  computation and latency.
 Operational details:
 
 - **Overpass quotas:**
@@ -314,8 +335,8 @@ Operational details:
     - Stable JSON (UTF-8, sorted keys, no whitespace).
     - Coordinates rounded to 5 decimal places (~1.1 m); themes sorted.
     - Hash: lowercase hex SHA-256 of the canonical payload.
-    - Key: `route:v1:` (optionally truncate to first 32 hex chars; document
-      truncation).
+    - Key: `route:v1:<hash>` (optionally truncate to first 32 hex chars;
+      document truncation).
 - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
   jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate on
   schema/engine version bumps by rotating namespace suffix (e.g. `v2`).
