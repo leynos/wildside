@@ -313,6 +313,39 @@ saves a generated route to the DB).
   hash of the request parameters as the cache key. If a later request hashes to
   the same value, the cached route is returned immediately, reducing
   computation and latency.
+ 
+Figure: Route response caching and on-demand enrichment sequence.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant API as API Service
+  participant Cache as Redis
+  participant DB as PostgreSQL
+  participant Worker as Enrichment Worker
+  participant Overpass as Overpass API
+  rect rgb(245,255,240)
+    Note over API,Cache: Route response caching
+    API->>Cache: GET cache_key(params)
+    alt hit
+      Cache-->>API: Cached response
+    else miss
+      API->>DB: Compute route using POIs (element_type,id)
+      API-->>Cache: SET cache_key -> response (TTL)
+      API-->>API: Return response
+    end
+  end
+  rect rgb(255,250,240)
+    Note over API,Worker: On-demand enrichment flow
+    API->>Worker: Enqueue EnrichmentJob (bbox, themes) when POIs sparse
+    Worker->>Overpass: Query (with quota/contact headers)
+    Overpass-->>Worker: POI results
+    Worker->>DB: Persist UPSERT (element_type,id,location,osm_tags,provenance)
+    Worker-->>API: Emit metrics / optional completion event
+  end
+```
+
+ 
 Operational details:
 
 - **Overpass quotas:**
