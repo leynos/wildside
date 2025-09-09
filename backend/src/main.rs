@@ -90,11 +90,15 @@ async fn main() -> std::io::Result<()> {
             // `--features metrics` to expose `/metrics` and add request metrics.
             #[cfg(feature = "metrics")]
             let app = {
+                // Prometheus middleware automatically serves the metrics at the configured
+                // endpoint (by short‑circuiting matching requests). We should therefore only
+                // wrap the app; registering it as a service is incorrect because the
+                // PrometheusMetrics type is not an HttpServiceFactory.
                 let prometheus = PrometheusMetricsBuilder::new("wildside")
                     .endpoint("/metrics")
                     .build()
                     .expect("configure Prometheus metrics");
-                app.wrap(prometheus.clone()).service(prometheus)
+                app.wrap(prometheus)
             };
 
             app
