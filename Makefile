@@ -72,9 +72,11 @@ lint-makefile:
 	checkmake Makefile
 	mbake validate Makefile
 
-test: deps
+test:
+	[ -f pnpm-lock.yaml ] || { echo "pnpm-lock.yaml missing"; exit 1; }
+	pnpm install --frozen-lockfile
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
-	pnpm -r --if-present --silent test
+	pnpm -r --if-present --silent run test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_HASH := $(shell sha256sum pnpm-lock.yaml | awk '{print $$1}')
