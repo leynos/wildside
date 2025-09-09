@@ -33,7 +33,7 @@ variable "node_pools" {
 
 variable "kubernetes_version" {
   type        = string
-  description = "Exact Kubernetes version slug supported by DigitalOcean (e.g., 1.28.0-do.0)"
+  description = "Exact Kubernetes version slug supported by DigitalOcean (e.g., <1.33.x-do.0>). Choose a supported release from the version table (1.33.x, 1.32.x, 1.31.x)."
 }
 
 variable "tags" {

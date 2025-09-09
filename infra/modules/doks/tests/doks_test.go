@@ -15,11 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const supportedVersion = "1.33.9-do.0" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
+
 func testVars() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster_name":       "terratest-cluster",
 		"region":             "nyc1",
-		"kubernetes_version": "1.28.0-do.0",
+		"kubernetes_version": supportedVersion,
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -139,7 +141,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "",
 				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+				"kubernetes_version": supportedVersion,
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "cluster_name must not be empty",
@@ -148,7 +150,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "invalid",
-				"kubernetes_version": "1.28.0-do.0",
+				"kubernetes_version": supportedVersion,
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "region must be a valid DigitalOcean slug",
@@ -174,7 +176,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+				"kubernetes_version": supportedVersion,
 				"node_pools":         []map[string]interface{}{},
 			},
 			ErrContains: "node_pools must not be empty",
@@ -183,7 +185,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+				"kubernetes_version": supportedVersion,
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
