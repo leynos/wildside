@@ -706,15 +706,14 @@ availability and a couple of worker pods for throughput, adjusting as needed.
 
 Kubernetes best practices are used, such as a **Traefik Ingress** (as per the
 repo’s manifests) to route external traffic to the Actix Web service[^2],
-configured with TLS (Let’s Encrypt via cert-manager). The static frontend (PWA)
-can be served via a CDN or object storage, as indicated by the design (the
-sequence diagram shows the browser fetching assets from CDN and API calls
-hitting
-backend)[^2].
- The backend containers mount config (like database DSN, secrets for cookie
-signing, API keys) via K8s Secrets and ConfigMaps. Readiness/liveness probes for
-the Actix Web app (e.g. an endpoint `/healthz`) allow Kubernetes to detect if a
-pod is unresponsive and restart it.
+configured with TLS (Let’s Encrypt via cert-manager). The static frontend
+(PWA) can be served via a CDN or object storage, as indicated by the design
+(the sequence diagram shows the browser fetching assets from CDN and API calls
+hitting the backend)[^2]. The backend containers will mount config (like
+database DSN and secrets for cookie signing and API keys) via K8s Secrets and
+ConfigMaps. We’ll also include readiness and liveness probes for the Actix Web
+app (e.g. endpoints `/health/ready` and `/health/live`) so Kubernetes can
+detect if a pod is unresponsive and restart it.
 
 Database options include a managed Postgres (e.g. DigitalOcean Managed DB) or
 running a cluster via an operator like **CloudNativePG**. The design documents

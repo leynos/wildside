@@ -2,7 +2,9 @@
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::cookie::{Key, SameSite};
-use actix_web::{get, web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpServer};
+#[cfg(feature = "metrics")]
+use actix_web_prom::PrometheusMetricsBuilder;
 use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -11,23 +13,12 @@ use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
+use backend::api::health::{live, ready, HealthState};
 use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::ws;
 use backend::Trace;
-
-/// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic.
-#[get("/health/ready")]
-async fn ready() -> HttpResponse {
-    HttpResponse::Ok().finish()
-}
-
-/// Liveness probe. Return 200 when the process is alive.
-#[get("/health/live")]
-async fn live() -> HttpResponse {
-    HttpResponse::Ok().finish()
-}
 
 /// Application bootstrap.
 #[actix_web::main]
@@ -61,35 +52,62 @@ async fn main() -> std::io::Result<()> {
         .map(|v| v != "0")
         .unwrap_or(true);
 
-    HttpServer::new(move || {
-        let session_middleware =
-            SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
-                .cookie_name("session".to_owned())
-                .cookie_path("/".to_owned())
-                .cookie_secure(cookie_secure)
-                .cookie_http_only(true)
-                .cookie_same_site(SameSite::Lax)
-                .build();
+    // Health readiness state shared with handlers
+    let health_state = web::Data::new(HealthState::new());
+    let server = HttpServer::new({
+        let health_state = health_state.clone();
+        move || {
+            let session_middleware =
+                SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                    .cookie_name("session".to_owned())
+                    .cookie_path("/".to_owned())
+                    .cookie_secure(cookie_secure)
+                    .cookie_http_only(true)
+                    .cookie_same_site(SameSite::Lax)
+                    .build();
 
-        let api = web::scope("/api/v1")
-            .wrap(session_middleware)
-            .service(login)
-            .service(list_users);
+            let api = web::scope("/api/v1")
+                .wrap(session_middleware)
+                .service(login)
+                .service(list_users);
 
-        let app = App::new()
-            .wrap(Trace)
-            .service(api)
-            .service(ws::ws_entry)
-            .service(ready)
-            .service(live);
+            // Base application assembly shared across build features.
+            let app = App::new()
+                .app_data(health_state.clone())
+                .wrap(Trace)
+                .service(api)
+                .service(ws::ws_entry)
+                .service(ready)
+                .service(live);
 
-        #[cfg(debug_assertions)]
-        let app =
-            app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+            #[cfg(debug_assertions)]
+            let app = app
+                .service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
-        app
+            // Optional Prometheus metrics integration. This is feature-gated to
+            // avoid introducing a hard dependency in environments where pulling
+            // new crates is undesirable. In production, enable with
+            // `--features metrics` to expose `/metrics` and add request metrics.
+            #[cfg(feature = "metrics")]
+            let app = {
+                // Prometheus middleware automatically serves the metrics at the configured
+                // endpoint (by short‑circuiting matching requests). We should therefore only
+                // wrap the app; registering it as a service is incorrect because the
+                // PrometheusMetrics type is not an HttpServiceFactory.
+                let prometheus = PrometheusMetricsBuilder::new("wildside")
+                    .endpoint("/metrics")
+                    .build()
+                    .expect("configure Prometheus metrics");
+                app.wrap(prometheus)
+            };
+
+            app
+        }
     })
-    .bind(("0.0.0.0", 8080))?
-    .run()
-    .await
+    .bind(("0.0.0.0", 8080))?;
+
+    // Mark the application as ready after initialisation completes.
+    health_state.mark_ready();
+
+    server.run().await
 }
