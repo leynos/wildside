@@ -222,6 +222,9 @@ API and WebSocket traffic.
 
     - Integrate the `actix-web-prom` crate as middleware to expose default
       Prometheus metrics on a `/metrics` endpoint.
+      Status: wired behind a `metrics` cargo feature. Build with
+      `--features metrics` to enable middleware and the `/metrics` route
+      without impacting environments that cannot fetch new crates.
 
     - Implement `/health/ready` and `/health/live` endpoints.
       `/health/ready` returns `200 OK` once dependencies are
