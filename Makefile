@@ -73,10 +73,10 @@ lint-makefile:
 	mbake validate Makefile
 
 test:
-	[ -f pnpm-lock.yaml ] || { echo "pnpm-lock.yaml missing"; exit 1; }
-	pnpm install --frozen-lockfile
+	[ -f package-lock.json ] || { echo "package-lock.json missing"; exit 1; }
+	npm ci --workspaces
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
-	pnpm -r --if-present --silent run test
+	npm --workspaces run test --if-present --silent --no-audit --no-fund
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml
