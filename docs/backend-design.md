@@ -272,7 +272,6 @@ transactionally updates user-specific info. Heavy geospatial reads can be
 isolated by using read replicas or a separate schema, but the MVP can start
 with a single database instance for everything.
 
- 
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
@@ -285,10 +284,10 @@ duration). The Prometheus operator will scrape database metrics (if using an
 operator or a managed DB with metrics). In Grafana, dashboards will plot DB
 metrics like CPU, I/O, number of queries per second, etc., as recommended by
 the deployment guide. Example alert:
+
 - `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
+
   Note: metric names are exporter‑dependent; adjust to your exporter.
- 
- 
 
 If any query regularly takes too long (impacting route generation latency),
 alert and optimize that part (adding indexes or caching results). On the
@@ -317,7 +316,7 @@ saves a generated route to the DB).
   hash of the request parameters as the cache key. If a later request hashes to
   the same value, the cached route is returned immediately, reducing
   computation and latency.
- 
+
 Figure: Route response caching and on-demand enrichment sequence.
 
 ```mermaid
@@ -349,7 +348,6 @@ sequenceDiagram
   end
 ```
 
- 
 Operational details:
 
 - **Overpass quotas:**
@@ -440,8 +438,6 @@ metrics:
 The cost analysis for MVP even budgets a small Redis Cloud instance for
 caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
 underlining its role as both cache and queue.
-
- 
 
 *Observability:* The caching layer is monitored to ensure it’s effectively
 improving performance. **Cache hit rates and misses** for critical caches are
@@ -884,7 +880,7 @@ for urban explorers, but also is stable, scalable, and well-monitored in
 production.
 
 **Sources:** The design is informed by the Wildside project’s high-level design
- 
+
 documents and repository guides, which emphasise a Rust Actix backend,
 Postgres/PostGIS data store, and monolithic MVP approach[^1][^2]. Observability
 and cloud deployment strategies follow the cloud-native architecture
