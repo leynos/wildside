@@ -538,8 +538,9 @@ docker-down:
 ```
 
 Use `make audit` to validate the audit exception allowlist against its schema
-and expiry dates. The target installs its validator with `pnpx`, so ensure pnpm is
-available in the CI environment.
+and expiry dates. The target installs its validator with `pnpx`, so ensure pnpm
+is available—run `corepack enable` or install pnpm—both locally and in the CI
+environment.
 
 ### Docker Compose startup sequence
 

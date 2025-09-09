@@ -9,6 +9,23 @@ data-validation pipeline. The strategy emphasises cost control, security-first
 AI integration, and clear differentiation from fitness, hiking, and static tour
 apps.
 
+## Development setup
+
+The workspace manages JavaScript dependencies with pnpm. Enable Corepack so
+that the `pnpm` command is available locally:
+
+```bash
+corepack enable
+```
+
+After enabling Corepack, install the workspace dependencies:
+
+```bash
+pnpm install
+```
+
+The Bun toolchain remains in use for runtime scripts and formatting tasks.
+
 ## Formatting, linting, and type checking
 
 Use the Makefile targets to format, lint, and type-check both the Rust backend
