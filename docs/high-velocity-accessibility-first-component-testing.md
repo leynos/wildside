@@ -845,10 +845,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          corepack: true
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Run Vitest shard
         run: pnpm exec vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
@@ -875,10 +876,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          corepack: true
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Download all blob reports
         uses: actions/download-artifact@v4

@@ -30,6 +30,7 @@
     "frontend-pwa",
     "packages/*"
   ],
+  "packageManager": "pnpm@10.15.1",
   "scripts": {
     "build": "pnpm -r run build",
     "audit": "node security/validate-audit.js"

@@ -79,17 +79,17 @@ test:
 	pnpm -r --if-present --silent test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
-BUN_LOCK_HASH := $(shell sha256sum bun.lock | awk '{print $$1}')
-NODE_MODULES_STAMP := node_modules/.bun-install-$(BUN_LOCK_HASH)
+PNPM_LOCK_HASH := $(shell sha256sum pnpm-lock.yaml | awk '{print $$1}')
+NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
 deps: $(NODE_MODULES_STAMP)
 
-$(NODE_MODULES_STAMP): bun.lock package.json ; bun install && touch $@
+$(NODE_MODULES_STAMP): pnpm-lock.yaml package.json ; pnpm install --frozen-lockfile && touch $@
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit:
-	pnpm run audit
+	pnpm -r --if-present run audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

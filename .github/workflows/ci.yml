@@ -12,8 +12,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Enable Corepack
-        run: corepack enable
+          corepack: true
+          cache: 'pnpm'
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
         with:
           bun-version: '1.2.20'
@@ -28,7 +28,10 @@ jobs:
             **/uv.lock
 
       - name: Install dependencies
-        run: make deps
+        run: pnpm install --frozen-lockfile
+      - name: Ensure pnpm lockfile for audit
+        run: pnpm install --lockfile-only
+        if: ${{ hashFiles('**/pnpm-lock.yaml') == '' }}
 
       - name: Install Mermaid CLI
         run: |
@@ -45,7 +48,7 @@ jobs:
           bun --version
 
       - name: Audit exceptions
-        run: pnpm run audit
+        run: pnpm -r --if-present run audit
 
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie

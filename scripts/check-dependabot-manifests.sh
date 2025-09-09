@@ -22,12 +22,15 @@ configured=(
   "packages/types/package.json"
 )
 
+unconfigured=0
 mapfile -t all_pnpm_arr <<<"$all_pnpm"
 for p in "${all_pnpm_arr[@]}"; do
   if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
     echo "UNCONFIGURED pnpm package.json: $p"
+    unconfigured=1
   fi
 done
+[[ $unconfigured -eq 0 ]] || { echo "Unconfigured pnpm packages detected"; exit 1; }
 
 if [[ $missing -ne 0 ]]; then
   echo "One or more expected manifests are missing."
