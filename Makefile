@@ -79,17 +79,28 @@ test:
 	pnpm -r --if-present --silent run test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
-PNPM_LOCK_HASH := $(shell sha256sum pnpm-lock.yaml | awk '{print $$1}')
+PNPM_LOCK_FILE := pnpm-lock.yaml
+PNPM_LOCK_HASH := $(shell \
+  if [ -f $(PNPM_LOCK_FILE) ]; then \
+    if command -v sha256sum >/dev/null 2>&1; then \
+      sha256sum $(PNPM_LOCK_FILE) | awk '{print $$1}'; \
+    else \
+      shasum -a 256 $(PNPM_LOCK_FILE) | awk '{print $$1}'; \
+    fi; \
+  else \
+    echo "MISSING_LOCKFILE"; \
+  fi)
 NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
 deps: $(NODE_MODULES_STAMP)
 
-$(NODE_MODULES_STAMP): pnpm-lock.yaml package.json ; pnpm install --frozen-lockfile && touch $@
+$(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json ; pnpm install --frozen-lockfile && touch $@
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
-audit:
+audit: deps
 	pnpm -r --if-present run audit
+	pnpm audit --recursive
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
