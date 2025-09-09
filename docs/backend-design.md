@@ -275,20 +275,112 @@ with a single database instance for everything.
 *Observability:* The database and ORM layer are monitored to ensure healthy
 performance. Postgres metrics collection is enabled (for example, running a
 **Postgres exporter** or using CloudNativePG’s built-in metrics if deployed in
-K8s[^4]). Key metrics include query throughput, slow query counts, connections in
-use, and cache hit rates. From the application side, Diesel’s query logging
-detects slow queries and instruments timings for critical ones (for instance,
-wrap certain calls to measure their duration). The Prometheus operator scrapes
-database metrics (if using an operator or a managed DB with metrics)[^4]. In
-Grafana, dashboards plot DB metrics like CPU, I/O, and number of queries per
-second, as recommended by the deployment guide[^4]. If any query regularly takes
-too long (impacting route generation latency), alerts highlight the slow part
-for optimisation (adding indexes or caching results). On the analytics side,
-database operations themselves aren’t directly in PostHog, but PostHog can
-track high-level outcomes (e.g. “UserSavedRoute” event when a user saves a
-generated route to the DB).
+K8s([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))).
+Key metrics include `pg_stat_activity`-derived gauges (connections in use),
+`pg_stat_database_blks_hit/blks_read` (cache hit rate), and slow query counts.
+From the application side, enable Diesel’s query logging and instrument
+timings for critical queries (for instance, wrap certain calls to measure their
+duration). The Prometheus operator will scrape database metrics (if using an
+operator or a managed DB with metrics). In Grafana, dashboards will plot DB
+metrics like CPU, I/O, number of queries per second, etc., as recommended by
+the deployment guide. Example alert:
 
-## Caching and job queue layer (Redis)
+- `pg_connections{db="app"} / pg_max_connections > 0.8` for 5m → page SRE.
+
+  Note: metric names are exporter‑dependent; adjust to your exporter.
+
+If any query regularly takes too long (impacting route generation latency),
+alert and optimize that part (adding indexes or caching results). On the
+analytics side, database operations themselves aren’t directly in PostHog, but
+PostHog may track high-level outcomes (e.g. “UserSavedRoute” event when a user
+saves a generated route to the DB).
+
+## Data seeding, enrichment, and route caching
+
+- Initial OSM seeding: A Rust ingestion tool uses the `osmpbf` crate to parse
+  `.osm.pbf` extracts and load nodes, ways, and relations into PostgreSQL. This
+  bootstraps the POI dataset before the API is exposed, ensuring the backend
+  operates on consistent local data.
+  - Convert ways/relations that represent POIs to point features via
+    point-on-surface (`GEOGRAPHY(Point, 4326)`) before insert to avoid geometry
+    mismatches.
+  - Idempotency: Use `ON CONFLICT (element_type, id) DO UPDATE` to avoid
+    duplicates.
+  - Batching: Commit 5k–20k features per transaction to bound locks and WAL.
+  - Verification: Report inserted/updated counts and elapsed time at exit.
+- On-demand enrichment: When a requested area lacks sufficient nearby POIs, a
+  background `EnrichmentJob` queries the Overpass API for additional amenities.
+  Newly found items are inserted into the database so subsequent requests
+  benefit from richer coverage.
+- Route output caching: Completed route responses are stored in Redis using a
+  hash of the request parameters as the cache key. If a later request hashes to
+  the same value, the cached route is returned immediately, reducing
+  computation and latency.
+
+Figure: Route response caching and on-demand enrichment sequence.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant API as API Service
+  participant Cache as Redis
+  participant DB as PostgreSQL
+  participant Worker as Enrichment Worker
+  participant Overpass as Overpass API
+  rect rgb(245,255,240)
+    Note over API,Cache: Route response caching
+    API->>Cache: GET cache_key(params)
+    alt hit
+      Cache-->>API: Cached response
+    else miss
+      API->>DB: Compute route using POIs (element_type,id)
+      API-->>Cache: SET cache_key -> response (TTL)
+      API-->>API: Return response
+    end
+  end
+  rect rgb(255,250,240)
+    Note over API,Worker: On-demand enrichment flow
+    API->>Worker: Enqueue EnrichmentJob (bbox, themes) when POIs sparse
+    Worker->>Overpass: Query (with quota/contact headers)
+    Overpass-->>Worker: POI results
+    Worker->>DB: Persist UPSERT (element_type,id,location,osm_tags,provenance)
+    Worker-->>API: Emit metrics / optional completion event
+  end
+```
+
+Operational details:
+
+- **Overpass quotas:**
+  - Send a descriptive `User-Agent` and `Contact` header (email or URL);
+    include a per-tenant token in the `User-Agent` for tracing abuse; expose
+    both via config.
+  - Enforce rate limits (≤ 10 000 requests/day; transfer < 1 GB/day; as of
+    2025-09-08), default timeout 180 s, and `maxsize` 512 MiB.
+  - Cap concurrent Overpass requests with a global semaphore or worker pool
+    (default ≤ 2, configurable).
+  - Retry HTTP 429 responses with jittered backoff.
+  - Guard with a circuit breaker that tracks failures/timeouts and opens for a
+    configurable cooldown before probing again; fall back to mirrored or
+    self-hosted endpoints while open.
+  - Surface metrics and logs for requests, failures, and breaker state with
+    knobs for headers, concurrency, thresholds, and cooldown.
+  ([dev.overpass-api.de](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
+  [osm-queries.ldodds.com](https://osm-queries.ldodds.com/tutorial/26-timeouts-and-endpoints.osm.html))
+  - **Cache keys:** Canonicalise request parameters before hashing:
+    - Stable JSON (UTF-8, sorted keys, no whitespace).
+    - Coordinates rounded to 5 decimal places (~1.1 m); themes sorted.
+    - Hash: lowercase hex SHA-256 of the canonical payload.
+    - Key: `route:v1:<sha256>` (optionally truncate to first 32 hex chars;
+      document truncation).
+    - **TTLs:** Set a default TTL (24 h) for anonymous route results; apply a
+      jitter of ±10% to avoid stampedes; skip TTL for saved routes. Invalidate
+      on schema/engine version bumps by rotating namespace suffix (e.g. `v2`).
+    - **Eviction:** Configure `maxmemory` and `maxmemory-policy allkeys-lfu`;
+      set per-namespace memory budgets and alert on `evicted_keys` > 0.
+    - **Attribution & provenance:** Store enrichment provenance (source URL,
+      timestamp, bbox) and enforce OSM attribution requirements in UI/docs.
+
+## Caching Layer (Redis/Memcached)
 
 To further improve responsiveness and reduce load, a caching layer will be
 introduced, backed by **Redis**. Redis will serve as both the cache and the
@@ -346,15 +438,6 @@ metrics:
 The cost analysis for MVP even budgets a small Redis Cloud instance for
 caching([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L2-L5)),
 underlining its role as both cache and queue.
-
-In a Kubernetes deployment, Redis can run as an in-cluster service or use a
-managed Redis. For a lightweight start, a single small Redis instance (or even
-an in-memory cache within the app process for non-critical data) suffices. The
-cost analysis for the MVP even budgets a small Redis Cloud instance for
-caching[^1], underlining its role. Memcached could alternatively be used for
-simple key-value caching if an even simpler, stateless cache layer is desired;
-however, Redis offers more features (persistence, pub/sub, etc.) that could be
-handy (for example, using Redis as the job queue backend in Apalis).
 
 *Observability:* The caching layer is monitored to ensure it’s effectively
 improving performance. **Cache hit rates and misses** for critical caches are
@@ -797,6 +880,7 @@ for urban explorers, but also is stable, scalable, and well-monitored in
 production.
 
 **Sources:** The design is informed by the Wildside project’s high-level design
+
 documents and repository guides, which emphasise a Rust Actix backend,
 Postgres/PostGIS data store, and monolithic MVP approach[^1][^2]. Observability
 and cloud deployment strategies follow the cloud-native architecture
@@ -813,3 +897,23 @@ growth.
 [^6]: <https://www.reddit.com/r/rust/comments/1jjebum/introducing_apalis_v07/#:~:text=,Many%20more%20features>
 [^7]: <https://docs.rs/underway#:~:text=Underway%20provides%20durable%20background%20jobs,scheduling%20and%20atomic%20task%20management>
 [^8]: <https://github.com/maxcountryman/underway#:~:text=maxcountryman%2Funderway%3A%20Durable%20step%20functions%20via,of%20the%20previous%20step>
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+ and caching and optimisation considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.
+documents and repository guides, which emphasize a Rust Actix backend,
+Postgres/PostGIS data store, and monolithic MVP
+approach([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L637-L645))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L655-L663))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L671-L680))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L682-L690)).
+ Observability and cloud deployment strategies are aligned with the provided
+cloud-native architecture
+recommendations([4](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/cloud-native-ephemeral-previews.md#L1505-L1513))([2](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/repository-structure.md#L2-L5))
+and caching and optimization considerations from the technical risk
+analysis([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L8-L16))([1](https://github.com/leynos/wildside/blob/663a1cb6ca7dd0af1b43276b65de6a2ae68f8da6/docs/wildside-high-level-design.md#L14-L17)).
+ All these pieces coalesce into the architecture detailed above, setting the
+stage for Wildside’s successful implementation and growth.

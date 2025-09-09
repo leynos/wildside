@@ -363,6 +363,7 @@ erDiagram
     }
 
     pois {
+        TEXT element_type PK
         BIGINT id PK
         GEOGRAPHY location "Point, 4326"
         JSONB osm_tags
@@ -371,6 +372,7 @@ erDiagram
     }
 
     poi_interest_themes {
+        TEXT poi_element_type PK, FK
         BIGINT poi_id PK, FK
         UUID theme_id PK, FK
     }
@@ -385,6 +387,7 @@ erDiagram
 
     route_pois {
         UUID route_id PK, FK
+        TEXT poi_element_type PK, FK
         BIGINT poi_id PK, FK
         INTEGER position
     }
@@ -433,8 +436,9 @@ Null (NN), and Generalized Search Tree (GiST).
 
 | Column | Type | Notes |
 | ------------------ | ------------------------ | ------------------------------------------- |
-| `id` | `BIGINT` | PK; OSM element ID |
-| `location` | `GEOGRAPHY(Point, 4326)` | NN; GIST index |
+| `element_type` | `TEXT` | NN; one of `node\|way\|relation` |
+| `id` | `BIGINT` | NN; OSM element ID (unique with `element_type`) |
+| `location` | `GEOGRAPHY(Point, 4326)` | NN; GiST index |
 | `osm_tags` | `JSONB` | OSM tags; GIN index |
 | `narrative` | `TEXT` | Optional engaging description |
 | `popularity_score` | `REAL` | Default 0.5; 0.0 hidden gem – 1.0 hotspot |
@@ -443,8 +447,9 @@ Null (NN), and Generalized Search Tree (GiST).
 
 | Column | Type | Constraints | Description |
 | ---------- | -------- | ------------------------------------------------- | ------------------------------------------- |
-| `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
-| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)` | Foreign key to the `interest_themes` table. |
+| `poi_element_type` | `TEXT` | `PRIMARY KEY`, `FOREIGN KEY (pois.element_type)` | POI element type. |
+| `poi_id` | `BIGINT` | `PRIMARY KEY`, `FOREIGN KEY (pois.id)` | POI element ID. |
+| `theme_id` | `UUID` | `PRIMARY KEY`, `FOREIGN KEY (interest_themes.id)`; PK `(poi_element_type, poi_id, theme_id)`; FK `(poi_element_type, poi_id)` → `pois(element_type, id)` | Foreign key to the `interest_themes` table. |
 
 **`routes`**: Stores generated walks.
 
@@ -452,7 +457,7 @@ Null (NN), and Generalized Search Tree (GiST).
 | ------------------- | ---------------------------- | ------------------------------------- |
 | `id` | `UUID` | PK; default `gen_random_uuid()` |
 | `user_id` | `UUID` | FK `users.id`; nullable |
-| `path` | `GEOMETRY(LineString, 4326)` | Full path; GIST index |
+| `path` | `GEOMETRY(LineString, 4326)` | Full path; GiST index |
 | `generation_params` | `JSONB` | Parameters used to generate the route |
 | `created_at` | `TIMESTAMPTZ` | NN; default `NOW()` |
 
@@ -461,9 +466,11 @@ specific route.
 
 | Column | Type | Constraints | Description |
 | ---------- | --------- | --------------------------------------------- | -------------------------------------------- |
-| `route_id` | `UUID` | `PK (with poi_id)`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table. |
-| `poi_id` | `BIGINT` | `PK (with route_id)`, `FOREIGN KEY (pois.id)` | Foreign key to the `pois` table. |
+| `route_id` | `UUID` | `PK`, `FOREIGN KEY (routes.id)` | Foreign key to the `routes` table. |
+| `poi_element_type` | `TEXT` | `PK`, `FOREIGN KEY (pois.element_type)` | POI element type. |
+| `poi_id` | `BIGINT` | `PK`, `FOREIGN KEY (pois.id)` | POI element ID. |
 | `position` | `INTEGER` | `NOT NULL`, `UNIQUE (route_id, position)` | Sequential position of this POI in the walk. |
+|  |  | FK: `(poi_element_type, poi_id)` → `pois(element_type, id)` |  |
 
 #### 3.3.3. MVP Data Strategy: Hybrid Ingestion and Caching
 
@@ -542,9 +549,40 @@ flowchart TD
 
 #### 3.3.4. Implementation Tasks
 
-- [ ] **Initial Data Seeding:** Create a standalone data ingestion script
-  (e.g., using Python with `osmium`) that performs the one-time pre-seeding of
-  the database for a defined geographic area (Edinburgh).
+- [ ] **Initial Data Seeding:** Build a Rust-based ingestion tool using the
+  `osmpbf` crate to perform the one-time pre-seeding of the database for a
+  defined geographic area (Edinburgh).
+
+  - Input: `.osm.pbf` extract (e.g., Geofabrik); filter to launch polygon.
+  - Mapping: Nodes → POIs; Ways/Relations → POIs via point-on-surface; persist
+    `element_type` (`node\|way\|relation`), `id` (OSM element ID), `location`
+    (GEOGRAPHY Point 4326), `osm_tags` (JSONB).
+  - Write path: UPSERT by `(element_type, id)` in batches with transactions;
+    ensure a UNIQUE constraint on `(element_type, id)` backs the upsert. Create
+    GiST on `location` and GIN on `osm_tags` after the initial bulk load to
+    maximize ingest throughput.
+  - Determinism: Canonicalize tag keys/values; record import provenance
+    (source URL, timestamp, bbox) for audit.
+  - CLI:
+
+    ```bash
+    ingest-osm --pbf edinburgh.osm.pbf \
+      --bbox <minLon,minLat,maxLon,maxLat> \
+      --tags amenity,historic,tourism,leisure,natural \
+      --batch-size 10000 \
+      --threads 4   # number of decode/ingest worker threads (document scope)
+    ```
+
+  - Performance: Stream with bounded memory; parallel decode when CPU > 1.
+  - Acceptance criteria:
+    - CLI runs against an Edinburgh extract and completes within a bounded time.
+    - Idempotent re-runs do not duplicate POIs (UPSERT by `(element_type, id)`
+      verified).
+    - UNIQUE(element_type,id), GiST(location), and GIN(osm_tags) exist
+      post-load.
+    - Import provenance (source URL, timestamp, bbox) recorded.
+    - Runtime reports inserted/updated counts per element_type and effective
+      batch size/threads.
 
 - [ ] **Implement On-Demand Enrichment Logic:** In the `GenerateRouteJob`
   handler, add logic to detect when the local POI query returns a sparse result
@@ -560,46 +598,31 @@ Asynchronous and long-running tasks are executed by a separate pool of worker
 processes to avoid blocking the main API server.
 
 - **Technology:** Apalis (with a Redis or Postgres backend).
-
 - **Current Status:** This component is purely at the design stage. No
   implementation exists.
-
 - **Key Responsibilities:**
-
   - Execute computationally intensive jobs (`GenerateRouteJob`).
-
   - Perform data enrichment tasks (`EnrichmentJob`).
-
   - Perform periodic maintenance tasks (e.g., refreshing data from external
     sources).
-
 - **Implementation Tasks:**
-
   - [ ] **Integration:**
-
     - Add `apalis` to `backend/Cargo.toml`.
-
     - Configure Apalis to use Redis as the job queue broker, with separate
       queues for high-priority (e.g., `route_generation`) and low-priority
       (`enrichment`) tasks.
-
     - Enforce bounded retries with exponential backoff and per-job timeouts,
       sending exhausted jobs to a dead-letter queue.
-
   - [ ] **Worker Binary:** Modify `main.rs` to launch in "worker" mode based
     on a CLI flag or environment variable (`WILDSIDE_MODE=worker`). In this
     mode, it should start the Apalis worker pool.
-
   - [ ] **Job Definitions:**
-
     - Define and implement the `GenerateRouteJob` as previously described.
       It should now include the logic to trigger the `EnrichmentJob`.
-
     - Define and implement the `EnrichmentJob`. This job's handler will
       construct and execute a query against the Overpass API with an HTTP
       client that enforces network timeouts. It will use Diesel to `UPSERT` the
       results into the `pois` table.
-
   - [ ] **Deployment:** Create a second Kubernetes `Deployment` for the
     workers.
 
@@ -608,28 +631,19 @@ processes to avoid blocking the main API server.
 An in-memory cache is used to improve performance and reduce database load.
 
 - **Technology:** Redis
-
 - **Current Status:** This component is purely at the design stage.
-
 - **Key Responsibilities:**
-
   - Cache the results of expensive, deterministic operations, such as route
     generation for common parameters.
-
   - Cache frequently accessed, slow-changing data from the database (e.g.,
     popular POIs).
-
 - **Implementation Tasks:**
-
   - [ ] **Integration:** Add the `redis` crate and configure a Redis
     connection pool available to the Actix application state.
-
   - [ ] **Route Caching:**
-
     - Before enqueuing a `GenerateRouteJob`, the API handler must first
       check Redis for a cached result. The cache key should be a hash of the
       route request parameters.
-
     - On successful route generation, the background worker must write the
       result to the cache with a reasonable TTL (e.g., 24 hours).
 
