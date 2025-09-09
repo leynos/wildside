@@ -3,6 +3,8 @@
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::{web, App, HttpServer};
+#[cfg(feature = "metrics")]
+use actix_web_prom::PrometheusMetricsBuilder;
 use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -69,6 +71,7 @@ async fn main() -> std::io::Result<()> {
                 .service(login)
                 .service(list_users);
 
+            // Base application assembly shared across build features.
             let app = App::new()
                 .app_data(health_state.clone())
                 .wrap(Trace)
@@ -80,6 +83,19 @@ async fn main() -> std::io::Result<()> {
             #[cfg(debug_assertions)]
             let app = app
                 .service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+
+            // Optional Prometheus metrics integration. This is feature-gated to
+            // avoid introducing a hard dependency in environments where pulling
+            // new crates is undesirable. In production, enable with
+            // `--features metrics` to expose `/metrics` and add request metrics.
+            #[cfg(feature = "metrics")]
+            let app = {
+                let prometheus = PrometheusMetricsBuilder::new("wildside")
+                    .endpoint("/metrics")
+                    .build()
+                    .expect("configure Prometheus metrics");
+                app.wrap(prometheus.clone()).service(prometheus)
+            };
 
             app
         }
