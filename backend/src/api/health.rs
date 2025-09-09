@@ -18,12 +18,12 @@ impl HealthState {
 
     /// Mark the service as ready.
     pub fn mark_ready(&self) {
-        self.ready.store(true, Ordering::Relaxed);
+        self.ready.store(true, Ordering::Release);
     }
 
     /// Return readiness state.
     pub fn is_ready(&self) -> bool {
-        self.ready.load(Ordering::Relaxed)
+        self.ready.load(Ordering::Acquire)
     }
 }
 
@@ -31,6 +31,7 @@ impl HealthState {
 #[utoipa::path(
     get,
     path = "/health/ready",
+    tags = ["health"],
     responses(
         (status = 200, description = "Server is ready to handle traffic"),
         (status = 503, description = "Server is not ready")
@@ -53,6 +54,7 @@ pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
 #[utoipa::path(
     get,
     path = "/health/live",
+    tags = ["health"],
     responses(
         (status = 200, description = "Server is alive")
     )
