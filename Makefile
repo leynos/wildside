@@ -75,7 +75,7 @@ lint-makefile:
 test:
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	# Ensure JavaScript dependencies are present for all workspaces
-	pnpm install --frozen-lockfile || pnpm install
+	pnpm install --frozen-lockfile
 	pnpm -r --if-present --silent test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
