@@ -539,8 +539,27 @@ docker-down:
 
 Use `make audit` to validate the audit exception allowlist against its schema
 and expiry dates. The target installs its validator with `pnpm dlx`; ensure
-Corepack is enabled in CI so `pnpm` is available. Enable Corepack locally if
-needed.
+Corepack is enabled in CI so `pnpm` is available. Enable Corepack locally if needed.
+### pnpm setup sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor CI as CI / Developer
+  participant NodeSetup as actions/setup-node
+  participant PNPM as pnpm
+  participant Repo as Monorepo
+
+  CI->>NodeSetup: Install Node (corepack: true)
+  NodeSetup->>PNPM: Provide pnpm via Corepack
+  CI->>PNPM: If missing -> `pnpm install --lockfile-only`
+  CI->>PNPM: `pnpm install --frozen-lockfile`
+  PNPM->>Repo: Resolve workspace (pnpm-workspace.yaml)
+  CI->>PNPM: Run lifecycle scripts (`pnpm -r run build`, `pnpm -r --if-present test`, `pnpm -r --if-present run audit`)
+  PNPM-->>CI: Return results/status
+  note right of PNPM: Cache and frozen lockfile enforce reproducible CI installs
+```
+
 
 ### Docker Compose startup sequence
 
