@@ -12,12 +12,10 @@ apps.
 ## Development setup
 
 The workspace manages JavaScript dependencies with pnpm. Enable Corepack so
-that the `pnpm` command is available locally, then activate the pinned version:
+that the `pnpm` command is available locally:
 
 ```bash
 corepack enable
-corepack prepare pnpm@10.15.1 --activate
-# Alternatively, add "packageManager": "pnpm@10.15.1" to the root package.json
 ```
 
 After enabling Corepack, install the workspace dependencies with a frozen lockfile:

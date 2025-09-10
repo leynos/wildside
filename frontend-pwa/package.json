@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "gen:api": "bunx orval --config orval.config.yaml",
-    "audit": "bun x pnpm@latest audit",
+    "audit": "pnpm audit",
     "audit:snyk": "bun x snyk test"
   },
   "engines": {

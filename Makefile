@@ -72,11 +72,9 @@ lint-makefile:
 	checkmake Makefile
 	mbake validate Makefile
 
-test:
-	[ -f package-lock.json ] || { echo "package-lock.json missing"; exit 1; }
-	npm ci --workspaces
+test: deps
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
-	npm --workspaces run test --if-present --silent --no-audit --no-fund
+	pnpm -r --if-present --silent run test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml
@@ -94,7 +92,10 @@ NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
 deps: $(NODE_MODULES_STAMP)
 
-$(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json ; pnpm install --frozen-lockfile && touch $@
+$(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
+	[ -f $(PNPM_LOCK_FILE) ] || { echo "$(PNPM_LOCK_FILE) missing"; exit 1; }
+	pnpm install --frozen-lockfile
+	touch $@
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
