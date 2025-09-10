@@ -100,8 +100,9 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit: deps
+	pnpm -r install
 	pnpm -r --if-present run audit
-	pnpm audit --recursive
+	pnpm -r audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

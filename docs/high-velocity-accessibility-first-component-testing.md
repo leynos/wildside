@@ -815,7 +815,10 @@ accessibility-first philosophy.
 
 The following is a complete, production-ready GitHub Actions workflow
 (`.github/workflows/ci.yml`) that implements this sharding strategy for the
-Vitest suite.
+Vitest suite. It installs dependencies with a frozen lockfile so CI and local
+builds resolve identical versions. The repository commits `pnpm-lock.yaml`, and
+the workflow's install step runs `pnpm install --frozen-lockfile`, failing if
+the lockfile is missing or stale.
 
 ```yaml
 #.github/workflows/ci.yml
