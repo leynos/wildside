@@ -14,6 +14,10 @@ build/
 !packages/types/dist/src/
 !packages/types/dist/**/*.d.ts
 
+# OpenTofu
+.terraform/
+**/.terraform/
+
 # Misc
 .DS_Store
 bun.lockb

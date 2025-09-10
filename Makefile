@@ -136,7 +136,7 @@ yamllint:
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
-.PHONY: conftest tofu doks-test
+.PHONY: conftest tofu doks-test dev-cluster-test
 conftest:
 	$(call ensure_tool,conftest)
 
@@ -170,3 +170,13 @@ doks-policy: conftest tofu
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
+
+dev-cluster-test: conftest tofu
+	tofu -chdir=infra/clusters/dev fmt -check
+	tofu -chdir=infra/clusters/dev init
+	tofu -chdir=infra/clusters/dev validate
+	command -v tflint >/dev/null
+	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/clusters/dev --policy infra/modules/doks/policy --ignore ".terraform"
+	cd infra/clusters/dev/tests && go test -v
+	tofu -chdir=infra/clusters/dev plan -detailed-exitcode || test $$? -eq 2
