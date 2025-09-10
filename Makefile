@@ -17,8 +17,8 @@ REDOCLY_CLI_VERSION ?= 2.1.0
 
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile
-
+        lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
+        dev-cluster-test
 all: fmt lint test
 
 clean:
@@ -137,7 +137,6 @@ yamllint:
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
-.PHONY: conftest tofu doks-test dev-cluster-test
 conftest:
 	$(call ensure_tool,conftest)
 
@@ -161,7 +160,6 @@ doks-test:
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
-.PHONY: doks-policy
 doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
@@ -174,10 +172,16 @@ doks-policy: conftest tofu
 
 dev-cluster-test: conftest tofu
 	tofu -chdir=infra/clusters/dev fmt -check
-	tofu -chdir=infra/clusters/dev init
+	tofu -chdir=infra/clusters/dev init -input=false
 	tofu -chdir=infra/clusters/dev validate
-	command -v tflint >/dev/null
+	$(call ensure_tool,tflint)
+	$(call ensure_tool,go)
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
-	conftest test infra/clusters/dev --policy infra/modules/doks/policy --ignore ".terraform"
+	@if [ -n "$$DIGITALOCEAN_TOKEN" ]; then \
+	tofu -chdir=infra/clusters/dev plan -out=tfplan.binary -detailed-exitcode || test $$? -eq 2; \
+	tofu -chdir=infra/clusters/dev show -json tfplan.binary > infra/clusters/dev/plan.json; \
+	conftest test infra/clusters/dev/plan.json --policy infra/modules/doks/policy; \
+	else \
+	echo "Skipping plan/policy: DIGITALOCEAN_TOKEN not set"; \
+	fi
 	cd infra/clusters/dev/tests && go test -v
-	tofu -chdir=infra/clusters/dev plan -detailed-exitcode || test $$? -eq 2

@@ -16,7 +16,7 @@ func testVars() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster_name":       "wildside-dev",
 		"region":             "nyc1",
-                "kubernetes_version": "1.33.1-do.3",
+		"kubernetes_version": "1.33.1-do.3",
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -55,17 +55,21 @@ func TestDevClusterValidate(t *testing.T) {
 func TestDevClusterPlanUnauthenticated(t *testing.T) {
 	t.Parallel()
 	_, opts := setupTerraform(t, testVars(), map[string]string{"DIGITALOCEAN_TOKEN": ""})
-	_, err := terraform.InitAndApplyE(t, opts)
-	require.Error(t, err, "expected apply to fail without token")
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err, "expected plan to fail without token")
 }
 
 func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 	t.Parallel()
-	tfDir, opts := setupTerraform(t, testVars(), map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	token := os.Getenv("DIGITALOCEAN_TOKEN")
+	if token == "" {
+		t.Skip("DIGITALOCEAN_TOKEN not set; skipping detailed exit code plan")
+	}
+	tfDir, opts := setupTerraform(t, testVars(), map[string]string{"DIGITALOCEAN_TOKEN": token})
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
 	cmd.Dir = tfDir
-	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN=dummy")
+	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
 	err := cmd.Run()
 	exitErr, ok := err.(*exec.ExitError)
 	require.True(t, ok, "expected ExitError")
@@ -74,7 +78,11 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 
 func TestDevClusterPolicy(t *testing.T) {
 	t.Parallel()
-	tfDir, opts := setupTerraform(t, testVars(), map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	token := os.Getenv("DIGITALOCEAN_TOKEN")
+	if token == "" {
+		t.Skip("DIGITALOCEAN_TOKEN not set; skipping policy test")
+	}
+	tfDir, opts := setupTerraform(t, testVars(), map[string]string{"DIGITALOCEAN_TOKEN": token})
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
 	terraform.InitAndPlan(t, opts)
@@ -89,7 +97,7 @@ func TestDevClusterPolicy(t *testing.T) {
 		t.Skip("conftest not found; skipping policy test")
 	}
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
-	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN=dummy")
+	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }

@@ -25,6 +25,6 @@ output "endpoint" {
 
 output "kubeconfig" {
   description = "Kubeconfig from module"
-  value       = module.doks.kubeconfig
+  value       = var.expose_kubeconfig ? module.doks.kubeconfig : null
   sensitive   = true
 }

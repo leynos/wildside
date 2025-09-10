@@ -11,12 +11,22 @@ variable "region" {
   type        = string
   description = "DigitalOcean region slug"
   default     = "nyc1"
+
+  validation {
+    condition     = can(regex("^[a-z]{3}[0-9]$", var.region))
+    error_message = "region must be a 3-letter region code followed by a digit (e.g., nyc1, sfo3, ams3)."
+  }
 }
 
 variable "kubernetes_version" {
   type        = string
   description = "Exact Kubernetes version slug supported by DigitalOcean"
   default     = "1.33.1-do.3"
+
+  validation {
+    condition     = can(regex("^[0-9]+[.][0-9]+[.][0-9]+-do[.][0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version must match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
+  }
 }
 
 variable "node_pools" {
@@ -30,6 +40,19 @@ variable "node_pools" {
     tags       = optional(list(string))
   }))
   description = "List of node pool definitions"
+
+  validation {
+    condition = alltrue([
+      for p in var.node_pools :
+      p.node_count >= 2 &&
+      (
+        p.auto_scale
+        ? (p.min_nodes >= 2 && p.max_nodes >= p.min_nodes)
+        : (p.min_nodes == p.node_count && p.max_nodes == p.node_count)
+      )
+    ])
+    error_message = "Each node pool must have at least 2 nodes; when auto_scale is false, min_nodes and max_nodes must equal node_count."
+  }
   default = [
     {
       name       = "default"

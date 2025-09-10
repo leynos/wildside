@@ -17,6 +17,20 @@ build/
 # OpenTofu
 .terraform/
 **/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.auto.tfvars
+terraform.tfvars
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
 
 # Misc
 .DS_Store
