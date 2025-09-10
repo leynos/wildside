@@ -2,7 +2,8 @@ SHELL := bash
 KUBE_VERSION ?= 1.31.0
 # Supported DigitalOcean Kubernetes release. Update to a current patch from
 # the 1.33.x, 1.32.x or 1.31.x series as listed in the DigitalOcean docs.
-DOKS_KUBERNETES_VERSION ?= 1.33.9-do.0
+# Latest tested patch: https://docs.digitalocean.com/products/kubernetes/releases/
+DOKS_KUBERNETES_VERSION ?= 1.33.1-do.3
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \

@@ -16,7 +16,7 @@ variable "region" {
 variable "kubernetes_version" {
   type        = string
   description = "Exact Kubernetes version slug supported by DigitalOcean"
-  default     = "1.33.9-do.0"
+  default     = "1.33.1-do.3"
 }
 
 variable "node_pools" {

@@ -16,7 +16,7 @@ func testVars() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster_name":       "wildside-dev",
 		"region":             "nyc1",
-		"kubernetes_version": "1.33.9-do.0",
+                "kubernetes_version": "1.33.1-do.3",
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
