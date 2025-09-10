@@ -59,11 +59,11 @@ lint:
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then bun x -y @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+	if [ -f spec/asyncapi.yaml ]; then pnpm dlx @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
-	bun x -y @redocly/cli@latest lint spec/openapi.json
+	pnpm dlx --package=@redocly/cli@1.28.0 redocly lint spec/openapi.json
 
 # Validate Makefile style and structure
 lint-makefile:
@@ -72,7 +72,7 @@ lint-makefile:
 	checkmake Makefile
 	mbake validate Makefile
 
-test: deps
+test: deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	pnpm -r --if-present --silent run test
 
@@ -93,15 +93,17 @@ NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 deps: $(NODE_MODULES_STAMP)
 
 $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
-	[ -f $(PNPM_LOCK_FILE) ] || { echo "$(PNPM_LOCK_FILE) missing"; exit 1; }
+	@[ -f $(PNPM_LOCK_FILE) ] || { echo "Error: pnpm-lock.yaml missing. Generate it locally (pnpm i) and commit it."; exit 1; }
 	pnpm install --frozen-lockfile
-	touch $@
+	@rm -f node_modules/.pnpm-install-*
+	@touch $@
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
 
 audit: deps
+	pnpm -r install
 	pnpm -r --if-present run audit
-	pnpm audit --recursive
+	pnpm -r audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check

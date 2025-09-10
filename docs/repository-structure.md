@@ -9,7 +9,7 @@ PWA frontend. It supports:
   future native shells.
 - Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
   with static assets served from object storage/CDN.
-- Bun as the JS runtime/package manager.
+- Bun as the JS runtime; pnpm as the package manager.
 
 A typical request flow is illustrated below:
 
@@ -538,8 +538,9 @@ docker-down:
 ```
 
 Use `make audit` to validate the audit exception allowlist against its schema
-and expiry dates. The target installs its validator with `pnpm dlx`; ensure
-Corepack is enabled in CI so `pnpm` is available. Enable Corepack locally if needed.
+and expiry dates. The target installs its validator with `pnpm dlx`; enable
+Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1 --activate`) so
+`pnpm` is available in local and CI environments.
 ### pnpm setup sequence
 
 ```mermaid

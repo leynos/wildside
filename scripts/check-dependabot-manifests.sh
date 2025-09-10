@@ -14,11 +14,11 @@ check deploy/charts/wildside/Chart.yaml
 
 echo "---- Scan for unconfigured pnpm packages ----"
 # Find all package.json, strip leading ./, ignore node_modules
-if ! command -v fd >/dev/null 2>&1; then
-  echo "fd not found; falling back to find" >&2
-  all_pnpm=$(find . -type f -name package.json -not -path "*/node_modules/*" -printf "%P\n" || true)
-else
+if command -v fd >/dev/null 2>&1; then
   all_pnpm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
+else
+  echo "fd not found; using find fallback" >&2
+  all_pnpm=$(find . -type f -name package.json -not -path "*/node_modules/*" -printf "%P\n" || true)
 fi
 configured=(
   "package.json"
