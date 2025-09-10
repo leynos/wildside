@@ -32,6 +32,9 @@ importers:
 
   frontend-pwa:
     dependencies:
+      '@app/types':
+        specifier: workspace:*
+        version: link:../packages/types
       '@tanstack/react-query':
         specifier: ^5
         version: 5.87.1(react@19.1.1)
@@ -78,6 +81,9 @@ importers:
 
   packages/tokens:
     devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.13
       color:
         specifier: ^5.0.0
         version: 5.0.0

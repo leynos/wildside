@@ -14,11 +14,11 @@ export declare const UserSchema: z.ZodObject<{
     id: z.ZodBranded<z.ZodString, "UserId">;
     display_name: z.ZodString;
 }, "strict", z.ZodTypeAny, {
-    id?: string & z.BRAND<"UserId">;
-    display_name?: string;
+    id: string & z.BRAND<"UserId">;
+    display_name: string;
 }, {
-    id?: string;
-    display_name?: string;
+    id: string;
+    display_name: string;
 }>;
 /** User record returned from the API. */
 export type User = z.infer<typeof UserSchema>;
@@ -27,11 +27,11 @@ export declare const UsersSchema: z.ZodArray<z.ZodObject<{
     id: z.ZodBranded<z.ZodString, "UserId">;
     display_name: z.ZodString;
 }, "strict", z.ZodTypeAny, {
-    id?: string & z.BRAND<"UserId">;
-    display_name?: string;
+    id: string & z.BRAND<"UserId">;
+    display_name: string;
 }, {
-    id?: string;
-    display_name?: string;
+    id: string;
+    display_name: string;
 }>, "many">;
 /** Collection of user records. */
 export type Users = z.infer<typeof UsersSchema>;

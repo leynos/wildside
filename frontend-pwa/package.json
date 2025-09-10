@@ -29,6 +29,7 @@
     "clsx": "^2",
     "react": "^19",
     "react-dom": "^18",
-    "zod": "^3"
+    "zod": "^3",
+    "@app/types": "workspace:*"
   }
 }
