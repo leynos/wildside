@@ -4,7 +4,7 @@ use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::{web, App, HttpServer};
 #[cfg(feature = "metrics")]
-use actix_web_prom::{PrometheusMetrics, PrometheusMetricsBuilder};
+use actix_web_prom::PrometheusMetricsBuilder;
 use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -53,9 +53,18 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or(true);
 
     let health_state = web::Data::new(HealthState::new());
-    let server =
-        HttpServer::new(move || build_app(health_state.clone(), key.clone(), cookie_secure))
-            .bind(("0.0.0.0", 8080))?;
+    // Clone for server factory so readiness probe remains accessible.
+    let server_health_state = health_state.clone();
+    let server = HttpServer::new(move || {
+        let app = build_app(server_health_state.clone(), key.clone(), cookie_secure);
+        #[cfg(feature = "metrics")]
+        let app = {
+            let prometheus = make_metrics();
+            app.wrap(prometheus)
+        };
+        app
+    })
+    .bind(("0.0.0.0", 8080))?;
 
     health_state.mark_ready();
     server.run().await
@@ -86,12 +95,6 @@ fn build_app(health_state: web::Data<HealthState>, key: Key, cookie_secure: bool
     #[cfg(debug_assertions)]
     {
         app = app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
-    }
-
-    #[cfg(feature = "metrics")]
-    {
-        let prometheus = make_metrics();
-        app = app.wrap(prometheus);
     }
 
     app
