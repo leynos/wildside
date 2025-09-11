@@ -12,9 +12,14 @@ check packages/tokens/package.json
 check packages/types/package.json
 check deploy/charts/wildside/Chart.yaml
 
-echo "---- Scan for unconfigured npm packages ----"
+echo "---- Scan for unconfigured pnpm packages ----"
 # Find all package.json, strip leading ./, ignore node_modules
-all_npm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
+if command -v fd >/dev/null 2>&1; then
+  all_pnpm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
+else
+  echo "fd not found; using find fallback" >&2
+  all_pnpm=$(find . -type f -name package.json -not -path "*/node_modules/*" -printf "%P\n" || true)
+fi
 configured=(
   "package.json"
   "frontend-pwa/package.json"
@@ -22,12 +27,15 @@ configured=(
   "packages/types/package.json"
 )
 
-mapfile -t all_npm_arr <<<"$all_npm"
-for p in "${all_npm_arr[@]}"; do
+unconfigured=0
+mapfile -t all_pnpm_arr <<<"$all_pnpm"
+for p in "${all_pnpm_arr[@]}"; do
   if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
-    echo "UNCONFIGURED npm package.json: $p"
+    echo "UNCONFIGURED pnpm package.json: $p"
+    unconfigured=1
   fi
 done
+[[ $unconfigured -eq 0 ]] || { echo "Unconfigured pnpm packages detected"; exit 1; }
 
 if [[ $missing -ne 0 ]]; then
   echo "One or more expected manifests are missing."

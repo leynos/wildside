@@ -685,7 +685,7 @@ The first step is to install the necessary packages and create a central
 configuration file.
 
 ```bash
-npm install react-i18next i18next i18next-http-backend i18next-browser-languagedetector
+pnpm add react-i18next i18next i18next-http-backend i18next-browser-languagedetector
 
 ```
 

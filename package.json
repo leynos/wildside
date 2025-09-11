@@ -1,7 +1,8 @@
 {
   "devDependencies": {
     "@biomejs/biome": "^2.2.2",
-    "@mermaid-js/mermaid-cli": "^10.9.1",
+    "@mermaid-js/mermaid-cli": "^11.9.0",
+    "puppeteer": "^24.20.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "markdownlint-cli": "^0.45.0",
@@ -30,8 +31,9 @@
     "frontend-pwa",
     "packages/*"
   ],
+  "packageManager": "pnpm@10.15.1",
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "pnpm -r run build",
     "audit": "node security/validate-audit.js"
   },
   "engines": {

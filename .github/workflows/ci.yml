@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+          corepack: true
+          cache: 'pnpm'
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
         with:
           bun-version: '1.2.20'
@@ -25,8 +27,11 @@ jobs:
             **/pyproject.toml
             **/uv.lock
 
-      - name: Install dependencies
-        run: make deps
+      - name: Ensure pnpm lockfile
+        if: ${{ hashFiles('**/pnpm-lock.yaml') == '' }}
+        run: pnpm install --lockfile-only
+      - name: Install dependencies (frozen)
+        run: pnpm install --frozen-lockfile
 
       - name: Install Mermaid CLI
         run: |
@@ -42,8 +47,8 @@ jobs:
           mmdc --version
           bun --version
 
-      - name: Audit exceptions
-        run: npm run audit
+      - name: Audit
+        run: make audit
 
       - name: Install Nixie
         run: uv tool install --from git+https://github.com/leynos/nixie nixie
