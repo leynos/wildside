@@ -14,6 +14,8 @@ build/
 !packages/types/dist/src/
 !packages/types/dist/**/*.d.ts
 
+# Ignore Terraform/OpenTofu state, plans, and sensitive tfvars.
+# Prevent accidental commits of state, crash logs, and secrets.
 # OpenTofu
 .terraform/
 **/.terraform/

@@ -15,6 +15,7 @@ endef
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
 
+# Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
