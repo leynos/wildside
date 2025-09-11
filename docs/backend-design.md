@@ -590,6 +590,7 @@ const MAX_BACKOFF_SECS: u64 = 160; // cap backoff at 160 seconds
 // Worker with bounded immediate retries
 let worker = WorkerBuilder::new("route_generation")
     .layer(RetryLayer::new(RetryPolicy::retries(MAX_ATTEMPTS)))
+    .data(dlq_storage.clone())
     .build(rg_storage.clone(), route_generation_handler);
 
 // Inside the handler, on failure, reschedule with backoff (persisting attempts):
@@ -668,9 +669,11 @@ struct GenerateRouteJob {
 }
 ```
 
-Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and -180.0 < lon ≤ 180.0 at
-enqueue time. Apply minimal guards when enqueuing to reject or normalise
-out-of-range coordinates.
+// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and -180.0 < lon ≤ 180.0 at
+// enqueue time.
+
+Apply minimal guards when enqueuing to reject or normalise out-of-range
+coordinates.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at‑least‑once, idempotent, retry‑with‑backoff,
