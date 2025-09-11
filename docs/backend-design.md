@@ -645,7 +645,8 @@ struct GenerateRouteJob {
     prefs: RoutePrefs,
 }
 ```
-// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and -180.0 < lon ≤ 180.0 at enqueue time.
+
+// Validate GeoPoint (lat: -90 to 90, lon: -180 to 180) at enqueue time.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at-least-once, idempotent, retry-with-backoff,
