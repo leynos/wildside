@@ -634,7 +634,7 @@ struct RoutePrefs {
     // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct GenerateRouteJob {
     // trace correlation
     request_id: Uuid,
