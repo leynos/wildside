@@ -22,6 +22,11 @@ channels:
 operations:
   submitDisplayName:
     summary: Send a display name for validation
+    description: >
+      On validation failure, the server replies with InvalidDisplayName on the
+      same channel. On success, no direct reply is sent; clients should await a
+      subsequent UserCreated event. Implement client-side timeouts and retries
+      as needed.
     action: send
     channel:
       $ref: '#/channels/~1ws'
@@ -113,6 +118,10 @@ components:
           - code
           - error
         properties:
+          trace_id:
+            type: string
+            description: Correlates this error with the triggering request
+            format: uuid
           code:
             type: string
             description: Machine-readable validation code
@@ -143,6 +152,7 @@ components:
           headers:
             trace_id: "123e4567-e89b-42d3-a456-426614174000"
           payload:
+            trace_id: "123e4567-e89b-42d3-a456-426614174000"
             code: invalid_chars
             error: >-
               Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.
@@ -161,6 +171,7 @@ components:
         type: object
         additionalProperties: false
         required:
+          - trace_id
           - display_name
         properties:
           trace_id:
