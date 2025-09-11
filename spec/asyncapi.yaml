@@ -36,7 +36,6 @@ operations:
       - name: users
         description: Events about system users
   userCreated:
-    x-operationId: userCreated  # AsyncAPI 3 uses vendor field for stable codegen identifier
     summary: Receive UserCreated events
     action: receive
     channel:
@@ -48,7 +47,6 @@ operations:
       - name: users
         description: Events about system users
   invalidDisplayName:
-    x-operationId: invalidDisplayName
     summary: Receive validation errors
     action: receive
     channel:
