@@ -557,10 +557,10 @@ use redis::Client;
 fn setup_queues(redis: Client) {
     // Route generation queue
     let rg_cfg = Config::default().set_namespace("apalis:route_generation");
-    let _rg = RedisStorage::new_with_config(redis.clone(), rg_cfg);
+    let rg_storage = RedisStorage::new_with_config(redis.clone(), rg_cfg);
     // Enrichment queue
     let en_cfg = Config::default().set_namespace("apalis:enrichment");
-    let _en = RedisStorage::new_with_config(redis, en_cfg);
+    let en_storage = RedisStorage::new_with_config(redis, en_cfg);
 }
 ```
 
@@ -646,13 +646,13 @@ struct GenerateRouteJob {
 }
 ```
 
-// Validate GeoPoint (lat: -90 to 90, lon: -180 to 180) at enqueue time.
+// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and
+// -180.0 < lon ≤ 180.0 at enqueue time.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at-least-once, idempotent, retry-with-backoff,
 and DLQ semantics.
 
-<<<<<<< HEAD
 *Observability:* Instrument the task worker system to ensure smooth
 operation. Track the **queue length** (pending jobs), throughput, and
 success/failure counts. When using Apalis or similar, hook into their
@@ -667,37 +667,6 @@ outcomes affect user experience; emit analytics for notable outcomes
 (for example, a “RouteGenerationFailed” event) to understand frequency
 and impact. Overall, keep workers transparent to users but closely
 monitored via metrics and logs.
-||||||| parent of 27e5562 (Document Apalis queue prefixes and retries)
-*Observability:* The task worker system will be instrumented to ensure
-smooth operation. Key metrics include the **queue length** (number of
-pending jobs), job throughput, and job success/failure counts. When using
-Apalis or similar, hook into their events to increment Prometheus
-counters (e.g. `jobs_success_total`, `jobs_failed_total`) and gauge how
-many jobs are in-flight. Measure **job execution time** per job type to
-detect consistently slow tasks. In K8s, worker pods can expose a
-`/metrics` endpoint so Prometheus can scrape worker-specific stats.
-Exceptions or failed tasks should be logged with details (and possibly
-sent to an error tracking system). From the analytics side, background
-jobs may emit events such as “RouteGenerationFailed” for analysis of how
-often and where it happens. Overall, background workers are transparent
-to users but should be closely monitored by the devops team via metrics
-and logs.
-=======
-*Observability:* The task worker system will be instrumented to ensure
-smooth operation. Key metrics include the **queue length** (number of
-pending jobs), job throughput, and job success/failure counts. When using
-Apalis or similar, hook into their events to increment Prometheus
-counters (e.g. `jobs_success_total`, `jobs_failed_total`) and gauge how
-many jobs are in-flight. Measure **job execution time** per job type to
-detect consistently slow tasks. In Kubernetes (K8s), worker pods can expose a
-`/metrics` endpoint so Prometheus can scrape worker-specific stats.
-Exceptions or failed tasks should be logged with details (and possibly
-sent to an error tracking system). From the analytics side, background
-jobs may emit events such as “RouteGenerationFailed” for analysis of how
-often and where it happens. Overall, background workers are transparent
-to users but should be closely monitored by the DevOps team via metrics
-and logs.
->>>>>>> 27e5562 (Document Apalis queue prefixes and retries)
 
 ## Session Management and Security
 
