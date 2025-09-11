@@ -558,9 +558,15 @@ fn setup_queues(redis: Client) {
     // Route generation queue
     let rg_cfg = Config::default().set_namespace("apalis:route_generation");
     let rg_storage = RedisStorage::new_with_config(redis.clone(), rg_cfg);
+    let rg_dlq_cfg =
+        Config::default().set_namespace("apalis:route_generation:dlq");
+    let rg_dlq_storage =
+        RedisStorage::new_with_config(redis.clone(), rg_dlq_cfg);
     // Enrichment queue
     let en_cfg = Config::default().set_namespace("apalis:enrichment");
-    let en_storage = RedisStorage::new_with_config(redis, en_cfg);
+    let en_storage = RedisStorage::new_with_config(redis.clone(), en_cfg);
+    let en_dlq_cfg = Config::default().set_namespace("apalis:enrichment:dlq");
+    let en_dlq_storage = RedisStorage::new_with_config(redis, en_dlq_cfg);
 }
 ```
 
@@ -635,12 +641,14 @@ schema:
 - `user_id` (UUID) – identifies the requester.
 - `start_point` (GeoPoint) – origin coordinates.
 - `prefs` (RoutePrefs) – routing preferences.
+Derive `PartialEq` and `Eq` for these structs to allow direct comparison and
+deduplication.
 
 ```rust
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct GeoPoint {
     lat: f64,
     lon: f64,
@@ -651,7 +659,7 @@ struct RoutePrefs {
     // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct GenerateRouteJob {
     // trace correlation
     request_id: Uuid,
@@ -663,8 +671,9 @@ struct GenerateRouteJob {
 }
 ```
 
-// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and
-// -180.0 < lon ≤ 180.0 at enqueue time.
+Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and -180.0 < lon ≤ 180.0 at enqueue
+time. Apply minimal guards when enqueuing to reject or normalise out-of-range
+coordinates.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at‑least‑once, idempotent, retry‑with‑backoff,
