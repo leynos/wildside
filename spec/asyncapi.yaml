@@ -97,19 +97,24 @@ components:
       title: Invalid display name error
       contentType: application/json
       correlationId:
-        location: "$message.payload#/trace_id"
-      payload:
+        location: "$message.header#/trace_id"
+      headers:
         type: object
         additionalProperties: false
         required:
           - trace_id
-          - code
-          - error
         properties:
           trace_id:
             type: string
             description: Correlates this error with a prior request
             format: uuid
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+          - code
+          - error
+        properties:
           code:
             type: string
             description: Machine-readable validation code
@@ -137,8 +142,9 @@ components:
       examples:
         - name: invalid
           summary: Name failed validation
-          payload:
+          headers:
             trace_id: "123e4567-e89b-42d3-a456-426614174000"
+          payload:
             code: invalid_chars
             error: >-
               Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.
