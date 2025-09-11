@@ -597,7 +597,7 @@ async fn route_generation_handler(job: GenerateRouteJob, ctx: JobContext) -> Res
 ```
 
 With Apalis, the Actix Web server produces tasks and worker(s) consume
-them. Delivery is at least once, so each handler must be idempotent.
+them. Delivery is at‑least‑once, so each handler must be idempotent.
 Workers persist job status—result, error, and progress—and do not write
 directly to WebSockets; the API layer observes this state and notifies
 clients when it changes. For example, when a user requests a route, the
@@ -629,12 +629,12 @@ struct GeoPoint {
     lon: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct RoutePrefs {
     // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct GenerateRouteJob {
     // trace correlation
     request_id: Uuid,
@@ -646,11 +646,11 @@ struct GenerateRouteJob {
 }
 ```
 
-// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and
-// -180.0 < lon ≤ 180.0 at enqueue time.
+Validate GeoPoint at enqueue time: −90.0 ≤ lat ≤ 90.0 and
+−180.0 < lon ≤ 180.0.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
-`enrichment` under the same at-least-once, idempotent, retry-with-backoff,
+`enrichment` under the same at‑least‑once, idempotent, retry‑with‑backoff,
 and DLQ semantics.
 
 *Observability:* Instrument the task worker system to ensure smooth
