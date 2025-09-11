@@ -12,9 +12,12 @@ define ensure_tool
 endef
 
 ASYNCAPI_CLI_VERSION ?= 3.4.2
+REDOCLY_CLI_VERSION ?= 2.1.0
+
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile
+
 all: fmt lint test
 
 clean:
@@ -59,11 +62,11 @@ lint:
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then pnpm dlx @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+	if [ -f spec/asyncapi.yaml ]; then bun x @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
-	pnpm dlx --package=@redocly/cli@1.28.0 redocly lint spec/openapi.json
+	bun x --package=@redocly/cli@$(REDOCLY_CLI_VERSION) redocly lint spec/openapi.json
 
 # Validate Makefile style and structure
 lint-makefile:
