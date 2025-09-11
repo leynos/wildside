@@ -21,13 +21,17 @@ channels:
         $ref: '#/components/messages/DisplayNameRequest'
 operations:
   submitDisplayName:
-    x-operationId: submitDisplayName
     summary: Send a display name for validation
     action: send
     channel:
       $ref: '#/channels/~1ws'
     messages:
       - $ref: '#/channels/~1ws/messages/displayNameRequest'
+    reply:
+      channel:
+        $ref: '#/channels/~1ws'
+      messages:
+        - $ref: '#/channels/~1ws/messages/invalidDisplayName'
     tags:
       - name: users
         description: Events about system users
@@ -98,12 +102,24 @@ components:
       name: InvalidDisplayName
       title: Invalid display name error
       contentType: application/json
+      correlationId:
+        location: "$message.payload#/trace_id"
       payload:
         type: object
         additionalProperties: false
         required:
+          - trace_id
+          - code
           - error
         properties:
+          trace_id:
+            type: string
+            description: Correlates this error with a prior request
+            format: uuid
+          code:
+            type: string
+            description: Machine-readable validation code
+            enum: [too_short, too_long, invalid_chars]
           error:
             type: string
             description: Reason the display name was rejected
@@ -111,21 +127,35 @@ components:
         - name: invalid
           summary: Name failed validation
           payload:
+            trace_id: "123e4567-e89b-42d3-a456-426614174000"
+            code: invalid_chars
             error: >-
-              Invalid display name. Only alphanumeric characters, spaces, and
-              underscores are allowed. Length must be between 3 and 32
-              characters.
+              Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.
     DisplayNameRequest:
       name: DisplayNameRequest
       title: Display name submission
-      contentType: text/plain
+      contentType: application/json
+      correlationId:
+        location: "$message.payload#/trace_id"
       payload:
-        type: string
-        description: Desired display name
-        minLength: 3
-        maxLength: 32
-        pattern: '^[A-Za-z0-9_ ]{3,32}$'
+        type: object
+        additionalProperties: false
+        required:
+          - display_name
+        properties:
+          trace_id:
+            type: string
+            description: Correlates this request with subsequent events
+            format: uuid
+          display_name:
+            type: string
+            description: Desired display name
+            minLength: 3
+            maxLength: 32
+            pattern: '^[A-Za-z0-9_ ]{3,32}$'
       examples:
         - name: valid
           summary: Valid display name
-          payload: "Ada Lovelace"
+          payload:
+            trace_id: "123e4567-e89b-42d3-a456-426614174000"
+            display_name: "Ada Lovelace"
