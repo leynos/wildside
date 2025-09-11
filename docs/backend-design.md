@@ -573,22 +573,39 @@ Define a clear reliability policy:
 
 ```rust
 use std::time::Duration;
-use apalis::{prelude::*, layers::retry::{RetryLayer, RetryPolicy}};
+use apalis::{
+    layers::retry::{RetryLayer, RetryPolicy},
+    prelude::*,
+    request::Request,
+};
+use apalis_redis::RedisStorage;
+
+const MAX_ATTEMPTS: i32 = 5;
+const BASE_BACKOFF_SECS: u64 = 5;
+const MAX_BACKOFF_SECS: u64 = 160; // cap backoff at 160 seconds
+
 // Worker with bounded immediate retries
 let worker = WorkerBuilder::new("route_generation")
-    .layer(RetryLayer::new(RetryPolicy::retries(3))) // cap attempts
+    .layer(RetryLayer::new(RetryPolicy::retries(MAX_ATTEMPTS)))
     .build(rg_storage.clone(), route_generation_handler);
 
 // Inside the handler, on failure, reschedule with backoff (persisting attempts):
-async fn route_generation_handler(job: GenerateRouteJob, ctx: JobContext) -> Result<(), anyhow::Error> {
+async fn route_generation_handler(
+    job: GenerateRouteJob,
+    ctx: JobContext,
+) -> Result<(), anyhow::Error> {
     if let Err(err) = do_work(job.clone()).await {
-        let attempt = ctx.attempt().unwrap_or(1);
-        let delay = Duration::from_secs((2_u64).saturating_pow(attempt.min(5)) * 5); // bounded exponential
-        if attempt >= 5 {
-            // send to DLQ
-            ctx.storage().send_to("apalis:dlq:route_generation", job).await?;
+        let attempt = ctx.attempts() + 1;
+        let delay_secs =
+            BASE_BACKOFF_SECS * 2_u64.pow((attempt - 1).min(MAX_ATTEMPTS - 1) as u32);
+        let delay = Duration::from_secs(delay_secs.min(MAX_BACKOFF_SECS));
+        if attempt >= MAX_ATTEMPTS {
+            let dlq: &RedisStorage<GenerateRouteJob> = ctx.data().expect("dlq storage");
+            dlq.push(job).await?;
         } else {
-            ctx.storage().reschedule(job, delay).await?;
+            ctx.storage()
+                .reschedule(Request::new(job), delay)
+                .await?;
         }
         return Err(err);
     }
@@ -623,13 +640,13 @@ schema:
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct GeoPoint {
     lat: f64,
     lon: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct RoutePrefs {
     // add fields as needed, for example: max_duration_minutes, themes, avoid_hills
 }
@@ -646,8 +663,8 @@ struct GenerateRouteJob {
 }
 ```
 
-Validate GeoPoint at enqueue time: −90.0 ≤ lat ≤ 90.0 and
-−180.0 < lon ≤ 180.0.
+// Validate GeoPoint with -90.0 ≤ lat ≤ 90.0 and
+// -180.0 < lon ≤ 180.0 at enqueue time.
 
 Scheduled jobs, such as refreshing OpenStreetMap data, run on
 `enrichment` under the same at‑least‑once, idempotent, retry‑with‑backoff,
