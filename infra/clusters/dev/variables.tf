@@ -24,8 +24,8 @@ variable "kubernetes_version" {
   default     = ""
 
   validation {
-    condition     = var.kubernetes_version == "" || can(regex("^[0-9]+[.][0-9]+[.][0-9]+-do[.][0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be empty or match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
+    condition     = var.kubernetes_version == "" || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+-do\\.[0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version may be empty or must match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
   }
 }
 
