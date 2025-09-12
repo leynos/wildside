@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@biomejs/biome": "^2.2.2",
+    "@biomejs/biome": "^2.2.4",
     "@mermaid-js/mermaid-cli": "^11.9.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
