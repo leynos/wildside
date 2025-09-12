@@ -251,8 +251,8 @@ mod tests {
         let res = err.error_response();
         assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.unwrap();
-        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        let bytes = to_bytes(res.into_body()).await.expect("serialise body");
+        let payload: Error = serde_json::from_slice(&bytes).expect("deserialise Error");
         assert_eq!(payload.message, "Internal server error");
         assert!(payload.details.is_none());
         assert_eq!(payload.trace_id.as_deref(), Some("abc"));
@@ -268,8 +268,8 @@ mod tests {
         let res = err.error_response();
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.unwrap();
-        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        let bytes = to_bytes(res.into_body()).await.expect("serialise body");
+        let payload: Error = serde_json::from_slice(&bytes).expect("deserialise Error");
         assert_eq!(payload.code, ErrorCode::InvalidRequest);
         assert_eq!(payload.message, "bad");
         assert_eq!(payload.details, Some(json!({"field": "name"})));
