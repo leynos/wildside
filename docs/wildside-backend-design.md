@@ -256,7 +256,7 @@ sequenceDiagram
 
   Client->>Actix: HTTP GET /users
   Actix->>TraceMW: pass ServiceRequest
-  TraceMW->>TraceMW: generate UUID trace_id\ninsert into req.extensions
+  TraceMW->>TraceMW: generate UUID traceId\ninsert into req.extensions
   TraceMW->>Handler: invoke handler
   alt Success
     Handler-->>TraceMW: Ok(Json<Vec<User>>)
@@ -265,7 +265,7 @@ sequenceDiagram
   else Error
     Handler-->>TraceMW: Err(Error)
     TraceMW->>ErrorModel: ResponseError::error_response()
-    ErrorModel-->>TraceMW: HttpResponse(status + JSON body with trace_id)
+    ErrorModel-->>TraceMW: HttpResponse(status + JSON body with traceId)
     TraceMW-->>Actix: 4xx/5xx + Error JSON
     Actix-->>Client: 4xx/5xx + Error JSON
   end
@@ -666,7 +666,7 @@ reliability, and user behaviour.
 
   - **Logging (Loki):** Output structured, correlated logs for debugging.
   Each request is wrapped by tracing middleware that assigns a UUID
-  `trace_id`, propagated to logs and error responses.
+`traceId`, propagated to logs and error responses.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
     funnels.
@@ -747,7 +747,7 @@ reliability, and user behaviour.
     ```
 
   - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
-    include the `trace_id` propagated from the initial API request, even into
+    include the `traceId` propagated from the initial API request, even into
     the background jobs.
 
   - [ ] **Analytics:**

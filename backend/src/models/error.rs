@@ -33,6 +33,7 @@ pub enum ErrorCode {
 /// assert_eq!(err.code, ErrorCode::NotFound);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Error {
     /// Stable machine-readable error code.

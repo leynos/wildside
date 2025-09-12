@@ -10,9 +10,9 @@ pub trait Correlated {
 
 /// Generic envelope that attaches a correlation identifier.
 #[derive(Debug, Serialize, Message)]
+#[serde(rename_all = "camelCase")]
 #[rtype(result = "()")]
 pub struct Envelope<T> {
-    #[serde(rename = "trace_id")]
     trace_id: Uuid,
     #[serde(flatten)]
     payload: T,
@@ -41,6 +41,7 @@ impl<T> Correlated for Envelope<T> {
 
 /// Payload emitted when a new user is created.
 #[derive(Debug, Serialize, Message)]
+#[serde(rename_all = "camelCase")]
 #[rtype(result = "()")]
 pub struct UserCreated {
     /// The user's unique identifier.
@@ -67,7 +68,7 @@ mod tests {
         let value = serde_json::to_value(&msg).expect("failed to convert message to JSON value");
         assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
         assert_eq!(
-            value.get("display_name").and_then(Value::as_str),
+            value.get("displayName").and_then(Value::as_str),
             Some("Alice")
         );
         insta::assert_json_snapshot!(value);

@@ -11,6 +11,7 @@ use actix_web::{get, post, web, HttpResponse, Result};
 use serde::Deserialize;
 
 #[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,

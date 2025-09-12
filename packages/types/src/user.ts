@@ -1,7 +1,7 @@
 /** @file User domain types shared between client and server.
  *  Invariants:
  *  - `id` is a branded string (`UserId`) parsed via `UserIdSchema`.
- *  - `display_name` is a trimmed, non-empty string.
+ *  - `displayName` is a trimmed, non-empty string.
  *  These schemas gate I/O at module boundaries to keep types and runtime in sync.
  */
 import { z } from 'zod';
@@ -15,7 +15,7 @@ export type UserId = z.infer<typeof UserIdSchema>;
 export const UserSchema = z
   .object({
     id: UserIdSchema,
-    display_name: z.string().trim().min(1, 'display_name must not be empty'),
+    displayName: z.string().trim().min(1, 'displayName must not be empty'),
   })
   .strict();
 /** User record returned from the API. */

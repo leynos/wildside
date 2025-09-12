@@ -5,6 +5,7 @@ use utoipa::ToSchema;
 
 /// Application user.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct User {
     /// Stable user identifier
