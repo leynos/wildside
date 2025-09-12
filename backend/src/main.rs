@@ -13,6 +13,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
+use zeroize::Zeroize;
 
 use backend::api::health::{live, ready, HealthState};
 use backend::api::users::{list_users, login};
@@ -35,7 +36,17 @@ async fn main() -> std::io::Result<()> {
     let key_path =
         env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
-        Ok(bytes) => Key::derive_from(&bytes),
+        Ok(mut bytes) => {
+            if !cfg!(debug_assertions) && bytes.len() < 32 {
+                return Err(std::io::Error::other(format!(
+                    "session key at {key_path} too short: need >=32 bytes, got {}",
+                    bytes.len()
+                )));
+            }
+            let key = Key::derive_from(&bytes);
+            bytes.zeroize();
+            key
+        }
         Err(e) => {
             let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
             if cfg!(debug_assertions) || allow_dev {

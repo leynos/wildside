@@ -159,11 +159,22 @@ API and WebSocket traffic.
     use std::env;
     use std::io;
     use tracing::warn;
+    use zeroize::Zeroize;
 
     let key_path = env::var("SESSION_KEY_FILE")
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
-        Ok(bytes) => Key::from(&bytes),
+        Ok(mut bytes) => {
+            if !cfg!(debug_assertions) && bytes.len() < 32 {
+                return Err(io::Error::other(format!(
+                    "session key at {key_path} too short: need >=32 bytes, got {}",
+                    bytes.len()
+                )));
+            }
+            let key = Key::derive_from(&bytes);
+            bytes.zeroize();
+            key
+        },
         Err(e) => {
             let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
             if cfg!(debug_assertions) || allow_dev {
@@ -204,7 +215,9 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    The key must be at least 32 bytes; release builds refuse to start if the key is shorter, and the raw bytes are zeroised after derivation. Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict` otherwise, expiring after two hours.
+
+`CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
     KB, so session payloads must remain well under this limit.
 
