@@ -6,7 +6,7 @@ info:
 servers:
   production:
     host: ws.yourdomain.example
-    protocol: ws
+    protocol: wss
     pathname: /
     description: Production WebSocket server
 channels:
@@ -93,7 +93,6 @@ components:
         - name: minimal
           summary: Minimal valid message
           payload:
-            trace_id: "123e4567-e89b-42d3-a456-426614174000"
             id: "123e4567-e89b-42d3-a456-426614174001"
             display_name: "Ada Lovelace"
     InvalidDisplayName:
@@ -101,6 +100,7 @@ components:
       title: Invalid display name error
       contentType: application/json
       correlationId:
+        description: Correlates this error with the triggering request via header trace_id
         location: "$message.header#/trace_id"
       headers:
         type: object
@@ -119,10 +119,6 @@ components:
           - code
           - error
         properties:
-          trace_id:
-            type: string
-            description: Correlates this error with the triggering request
-            format: uuid
           code:
             type: string
             description: Machine-readable validation code
@@ -138,6 +134,7 @@ components:
               field:
                 type: string
                 description: The offending field path
+                const: display_name
               value:
                 type: string
                 description: The offending value
@@ -153,7 +150,6 @@ components:
           headers:
             trace_id: "123e4567-e89b-42d3-a456-426614174000"
           payload:
-            trace_id: "123e4567-e89b-42d3-a456-426614174000"
             code: invalid_chars
             error: >-
               Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.
@@ -188,7 +184,6 @@ components:
         - name: valid
           summary: Valid display name
           payload:
-            trace_id: "123e4567-e89b-42d3-a456-426614174000"
             display_name: "Ada Lovelace"
   schemas:
     DisplayName:
