@@ -29,6 +29,8 @@ utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 # fetching new dependencies. Enable with `--features metrics`.
 actix-web-prom = { version = "0.10", optional = true }
 
+zeroize = { version = "1.7", default-features = false, features = ["zeroize_derive"] }
+
 [features]
 default = []
 # Enable Prometheus metrics middleware and endpoint
