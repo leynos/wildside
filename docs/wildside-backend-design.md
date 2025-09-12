@@ -122,6 +122,8 @@ API and WebSocket traffic.
 - **Current Status:** A foundational Actix Web server exists in
   `backend/src/main.rs`. It is configured with basic logging (`tracing`),
   OpenAPI documentation (`utoipa`), and a working WebSocket endpoint (`/ws`).
+  The server binds to a host and port taken from the `HOST` and `PORT`
+  environment variables, defaulting to `0.0.0.0:8080` for development.
 
 - **Key Responsibilities:**
 
@@ -145,7 +147,8 @@ API and WebSocket traffic.
     key from a secret store (for example, a Kubernetes Secret or Vault) and
     mount or inject it for the service at runtime. Name the cookie `session`
     and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
-    (or `Strict`). Startup must abort in production if the key file cannot be
+    during development but `SameSite=Strict` for releases. Startup must abort
+    in production if the key file cannot be
     read; a temporary key is permitted only in development when
     `SESSION_ALLOW_EPHEMERAL=1`.
 
@@ -156,11 +159,22 @@ API and WebSocket traffic.
     use std::env;
     use std::io;
     use tracing::warn;
+    use zeroize::Zeroize;
 
     let key_path = env::var("SESSION_KEY_FILE")
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
-        Ok(bytes) => Key::from(&bytes),
+        Ok(mut bytes) => {
+            if !cfg!(debug_assertions) && bytes.len() < 32 {
+                return Err(io::Error::other(format!(
+                    "session key at {key_path} too short: need >=32 bytes, got {}",
+                    bytes.len()
+                )));
+            }
+            let key = Key::derive_from(&bytes);
+            bytes.zeroize();
+            key
+        },
         Err(e) => {
             let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
             if cfg!(debug_assertions) || allow_dev {
@@ -177,6 +191,11 @@ API and WebSocket traffic.
     let cookie_secure = env::var("SESSION_COOKIE_SECURE")
         .map(|v| v != "0")
         .unwrap_or(true);
+    let same_site = if cfg!(debug_assertions) {
+        SameSite::Lax
+    } else {
+        SameSite::Strict
+    };
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
@@ -185,7 +204,7 @@ API and WebSocket traffic.
     .cookie_path("/")
     .cookie_secure(cookie_secure)
     .cookie_http_only(true)
-    .cookie_same_site(SameSite::Lax)
+    .cookie_same_site(same_site)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
     .cookie_max_age(Duration::hours(2))
@@ -196,7 +215,9 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    The key must be at least 32 bytes; release builds refuse to start if the key is shorter, and the raw bytes are zeroised after derivation. Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict` otherwise, expiring after two hours.
+
+`CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
     KB, so session payloads must remain well under this limit.
 
