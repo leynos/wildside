@@ -70,13 +70,30 @@ async fn main() -> std::io::Result<()> {
     server.run().await
 }
 
-fn build_app(health_state: web::Data<HealthState>, key: Key, cookie_secure: bool) -> App<()> {
+fn build_app(
+    health_state: web::Data<HealthState>,
+    key: Key,
+    cookie_secure: bool,
+) -> App<
+    impl actix_web::dev::ServiceFactory<
+        actix_web::dev::ServiceRequest,
+        Config = (),
+        Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+        Error = actix_web::Error,
+        InitError = (),
+    >,
+> {
+    let same_site = if cfg!(debug_assertions) {
+        SameSite::Lax
+    } else {
+        SameSite::Strict
+    };
     let session = SessionMiddleware::builder(CookieSessionStore::default(), key)
         .cookie_name("session".into())
         .cookie_path("/".into())
         .cookie_secure(cookie_secure)
         .cookie_http_only(true)
-        .cookie_same_site(SameSite::Lax)
+        .cookie_same_site(same_site)
         .build();
 
     let api = web::scope("/api/v1")

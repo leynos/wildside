@@ -559,18 +559,20 @@ let key_bytes = {
 };
 let key = Key::from(&key_bytes);
 
+let same_site = if cfg!(debug_assertions) { SameSite::Lax } else { SameSite::Strict };
+
 let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
     .cookie_name("session")
     .cookie_content_security(CookieContentSecurity::Private) // encrypt + sign
     .cookie_secure(true)
     .cookie_http_only(true)
-    .cookie_same_site(SameSite::Lax)
+    .cookie_same_site(same_site)
     .build();
 ```
 
 On login, the server sets a cookie named `session`, such as `session=<payload>`,
 and `actix-session` handles serialization and integrity checks automatically.
-Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` unless a
+Cookies are marked `HttpOnly` and `Secure`. They default to `SameSite=Strict` in release builds (Lax in debug) unless a
 cross-site flow is required. To rotate the key, generate a new value, replace
 the secret file, and restart the pods; the framework cannot validate cookies
 issued with a previous key, so all existing sessions are dropped. This keeps the
