@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
 //! Print the OpenAPI document as JSON.
 
 use backend::ApiDoc;
