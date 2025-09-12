@@ -97,7 +97,8 @@ where
             let mut res = fut.await?;
             res.response_mut().headers_mut().insert(
                 HeaderName::from_static("trace-id"),
-                HeaderValue::from_str(&trace_id).expect("valid Trace-Id header value"),
+                HeaderValue::from_str(&trace_id)
+                    .unwrap_or_else(|e| unreachable!("invalid Trace-Id header: {e}")),
             );
             Ok(res)
         })

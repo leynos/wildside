@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
@@ -97,7 +98,7 @@ async fn main() -> std::io::Result<()> {
                 let prometheus = PrometheusMetricsBuilder::new("wildside")
                     .endpoint("/metrics")
                     .build()
-                    .expect("configure Prometheus metrics");
+                    .unwrap_or_else(|e| panic!("configure Prometheus metrics: {e}"));
                 app.wrap(prometheus)
             };
 

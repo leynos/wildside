@@ -17,7 +17,7 @@ pub const DISPLAY_NAME_MAX: usize = 32;
 /// ```
 static DISPLAY_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
     let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
-    Regex::new(&pattern).expect("valid regex")
+    Regex::new(&pattern).unwrap_or_else(|e| unreachable!("invalid display name regex: {e}"))
 });
 
 pub fn is_valid_display_name(name: &str) -> bool {
