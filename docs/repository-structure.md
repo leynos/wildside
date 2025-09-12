@@ -9,7 +9,7 @@ PWA frontend. It supports:
   future native shells.
 - Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
   with static assets served from object storage/CDN.
-- Bun as the JS runtime/package manager.
+- Bun as the JS runtime; pnpm as the package manager.
 
 A typical request flow is illustrated below:
 
@@ -538,8 +538,29 @@ docker-down:
 ```
 
 Use `make audit` to validate the audit exception allowlist against its schema
-and expiry dates. The target installs its validator with `npx`, so ensure npm is
-available in the CI environment.
+and expiry dates. The target installs its validator with `pnpm dlx`; enable
+Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1 --activate`) so
+`pnpm` is available in local and CI environments.
+
+### pnpm setup sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor CI as CI / Developer
+  participant NodeSetup as actions/setup-node
+  participant PNPM as pnpm
+  participant Repo as Monorepo
+
+  CI->>NodeSetup: Install Node (corepack: true)
+  NodeSetup->>PNPM: Provide pnpm via Corepack
+  CI->>PNPM: If missing -> `pnpm install --lockfile-only`
+  CI->>PNPM: `pnpm install --frozen-lockfile`
+  PNPM->>Repo: Resolve workspace (pnpm-workspace.yaml)
+  CI->>PNPM: Run lifecycle scripts (`pnpm -r run build`, `pnpm -r --if-present test`, `pnpm -r --if-present run audit`)
+  PNPM-->>CI: Return results/status
+  note right of PNPM: Cache and frozen lockfile enforce reproducible CI installs
+```
 
 ### Docker Compose startup sequence
 

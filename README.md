@@ -9,15 +9,29 @@ data-validation pipeline. The strategy emphasises cost control, security-first
 AI integration, and clear differentiation from fitness, hiking, and static tour
 apps.
 
+## Development setup
+
+The workspace manages JavaScript dependencies with pnpm. Enable Corepack so
+that the `pnpm` command is available locally:
+
+```bash
+corepack enable
+```
+
+After enabling Corepack, install the workspace dependencies with a frozen lockfile:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+The Bun toolchain remains in use for runtime scripts and formatting tasks.
+
 ## Formatting, linting, and type checking
 
 Use the Makefile targets to format, lint, and type-check both the Rust backend
 and the TypeScript/JavaScript workspaces:
 
 ```bash
-# Install Bun dependencies
-make deps
-
 # Format all code (Rust + Biome with write)
 make fmt
 
@@ -51,8 +65,8 @@ Notes:
   `vcs.useIgnoreFile`), so build artefacts such as any `target/` directory are
   ignored. There is also an explicit override that disables Biome for
   `**/target/**`.
-- Run `make deps` once in the repo root if Bun tooling is not already set
-  up locally.
+- Run `pnpm install --frozen-lockfile` once in the repo root if dependencies
+  are not already installed.
 
 ## Documentation linting
 
