@@ -541,6 +541,7 @@ Use `make audit` to validate the audit exception allowlist against its schema
 and expiry dates. The target installs its validator with `pnpm dlx`; enable
 Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1 --activate`) so
 `pnpm` is available in local and CI environments.
+
 ### pnpm setup sequence
 
 ```mermaid
@@ -560,7 +561,6 @@ sequenceDiagram
   PNPM-->>CI: Return results/status
   note right of PNPM: Cache and frozen lockfile enforce reproducible CI installs
 ```
-
 
 ### Docker Compose startup sequence
 

@@ -106,7 +106,7 @@ typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/ts
 audit: deps
 	pnpm -r install
 	pnpm -r --if-present run audit
-	pnpm -r audit
+	pnpm audit
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
