@@ -93,6 +93,7 @@ components:
         - name: minimal
           summary: Minimal valid message
           payload:
+            traceId: "123e4567-e89b-42d3-a456-426614174000"
             id: "123e4567-e89b-42d3-a456-426614174001"
             displayName: "Ada Lovelace"
     InvalidDisplayName:

@@ -13,5 +13,25 @@ pub struct User {
     pub id: String,
     /// Display name shown to other users
     #[schema(example = "Ada Lovelace")]
+    #[serde(alias = "display_name")]
     pub display_name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn round_trips_display_name_alias() {
+        let camel: User = serde_json::from_value(json!({"id":"1","displayName":"Alice"})).unwrap();
+        let snake: User = serde_json::from_value(json!({"id":"1","display_name":"Alice"})).unwrap();
+        assert_eq!(camel, snake);
+        let value = serde_json::to_value(snake).unwrap();
+        assert_eq!(
+            value.get("displayName").and_then(|v| v.as_str()),
+            Some("Alice")
+        );
+        assert!(value.get("display_name").is_none());
+    }
 }

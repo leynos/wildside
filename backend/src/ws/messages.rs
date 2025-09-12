@@ -73,4 +73,24 @@ mod tests {
         );
         insta::assert_json_snapshot!(value);
     }
+
+    #[rstest]
+    fn serialises_user_created_enveloped() {
+        let inner = UserCreated {
+            id: "123".into(),
+            display_name: "Alice".into(),
+        };
+        let msg = Envelope::with_trace_id(Uuid::nil(), inner);
+        let value = serde_json::to_value(&msg).expect("to JSON");
+        assert_eq!(
+            value.get("traceId").and_then(Value::as_str),
+            Some("00000000-0000-0000-0000-000000000000")
+        );
+        assert_eq!(value.get("id").and_then(Value::as_str), Some("123"));
+        assert_eq!(
+            value.get("displayName").and_then(Value::as_str),
+            Some("Alice")
+        );
+        insta::assert_json_snapshot!(value);
+    }
 }
