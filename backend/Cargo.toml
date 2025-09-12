@@ -43,3 +43,8 @@ insta = { version = "1", features = ["json", "redactions"] }
 codegen-units = 1
 lto = "thin"
 opt-level = 3
+
+[[bin]]
+name = "openapi-dump"
+path = "src/bin/openapi_dump.rs"
+
