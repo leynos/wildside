@@ -147,7 +147,8 @@ API and WebSocket traffic.
     key from a secret store (for example, a Kubernetes Secret or Vault) and
     mount or inject it for the service at runtime. Name the cookie `session`
     and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
-    (or `Strict`). Startup must abort in production if the key file cannot be
+    during development but `SameSite=Strict` for releases. Startup must abort
+    in production if the key file cannot be
     read; a temporary key is permitted only in development when
     `SESSION_ALLOW_EPHEMERAL=1`.
 
@@ -179,6 +180,11 @@ API and WebSocket traffic.
     let cookie_secure = env::var("SESSION_COOKIE_SECURE")
         .map(|v| v != "0")
         .unwrap_or(true);
+    let same_site = if cfg!(debug_assertions) {
+        SameSite::Lax
+    } else {
+        SameSite::Strict
+    };
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
@@ -187,7 +193,7 @@ API and WebSocket traffic.
     .cookie_path("/")
     .cookie_secure(cookie_secure)
     .cookie_http_only(true)
-    .cookie_same_site(SameSite::Lax)
+    .cookie_same_site(same_site)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
     .cookie_max_age(Duration::hours(2))
