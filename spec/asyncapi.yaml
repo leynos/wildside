@@ -68,6 +68,7 @@ components:
       title: User created event
       contentType: application/json
       correlationId:
+        description: Correlates UserCreated with prior client actions via payload.trace_id
         location: "$message.payload#/trace_id"
       payload:
         type: object
@@ -167,6 +168,9 @@ components:
       contentType: application/json
       correlationId:
         location: "$message.payload#/trace_id"
+      description: >
+        trace_id MUST be unique for each submission attempt within a client-defined time window.
+        The server treats duplicate trace_id values as idempotent replays.
       payload:
         type: object
         additionalProperties: false
