@@ -29,9 +29,8 @@ jobs:
             **/pyproject.toml
             **/uv.lock
 
-      - name: Ensure pnpm lockfile
-        if: ${{ hashFiles('**/pnpm-lock.yaml') == '' }}
-        run: pnpm install --lockfile-only
+      - name: Check lockfile consistency
+        run: make lockfile
       - name: Install dependencies (frozen)
         run: pnpm install --frozen-lockfile
 
