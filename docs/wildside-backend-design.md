@@ -122,6 +122,8 @@ API and WebSocket traffic.
 - **Current Status:** A foundational Actix Web server exists in
   `backend/src/main.rs`. It is configured with basic logging (`tracing`),
   OpenAPI documentation (`utoipa`), and a working WebSocket endpoint (`/ws`).
+  The server binds to a host and port taken from the `HOST` and `PORT`
+  environment variables, defaulting to `0.0.0.0:8080` for development.
 
 - **Key Responsibilities:**
 
