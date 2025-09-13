@@ -256,7 +256,7 @@ sequenceDiagram
 
   Client->>Actix: HTTP GET /users
   Actix->>TraceMW: pass ServiceRequest
-  TraceMW->>TraceMW: generate UUID trace_id\ninsert into req.extensions
+  TraceMW->>TraceMW: generate UUID traceId\ninsert into req.extensions
   TraceMW->>Handler: invoke handler
   alt Success
     Handler-->>TraceMW: Ok(Json<Vec<User>>)
@@ -265,7 +265,7 @@ sequenceDiagram
   else Error
     Handler-->>TraceMW: Err(Error)
     TraceMW->>ErrorModel: ResponseError::error_response()
-    ErrorModel-->>TraceMW: HttpResponse(status + JSON body with trace_id)
+    ErrorModel-->>TraceMW: HttpResponse(status + JSON body with traceId)
     TraceMW-->>Actix: 4xx/5xx + Error JSON
     Actix-->>Client: 4xx/5xx + Error JSON
   end
@@ -666,7 +666,7 @@ reliability, and user behaviour.
 
   - **Logging (Loki):** Output structured, correlated logs for debugging.
   Each request is wrapped by tracing middleware that assigns a UUID
-  `trace_id`, propagated to logs and error responses.
+`traceId`, propagated to logs and error responses.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
     funnels.
@@ -747,7 +747,7 @@ reliability, and user behaviour.
     ```
 
   - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
-    include the `trace_id` propagated from the initial API request, even into
+    include the `traceId` propagated from the initial API request, even into
     the background jobs.
 
   - [ ] **Analytics:**
@@ -795,25 +795,25 @@ All REST endpoints are prefixed with `/api/v1`.
 
 ```json
 {
-  "start_location": {
+  "startLocation": {
     "type": "Point",
     "coordinates": [-3.1883, 55.9533]
   },
-  "duration_minutes": 60,
-  "interest_theme_ids": [
+  "durationMinutes": 60,
+  "interestThemeIds": [
     "f47ac10b-58cc-4372-a567-0e02b2c3d479"
   ],
-  "popularity_bias": 0.7,
+  "popularityBias": 0.7,
   "accessibility": {
-    "avoid_stairs": true,
-    "prefer_well_lit": false
+    "avoidStairs": true,
+    "preferWellLit": false
   }
 }
 ```
 
 On success, this endpoint returns a `202 Accepted` with a body containing a
-`request_id` and a `status_url` for polling the job (for example,
-`/api/v1/routes/status/{request_id}`). The `route_id` is not available until
+`requestId` and a `statusUrl` for polling the job (for example,
+`/api/v1/routes/status/{requestId}`). The `routeId` is not available until
 the WebSocket `complete` event supplies it.
 
 ### 4.2. WebSocket API
@@ -832,12 +832,12 @@ Pushed to the client to provide real-time updates on a route generation job.
 
 - **Payload**:
 
-  - `request_id` (string): Correlates with the ID returned from
+  - `requestId` (string): Correlates with the ID returned from
     `POST /api/v1/routes`.
 
   - `status` (string): One of `pending`, `in_progress`, `complete`, `failed`.
 
-  - `route_id` (string, optional): The ID of the final route, present when
+  - `routeId` (string, optional): The ID of the final route, present when
     status is `complete`.
 
   - `error` (string, optional): An error message, present when status is

@@ -55,11 +55,11 @@
                     "value": [
                       {
                         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                        "display_name": "Ada Lovelace"
+                        "displayName": "Ada Lovelace"
                       },
                       {
                         "id": "7b1d3a62-0e3d-4f2f-8f94-3a5b5db02f0f",
-                        "display_name": "Alan Turing"
+                        "displayName": "Alan Turing"
                       }
                     ]
                   }
@@ -198,9 +198,9 @@
         "type": "object",
         "description": "A user of the system",
         "additionalProperties": false,
-        "required": ["id", "display_name"],
+        "required": ["id", "displayName"],
         "properties": {
-          "display_name": {
+          "displayName": {
             "type": "string",
             "description": "User's display name",
             "example": "Ada Lovelace",

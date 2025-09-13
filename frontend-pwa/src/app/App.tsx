@@ -42,7 +42,7 @@ export function App() {
         {data && data.length > 0 ? (
           data.map((u) => (
             <li key={u.id}>
-              <span>{u.display_name}</span>
+              <span>{u.displayName}</span>
             </li>
           ))
         ) : (

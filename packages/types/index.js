@@ -10,9 +10,7 @@ export const UserIdSchema = z.string().uuid().brand();
 export const UserSchema = z
   .object({
     id: UserIdSchema,
-    // TODO(#types-casing): Remove when TS source switches to `displayName`.
-    // snake/camel-case conversion is in place; property remains snake_case to mirror API payloads.
-    display_name: z.string().trim().min(1, 'display_name must not be empty'),
+    displayName: z.string().trim().min(1, 'displayName must not be empty'),
   })
   .strict();
 /** Runtime schema for a list of user records. */
