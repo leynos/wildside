@@ -31,6 +31,14 @@ cluster lifecycle.
   `DIGITALOCEAN_TOKEN` is absent, enabling local and CI execution without cloud
   credentials.
 
+## Root configuration
+
+- **Dev cluster defaults.** A root configuration in `infra/clusters/dev`
+  instantiates the module with a two-node `s-2vcpu-2gb` pool in `nyc1`.
+  The Kubernetes version is supplied via variables rather than a
+  committed default so plans use a supported patch. The kubeconfig
+  output is disabled by default to avoid persisting credentials.
+
 ## Future Work
 
 - Expose additional outputs such as the dashboard URL or VPC identifier.

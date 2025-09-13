@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const supportedVersion = "1.33.9-do.0" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
+const supportedVersion = "1.33.1-do.3" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
 
 func testVars() map[string]interface{} {
 	return map[string]interface{}{
