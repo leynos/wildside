@@ -116,7 +116,7 @@ async fn main() -> std::io::Result<()> {
         env::var("PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(8080u16),
+            .unwrap_or(8080_u16),
     ))?;
 
     let server = server.run();
