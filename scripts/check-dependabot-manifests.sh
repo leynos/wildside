@@ -28,7 +28,11 @@ configured=(
 )
 
 unconfigured=0
-mapfile -t all_pnpm_arr <<<"$all_pnpm"
+all_pnpm_arr=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  all_pnpm_arr+=("$line")
+done <<< "$all_pnpm"
 for p in "${all_pnpm_arr[@]}"; do
   if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
     echo "UNCONFIGURED pnpm package.json: $p"
