@@ -741,7 +741,8 @@ let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
 On login, the server sets a cookie named `session`, such as `session=<payload>`,
 and `actix-session` handles serialization and integrity checks automatically.
 Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` during development
-but `SameSite=Strict` otherwise unless a cross-site flow is required. To rotate the key,
+and `SameSite=Strict` otherwise. For cross-site flows, set `SESSION_SAMESITE`
+to `Lax` or `None` explicitly (note that `None` requires `Secure=true`). To rotate the key,
 generate a new value, replace the secret file, and restart the pods; the framework cannot validate cookies
 issued with a previous key, so all existing sessions are dropped. This keeps the
 session layer self-contained without any server-side cache or database lookup.

@@ -63,12 +63,47 @@ async fn main() -> std::io::Result<()> {
     let cookie_secure = env::var("SESSION_COOKIE_SECURE")
         .map(|v| v != "0")
         .unwrap_or(true);
+    let default_same_site = if cfg!(debug_assertions) {
+        SameSite::Lax
+    } else {
+        SameSite::Strict
+    };
+    let same_site = match env::var("SESSION_SAMESITE") {
+        Ok(v) => match v.to_ascii_lowercase().as_str() {
+            "lax" => SameSite::Lax,
+            "strict" => SameSite::Strict,
+            "none" => {
+                if !cookie_secure && !cfg!(debug_assertions) {
+                    return Err(std::io::Error::other(
+                        "SESSION_SAMESITE=None requires SESSION_COOKIE_SECURE=1",
+                    ));
+                }
+                SameSite::None
+            }
+            other => {
+                if cfg!(debug_assertions) {
+                    warn!(value = %other, "invalid SESSION_SAMESITE, using default");
+                    default_same_site
+                } else {
+                    return Err(std::io::Error::other(format!(
+                        "invalid SESSION_SAMESITE: {other}"
+                    )));
+                }
+            }
+        },
+        Err(_) => default_same_site,
+    };
 
     let health_state = web::Data::new(HealthState::new());
     // Clone for server factory so readiness probe remains accessible.
     let server_health_state = health_state.clone();
     let server = HttpServer::new(move || {
-        let app = build_app(server_health_state.clone(), key.clone(), cookie_secure);
+        let app = build_app(
+            server_health_state.clone(),
+            key.clone(),
+            cookie_secure,
+            same_site,
+        );
         #[cfg(feature = "metrics")]
         let app = {
             let prometheus = make_metrics();
@@ -81,17 +116,19 @@ async fn main() -> std::io::Result<()> {
         env::var("PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(8080),
+            .unwrap_or(8080u16),
     ))?;
 
+    let server = server.run();
     health_state.mark_ready();
-    server.run().await
+    server.await
 }
 
 fn build_app(
     health_state: web::Data<HealthState>,
     key: Key,
     cookie_secure: bool,
+    same_site: SameSite,
 ) -> App<
     impl ServiceFactory<
         ServiceRequest,
@@ -101,11 +138,6 @@ fn build_app(
         InitError = (),
     >,
 > {
-    let same_site = if cfg!(debug_assertions) {
-        SameSite::Lax
-    } else {
-        SameSite::Strict
-    };
     let session = SessionMiddleware::builder(CookieSessionStore::default(), key)
         .cookie_name("session".into())
         .cookie_path("/".into())
