@@ -108,11 +108,7 @@ mod tests {
                         .cookie_secure(false)
                         .build(),
                 )
-                .service(
-                    web::scope("/api/v1")
-                        .service(login)
-                        .service(list_users),
-                ),
+                .service(web::scope("/api/v1").service(login).service(list_users)),
         )
         .await;
 
