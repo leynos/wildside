@@ -36,7 +36,7 @@ metrics = ["dep:actix-web-prom"]
 
 [dev-dependencies]
 actix-rt = "2"
-rstest = "0.18"
+rstest = "0.26"
 insta = { version = "1", features = ["json", "redactions"] }
 
 [profile.release]
