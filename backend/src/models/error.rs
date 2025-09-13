@@ -249,10 +249,20 @@ mod tests {
             .with_trace_id("abc")
             .with_details(json!({"secret": "x"}));
         let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.expect("serialise body");
-        let payload: Error = serde_json::from_slice(&bytes).expect("deserialise Error");
+        let status = res.status();
+        let trace_id = res
+            .headers()
+            .get("Trace-Id")
+            .expect("missing Trace-Id")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8")
+            .to_owned();
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(trace_id, "abc");
+        let body_msg = format!("read body for status {status} trace {trace_id}");
+        let bytes = to_bytes(res.into_body()).await.expect(&body_msg);
+        let decode_msg = format!("decode error payload for trace {trace_id}");
+        let payload: Error = serde_json::from_slice(&bytes).expect(&decode_msg);
         assert_eq!(payload.message, "Internal server error");
         assert!(payload.details.is_none());
         assert_eq!(payload.trace_id.as_deref(), Some("abc"));
@@ -266,10 +276,20 @@ mod tests {
             .with_trace_id("abc")
             .with_details(json!({"field": "name"}));
         let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.expect("serialise body");
-        let payload: Error = serde_json::from_slice(&bytes).expect("deserialise Error");
+        let status = res.status();
+        let trace_id = res
+            .headers()
+            .get("Trace-Id")
+            .expect("missing Trace-Id")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8")
+            .to_owned();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(trace_id, "abc");
+        let body_msg = format!("read body for status {status} trace {trace_id}");
+        let bytes = to_bytes(res.into_body()).await.expect(&body_msg);
+        let decode_msg = format!("decode error payload for trace {trace_id}");
+        let payload: Error = serde_json::from_slice(&bytes).expect(&decode_msg);
         assert_eq!(payload.code, ErrorCode::InvalidRequest);
         assert_eq!(payload.message, "bad");
         assert_eq!(payload.details, Some(json!({"field": "name"})));
