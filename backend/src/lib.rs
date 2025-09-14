@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
 //! Backend library modules.
 
 pub mod api;

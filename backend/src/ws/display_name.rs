@@ -17,7 +17,11 @@ pub const DISPLAY_NAME_MAX: usize = 32;
 /// ```
 static DISPLAY_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
     let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
-    Regex::new(&pattern).expect("valid regex")
+    #[expect(
+        clippy::expect_used,
+        reason = "Pattern is fixed by code; invalid only if code is wrong"
+    )]
+    Regex::new(&pattern).expect("valid display name regex")
 });
 
 pub fn is_valid_display_name(name: &str) -> bool {

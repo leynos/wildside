@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
 use actix_session::{

@@ -55,12 +55,15 @@ fe-build:
 	pushd frontend-pwa && bun install && popd
 	cd frontend-pwa && bun run build
 
-openapi:
-	# Replace with a bin that prints OpenAPI
-	mkdir -p spec
-	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
+openapi: spec/openapi.json
 
-gen:
+spec/openapi.json:
+	mkdir -p spec
+	tmp="spec/openapi.json.tmp.$$"; \
+	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
+	mv "$$tmp" spec/openapi.json
+
+gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
 
 docker-up:
@@ -85,7 +88,7 @@ lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
 
 # Lint OpenAPI spec with Redocly CLI
-lint-openapi:
+lint-openapi: openapi
 	$(call exec_or_bunx,redocly,lint spec/openapi.json,@redocly/cli@$(REDOCLY_CLI_VERSION))
 
 # Validate Makefile style and structure
