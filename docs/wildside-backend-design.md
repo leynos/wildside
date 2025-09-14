@@ -122,7 +122,10 @@ API and WebSocket traffic.
 - **Current Status:** A foundational Actix Web server exists in
   `backend/src/main.rs`. It is configured with basic logging (`tracing`),
   OpenAPI documentation (`utoipa`), and a working WebSocket endpoint (`/ws`).
-  The server binds to a host and port taken from the `HOST` and `PORT` environment variables, defaulting to `0.0.0.0:8080` for development. Use a literal IPv6 address such as `::` to listen on IPv6, and ensure the chosen address and port are exposed by the Ingress or Service.
+  The server binds to a host and port taken from the `HOST` and `PORT`
+  environment variables, defaulting to `0.0.0.0:8080` for development. Use a
+  literal IPv6 address such as `::` to listen on IPv6, and ensure the chosen
+  address and port are exposed by the Ingress or Service.
 
 - **Key Responsibilities:**
 
@@ -149,12 +152,13 @@ API and WebSocket traffic.
     during development but `SameSite=Strict` for releases. Override with
     `SESSION_SAMESITE=Strict|Lax|None` when cross-site flows are required;
     `None` mandates `Secure=true` and may still be blocked by some browsers.
-    Startup must abort in production if the key file cannot be
-    read; a temporary key is permitted only in development when
+    Record the chosen value in ops runbooks for environments that need
+    identity-provider redirects. Startup must abort in production if the key
+    file cannot be read; a temporary key is permitted only in development when
     `SESSION_ALLOW_EPHEMERAL=1`.
 
     ```rust
-    use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
+    use actix_session::{config::{CookieContentSecurity, PersistentSession}, storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::{time::Duration, Key, SameSite};
     use actix_web::web;
     use std::env;
@@ -166,9 +170,9 @@ API and WebSocket traffic.
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
         Ok(mut bytes) => {
-            if !cfg!(debug_assertions) && bytes.len() < 32 {
+            if !cfg!(debug_assertions) && bytes.len() < 64 {
                 return Err(io::Error::other(format!(
-                    "session key at {key_path} too short: need >=32 bytes, got {}",
+                    "session key at {key_path} too short: need >=64 bytes, got {}",
                     bytes.len()
                 )));
             }
@@ -205,6 +209,7 @@ API and WebSocket traffic.
     .cookie_path("/")
     .cookie_secure(cookie_secure)
     .cookie_http_only(true)
+    .cookie_content_security(CookieContentSecurity::Private)
     .cookie_same_site(same_site)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
@@ -216,7 +221,7 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-    - The key must be at least 32 bytes; release builds refuse to start if the
+    - The key must be at least 64 bytes; release builds refuse to start if the
       key is shorter. Raw bytes are zeroised after derivation.
 
     - Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict`

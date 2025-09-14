@@ -1,6 +1,10 @@
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
-use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
+use actix_session::{
+    config::{CookieContentSecurity, PersistentSession},
+    storage::CookieSessionStore,
+    SessionMiddleware,
+};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{ServiceFactory, ServiceRequest, ServiceResponse};
 use actix_web::{web, App, HttpServer};
@@ -41,6 +45,7 @@ fn build_app(
         .cookie_path("/".into())
         .cookie_secure(cookie_secure)
         .cookie_http_only(true)
+        .cookie_content_security(CookieContentSecurity::Private)
         .cookie_same_site(same_site)
         .session_lifecycle(
             PersistentSession::default().session_ttl(actix_web::cookie::time::Duration::hours(2)),
@@ -81,9 +86,9 @@ fn load_session_key() -> std::io::Result<Key> {
         env::var("SESSION_KEY_FILE").unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     match std::fs::read(&key_path) {
         Ok(mut bytes) => {
-            if !cfg!(debug_assertions) && bytes.len() < 32 {
+            if !cfg!(debug_assertions) && bytes.len() < 64 {
                 return Err(std::io::Error::other(format!(
-                    "session key at {key_path} too short: need >=32 bytes, got {}",
+                    "session key at {key_path} too short: need >=64 bytes, got {}",
                     bytes.len()
                 )));
             }
