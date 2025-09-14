@@ -193,14 +193,18 @@ API and WebSocket traffic.
         }
     };
 
-    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
-        .map(|v| v != "0")
-        .unwrap_or(true);
-    let same_site = if cfg!(debug_assertions) {
-        SameSite::Lax
-    } else {
-        SameSite::Strict
+    let cookie_secure = match env::var("SESSION_COOKIE_SECURE") {
+        Ok(v) => match v.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "y" => true,
+            "0" | "false" | "no" | "n" => false,
+            other => {
+                warn!(value = %other, "invalid SESSION_COOKIE_SECURE; defaulting to secure");
+                true
+            }
+        },
+        Err(_) => true,
     };
+    let same_site = same_site_from_env(cookie_secure)?;
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
@@ -218,8 +222,10 @@ API and WebSocket traffic.
 
     let api = web::scope("/api/v1")
         .wrap(session_middleware)
-        .service(list_users);
+    .service(list_users);
     ```
+
+    This helper mirrors the production implementation in `backend/src/main.rs`.
 
     - The key must be at least 64 bytes; release builds refuse to start if the
       key is shorter. Raw bytes are zeroised after derivation.
