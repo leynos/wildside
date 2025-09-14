@@ -1,9 +1,14 @@
 #![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
 //! Print the OpenAPI document as JSON.
+//!
+//! # Examples
+//! ```sh
+//! cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
+//! ```
 
 use backend::ApiDoc;
-use serde_json::{ser::PrettyFormatter, Serializer};
-use std::io::{self, Write};
+use serde_json::to_writer_pretty;
+use std::io::{self, BufWriter, Write};
 use utoipa::OpenApi;
 
 /// Write the OpenAPI document to stdout.
@@ -11,10 +16,8 @@ use utoipa::OpenApi;
 fn main() -> io::Result<()> {
     let doc = ApiDoc::openapi();
     let stdout = io::stdout();
-    let mut out = stdout.lock();
-    let formatter = PrettyFormatter::with_indent(b"  ");
-    let mut serializer = Serializer::with_formatter(&mut out, formatter);
-    serde::Serialize::serialize(&doc, &mut serializer)
+    let mut out = BufWriter::new(stdout.lock());
+    to_writer_pretty(&mut out, &doc)
         .map_err(|e| io::Error::other(format!("serialising OpenAPI document: {e}")))?;
     writeln!(out)?;
     Ok(())

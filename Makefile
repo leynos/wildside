@@ -15,8 +15,8 @@ ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
 
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile
+	 check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+	 lint-asyncapi lint-openapi lint-makefile
 
 all: fmt lint test
 
@@ -35,9 +35,13 @@ fe-build:
 	pushd frontend-pwa && bun install && popd
 	cd frontend-pwa && bun run build
 
-openapi:
+openapi: spec/openapi.json
+
+spec/openapi.json:
 	mkdir -p spec
-	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
+	tmp="spec/openapi.json.tmp.$$"; \
+	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
+	mv "$$tmp" spec/openapi.json
 
 gen: openapi
 	cd frontend-pwa && bunx orval --config orval.config.yaml
@@ -129,7 +133,7 @@ yamllint:
 	command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
-        (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+	 (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
 .PHONY: conftest tofu doks-test
 conftest:
@@ -150,7 +154,7 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
-        -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
+	 -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
 	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
@@ -160,7 +164,7 @@ doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
-        -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
+	 -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
 	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
