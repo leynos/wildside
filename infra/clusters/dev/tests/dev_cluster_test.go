@@ -75,9 +75,9 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
 	})
 	terraform.Init(t, opts)
-	cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
+	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
 	cmd.Dir = tfDir
-	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "DIGITALOCEAN_TOKEN="+token)
 	err := cmd.Run()
 	if err == nil {
 		t.Fatalf("expected exit code 2 (changes present), got 0")
@@ -99,19 +99,21 @@ func TestDevClusterPolicy(t *testing.T) {
 		Vars:          testVars(t),
 		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
 	})
+	if _, err := exec.LookPath("conftest"); err != nil {
+		t.Skip("conftest not found; skipping policy test")
+	}
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
 	terraform.InitAndPlan(t, opts)
+	t.Cleanup(func() { _ = os.Remove(planFile) })
 
 	show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
 	require.NoError(t, err)
 	planJSON := filepath.Join(tfDir, "plan.json")
 	require.NoError(t, os.WriteFile(planJSON, []byte(show), 0600))
+	t.Cleanup(func() { _ = os.Remove(planJSON) })
 	policyPath, err := filepath.Abs(filepath.Join(tfDir, "..", "..", "modules", "doks", "policy"))
 	require.NoError(t, err)
-	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
-		t.Skip("conftest not found; skipping policy test")
-	}
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
 	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
 	out, err := cmd.CombinedOutput()
@@ -147,28 +149,32 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	require.Error(t, err)
 }
 
-func TestDevClusterInvalidNodePool(t *testing.T) {
-	testInvalidNodePoolConfig(t, []map[string]interface{}{
-		{
-			"name":       "default",
-			"size":       "s-2vcpu-2gb",
-			"node_count": 1,
-			"auto_scale": false,
-			"min_nodes":  1,
-			"max_nodes":  1,
+func TestDevClusterInvalidNodePools(t *testing.T) {
+	cases := map[string][]map[string]interface{}{
+		"InvalidNodePool": {
+			{
+				"name":       "default",
+				"size":       "s-2vcpu-2gb",
+				"node_count": 1,
+				"auto_scale": false,
+				"min_nodes":  1,
+				"max_nodes":  1,
+			},
 		},
-	})
-}
-
-func TestDevClusterAutoScaleMinExceedsCount(t *testing.T) {
-	testInvalidNodePoolConfig(t, []map[string]interface{}{
-		{
-			"name":       "default",
-			"size":       "s-2vcpu-2gb",
-			"node_count": 2,
-			"auto_scale": true,
-			"min_nodes":  3,
-			"max_nodes":  5,
+		"AutoScaleMinExceedsCount": {
+			{
+				"name":       "default",
+				"size":       "s-2vcpu-2gb",
+				"node_count": 2,
+				"auto_scale": true,
+				"min_nodes":  3,
+				"max_nodes":  5,
+			},
 		},
-	})
+	}
+	for name, pools := range cases {
+		t.Run(name, func(t *testing.T) {
+			testInvalidNodePoolConfig(t, pools)
+		})
+	}
 }

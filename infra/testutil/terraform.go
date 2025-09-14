@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -32,6 +33,9 @@ type TerraformConfig struct {
 // returns its path and options for execution.
 func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Options) {
 	t.Helper()
+	if _, err := exec.LookPath("tofu"); err != nil {
+		t.Skip("tofu not found; skipping Terraform-based tests")
+	}
 	tempRoot := test_structure.CopyTerraformFolderToTemp(t, config.SourceRootRel, ".")
 	tfDir := filepath.Join(tempRoot, config.TfSubDir)
 	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
