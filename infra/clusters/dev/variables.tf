@@ -47,11 +47,20 @@ variable "node_pools" {
       p.node_count >= 2 &&
       (
         p.auto_scale
-        ? (p.min_nodes >= 2 && p.max_nodes >= p.min_nodes && p.node_count >= p.min_nodes && p.node_count <= p.max_nodes)
-        : (p.min_nodes == p.node_count && p.max_nodes == p.node_count)
+        ? (
+          p.min_nodes >= 2 &&
+          p.max_nodes >= p.min_nodes &&
+          p.node_count >= p.min_nodes &&
+          p.node_count <= p.max_nodes &&
+          p.min_nodes <= p.node_count
+        )
+        : (
+          p.min_nodes == p.node_count &&
+          p.max_nodes == p.node_count
+        )
       )
     ])
-    error_message = "Each node pool must have at least 2 nodes; when auto_scale is false, min_nodes and max_nodes must equal node_count."
+    error_message = "Each node pool must have at least 2 nodes. When auto_scale is true, min_nodes must be less than or equal to node_count, and node_count must be between min_nodes and max_nodes. When auto_scale is false, min_nodes and max_nodes must equal node_count."
   }
   default = [
     {

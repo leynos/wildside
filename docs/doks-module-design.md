@@ -35,9 +35,9 @@ cluster lifecycle.
 
 - **Dev cluster defaults.** A root configuration in `infra/clusters/dev`
   instantiates the module with a two-node `s-2vcpu-2gb` pool in `nyc1`.
-  The Kubernetes version is supplied via variables rather than a
-  committed default so plans use a supported patch. The kubeconfig
-  output is disabled by default to avoid persisting credentials.
+  The Kubernetes version is sourced from `infra/testutil/DOKS_KUBERNETES_VERSION`
+  so tooling and tests share one default. The kubeconfig output is
+  disabled by default to avoid persisting credentials.
 
 ## Future work
 

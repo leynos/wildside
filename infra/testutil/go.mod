@@ -1,12 +1,8 @@
-module wildside/infra/modules/doks/tests
+module wildside/infra/testutil
 
 go 1.21
 
-require (
-	github.com/gruntwork-io/terratest v0.46.5
-	github.com/stretchr/testify v1.8.1
-	wildside/infra/testutil v0.0.0
-)
+require github.com/gruntwork-io/terratest v0.46.5
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -65,6 +61,7 @@ require (
 	github.com/pquerna/otp v1.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/tmccombs/hcl2json v0.3.3 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/urfave/cli v1.22.2 // indirect
@@ -96,5 +93,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace wildside/infra/testutil => ../../../testutil

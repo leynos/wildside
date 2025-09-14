@@ -7,20 +7,16 @@ import (
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/require"
+	testutil "wildside/infra/testutil"
 )
 
 // testVars returns a baseline variable set matching the defaults in variables.tf.
 func testVars(t *testing.T) map[string]interface{} {
-	version := os.Getenv("DOKS_KUBERNETES_VERSION")
-	if version == "" {
-		version = "1.33.1-do.3"
-	}
 	return map[string]interface{}{
 		"cluster_name":       "wildside-dev",
 		"region":             "nyc1",
-		"kubernetes_version": version,
+		"kubernetes_version": testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -37,22 +33,9 @@ func testVars(t *testing.T) map[string]interface{} {
 	}
 }
 
-func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]string) (string, *terraform.Options) {
-	tempRoot := test_structure.CopyTerraformFolderToTemp(t, "../../..", ".")
-	tfDir := filepath.Join(tempRoot, "clusters", "dev")
-	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir:    tfDir,
-		TerraformBinary: "tofu",
-		Vars:            vars,
-		EnvVars:         env,
-		NoColor:         true,
-	})
-	return tfDir, opts
-}
-
 func TestDevClusterValidate(t *testing.T) {
 	t.Parallel()
-	_, opts := setupTerraform(t, testVars(t), map[string]string{})
+	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{})
 	terraform.InitAndValidate(t, opts)
 }
 
@@ -63,7 +46,7 @@ func TestDevClusterPlanUnauthenticated(t *testing.T) {
 	}
 	// The DigitalOcean provider does not require authentication at plan time,
 	// so an unauthenticated plan should succeed.
-	_, opts := setupTerraform(t, testVars(t), map[string]string{})
+	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.NoError(t, err)
 }
@@ -74,7 +57,7 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 	if token == "" {
 		t.Skip("DIGITALOCEAN_TOKEN not set; skipping detailed exit code plan")
 	}
-	tfDir, opts := setupTerraform(t, testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
+	tfDir, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
 	cmd.Dir = tfDir
@@ -94,7 +77,7 @@ func TestDevClusterPolicy(t *testing.T) {
 	if token == "" {
 		t.Skip("DIGITALOCEAN_TOKEN not set; skipping policy test")
 	}
-	tfDir, opts := setupTerraform(t, testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
+	tfDir, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
 	terraform.InitAndPlan(t, opts)
@@ -127,7 +110,25 @@ func TestDevClusterInvalidNodePool(t *testing.T) {
 			"max_nodes":  1,
 		},
 	}
-	_, opts := setupTerraform(t, vars, map[string]string{})
+	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", vars, map[string]string{})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+}
+
+func TestDevClusterAutoScaleMinExceedsCount(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["node_pools"] = []map[string]interface{}{
+		{
+			"name":       "default",
+			"size":       "s-2vcpu-2gb",
+			"node_count": 2,
+			"auto_scale": true,
+			"min_nodes":  3,
+			"max_nodes":  5,
+		},
+	}
+	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", vars, map[string]string{})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
 }

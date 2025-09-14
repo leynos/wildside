@@ -7,6 +7,7 @@ toolchain go1.24.3
 require (
 	github.com/gruntwork-io/terratest v0.46.5
 	github.com/stretchr/testify v1.8.3
+	wildside/infra/testutil v0.0.0
 )
 
 require (
@@ -95,3 +96,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace wildside/infra/testutil => ../../../testutil

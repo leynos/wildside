@@ -11,17 +11,15 @@ import (
 
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/require"
+	testutil "wildside/infra/testutil"
 )
-
-const supportedVersion = "1.33.1-do.3" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
 
 func testVars() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster_name":       "terratest-cluster",
 		"region":             "nyc1",
-		"kubernetes_version": supportedVersion,
+		"kubernetes_version": testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -37,25 +35,12 @@ func testVars() map[string]interface{} {
 	}
 }
 
-func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]string) (string, *terraform.Options) {
-	tempRoot := test_structure.CopyTerraformFolderToTemp(t, "..", ".")
-	tfDir := filepath.Join(tempRoot, "examples", "basic")
-	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir:    tfDir,
-		TerraformBinary: "tofu",
-		Vars:            vars,
-		EnvVars:         env,
-		NoColor:         true,
-	})
-	return tfDir, opts
-}
-
 func TestDoksModuleValidate(t *testing.T) {
 	t.Parallel()
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 	terraform.InitAndValidate(t, opts)
 }
 
@@ -64,7 +49,7 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
+	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
 
 	_, err := terraform.InitAndPlanE(t, opts)
 	if err == nil {
@@ -85,7 +70,7 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": token})
 
 	defer terraform.Destroy(t, opts)
 	terraform.InitAndApply(t, opts)
@@ -105,7 +90,7 @@ func TestDoksModulePolicy(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	tfDir, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	tfDir, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
@@ -155,7 +140,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "cluster_name must not be empty",
@@ -164,7 +149,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "invalid",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "region must be a valid DigitalOcean slug",
@@ -190,7 +175,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         []map[string]interface{}{},
 			},
 			ErrContains: "node_pools must not be empty",
@@ -199,7 +184,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
@@ -273,7 +258,7 @@ func getInvalidInputTestCases() map[string]struct {
 func TestDoksModuleInvalidInputs(t *testing.T) {
 	for name, tc := range getInvalidInputTestCases() {
 		t.Run(name, func(t *testing.T) {
-			_, opts := setupTerraform(t, tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+			_, opts := testutil.SetupTerraform(t, "..", "examples/basic", tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 			_, err := terraform.InitAndPlanE(t, opts)
 			require.Error(t, err)
 			require.Regexp(t, regexp.MustCompile("(?i)"+regexp.QuoteMeta(tc.ErrContains)), err.Error())

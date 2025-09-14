@@ -3,7 +3,7 @@ KUBE_VERSION ?= 1.31.0
 # Supported DigitalOcean Kubernetes release. Update to a current patch from
 # the 1.33.x, 1.32.x or 1.31.x series as listed in the DigitalOcean docs.
 # Latest tested patch: https://docs.digitalocean.com/products/kubernetes/releases/
-DOKS_KUBERNETES_VERSION ?= 1.33.1-do.3
+DOKS_KUBERNETES_VERSION ?= $(shell cat infra/testutil/DOKS_KUBERNETES_VERSION)
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -152,18 +152,4 @@ doks-policy: conftest tofu
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
 
 dev-cluster-test: conftest tofu
-	tofu -chdir=infra/clusters/dev fmt -check
-	tofu -chdir=infra/clusters/dev init -input=false
-	tofu -chdir=infra/clusters/dev validate
-	$(call ensure_tool,tflint)
-	$(call ensure_tool,go)
-	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
-	@if [ -n "$$DIGITALOCEAN_TOKEN" ]; then \
-	tofu -chdir=infra/clusters/dev plan -out=tfplan.binary -detailed-exitcode || test $$? -eq 2; \
-	tofu -chdir=infra/clusters/dev show -json tfplan.binary > infra/clusters/dev/plan.json; \
-	conftest test infra/clusters/dev/plan.json --policy infra/modules/doks/policy; \
-	rm -f infra/clusters/dev/tfplan.binary infra/clusters/dev/plan.json; \
-	else \
-	echo "Skipping plan/policy: DIGITALOCEAN_TOKEN not set"; \
-	fi
-	cd infra/clusters/dev/tests && DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v
+	./scripts/dev-cluster-test.sh
