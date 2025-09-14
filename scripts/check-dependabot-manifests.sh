@@ -18,7 +18,10 @@ if command -v fd >/dev/null 2>&1; then
   all_pnpm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
 else
   echo "fd not found; using find fallback" >&2
-  all_pnpm=$(find . -type f -name package.json -not -path "*/node_modules/*" -printf "%P\n" || true)
+  all_pnpm=$(find . \
+    -path '*/node_modules/*' -prune -o \
+    -type f -name package.json \
+    -exec sh -c 'printf "%s\n" "${1#./}"' _ {} \; || true)
 fi
 configured=(
   "package.json"
@@ -28,7 +31,11 @@ configured=(
 )
 
 unconfigured=0
-mapfile -t all_pnpm_arr <<<"$all_pnpm"
+all_pnpm_arr=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  all_pnpm_arr+=("$line")
+done <<< "$all_pnpm"
 for p in "${all_pnpm_arr[@]}"; do
   if ! printf '%s\n' "${configured[@]}" | grep -Fxq "$p"; then
     echo "UNCONFIGURED pnpm package.json: $p"
