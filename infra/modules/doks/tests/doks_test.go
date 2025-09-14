@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -121,11 +122,11 @@ func TestDoksModulePolicy(t *testing.T) {
 	jsonPath := filepath.Join(tfDir, "plan.json")
 	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
 
-	// Resolve policy dir relative to this test file to run from any CWD.
-	thisFile, err := filepath.Abs(filepath.Join(".", "doks_test.go"))
-	require.NoError(t, err)
+	// Resolve policy dir relative to this source file.
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok, "unable to resolve caller path")
 	thisDir := filepath.Dir(thisFile)
-	policyPath := filepath.Clean(filepath.Join(thisDir, "..", "policy"))
+	policyPath := filepath.Join(thisDir, "..", "policy")
 	entries, readErr := os.ReadDir(policyPath)
 	require.NoError(t, readErr, "policy directory not found: %s", policyPath)
 	hasRego := false

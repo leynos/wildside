@@ -16,6 +16,7 @@ build/
 
 # Ignore Terraform/OpenTofu state, plans, and sensitive tfvars.
 # Prevent accidental commits of state, crash logs, and secrets.
+# Keep .terraform.lock.hcl under version control for reproducible provider installs.
 # OpenTofu
 .terraform/
 **/.terraform/
