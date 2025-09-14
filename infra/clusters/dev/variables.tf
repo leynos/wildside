@@ -11,6 +11,11 @@ variable "cluster_name" {
   type        = string
   description = "Name for the DOKS cluster"
   default     = "wildside-dev"
+
+  validation {
+    condition     = length(var.cluster_name) > 0
+    error_message = "cluster_name must not be empty"
+  }
 }
 
 variable "region" {
@@ -85,6 +90,11 @@ variable "tags" {
   type        = list(string)
   description = "Tags applied to the cluster"
   default     = ["env:dev"]
+
+  validation {
+    condition     = length(var.tags) > 0 && alltrue([for t in var.tags : t != ""]) && length(distinct(var.tags)) == length(var.tags)
+    error_message = "tags must be non-empty, unique strings"
+  }
 }
 
 variable "expose_kubeconfig" {

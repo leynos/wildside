@@ -115,7 +115,7 @@ func TestDevClusterPolicy(t *testing.T) {
 	policyPath, err := filepath.Abs(filepath.Join(tfDir, "..", "..", "modules", "doks", "policy"))
 	require.NoError(t, err)
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
-	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "DIGITALOCEAN_TOKEN="+token)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
@@ -147,6 +147,7 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
+	require.ErrorContains(t, err, "at least 2 nodes")
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {

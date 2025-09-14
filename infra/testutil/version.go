@@ -3,10 +3,7 @@ package testutil
 import "os"
 
 // KubernetesVersion returns the Kubernetes version for tests.
-// It reads DOKS_KUBERNETES_VERSION and falls back to a known-good default.
+// It reads DOKS_KUBERNETES_VERSION and relies on the module's default when unset.
 func KubernetesVersion() string {
-        if v := os.Getenv("DOKS_KUBERNETES_VERSION"); v != "" {
-                return v
-        }
-        return "1.31.1-do.3"
+	return os.Getenv("DOKS_KUBERNETES_VERSION")
 }
