@@ -32,7 +32,7 @@ func testVars(t *testing.T) map[string]interface{} {
 		"expose_kubeconfig": false,
 	}
 
-        return vars
+	return vars
 }
 
 func TestDevClusterValidate(t *testing.T) {
@@ -137,58 +137,64 @@ func TestDevClusterPolicy(t *testing.T) {
 //	    },
 //	})
 func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, want ...string) {
-        t.Helper()
-        t.Parallel()
-        vars := testVars(t)
-        vars["node_pools"] = invalidNodePools
-        _, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-                SourceRootRel: "../../..",
-                TfSubDir:      "clusters/dev",
-                Vars:          vars,
-                EnvVars:       map[string]string{},
-        })
-        _, err := terraform.InitAndPlanE(t, opts)
-        require.Error(t, err)
-        for _, s := range append([]string{"node_pools"}, want...) {
-                require.ErrorContains(t, err, s)
-        }
+	t.Helper()
+	t.Parallel()
+	vars := testVars(t)
+	vars["node_pools"] = invalidNodePools
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	for _, s := range append([]string{"node_pools"}, want...) {
+		require.ErrorContains(t, err, s)
+	}
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {
-        cases := map[string]struct {
-                Pools []map[string]interface{}
-                Want  []string
-        }{
-                "InvalidNodePool": {
-                        Pools: []map[string]interface{}{
-                                {
-                                        "name":       "default",
-                                        "size":       "s-2vcpu-2gb",
-                                        "node_count": 1,
-                                        "auto_scale": false,
-                                        "min_nodes":  1,
-                                        "max_nodes":  1,
-                                },
-                        },
-                        Want: []string{"node_count", "at least 2 nodes"},
-                },
-                "AutoScaleMinExceedsCount": {
-                        Pools: []map[string]interface{}{
-                                {
-                                        "name":       "default",
-                                        "size":       "s-2vcpu-2gb",
-                                        "node_count": 2,
-                                        "auto_scale": true,
-                                        "min_nodes":  3,
-                                        "max_nodes":  5,
-                                },
-                        },
-                        Want: []string{"auto_scale", "min_nodes"},
-                },
-        }
-        for name, tc := range cases {
-                t.Run(name, func(t *testing.T) {
-                        testInvalidNodePoolConfig(t, tc.Pools, tc.Want...)
-                })
-        }
+	t.Parallel()
+	cases := []struct {
+		name  string
+		pools []map[string]interface{}
+		want  []string
+	}{
+		{
+			name: "InvalidNodePool",
+			pools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 1,
+					"auto_scale": false,
+					"min_nodes":  1,
+					"max_nodes":  1,
+				},
+			},
+			want: []string{"node_count", "at least 2 nodes"},
+		},
+		{
+			name: "AutoScaleMinExceedsCount",
+			pools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  3,
+					"max_nodes":  5,
+				},
+			},
+			want: []string{"auto_scale", "min_nodes"},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			testInvalidNodePoolConfig(t, tc.pools, tc.want...)
+		})
+	}
 }
