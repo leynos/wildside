@@ -57,7 +57,7 @@ fn build_app(
         .service(login)
         .service(list_users);
 
-    let mut app = App::new()
+    let app = App::new()
         .app_data(health_state)
         .wrap(Trace)
         .service(api)
@@ -66,9 +66,9 @@ fn build_app(
         .service(live);
 
     #[cfg(debug_assertions)]
-    {
-        app = app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
-    }
+    let app = app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+    #[cfg(not(debug_assertions))]
+    let app = app;
 
     app
 }
