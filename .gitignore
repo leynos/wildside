@@ -26,6 +26,9 @@ crash.*.log
 *.tfvars
 *.auto.tfvars
 terraform.tfvars
+*.tfvars.json
+*.auto.tfvars.json
+terraform.tfvars.json
 *.tfplan
 override.tf
 override.tf.json

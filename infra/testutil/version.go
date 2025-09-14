@@ -1,20 +1,9 @@
 package testutil
 
-import (
-	"os"
-	"strings"
+import "os"
 
-	_ "embed"
-)
-
-//go:embed DOKS_KUBERNETES_VERSION
-var embeddedVersion string
-
-// KubernetesVersion returns the default Kubernetes version for tests.
-// An environment variable overrides the embedded default.
+// KubernetesVersion returns the Kubernetes version for tests.
+// It reads the value from the DOKS_KUBERNETES_VERSION environment variable.
 func KubernetesVersion() string {
-	if v := os.Getenv("DOKS_KUBERNETES_VERSION"); v != "" {
-		return v
-	}
-	return strings.TrimSpace(embeddedVersion)
+	return os.Getenv("DOKS_KUBERNETES_VERSION")
 }

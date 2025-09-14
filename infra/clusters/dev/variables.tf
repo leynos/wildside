@@ -1,6 +1,12 @@
 # Input variables for the dev cluster root configuration.
 # Defaults provision a small two-node cluster in nyc1 for preview workloads.
 
+variable "should_create_cluster" {
+  type        = bool
+  description = "Whether to create the dev cluster"
+  default     = false
+}
+
 variable "cluster_name" {
   type        = string
   description = "Name for the DOKS cluster"

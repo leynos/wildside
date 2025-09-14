@@ -14,9 +14,10 @@ import (
 // testVars returns a baseline variable set matching the defaults in variables.tf.
 func testVars(t *testing.T) map[string]interface{} {
 	return map[string]interface{}{
-		"cluster_name":       "wildside-dev",
-		"region":             "nyc1",
-		"kubernetes_version": testutil.KubernetesVersion(),
+		"should_create_cluster": true,
+		"cluster_name":          "wildside-dev",
+		"region":                "nyc1",
+		"kubernetes_version":    testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",

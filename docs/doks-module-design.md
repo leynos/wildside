@@ -23,7 +23,7 @@ cluster lifecycle.
   worker set without relying on provider-specific flags.
 - **Tagging.** Cluster-level tags can be supplied via the `tags` input, and
   node pool objects accept optional `tags` for cost allocation.
-- **Minimal outputs.** Only the cluster identifier, and API endpoint, are
+- **Minimal outputs.** Only the cluster identifier and API endpoint are
   exported by default. An `expose_kubeconfig` input gates the kubeconfig output,
   allowing credentials to be surfaced only when explicitly requested.
 - **Testing strategy.** Terratest validates module syntax and exercises plan
@@ -35,9 +35,11 @@ cluster lifecycle.
 
 - **Dev cluster defaults.** A root configuration in `infra/clusters/dev`
   instantiates the module with a two-node `s-2vcpu-2gb` pool in `nyc1`.
-  The Kubernetes version is sourced from `infra/testutil/DOKS_KUBERNETES_VERSION`
-  so tooling and tests share one default. The kubeconfig output is
-  disabled by default to avoid persisting credentials.
+  Provisioning is gated by a `should_create_cluster` variable to avoid
+  accidental applies. The Kubernetes version is sourced from the
+  `DOKS_KUBERNETES_VERSION` environment variable so tooling and tests share
+  one default. The kubeconfig output is disabled by default to avoid
+  persisting credentials.
 
 ## Future work
 

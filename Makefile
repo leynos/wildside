@@ -3,7 +3,7 @@ KUBE_VERSION ?= 1.31.0
 # Supported DigitalOcean Kubernetes release. Update to a current patch from
 # the 1.33.x, 1.32.x or 1.31.x series as listed in the DigitalOcean docs.
 # Latest tested patch: https://docs.digitalocean.com/products/kubernetes/releases/
-DOKS_KUBERNETES_VERSION ?= $(shell cat infra/testutil/DOKS_KUBERNETES_VERSION)
+DOKS_KUBERNETES_VERSION ?= 1.33.1-do.3
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -131,7 +131,7 @@ doks-test:
 	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
-	cd infra/modules/doks/tests && go test -v
+	cd infra/modules/doks/tests && DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v
 	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
@@ -152,4 +152,4 @@ doks-policy: conftest tofu
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
 
 dev-cluster-test: conftest tofu
-	./scripts/dev-cluster-test.sh
+	DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) ./scripts/dev-cluster-test.sh

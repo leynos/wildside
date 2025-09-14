@@ -4,6 +4,7 @@
 provider "digitalocean" {}
 
 module "doks" {
+  count              = var.should_create_cluster ? 1 : 0
   source             = "../../modules/doks"
   cluster_name       = var.cluster_name
   region             = var.region
@@ -15,16 +16,16 @@ module "doks" {
 
 output "cluster_id" {
   description = "Cluster ID from module"
-  value       = module.doks.cluster_id
+  value       = var.should_create_cluster ? module.doks[0].cluster_id : null
 }
 
 output "endpoint" {
   description = "Cluster API endpoint from module"
-  value       = module.doks.endpoint
+  value       = var.should_create_cluster ? module.doks[0].endpoint : null
 }
 
 output "kubeconfig" {
   description = "Kubeconfig from module"
-  value       = var.expose_kubeconfig ? module.doks.kubeconfig : null
+  value       = var.should_create_cluster && var.expose_kubeconfig ? module.doks[0].kubeconfig : null
   sensitive   = true
 }
