@@ -119,6 +119,11 @@ fn cookie_secure_from_env() -> bool {
     }
 }
 
+/// Determine the session SameSite policy, allowing an environment override.
+///
+/// Defaults to `Lax` in debug builds and `Strict` otherwise. `SESSION_SAMESITE`
+/// can set `Strict`, `Lax`, or `None`; choosing `None` requires a secure cookie
+/// and some browsers may block such third-party cookies entirely.
 fn same_site_from_env(cookie_secure: bool) -> std::io::Result<SameSite> {
     let default_same_site = if cfg!(debug_assertions) {
         SameSite::Lax

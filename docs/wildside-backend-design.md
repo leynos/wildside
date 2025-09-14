@@ -146,8 +146,10 @@ API and WebSocket traffic.
     key from a secret store (for example, a Kubernetes Secret or Vault) and
     mount or inject it for the service at runtime. Name the cookie `session`
     and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
-    during development but `SameSite=Strict` for releases. Startup must abort
-    in production if the key file cannot be
+    during development but `SameSite=Strict` for releases. Override with
+    `SESSION_SAMESITE=Strict|Lax|None` when cross-site flows are required;
+    `None` mandates `Secure=true` and may still be blocked by some browsers.
+    Startup must abort in production if the key file cannot be
     read; a temporary key is permitted only in development when
     `SESSION_ALLOW_EPHEMERAL=1`.
 
@@ -220,8 +222,10 @@ API and WebSocket traffic.
     - Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict`
       otherwise, and expire after two hours.
 
-    - Override with `SESSION_SAMESITE=Strict|Lax|None`. When `None` is chosen,
-      also set `SESSION_COOKIE_SECURE=1`.
+    - Override with `SESSION_SAMESITE=Strict|Lax|None` (takes precedence over
+      the build mode). If `SESSION_SAMESITE=None`, also set
+      `SESSION_COOKIE_SECURE=1`; some browsers may block third-party cookies
+      regardless.
 
 `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
@@ -232,7 +236,7 @@ plain HTTP; production deployments should leave this unset to enforce HTTPS.
 Use `SESSION_SAMESITE` to override the default for cross-site flows such as
 identity-provider redirects. It accepts `Strict`, `Lax`, or `None`; any other
 value aborts startup outside debug builds. `None` also requires
-`SESSION_COOKIE_SECURE=1`.
+`SESSION_COOKIE_SECURE=1` and may still be blocked by some browsers' policies.
 
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`
