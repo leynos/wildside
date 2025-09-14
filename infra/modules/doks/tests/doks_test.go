@@ -102,48 +102,51 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 }
 
 func TestDoksModulePolicy(t *testing.T) {
-	t.Parallel()
+       t.Parallel()
+       if _, err := exec.LookPath("conftest"); err != nil {
+               t.Skip("conftest not found; skipping policy test")
+       }
 
-	vars := testVars()
-	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-		SourceRootRel: "..",
-		TfSubDir:      "examples/basic",
-		Vars:          vars,
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
-	})
+       vars := testVars()
+       vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+       tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+               SourceRootRel: "..",
+               TfSubDir:      "examples/basic",
+               Vars:          vars,
+               EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+       })
 
-	planFile := filepath.Join(tfDir, "tfplan.binary")
-	opts.PlanFilePath = planFile
-	terraform.InitAndPlan(t, opts)
+       planFile := filepath.Join(tfDir, "tfplan.binary")
+       opts.PlanFilePath = planFile
+       terraform.InitAndPlan(t, opts)
+       t.Cleanup(func() { _ = os.Remove(planFile) })
 
-	show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
-	require.NoError(t, err)
-	jsonPath := filepath.Join(tfDir, "plan.json")
-	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
+       show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
+       require.NoError(t, err)
+       jsonPath := filepath.Join(tfDir, "plan.json")
+       require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
+       t.Cleanup(func() { _ = os.Remove(jsonPath) })
 
-	// Resolve policy dir relative to this source file.
-	_, thisFile, _, ok := runtime.Caller(0)
-	require.True(t, ok, "unable to resolve caller path")
-	thisDir := filepath.Dir(thisFile)
-	policyPath := filepath.Join(thisDir, "..", "policy")
-	entries, readErr := os.ReadDir(policyPath)
-	require.NoError(t, readErr, "policy directory not found: %s", policyPath)
-	hasRego := false
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".rego") {
-			hasRego = true
-			break
-		}
-	}
-	require.True(t, hasRego, "no .rego files found in %s", policyPath)
-	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
-		t.Skip("conftest not found; skipping policy test")
-	}
-	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
-	cmd.Dir = tfDir
-	output, err := cmd.CombinedOutput()
-	require.NoErrorf(t, err, "conftest failed: %s", string(output))
+       // Resolve policy dir relative to this source file.
+       _, thisFile, _, ok := runtime.Caller(0)
+       require.True(t, ok, "unable to resolve caller path")
+       thisDir := filepath.Dir(thisFile)
+       policyPath := filepath.Join(thisDir, "..", "policy")
+       entries, readErr := os.ReadDir(policyPath)
+       require.NoError(t, readErr, "policy directory not found: %s", policyPath)
+       hasRego := false
+       for _, e := range entries {
+               if !e.IsDir() && strings.HasSuffix(e.Name(), ".rego") {
+                       hasRego = true
+                       break
+               }
+       }
+       require.True(t, hasRego, "no .rego files found in %s", policyPath)
+
+       cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+       cmd.Dir = tfDir
+       output, err := cmd.CombinedOutput()
+       require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
 func getInvalidInputTestCases() map[string]struct {
