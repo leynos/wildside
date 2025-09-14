@@ -67,6 +67,8 @@ fn build_app(
 
     #[cfg(debug_assertions)]
     let app = app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+    #[cfg(not(debug_assertions))]
+    let app = app;
 
     app
 }
