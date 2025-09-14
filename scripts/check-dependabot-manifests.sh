@@ -18,7 +18,10 @@ if command -v fd >/dev/null 2>&1; then
   all_pnpm=$(fd --strip-cwd-prefix -t f package.json -E node_modules || true)
 else
   echo "fd not found; using find fallback" >&2
-  all_pnpm=$(find . -type f -name package.json -not -path "*/node_modules/*" | sed -e 's|^\./||' || true)
+  all_pnpm=$(find . \
+    -path '*/node_modules/*' -prune -o \
+    -type f -name package.json \
+    -exec sh -c 'printf "%s\n" "${1#./}"' _ {} \; || true)
 fi
 configured=(
   "package.json"
