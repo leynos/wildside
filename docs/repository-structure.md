@@ -554,13 +554,16 @@ sequenceDiagram
 
   CI->>NodeSetup: Install Node (corepack: true)
   NodeSetup->>PNPM: Provide pnpm via Corepack
-  CI->>PNPM: If missing -> `pnpm install --lockfile-only`
+  CI->>PNPM: Validate lockfile (`pnpm install --lockfile-only`)
   CI->>PNPM: `pnpm install --frozen-lockfile`
   PNPM->>Repo: Resolve workspace (pnpm-workspace.yaml)
   CI->>PNPM: Run lifecycle scripts (`pnpm -r run build`, `pnpm -r --if-present test`, `pnpm -r --if-present run audit`)
   PNPM-->>CI: Return results/status
   note right of PNPM: Cache and frozen lockfile enforce reproducible CI installs
 ```
+
+`make lockfile` runs `pnpm install --lockfile-only` and fails if
+`pnpm-lock.yaml` changes, guarding against stale dependencies.
 
 ### Docker Compose startup sequence
 
