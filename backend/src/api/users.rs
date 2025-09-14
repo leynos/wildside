@@ -8,9 +8,14 @@
 use crate::models::{ApiResult, Error, ErrorCode, User};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, utoipa::ToSchema)]
+/// Login request body for `POST /api/v1/login`.
+///
+/// Example JSON:
+/// `{"username":"admin","password":"password"}`
+#[derive(Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
@@ -88,4 +93,58 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
         display_name: "Ada Lovelace".into(),
     }];
     Ok(web::Json(data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+    use actix_web::cookie::Key;
+    use actix_web::{test, web, App};
+    use serde_json::Value;
+
+    #[actix_web::test]
+    async fn list_users_returns_camel_case_json() {
+        let app = test::init_service(
+            App::new()
+                .wrap(
+                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                        .cookie_name("actix-session".to_owned())
+                        .cookie_secure(false)
+                        .build(),
+                )
+                .service(web::scope("/api/v1").service(login).service(list_users)),
+        )
+        .await;
+
+        let login_req = test::TestRequest::post()
+            .uri("/api/v1/login")
+            .set_json(&LoginRequest {
+                username: "admin".into(),
+                password: "password".into(),
+            })
+            .to_request();
+        let login_res = test::call_service(&app, login_req).await;
+        assert!(login_res.status().is_success());
+        let cookie = login_res
+            .response()
+            .cookies()
+            .find(|c| c.name() == "actix-session")
+            .expect("actix-session cookie");
+
+        let users_req = test::TestRequest::get()
+            .uri("/api/v1/users")
+            .cookie(cookie)
+            .to_request();
+        let users_res = test::call_service(&app, users_req).await;
+        assert!(users_res.status().is_success());
+        let body = test::read_body(users_res).await;
+        let value: Value = serde_json::from_slice(&body).expect("response JSON");
+        let first = &value.as_array().expect("array")[0];
+        assert_eq!(
+            first.get("displayName").and_then(Value::as_str),
+            Some("Ada Lovelace")
+        );
+        assert!(first.get("display_name").is_none());
+    }
 }

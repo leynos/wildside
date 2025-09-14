@@ -130,7 +130,7 @@ disabled to prevent inaccurate results.[^2] The most significant and
 widely-known incompatible rule is
 
 `color-contrast`. This rule requires the ability to compute the final, rendered
-foreground color of text and the actual background color(s) it is painted on.
+foreground colour of text and the actual background colour(s) it is painted on.
 Since `jsdom` does not render pixels, it cannot perform this calculation,
 making the rule non-functional in this environment.[^2]
 
@@ -157,7 +157,7 @@ where each layer has a distinct responsibility:
    foundational elements of an accessible component.
 2. **E2E Layer (Playwright):** This layer validates the component in a real,
    rendering browser. Its responsibility is to catch the _visual and
-   interactional_ accessibility issues that `jsdom` cannot, such as color
+   interactional_ accessibility issues that `jsdom` cannot, such as colour
    contrast, focus visibility, keyboard trap prevention, and correct focus
    order.
 
@@ -171,7 +171,7 @@ To provide immediate, actionable guidance, the following table outlines the
 
 | Rule ID                       | Reason for Disabling in `jsdom`                                                                                                                      | Recommended Action                                                                                                |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `color-contrast`              | `jsdom` is a non-rendering environment and cannot compute visual styles or color values. This rule will not work correctly.                          | Disable globally in `vitest.config.ts`. Defer all color contrast testing to the Playwright E2E layer.             |
+| `color-contrast`              | `jsdom` is a non-rendering environment and cannot compute visual styles or colour values. This rule will not work correctly.                          | Disable globally in `vitest.config.ts`. Defer all colour contrast testing to the Playwright E2E layer.             |
 | `scrollable-region-focusable` | This rule relies on computed styles and layout to determine if an element is genuinely scrollable, which is unreliable in `jsdom`.                   | Disable globally in `vitest.config.ts`. Validate keyboard accessibility of scrollable areas in Playwright.        |
 | `region`                      | This page-level rule requires content to be within landmarks (e.g., `<main>`). It will produce false positives when testing components in isolation. | Disable on a per-test basis when testing isolated components. Enable for full-page component tests if applicable. |
 | `page-has-heading-one`        | This page-level rule requires a single `<h1>`. It is not relevant for most isolated component tests.                                                 | Disable on a per-test basis when testing isolated components.                                                     |
@@ -359,29 +359,27 @@ The following is a complete, production-quality implementation of the
 ```typescript
 import { expect } from 'vitest';
 import type { AxeResults, Result } from 'axe-core';
-import {-red, -green, -dim} from 'kleur/colors'; // For colored console output
+import { red, green, dim } from 'kleur/colors'; // For coloured console output
 
 // Helper function to format a single violation for readability
 function formatViolation(violation: Result): string {
-  const impactColor = {
-    minor: -dim,
-    moderate: (str: string) => str, // Default color
-    serious: -red,
-    critical: -red,
+  const impactColour = {
+    minor: dim,
+    moderate: (str: string) => str, // Default colour
+    serious: red,
+    critical: red,
   };
 
-  const impact = violation.impact |
-
-| 'moderate';
-  const coloredImpact = impactColor[impact](impact.toUpperCase());
+  const impact = violation.impact ?? 'moderate';
+  const colouredImpact = impactColour[impact](impact.toUpperCase());
 
   const nodes = violation.nodes.map((node, index) => 
-    `  ${index + 1}. Target: ${node.target.join(', ')}\n     HTML: ${-dim(node.html)}`
+    `  ${index + 1}. Target: ${node.target.join(', ')}\n     HTML: ${dim(node.html)}`
   ).join('\n');
 
   return (
-    `\n(${coloredImpact}) ${-green(violation.id)}: ${violation.help}\n` +
-    `${-dim(violation.helpUrl)}\n\n${nodes}`
+    `\n(${colouredImpact}) ${green(violation.id)}: ${violation.help}\n` +
+    `${dim(violation.helpUrl)}\n\n${nodes}`
   );
 }
 
@@ -541,7 +539,7 @@ application is not just compliant in code but truly usable in practice.
 
 Integrating `axe-core` into the E2E suite via the `@axe-core/playwright`
 package provides the ability to run scans in a fully-rendered browser
-environment, catching issues like color contrast that are impossible to detect
+environment, catching issues like colour contrast that are impossible to detect
 in `jsdom`.[^39] However, an undisciplined application of these scans can
 drastically slow down the E2E suite, violating the principle that accessibility
 tests should not be a "slow bus." The key to success is a strategic, targeted
@@ -573,7 +571,7 @@ test.describe('Modal Flow Accessibility', () => {
 
     const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
     
-    expect(accessibilityScanResults.violations).toEqual();
+    expect(accessibilityScanResults.violations).toEqual([]);
   });
 
   test('modal dialog should be accessible after opening', async ({ page }) => {
@@ -591,7 +589,7 @@ test.describe('Modal Flow Accessibility', () => {
      .include('#add-to-cart-modal')
      .analyze();
       
-    expect(modalScanResults.violations).toEqual();
+    expect(modalScanResults.violations).toEqual([]);
   });
 });
 
@@ -763,7 +761,7 @@ For an accessibility failure, the workflow is as follows:
 1. A test fails in the CI pipeline.
 2. The CI job artifacts will include a `trace.zip` file.
 3. Download and open this file locally using the command
-   `npx playwright show-trace trace.zip`.
+   `pnpm exec playwright show-trace trace.zip`.
 4. The Trace Viewer opens. Navigate to the failed
    `expect(accessibilityScanResults)` assertion.
 5. Select the action immediately preceding the scan (e.g., `page.click()`).
@@ -815,7 +813,10 @@ accessibility-first philosophy.
 
 The following is a complete, production-ready GitHub Actions workflow
 (`.github/workflows/ci.yml`) that implements this sharding strategy for the
-Vitest suite.
+Vitest suite. It installs dependencies with a frozen lockfile so CI and local
+builds resolve identical versions. The repository commits `pnpm-lock.yaml`, and
+the workflow's install step runs `pnpm install --frozen-lockfile`, failing if
+the lockfile is missing or stale.
 
 ```yaml
 #.github/workflows/ci.yml
@@ -845,20 +846,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          corepack: true
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run Vitest shard
-        run: npx vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        run: pnpm exec vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
 
       - name: Upload blob report artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: blob-report-${{ matrix.shardIndex }}
-          path:.vitest-reports/*.blob
+          path: .vitest-reports/*.blob
           retention-days: 1
 
   merge-reports:
@@ -875,10 +877,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
-          
+          corepack: true
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Download all blob reports
         uses: actions/download-artifact@v4
@@ -888,7 +891,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge blob reports into a single HTML report
-        run: npx vitest run --merge-reports
+        run: pnpm exec vitest run --merge-reports
 
       - name: Upload final HTML report
         uses: actions/upload-artifact@v4

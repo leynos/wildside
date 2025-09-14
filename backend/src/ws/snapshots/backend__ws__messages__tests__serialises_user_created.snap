@@ -3,6 +3,6 @@ source: src/ws/messages.rs
 expression: value
 ---
 {
-  "display_name": "Alice",
+  "displayName": "Alice",
   "id": "123"
 }

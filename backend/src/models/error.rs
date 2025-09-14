@@ -33,6 +33,7 @@ pub enum ErrorCode {
 /// assert_eq!(err.code, ErrorCode::NotFound);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Error {
     /// Stable machine-readable error code.
@@ -44,6 +45,7 @@ pub struct Error {
     /// Correlation identifier for tracing this error across systems.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
+    #[serde(alias = "trace_id")]
     pub trace_id: Option<String>,
     /// Supplementary error details.
     ///
@@ -249,10 +251,20 @@ mod tests {
             .with_trace_id("abc")
             .with_details(json!({"secret": "x"}));
         let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.unwrap();
-        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        let status = res.status();
+        let trace_id = res
+            .headers()
+            .get("Trace-Id")
+            .expect("missing Trace-Id")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8")
+            .to_owned();
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(trace_id, "abc");
+        let body_msg = format!("read body for status {status} trace {trace_id}");
+        let bytes = to_bytes(res.into_body()).await.expect(&body_msg);
+        let decode_msg = format!("decode error payload for trace {trace_id}");
+        let payload: Error = serde_json::from_slice(&bytes).expect(&decode_msg);
         assert_eq!(payload.message, "Internal server error");
         assert!(payload.details.is_none());
         assert_eq!(payload.trace_id.as_deref(), Some("abc"));
@@ -266,10 +278,20 @@ mod tests {
             .with_trace_id("abc")
             .with_details(json!({"field": "name"}));
         let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(res.headers().get("Trace-Id").unwrap(), "abc");
-        let bytes = to_bytes(res.into_body()).await.unwrap();
-        let payload: Error = serde_json::from_slice(&bytes).unwrap();
+        let status = res.status();
+        let trace_id = res
+            .headers()
+            .get("Trace-Id")
+            .expect("missing Trace-Id")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8")
+            .to_owned();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(trace_id, "abc");
+        let body_msg = format!("read body for status {status} trace {trace_id}");
+        let bytes = to_bytes(res.into_body()).await.expect(&body_msg);
+        let decode_msg = format!("decode error payload for trace {trace_id}");
+        let payload: Error = serde_json::from_slice(&bytes).expect(&decode_msg);
         assert_eq!(payload.code, ErrorCode::InvalidRequest);
         assert_eq!(payload.message, "bad");
         assert_eq!(payload.details, Some(json!({"field": "name"})));
