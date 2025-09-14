@@ -2,7 +2,8 @@ SHELL := bash
 KUBE_VERSION ?= 1.31.0
 # Supported DigitalOcean Kubernetes release. Update to a current patch from
 # the 1.33.x, 1.32.x or 1.31.x series as listed in the DigitalOcean docs.
-DOKS_KUBERNETES_VERSION ?= 1.33.9-do.0
+# Latest tested patch: https://docs.digitalocean.com/products/kubernetes/releases/
+DOKS_KUBERNETES_VERSION ?= 1.33.1-do.3
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -12,9 +13,11 @@ define ensure_tool
 endef
 
 ASYNCAPI_CLI_VERSION ?= 3.4.2
+# Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile
+        lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
+        dev-cluster-test
 all: fmt lint test
 
 clean:
@@ -115,7 +118,6 @@ yamllint:
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
         (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
-.PHONY: conftest tofu doks-test
 conftest:
 	$(call ensure_tool,conftest)
 
@@ -139,7 +141,6 @@ doks-test:
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
-.PHONY: doks-policy
 doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
@@ -149,3 +150,20 @@ doks-policy: conftest tofu
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
+
+dev-cluster-test: conftest tofu
+	tofu -chdir=infra/clusters/dev fmt -check
+	tofu -chdir=infra/clusters/dev init -input=false
+	tofu -chdir=infra/clusters/dev validate
+	$(call ensure_tool,tflint)
+	$(call ensure_tool,go)
+	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	@if [ -n "$$DIGITALOCEAN_TOKEN" ]; then \
+	tofu -chdir=infra/clusters/dev plan -out=tfplan.binary -detailed-exitcode || test $$? -eq 2; \
+	tofu -chdir=infra/clusters/dev show -json tfplan.binary > infra/clusters/dev/plan.json; \
+	conftest test infra/clusters/dev/plan.json --policy infra/modules/doks/policy; \
+	rm -f infra/clusters/dev/tfplan.binary infra/clusters/dev/plan.json; \
+	else \
+	echo "Skipping plan/policy: DIGITALOCEAN_TOKEN not set"; \
+	fi
+	cd infra/clusters/dev/tests && DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v

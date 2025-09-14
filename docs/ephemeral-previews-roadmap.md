@@ -68,7 +68,7 @@ modules defined in the wildside-infra repository.
 - [x] **Define outputs**: The module outputs the cluster ID and API endpoint.
   The kubeconfig can be optionally exposed for local use.
 
-- [ ] **Instantiate the module**: Create a root OpenTofu configuration that uses
+- [x] **Instantiate the module**: Create a root OpenTofu configuration that uses
   the `doks` module to provision a "dev" cluster.
 
 - [ ] **Initialize and apply**: Run `tofu init` and `tofu apply` to create the

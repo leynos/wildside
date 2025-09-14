@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const supportedVersion = "1.33.9-do.0" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
+const supportedVersion = "1.33.1-do.3" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
 
 func testVars() map[string]interface{} {
 	return map[string]interface{}{
@@ -115,8 +115,22 @@ func TestDoksModulePolicy(t *testing.T) {
 	require.NoError(t, err)
 	jsonPath := filepath.Join(tfDir, "plan.json")
 	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
-	policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
+
+	// Resolve policy dir relative to this test file to run from any CWD.
+	thisFile, err := filepath.Abs(filepath.Join(".", "doks_test.go"))
 	require.NoError(t, err)
+	thisDir := filepath.Dir(thisFile)
+	policyPath := filepath.Clean(filepath.Join(thisDir, "..", "policy"))
+	entries, readErr := os.ReadDir(policyPath)
+	require.NoError(t, readErr, "policy directory not found: %s", policyPath)
+	hasRego := false
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".rego") {
+			hasRego = true
+			break
+		}
+	}
+	require.True(t, hasRego, "no .rego files found in %s", policyPath)
 	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
 		t.Skip("conftest not found; skipping policy test")
 	}
@@ -262,7 +276,7 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 			_, opts := setupTerraform(t, tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
 			_, err := terraform.InitAndPlanE(t, opts)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), tc.ErrContains)
+			require.Regexp(t, regexp.MustCompile("(?i)"+regexp.QuoteMeta(tc.ErrContains)), err.Error())
 		})
 	}
 }

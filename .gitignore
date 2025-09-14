@@ -14,6 +14,26 @@ build/
 !packages/types/dist/src/
 !packages/types/dist/**/*.d.ts
 
+# Ignore Terraform/OpenTofu state, plans, and sensitive tfvars.
+# Prevent accidental commits of state, crash logs, and secrets.
+# OpenTofu
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.auto.tfvars
+terraform.tfvars
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
 # Misc
 .DS_Store
 bun.lockb
