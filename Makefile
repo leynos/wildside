@@ -11,6 +11,14 @@ define ensure_tool
 	}
 endef
 
+define exec_or_bunx
+	if command -v $(1) >/dev/null 2>&1; then \
+	  $(2); \
+	else \
+	  bun x $(3); \
+	fi
+endef
+
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
 
@@ -41,7 +49,7 @@ openapi:
 	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
 
 gen:
-	cd frontend-pwa && bunx orval --config orval.config.yaml
+	cd frontend-pwa && $(call exec_or_bunx,orval,orval --config orval.config.yaml,orval --config orval.config.yaml)
 
 docker-up:
 	cd deploy && docker compose up --build -d
@@ -51,22 +59,22 @@ docker-down:
 
 fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all
-	bun x biome format --write
+	$(call exec_or_bunx,biome,biome format --write,biome format --write)
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-	bun x biome ci --formatter-enabled=true --reporter=github frontend-pwa packages
+	$(call exec_or_bunx,biome,biome ci --formatter-enabled=true --reporter=github frontend-pwa packages,biome ci --formatter-enabled=true --reporter=github frontend-pwa packages)
 	$(MAKE) lint-asyncapi
 	$(MAKE) lint-openapi
 	$(MAKE) lint-makefile
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then bun x @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml; fi
+	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,asyncapi validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml); fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
-	bun x --package=@redocly/cli@$(REDOCLY_CLI_VERSION) redocly lint spec/openapi.json
+	$(call exec_or_bunx,redocly,redocly lint spec/openapi.json,--package=@redocly/cli@$(REDOCLY_CLI_VERSION) redocly lint spec/openapi.json)
 
 # Validate Makefile style and structure
 lint-makefile:
@@ -101,7 +109,7 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 	@rm -f node_modules/.pnpm-install-*
 	@touch $@
 
-typecheck: deps ; for dir in $(TS_WORKSPACES); do bun x tsc --noEmit -p $$dir/tsconfig.json || exit 1; done
+typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,tsc --noEmit -p $$dir/tsconfig.json,tsc --noEmit -p $$dir/tsconfig.json) || exit 1; done
 
 audit: deps
 	pnpm -r install
@@ -114,7 +122,7 @@ lockfile:
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
-	bun x biome format
+	$(call exec_or_bunx,biome,biome format,biome format)
 
 markdownlint:
 	find . \
