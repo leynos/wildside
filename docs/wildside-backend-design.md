@@ -122,8 +122,7 @@ API and WebSocket traffic.
 - **Current Status:** A foundational Actix Web server exists in
   `backend/src/main.rs`. It is configured with basic logging (`tracing`),
   OpenAPI documentation (`utoipa`), and a working WebSocket endpoint (`/ws`).
-  The server binds to a host and port taken from the `HOST` and `PORT`
-  environment variables, defaulting to `0.0.0.0:8080` for development.
+  The server binds to a host and port taken from the `HOST` and `PORT` environment variables, defaulting to `0.0.0.0:8080` for development. Use a literal IPv6 address such as `::` to listen on IPv6, and ensure the chosen address and port are exposed by the Ingress or Service.
 
 - **Key Responsibilities:**
 
@@ -215,15 +214,25 @@ API and WebSocket traffic.
         .service(list_users);
     ```
 
-    The key must be at least 32 bytes; release builds refuse to start if the key is shorter, and the raw bytes are zeroised after derivation. Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict` otherwise, expiring after two hours. Override the policy with `SESSION_SAMESITE=Strict|Lax|None`; setting `None` also requires `SESSION_COOKIE_SECURE=1`.
+    - The key must be at least 32 bytes; release builds refuse to start if the
+      key is shorter. Raw bytes are zeroised after derivation.
+
+    - Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict`
+      otherwise, and expire after two hours.
+
+    - Override with `SESSION_SAMESITE=Strict|Lax|None`. When `None` is chosen,
+      also set `SESSION_COOKIE_SECURE=1`.
 
 `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
     KB, so session payloads must remain well under this limit.
 
-    Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
-      plain HTTP; production deployments should leave this unset to enforce HTTPS.
-      Use `SESSION_SAMESITE` to override the default for cross-site flows such as identity-provider redirects. It accepts `Strict`, `Lax`, or `None`; any other value aborts startup outside debug builds, and `None` also requires `SESSION_COOKIE_SECURE=1`.
+Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
+plain HTTP; production deployments should leave this unset to enforce HTTPS.
+Use `SESSION_SAMESITE` to override the default for cross-site flows such as
+identity-provider redirects. It accepts `Strict`, `Lax`, or `None`; any other
+value aborts startup outside debug builds. `None` also requires
+`SESSION_COOKIE_SECURE=1`.
 
     Deployment manifests in `deploy/k8s/` should mount the secret read-only and
     expose its path to the service (for instance, via a `SESSION_KEY_FILE`

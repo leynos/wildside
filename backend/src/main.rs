@@ -60,9 +60,17 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
-        .map(|v| v != "0")
-        .unwrap_or(true);
+    let cookie_secure = match env::var("SESSION_COOKIE_SECURE") {
+        Ok(v) => match v.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "y" => true,
+            "0" | "false" | "no" | "n" => false,
+            other => {
+                warn!(value = %other, "invalid SESSION_COOKIE_SECURE; defaulting to secure");
+                true
+            }
+        },
+        Err(_) => true,
+    };
     let default_same_site = if cfg!(debug_assertions) {
         SameSite::Lax
     } else {
@@ -116,7 +124,7 @@ async fn main() -> std::io::Result<()> {
         env::var("PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(8080_u16),
+            .unwrap_or(8080u16),
     ))?;
 
     let server = server.run();
