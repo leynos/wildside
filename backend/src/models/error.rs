@@ -33,6 +33,7 @@ pub enum ErrorCode {
 /// assert_eq!(err.code, ErrorCode::NotFound);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Error {
     /// Stable machine-readable error code.
@@ -44,6 +45,7 @@ pub struct Error {
     /// Correlation identifier for tracing this error across systems.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
+    #[serde(alias = "trace_id")]
     pub trace_id: Option<String>,
     /// Supplementary error details.
     ///

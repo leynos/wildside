@@ -68,17 +68,17 @@ components:
       title: User created event
       contentType: application/json
       correlationId:
-        description: Correlates UserCreated with prior client actions via payload.trace_id
-        location: "$message.payload#/trace_id"
+        description: Correlates UserCreated with prior client actions via payload.traceId
+        location: "$message.payload#/traceId"
       payload:
         type: object
         additionalProperties: false
         required:
-          - trace_id
+          - traceId
           - id
-          - display_name
+          - displayName
         properties:
-          trace_id:
+          traceId:
             type: string
             description: Correlation identifier for tracing across systems
             format: uuid
@@ -87,28 +87,29 @@ components:
             description: Unique user identifier
             examples: ["123e4567-e89b-42d3-a456-426614174001"]
             format: uuid
-          display_name:
+          displayName:
             $ref: '#/components/schemas/DisplayName'
       examples:
         - name: minimal
           summary: Minimal valid message
           payload:
+            traceId: "123e4567-e89b-42d3-a456-426614174000"
             id: "123e4567-e89b-42d3-a456-426614174001"
-            display_name: "Ada Lovelace"
+            displayName: "Ada Lovelace"
     InvalidDisplayName:
       name: InvalidDisplayName
       title: Invalid display name error
       contentType: application/json
       correlationId:
-        description: Correlates this error with the triggering request via header trace_id
-        location: "$message.header#/trace_id"
+        description: Correlates this error with the triggering request via header traceId
+        location: "$message.header#/traceId"
       headers:
         type: object
         additionalProperties: false
         required:
-          - trace_id
+          - traceId
         properties:
-          trace_id:
+          traceId:
             type: string
             description: Correlates this error with a prior request
             format: uuid
@@ -134,7 +135,7 @@ components:
               field:
                 type: string
                 description: The offending field path
-                const: display_name
+                const: displayName
               value:
                 type: string
                 description: The offending value
@@ -148,13 +149,13 @@ components:
         - name: invalid
           summary: Name failed validation
           headers:
-            trace_id: "123e4567-e89b-42d3-a456-426614174000"
+            traceId: "123e4567-e89b-42d3-a456-426614174000"
           payload:
             code: invalid_chars
             error: >-
               Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.
             details:
-              field: display_name
+              field: displayName
               value: "@da!"
               message: Only alphanumeric characters, spaces, and underscores are allowed.
               code: invalid_chars
@@ -163,28 +164,29 @@ components:
       title: Display name submission
       contentType: application/json
       correlationId:
-        location: "$message.payload#/trace_id"
+        location: "$message.payload#/traceId"
       description: >
-        trace_id MUST be unique for each submission attempt within a client-defined time window.
-        The server treats duplicate trace_id values as idempotent replays.
+        traceId MUST be unique for each submission attempt within a client-defined time window.
+        The server treats duplicate traceId values as idempotent replays.
       payload:
         type: object
         additionalProperties: false
         required:
-          - trace_id
-          - display_name
+          - traceId
+          - displayName
         properties:
-          trace_id:
+          traceId:
             type: string
             description: Correlates this request with subsequent events
             format: uuid
-          display_name:
+          displayName:
             $ref: '#/components/schemas/DisplayName'
       examples:
         - name: valid
           summary: Valid display name
           payload:
-            display_name: "Ada Lovelace"
+            traceId: "123e4567-e89b-42d3-a456-426614174000"
+            displayName: "Ada Lovelace"
   schemas:
     DisplayName:
       type: string
