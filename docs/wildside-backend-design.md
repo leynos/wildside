@@ -153,7 +153,7 @@ API and WebSocket traffic.
     `SESSION_ALLOW_EPHEMERAL=1`.
 
     ```rust
-    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+    use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::{time::Duration, Key, SameSite};
     use actix_web::web;
     use std::env;
@@ -207,7 +207,7 @@ API and WebSocket traffic.
     .cookie_same_site(same_site)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
-    .cookie_max_age(Duration::hours(2))
+    .session_lifecycle(PersistentSession::default().session_ttl(Duration::hours(2)))
     .build();
 
     let api = web::scope("/api/v1")

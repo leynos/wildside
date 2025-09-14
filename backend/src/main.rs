@@ -1,6 +1,6 @@
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
-use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{ServiceFactory, ServiceRequest, ServiceResponse};
 use actix_web::{web, App, HttpServer};
@@ -144,6 +144,9 @@ fn build_app(
         .cookie_secure(cookie_secure)
         .cookie_http_only(true)
         .cookie_same_site(same_site)
+        .session_lifecycle(
+            PersistentSession::default().session_ttl(actix_web::cookie::time::Duration::hours(2)),
+        )
         .build();
 
     let api = web::scope("/api/v1")
