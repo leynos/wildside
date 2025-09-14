@@ -11,20 +11,29 @@ define ensure_tool
 	}
 endef
 
+# Prefer PATH-installed tools but fall back to `bun x` for ephemeral runs.
+#
+# Parameters:
+#   $(1) - command name to execute (e.g. `biome`)
+#   $(2) - arguments passed to the command
+#   $(3) - optional npm package spec for the Bun fallback
 define exec_or_bunx
 	if command -v $(1) >/dev/null 2>&1; then \
-	  $(2); \
+	  $(1) $(2); \
 	else \
-	  bun x $(3); \
+	  bun x $(if $(3),--package=$(3) ,)$(1) $(2); \
 	fi
 endef
 
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
+ORVAL_VERSION ?= 7.11.2
+BIOME_VERSION ?= 2.2.4
+TSC_VERSION ?= 5.9.2
 
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile
+	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+	lint-asyncapi lint-openapi lint-makefile
 
 all: fmt lint test
 
@@ -49,7 +58,7 @@ openapi:
 	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
 
 gen:
-	cd frontend-pwa && $(call exec_or_bunx,orval,orval --config orval.config.yaml,orval --config orval.config.yaml)
+	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
 
 docker-up:
 	cd deploy && docker compose up --build -d
@@ -59,22 +68,22 @@ docker-down:
 
 fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all
-	$(call exec_or_bunx,biome,biome format --write,biome format --write)
+	$(call exec_or_bunx,biome,format --write,@biomejs/biome@$(BIOME_VERSION))
 
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
-	$(call exec_or_bunx,biome,biome ci --formatter-enabled=true --reporter=github frontend-pwa packages,biome ci --formatter-enabled=true --reporter=github frontend-pwa packages)
+	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi
 	$(MAKE) lint-openapi
 	$(MAKE) lint-makefile
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,asyncapi validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml); fi
+	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
-	$(call exec_or_bunx,redocly,redocly lint spec/openapi.json,--package=@redocly/cli@$(REDOCLY_CLI_VERSION) redocly lint spec/openapi.json)
+	$(call exec_or_bunx,redocly,lint spec/openapi.json,@redocly/cli@$(REDOCLY_CLI_VERSION))
 
 # Validate Makefile style and structure
 lint-makefile:
@@ -109,7 +118,7 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 	@rm -f node_modules/.pnpm-install-*
 	@touch $@
 
-typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,tsc --noEmit -p $$dir/tsconfig.json,tsc --noEmit -p $$dir/tsconfig.json) || exit 1; done
+typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
 
 audit: deps
 	pnpm -r install
@@ -122,7 +131,7 @@ lockfile:
 
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
-	$(call exec_or_bunx,biome,biome format,biome format)
+	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
 
 markdownlint:
 	find . \
@@ -137,12 +146,10 @@ nixie:
 	nixie --no-sandbox
 
 yamllint:
-	command -v helm >/dev/null
-	command -v yamllint >/dev/null
-	command -v yq >/dev/null
+	command -v helm >/dev/null && command -v yamllint >/dev/null && command -v yq >/dev/null
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
-        (set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
+	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
 .PHONY: conftest tofu doks-test
 conftest:
@@ -163,7 +170,7 @@ doks-test:
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
-        -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
+	-var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
 	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
@@ -173,7 +180,7 @@ doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
-        -var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
+	-var kubernetes_version=$(DOKS_KUBERNETES_VERSION) \
 	-var 'node_pools=[{"name"="default","size"="s-2vcpu-2gb","node_count"=2,"auto_scale"=false,"min_nodes"=2,"max_nodes"=2}]' \
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
