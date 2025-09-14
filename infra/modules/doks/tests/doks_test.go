@@ -40,7 +40,12 @@ func TestDoksModuleValidate(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+	})
 	terraform.InitAndValidate(t, opts)
 }
 
@@ -49,7 +54,12 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": ""},
+	})
 
 	_, err := terraform.InitAndPlanE(t, opts)
 	if err == nil {
@@ -70,7 +80,12 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+	})
 
 	defer terraform.Destroy(t, opts)
 	terraform.InitAndApply(t, opts)
@@ -90,7 +105,12 @@ func TestDoksModulePolicy(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	tfDir, opts := testutil.SetupTerraform(t, "..", "examples/basic", vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+	})
 
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
@@ -258,7 +278,12 @@ func getInvalidInputTestCases() map[string]struct {
 func TestDoksModuleInvalidInputs(t *testing.T) {
 	for name, tc := range getInvalidInputTestCases() {
 		t.Run(name, func(t *testing.T) {
-			_, opts := testutil.SetupTerraform(t, "..", "examples/basic", tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+			_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+				SourceRootRel: "..",
+				TfSubDir:      "examples/basic",
+				Vars:          tc.Vars,
+				EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+			})
 			_, err := terraform.InitAndPlanE(t, opts)
 			require.Error(t, err)
 			require.Regexp(t, regexp.MustCompile("(?i)"+regexp.QuoteMeta(tc.ErrContains)), err.Error())

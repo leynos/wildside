@@ -35,7 +35,12 @@ func testVars(t *testing.T) map[string]interface{} {
 
 func TestDevClusterValidate(t *testing.T) {
 	t.Parallel()
-	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          testVars(t),
+		EnvVars:       map[string]string{},
+	})
 	terraform.InitAndValidate(t, opts)
 }
 
@@ -46,7 +51,12 @@ func TestDevClusterPlanUnauthenticated(t *testing.T) {
 	}
 	// The DigitalOcean provider does not require authentication at plan time,
 	// so an unauthenticated plan should succeed.
-	_, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          testVars(t),
+		EnvVars:       map[string]string{},
+	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.NoError(t, err)
 }
@@ -57,7 +67,12 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 	if token == "" {
 		t.Skip("DIGITALOCEAN_TOKEN not set; skipping detailed exit code plan")
 	}
-	tfDir, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
+	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          testVars(t),
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+	})
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
 	cmd.Dir = tfDir
@@ -77,7 +92,12 @@ func TestDevClusterPolicy(t *testing.T) {
 	if token == "" {
 		t.Skip("DIGITALOCEAN_TOKEN not set; skipping policy test")
 	}
-	tfDir, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", testVars(t), map[string]string{"DIGITALOCEAN_TOKEN": token})
+	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          testVars(t),
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+	})
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
 	terraform.InitAndPlan(t, opts)
@@ -94,7 +114,7 @@ func TestDevClusterPolicy(t *testing.T) {
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
 	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
 	out, err := cmd.CombinedOutput()
-        require.NoErrorf(t, err, "conftest failed: %s", string(out))
+	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
 // testInvalidNodePoolConfig plans the dev cluster with the provided node pool
@@ -102,47 +122,52 @@ func TestDevClusterPolicy(t *testing.T) {
 //
 // Example:
 //
-// testInvalidNodePoolConfig(t, []map[string]interface{}{
-//     {
-//             "name":       "default",
-//             "size":       "s-2vcpu-2gb",
-//             "node_count": 1,
-//             "auto_scale": false,
-//             "min_nodes":  1,
-//             "max_nodes":  1,
-//     },
-// })
+//	testInvalidNodePoolConfig(t, []map[string]interface{}{
+//	    {
+//	            "name":       "default",
+//	            "size":       "s-2vcpu-2gb",
+//	            "node_count": 1,
+//	            "auto_scale": false,
+//	            "min_nodes":  1,
+//	            "max_nodes":  1,
+//	    },
+//	})
 func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}) {
-        t.Parallel()
-        vars := testVars(t)
-        vars["node_pools"] = invalidNodePools
-        _, opts := testutil.SetupTerraform(t, "../../..", "clusters/dev", vars, map[string]string{})
-        _, err := terraform.InitAndPlanE(t, opts)
-        require.Error(t, err)
+	t.Parallel()
+	vars := testVars(t)
+	vars["node_pools"] = invalidNodePools
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
 }
 
 func TestDevClusterInvalidNodePool(t *testing.T) {
-        testInvalidNodePoolConfig(t, []map[string]interface{}{
-                {
-                        "name":       "default",
-                        "size":       "s-2vcpu-2gb",
-                        "node_count": 1,
-                        "auto_scale": false,
-                        "min_nodes":  1,
-                        "max_nodes":  1,
-                },
-        })
+	testInvalidNodePoolConfig(t, []map[string]interface{}{
+		{
+			"name":       "default",
+			"size":       "s-2vcpu-2gb",
+			"node_count": 1,
+			"auto_scale": false,
+			"min_nodes":  1,
+			"max_nodes":  1,
+		},
+	})
 }
 
 func TestDevClusterAutoScaleMinExceedsCount(t *testing.T) {
-        testInvalidNodePoolConfig(t, []map[string]interface{}{
-                {
-                        "name":       "default",
-                        "size":       "s-2vcpu-2gb",
-                        "node_count": 2,
-                        "auto_scale": true,
-                        "min_nodes":  3,
-                        "max_nodes":  5,
-                },
-        })
+	testInvalidNodePoolConfig(t, []map[string]interface{}{
+		{
+			"name":       "default",
+			"size":       "s-2vcpu-2gb",
+			"node_count": 2,
+			"auto_scale": true,
+			"min_nodes":  3,
+			"max_nodes":  5,
+		},
+	})
 }
