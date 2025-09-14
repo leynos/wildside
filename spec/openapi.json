@@ -1,245 +1,164 @@
 {
   "openapi": "3.1.0",
-  "info": {
-    "title": "backend",
-    "description": "HTTP interface for the wildside backend",
-    "version": "0.1.0",
-    "license": {
-      "name": "ISC",
-      "url": "https://opensource.org/license/isc-license"
-    }
-  },
-  "servers": [
-    {
-      "url": "https://{subdomain}.yourdomain.example",
-      "description": "HTTP API",
-      "variables": {
-        "subdomain": {
-          "default": "api",
-          "enum": ["api", "staging", "dev"]
-        }
-      }
-    }
-  ],
+  "info": { "title": "backend", "description": "", "license": { "name": "" }, "version": "0.1.0" },
   "paths": {
-    "/api/v1/users": {
-      "get": {
+    "/api/v1/login": {
+      "post": {
         "tags": ["users"],
-        "operationId": "listUsers",
-        "summary": "List users",
-        "description": "Return up to 100 known users in the system. The server enforces this temporary limit until cursor-based pagination is introduced.",
-        "externalDocs": {
-          "description": "Cursor-based pagination guideline",
-          "url": "https://opensource.zalando.com/restful-api-guidelines/#153"
+        "summary": "Authenticate user and establish a session.",
+        "description": "Uses the centralised `Error` type so clients get a consistent\nerror schema across all endpoints.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } }
+          },
+          "required": true
         },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
         "responses": {
           "200": {
-            "description": "Users (maximum 100 items)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/User"
-                  },
-                  "maxItems": 100
-                },
-                "examples": {
-                  "twoUsers": {
-                    "summary": "Two users",
-                    "value": [
-                      {
-                        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                        "displayName": "Ada Lovelace"
-                      },
-                      {
-                        "id": "7b1d3a62-0e3d-4f2f-8f94-3a5b5db02f0f",
-                        "displayName": "Alan Turing"
-                      }
-                    ]
-                  }
-                }
-              }
+            "description": "Login success",
+            "headers": {
+              "Set-Cookie": { "schema": { "type": "string" }, "description": "Session cookie" }
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "List known users.",
+        "description": "# Examples\n```\nuse actix_web::App;\nuse backend::api::users::list_users;\n\nlet app = App::new().service(list_users);\n```",
+        "operationId": "listUsers",
+        "responses": {
+          "200": {
+            "description": "Users",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Unauthorised",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Forbidden",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "description": "Internal server error",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
     },
-    "/api/v1/login": {
-      "post": {
-        "tags": ["users"],
-        "operationId": "login",
-        "summary": "Log in",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          }
-        },
+    "/health/live": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness probe. Return 200 when the process is alive.",
+        "operationId": "live",
+        "responses": { "200": { "description": "Server is alive" } }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
+        "operationId": "ready",
         "responses": {
-          "200": {
-            "description": "Login successful",
-            "headers": {
-              "Set-Cookie": {
-                "description": "Session cookie",
-                "schema": { "type": "string" }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
+          "200": { "description": "Server is ready to handle traffic" },
+          "503": { "description": "Server is not ready" }
         }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "cookieAuth": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "session"
-      }
-    },
-    "responses": {
-      "Unauthorized": {
-        "description": "Unauthorized",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "Forbidden": {
-        "description": "Forbidden",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "InternalServerError": {
-        "description": "Internal server error",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      }
-    },
     "schemas": {
-      "ErrorCode": {
-        "title": "Error code",
-        "type": "string",
-        "description": "Stable machine-readable error code",
-        "example": "invalid_request",
-        "pattern": "^[a-z0-9_.:-]+$",
-        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"],
-        "x-enumDescriptions": [
-          "The request is malformed or fails validation",
-          "Authentication failed or is missing",
-          "Authenticated but not permitted to perform this action",
-          "The requested resource does not exist",
-          "An unexpected error occurred on the server"
-        ]
-      },
       "Error": {
-        "title": "Error",
         "type": "object",
-        "description": "An error response",
-        "additionalProperties": false,
+        "description": "API error response payload.\n\n# Examples\n```\nuse backend::models::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code, ErrorCode::NotFound);\n```",
+        "required": ["code", "message"],
         "properties": {
           "code": {
-            "$ref": "#/components/schemas/ErrorCode"
+            "$ref": "#/components/schemas/ErrorCode",
+            "description": "Stable machine-readable error code."
+          },
+          "details": {
+            "description": "Supplementary error details.\n\nThis field should contain additional structured information about the error,\nsuch as validation errors, field-specific issues, or other context.\nThe expected format is a JSON object, for example:\n`{ \"field_errors\": { \"email\": \"invalid format\" }, \"reason\": \"missing data\" }`\nConsumers should document and maintain the structure of this object for consistency."
           },
           "message": {
             "type": "string",
-            "description": "Human-readable error message",
+            "description": "Human-readable error message.",
             "example": "Something went wrong"
           },
-          "details": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Supplementary error details"
+          "traceId": {
+            "type": ["string", "null"],
+            "description": "Correlation identifier for tracing this error across systems.",
+            "example": "01HZY8B2W6X5Y7Z9ABCD1234"
           }
         },
-        "required": ["code", "message"]
+        "additionalProperties": false
+      },
+      "ErrorCode": {
+        "type": "string",
+        "description": "Stable machine-readable error code.",
+        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "Login request body for `POST /api/v1/login`.\n\nExample JSON:\n`{\"username\":\"admin\",\"password\":\"password\"}`",
+        "required": ["username", "password"],
+        "properties": { "password": { "type": "string" }, "username": { "type": "string" } }
       },
       "User": {
-        "title": "User",
         "type": "object",
-        "description": "A user of the system",
-        "additionalProperties": false,
+        "description": "Application user.",
         "required": ["id", "displayName"],
         "properties": {
           "displayName": {
             "type": "string",
-            "description": "User's display name",
-            "example": "Ada Lovelace",
-            "minLength": 1,
-            "maxLength": 100
+            "description": "Display name shown to other users",
+            "example": "Ada Lovelace"
           },
           "id": {
             "type": "string",
             "description": "Stable user identifier",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-            "format": "uuid"
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           }
-        }
-      },
-      "LoginRequest": {
-        "title": "LoginRequest",
-        "type": "object",
-        "description": "User login request",
-        "additionalProperties": false,
-        "required": ["username", "password"],
-        "properties": {
-          "username": {
-            "type": "string",
-            "description": "Username",
-            "example": "admin"
-          },
-          "password": {
-            "type": "string",
-            "description": "Password",
-            "example": "password"
-          }
-        }
+        },
+        "additionalProperties": false
       }
     }
   },
   "tags": [
-    {
-      "name": "users",
-      "description": "Operations about system users"
-    }
+    { "name": "users", "description": "Operations related to users" },
+    { "name": "health", "description": "Endpoints for health checks" }
   ]
 }

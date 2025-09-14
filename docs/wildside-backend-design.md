@@ -666,7 +666,9 @@ reliability, and user behaviour.
 
   - **Logging (Loki):** Output structured, correlated logs for debugging.
   Each request is wrapped by tracing middleware that assigns a UUID
-`traceId`, propagated to logs and error responses.
+`traceId`. Propagate this identifier across async boundaries, inject it into
+spans for background jobs, and enrich JSON logs and error responses so events
+remain correlated end-to-end.
 
   - **Analytics (PostHog):** Send events to track user engagement and product
     funnels.
@@ -746,9 +748,9 @@ reliability, and user behaviour.
           description: "Evictions indicate memory pressure or suboptimal TTLs."
     ```
 
-  - [ ] **Logging:** Ensure all logs are emitted as structured JSON and
-    include the `traceId` propagated from the initial API request, even into
-    the background jobs.
+  - [ ] **Logging:** Emit structured JSON logs that carry the `traceId`
+    propagated from the initial API request. Inject the identifier into spans
+    for background tasks so logs remain correlated across async boundaries.
 
   - [ ] **Analytics:**
 

@@ -10,6 +10,10 @@ use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
 
+/// Login request body for `POST /api/v1/login`.
+///
+/// Example JSON:
+/// `{"username":"admin","password":"password"}`
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
@@ -105,6 +109,7 @@ mod tests {
             App::new()
                 .wrap(
                     SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                        .cookie_name("actix-session".to_owned())
                         .cookie_secure(false)
                         .build(),
                 )
@@ -124,8 +129,8 @@ mod tests {
         let cookie = login_res
             .response()
             .cookies()
-            .next()
-            .expect("session cookie");
+            .find(|c| c.name() == "actix-session")
+            .expect("actix-session cookie");
 
         let users_req = test::TestRequest::get()
             .uri("/api/v1/users")
@@ -134,7 +139,7 @@ mod tests {
         let users_res = test::call_service(&app, users_req).await;
         assert!(users_res.status().is_success());
         let body = test::read_body(users_res).await;
-        let value: Value = serde_json::from_slice(&body).unwrap();
+        let value: Value = serde_json::from_slice(&body).expect("response JSON");
         let first = &value.as_array().expect("array")[0];
         assert_eq!(
             first.get("displayName").and_then(Value::as_str),

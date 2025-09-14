@@ -47,6 +47,7 @@ pub struct UserCreated {
     /// The user's unique identifier.
     pub id: String,
     /// The user's chosen display name.
+    #[serde(alias = "display_name")]
     pub display_name: String,
 }
 
