@@ -257,8 +257,9 @@ an OpenTofu project should include 8:
 
 - `/.terraform.lock.hcl`: This file records the exact provider versions and
   checksums selected during initialization to ensure consistent dependency
-  resolution. While it should be committed to version control, local changes
-  may occur that shouldn't be pushed without review.
+  resolution. The repository commits this lockfile so team members and CI
+  resolve identical provider builds. Review and commit changes produced by
+  `tofu init -upgrade` to keep dependencies reproducible.
 
 - `*.tfstate` and `*.tfstate.*`: These are the state files, which often contain
   sensitive information and should never be committed to version control.

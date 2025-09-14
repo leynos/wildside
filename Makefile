@@ -2,7 +2,8 @@ SHELL := bash
 KUBE_VERSION ?= 1.31.0
 # Supported DigitalOcean Kubernetes release. Update to a current patch from
 # the 1.33.x, 1.32.x or 1.31.x series as listed in the DigitalOcean docs.
-DOKS_KUBERNETES_VERSION ?= 1.33.9-do.0
+# Latest tested patch: https://docs.digitalocean.com/products/kubernetes/releases/
+DOKS_KUBERNETES_VERSION ?= 1.33.1-do.3
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -31,9 +32,11 @@ ORVAL_VERSION ?= 7.11.2
 BIOME_VERSION ?= 2.2.4
 TSC_VERSION ?= 5.9.2
 
+# Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
-	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-	lint-asyncapi lint-openapi lint-makefile
+        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+        lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
+        dev-cluster-test
 
 all: fmt lint test
 
@@ -151,7 +154,6 @@ yamllint:
 	[ ! -f deploy/k8s/overlays/production/patch-helmrelease-values.yaml ] || \
 	(set -o pipefail; helm template wildside ./deploy/charts/wildside -f <(yq e '.spec.values' deploy/k8s/overlays/production/patch-helmrelease-values.yaml) --kube-version $(KUBE_VERSION) | yamllint -f parsable -)
 
-.PHONY: conftest tofu doks-test
 conftest:
 	$(call ensure_tool,conftest)
 
@@ -165,7 +167,7 @@ doks-test:
 	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
-	cd infra/modules/doks/tests && go test -v
+	cd infra/modules/doks/tests && DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v
 	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
@@ -175,7 +177,6 @@ doks-test:
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
-.PHONY: doks-policy
 doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
@@ -185,3 +186,6 @@ doks-policy: conftest tofu
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
+
+dev-cluster-test: conftest tofu
+	DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) ./scripts/dev-cluster-test.sh

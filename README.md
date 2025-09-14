@@ -26,6 +26,13 @@ pnpm install --frozen-lockfile
 
 The Bun toolchain remains in use for runtime scripts and formatting tasks.
 
+## Terraform provider lockfile
+
+OpenTofu pins provider versions in `.terraform.lock.hcl`. Commit this file so
+local and CI environments resolve identical provider builds. When upgrading
+providers with `tofu init -upgrade`, include the updated lockfile in your
+commit.
+
 ## Formatting, linting, and type checking
 
 Use the Makefile targets to format, lint, and type-check both the Rust backend

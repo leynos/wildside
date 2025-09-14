@@ -6,22 +6,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/require"
+	testutil "wildside/infra/testutil"
 )
-
-const supportedVersion = "1.33.9-do.0" // update to a supported release from the 1.33.x, 1.32.x or 1.31.x series
 
 func testVars() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster_name":       "terratest-cluster",
 		"region":             "nyc1",
-		"kubernetes_version": supportedVersion,
+		"kubernetes_version": testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -37,25 +36,17 @@ func testVars() map[string]interface{} {
 	}
 }
 
-func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]string) (string, *terraform.Options) {
-	tempRoot := test_structure.CopyTerraformFolderToTemp(t, "..", ".")
-	tfDir := filepath.Join(tempRoot, "examples", "basic")
-	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir:    tfDir,
-		TerraformBinary: "tofu",
-		Vars:            vars,
-		EnvVars:         env,
-		NoColor:         true,
-	})
-	return tfDir, opts
-}
-
 func TestDoksModuleValidate(t *testing.T) {
 	t.Parallel()
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+	})
 	terraform.InitAndValidate(t, opts)
 }
 
@@ -64,7 +55,12 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": ""})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": ""},
+	})
 
 	_, err := terraform.InitAndPlanE(t, opts)
 	if err == nil {
@@ -85,7 +81,12 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	_, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+	})
 
 	defer terraform.Destroy(t, opts)
 	terraform.InitAndApply(t, opts)
@@ -101,29 +102,51 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 }
 
 func TestDoksModulePolicy(t *testing.T) {
-	t.Parallel()
+       t.Parallel()
+       if _, err := exec.LookPath("conftest"); err != nil {
+               t.Skip("conftest not found; skipping policy test")
+       }
 
-	vars := testVars()
-	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	tfDir, opts := setupTerraform(t, vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+       vars := testVars()
+       vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+       tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+               SourceRootRel: "..",
+               TfSubDir:      "examples/basic",
+               Vars:          vars,
+               EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+       })
 
-	planFile := filepath.Join(tfDir, "tfplan.binary")
-	opts.PlanFilePath = planFile
-	terraform.InitAndPlan(t, opts)
+       planFile := filepath.Join(tfDir, "tfplan.binary")
+       opts.PlanFilePath = planFile
+       terraform.InitAndPlan(t, opts)
+       t.Cleanup(func() { _ = os.Remove(planFile) })
 
-	show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
-	require.NoError(t, err)
-	jsonPath := filepath.Join(tfDir, "plan.json")
-	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
-	policyPath, err := filepath.Abs(filepath.Join("..", "policy"))
-	require.NoError(t, err)
-	if _, lookErr := exec.LookPath("conftest"); lookErr != nil {
-		t.Skip("conftest not found; skipping policy test")
-	}
-	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
-	cmd.Dir = tfDir
-	output, err := cmd.CombinedOutput()
-	require.NoErrorf(t, err, "conftest failed: %s", string(output))
+       show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
+       require.NoError(t, err)
+       jsonPath := filepath.Join(tfDir, "plan.json")
+       require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
+       t.Cleanup(func() { _ = os.Remove(jsonPath) })
+
+       // Resolve policy dir relative to this source file.
+       _, thisFile, _, ok := runtime.Caller(0)
+       require.True(t, ok, "unable to resolve caller path")
+       thisDir := filepath.Dir(thisFile)
+       policyPath := filepath.Join(thisDir, "..", "policy")
+       entries, readErr := os.ReadDir(policyPath)
+       require.NoError(t, readErr, "policy directory not found: %s", policyPath)
+       hasRego := false
+       for _, e := range entries {
+               if !e.IsDir() && strings.HasSuffix(e.Name(), ".rego") {
+                       hasRego = true
+                       break
+               }
+       }
+       require.True(t, hasRego, "no .rego files found in %s", policyPath)
+
+       cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+       cmd.Dir = tfDir
+       output, err := cmd.CombinedOutput()
+       require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
 func getInvalidInputTestCases() map[string]struct {
@@ -141,7 +164,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "cluster_name must not be empty",
@@ -150,7 +173,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "invalid",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         testVars()["node_pools"],
 			},
 			ErrContains: "region must be a valid DigitalOcean slug",
@@ -176,7 +199,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools":         []map[string]interface{}{},
 			},
 			ErrContains: "node_pools must not be empty",
@@ -185,7 +208,7 @@ func getInvalidInputTestCases() map[string]struct {
 			Vars: map[string]interface{}{
 				"cluster_name":       "terratest-cluster",
 				"region":             "nyc1",
-				"kubernetes_version": supportedVersion,
+				"kubernetes_version": testutil.KubernetesVersion(),
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
@@ -259,10 +282,15 @@ func getInvalidInputTestCases() map[string]struct {
 func TestDoksModuleInvalidInputs(t *testing.T) {
 	for name, tc := range getInvalidInputTestCases() {
 		t.Run(name, func(t *testing.T) {
-			_, opts := setupTerraform(t, tc.Vars, map[string]string{"DIGITALOCEAN_TOKEN": "dummy"})
+			_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+				SourceRootRel: "..",
+				TfSubDir:      "examples/basic",
+				Vars:          tc.Vars,
+				EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+			})
 			_, err := terraform.InitAndPlanE(t, opts)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), tc.ErrContains)
+			require.Regexp(t, regexp.MustCompile("(?i)"+regexp.QuoteMeta(tc.ErrContains)), err.Error())
 		})
 	}
 }
