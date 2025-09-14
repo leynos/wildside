@@ -249,45 +249,44 @@ identity-provider redirects. It accepts `Strict`, `Lax`, or `None`; any other
 value aborts startup outside debug builds. `None` also requires
 `SESSION_COOKIE_SECURE=1` and may still be blocked by some browsers' policies.
 
-    Deployment manifests in `deploy/k8s/` should mount the secret read-only and
-    expose its path to the service (for instance, via a `SESSION_KEY_FILE`
-    environment variable). Use high-entropy (≥64-byte) keys and rotate them by
-    deploying new secrets and reloading the service, so the fresh key takes
-    effect while the previous key remains available for validating existing
-    sessions during the rollout. For seamless rotation, run at least two
-    replicas and perform a rolling update, so pods with the prior key continue
-    to validate existing cookies until expiry. Scope the middleware to routes
-    that require authentication. Developers can opt into an ephemeral session
-    key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
-    unset so startup fails if the key file is unreadable.
+Deployment manifests in `deploy/k8s/` should mount the secret read-only and
+expose its path to the service (for instance, via a `SESSION_KEY_FILE`
+environment variable). Use high-entropy (≥64-byte) keys and rotate them by
+deploying new secrets and reloading the service, so the fresh key takes
+effect while the previous key remains available for validating existing
+sessions during the rollout. For seamless rotation, run at least two
+replicas and perform a rolling update, so pods with the prior key continue
+to validate existing cookies until expiry. Scope the middleware to routes
+that require authentication. Developers can opt into an ephemeral session
+key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
+unset so startup fails if the key file is unreadable.
 
-  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
-        and initialise sessions.
+- [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
+  and initialise sessions.
 
-  - [ ] **Observability:**
+- [ ] **Observability:**
 
-    - Integrate the `actix-web-prom` crate as middleware to expose default
-      Prometheus metrics on a `/metrics` endpoint.
-      Status: wired behind a `metrics` cargo feature. Build with
-      `--features metrics` to enable middleware and the `/metrics` route
-      without impacting environments that cannot fetch new crates.
+  - Integrate the `actix-web-prom` crate as middleware to expose default
+    Prometheus metrics on a `/metrics` endpoint. Status: wired behind a
+    `metrics` cargo feature. Build with `--features metrics` to enable
+    middleware and the `/metrics` route without impacting environments that
+    cannot fetch new crates.
 
-    - Implement `/health/ready` and `/health/live` endpoints.
-      `/health/ready` returns `200 OK` once dependencies are
-      initialised and `503` otherwise.
+  - Implement `/health/ready` and `/health/live` endpoints. `/health/ready`
+    returns `200 OK` once dependencies are initialised and `503` otherwise.
 
-    - Ensure all request handlers have `tracing` spans with a unique
-      `request_id`, propagating it via a `Trace-Id` response header for
-      client correlation.
+  - Ensure all request handlers have `tracing` spans with a unique
+    `request_id`, propagating it via a `Trace-Id` response header for client
+    correlation.
 
-  - [ ] **API Endpoints:**
+- [ ] **API Endpoints:**
 
-    - Implement the full suite of user management endpoints (create, read,
-      update) under `/api/v1/users`.
+  - Implement the full suite of user management endpoints (create, read,
+    update) under `/api/v1/users`.
 
-    - Create a `/api/v1/routes` endpoint to accept route generation requests.
-      This endpoint should validate the input and enqueue a `GenerateRouteJob`
-      (see § 3.4).
+  - Create a `/api/v1/routes` endpoint to accept route generation requests.
+    This endpoint should validate the input and enqueue a `GenerateRouteJob`
+    (see § 3.4).
 
 The flow for request handling and trace propagation is shown below:
 
