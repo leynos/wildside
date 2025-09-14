@@ -92,8 +92,18 @@ variable "tags" {
   default     = ["env:dev"]
 
   validation {
-    condition     = length(var.tags) > 0 && alltrue([for t in var.tags : t != ""]) && length(distinct(var.tags)) == length(var.tags)
-    error_message = "tags must be non-empty, unique strings"
+    condition     = length(var.tags) > 0
+    error_message = "tags must contain at least one value"
+  }
+
+  validation {
+    condition     = alltrue([for t in var.tags : t != ""])
+    error_message = "tags must not be empty strings"
+  }
+
+  validation {
+    condition     = length(distinct(var.tags)) == length(var.tags)
+    error_message = "tags must be unique"
   }
 }
 
