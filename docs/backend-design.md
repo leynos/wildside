@@ -724,22 +724,36 @@ let key_bytes = {
 };
 let key = Key::from(&key_bytes);
 
+let same_site = if cfg!(debug_assertions) {
+    SameSite::Lax
+} else {
+    SameSite::Strict
+};
 let middleware = SessionMiddleware::builder(CookieSessionStore::default(), key)
     .cookie_name("session")
     .cookie_content_security(CookieContentSecurity::Private) // encrypt + sign
     .cookie_secure(true)
     .cookie_http_only(true)
-    .cookie_same_site(SameSite::Lax)
+    .cookie_same_site(same_site)
     .build();
 ```
 
 On login, the server sets a cookie named `session`, such as `session=<payload>`,
 and `actix-session` handles serialization and integrity checks automatically.
-Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` unless a
-cross-site flow is required. To rotate the key, generate a new value, replace
-the secret file, and restart the pods; the framework cannot validate cookies
-issued with a previous key, so all existing sessions are dropped. This keeps the
-session layer self-contained without any server-side cache or database lookup.
+Cookies are marked `HttpOnly`, `Secure`, and use `SameSite=Lax` during development
+and `SameSite=Strict` otherwise.
+
+Override `SameSite` when cross-site flows are required:
+
+- Environment: `SESSION_SAMESITE=Strict|Lax|None` (optional; overrides build
+  mode).
+- If `SESSION_SAMESITE=None`, cookies must be `Secure=true` and some browsers
+  may block third-party cookies by policy.
+
+To rotate the key, generate a new value, replace the secret file, and restart
+the pods; the framework cannot validate cookies issued with a previous key, so
+all existing sessions are dropped. This keeps the session layer self-contained
+without any server-side cache or database lookup.
 
 **Security considerations:** Browser cookies are limited to 4 KiB, so the
 serialized session payload must stay within that bound. For non‑persistent

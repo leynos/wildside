@@ -122,6 +122,10 @@ API and WebSocket traffic.
 - **Current Status:** A foundational Actix Web server exists in
   `backend/src/main.rs`. It is configured with basic logging (`tracing`),
   OpenAPI documentation (`utoipa`), and a working WebSocket endpoint (`/ws`).
+  The server binds to a host and port taken from the `HOST` and `PORT`
+  environment variables, defaulting to `0.0.0.0:8080` for development. Use a
+  literal IPv6 address such as `::` to listen on IPv6, and ensure the chosen
+  address and port are exposed by the Ingress or Service.
 
 - **Key Responsibilities:**
 
@@ -145,22 +149,37 @@ API and WebSocket traffic.
     key from a secret store (for example, a Kubernetes Secret or Vault) and
     mount or inject it for the service at runtime. Name the cookie `session`
     and configure it with `Secure=true`, `HttpOnly=true`, and `SameSite=Lax`
-    (or `Strict`). Startup must abort in production if the key file cannot be
-    read; a temporary key is permitted only in development when
+    during development but `SameSite=Strict` for releases. Override with
+    `SESSION_SAMESITE=Strict|Lax|None` when cross-site flows are required;
+    `None` mandates `Secure=true` and may still be blocked by some browsers.
+    Record the chosen value in ops runbooks for environments that need
+    identity-provider redirects. Startup must abort in production if the key
+    file cannot be read; a temporary key is permitted only in development when
     `SESSION_ALLOW_EPHEMERAL=1`.
 
     ```rust
-    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+    use actix_session::{config::{CookieContentSecurity, PersistentSession}, storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::{time::Duration, Key, SameSite};
     use actix_web::web;
     use std::env;
     use std::io;
     use tracing::warn;
+    use zeroize::Zeroize;
 
     let key_path = env::var("SESSION_KEY_FILE")
         .unwrap_or_else(|_| "/var/run/secrets/session_key".into());
     let key = match std::fs::read(&key_path) {
-        Ok(bytes) => Key::from(&bytes),
+        Ok(mut bytes) => {
+            if !cfg!(debug_assertions) && bytes.len() < 64 {
+                return Err(io::Error::other(format!(
+                    "session key at {key_path} too short: need >=64 bytes, got {}",
+                    bytes.len()
+                )));
+            }
+            let key = Key::derive_from(&bytes);
+            bytes.zeroize();
+            key
+        },
         Err(e) => {
             let allow_dev = env::var("SESSION_ALLOW_EPHEMERAL").ok().as_deref() == Some("1");
             if cfg!(debug_assertions) || allow_dev {
@@ -174,9 +193,18 @@ API and WebSocket traffic.
         }
     };
 
-    let cookie_secure = env::var("SESSION_COOKIE_SECURE")
-        .map(|v| v != "0")
-        .unwrap_or(true);
+    let cookie_secure = match env::var("SESSION_COOKIE_SECURE") {
+        Ok(v) => match v.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "y" => true,
+            "0" | "false" | "no" | "n" => false,
+            other => {
+                warn!(value = %other, "invalid SESSION_COOKIE_SECURE; defaulting to secure");
+                true
+            }
+        },
+        Err(_) => true,
+    };
+    let same_site = same_site_from_env(cookie_secure)?;
     let session_middleware = SessionMiddleware::builder(
         CookieSessionStore::default(),
         key,
@@ -185,63 +213,80 @@ API and WebSocket traffic.
     .cookie_path("/")
     .cookie_secure(cookie_secure)
     .cookie_http_only(true)
-    .cookie_same_site(SameSite::Lax)
+    .cookie_content_security(CookieContentSecurity::Private)
+    .cookie_same_site(same_site)
     // Set at deploy time if required:
     //.cookie_domain(Some("example.com".into()))
-    .cookie_max_age(Duration::hours(2))
+    .session_lifecycle(PersistentSession::default().session_ttl(Duration::hours(2)))
     .build();
 
     let api = web::scope("/api/v1")
         .wrap(session_middleware)
-        .service(list_users);
+    .service(list_users);
     ```
 
-    `CookieSessionStore` keeps session state entirely in the cookie, avoiding an
+    This helper mirrors the production implementation in `backend/src/main.rs`.
+
+    - The key must be at least 64 bytes; release builds refuse to start if the
+      key is shorter. Raw bytes are zeroised after derivation.
+
+    - Session cookies use `SameSite=Lax` in debug builds and `SameSite=Strict`
+      otherwise, and expire after two hours.
+
+    - Override with `SESSION_SAMESITE=Strict|Lax|None` (takes precedence over
+      the build mode). If `SESSION_SAMESITE=None`, also set
+      `SESSION_COOKIE_SECURE=1`; some browsers may block third-party cookies
+      regardless.
+
+`CookieSessionStore` keeps session state entirely in the cookie, avoiding an
     external store such as Redis. Browsers cap individual cookies at roughly 4
     KB, so session payloads must remain well under this limit.
 
-    Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
-    plain HTTP; production deployments should leave this unset to enforce HTTPS.
+Set `SESSION_COOKIE_SECURE=0` during local development to allow cookies over
+plain HTTP; production deployments should leave this unset to enforce HTTPS.
+Use `SESSION_SAMESITE` to override the default for cross-site flows such as
+identity-provider redirects. It accepts `Strict`, `Lax`, or `None`; any other
+value aborts startup outside debug builds. `None` also requires
+`SESSION_COOKIE_SECURE=1` and may still be blocked by some browsers' policies.
 
-    Deployment manifests in `deploy/k8s/` should mount the secret read-only and
-    expose its path to the service (for instance, via a `SESSION_KEY_FILE`
-    environment variable). Use high-entropy (≥64-byte) keys and rotate them by
-    deploying new secrets and reloading the service, so the fresh key takes
-    effect while the previous key remains available for validating existing
-    sessions during the rollout. For seamless rotation, run at least two
-    replicas and perform a rolling update, so pods with the prior key continue
-    to validate existing cookies until expiry. Scope the middleware to routes
-    that require authentication. Developers can opt into an ephemeral session
-    key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
-    unset so startup fails if the key file is unreadable.
+Deployment manifests in `deploy/k8s/` should mount the secret read-only and
+expose its path to the service (for instance, via a `SESSION_KEY_FILE`
+environment variable). Use high-entropy (≥64-byte) keys and rotate them by
+deploying new secrets and reloading the service, so the fresh key takes
+effect while the previous key remains available for validating existing
+sessions during the rollout. For seamless rotation, run at least two
+replicas and perform a rolling update, so pods with the prior key continue
+to validate existing cookies until expiry. Scope the middleware to routes
+that require authentication. Developers can opt into an ephemeral session
+key by setting `SESSION_ALLOW_EPHEMERAL=1`; production should leave this
+unset so startup fails if the key file is unreadable.
 
-  - [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
-        and initialise sessions.
+- [x] **Login endpoint:** Add `POST /api/v1/login` to validate credentials
+  and initialise sessions.
 
-  - [ ] **Observability:**
+- [ ] **Observability:**
 
-    - Integrate the `actix-web-prom` crate as middleware to expose default
-      Prometheus metrics on a `/metrics` endpoint.
-      Status: wired behind a `metrics` cargo feature. Build with
-      `--features metrics` to enable middleware and the `/metrics` route
-      without impacting environments that cannot fetch new crates.
+  - Integrate the `actix-web-prom` crate as middleware to expose default
+    Prometheus metrics on a `/metrics` endpoint. Status: wired behind a
+    `metrics` cargo feature. Build with `--features metrics` to enable
+    middleware and the `/metrics` route without impacting environments that
+    cannot fetch new crates.
 
-    - Implement `/health/ready` and `/health/live` endpoints.
-      `/health/ready` returns `200 OK` once dependencies are
-      initialised and `503` otherwise.
+  - Implement `/health/ready` and `/health/live` endpoints. `/health/ready`
+    returns `200 OK` once dependencies are initialised and `503` otherwise.
 
-    - Ensure all request handlers have `tracing` spans with a unique
-      `request_id`, propagating it via a `Trace-Id` response header for
-      client correlation.
+  - Ensure all request handlers have `tracing` spans with a unique
+    `request_id`, propagating it via a `Trace-Id` response header for client
+    correlation.
 
-  - [ ] **API Endpoints:**
+- [ ] **API Endpoints:**
 
-    - Implement the full suite of user management endpoints (create, read,
-      update) under `/api/v1/users`.
+  - Implement the full suite of user management endpoints (create, read,
+    update) under `/api/v1/users`.
 
-    - Create a `/api/v1/routes` endpoint to accept route generation requests.
-      This endpoint should validate the input and enqueue a `GenerateRouteJob`
-      (see § 3.4).
+  - Create a `/api/v1/routes` endpoint to accept route generation requests.
+    This endpoint should validate the input and enqueue a `GenerateRouteJob`
+    (see § 3.4).
 
 The flow for request handling and trace propagation is shown below:
 
