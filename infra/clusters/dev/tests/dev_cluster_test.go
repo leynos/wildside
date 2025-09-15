@@ -147,7 +147,8 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "at least 2 nodes")
+       require.ErrorContains(t, err, "node_pools")
+       require.ErrorContains(t, err, "node_count")
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {

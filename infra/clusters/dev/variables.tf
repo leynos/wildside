@@ -13,8 +13,8 @@ variable "cluster_name" {
   default     = "wildside-dev"
 
   validation {
-    condition     = length(var.cluster_name) > 0
-    error_message = "cluster_name must not be empty"
+    condition     = length(trimspace(var.cluster_name)) > 0
+    error_message = "cluster_name must not be blank"
   }
 }
 
@@ -97,12 +97,12 @@ variable "tags" {
   }
 
   validation {
-    condition     = alltrue([for t in var.tags : t != ""])
-    error_message = "tags must not be empty strings"
+    condition     = alltrue([for t in var.tags : length(trimspace(t)) > 0])
+    error_message = "tags must not be blank strings"
   }
 
   validation {
-    condition     = length(distinct(var.tags)) == length(var.tags)
+    condition     = length(distinct([for t in var.tags : trimspace(t)])) == length(var.tags)
     error_message = "tags must be unique"
   }
 }

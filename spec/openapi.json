@@ -4,10 +4,16 @@
     "title": "backend",
     "description": "",
     "license": {
-      "name": ""
+      "name": "Apache-2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
     "version": "0.1.0"
   },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
   "paths": {
     "/api/v1/login": {
       "post": {
@@ -17,6 +23,7 @@
         "summary": "Authenticate user and establish a session.",
         "description": "Uses the centralised `Error` type so clients get a consistent\nerror schema across all endpoints.",
         "operationId": "login",
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -63,6 +70,7 @@
         "summary": "List known users.",
         "description": "# Examples\n```\nuse actix_web::App;\nuse backend::api::users::list_users;\n\nlet app = App::new().service(list_users);\n```",
         "operationId": "listUsers",
+        "security": [{ "SessionCookie": [] }],
         "responses": {
           "200": {
             "description": "Users",
@@ -163,6 +171,9 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "SessionCookie": { "type": "apiKey", "in": "cookie", "name": "session" }
+    },
     "schemas": {
       "Error": {
         "type": "object",
