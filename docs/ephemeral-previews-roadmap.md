@@ -116,8 +116,8 @@ HashiCorp Vault instance.
 
     - `base` containing the canonical `HelmRelease` for the application.
 
-    - `overlays` with long-lived environments (`production`, `staging`) and a
-      `previews` directory for dynamically generated ephemeral overlays.
+    - `overlays` with long-lived environments (`production`, `staging`) and an
+      `ephemeral` directory for dynamically generated overlays.
 
   - [ ] Fetch application secrets from HashiCorp Vault and reference them in
     the rendered manifests.
@@ -141,7 +141,7 @@ HashiCorp Vault instance.
   - [ ] Add a step to check out the `wildside-apps` repository.
 
     - [ ] Create a new Kustomize overlay directory based on the pull request
-      number (e.g., `overlays/previews/pr-123`).
+      number (e.g., `overlays/ephemeral/pr-123`).
 
     - [ ] Generate a `patch-helmrelease-values.yaml` file that updates the image
       tags to the new commit SHA and sets the ingress hostname.
@@ -149,7 +149,7 @@ HashiCorp Vault instance.
     - [ ] Generate a `kustomization.yaml` referencing the base release and the
       patch file.
 
-    - [ ] Update the top-level `overlays/previews/kustomization.yaml` to include
+    - [ ] Update the top-level `overlays/ephemeral/kustomization.yaml` to include
       the new ephemeral environment.
 
     - [ ] Commit and push the new overlay to a branch in the `wildside-apps`

@@ -430,7 +430,7 @@ the expected manifests.
 | Repository | Path | Purpose |
 | --- | --- | --- |
 | wildside-infra | / | Defines the desired state of the cluster's shared platform infrastructure. |
-|  | clusters/<cluster>/ | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`). |
+|  | `clusters/<cluster>/` | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`). |
 |  | modules/ | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`. |
 |  | platform/sources/ | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
 |  | platform/traefik/ | HelmRelease and supporting manifests for the Traefik ingress controller. |
