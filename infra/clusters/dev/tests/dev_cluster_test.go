@@ -138,7 +138,6 @@ func TestDevClusterPolicy(t *testing.T) {
 //	})
 func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, want ...string) {
 	t.Helper()
-	t.Parallel()
 	vars := testVars(t)
 	vars["node_pools"] = invalidNodePools
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
@@ -189,11 +188,26 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 			},
 			want: []string{"auto_scale", "min_nodes"},
 		},
+		{
+			name: "MaxNodesBelowMinNodes",
+			pools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  5,
+					"max_nodes":  4,
+				},
+			},
+			want: []string{"max_nodes", "min_nodes"},
+		},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			testInvalidNodePoolConfig(t, tc.pools, tc.want...)
 		})
 	}
