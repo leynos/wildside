@@ -97,11 +97,7 @@ where
             let mut res = fut.await?;
             res.response_mut().headers_mut().insert(
                 HeaderName::from_static("trace-id"),
-                #[expect(
-                    clippy::expect_used,
-                    reason = "UUID v4 is always a valid ASCII header value"
-                )]
-                HeaderValue::from_str(&trace_id).expect("valid Trace-Id header"),
+                HeaderValue::from_str(&trace_id)?,
             );
             Ok(res)
         })

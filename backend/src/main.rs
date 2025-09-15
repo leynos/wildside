@@ -202,6 +202,7 @@ async fn main() -> std::io::Result<()> {
         }
     };
     let health_state = web::Data::new(HealthState::new());
+<<<<<<< HEAD
     let server_health_state = health_state.clone();
     let server = HttpServer::new(move || {
         let app = build_app(
@@ -213,6 +214,111 @@ async fn main() -> std::io::Result<()> {
         #[cfg(feature = "metrics")]
         let app = app.wrap(prometheus.clone());
         app
+||||||| parent of 39f1414 (Propagate trace and display name errors)
+    let server = HttpServer::new({
+        let health_state = health_state.clone();
+        move || {
+            let session_middleware =
+                SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                    .cookie_name("session".to_owned())
+                    .cookie_path("/".to_owned())
+                    .cookie_secure(cookie_secure)
+                    .cookie_http_only(true)
+                    .cookie_same_site(SameSite::Lax)
+                    .build();
+
+            let api = web::scope("/api/v1")
+                .wrap(session_middleware)
+                .service(login)
+                .service(list_users);
+
+            // Base application assembly shared across build features.
+            let app = App::new()
+                .app_data(health_state.clone())
+                .wrap(Trace)
+                .service(api)
+                .service(ws::ws_entry)
+                .service(ready)
+                .service(live);
+
+            #[cfg(debug_assertions)]
+            let app = app
+                .service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+
+            // Optional Prometheus metrics integration. This is feature-gated to
+            // avoid introducing a hard dependency in environments where pulling
+            // new crates is undesirable. In production, enable with
+            // `--features metrics` to expose `/metrics` and add request metrics.
+            #[cfg(feature = "metrics")]
+            let app = {
+                // Prometheus middleware automatically serves the metrics at the configured
+                // endpoint (by short‑circuiting matching requests). We should therefore only
+                // wrap the app; registering it as a service is incorrect because the
+                // PrometheusMetrics type is not an HttpServiceFactory.
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Fail fast on startup misconfiguration with an actionable message"
+                )]
+                let prometheus = PrometheusMetricsBuilder::new("wildside")
+                    .endpoint("/metrics")
+                    .build()
+                    .expect("configure Prometheus metrics");
+                app.wrap(prometheus)
+            };
+
+            app
+        }
+=======
+    #[cfg(feature = "metrics")]
+    let prometheus = PrometheusMetricsBuilder::new("wildside")
+        .endpoint("/metrics")
+        .build()
+        .map_err(|e| std::io::Error::other(format!("configure Prometheus metrics: {e}")))?;
+
+    let server = HttpServer::new({
+        let health_state = health_state.clone();
+        move || {
+            let session_middleware =
+                SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
+                    .cookie_name("session".to_owned())
+                    .cookie_path("/".to_owned())
+                    .cookie_secure(cookie_secure)
+                    .cookie_http_only(true)
+                    .cookie_same_site(SameSite::Lax)
+                    .build();
+
+            let api = web::scope("/api/v1")
+                .wrap(session_middleware)
+                .service(login)
+                .service(list_users);
+
+            // Base application assembly shared across build features.
+            let app = App::new()
+                .app_data(health_state.clone())
+                .wrap(Trace)
+                .service(api)
+                .service(ws::ws_entry)
+                .service(ready)
+                .service(live);
+
+            #[cfg(debug_assertions)]
+            let app = app
+                .service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
+
+            // Optional Prometheus metrics integration. This is feature-gated to
+            // avoid introducing a hard dependency in environments where pulling
+            // new crates is undesirable. In production, enable with
+            // `--features metrics` to expose `/metrics` and add request metrics.
+            // Prometheus middleware automatically serves the metrics at the configured
+            // endpoint (by short‑circuiting matching requests). We should therefore only
+            // wrap the app; registering it as a service is incorrect because the
+            // PrometheusMetrics type is not an HttpServiceFactory.
+            #[cfg(feature = "metrics")]
+            let app = app.wrap(prometheus.clone());
+
+            app
+        }
+>>>>>>> 39f1414 (Propagate trace and display name errors)
     })
     .bind(bind_address())?;
 
