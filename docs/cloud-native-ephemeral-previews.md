@@ -49,11 +49,47 @@ a robust and scalable system:
   automatically decommissions all associated resources, ensuring a clean and
   cost-effective state.
 
+Two reusable GitHub Actions encode these idempotent operations. Each action is
+implemented as a convergent workflow that reshapes its target GitOps repository
+before handing control back to Flux:
+
+- `wildside-infra-k8s` provisions Kubernetes clusters and shared fixtures from
+  the OpenTofu modules in this repository, writing the desired state into the
+  `wildside-infra` GitOps repository that FluxCD watches. Every execution
+  performs the following steps idempotently:
+
+  - Ensure the repository presents the expected GitOps layout, including the
+    `clusters`, `modules`, and `platform` directories with
+    `platform/sources`, `platform/traefik`, `platform/cert-manager`,
+    `platform/external-dns`, and `platform/vault` subdirectories.
+  - Materialise the OpenTofu configuration for the requested cluster and
+    fixtures, applying modules safely and capturing the resulting state in Git
+    so Flux can drive Helm-based platform services from the repository.
+  - Commit any drift back to the repository while sourcing secrets from
+    HashiCorp Vault for both OpenTofu execution and the rendered manifests.
+
+- `wildside-app` deploys an isolated application instance on an existing
+  cluster. It commits manifests to the `wildside-apps` repository—FluxCD's
+  source of truth for application state—by performing these idempotent steps:
+
+  - Guarantee the repository hosts the canonical `base` HelmRelease alongside
+    an `overlays` tree containing long-lived environments (`production`,
+    `staging`) and an `overlays/ephemeral` directory for dynamically generated
+    overlays.
+  - Generate or update the Kustomize overlays for the target environment,
+    including ephemeral patches produced for each pull request.
+  - Persist changes through commits so Flux can converge the cluster while
+    retrieving application secrets from the shared Vault instance.
+
+Both actions can be run repeatedly without introducing drift because each run
+records the desired state through a commit while drawing sensitive material
+from the central HashiCorp Vault deployment.
+
 The synergy between the selected technologies—OpenTofu, DigitalOcean Kubernetes
 (DOKS), FluxCD, Helm, GitHub Actions, and Cloudflare—creates a seamless and
 powerful control loop. This loop begins with a developer's `git push` and
 culminates, without human intervention, in a fully functional, publicly
-accessible preview environment. This document provides the detailed
+accessible ephemeral preview environment. This document provides the detailed
 configurations, code examples, and operational guidance necessary to implement
 this state-of-the-art platform.
 
@@ -385,29 +421,32 @@ This command performs several critical actions 14:
 ### Structuring the GitOps Repositories
 
 A well-defined repository structure is essential for managing the complexity of
-the system and ensuring maintainability. The following structures are
-recommended for the two GitOps repositories.
+the system and ensuring maintainability. The reusable GitHub Actions introduced
+earlier enforce the following layouts on every run so that Flux always finds
+the expected manifests.
 
 #### Table 1: GitOps Repository Structure
 
 | Repository | Path | Purpose |
 | --- | --- | --- |
 | wildside-infra | / | Defines the desired state of the cluster's shared platform infrastructure. |
-|  | clusters/production/ | Root directory for the production cluster's Flux configuration. |
-|  | clusters/production/flux-system/ | Contains the core Flux manifests, managed automatically by flux bootstrap. |
-|  | deploy/k8s/sources/ | Contains GitRepository and HelmRepository CRDs, defining all external sources Flux can pull from (e.g., Bitnami Helm repo, wildside-apps Git repo). |
-|  | deploy/k8s/ingress/ | Contains Flux Kustomization and HelmRelease manifests for core services like Traefik, cert-manager, and external-dns. |
-|  | infrastructure/secrets/ | Contains manifests for the secrets management solution (Vault and External Secrets Operator). |
-|  | infrastructure/databases/ | Contains manifests for database operators like CloudNativePG. |
-|  | infrastructure/apps.yaml | A root Kustomization that orchestrates the deployment of all applications by referencing the wildside-apps repository. |
+|  | clusters/<cluster>/ | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`). |
+|  | modules/ | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`. |
+|  | platform/sources/ | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
+|  | platform/traefik/ | HelmRelease and supporting manifests for the Traefik ingress controller. |
+|  | platform/cert-manager/ | HelmRelease and issuers for cert-manager-driven TLS automation. |
+|  | platform/external-dns/ | HelmRelease and configuration for ExternalDNS. |
+|  | platform/vault/ | HelmReleases plus External Secrets Operator resources for secrets replication from Vault. |
+|  | platform/databases/ | Operators and HelmReleases for shared data services such as CloudNativePG and Redis. |
 | wildside-apps | / | Defines the desired state of the Wildside application across all environments. |
-|  | base/ | Contains the common, environment-agnostic HelmRelease manifest for the Wildside application. This serves as the foundation for all deployments. |
-|  | overlays/production/ | A Kustomize overlay containing patches for the production environment (e.g., increased replicas, production hostnames, resource limits). |
-|  | overlays/staging/ | A Kustomize overlay containing patches for the staging environment. |
-|  | overlays/ephemeral/ | A directory to house the dynamically generated overlays for each pull request (e.g., pr-123/, pr-124/). |
+|  | base/ | Canonical, environment-agnostic HelmRelease manifest for the Wildside application. |
+|  | overlays/production/ | Kustomize overlay with production-specific patches (hostnames, scaling, resources). |
+|  | overlays/staging/ | Kustomize overlay with staging configuration. |
+|  | overlays/ephemeral/ | Directory of dynamically generated overlays for each pull request (e.g., `pr-123/`). |
 
 This structure provides a clear separation of concerns and a logical hierarchy
-for defining the cluster's state.[^11]
+for defining the cluster's state while keeping the repositories ready for the
+idempotent actions to commit updates.[^11]
 
 ### Declaring Cluster-Wide Sources
 
@@ -417,7 +456,7 @@ to tell Flux where to find the Helm charts for the platform components.
 YAML
 
 ```yaml
-# deploy/k8s/sources/traefik-repo.yaml
+# platform/sources/traefik-repo.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -454,7 +493,7 @@ elsewhere.[^12]
 YAML
 
 ```yaml
-# deploy/k8s/sources/git-repositories.yaml
+# platform/sources/git-repositories.yaml
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
@@ -476,7 +515,10 @@ for use by `HelmRelease` and `Kustomization` objects throughout the cluster.
 With the GitOps control plane established, the next step is to deploy the core
 services that provide essential functionality to the cluster, such as ingress,
 DNS, TLS, and data persistence. These services are all deployed declaratively
-via FluxCD, with their manifests stored in the `wildside-infra` repository.
+via FluxCD, with their manifests stored in the `wildside-infra` repository. The
+`wildside-infra-k8s` action renders and commits these manifests as part of its
+idempotent run, guaranteeing the required `platform/*` directories exist before
+Flux reconciles the changes.
 
 ### Ingress Controller: Traefik
 
@@ -490,7 +532,7 @@ without authentication or allowlisting is unsafe.
 YAML
 
 ```yaml
-# deploy/k8s/ingress/traefik-helmrelease.yaml
+# platform/traefik/helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -553,7 +595,7 @@ middleware or IP allowlisting.
 YAML
 
 ```yaml
-# deploy/k8s/ingress/traefik-dashboard.yaml
+# platform/traefik/dashboard.yaml
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -585,7 +627,7 @@ manual step of pointing a subdomain to the load balancer's IP address.[^13]
 YAML
 
 ```yaml
-# deploy/k8s/ingress/external-dns.yaml
+# platform/external-dns/helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -640,7 +682,7 @@ First, the `HelmRelease` for `cert-manager` itself:
 YAML
 
 ```yaml
-# deploy/k8s/ingress/cert-manager.yaml
+# platform/cert-manager/helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -671,7 +713,7 @@ that defines how `cert-manager` should obtain certificates.
 YAML
 
 ```yaml
-# deploy/k8s/ingress/cluster-issuer.yaml
+# platform/cert-manager/cluster-issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -720,7 +762,7 @@ The implementation involves a three-step process:
 1. **Deploy Vault and ESO:** Both Vault (in a development mode for this
    example) and the External Secrets Operator are deployed to the cluster using
    their respective Helm charts via Flux `HelmRelease` manifests stored in
-   `wildside-infra/infrastructure/secrets/`.
+   `wildside-infra/platform/vault/`.
 
 2. **Configure a** `ClusterSecretStore`**:** This custom resource tells ESO how
    to connect to and authenticate with the Vault instance. Authentication can
@@ -730,7 +772,7 @@ The implementation involves a three-step process:
    YAML
 
    ```yaml
-   # infrastructure/secrets/cluster-secret-store.yaml
+   # platform/vault/cluster-secret-store.yaml
    apiVersion: external-secrets.io/v1beta1
    kind: ClusterSecretStore
    metadata:
@@ -759,7 +801,7 @@ The implementation involves a three-step process:
    YAML
 
    ```yaml
-   # infrastructure/secrets/cloudflare-token-secret.yaml
+   # platform/vault/cloudflare-token-secret.yaml
    apiVersion: external-secrets.io/v1beta1
    kind: ExternalSecret
    metadata:
@@ -805,7 +847,7 @@ First, the operator is deployed via a `HelmRelease`:
 YAML
 
 ```yaml
-# infrastructure/databases/cnpg-operator.yaml
+# platform/databases/cnpg-operator.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -829,7 +871,7 @@ cluster.
 YAML
 
 ```yaml
-# infrastructure/databases/wildside-postgres-cluster.yaml
+# platform/databases/wildside-postgres-cluster.yaml
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -873,7 +915,7 @@ disabled to reduce cost and complexity.
 YAML
 
 ```yaml
-# deploy/k8s/ingress/redis.yaml
+# platform/redis/helmrelease.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -1097,7 +1139,7 @@ YAML
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
--../../base
+- ../../base
 
 patches:
 - path: patch-namespace.yaml
@@ -1145,10 +1187,28 @@ manage application deployments across any number of environments.
 
 ## The CI/CD Workflow: Automating Preview Environments with GitHub Actions
 
-The GitHub Actions workflow is the orchestrator that connects code changes in
-the application repository to deployments in the Kubernetes cluster. It
-automates the entire lifecycle of the ephemeral preview environments, from
-creation to destruction.
+The GitHub Actions workflow orchestrates two reusable actions,
+`wildside-infra-k8s` and `wildside-app`, to connect code changes in the
+application repository to deployments in the Kubernetes cluster. By committing
+the desired state to the appropriate GitOps repository and sourcing secrets
+from Vault, the workflow automates the entire lifecycle of the ephemeral
+environments, from creation to destruction.
+
+### Reusable actions
+
+- `wildside-infra-k8s` creates or updates the target cluster and shared
+  infrastructure. It commits the infrastructure state to `wildside-infra` and
+  lays out the repository with `clusters`, `modules`, and `platform`
+  directories (`platform/sources`, `platform/traefik`, `platform/cert-manager`,
+  `platform/external-dns`). Credentials are obtained from Vault.
+
+- `wildside-app` generates the overlay for an application instance and commits
+  it to `wildside-apps` so FluxCD can reconcile the deployment. It maintains the
+  `base` and `overlays` directories (`production`, `staging`, and dynamic
+  `ephemeral` overlays). Secrets are likewise sourced from Vault.
+
+These actions are idempotent and can safely be run multiple times to converge on
+the specified state.
 
 ### Workflow Triggers and Permissions
 
@@ -1274,13 +1334,15 @@ YAML
 
 A script step uses standard shell commands and `yq` (a command-line YAML
 processor pre-installed on GitHub runners) to dynamically create the required
-files.[^32]
+files.[^32] In practice this logic is wrapped inside the reusable
+`wildside-app` action so that every workflow invoking the action benefits from
+the same idempotent overlay generation and repository commit behaviour.
 
 YAML
 
 ```yaml
 #.github/workflows/preview-environment.yaml (continued)
-      - name: Generate Ephemeral Environment Manifests
+      - name: Generate Preview Environment Manifests
         id: generate
         run: |
           PR_NUMBER=${{ github.event.number }}
@@ -1297,7 +1359,7 @@ YAML
           kind: Kustomization
           namespace: ${NAMESPACE}
           resources:
-          -../../base
+          - ../../base
           patches:
           - path: patch-main.yaml
           EOF
@@ -1381,7 +1443,7 @@ YAML
           repository: <your-github-username>/wildside-apps
           token: ${{ secrets.APPS_REPO_PAT }}
 
-      - name: Remove Ephemeral Environment Manifests
+      - name: Remove Preview Environment Manifests
         run: |
           PR_NUMBER=${{ github.event.number }}
           MANIFESTS_DIR="overlays/ephemeral/pr-${PR_NUMBER}"
