@@ -11,7 +11,7 @@
     "test": "node build/validate-contrast.js"
   },
   "devDependencies": {
-    "color": "^5.0.0",
+    "color": "^5.0.2",
     "style-dictionary": "^5.0.4",
     "markdownlint-cli": "^0.45.0",
     "vite": "^7.1.4",
