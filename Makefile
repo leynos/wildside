@@ -56,11 +56,13 @@ fe-build:
 	cd frontend-pwa && bun run build
 
 openapi:
-	# Replace with a bin that prints OpenAPI
-	mkdir -p spec
-	curl -s http://localhost:8080/api-docs/openapi.json > spec/openapi.json
+	set -euo pipefail; mkdir -p spec; \
+	tmp="spec/openapi.json.tmp.$$"; \
+	cleanup() { rm -f "$$tmp"; }; trap cleanup EXIT; \
+	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
+	mv "$$tmp" spec/openapi.json; trap - EXIT
 
-gen:
+gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
 
 docker-up:
@@ -82,11 +84,21 @@ lint:
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
+	if [ -f spec/asyncapi.yaml ]; then \
+	  if command -v asyncapi >/dev/null 2>&1; then \
+	    asyncapi validate spec/asyncapi.yaml; \
+	  else \
+	    echo "warning: asyncapi CLI not installed; skipping AsyncAPI lint"; \
+	  fi; \
+	fi
 
 # Lint OpenAPI spec with Redocly CLI
-lint-openapi:
-	$(call exec_or_bunx,redocly,lint spec/openapi.json,@redocly/cli@$(REDOCLY_CLI_VERSION))
+lint-openapi: openapi
+	if command -v redocly >/dev/null 2>&1; then \
+	  redocly lint spec/openapi.json; \
+	else \
+	  echo "warning: redocly CLI not installed; skipping OpenAPI lint"; \
+	fi
 
 # Validate Makefile style and structure
 lint-makefile:

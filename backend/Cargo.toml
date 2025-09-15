@@ -45,3 +45,16 @@ insta = { version = "1", features = ["json", "redactions"] }
 codegen-units = 1
 lto = "thin"
 opt-level = 3
+
+[[bin]]
+name = "openapi-dump"
+path = "src/bin/openapi_dump.rs"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+future_incompatible = { level = "deny", priority = -1 } # low priority to avoid clippy::lint_groups_priority warnings
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+

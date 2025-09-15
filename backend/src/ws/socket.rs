@@ -56,19 +56,26 @@ impl StreamHandler<Result<Message, ProtocolError>> for UserSocket {
             Ok(Message::Text(name)) => {
                 self.last_heartbeat = Instant::now();
                 let name = name.to_string();
-                if is_valid_display_name(&name) {
-                    let payload = UserCreated {
-                        id: Uuid::new_v4().to_string(),
-                        display_name: name,
-                    };
-                    let msg = UserCreatedMessage::new(payload);
-                    ctx.address().do_send(msg);
-                } else {
-                    warn!(display_name = %name, "Rejected invalid display name");
-                    let error_msg = serde_json::json!({
-                        "error": format!("Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between {} and {} characters.", DISPLAY_NAME_MIN, DISPLAY_NAME_MAX)
-                    });
-                    ctx.text(error_msg.to_string());
+                let error_msg = serde_json::json!({
+                    "error": format!("Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between {} and {} characters.", DISPLAY_NAME_MIN, DISPLAY_NAME_MAX)
+                });
+                match is_valid_display_name(&name) {
+                    Ok(true) => {
+                        let payload = UserCreated {
+                            id: Uuid::new_v4().to_string(),
+                            display_name: name,
+                        };
+                        let msg = UserCreatedMessage::new(payload);
+                        ctx.address().do_send(msg);
+                    }
+                    Ok(false) => {
+                        warn!(display_name = %name, "Rejected invalid display name");
+                        ctx.text(error_msg.to_string());
+                    }
+                    Err(err) => {
+                        warn!(error = %err, "Failed to validate display name");
+                        ctx.text(error_msg.to_string());
+                    }
                 }
             }
             Ok(Message::Pong(_)) | Ok(Message::Binary(_)) => {
@@ -112,6 +119,9 @@ mod tests {
     #[case(String::from("abc"), true)]
     #[case("a".repeat(32), true)]
     fn is_valid_display_name_cases(#[case] name: String, #[case] expected: bool) {
-        assert_eq!(is_valid_display_name(&name), expected);
+        assert_eq!(
+            is_valid_display_name(&name).expect("regex compiles"),
+            expected
+        );
     }
 }
