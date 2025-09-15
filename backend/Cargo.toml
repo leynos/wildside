@@ -56,4 +56,5 @@ future_incompatible = { level = "deny", priority = -1 } # low priority to avoid 
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
+expect_used = "deny"
 
