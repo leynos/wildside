@@ -3,6 +3,10 @@
 
 provider "digitalocean" {}
 
+locals {
+  tags_normalised = [for t in var.tags : trimspace(t)]
+}
+
 module "doks" {
   count              = var.should_create_cluster ? 1 : 0
   source             = "../../modules/doks"
@@ -10,7 +14,7 @@ module "doks" {
   region             = var.region
   kubernetes_version = var.kubernetes_version
   node_pools         = var.node_pools
-  tags               = var.tags
+  tags               = local.tags_normalised
   expose_kubeconfig  = var.expose_kubeconfig
 }
 

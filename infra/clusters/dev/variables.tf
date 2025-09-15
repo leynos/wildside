@@ -103,7 +103,7 @@ variable "tags" {
 
   validation {
     condition     = length(distinct([for t in var.tags : trimspace(t)])) == length(var.tags)
-    error_message = "tags must be unique"
+    error_message = "tags must be unique after trimming whitespace"
   }
 }
 

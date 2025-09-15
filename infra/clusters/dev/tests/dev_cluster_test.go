@@ -13,11 +13,10 @@ import (
 
 // testVars returns a baseline variable set matching the defaults in variables.tf.
 func testVars(t *testing.T) map[string]interface{} {
-	return map[string]interface{}{
+	vars := map[string]interface{}{
 		"should_create_cluster": true,
 		"cluster_name":          "wildside-dev",
 		"region":                "nyc1",
-		"kubernetes_version":    testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -32,6 +31,12 @@ func testVars(t *testing.T) map[string]interface{} {
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
 	}
+
+	if version := testutil.KubernetesVersion(); version != "" {
+		vars["kubernetes_version"] = version
+	}
+
+	return vars
 }
 
 func TestDevClusterValidate(t *testing.T) {
@@ -147,8 +152,9 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-       require.ErrorContains(t, err, "node_pools")
-       require.ErrorContains(t, err, "node_count")
+	require.ErrorContains(t, err, "at least 2 nodes")
+	require.ErrorContains(t, err, "node_pools")
+	require.ErrorContains(t, err, "node_count")
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {

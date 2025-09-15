@@ -6,7 +6,11 @@ TF_DIR="$ROOT_DIR/infra/clusters/dev"
 POLICY_DIR="$ROOT_DIR/infra/modules/doks/policy"
 
 DOKS_VERSION=${DOKS_KUBERNETES_VERSION:-}
-export TF_VAR_kubernetes_version="$DOKS_VERSION"
+if [[ -n "$DOKS_VERSION" ]]; then
+  export TF_VAR_kubernetes_version="$DOKS_VERSION"
+else
+  unset TF_VAR_kubernetes_version
+fi
 export TF_VAR_should_create_cluster=true
 
 # Static checks
@@ -35,4 +39,8 @@ fi
 
 # Go tests
 cd "$ROOT_DIR/infra/clusters/dev/tests"
-DOKS_KUBERNETES_VERSION=$DOKS_VERSION go test -v
+if [[ -n "$DOKS_VERSION" ]]; then
+  DOKS_KUBERNETES_VERSION=$DOKS_VERSION go test -v
+else
+  go test -v
+fi
