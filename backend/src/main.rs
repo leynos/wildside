@@ -277,6 +277,8 @@ async fn main() -> std::io::Result<()> {
 
     let server = HttpServer::new({
         let health_state = health_state.clone();
+        #[cfg(feature = "metrics")]
+        let prometheus = prometheus.clone();
         move || {
             let session_middleware =
                 SessionMiddleware::builder(CookieSessionStore::default(), key.clone())
