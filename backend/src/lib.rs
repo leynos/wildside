@@ -3,6 +3,7 @@
     expect(clippy::expect_used, reason = "tests require contextual panics")
 )]
 #![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
+#![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
 //! Backend library modules.
 
 pub mod api;
