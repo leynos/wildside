@@ -97,7 +97,11 @@ where
             let mut res = fut.await?;
             res.response_mut().headers_mut().insert(
                 HeaderName::from_static("trace-id"),
-                HeaderValue::from_str(&trace_id)?,
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Trace IDs are UUIDs and valid header values"
+                )]
+                HeaderValue::from_str(&trace_id).expect("UUIDs produce valid header values"),
             );
             Ok(res)
         })
@@ -130,7 +134,12 @@ mod tests {
         let app = test::init_service(App::new().wrap(Trace).route(
             "/",
             web::get().to(|req: HttpRequest| async move {
-                let id = req.extensions().get::<TraceId>().unwrap().0.clone();
+                let id = req
+                    .extensions()
+                    .get::<TraceId>()
+                    .cloned()
+                    .ok_or_else(|| Error::internal("trace id missing"))?
+                    .0;
                 ApiResult::<HttpResponse>::Err(Error::internal("boom").with_trace_id(id))
             }),
         ))
