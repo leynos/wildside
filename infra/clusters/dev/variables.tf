@@ -29,6 +29,16 @@ variable "region" {
   }
 }
 
+variable "kubernetes_version" {
+  type        = string
+  description = "Exact Kubernetes version slug supported by DigitalOcean"
+  default     = "1.33.1-do.3"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+-do\\.\\d+$", var.kubernetes_version))
+    error_message = "kubernetes_version must match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
+  }
+}
 variable "node_pools" {
   type = list(object({
     name       = string

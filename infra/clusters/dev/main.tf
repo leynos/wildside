@@ -4,15 +4,16 @@
 provider "digitalocean" {}
 
 locals {
-  tags_normalised = [for t in var.tags : trimspace(t)]
+  tags_normalised = distinct([for t in var.tags : trimspace(t)])
   node_pools_normalised = [
     for np in var.node_pools : merge(
       np,
       {
-        tags = try([for t in np.tags : trimspace(t)], null)
+        tags = try(distinct([for t in np.tags : trimspace(t)]), null)
       }
     )
   ]
+  kubernetes_version = trimspace(var.kubernetes_version)
 }
 
 module "doks" {
@@ -20,6 +21,7 @@ module "doks" {
   source             = "../../modules/doks"
   cluster_name       = var.cluster_name
   region             = var.region
+  kubernetes_version = local.kubernetes_version
   node_pools         = local.node_pools_normalised
   tags               = local.tags_normalised
   expose_kubeconfig  = var.expose_kubeconfig

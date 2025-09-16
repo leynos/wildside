@@ -19,6 +19,8 @@ variable "region" {
 variable "kubernetes_version" {
   description = "Kubernetes version for the cluster"
   type        = string
+  default     = "1.33.1-do.3"
+
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+(-do\\.\\d+)?$", var.kubernetes_version))
     error_message = "kubernetes_version must match X.Y.Z or X.Y.Z-do.N (DigitalOcean format)"

@@ -31,7 +31,9 @@ func testVars(t *testing.T) map[string]interface{} {
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
 	}
-
+	if version := testutil.KubernetesVersion(); version != "" {
+		vars["kubernetes_version"] = version
+	}
 	return vars
 }
 
@@ -136,7 +138,7 @@ func TestDevClusterPolicy(t *testing.T) {
 //	            "max_nodes":  1,
 //	    },
 //	})
-func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, want ...string) {
+func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, wantErrSubstrings ...string) {
 	t.Helper()
 	vars := testVars(t)
 	vars["node_pools"] = invalidNodePools
@@ -148,21 +150,22 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	for _, s := range append([]string{"node_pools"}, want...) {
-		require.ErrorContains(t, err, s)
+	require.ErrorContains(t, err, "node_pools")
+	for _, substring := range wantErrSubstrings {
+		require.ErrorContains(t, err, substring)
 	}
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name  string
-		pools []map[string]interface{}
-		want  []string
+		name              string
+		nodePools         []map[string]interface{}
+		wantErrSubstrings []string
 	}{
 		{
 			name: "InvalidNodePool",
-			pools: []map[string]interface{}{
+			nodePools: []map[string]interface{}{
 				{
 					"name":       "default",
 					"size":       "s-2vcpu-2gb",
@@ -172,11 +175,11 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"max_nodes":  1,
 				},
 			},
-			want: []string{"node_count", "at least 2 nodes"},
+			wantErrSubstrings: []string{"node_count", "at least 2 nodes"},
 		},
 		{
 			name: "AutoScaleMinExceedsCount",
-			pools: []map[string]interface{}{
+			nodePools: []map[string]interface{}{
 				{
 					"name":       "default",
 					"size":       "s-2vcpu-2gb",
@@ -186,11 +189,11 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"max_nodes":  5,
 				},
 			},
-			want: []string{"auto_scale", "min_nodes"},
+			wantErrSubstrings: []string{"auto_scale", "min_nodes"},
 		},
 		{
 			name: "MaxNodesBelowMinNodes",
-			pools: []map[string]interface{}{
+			nodePools: []map[string]interface{}{
 				{
 					"name":       "default",
 					"size":       "s-2vcpu-2gb",
@@ -200,15 +203,15 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"max_nodes":  4,
 				},
 			},
-			want: []string{"max_nodes", "min_nodes"},
+			wantErrSubstrings: []string{"max_nodes", "min_nodes"},
 		},
 	}
-
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			testInvalidNodePoolConfig(t, tc.pools, tc.want...)
+			testInvalidNodePoolConfig(t, tc.nodePools, tc.wantErrSubstrings...)
 		})
 	}
 }
+

@@ -16,15 +16,10 @@ import (
 	testutil "wildside/infra/testutil"
 )
 
-func withKubernetesVersion(vars map[string]interface{}) map[string]interface{} {
-	if version := testutil.KubernetesVersion(); version != "" {
-		vars["kubernetes_version"] = version
-	}
-	return vars
-}
+const defaultKubernetesVersion = "1.33.1-do.3"
 
 func testVars() map[string]interface{} {
-	return withKubernetesVersion(map[string]interface{}{
+	vars := map[string]interface{}{
 		"cluster_name": "terratest-cluster",
 		"region":       "nyc1",
 		"node_pools": []map[string]interface{}{
@@ -39,7 +34,23 @@ func testVars() map[string]interface{} {
 		},
 		"tags":              []string{"terratest"},
 		"expose_kubeconfig": true,
-	})
+	}
+	vars["kubernetes_version"] = defaultVersion()
+	return vars
+}
+
+func withVersion(vars map[string]interface{}, version string) map[string]interface{} {
+	if version != "" {
+		vars["kubernetes_version"] = version
+	}
+	return vars
+}
+
+func defaultVersion() string {
+	if version := testutil.KubernetesVersion(); version != "" {
+		return version
+	}
+	return defaultKubernetesVersion
 }
 
 func TestDoksModuleValidate(t *testing.T) {
@@ -149,11 +160,11 @@ func TestDoksModulePolicy(t *testing.T) {
 	}
 	require.True(t, hasRego, "no .rego files found in %s", policyPath)
 
-        cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
-        cmd.Dir = tfDir
-        cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
-        output, err := cmd.CombinedOutput()
-        require.NoErrorf(t, err, "conftest failed: %s", string(output))
+	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+	cmd.Dir = tfDir
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
 func getInvalidInputTestCases() map[string]struct {
@@ -168,48 +179,39 @@ func getInvalidInputTestCases() map[string]struct {
 		ErrContains string
 	}{
 		"EmptyClusterName": {
-			Vars: withKubernetesVersion(map[string]interface{}{
+			Vars: withVersion(map[string]interface{}{
 				"cluster_name": "",
 				"region":       "nyc1",
 				"node_pools":   testVars()["node_pools"],
-			}),
+			}, defaultVersion()),
 			ErrContains: "cluster_name must not be empty",
 		},
 		"InvalidRegion": {
-			Vars: withKubernetesVersion(map[string]interface{}{
+			Vars: withVersion(map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "invalid",
 				"node_pools":   testVars()["node_pools"],
-			}),
+			}, defaultVersion()),
 			ErrContains: "region must be a valid DigitalOcean slug",
 		},
 		"InvalidKubernetesVersion": {
-			Vars: map[string]interface{}{
-				"cluster_name":       "terratest-cluster",
-				"region":             "nyc1",
-				"kubernetes_version": "1.28",
-				"node_pools":         testVars()["node_pools"],
-			},
-			ErrContains: "kubernetes_version must match",
-		},
-		"MissingKubernetesVersion": {
-			Vars: map[string]interface{}{
+			Vars: withVersion(map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools":   testVars()["node_pools"],
-			},
-			ErrContains: "kubernetes_version",
+			}, "1.28"),
+			ErrContains: "kubernetes_version must match",
 		},
 		"EmptyNodePools": {
-			Vars: withKubernetesVersion(map[string]interface{}{
+			Vars: withVersion(map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools":   []map[string]interface{}{},
-			}),
+			}, defaultVersion()),
 			ErrContains: "node_pools must not be empty",
 		},
 		"OneNode": {
-			Vars: withKubernetesVersion(map[string]interface{}{
+			Vars: withVersion(map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
@@ -222,14 +224,13 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  1,
 					},
 				},
-			}),
+			}, defaultVersion()),
 			ErrContains: "node_count >= 2",
 		},
 		"MinNodesZero": {
-			Vars: map[string]interface{}{
-				"cluster_name":       "terratest-cluster",
-				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+			Vars: withVersion(map[string]interface{}{
+				"cluster_name": "terratest-cluster",
+				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
@@ -240,14 +241,13 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  2,
 					},
 				},
-			},
+			}, "1.28.0-do.0"),
 			ErrContains: "min_nodes >= 1",
 		},
 		"MaxLessThanNodeCount": {
-			Vars: map[string]interface{}{
-				"cluster_name":       "terratest-cluster",
-				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+			Vars: withVersion(map[string]interface{}{
+				"cluster_name": "terratest-cluster",
+				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
@@ -258,14 +258,13 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  2,
 					},
 				},
-			},
+			}, "1.28.0-do.0"),
 			ErrContains: "min_nodes <= node_count <=",
 		},
 		"MinGreaterThanNodeCount": {
-			Vars: map[string]interface{}{
-				"cluster_name":       "terratest-cluster",
-				"region":             "nyc1",
-				"kubernetes_version": "1.28.0-do.0",
+			Vars: withVersion(map[string]interface{}{
+				"cluster_name": "terratest-cluster",
+				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
 					{
 						"name":       "default",
@@ -276,7 +275,7 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  5,
 					},
 				},
-			},
+			}, "1.28.0-do.0"),
 			ErrContains: "min_nodes <= node_count <=",
 		},
 	}
