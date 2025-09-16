@@ -6,11 +6,6 @@ TF_DIR="$ROOT_DIR/infra/clusters/dev"
 POLICY_DIR="$ROOT_DIR/infra/modules/doks/policy"
 
 DOKS_VERSION=${DOKS_KUBERNETES_VERSION:-}
-if [[ -n "$DOKS_VERSION" ]]; then
-  export TF_VAR_kubernetes_version="$DOKS_VERSION"
-else
-  unset TF_VAR_kubernetes_version
-fi
 export TF_VAR_should_create_cluster=true
 export TF_IN_AUTOMATION=1
 

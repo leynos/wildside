@@ -32,11 +32,7 @@ func testVars(t *testing.T) map[string]interface{} {
 		"expose_kubeconfig": false,
 	}
 
-	if version := testutil.KubernetesVersion(); version != "" {
-		vars["kubernetes_version"] = version
-	}
-
-	return vars
+        return vars
 }
 
 func TestDevClusterValidate(t *testing.T) {
