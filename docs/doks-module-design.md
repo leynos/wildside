@@ -37,10 +37,12 @@ cluster lifecycle.
 - **Dev cluster defaults.** A root configuration in `infra/clusters/dev`
   instantiates the module with a two-node `s-2vcpu-2gb` pool in `nyc1`.
   Provisioning is gated by a `should_create_cluster` variable to avoid
-  accidental applies. The Kubernetes version defaults to `1.33.1-do.3`, and
-  the `DOKS_KUBERNETES_VERSION` environment variable still allows tooling and
-  tests to override that pin when needed. The kubeconfig output is disabled by
-  default to avoid persisting credentials.
+  accidental applies. The configuration inherits the module's pinned
+  Kubernetes version (`1.33.1-do.3`) rather than forwarding its own override,
+  preventing empty values from shadowing the module default. Tooling that
+  needs a different version sets `DOKS_KUBERNETES_VERSION` when invoking the
+  module directly. The kubeconfig output is disabled by default to avoid
+  persisting credentials.
 
 ## Future work
 

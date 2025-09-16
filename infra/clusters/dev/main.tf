@@ -13,7 +13,6 @@ locals {
       }
     )
   ]
-  kubernetes_version = trimspace(var.kubernetes_version)
 }
 
 module "doks" {
@@ -21,7 +20,6 @@ module "doks" {
   source             = "../../modules/doks"
   cluster_name       = var.cluster_name
   region             = var.region
-  kubernetes_version = local.kubernetes_version
   node_pools         = local.node_pools_normalised
   tags               = local.tags_normalised
   expose_kubeconfig  = var.expose_kubeconfig

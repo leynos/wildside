@@ -31,9 +31,6 @@ func testVars(t *testing.T) map[string]interface{} {
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
 	}
-	if version := testutil.KubernetesVersion(); version != "" {
-		vars["kubernetes_version"] = version
-	}
 	return vars
 }
 
