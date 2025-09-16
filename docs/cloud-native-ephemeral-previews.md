@@ -74,7 +74,7 @@ before handing control back to Flux:
 
   - Guarantee the repository hosts the canonical `base` HelmRelease alongside
     an `overlays` tree containing long-lived environments (`production`,
-    `staging`) and an `overlays/ephemeral` directory for dynamically generated
+    `staging`) and an `overlays/ephemeral/` directory for dynamically generated
     overlays.
   - Generate or update the Kustomize overlays for the target environment,
     including ephemeral patches produced for each pull request.

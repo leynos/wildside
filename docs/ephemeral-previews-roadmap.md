@@ -117,7 +117,7 @@ HashiCorp Vault instance.
     - `base` containing the canonical `HelmRelease` for the application.
 
     - `overlays` with long-lived environments (`production`, `staging`) and an
-      `ephemeral` directory for dynamically generated overlays.
+      `overlays/ephemeral/` directory for dynamically generated overlays.
 
   - [ ] Fetch application secrets from HashiCorp Vault and reference them in
     the rendered manifests.
