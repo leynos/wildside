@@ -149,10 +149,11 @@ func TestDoksModulePolicy(t *testing.T) {
 	}
 	require.True(t, hasRego, "no .rego files found in %s", policyPath)
 
-	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
-	cmd.Dir = tfDir
-	output, err := cmd.CombinedOutput()
-	require.NoErrorf(t, err, "conftest failed: %s", string(output))
+        cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+        cmd.Dir = tfDir
+        cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+        output, err := cmd.CombinedOutput()
+        require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 
 func getInvalidInputTestCases() map[string]struct {

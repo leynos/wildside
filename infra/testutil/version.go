@@ -6,7 +6,8 @@ import (
 )
 
 // KubernetesVersion returns the Kubernetes version for tests.
-// It reads DOKS_KUBERNETES_VERSION and relies on the module's default when unset.
+// It reads and trims DOKS_KUBERNETES_VERSION.
+// Omit the 'kubernetes_version' input when this returns "" so the module's default applies.
 func KubernetesVersion() string {
-	return strings.TrimSpace(os.Getenv("DOKS_KUBERNETES_VERSION"))
+        return strings.TrimSpace(os.Getenv("DOKS_KUBERNETES_VERSION"))
 }
