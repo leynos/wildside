@@ -92,10 +92,12 @@ lint-asyncapi:
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
+	$(call ensure_tool,python3)
 	@if ! grep -q "^$(OPENAPI_SPEC):" .redocly.lint-ignore.yaml; then \
 		echo "OpenAPI ignore file missing entry for $(OPENAPI_SPEC)" >&2; \
 		exit 1; \
 	fi
+	@python3 scripts/check_redoc_ignore.py
 	$(call exec_or_bunx,redocly,lint $(OPENAPI_SPEC),@redocly/cli@$(REDOCLY_CLI_VERSION))
 
 # Validate Makefile style and structure

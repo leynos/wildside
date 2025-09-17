@@ -1,5 +1,17 @@
 # This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
 # See https://redocly.com/docs/cli/ for more information.
 spec/openapi.json:
+  operation-4xx-response:
+    - '#/paths/~1health~1live/get'
+      # owner: platform-engineering
+      # rationale: Liveness probes surface readiness via 503 responses rather than bespoke client errors.
+      # review by: 2025-12-31
+    - '#/paths/~1health~1ready/get'
+      # owner: platform-engineering
+      # rationale: Readiness failures emit 503 to signal backends are draining; 4xx would mislead orchestration.
+      # review by: 2025-12-31
   no-empty-servers:
     - '#/servers'
+      # owner: platform-engineering
+      # rationale: Server URLs are injected per environment by Traefik; the spec intentionally leaves them blank.
+      # review by: 2025-12-31

@@ -190,19 +190,19 @@ func getInvalidInputTestCases() map[string]struct {
 		ErrContains string
 	}{
 		"EmptyClusterName": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "",
 				"region":       "nyc1",
 				"node_pools":   testVars()["node_pools"],
-			}, versionOverride()),
+			},
 			ErrContains: "cluster_name must not be empty",
 		},
 		"InvalidRegion": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "invalid",
 				"node_pools":   testVars()["node_pools"],
-			}, versionOverride()),
+			},
 			ErrContains: "region must be a valid DigitalOcean slug",
 		},
 		"InvalidKubernetesVersion": {
@@ -214,15 +214,15 @@ func getInvalidInputTestCases() map[string]struct {
 			ErrContains: "kubernetes_version must match",
 		},
 		"EmptyNodePools": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools":   []map[string]interface{}{},
-			}, versionOverride()),
+			},
 			ErrContains: "node_pools must not be empty",
 		},
 		"OneNode": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
@@ -235,7 +235,7 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  1,
 					},
 				},
-			}, versionOverride()),
+			},
 			ErrContains: "node_count >= 2",
 		},
 		"MinNodesZero": {
