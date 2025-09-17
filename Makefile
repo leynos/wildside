@@ -57,11 +57,10 @@ fe-build:
 	cd frontend-pwa && bun run build
 
 openapi:
-	set -euo pipefail; mkdir -p spec; \
-	tmp="spec/openapi.json.tmp.$$"; \
-	cleanup() { rm -f "$$tmp"; }; trap cleanup EXIT; \
-	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
-	mv "$$tmp" spec/openapi.json; trap - EXIT
+	# Replace with a bin that prints OpenAPI
+	mkdir -p $(dir $(OPENAPI_SPEC))
+	$(call ensure_tool,jq)
+	curl -s http://localhost:8080/api-docs/openapi.json | jq -S . > $(OPENAPI_SPEC)
 
 gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
