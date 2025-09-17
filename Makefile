@@ -33,7 +33,7 @@ BIOME_VERSION ?= 2.2.4
 TSC_VERSION ?= 5.9.2
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test js-test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
         dev-cluster-test
@@ -109,6 +109,9 @@ lint-makefile:
 
 test: deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(MAKE) js-test
+
+js-test:
 	pnpm -r --if-present --silent run test
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
