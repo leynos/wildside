@@ -14,44 +14,6 @@ application and infrastructure deployments via GitOps.
   - [x] **Decision**: Combine Helm for templating with Kustomize for
     environment-specific configuration.
 
-- [ ] **Structure the `wildside-infra` repository**
-
-  - [ ] Create a `clusters` directory to hold the OpenTofu configurations for
-    each Kubernetes cluster (e.g., clusters/dev, clusters/prod).
-
-  - [ ] Create a `modules` directory to store reusable OpenTofu modules for
-    provisioning infrastructure components (DigitalOcean Kubernetes (DOKS),
-    FluxCD, etc.).
-
-  - [ ] Create a `platform` directory containing the Kubernetes manifests (as
-    Kustomizations) for core cluster services that FluxCD will manage. This
-    includes:
-
-    - `platform/sources`: For `GitRepository` and `HelmRepository` custom
-      resources.
-
-    - `platform/traefik`: `HelmRelease` for the ingress controller.
-
-    - `platform/cert-manager`: `HelmRelease` for TLS management.
-
-    - `platform/external-dns`: `HelmRelease` for DNS automation.
-
-- [ ] **Structure the `wildside-apps` repository**
-
-  - [ ] Create a `base` directory containing the canonical HelmRelease for the
-    Wildside application. This defines the default deployment configuration.
-
-  - [ ] Create an `overlays` directory to manage environment-specific
-    configurations.
-
-  - [ ] Inside `overlays`, create directories for long-lived environments
-    (`production`, `staging`). Each will contain a `kustomization.yaml` and
-    patches to modify the base `HelmRelease` for that specific environment.
-
-  - [ ] Create an `overlays/previews` directory to house the dynamically
-    generated Kustomize overlays for ephemeral preview environments. This
-    directory will be managed by the CI/CD pipeline.
-
 ## Phase 2: Foundational infrastructure (To do)
 
 This phase focuses on provisioning the core infrastructure using the OpenTofu
@@ -90,38 +52,80 @@ modules defined in the wildside-infra repository.
 
 ### 2.3: Core cluster services
 
-- [ ] **Create a `traefik` OpenTofu module**: This module will install the
-  Traefik ingress controller.
+These tasks deliver the shared fixtures that `wildside-infra-k8s` converges on
+each time it runs. The action consumes OpenTofu modules from the `infra`
+repository and commits Flux-ready manifests into `wildside-infra`.
 
-- [ ] **Create an `external-dns` OpenTofu module**: This module will install
-  ExternalDNS.
+- [ ] **Publish reusable OpenTofu modules**: Add modules for Traefik,
+  ExternalDNS, cert-manager, Vault + External Secrets Operator, CloudNativePG,
+  and Redis under `infra/modules`. Each module should expose inputs/outputs the
+  action can pass between components (e.g., DNS zones, certificate issuers,
+  database connection details).
 
-- [ ] **Create a `cert-manager` OpenTofu module**: This module will install
-  cert-manager.
+- [ ] **Lay out the `wildside-infra` GitOps tree**: Ensure the repository hosts
+  `clusters/<cluster>/`, `modules/`, and a `platform` directory with
+  subdirectories for `sources`, `traefik`, `cert-manager`, `external-dns`,
+  `vault`, and shared data services (CloudNativePG, Redis). Each subdirectory
+  should contain the HelmReleases, Kustomizations, and supporting manifests the
+  action can render idempotently.
 
-- [ ] **Create a `vault` OpenTofu module**: This module will install Vault and
-  the External Secrets Operator.
-
-- [ ] **Create a `cnpg` OpenTofu module**: This module will install
-  CloudNativePG for PostgreSQL.
-
-- [ ] **Create a `redis` OpenTofu module**: This module will install Redis.
-
-- [ ] **Instantiate the modules**: Add the new modules to the root OpenTofu
-  configuration.
-
-- [ ] **Apply the changes**: Run `tofu apply` to install the core cluster
-  services.
+- [ ] **Extend `wildside-infra-k8s` for fixtures**: Update the action so it
+  applies the new modules, writes resulting manifests into the `platform/*`
+  directories, commits any drift, and sources required secrets from HashiCorp
+  Vault. Rerunning the action must reconcile the repository state without
+  manual `tofu apply` steps.
 
 ## Phase 3: CI/CD workflow (In progress)
 
-This phase focuses on automating the lifecycle of the preview environments by
-updating the wildside-apps repository, which is then actioned by FluxCD.
+This phase focuses on automating the lifecycle of the ephemeral preview
+environments by updating the wildside-apps repository, which is then actioned
+by FluxCD.
 
-### 3.1: Ephemeral environment automation (GitHub Actions)
+### 3.1: Reusable idempotent actions
 
-- [ ] **Develop a `preview-environment` reusable workflow**: This workflow will
-  be triggered by pull requests in the wildside repository.
+These actions converge repository state idempotently, committing changes to
+their respective GitOps repositories while sourcing secrets from a shared
+HashiCorp Vault instance.
+
+- [ ] **Develop the `wildside-infra-k8s` action**:
+
+  - [ ] Assemble Kubernetes clusters and shared fixtures from the OpenTofu
+    modules in the Wildside repository, persisting the resulting state in the
+    `wildside-infra` GitOps repository for FluxCD to reconcile.
+
+  - [ ] Ensure the repository contains the expected GitOps layout:
+
+    - `clusters` for per-cluster OpenTofu configurations.
+
+    - `modules` for reusable OpenTofu modules (DOKS, FluxCD, etc.).
+
+    - `platform` Kustomizations for core cluster services, including
+      `sources`, `traefik`, `cert-manager`, `external-dns`, and `vault`
+      subdirectories.
+
+  - [ ] Render Helm-based fixtures into the `platform/*` tree so FluxCD
+    applies them and retrieve any required secrets from HashiCorp Vault.
+
+- [ ] **Develop the `wildside-app` action**:
+
+  - [ ] Deploy an application instance onto an existing cluster by generating
+    overlays in the `wildside-apps` repository and committing the desired state
+    for FluxCD.
+
+  - [ ] Maintain the repository structure:
+
+    - `base` containing the canonical `HelmRelease` for the application.
+
+    - `overlays` with long-lived environments (`production`, `staging`) and an
+      `overlays/ephemeral/` directory for dynamically generated overlays.
+
+  - [ ] Fetch application secrets from HashiCorp Vault and reference them in
+    the rendered manifests.
+
+### 3.2: Ephemeral environment automation (GitHub Actions)
+
+- [ ] **Develop an `ephemeral-environment` reusable workflow**: This workflow
+  will be triggered by pull requests in the wildside repository.
 
 - [ ] **Build and push Docker images**:
 
@@ -137,7 +141,7 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
   - [ ] Add a step to check out the `wildside-apps` repository.
 
     - [ ] Create a new Kustomize overlay directory based on the pull request
-      number (e.g., `overlays/previews/pr-123`).
+      number (e.g., `overlays/ephemeral/pr-123`).
 
     - [ ] Generate a `patch-helmrelease-values.yaml` file that updates the image
       tags to the new commit SHA and sets the ingress hostname.
@@ -145,8 +149,8 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
     - [ ] Generate a `kustomization.yaml` referencing the base release and the
       patch file.
 
-    - [ ] Update the top-level `overlays/previews/kustomization.yaml` to include
-      the new preview environment.
+    - [ ] Update the top-level `overlays/ephemeral/kustomization.yaml` to include
+      the new ephemeral environment.
 
     - [ ] Commit and push the new overlay to a branch in the `wildside-apps`
       repository.
@@ -168,7 +172,7 @@ updating the wildside-apps repository, which is then actioned by FluxCD.
   - [ ] It will commit and push the removal, triggering FluxCD to decommission
     the environment's resources.
 
-### 3.2: Monitoring and observability
+### 3.3: Monitoring and observability
 
 - [ ] **Deploy Prometheus and Grafana**: Set up a monitoring stack to scrape
   metrics from all key cluster components.
@@ -186,5 +190,5 @@ This phase includes long-term goals for enhancing the platform's capabilities.
   separate development, staging, and production clusters.
 
 - [ ] **Optimize ephemeral database provisioning**: Investigate and implement a
-  faster method for provisioning databases for preview environments, such as
+  faster method for provisioning databases for ephemeral environments, such as
   creating a unique database or schema within a shared cluster.
