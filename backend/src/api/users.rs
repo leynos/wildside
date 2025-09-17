@@ -35,7 +35,8 @@ pub struct LoginRequest {
         (status = 500, description = "Internal server error")
     ),
     tags = ["users"],
-    operation_id = "login"
+    operation_id = "login",
+    security(()),
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
