@@ -93,7 +93,7 @@ lint-asyncapi:
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
 	$(call ensure_tool,python3)
-	@if ! grep -q "^$(OPENAPI_SPEC):" .redocly.lint-ignore.yaml; then \
+	@if ! grep -F -q "$(OPENAPI_SPEC):" .redocly.lint-ignore.yaml; then \
 		echo "OpenAPI ignore file missing entry for $(OPENAPI_SPEC)" >&2; \
 		exit 1; \
 	fi
