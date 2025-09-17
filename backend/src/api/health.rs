@@ -44,6 +44,18 @@ impl HealthState {
     pub fn is_alive(&self) -> bool {
         self.live.load(Ordering::Acquire)
     }
+
+    fn probe_response(probe_ok: bool) -> HttpResponse {
+        let mut response = if probe_ok {
+            HttpResponse::Ok()
+        } else {
+            HttpResponse::ServiceUnavailable()
+        };
+
+        response
+            .insert_header((header::CACHE_CONTROL, "no-store"))
+            .finish()
+    }
 }
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.
@@ -63,15 +75,7 @@ impl HealthState {
 )]
 #[get("/health/ready")]
 pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
-    if state.is_ready() {
-        HttpResponse::Ok()
-            .insert_header((header::CACHE_CONTROL, "no-store"))
-            .finish()
-    } else {
-        HttpResponse::ServiceUnavailable()
-            .insert_header((header::CACHE_CONTROL, "no-store"))
-            .finish()
-    }
+    HealthState::probe_response(state.is_ready())
 }
 
 /// Liveness probe. Return 200 while the process is marked alive and 503 once draining.
@@ -95,13 +99,5 @@ pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
 )]
 #[get("/health/live")]
 pub async fn live(state: web::Data<HealthState>) -> HttpResponse {
-    if state.is_alive() {
-        HttpResponse::Ok()
-            .insert_header((header::CACHE_CONTROL, "no-store"))
-            .finish()
-    } else {
-        HttpResponse::ServiceUnavailable()
-            .insert_header((header::CACHE_CONTROL, "no-store"))
-            .finish()
-    }
+    HealthState::probe_response(state.is_alive())
 }

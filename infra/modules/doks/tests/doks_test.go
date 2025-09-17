@@ -18,8 +18,6 @@ import (
 	testutil "wildside/infra/testutil"
 )
 
-const defaultKubernetesVersion = "1.33.1-do.3"
-
 func testVars() map[string]interface{} {
 	vars := map[string]interface{}{
 		"cluster_name": "terratest-cluster",
@@ -51,11 +49,11 @@ func withVersion(vars map[string]interface{}, version string) map[string]interfa
 	return out
 }
 
-func defaultVersion() string {
-	if version := testutil.KubernetesVersion(); version != "" {
-		return version
-	}
-	return defaultKubernetesVersion
+// versionOverride returns the optional Kubernetes version requested by the
+// environment (via DOKS_KUBERNETES_VERSION or DOKS_VERSION). When unset,
+// Terraform applies the module's pinned default.
+func versionOverride() string {
+	return testutil.KubernetesVersion()
 }
 
 func TestDoksModuleValidate(t *testing.T) {
@@ -63,7 +61,7 @@ func TestDoksModuleValidate(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	vars = withVersion(vars, defaultVersion())
+	vars = withVersion(vars, versionOverride())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -78,7 +76,7 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	vars = withVersion(vars, defaultVersion())
+	vars = withVersion(vars, versionOverride())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -105,7 +103,7 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	vars = withVersion(vars, defaultVersion())
+	vars = withVersion(vars, versionOverride())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -134,7 +132,7 @@ func TestDoksModulePolicy(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
-	vars = withVersion(vars, defaultVersion())
+	vars = withVersion(vars, versionOverride())
 	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -196,7 +194,7 @@ func getInvalidInputTestCases() map[string]struct {
 				"cluster_name": "",
 				"region":       "nyc1",
 				"node_pools":   testVars()["node_pools"],
-			}, defaultVersion()),
+			}, versionOverride()),
 			ErrContains: "cluster_name must not be empty",
 		},
 		"InvalidRegion": {
@@ -204,7 +202,7 @@ func getInvalidInputTestCases() map[string]struct {
 				"cluster_name": "terratest-cluster",
 				"region":       "invalid",
 				"node_pools":   testVars()["node_pools"],
-			}, defaultVersion()),
+			}, versionOverride()),
 			ErrContains: "region must be a valid DigitalOcean slug",
 		},
 		"InvalidKubernetesVersion": {
@@ -220,7 +218,7 @@ func getInvalidInputTestCases() map[string]struct {
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools":   []map[string]interface{}{},
-			}, defaultVersion()),
+			}, versionOverride()),
 			ErrContains: "node_pools must not be empty",
 		},
 		"OneNode": {
@@ -237,7 +235,7 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  1,
 					},
 				},
-			}, defaultVersion()),
+			}, versionOverride()),
 			ErrContains: "node_count >= 2",
 		},
 		"MinNodesZero": {

@@ -1,7 +1,11 @@
+locals {
+  default_kubernetes_version = "1.33.1-do.3"
+}
+
 resource "digitalocean_kubernetes_cluster" "this" {
   name    = var.cluster_name
   region  = var.region
-  version = var.kubernetes_version
+  version = coalesce(var.kubernetes_version, local.default_kubernetes_version)
   tags    = var.tags
 
   dynamic "node_pool" {

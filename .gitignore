@@ -6,6 +6,7 @@
 node_modules/
 **/dist/
 packages/types/dist/
+**/node-compile-cache/
 
 # Build outputs
 dist/
