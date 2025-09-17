@@ -17,9 +17,7 @@
   "paths": {
     "/api/v1/login": {
       "post": {
-        "tags": [
-          "users"
-        ],
+        "tags": ["users"],
         "summary": "Authenticate user and establish a session.",
         "description": "Uses the centralised `Error` type so clients get a consistent\nerror schema across all endpoints.",
         "operationId": "login",
@@ -64,13 +62,15 @@
     },
     "/api/v1/users": {
       "get": {
-        "tags": [
-          "users"
-        ],
+        "tags": ["users"],
         "summary": "List known users.",
         "description": "# Examples\n```\nuse actix_web::App;\nuse backend::api::users::list_users;\n\nlet app = App::new().service(list_users);\n```",
         "operationId": "listUsers",
-        "security": [{ "SessionCookie": [] }],
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Users",
@@ -140,9 +140,7 @@
     },
     "/health/live": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Liveness probe. Return 200 when the process is alive.",
         "operationId": "live",
         "responses": {
@@ -154,9 +152,7 @@
     },
     "/health/ready": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
         "operationId": "ready",
         "responses": {
@@ -172,16 +168,17 @@
   },
   "components": {
     "securitySchemes": {
-      "SessionCookie": { "type": "apiKey", "in": "cookie", "name": "session" }
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      }
     },
     "schemas": {
       "Error": {
         "type": "object",
         "description": "API error response payload.\n\n# Examples\n```\nuse backend::models::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code, ErrorCode::NotFound);\n```",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ErrorCode",
@@ -196,10 +193,7 @@
             "example": "Something went wrong"
           },
           "traceId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Correlation identifier for tracing this error across systems.",
             "example": "01HZY8B2W6X5Y7Z9ABCD1234"
           }
@@ -209,21 +203,12 @@
       "ErrorCode": {
         "type": "string",
         "description": "Stable machine-readable error code.",
-        "enum": [
-          "invalid_request",
-          "unauthorized",
-          "forbidden",
-          "not_found",
-          "internal_error"
-        ]
+        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"]
       },
       "LoginRequest": {
         "type": "object",
         "description": "Login request body for `POST /api/v1/login`.\n\nExample JSON:\n`{\"username\":\"admin\",\"password\":\"password\"}`",
-        "required": [
-          "username",
-          "password"
-        ],
+        "required": ["username", "password"],
         "properties": {
           "password": {
             "type": "string"
@@ -236,10 +221,7 @@
       "User": {
         "type": "object",
         "description": "Application user.",
-        "required": [
-          "id",
-          "displayName"
-        ],
+        "required": ["id", "displayName"],
         "properties": {
           "displayName": {
             "type": "string",
