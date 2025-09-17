@@ -239,7 +239,7 @@ func getInvalidInputTestCases() map[string]struct {
 			ErrContains: "node_count >= 2",
 		},
 		"MinNodesZero": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
@@ -252,11 +252,11 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  2,
 					},
 				},
-			}, "1.28.0-do.0"),
+			},
 			ErrContains: "min_nodes >= 1",
 		},
 		"MaxLessThanNodeCount": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
@@ -269,11 +269,11 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  2,
 					},
 				},
-			}, "1.28.0-do.0"),
+			},
 			ErrContains: "min_nodes <= node_count <=",
 		},
 		"MinGreaterThanNodeCount": {
-			Vars: withVersion(map[string]interface{}{
+			Vars: map[string]interface{}{
 				"cluster_name": "terratest-cluster",
 				"region":       "nyc1",
 				"node_pools": []map[string]interface{}{
@@ -286,7 +286,7 @@ func getInvalidInputTestCases() map[string]struct {
 						"max_nodes":  5,
 					},
 				},
-			}, "1.28.0-do.0"),
+			},
 			ErrContains: "min_nodes <= node_count <=",
 		},
 	}
