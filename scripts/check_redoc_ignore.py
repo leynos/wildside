@@ -11,32 +11,88 @@ IGNORE_FILE = Path(".redocly.lint-ignore.yaml")
 REVIEW_BY_PATTERN = re.compile(r"#\s*review by:\s*(\d{4}-\d{2}-\d{2})")
 
 
-def main() -> None:
+def load_ignore_file_lines() -> list[str]:
+    """Read the ignore file and return its lines.
+
+    Examples:
+        >>> lines = load_ignore_file_lines()  # doctest: +SKIP
+        >>> isinstance(lines, list)
+        True
+    """
+
     try:
-        lines = IGNORE_FILE.read_text(encoding="utf-8").splitlines()
+        return IGNORE_FILE.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         print(f"Missing {IGNORE_FILE} for review-by validation.", file=sys.stderr)
         sys.exit(1)
 
+
+def extract_review_date(line: str) -> str | None:
+    """Return the review-by date contained within a line, if present.
+
+    Examples:
+        >>> extract_review_date('# review by: 2025-01-01')
+        '2025-01-01'
+        >>> extract_review_date('no annotation here') is None
+        True
+    """
+
+    match = REVIEW_BY_PATTERN.search(line)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def parse_review_date(date_str: str, line_num: int) -> dt.date | None:
+    """Parse a review-by date, returning ``None`` when invalid.
+
+    Examples:
+        >>> parse_review_date('2025-01-01', 3)
+        datetime.date(2025, 1, 1)
+        >>> parse_review_date('invalid-date', 4) is None
+        True
+    """
+
+    try:
+        return dt.date.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+
+def validate_review_line(line: str, line_num: int, today: dt.date) -> str | None:
+    """Validate a review-by annotation and report any problems.
+
+    Examples:
+        >>> today = dt.date(2025, 1, 1)
+        >>> validate_review_line('# review by: 2024-12-31', 8, today)
+        "line 8: review by 2024-12-31 has already passed"
+        >>> validate_review_line('# review by: 2025-01-02', 9, today) is None
+        True
+    """
+
+    date_str = extract_review_date(line)
+    if date_str is None:
+        return None
+
+    review_date = parse_review_date(date_str, line_num)
+    if review_date is None:
+        return f"line {line_num}: invalid review by date '{date_str}'"
+
+    if review_date < today:
+        return f"line {line_num}: review by {review_date.isoformat()} has already passed"
+
+    return None
+
+
+def main() -> None:
+    lines = load_ignore_file_lines()
     today = dt.date.today()
     problems: list[str] = []
 
     for idx, line in enumerate(lines, start=1):
-        match = REVIEW_BY_PATTERN.search(line)
-        if not match:
-            continue
-
-        date_str = match.group(1)
-        try:
-            review_date = dt.date.fromisoformat(date_str)
-        except ValueError:
-            problems.append(f"line {idx}: invalid review by date '{date_str}'")
-            continue
-
-        if review_date < today:
-            problems.append(
-                f"line {idx}: review by {review_date.isoformat()} has already passed"
-            )
+        problem = validate_review_line(line, idx, today)
+        if problem:
+            problems.append(problem)
 
     if problems:
         print(
