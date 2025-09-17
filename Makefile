@@ -36,7 +36,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
+        lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy \
         dev-cluster-test
 
 all: fmt lint test
@@ -78,9 +78,7 @@ fmt:
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
-	$(MAKE) lint-asyncapi
-	$(MAKE) lint-openapi
-	$(MAKE) lint-makefile
+	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
@@ -106,6 +104,13 @@ lint-makefile:
 	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
 	checkmake Makefile
 	mbake validate Makefile
+
+lint-infra:
+	$(call ensure_tool,tflint)
+	$(call ensure_tool,uvx)
+	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl
+	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
+	uvx checkov -d infra
 
 test: deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
