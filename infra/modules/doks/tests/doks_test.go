@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -160,10 +162,14 @@ func TestDoksModulePolicy(t *testing.T) {
 	}
 	require.True(t, hasRego, "no .rego files found in %s", policyPath)
 
-	cmd := exec.Command("conftest", "test", jsonPath, "--policy", policyPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "conftest", "test", jsonPath, "--policy", policyPath)
 	cmd.Dir = tfDir
 	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
 	output, err := cmd.CombinedOutput()
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 	require.NoErrorf(t, err, "conftest failed: %s", string(output))
 }
 

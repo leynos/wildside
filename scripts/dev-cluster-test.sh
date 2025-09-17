@@ -25,7 +25,7 @@ cd "$ROOT_DIR"
 
 # Plan and policy tests if token present
 if [[ -n "${DIGITALOCEAN_TOKEN:-}" ]]; then
-  tofu -chdir="$TF_DIR" plan -out=tfplan.binary -detailed-exitcode || [ $? -eq 2 ]
+  tofu -chdir="$TF_DIR" plan -input=false -out=tfplan.binary -detailed-exitcode || [ $? -eq 2 ]
   tofu -chdir="$TF_DIR" show -json tfplan.binary > "$TF_DIR/plan.json"
   conftest test "$TF_DIR/plan.json" --policy "$POLICY_DIR"
   rm -f "$TF_DIR/tfplan.binary" "$TF_DIR/plan.json"

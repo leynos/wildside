@@ -1,31 +1,19 @@
 # This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
 # See https://redocly.com/docs/cli/ for more information.
 spec/openapi.json:
-  no-empty-servers:
-    # The public gateway injects cluster-specific hosts, so we intentionally
-    # leave the top-level servers array empty until the ingress domains are
-    # finalised.
-    - '#/openapi'
-  info-license-strict:
-    # Legal is still selecting the licence for the private beta; we retain the
-    # placeholder node so downstream tooling knows to populate it later.
-    - '#/info/license'
   operation-4xx-response:
-    # Liveness probes communicate with a binary success signal, so additional
-    # 4xx payloads would not be consumed by Kubernetes controllers.
+    # owner: Platform Team
+    # reason: Health endpoints intentionally omit error payloads; we only expose 200s to keep uptime probes trivial.
+    # review by: 2025-06-30
     - '#/paths/~1health~1live/get/responses'
-    # The readiness endpoint follows Kubernetes guidance by returning only 200
-    # or 503 to simplify automation; no intermediate 4xx responses are
-    # generated.
     - '#/paths/~1health~1ready/get/responses'
   security-defined:
-    # Authentication must be issuable without prior credentials, so the login
-    # endpoint intentionally omits a security scheme.
+    # owner: Platform Team
+    # reason: Login remains intentionally unauthenticated, list-users lacks a
+    #   formal cookie security scheme, and health checks stay public until
+    #   zero-trust rollout lands.
+    # review by: 2025-06-30
     - '#/paths/~1api~1v1~1login/post'
-    # The users listing is currently restricted at the gateway layer; the OpenAPI
-    # definition will grow a formal scheme once the session middleware lands.
     - '#/paths/~1api~1v1~1users/get'
-    # Cluster health checks remain publicly accessible for managed Kubernetes
-    # integrations and therefore declare no authentication requirements.
     - '#/paths/~1health~1live/get'
     - '#/paths/~1health~1ready/get'

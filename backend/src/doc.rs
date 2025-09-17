@@ -7,6 +7,17 @@ use utoipa::OpenApi;
 /// Swagger UI is enabled in debug builds only and used by tooling.
 #[derive(OpenApi)]
 #[openapi(
+    info(
+        title = "Wildside API",
+        description = "Public REST API for Wildside services.",
+        license(
+            name = "ISC",
+            url = "https://opensource.org/license/isc-license-txt/"
+        )
+    ),
+    servers(
+        (url = "https://api.wildside.test", description = "Local development server")
+    ),
     paths(
         crate::api::users::list_users,
         crate::api::users::login,

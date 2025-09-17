@@ -31,6 +31,7 @@ REDOCLY_CLI_VERSION ?= 2.1.0
 ORVAL_VERSION ?= 7.11.2
 BIOME_VERSION ?= 2.2.4
 TSC_VERSION ?= 5.9.2
+OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
@@ -93,12 +94,12 @@ lint-asyncapi:
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
-lint-openapi: openapi
-	if command -v redocly >/dev/null 2>&1; then \
-	  redocly lint spec/openapi.json; \
-	else \
-	  echo "warning: redocly CLI not installed; skipping OpenAPI lint"; \
+lint-openapi:
+	@if ! grep -q "^$(OPENAPI_SPEC):" .redocly.lint-ignore.yaml; then \
+		echo "OpenAPI ignore file missing entry for $(OPENAPI_SPEC)" >&2; \
+		exit 1; \
 	fi
+	$(call exec_or_bunx,redocly,lint $(OPENAPI_SPEC),@redocly/cli@$(REDOCLY_CLI_VERSION))
 
 # Validate Makefile style and structure
 lint-makefile:
