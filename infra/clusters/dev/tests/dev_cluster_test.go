@@ -189,6 +189,20 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 			wantErrSubstrings: []string{"auto_scale", "min_nodes"},
 		},
 		{
+			name: "AutoScaleMinBelowTwo",
+			nodePools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  1,
+					"max_nodes":  4,
+				},
+			},
+			wantErrSubstrings: []string{"min_nodes"},
+		},
+		{
 			name: "MaxNodesBelowMinNodes",
 			nodePools: []map[string]interface{}{
 				{
