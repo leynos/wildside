@@ -37,15 +37,18 @@ func testVars() map[string]interface{} {
 		"tags":              []string{"terratest"},
 		"expose_kubeconfig": true,
 	}
-	vars["kubernetes_version"] = defaultVersion()
 	return vars
 }
 
 func withVersion(vars map[string]interface{}, version string) map[string]interface{} {
-	if version != "" {
-		vars["kubernetes_version"] = version
+	out := make(map[string]interface{}, len(vars)+1)
+	for k, v := range vars {
+		out[k] = v
 	}
-	return vars
+	if version != "" {
+		out["kubernetes_version"] = version
+	}
+	return out
 }
 
 func defaultVersion() string {
@@ -60,6 +63,7 @@ func TestDoksModuleValidate(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+	vars = withVersion(vars, defaultVersion())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -74,6 +78,7 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+	vars = withVersion(vars, defaultVersion())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -100,6 +105,7 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+	vars = withVersion(vars, defaultVersion())
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
@@ -128,6 +134,7 @@ func TestDoksModulePolicy(t *testing.T) {
 
 	vars := testVars()
 	vars["cluster_name"] = fmt.Sprintf("terratest-%s", strings.ToLower(random.UniqueId()))
+	vars = withVersion(vars, defaultVersion())
 	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
