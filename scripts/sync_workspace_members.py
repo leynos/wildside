@@ -94,6 +94,11 @@ def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
     tuple of int and str
         Start index, end index, and indentation for the members array.
 
+    Raises
+    ------
+    SystemExit
+        If the members array cannot be located in the manifest.
+
     Examples
     --------
     >>> example = ['[workspace]', 'members = [', '    "crate",', ']']
@@ -106,14 +111,14 @@ def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
     depth = 0
     for idx, line in enumerate(lines):
         stripped = line.lstrip()
-        if start is None and stripped.startswith("members"):
+        if start is None:
+            if not stripped.startswith("members"):
+                continue
             start = idx
             indent = line[: len(line) - len(stripped)]
-            depth += _calculate_bracket_depth_change(line)
+            depth = _calculate_bracket_depth_change(line)
             if depth <= 0:
                 return start, idx, indent
-            continue
-        if start is None:
             continue
         depth += _calculate_bracket_depth_change(line)
         if depth <= 0:
