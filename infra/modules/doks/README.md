@@ -34,7 +34,7 @@ module "doks" {
 
   cluster_name       = "example"
   region             = "nyc1"
-  kubernetes_version = "<SUPPORTED_DOKS_VERSION>"
+  kubernetes_version = "<SUPPORTED_VERSION_SLUG>"
 
   node_pools = [{
     name       = "default"

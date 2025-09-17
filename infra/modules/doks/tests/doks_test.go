@@ -50,7 +50,7 @@ func withVersion(vars map[string]interface{}, version string) map[string]interfa
 }
 
 // versionOverride returns the optional Kubernetes version requested by the
-// environment (via DOKS_KUBERNETES_VERSION or DOKS_VERSION). When unset,
+// environment via DOKS_KUBERNETES_VERSION. When unset,
 // Terraform applies the module's pinned default.
 func versionOverride() string {
 	return testutil.KubernetesVersion()

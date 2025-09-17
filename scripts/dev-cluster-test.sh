@@ -5,7 +5,6 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TF_DIR="$ROOT_DIR/infra/clusters/dev"
 POLICY_DIR="$ROOT_DIR/infra/modules/doks/policy"
 
-DOKS_VERSION=${DOKS_KUBERNETES_VERSION:-}
 export TF_VAR_should_create_cluster=true
 export TF_IN_AUTOMATION=1
 
@@ -45,4 +44,4 @@ fi
 
 # Go tests
 cd "$ROOT_DIR/infra/clusters/dev/tests"
-DOKS_KUBERNETES_VERSION=$DOKS_VERSION go test -v
+DOKS_KUBERNETES_VERSION="${DOKS_KUBERNETES_VERSION:-}" go test -v
