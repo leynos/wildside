@@ -37,7 +37,10 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy \
-        dev-cluster-test
+        dev-cluster-test workspace-sync
+
+workspace-sync:
+	./scripts/sync_workspace_members.py
 
 all: fmt lint test
 
@@ -56,11 +59,14 @@ fe-build:
 	pushd frontend-pwa && bun install && popd
 	cd frontend-pwa && bun run build
 
-openapi:
-	# Replace with a bin that prints OpenAPI
-	mkdir -p $(dir $(OPENAPI_SPEC))
+openapi: workspace-sync
 	$(call ensure_tool,jq)
-	curl -s http://localhost:8080/api-docs/openapi.json | jq -S . > $(OPENAPI_SPEC)
+	set -euo pipefail; mkdir -p $(dir $(OPENAPI_SPEC)); \
+	tmp="$(OPENAPI_SPEC).tmp.$$"; \
+	cleanup() { rm -f "$$tmp"; }; trap cleanup EXIT; \
+	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
+	jq -S . "$$tmp" > "$(OPENAPI_SPEC)"; \
+	trap - EXIT
 
 gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
@@ -71,11 +77,11 @@ docker-up:
 docker-down:
 	cd deploy && docker compose down
 
-fmt:
+fmt: workspace-sync
 	cargo fmt --manifest-path backend/Cargo.toml --all
 	$(call exec_or_bunx,biome,format --write,@biomejs/biome@$(BIOME_VERSION))
 
-lint:
+lint: workspace-sync
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
@@ -108,7 +114,7 @@ lint-infra:
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
 	uvx checkov -d infra
 
-test: deps typecheck
+test: workspace-sync deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	pnpm -r --if-present --silent run test
 
