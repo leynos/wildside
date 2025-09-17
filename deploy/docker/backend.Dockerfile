@@ -15,7 +15,8 @@ RUN apk add --no-cache \
 ENV OPENSSL_STATIC=1
 WORKDIR /app
 # Cache dependencies independently from source to speed up rebuilds.
-COPY backend/Cargo.toml backend/Cargo.lock backend/
+COPY Cargo.toml Cargo.lock ./
+COPY backend/Cargo.toml backend/
 RUN cargo fetch --locked --manifest-path backend/Cargo.toml
 COPY backend/ backend/
 RUN cargo build --locked --release --target x86_64-unknown-linux-musl \
