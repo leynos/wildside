@@ -57,10 +57,51 @@ def format_members(members: list[str], indent: str) -> list[str]:
     return lines
 
 
-def update_manifest(members: list[str]) -> bool:
-    lines = MANIFEST.read_text(encoding="utf-8").splitlines()
+def _calculate_bracket_depth_change(line: str) -> int:
+    """Compute the net bracket depth delta for a line.
+
+    Parameters
+    ----------
+    line : str
+        A single line of text from the manifest.
+
+    Returns
+    -------
+    int
+        Net change in bracket nesting produced by the line.
+
+    Examples
+    --------
+    >>> _calculate_bracket_depth_change('members = [')
+    1
+    >>> _calculate_bracket_depth_change('    ]')
+    -1
+    """
+
+    return line.count("[") - line.count("]")
+
+
+def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
+    """Locate the bounds of the workspace members array.
+
+    Parameters
+    ----------
+    lines : list of str
+        Lines from the workspace manifest.
+
+    Returns
+    -------
+    tuple of int and str
+        Start index, end index, and indentation for the members array.
+
+    Examples
+    --------
+    >>> example = ['[workspace]', 'members = [', '    "crate",', ']']
+    >>> _find_members_array_bounds(example)
+    (1, 3, '')
+    """
+
     start = None
-    end = None
     indent = ""
     depth = 0
     for idx, line in enumerate(lines):
@@ -68,18 +109,21 @@ def update_manifest(members: list[str]) -> bool:
         if start is None and stripped.startswith("members"):
             start = idx
             indent = line[: len(line) - len(stripped)]
-            depth += line.count("[") - line.count("]")
+            depth += _calculate_bracket_depth_change(line)
             if depth <= 0:
-                end = idx
-                break
-        elif start is not None:
-            depth += line.count("[") - line.count("]")
-            if depth <= 0:
-                end = idx
-                break
-    if start is None or end is None:
-        raise SystemExit("workspace members array not found in Cargo.toml")
+                return start, idx, indent
+            continue
+        if start is None:
+            continue
+        depth += _calculate_bracket_depth_change(line)
+        if depth <= 0:
+            return start, idx, indent
+    raise SystemExit("workspace members array not found in Cargo.toml")
 
+
+def update_manifest(members: list[str]) -> bool:
+    lines = MANIFEST.read_text(encoding="utf-8").splitlines()
+    start, end, indent = _find_members_array_bounds(lines)
     replacement = format_members(members, indent)
     if lines[start : end + 1] == replacement:
         return False
