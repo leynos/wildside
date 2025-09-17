@@ -6,13 +6,13 @@ TF_DIR="$ROOT_DIR/infra/clusters/dev"
 POLICY_DIR="$ROOT_DIR/infra/modules/doks/policy"
 
 DOKS_VERSION=${DOKS_KUBERNETES_VERSION:-}
-export TF_VAR_kubernetes_version="$DOKS_VERSION"
 export TF_VAR_should_create_cluster=true
+export TF_IN_AUTOMATION=1
 
 # Static checks
- tofu -chdir="$TF_DIR" fmt -check
- tofu -chdir="$TF_DIR" init -input=false
- tofu -chdir="$TF_DIR" validate
+tofu -chdir="$TF_DIR" fmt -check
+tofu -chdir="$TF_DIR" init -input=false
+tofu -chdir="$TF_DIR" validate
 
 cd "$TF_DIR"
 if ! command -v tflint >/dev/null 2>&1; then
@@ -35,4 +35,8 @@ fi
 
 # Go tests
 cd "$ROOT_DIR/infra/clusters/dev/tests"
-DOKS_KUBERNETES_VERSION=$DOKS_VERSION go test -v
+if [[ -n "$DOKS_VERSION" ]]; then
+  DOKS_KUBERNETES_VERSION=$DOKS_VERSION go test -v
+else
+  go test -v
+fi

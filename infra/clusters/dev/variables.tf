@@ -11,6 +11,11 @@ variable "cluster_name" {
   type        = string
   description = "Name for the DOKS cluster"
   default     = "wildside-dev"
+
+  validation {
+    condition     = length(trimspace(var.cluster_name)) > 0
+    error_message = "cluster_name must not be blank"
+  }
 }
 
 variable "region" {
@@ -21,17 +26,6 @@ variable "region" {
   validation {
     condition     = can(regex("^[a-z]{3}[0-9]$", var.region))
     error_message = "region must be a 3-letter region code followed by a digit (e.g., nyc1, sfo3, ams3)."
-  }
-}
-
-variable "kubernetes_version" {
-  type        = string
-  description = "Exact Kubernetes version slug supported by DigitalOcean"
-  default     = ""
-
-  validation {
-    condition     = var.kubernetes_version == "" || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+-do\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version may be empty or must match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
   }
 }
 
@@ -85,6 +79,21 @@ variable "tags" {
   type        = list(string)
   description = "Tags applied to the cluster"
   default     = ["env:dev"]
+
+  validation {
+    condition     = length(var.tags) > 0
+    error_message = "tags must contain at least one value"
+  }
+
+  validation {
+    condition     = alltrue([for t in var.tags : length(trimspace(t)) > 0])
+    error_message = "tags must not be blank strings"
+  }
+
+  validation {
+    condition     = length(distinct([for t in var.tags : trimspace(t)])) == length(var.tags)
+    error_message = "tags must be unique after trimming whitespace"
+  }
 }
 
 variable "expose_kubeconfig" {

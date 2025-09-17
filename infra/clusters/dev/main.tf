@@ -3,14 +3,25 @@
 
 provider "digitalocean" {}
 
+locals {
+  tags_normalised = [for t in var.tags : trimspace(t)]
+  node_pools_normalised = [
+    for np in var.node_pools : merge(
+      np,
+      {
+        tags = try([for t in np.tags : trimspace(t)], null)
+      }
+    )
+  ]
+}
+
 module "doks" {
   count              = var.should_create_cluster ? 1 : 0
   source             = "../../modules/doks"
   cluster_name       = var.cluster_name
   region             = var.region
-  kubernetes_version = var.kubernetes_version
-  node_pools         = var.node_pools
-  tags               = var.tags
+  node_pools         = local.node_pools_normalised
+  tags               = local.tags_normalised
   expose_kubeconfig  = var.expose_kubeconfig
 }
 

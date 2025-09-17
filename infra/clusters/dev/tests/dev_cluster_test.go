@@ -13,11 +13,10 @@ import (
 
 // testVars returns a baseline variable set matching the defaults in variables.tf.
 func testVars(t *testing.T) map[string]interface{} {
-	return map[string]interface{}{
+	vars := map[string]interface{}{
 		"should_create_cluster": true,
 		"cluster_name":          "wildside-dev",
 		"region":                "nyc1",
-		"kubernetes_version":    testutil.KubernetesVersion(),
 		"node_pools": []map[string]interface{}{
 			{
 				"name":       "default",
@@ -32,6 +31,8 @@ func testVars(t *testing.T) map[string]interface{} {
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
 	}
+
+        return vars
 }
 
 func TestDevClusterValidate(t *testing.T) {
@@ -115,7 +116,7 @@ func TestDevClusterPolicy(t *testing.T) {
 	policyPath, err := filepath.Abs(filepath.Join(tfDir, "..", "..", "modules", "doks", "policy"))
 	require.NoError(t, err)
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
-	cmd.Env = append(os.Environ(), "DIGITALOCEAN_TOKEN="+token)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "DIGITALOCEAN_TOKEN="+token)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
@@ -135,46 +136,59 @@ func TestDevClusterPolicy(t *testing.T) {
 //	            "max_nodes":  1,
 //	    },
 //	})
-func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}) {
-	t.Parallel()
-	vars := testVars(t)
-	vars["node_pools"] = invalidNodePools
-	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-		SourceRootRel: "../../..",
-		TfSubDir:      "clusters/dev",
-		Vars:          vars,
-		EnvVars:       map[string]string{},
-	})
-	_, err := terraform.InitAndPlanE(t, opts)
-	require.Error(t, err)
+func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, want ...string) {
+        t.Helper()
+        t.Parallel()
+        vars := testVars(t)
+        vars["node_pools"] = invalidNodePools
+        _, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+                SourceRootRel: "../../..",
+                TfSubDir:      "clusters/dev",
+                Vars:          vars,
+                EnvVars:       map[string]string{},
+        })
+        _, err := terraform.InitAndPlanE(t, opts)
+        require.Error(t, err)
+        for _, s := range append([]string{"node_pools"}, want...) {
+                require.ErrorContains(t, err, s)
+        }
 }
 
 func TestDevClusterInvalidNodePools(t *testing.T) {
-	cases := map[string][]map[string]interface{}{
-		"InvalidNodePool": {
-			{
-				"name":       "default",
-				"size":       "s-2vcpu-2gb",
-				"node_count": 1,
-				"auto_scale": false,
-				"min_nodes":  1,
-				"max_nodes":  1,
-			},
-		},
-		"AutoScaleMinExceedsCount": {
-			{
-				"name":       "default",
-				"size":       "s-2vcpu-2gb",
-				"node_count": 2,
-				"auto_scale": true,
-				"min_nodes":  3,
-				"max_nodes":  5,
-			},
-		},
-	}
-	for name, pools := range cases {
-		t.Run(name, func(t *testing.T) {
-			testInvalidNodePoolConfig(t, pools)
-		})
-	}
+        cases := map[string]struct {
+                Pools []map[string]interface{}
+                Want  []string
+        }{
+                "InvalidNodePool": {
+                        Pools: []map[string]interface{}{
+                                {
+                                        "name":       "default",
+                                        "size":       "s-2vcpu-2gb",
+                                        "node_count": 1,
+                                        "auto_scale": false,
+                                        "min_nodes":  1,
+                                        "max_nodes":  1,
+                                },
+                        },
+                        Want: []string{"node_count", "at least 2 nodes"},
+                },
+                "AutoScaleMinExceedsCount": {
+                        Pools: []map[string]interface{}{
+                                {
+                                        "name":       "default",
+                                        "size":       "s-2vcpu-2gb",
+                                        "node_count": 2,
+                                        "auto_scale": true,
+                                        "min_nodes":  3,
+                                        "max_nodes":  5,
+                                },
+                        },
+                        Want: []string{"auto_scale", "min_nodes"},
+                },
+        }
+        for name, tc := range cases {
+                t.Run(name, func(t *testing.T) {
+                        testInvalidNodePoolConfig(t, tc.Pools, tc.Want...)
+                })
+        }
 }

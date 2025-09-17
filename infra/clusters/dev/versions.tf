@@ -3,7 +3,7 @@ terraform {
   required_providers {
     digitalocean = {
       source  = "opentofu/digitalocean"
-      version = "~> 2.36"
+      version = "~> 2.66.0"
     }
   }
 }
