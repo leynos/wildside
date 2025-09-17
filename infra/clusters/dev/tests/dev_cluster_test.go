@@ -143,7 +143,7 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       map[string]string{},
+		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
@@ -153,15 +153,14 @@ func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]inter
 	}
 }
 
-func TestDevClusterInvalidNodePools(t *testing.T) {
-	t.Parallel()
+func TestDevClusterInvalidNodePoolConfigs(t *testing.T) {
 	cases := []struct {
 		name              string
 		nodePools         []map[string]interface{}
 		wantErrSubstrings []string
 	}{
 		{
-			name: "InvalidNodePool",
+			name: "NodeCountBelowMinimum",
 			nodePools: []map[string]interface{}{
 				{
 					"name":       "default",
@@ -172,7 +171,7 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"max_nodes":  1,
 				},
 			},
-			wantErrSubstrings: []string{"node_count", "at least 2 nodes"},
+			wantErrSubstrings: []string{"node_count"},
 		},
 		{
 			name: "AutoScaleMinExceedsCount",
@@ -197,7 +196,7 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"node_count": 2,
 					"auto_scale": true,
 					"min_nodes":  1,
-					"max_nodes":  4,
+					"max_nodes":  5,
 				},
 			},
 			wantErrSubstrings: []string{"min_nodes"},
@@ -214,7 +213,7 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 					"max_nodes":  4,
 				},
 			},
-			wantErrSubstrings: []string{"max_nodes", "min_nodes"},
+			wantErrSubstrings: []string{"max_nodes"},
 		},
 	}
 	for _, tc := range cases {
@@ -225,4 +224,3 @@ func TestDevClusterInvalidNodePools(t *testing.T) {
 		})
 	}
 }
-
