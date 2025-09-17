@@ -34,6 +34,7 @@ use utoipa::{openapi, OpenApi};
 pub struct ApiDoc;
 
 impl ApiDoc {
+    /// Return the generated OpenAPI document enriched with the cookie session security scheme.
     pub fn openapi() -> openapi::OpenApi {
         let mut doc = <Self as OpenApi>::openapi();
         let components = doc.components.get_or_insert_with(Default::default);
