@@ -22,8 +22,8 @@ variable "kubernetes_version" {
   default     = "1.33.1-do.3"
 
   validation {
-    condition     = can(regex("^\\d+\\.\\d+\\.\\d+(-do\\.\\d+)?$", var.kubernetes_version))
-    error_message = "kubernetes_version must match X.Y.Z or X.Y.Z-do.N (DigitalOcean format)"
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+-do\\.\\d+$", var.kubernetes_version))
+    error_message = "kubernetes_version must match '<major>.<minor>.<patch>-do.<n>' (e.g., '1.33.1-do.3')."
   }
 }
 

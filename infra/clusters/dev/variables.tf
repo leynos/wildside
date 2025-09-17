@@ -65,8 +65,7 @@ variable "node_pools" {
           p.min_nodes >= 2 &&
           p.max_nodes >= p.min_nodes &&
           p.node_count >= p.min_nodes &&
-          p.node_count <= p.max_nodes &&
-          p.min_nodes <= p.node_count
+          p.node_count <= p.max_nodes
         )
         : (
           p.min_nodes == p.node_count &&

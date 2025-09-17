@@ -289,11 +289,18 @@ func getInvalidInputTestCases() map[string]struct {
 
 func TestDoksModuleInvalidInputs(t *testing.T) {
 	for name, tc := range getInvalidInputTestCases() {
+		name := name
+		tc := tc
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			localVars := make(map[string]interface{}, len(tc.Vars))
+			for k, v := range tc.Vars {
+				localVars[k] = v
+			}
 			_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 				SourceRootRel: "..",
 				TfSubDir:      "examples/basic",
-				Vars:          tc.Vars,
+				Vars:          localVars,
 				EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
 			})
 			_, err := terraform.InitAndPlanE(t, opts)

@@ -24,11 +24,17 @@ tflint --config .tflint.hcl
 cd "$ROOT_DIR"
 
 # Plan and policy tests if token present
+trap 'rm -f "$TF_DIR/tfplan.binary" "$TF_DIR/plan.json"' EXIT
 if [[ -n "${DIGITALOCEAN_TOKEN:-}" ]]; then
-  tofu -chdir="$TF_DIR" plan -input=false -out=tfplan.binary -detailed-exitcode || [ $? -eq 2 ]
+  set +e
+  tofu -chdir="$TF_DIR" plan -input=false -out=tfplan.binary -detailed-exitcode
+  ec=$?
+  set -e
+  if [[ $ec -ne 0 && $ec -ne 2 ]]; then
+    exit "$ec"
+  fi
   tofu -chdir="$TF_DIR" show -json tfplan.binary > "$TF_DIR/plan.json"
   conftest test "$TF_DIR/plan.json" --policy "$POLICY_DIR"
-  rm -f "$TF_DIR/tfplan.binary" "$TF_DIR/plan.json"
 else
   echo "Skipping plan/policy: DIGITALOCEAN_TOKEN not set"
 fi
