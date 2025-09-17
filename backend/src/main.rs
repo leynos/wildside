@@ -16,8 +16,6 @@ use std::env;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 #[cfg(debug_assertions)]
-use utoipa::OpenApi;
-#[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 use zeroize::Zeroize;
 

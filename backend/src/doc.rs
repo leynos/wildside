@@ -1,7 +1,7 @@
 //! OpenAPI documentation setup.
 
 use crate::models::{Error, ErrorCode, User};
-use utoipa::{openapi, Modify, OpenApi};
+use utoipa::{openapi, OpenApi};
 
 /// OpenAPI document for the REST API.
 /// Swagger UI is enabled in debug builds only and used by tooling.
@@ -25,7 +25,6 @@ use utoipa::{openapi, Modify, OpenApi};
         crate::api::health::live,
     ),
     components(schemas(User, Error, ErrorCode)),
-    modifiers(&CookieSecurity),
     security(("cookieAuth" = [])),
     tags(
         (name = "users", description = "Operations related to users"),
@@ -34,12 +33,10 @@ use utoipa::{openapi, Modify, OpenApi};
 )]
 pub struct ApiDoc;
 
-/// Adds the cookie-based session scheme so generated docs reflect runtime auth.
-struct CookieSecurity;
-
-impl Modify for CookieSecurity {
-    fn modify(&self, openapi: &mut openapi::OpenApi) {
-        let components = openapi.components.get_or_insert_with(Default::default);
+impl ApiDoc {
+    pub fn openapi() -> openapi::OpenApi {
+        let mut doc = <Self as OpenApi>::openapi();
+        let components = doc.components.get_or_insert_with(Default::default);
 
         components.add_security_scheme(
             "cookieAuth",
@@ -47,5 +44,7 @@ impl Modify for CookieSecurity {
                 openapi::security::ApiKeyValue::new("session"),
             )),
         );
+
+        doc
     }
 }
