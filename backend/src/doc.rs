@@ -33,6 +33,10 @@ use utoipa::{openapi, OpenApi};
 )]
 pub struct ApiDoc;
 
+fn disable_security(operation: &mut openapi::path::Operation) {
+    operation.security = Some(Vec::new());
+}
+
 impl ApiDoc {
     /// Return the generated OpenAPI document enriched with the cookie session security scheme.
     pub fn openapi() -> openapi::OpenApi {
@@ -45,6 +49,24 @@ impl ApiDoc {
                 openapi::security::ApiKeyValue::new("session"),
             )),
         );
+
+        if let Some(path_item) = doc.paths.paths.get_mut("/api/v1/login") {
+            if let Some(operation) = path_item.post.as_mut() {
+                disable_security(operation);
+            }
+        }
+
+        if let Some(path_item) = doc.paths.paths.get_mut("/health/ready") {
+            if let Some(operation) = path_item.get.as_mut() {
+                disable_security(operation);
+            }
+        }
+
+        if let Some(path_item) = doc.paths.paths.get_mut("/health/live") {
+            if let Some(operation) = path_item.get.as_mut() {
+                disable_security(operation);
+            }
+        }
 
         doc
     }
