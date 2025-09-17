@@ -238,6 +238,9 @@
             "description": "Server is shutting down"
           }
         },
+        "security": [
+          {}
+        ],
         "summary": "Liveness probe. Return 200 while the process is marked alive and 503 once draining.\nCall `HealthState::mark_unhealthy` before graceful shutdown to surface the drain early.",
         "tags": [
           "health"
@@ -258,6 +261,9 @@
             "description": "Server is not ready"
           }
         },
+        "security": [
+          {}
+        ],
         "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
         "tags": [
           "health"

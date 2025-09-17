@@ -58,7 +58,8 @@ impl HealthState {
             description = "Method not allowed; only GET probes are supported"
         ),
         (status = 503, description = "Server is not ready")
-    )
+    ),
+    security([])
 )]
 #[get("/health/ready")]
 pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
@@ -89,7 +90,8 @@ pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
             status = 503,
             description = "Server is shutting down"
         )
-    )
+    ),
+    security([])
 )]
 #[get("/health/live")]
 pub async fn live(state: web::Data<HealthState>) -> HttpResponse {

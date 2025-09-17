@@ -11,5 +11,8 @@ import (
 // - in module tests, the module default applies;
 // - in dev cluster tests, the root default applies.
 func KubernetesVersion() string {
-	return strings.TrimSpace(os.Getenv("DOKS_KUBERNETES_VERSION"))
+	if version := strings.TrimSpace(os.Getenv("DOKS_KUBERNETES_VERSION")); version != "" {
+		return version
+	}
+	return strings.TrimSpace(os.Getenv("DOKS_VERSION"))
 }

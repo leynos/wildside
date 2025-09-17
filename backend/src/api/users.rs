@@ -36,7 +36,7 @@ pub struct LoginRequest {
     ),
     tags = ["users"],
     operation_id = "login",
-    security(()),
+    security([]),
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {

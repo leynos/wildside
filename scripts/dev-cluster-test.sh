@@ -34,7 +34,11 @@ if [[ -n "${DIGITALOCEAN_TOKEN:-}" ]]; then
     exit "$ec"
   fi
   tofu -chdir="$TF_DIR" show -json tfplan.binary > "$TF_DIR/plan.json"
-  conftest test "$TF_DIR/plan.json" --policy "$POLICY_DIR"
+  if command -v conftest >/dev/null 2>&1; then
+    conftest test "$TF_DIR/plan.json" --policy "$POLICY_DIR"
+  else
+    echo "Skipping policy: conftest not installed" >&2
+  fi
 else
   echo "Skipping plan/policy: DIGITALOCEAN_TOKEN not set"
 fi
