@@ -545,6 +545,41 @@ intentional.
 7. Upload plan and apply logs to the workflow summary and optionally forward a
    Slack notification when the run completes.
 
+**Integration with `wildside-infra-k8s`**
+- The manual workflow shells out to the reusable
+  `wildside-infra-k8s` composite action (published alongside the cluster
+  modules) instead of duplicating bootstrap logic. The action receives the
+  selected `cluster` and Vault inputs and emits the generated Flux manifests
+  into the checked out `wildside-infra` repository, matching the
+  `clusters/{name}` and `platform/**` tree expected by FluxCD.
+- `wildside-infra-k8s` encapsulates its own `scripts/bootstrap-doks.sh`
+  (maintained inside the action repository), keeps provider versions aligned
+  with the module, and ensures Flux is configured to watch the same
+  `wildside-infra` commit that captured the state.
+- By reusing the action, the manual trigger produces the exact same layout and
+  artefacts as automated preview pipelines, preventing drift between
+  human-driven and CI-driven provisioning.
+
+**Idempotent bootstrap behaviour**
+- The action's `scripts/bootstrap-doks.sh` executes `tofu init`, `tofu plan`,
+  and `tofu apply` with `-refresh=true` and never issues destroy operations. It
+  uses `-target` only when reconciling newly added modules so re-runs simply
+  converge the cluster to the declared state.
+- Generated credentials (Flux deploy key, kubeconfig, admin tokens) are only
+  minted when Vault lacks the corresponding keys. The script first attempts a
+  `vault kv get` and short-circuits secret generation if data already exists,
+  guaranteeing re-runs do not rotate credentials unexpectedly.
+- When data must be updated (for example, after scaling node pools), the
+  script uses `vault kv patch` to upsert just the changed fields, leaving any
+  operator-added metadata untouched.
+- Flux bootstrap is invoked with `--components-upgrade` and
+  `--reconcile-strategy=merge`, which makes it safe to run repeatedly. The
+  command is guarded by `kubectl apply --server-side --dry-run=client` checks
+  so configuration is validated before touching the cluster.
+- The final `git push` to `wildside-infra` happens only when `git status` is
+  dirty, avoiding empty commits and ensuring the run is a no-op if nothing has
+  changed.
+
 **Bootstrap secrets required in repository settings**
 - `DO_API_TOKEN`: DigitalOcean PAT with write access to Kubernetes, droplets,
   networking, and Spaces so the provider can create cluster assets.
