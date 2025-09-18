@@ -586,6 +586,95 @@ intentional.
    tokens, unlock OpenTofu state, and roll back partial state pushes when an
    earlier step times out or fails.
 
+```yaml
+name: deploy-opentofu-doks
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster:
+        description: Target cluster
+        required: true
+        type: choice
+        options: [] # populated dynamically before dispatch
+      plan_only:
+        description: Run plan without applying changes
+        required: false
+        type: boolean
+        default: false
+      vault_secret_prefix:
+        description: Vault KV prefix
+        required: false
+        default: kv/wildside/platform/
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v4
+        timeout-minutes: 5
+
+      - name: Checkout state repository
+        uses: actions/checkout@v4
+        timeout-minutes: 5
+        with:
+          repository: wildside/wildside-infra
+          path: wildside-infra
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        timeout-minutes: 5
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        timeout-minutes: 5
+        with:
+          token: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Vault AppRole login
+        id: vault
+        timeout-minutes: 5
+        run: |
+          token=$(vault write -field=token auth/approle/login role_id=${{ secrets.VAULT_ROLE_ID }} secret_id=${{ secrets.VAULT_SECRET_ID }})
+          echo "::add-mask::${token}"
+          echo "token=${token}" >> $GITHUB_OUTPUT
+
+      - name: tofu init
+        timeout-minutes: 5
+        env:
+          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
+        working-directory: infra/clusters/${{ inputs.cluster }}
+        run: tofu init
+
+      - name: tofu plan
+        timeout-minutes: 10
+        env:
+          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
+        working-directory: infra/clusters/${{ inputs.cluster }}
+        run: tofu plan
+
+      - name: tofu apply
+        if: inputs.plan_only != 'true'
+        timeout-minutes: 30
+        env:
+          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
+          TF_CLI_ARGS_apply: -lock-timeout=5m -input=false
+        working-directory: infra/clusters/${{ inputs.cluster }}
+        run: tofu apply -auto-approve
+
+      - name: Persist state
+        timeout-minutes: 5
+        run: ./scripts/persist_state.sh
+
+      - name: Cleanup
+        if: always()
+        timeout-minutes: 5
+        run: ./scripts/cleanup.sh
+```
 #### Integration with `wildside-infra-k8s`
 
 - The manual workflow shells out to the reusable
