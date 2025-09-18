@@ -50,7 +50,8 @@ if __name__ == "__main__":
   fixture-driven mocking of Python objects and
   [`cmd-mox`](https://github.com/leynos/cmd-mox/) to simulate external
   executables without touching the host system.
-- Behavioural flows that map cleanly to scenarios should adopt `pytest-bdd` so
+- Behavioural flows that map cleanly to scenarios should adopt
+  Behaviour-Driven Development (BDD) via `pytest-bdd` so
   the intent of the script is captured in human-readable Given/When/Then
   narratives.
 - Tests reside in `scripts/tests/` mirroring the script names. For example,
