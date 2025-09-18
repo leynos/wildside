@@ -82,13 +82,7 @@ lint:
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then \
-	  if command -v asyncapi >/dev/null 2>&1; then \
-	    asyncapi validate spec/asyncapi.yaml; \
-	  else \
-	    echo "warning: asyncapi CLI not installed; skipping AsyncAPI lint"; \
-	  fi; \
-	fi
+	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:
