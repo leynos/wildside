@@ -20,27 +20,15 @@
           "traceId": {
             "description": "Correlation identifier for tracing this error across systems.",
             "example": "01HZY8B2W6X5Y7Z9ABCD1234",
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "type": "object"
       },
       "ErrorCode": {
         "description": "Stable machine-readable error code.",
-        "enum": [
-          "invalid_request",
-          "unauthorized",
-          "forbidden",
-          "not_found",
-          "internal_error"
-        ],
+        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"],
         "type": "string"
       },
       "LoginRequest": {
@@ -53,10 +41,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "username",
-          "password"
-        ],
+        "required": ["username", "password"],
         "type": "object"
       },
       "User": {
@@ -74,10 +59,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "displayName"
-        ],
+        "required": ["id", "displayName"],
         "type": "object"
       }
     },
@@ -142,9 +124,7 @@
         },
         "security": [],
         "summary": "Authenticate user and establish a session.",
-        "tags": [
-          "users"
-        ]
+        "tags": ["users"]
       }
     },
     "/api/v1/users": {
@@ -217,9 +197,7 @@
           }
         },
         "summary": "List known users.",
-        "tags": [
-          "users"
-        ]
+        "tags": ["users"]
       }
     },
     "/health/live": {
@@ -238,9 +216,7 @@
         },
         "security": [],
         "summary": "Liveness probe. Return 200 while the process is marked alive and 503 once draining.\nCall `HealthState::mark_unhealthy` before graceful shutdown to surface the drain early.",
-        "tags": [
-          "health"
-        ]
+        "tags": ["health"]
       }
     },
     "/health/ready": {
@@ -259,9 +235,7 @@
         },
         "security": [],
         "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
-        "tags": [
-          "health"
-        ]
+        "tags": ["health"]
       }
     }
   },
