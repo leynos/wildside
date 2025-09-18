@@ -757,6 +757,52 @@ them into the cluster. This design means that the master Vault token is never
 exposed in Git or to most components of the cluster; only ESO has the
 credentials needed to communicate with Vault.[^19]
 
+### Vault appliance design on DigitalOcean
+
+To keep secrets outside the Kubernetes control plane we operate Vault on a
+hardened DigitalOcean Droplet rather than as an in-cluster deployment. The
+appliance is treated as first-class infrastructure with three building blocks:
+
+1. **OpenTofu module (`infra/modules/vault_appliance`)** provisions the Droplet,
+   its firewall, and attached block storage. The module outputs the floating IP,
+   private IP, rendered cloud-init template, and recovery data so downstream
+   automation can fetch them deterministically. Terraform locals drive tagging
+   so observability and backup tooling can discover the node.
+
+2. **Python bootstrap helper (`scripts/bootstrap_vault_appliance.py`)** follows
+   the [scripting standards](scripting-standards.md). It uses `plumbum` to run
+   `ssh`, `vault`, and `doctl` commands, initialises Vault if required, stores
+   generated unseal keys in a secure secrets store, and enables the KV v2 engine
+   plus the AppRole required by the DOKS deployment workflow. The helper is
+   idempotent—re-running it simply verifies that the appliance state matches the
+   desired configuration.
+
+3. **Reusable GitHub Action (`bootstrap-vault-appliance`)** wraps the helper so
+   both the manual DOKS deploy workflow and automated preview pipelines can call
+   it. Inputs include DigitalOcean credentials, the targeted environment, and a
+   reference to where seal keys are stored (for example, 1Password or an S3
+   bucket). The action exposes outputs for the Vault address, CA bundle, and
+   AppRole credentials that the DOKS workflow consumes.
+
+Operational safeguards include:
+
+- **Network isolation:** the Droplet permits ingress only from the CI runners'
+  egress IPs and from the DOKS cluster's node CIDRs. All Vault operations occur
+  over TLS 1.3 with certificates issued via DNS-01 challenges.
+- **Backups:** a nightly DigitalOcean backup captures the encrypted data
+  volume. Operators also configure periodic snapshots with restic to Object
+  Storage for defence in depth.
+- **Auditing:** Vault audit devices stream JSON logs to Loki, giving platform
+  engineers a tamper-evident history of secret access.
+- **Disaster recovery:** recovery keys are split between platform leads and
+  stored in sealed hardware tokens. The bootstrap helper can reseal or unseal
+  the appliance during incidents without rebuilding the Droplet from scratch.
+
+This architecture keeps Vault authoritative for secrets even when clusters are
+recycled. The GitHub Action participates in the same GitOps cycle as other
+infrastructure so operators can recreate environments confidently while
+preserving secret hygiene.
+
 The implementation involves a three-step process:
 
 1. **Deploy Vault and ESO:** Both Vault (in a development mode for this
