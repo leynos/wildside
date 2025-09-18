@@ -61,12 +61,8 @@ fe-build:
 
 openapi: workspace-sync
 	$(call ensure_tool,jq)
-	set -euo pipefail; mkdir -p $(dir $(OPENAPI_SPEC)); \
-	tmp="$(OPENAPI_SPEC).tmp.$$"; \
-	cleanup() { rm -f "$$tmp"; }; trap cleanup EXIT; \
-	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
-	jq -S . "$$tmp" > "$(OPENAPI_SPEC)"; \
-	trap - EXIT
+	mkdir -p $(dir $(OPENAPI_SPEC))
+	./scripts/generate_openapi.sh $(OPENAPI_SPEC)
 
 gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
