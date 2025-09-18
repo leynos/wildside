@@ -510,7 +510,7 @@ with **Kustomize overlays** that patch `spec.values` (e.g., production).
 | ------------ | ------------------- | ----------------------------------------------------------- |
 | Trigger      | Operator input      | Manual `workflow_dispatch` with cluster and optional flags |
 | Preparation  | Environment setup   | Check out repos, install OpenTofu/doctl, authenticate Vault |
-| Plan/apply   | Execute IaC changes | Run `tofu plan`/`tofu apply`, respecting `plan_only`       |
+| Plan/apply   | Infrastructure as Code (IaC) | Execute Infrastructure as Code (IaC) changes (`tofu plan`/`tofu apply`, respecting `plan_only`) |
 | Post-apply   | State persistence   | Commit state artefacts and sync generated secrets to Vault |
 | Reporting    | Observability       | Upload logs and send optional Slack notification           |
 
@@ -544,8 +544,8 @@ intentional.
    environment variables, avoid `doctl` debug output, keep `TF_LOG` at
    `ERROR`, and set `timeout-minutes: 5` so credential bootstrap cannot hang.
 4. Authenticate against Vault using the AppRole credentials, requesting a
-   short-lived token restricted to the configured secret prefix. Use a 20
-   minute TTL with automatic renewal, mask the token via
+   short-lived token restricted to the configured secret prefix. Use a 20-minute
+   time to live (TTL) with automatic renewal, mask the token via
    `echo "::add-mask::${{ steps.login.outputs.token }}"`, and assign
    `timeout-minutes: 5`. Ensure a `finally` step revokes the token on failure.
 5. Run `tofu init`, `tofu plan`, and `tofu apply` from
@@ -627,9 +627,9 @@ environment so blast radius stays contained.
 
 #### Bootstrap secrets required in repository settings
 
-- `DO_API_TOKEN`: DigitalOcean PAT with write access to Kubernetes, droplets,
+- `DO_API_TOKEN`: DigitalOcean Personal Access Token (PAT) with write access to Kubernetes, droplets,
   networking, and Spaces so the provider can create cluster assets.
-- `WILDSIDE_INFRA_PAT`: GitHub token or deploy key with push rights to the
+- `WILDSIDE_INFRA_PAT`: GitHub Personal Access Token (PAT) or deploy key with push rights to the
   `wildside-infra` repository. Required for committing state artefacts.
 - `VAULT_ADDR`: URL of the Vault cluster receiving generated credentials.
 - `VAULT_NAMESPACE` (optional): Populate when Vault uses namespaces; leave
