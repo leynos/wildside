@@ -118,7 +118,7 @@ myapp/
 │  │  └─ kustomization.yaml
 │  └─ scripts/                        # CI/deploy helpers
 │
-├─ .github/workflows/                 # CI pipelines (lint, build, test, push images)
+├─ .github/workflows/                 # CI pipelines + manual DOKS deploy
 ├─ Makefile                           # local DX (optional, see Section 6)
 ├─ package.json                       # bun workspaces + root scripts
 └─ README.md
@@ -503,6 +503,71 @@ with **Kustomize overlays** that patch `spec.values` (e.g., production).
      FluxCD.
    - Invalidate CDN (only for `index.html`), or rely on cache busting for
      hashed assets.
+
+### 7.4 Manual OpenTofu DOKS Deployment Workflow
+
+A manual-only GitHub Actions workflow `deploy-opentofu-doks.yml` lives in
+`.github/workflows/` and drives the DOKS provisioning stack. Keeping the
+workflow manual reduces accidental cluster churn and ensures infra changes are
+intentional.
+
+**Trigger and operator inputs**
+- `workflow_dispatch` with a mandatory `cluster` choice sourced from
+  `infra/clusters/*` so the dropdown always mirrors available environments.
+- Optional `plan_only` boolean for running drift checks without changing
+  infrastructure.
+- Optional `vault_secret_prefix` input that defaults to
+  `kv/wildside/platform/`; operators set it when Vault namespaces organize
+  secrets differently.
+
+**Execution outline**
+1. Check out the application repo and the `wildside-infra` state repo as
+   separate worktrees so Terraform state commits remain isolated from app
+   sources.
+2. Install OpenTofu via `opentofu/setup-opentofu@v1` and export
+   `TF_IN_AUTOMATION=1` to keep logs concise for review.
+3. Configure the DigitalOcean provider with `digitalocean/action-doctl@v2`
+   (fed by `DO_API_TOKEN`) before invoking the OpenTofu wrapper.
+4. Authenticate against Vault using the AppRole credentials, requesting a
+   short-lived token restricted to the configured secret prefix.
+5. Run `tofu init`, `tofu plan`, and `tofu apply` from
+   `infra/clusters/${{ inputs.cluster }}`. Honour `plan_only` by skipping the
+   apply step when it is set to true.
+6. After a successful apply:
+   - Copy `terraform.tfstate` and JSON outputs into the checked out
+     `wildside-infra` repository under
+     `state/doks/${{ inputs.cluster }}/`.
+   - Commit using the bot identity and push to `main` so state history is
+     version controlled.
+   - Stream newly generated secrets (kubeconfig, Flux bootstrap tokens, admin
+     passwords) to Vault with `vault kv put
+     "${{ inputs.vault_secret_prefix }}${{ inputs.cluster }}"`.
+7. Upload plan and apply logs to the workflow summary and optionally forward a
+   Slack notification when the run completes.
+
+**Bootstrap secrets required in repository settings**
+- `DO_API_TOKEN`: DigitalOcean PAT with write access to Kubernetes, droplets,
+  networking, and Spaces so the provider can create cluster assets.
+- `WILDSIDE_INFRA_PAT`: GitHub token or deploy key with push rights to the
+  `wildside-infra` repository. Required for committing state artefacts.
+- `VAULT_ADDR`: URL of the Vault cluster receiving generated credentials.
+- `VAULT_NAMESPACE` (optional): Populate when Vault uses namespaces; leave
+  empty otherwise.
+- `VAULT_ROLE_ID` and `VAULT_SECRET_ID`: AppRole pair scoped to the
+  workflow's secret prefix. Grants write access without sharing a long-lived
+  token.
+- `VAULT_KV_MOUNT`: Name of the KV v2 mount (for example `kv`). Keeps the
+  workflow configurable when multiple mounts exist.
+- `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`: Identity used when committing
+  state back to `wildside-infra`.
+- `SLACK_WEBHOOK_URL` (optional): Enables post-deploy notifications to the
+  platform channel.
+
+Secrets never leave the runner disk unencrypted: the workflow streams
+ephemeral outputs straight to Vault, and only non-sensitive plan/apply logs
+enter the Actions trace. State stays authoritative inside the
+`wildside-infra` repository, while Vault retains any runtime credentials that
+OpenTofu mints, giving operators a reproducible path to rebuild clusters.
 
 ______________________________________________________________________
 
