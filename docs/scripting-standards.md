@@ -70,5 +70,5 @@ if __name__ == "__main__":
 - Keep dependencies minimal. If a new package is required, add it to the `uv`
   block and document the rationale inside the script or companion tests.
 
-Refer back to this document whenever introducing or updating automation
+This document should be referenced when introducing or updating automation
 scripts to maintain a consistent developer experience across the repository.
