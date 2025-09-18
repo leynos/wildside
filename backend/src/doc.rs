@@ -38,6 +38,20 @@ fn disable_security(operation: &mut openapi::path::Operation) {
 }
 
 impl ApiDoc {
+    fn disable_security_for_endpoint<F>(
+        doc: &mut openapi::OpenApi,
+        path: &str,
+        mut select_operation: F,
+    ) where
+        F: FnMut(&mut openapi::path::PathItem) -> Option<&mut openapi::path::Operation>,
+    {
+        if let Some(path_item) = doc.paths.paths.get_mut(path) {
+            if let Some(operation) = select_operation(path_item) {
+                disable_security(operation);
+            }
+        }
+    }
+
     /// Return the generated OpenAPI document enriched with the cookie session security scheme.
     pub fn openapi() -> openapi::OpenApi {
         let mut doc = <Self as OpenApi>::openapi();
@@ -50,23 +64,9 @@ impl ApiDoc {
             )),
         );
 
-        if let Some(path_item) = doc.paths.paths.get_mut("/api/v1/login") {
-            if let Some(operation) = path_item.post.as_mut() {
-                disable_security(operation);
-            }
-        }
-
-        if let Some(path_item) = doc.paths.paths.get_mut("/health/ready") {
-            if let Some(operation) = path_item.get.as_mut() {
-                disable_security(operation);
-            }
-        }
-
-        if let Some(path_item) = doc.paths.paths.get_mut("/health/live") {
-            if let Some(operation) = path_item.get.as_mut() {
-                disable_security(operation);
-            }
-        }
+        Self::disable_security_for_endpoint(&mut doc, "/api/v1/login", |path| path.post.as_mut());
+        Self::disable_security_for_endpoint(&mut doc, "/health/ready", |path| path.get.as_mut());
+        Self::disable_security_for_endpoint(&mut doc, "/health/live", |path| path.get.as_mut());
 
         doc
     }
