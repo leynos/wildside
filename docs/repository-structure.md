@@ -7,9 +7,9 @@ PWA frontend. It supports:
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
 - **Design tokens** as a first‑class package powering Tailwind/daisyUI and
   future native shells.
-- Docker‑friendly builds (musl where sensible) targeting Kubernetes on DOKS,
-  with static assets served from object storage/CDN.
-- Bun as the JS runtime; pnpm as the package manager.
+- Docker-friendly builds (musl where sensible) targeting Kubernetes on
+  DigitalOcean Kubernetes Service (DOKS), with static assets served from
+  object storage/CDN.
 
 A typical request flow is illustrated below:
 
