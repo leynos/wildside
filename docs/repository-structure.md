@@ -511,7 +511,8 @@ A manual-only GitHub Actions workflow `deploy-opentofu-doks.yml` lives in
 workflow manual reduces accidental cluster churn and ensures infra changes are
 intentional.
 
-**Trigger and operator inputs**
+#### Trigger and operator inputs
+
 - `workflow_dispatch` with a mandatory `cluster` choice sourced from
   `infra/clusters/*` so the dropdown always mirrors available environments.
 - Optional `plan_only` boolean for running drift checks without changing
@@ -520,7 +521,8 @@ intentional.
   `kv/wildside/platform/`; operators set it when Vault namespaces organize
   secrets differently.
 
-**Execution outline**
+#### Execution outline
+
 1. Check out the application repo and the `wildside-infra` state repo as
    separate worktrees so Terraform state commits remain isolated from app
    sources.
@@ -545,7 +547,8 @@ intentional.
 7. Upload plan and apply logs to the workflow summary and optionally forward a
    Slack notification when the run completes.
 
-**Integration with `wildside-infra-k8s`**
+#### Integration with `wildside-infra-k8s`
+
 - The manual workflow shells out to the reusable
   `wildside-infra-k8s` composite action (published alongside the cluster
   modules) instead of duplicating bootstrap logic. The action receives the
@@ -561,7 +564,8 @@ intentional.
   artefacts as automated preview pipelines, preventing drift between
   human-driven and CI-driven provisioning.
 
-**Idempotent bootstrap behaviour**
+#### Idempotent bootstrap behaviour
+
 - The action's `scripts/bootstrap_doks.py` executes `tofu init`, `tofu plan`,
   and `tofu apply` with `-refresh=true` and never issues destroy operations. It
   uses `-target` only when reconciling newly added modules so re-runs simply
@@ -581,7 +585,8 @@ intentional.
   dirty, avoiding empty commits and ensuring the run is a no-op if nothing has
   changed.
 
-**Bootstrap secrets required in repository settings**
+#### Bootstrap secrets required in repository settings
+
 - `DO_API_TOKEN`: DigitalOcean PAT with write access to Kubernetes, droplets,
   networking, and Spaces so the provider can create cluster assets.
 - `WILDSIDE_INFRA_PAT`: GitHub token or deploy key with push rights to the
