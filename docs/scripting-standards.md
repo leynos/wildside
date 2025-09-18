@@ -1,4 +1,4 @@
-# Scripting Standards
+# Scripting standards
 
 Wildside scripts favour clarity, reproducibility, and testability. The
 baseline tooling is Python and the [`uv`](https://github.com/astral-sh/uv)
