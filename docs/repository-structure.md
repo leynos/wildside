@@ -506,6 +506,14 @@ with **Kustomize overlays** that patch `spec.values` (e.g., production).
 
 ### 7.4 Manual OpenTofu DOKS deployment workflow
 
+| Phase        | Focus               | Key actions                                                 |
+| ------------ | ------------------- | ----------------------------------------------------------- |
+| Trigger      | Operator input      | Manual `workflow_dispatch` with cluster and optional flags |
+| Preparation  | Environment setup   | Check out repos, install OpenTofu/doctl, authenticate Vault |
+| Plan/apply   | Execute IaC changes | Run `tofu plan`/`tofu apply`, respecting `plan_only`       |
+| Post-apply   | State persistence   | Commit state artefacts and sync generated secrets to Vault |
+| Reporting    | Observability       | Upload logs and send optional Slack notification           |
+
 A manual-only GitHub Actions workflow `deploy-opentofu-doks.yml` lives in
 `.github/workflows/` and drives the DOKS provisioning stack. Keeping the
 workflow manual reduces accidental cluster churn and ensures infra changes are
