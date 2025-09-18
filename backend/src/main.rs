@@ -25,6 +25,8 @@ use backend::api::users::{list_users, login};
 use backend::doc::ApiDoc;
 use backend::ws;
 use backend::Trace;
+#[cfg(debug_assertions)]
+use utoipa::OpenApi;
 
 fn build_app(
     health_state: web::Data<HealthState>,
