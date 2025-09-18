@@ -84,24 +84,40 @@ def validate_review_line(line: str, line_num: int, today: dt.date) -> str | None
     return None
 
 
+def collect_problems(lines: list[str], today: dt.date) -> list[str]:
+    """Return all review-by issues detected in *lines*.
+
+    Examples:
+        >>> today = dt.date(2025, 1, 1)
+        >>> collect_problems(['# review by: 2024-12-31'], today)
+        ["line 1: review by 2024-12-31 has already passed"]
+    """
+
+    return [
+        issue
+        for idx, line in enumerate(lines, start=1)
+        if (issue := validate_review_line(line, idx, today))
+    ]
+
+
+def report_problems(problems: list[str]) -> None:
+    """Emit diagnostics for the collected *problems*."""
+
+    print(
+        "Expired review-by annotations detected in .redocly.lint-ignore.yaml:",
+        file=sys.stderr,
+    )
+    for issue in problems:
+        print(f"  {issue}", file=sys.stderr)
+
+
 def main() -> None:
-    lines = load_ignore_file_lines()
-    today = dt.date.today()
-    problems: list[str] = []
+    problems = collect_problems(load_ignore_file_lines(), dt.date.today())
+    if not problems:
+        return
 
-    for idx, line in enumerate(lines, start=1):
-        problem = validate_review_line(line, idx, today)
-        if problem:
-            problems.append(problem)
-
-    if problems:
-        print(
-            "Expired review-by annotations detected in .redocly.lint-ignore.yaml:",
-            file=sys.stderr,
-        )
-        for issue in problems:
-            print(f"  {issue}", file=sys.stderr)
-        sys.exit(1)
+    report_problems(problems)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
