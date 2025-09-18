@@ -4,12 +4,12 @@
 provider "digitalocean" {}
 
 locals {
-  tags_normalised = [for t in var.tags : trimspace(t)]
+  tags_normalised = distinct([for t in var.tags : trimspace(t)])
   node_pools_normalised = [
     for np in var.node_pools : merge(
       np,
       {
-        tags = try([for t in np.tags : trimspace(t)], null)
+        tags = try(distinct([for t in np.tags : trimspace(t)]), null)
       }
     )
   ]

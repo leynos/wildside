@@ -31,11 +31,12 @@ REDOCLY_CLI_VERSION ?= 2.1.0
 ORVAL_VERSION ?= 7.11.2
 BIOME_VERSION ?= 2.2.4
 TSC_VERSION ?= 5.9.2
+OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile conftest tofu doks-test doks-policy \
+        lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy \
         dev-cluster-test
 
 all: fmt lint test
@@ -56,11 +57,10 @@ fe-build:
 	cd frontend-pwa && bun run build
 
 openapi:
-	set -euo pipefail; mkdir -p spec; \
-	tmp="spec/openapi.json.tmp.$$"; \
-	cleanup() { rm -f "$$tmp"; }; trap cleanup EXIT; \
-	cargo run --quiet --manifest-path backend/Cargo.toml --bin openapi-dump > "$$tmp"; \
-	mv "$$tmp" spec/openapi.json; trap - EXIT
+	# Replace with a bin that prints OpenAPI
+	mkdir -p $(dir $(OPENAPI_SPEC))
+	$(call ensure_tool,jq)
+	curl -s http://localhost:8080/api-docs/openapi.json | jq -S . > $(OPENAPI_SPEC)
 
 gen: openapi
 	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
@@ -78,27 +78,21 @@ fmt:
 lint:
 	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
-	$(MAKE) lint-asyncapi
-	$(MAKE) lint-openapi
-	$(MAKE) lint-makefile
+	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then \
-	  if command -v asyncapi >/dev/null 2>&1; then \
-	    asyncapi validate spec/asyncapi.yaml; \
-	  else \
-	    echo "warning: asyncapi CLI not installed; skipping AsyncAPI lint"; \
-	  fi; \
-	fi
+	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
 
 # Lint OpenAPI spec with Redocly CLI
-lint-openapi: openapi
-	if command -v redocly >/dev/null 2>&1; then \
-	  redocly lint spec/openapi.json; \
-	else \
-	  echo "warning: redocly CLI not installed; skipping OpenAPI lint"; \
+lint-openapi:
+	$(call ensure_tool,python3)
+	@if ! grep -F -q "$(OPENAPI_SPEC):" .redocly.lint-ignore.yaml; then \
+		echo "OpenAPI ignore file missing entry for $(OPENAPI_SPEC)" >&2; \
+		exit 1; \
 	fi
+	@python3 scripts/check_redoc_ignore.py
+	$(call exec_or_bunx,redocly,lint $(OPENAPI_SPEC),@redocly/cli@$(REDOCLY_CLI_VERSION))
 
 # Validate Makefile style and structure
 lint-makefile:
@@ -106,6 +100,13 @@ lint-makefile:
 	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
 	checkmake Makefile
 	mbake validate Makefile
+
+lint-infra:
+	$(call ensure_tool,tflint)
+	$(call ensure_tool,uvx)
+	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl
+	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
+	uvx checkov -d infra
 
 test: deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features

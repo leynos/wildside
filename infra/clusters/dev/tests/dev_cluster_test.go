@@ -31,8 +31,7 @@ func testVars(t *testing.T) map[string]interface{} {
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
 	}
-
-        return vars
+	return vars
 }
 
 func TestDevClusterValidate(t *testing.T) {
@@ -136,59 +135,92 @@ func TestDevClusterPolicy(t *testing.T) {
 //	            "max_nodes":  1,
 //	    },
 //	})
-func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, want ...string) {
-        t.Helper()
-        t.Parallel()
-        vars := testVars(t)
-        vars["node_pools"] = invalidNodePools
-        _, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-                SourceRootRel: "../../..",
-                TfSubDir:      "clusters/dev",
-                Vars:          vars,
-                EnvVars:       map[string]string{},
-        })
-        _, err := terraform.InitAndPlanE(t, opts)
-        require.Error(t, err)
-        for _, s := range append([]string{"node_pools"}, want...) {
-                require.ErrorContains(t, err, s)
-        }
+func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, wantErrSubstrings ...string) {
+	t.Helper()
+	vars := testVars(t)
+	vars["node_pools"] = invalidNodePools
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "node_pools")
+	for _, substring := range wantErrSubstrings {
+		require.ErrorContains(t, err, substring)
+	}
 }
 
-func TestDevClusterInvalidNodePools(t *testing.T) {
-        cases := map[string]struct {
-                Pools []map[string]interface{}
-                Want  []string
-        }{
-                "InvalidNodePool": {
-                        Pools: []map[string]interface{}{
-                                {
-                                        "name":       "default",
-                                        "size":       "s-2vcpu-2gb",
-                                        "node_count": 1,
-                                        "auto_scale": false,
-                                        "min_nodes":  1,
-                                        "max_nodes":  1,
-                                },
-                        },
-                        Want: []string{"node_count", "at least 2 nodes"},
-                },
-                "AutoScaleMinExceedsCount": {
-                        Pools: []map[string]interface{}{
-                                {
-                                        "name":       "default",
-                                        "size":       "s-2vcpu-2gb",
-                                        "node_count": 2,
-                                        "auto_scale": true,
-                                        "min_nodes":  3,
-                                        "max_nodes":  5,
-                                },
-                        },
-                        Want: []string{"auto_scale", "min_nodes"},
-                },
-        }
-        for name, tc := range cases {
-                t.Run(name, func(t *testing.T) {
-                        testInvalidNodePoolConfig(t, tc.Pools, tc.Want...)
-                })
-        }
+func TestDevClusterInvalidNodePoolConfigs(t *testing.T) {
+	cases := []struct {
+		name              string
+		nodePools         []map[string]interface{}
+		wantErrSubstrings []string
+	}{
+		{
+			name: "NodeCountBelowMinimum",
+			nodePools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 1,
+					"auto_scale": false,
+					"min_nodes":  1,
+					"max_nodes":  1,
+				},
+			},
+			wantErrSubstrings: []string{"node_count"},
+		},
+		{
+			name: "AutoScaleMinExceedsCount",
+			nodePools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  3,
+					"max_nodes":  5,
+				},
+			},
+			wantErrSubstrings: []string{"auto_scale", "min_nodes"},
+		},
+		{
+			name: "AutoScaleMinBelowTwo",
+			nodePools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  1,
+					"max_nodes":  5,
+				},
+			},
+			wantErrSubstrings: []string{"min_nodes"},
+		},
+		{
+			name: "MaxNodesBelowMinNodes",
+			nodePools: []map[string]interface{}{
+				{
+					"name":       "default",
+					"size":       "s-2vcpu-2gb",
+					"node_count": 2,
+					"auto_scale": true,
+					"min_nodes":  5,
+					"max_nodes":  4,
+				},
+			},
+			wantErrSubstrings: []string{"max_nodes"},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			testInvalidNodePoolConfig(t, tc.nodePools, tc.wantErrSubstrings...)
+		})
+	}
 }

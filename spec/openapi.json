@@ -1,27 +1,91 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "backend",
-    "description": "",
-    "license": {
-      "name": "Apache-2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+  "components": {
+    "schemas": {
+      "Error": {
+        "additionalProperties": false,
+        "description": "API error response payload.\n\n# Examples\n```\nuse backend::models::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code, ErrorCode::NotFound);\n```",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode",
+            "description": "Stable machine-readable error code."
+          },
+          "details": {
+            "description": "Supplementary error details.\n\nThis field should contain additional structured information about the error,\nsuch as validation errors, field-specific issues, or other context.\nThe expected format is a JSON object, for example:\n`{ \"field_errors\": { \"email\": \"invalid format\" }, \"reason\": \"missing data\" }`\nConsumers should document and maintain the structure of this object for consistency."
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "example": "Something went wrong",
+            "type": "string"
+          },
+          "traceId": {
+            "description": "Correlation identifier for tracing this error across systems.",
+            "example": "01HZY8B2W6X5Y7Z9ABCD1234",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["code", "message"],
+        "type": "object"
+      },
+      "ErrorCode": {
+        "description": "Stable machine-readable error code.",
+        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"],
+        "type": "string"
+      },
+      "LoginRequest": {
+        "description": "Login request body for `POST /api/v1/login`.\n\nExample JSON:\n`{\"username\":\"admin\",\"password\":\"password\"}`",
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": ["username", "password"],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "description": "Application user.",
+        "properties": {
+          "displayName": {
+            "description": "Display name shown to other users",
+            "example": "Ada Lovelace",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable user identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "type": "string"
+          }
+        },
+        "required": ["id", "displayName"],
+        "type": "object"
+      }
     },
+    "securitySchemes": {
+      "cookieAuth": {
+        "in": "cookie",
+        "name": "session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Public REST API for Wildside services.",
+    "license": {
+      "name": "ISC",
+      "url": "https://opensource.org/license/isc-license-txt/"
+    },
+    "title": "Wildside API",
     "version": "0.1.0"
   },
-  "servers": [
-    {
-      "url": "/"
-    }
-  ],
+  "openapi": "3.1.0",
   "paths": {
     "/api/v1/login": {
       "post": {
-        "tags": ["users"],
-        "summary": "Authenticate user and establish a session.",
         "description": "Uses the centralised `Error` type so clients get a consistent\nerror schema across all endpoints.",
         "operationId": "login",
-        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -37,215 +101,163 @@
             "description": "Login success",
             "headers": {
               "Set-Cookie": {
+                "description": "Session cookie",
                 "schema": {
                   "type": "string"
-                },
-                "description": "Session cookie"
+                }
               }
             }
           },
           "401": {
-            "description": "Invalid credentials",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Invalid credentials"
           },
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [],
+        "summary": "Authenticate user and establish a session.",
+        "tags": ["users"]
       }
     },
     "/api/v1/users": {
       "get": {
-        "tags": ["users"],
-        "summary": "List known users.",
         "description": "# Examples\n```\nuse actix_web::App;\nuse backend::api::users::list_users;\n\nlet app = App::new().service(list_users);\n```",
         "operationId": "listUsers",
-        "security": [
-          {
-            "SessionCookie": []
-          }
-        ],
         "responses": {
           "200": {
-            "description": "Users",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/User"
-                  }
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": "Users"
           },
           "400": {
-            "description": "Invalid request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Invalid request"
           },
           "401": {
-            "description": "Unauthorised",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Unauthorised"
           },
           "403": {
-            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Forbidden"
           },
           "404": {
-            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Not found"
           },
           "500": {
-            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            }
+            },
+            "description": "Internal server error"
           }
-        }
+        },
+        "summary": "List known users.",
+        "tags": ["users"]
       }
     },
     "/health/live": {
       "get": {
-        "tags": ["health"],
-        "summary": "Liveness probe. Return 200 when the process is alive.",
         "operationId": "live",
         "responses": {
           "200": {
             "description": "Server is alive"
+          },
+          "405": {
+            "description": "Method not allowed; only GET probes are supported"
+          },
+          "503": {
+            "description": "Server is shutting down"
           }
-        }
+        },
+        "security": [],
+        "summary": "Liveness probe. Return 200 while the process is marked alive and 503 once draining.\nCall `HealthState::mark_unhealthy` before graceful shutdown to surface the drain early.",
+        "tags": ["health"]
       }
     },
     "/health/ready": {
       "get": {
-        "tags": ["health"],
-        "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
         "operationId": "ready",
         "responses": {
           "200": {
             "description": "Server is ready to handle traffic"
           },
+          "405": {
+            "description": "Method not allowed; only GET probes are supported"
+          },
           "503": {
             "description": "Server is not ready"
           }
-        }
+        },
+        "security": [],
+        "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
+        "tags": ["health"]
       }
     }
   },
-  "components": {
-    "securitySchemes": {
-      "SessionCookie": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "session"
-      }
-    },
-    "schemas": {
-      "Error": {
-        "type": "object",
-        "description": "API error response payload.\n\n# Examples\n```\nuse backend::models::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code, ErrorCode::NotFound);\n```",
-        "required": ["code", "message"],
-        "properties": {
-          "code": {
-            "$ref": "#/components/schemas/ErrorCode",
-            "description": "Stable machine-readable error code."
-          },
-          "details": {
-            "description": "Supplementary error details.\n\nThis field should contain additional structured information about the error,\nsuch as validation errors, field-specific issues, or other context.\nThe expected format is a JSON object, for example:\n`{ \"field_errors\": { \"email\": \"invalid format\" }, \"reason\": \"missing data\" }`\nConsumers should document and maintain the structure of this object for consistency."
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable error message.",
-            "example": "Something went wrong"
-          },
-          "traceId": {
-            "type": ["string", "null"],
-            "description": "Correlation identifier for tracing this error across systems.",
-            "example": "01HZY8B2W6X5Y7Z9ABCD1234"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ErrorCode": {
-        "type": "string",
-        "description": "Stable machine-readable error code.",
-        "enum": ["invalid_request", "unauthorized", "forbidden", "not_found", "internal_error"]
-      },
-      "LoginRequest": {
-        "type": "object",
-        "description": "Login request body for `POST /api/v1/login`.\n\nExample JSON:\n`{\"username\":\"admin\",\"password\":\"password\"}`",
-        "required": ["username", "password"],
-        "properties": {
-          "password": {
-            "type": "string"
-          },
-          "username": {
-            "type": "string"
-          }
-        }
-      },
-      "User": {
-        "type": "object",
-        "description": "Application user.",
-        "required": ["id", "displayName"],
-        "properties": {
-          "displayName": {
-            "type": "string",
-            "description": "Display name shown to other users",
-            "example": "Ada Lovelace"
-          },
-          "id": {
-            "type": "string",
-            "description": "Stable user identifier",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          }
-        },
-        "additionalProperties": false
-      }
+  "security": [
+    {
+      "cookieAuth": []
     }
-  },
+  ],
+  "servers": [
+    {
+      "description": "Local development server",
+      "url": "https://api.wildside.test"
+    }
+  ],
   "tags": [
     {
-      "name": "users",
-      "description": "Operations related to users"
+      "description": "Operations related to users",
+      "name": "users"
     },
     {
-      "name": "health",
-      "description": "Endpoints for health checks"
+      "description": "Endpoints for health checks",
+      "name": "health"
     }
   ]
 }

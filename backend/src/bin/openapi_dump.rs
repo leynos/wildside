@@ -10,7 +10,6 @@
 use backend::ApiDoc;
 use serde_json::to_writer_pretty;
 use std::io::{self, BufWriter, Write};
-use utoipa::OpenApi;
 
 /// Write the OpenAPI document to stdout.
 /// Serialises with a two-space indent to match repo style.

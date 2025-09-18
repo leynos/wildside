@@ -112,6 +112,9 @@ jobs:
             test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
           fi
 
+      - name: Lint OpenAPI specification
+        run: make lint-openapi
+
       # Frontend
       - name: Build tokens
         working-directory: packages/tokens

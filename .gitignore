@@ -6,6 +6,7 @@
 node_modules/
 **/dist/
 packages/types/dist/
+**/node-compile-cache/
 
 # Build outputs
 dist/
@@ -37,6 +38,7 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+.tflint.d/
 
 # Misc
 .DS_Store
