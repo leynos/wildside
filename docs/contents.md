@@ -62,6 +62,9 @@
 
 - [Documentation style guide](documentation-style-guide.md) – conventions for
   clear, consistent docs. *Audience: all contributors.*
+- [Scripting standards](scripting-standards.md) – Python-first automation
+  guidance covering `uv`, `plumbum`, and testing expectations. *Audience:
+  automation authors.*
 - [Complexity antipatterns and refactoring strategies][complexity-guide] –
   managing code complexity. *Audience: implementers and maintainers.*
 - [A command-line wizard’s guide to srgn](srgn.md) – using `srgn` for

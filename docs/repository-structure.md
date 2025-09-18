@@ -552,16 +552,17 @@ intentional.
   selected `cluster` and Vault inputs and emits the generated Flux manifests
   into the checked out `wildside-infra` repository, matching the
   `clusters/{name}` and `platform/**` tree expected by FluxCD.
-- `wildside-infra-k8s` encapsulates its own `scripts/bootstrap-doks.sh`
-  (maintained inside the action repository), keeps provider versions aligned
-  with the module, and ensures Flux is configured to watch the same
-  `wildside-infra` commit that captured the state.
+- `wildside-infra-k8s` encapsulates a Python bootstrap helper
+  (`scripts/bootstrap_doks.py`) implemented according to the
+  [scripting standards](scripting-standards.md). The helper keeps provider
+  versions aligned with the module and ensures Flux is configured to watch the
+  same `wildside-infra` commit that captured the state.
 - By reusing the action, the manual trigger produces the exact same layout and
   artefacts as automated preview pipelines, preventing drift between
   human-driven and CI-driven provisioning.
 
 **Idempotent bootstrap behaviour**
-- The action's `scripts/bootstrap-doks.sh` executes `tofu init`, `tofu plan`,
+- The action's `scripts/bootstrap_doks.py` executes `tofu init`, `tofu plan`,
   and `tofu apply` with `-refresh=true` and never issues destroy operations. It
   uses `-target` only when reconciling newly added modules so re-runs simply
   converge the cluster to the declared state.
