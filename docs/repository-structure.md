@@ -504,7 +504,7 @@ with **Kustomize overlays** that patch `spec.values` (e.g., production).
    - Invalidate CDN (only for `index.html`), or rely on cache busting for
      hashed assets.
 
-### 7.4 Manual OpenTofu DOKS Deployment Workflow
+### 7.4 Manual OpenTofu DOKS deployment workflow
 
 A manual-only GitHub Actions workflow `deploy-opentofu-doks.yml` lives in
 `.github/workflows/` and drives the DOKS provisioning stack. Keeping the
