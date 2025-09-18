@@ -64,8 +64,9 @@ if __name__ == "__main__":
 ## Operational guidelines
 
 - Scripts must be idempotent. Re-running them should converge state without
-  destructive side effects. Use guard conditions (for example, checking Vault
-  for existing secrets) before writing or rotating credentials.
+  destructive side effects. Use guard conditions (for example, checking the
+  HashiCorp Vault secrets manager for existing secrets) before writing or
+  rotating credentials.
 - Prefer pure functions that accept configuration objects over global state so
   tests can exercise the logic deterministically.
 - Exit codes should follow UNIX conventions: `0` for success, non-zero for
