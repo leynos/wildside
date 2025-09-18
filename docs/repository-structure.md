@@ -556,8 +556,15 @@ intentional.
    - `tofu apply`: `timeout-minutes: 30` plus `TF_CLI_ARGS_apply` containing
      `-lock-timeout=5m -input=false`.
    Honour `plan_only` by skipping apply, treat any timeout as a failure, and
-   run cleanup (`tofu force-unlock` and Vault token revoke) in subsequent
-   steps.
+   capture the state lock identifier that `tofu` prints (for example, parse the
+   `ID` from `Acquiring state lock` messages) so it can be provided to
+   `tofu force-unlock <LOCK_ID>` when recovery is required. Only invoke
+   `tofu force-unlock` after confirming the run timed out or was aborted,
+   verifying the backend still lists this workflow as the lock owner, and
+   ensuring state backups exist. Normal failures should not use
+   `force-unlock`; instead, coordinate with the lock holder or retry once the
+   lock clears. The cleanup step continues to revoke Vault tokens and should
+   perform any unlock only after those safety checks pass.
 6. After a successful apply:
    - Copy `terraform.tfstate` and JSON outputs into the checked out
      `wildside-infra` repository under
