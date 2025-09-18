@@ -75,6 +75,26 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   Vault. Rerunning the action must reconcile the repository state without
   manual `tofu apply` steps.
 
+### 2.4: Vault appliance bootstrap
+
+- [ ] **Author an OpenTofu `vault_appliance` module**: Provision a dedicated
+  DigitalOcean Droplet (or HA pair) with firewall rules, block storage, and
+  load balancer attachment for Vault. Expose outputs for the public endpoint,
+  CA certificate, and recovery keys.
+
+- [ ] **Ship a Python bootstrap helper**: Create
+  `scripts/bootstrap_vault_appliance.py` using the
+  [scripting standards](scripting-standards.md) to initialise Vault (init if
+  sealed, unseal with stored shares, enable the KV v2 mount, and provision the
+  AppRole used by the DOKS workflow). Include pytest coverage with
+  `cmd-mox`-backed mocks for `vault`, `doctl`, and `ssh` interactions.
+
+- [ ] **Publish a `bootstrap-vault-appliance` GitHub Action**: Wrap the Python
+  helper in a composite action that the manual DOKS workflow and the
+  `wildside-infra-k8s` pipeline can reuse. The action should accept environment
+  identifiers, Vault seal key secrets, and DigitalOcean credentials, and must
+  be idempotent so re-runs verify rather than recreate the appliance.
+
 ## Phase 3: CI/CD workflow (In progress)
 
 This phase focuses on automating the lifecycle of the ephemeral preview
