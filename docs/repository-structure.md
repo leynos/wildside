@@ -533,27 +533,51 @@ intentional.
 
 1. Check out the application repo and the `wildside-infra` state repo as
    separate worktrees so Terraform state commits remain isolated from app
-   sources.
+   sources. Set `timeout-minutes: 5` on each `actions/checkout` invocation to
+   fail fast if GitHub cannot reach the repository.
 2. Install OpenTofu via `opentofu/setup-opentofu@v1` and export
-   `TF_IN_AUTOMATION=1` to keep logs concise for review.
+   `TF_IN_AUTOMATION=1` to keep logs concise for review. Cap the toolchain
+   setup step at `timeout-minutes: 5` to prevent indefinite downloads.
 3. Configure the DigitalOcean provider with `digitalocean/action-doctl@v2`
-   (fed by `DO_API_TOKEN`) before invoking the OpenTofu wrapper.
+   (fed by `DO_API_TOKEN`) before invoking the OpenTofu wrapper. Rely on the
+   action's `core.setSecret` masking or emit `::add-mask::` for any derived
+   environment variables, avoid `doctl` debug output, keep `TF_LOG` at
+   `ERROR`, and set `timeout-minutes: 5` so credential bootstrap cannot hang.
 4. Authenticate against Vault using the AppRole credentials, requesting a
-   short-lived token restricted to the configured secret prefix.
+   short-lived token restricted to the configured secret prefix. Use a 20
+   minute TTL with automatic renewal, mask the token via
+   `echo "::add-mask::${{ steps.login.outputs.token }}"`, and assign
+   `timeout-minutes: 5`. Ensure a `finally` step revokes the token on failure.
 5. Run `tofu init`, `tofu plan`, and `tofu apply` from
-   `infra/clusters/${{ inputs.cluster }}`. Honour `plan_only` by skipping the
-   apply step when it is set to true.
+   `infra/clusters/${{ inputs.cluster }}`. Configure them as distinct steps
+   with sensible guards:
+   - `tofu init`: `timeout-minutes: 5`.
+   - `tofu plan`: `timeout-minutes: 10`.
+   - `tofu apply`: `timeout-minutes: 30` plus `TF_CLI_ARGS_apply` containing
+     `-lock-timeout=5m -input=false`.
+   Honour `plan_only` by skipping apply, treat any timeout as a failure, and
+   run cleanup (`tofu force-unlock` and Vault token revoke) in subsequent
+   steps.
 6. After a successful apply:
    - Copy `terraform.tfstate` and JSON outputs into the checked out
      `wildside-infra` repository under
-     `state/doks/${{ inputs.cluster }}/`.
+     `state/doks/${{ inputs.cluster }}/`, redacting values marked sensitive
+     before persistence.
    - Commit using the bot identity and push to `main` so state history is
-     version controlled.
+     version controlled; set `timeout-minutes: 5` on the push step.
    - Stream newly generated secrets (kubeconfig, Flux bootstrap tokens, admin
      passwords) to Vault with `vault kv put
-     "${{ inputs.vault_secret_prefix }}${{ inputs.cluster }}"`.
+     "${{ inputs.vault_secret_prefix }}${{ inputs.cluster }}"`, piping
+     stdout through tooling that honours GitHub masking and avoiding any
+     direct `echo` of secret values.
 7. Upload plan and apply logs to the workflow summary and optionally forward a
-   Slack notification when the run completes.
+   Slack notification when the run completes. Use a redaction script (for
+   example, `scripts/redact_tofu_outputs.py`) so Terraform outputs, Vault
+   responses, and DigitalOcean IDs remain masked, and keep the upload step to
+   `timeout-minutes: 5`.
+8. Add a terminal cleanup step conditioned with `if: always()` to revoke
+   tokens, unlock OpenTofu state, and roll back partial state pushes when an
+   earlier step times out or fails.
 
 #### Integration with `wildside-infra-k8s`
 
@@ -571,6 +595,14 @@ intentional.
 - By reusing the action, the manual trigger produces the exact same layout and
   artefacts as automated preview pipelines, preventing drift between
   human-driven and CI-driven provisioning.
+
+Maintain strict secret hygiene: although GitHub Actions masks registered
+secrets, never echo or log credential values, including through debug statements
+or accidental `print` output. Avoid writing secrets to workspace files or
+committing them; prefer least-privilege, short-lived tokens, and rely on the
+platform's masking and secret redaction features when streaming data to Vault.
+Review workflow permissions regularly and provision dedicated secrets per
+environment so blast radius stays contained.
 
 #### Idempotent bootstrap behaviour
 
