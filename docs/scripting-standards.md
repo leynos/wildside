@@ -34,7 +34,7 @@ from plumbum.cmd import tofu
 
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
-    tofu["-chdir", project_root / "infra" / "clusters" / "dev", "plan"]()
+    tofu[f"-chdir={project_root / 'infra' / 'clusters' / 'dev'}", "plan"]()
 
 
 if __name__ == "__main__":
