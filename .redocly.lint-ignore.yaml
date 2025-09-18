@@ -6,3 +6,16 @@ spec/openapi.json:
       # owner: platform-engineering
       # rationale: Server URLs are injected per environment by Traefik; the spec intentionally leaves them blank.
       # review by: 2025-12-31
+  operation-4xx-response:
+    - '#/paths/~1health~1live/get/responses'
+      # owner: platform-engineering
+      # rationale: Health probes return 200 or 503 to reflect service state;
+      #   4xx responses would signal client misconfiguration, not an API
+      #   contract change.
+      # review by: 2026-03-31
+    - '#/paths/~1health~1ready/get/responses'
+      # owner: platform-engineering
+      # rationale: Health probes return 200 or 503 to reflect service state;
+      #   4xx responses would signal client misconfiguration, not an API
+      #   contract change.
+      # review by: 2026-03-31
