@@ -639,7 +639,9 @@ jobs:
         id: vault
         timeout-minutes: 5
         run: |
-          token=$(vault write -field=token auth/approle/login role_id=${{ secrets.VAULT_ROLE_ID }} secret_id=${{ secrets.VAULT_SECRET_ID }})
+          token=$(vault write -field=token auth/approle/login \
+            role_id=${{ secrets.VAULT_ROLE_ID }} \
+            secret_id=${{ secrets.VAULT_SECRET_ID }})
           echo "::add-mask::${token}"
           echo "token=${token}" >> $GITHUB_OUTPUT
 
@@ -675,14 +677,15 @@ jobs:
         timeout-minutes: 5
         run: ./scripts/cleanup.sh
 ```
+
 #### Integration with `wildside-infra-k8s`
 
-- The manual workflow shells out to the reusable
-  `wildside-infra-k8s` composite action (published alongside the cluster
-  modules) instead of duplicating bootstrap logic. The action receives the
-  selected `cluster` and Vault inputs and emits the generated Flux manifests
-  into the checked out `wildside-infra` repository, matching the
-  `clusters/{name}` and `platform/**` tree expected by FluxCD.
+- The manual workflow shells out to the reusable `wildside-infra-k8s`
+  composite action (published alongside the cluster modules) instead of
+  duplicating bootstrap logic. The action receives the selected `cluster` and
+  Vault inputs and emits the generated Flux manifests into the checked out
+  `wildside-infra` repository, matching the `clusters/{name}` and
+  `platform/**` tree expected by FluxCD.
 - `wildside-infra-k8s` encapsulates a Python bootstrap helper
   (`scripts/bootstrap_doks.py`) implemented according to the
   [scripting standards](scripting-standards.md). The helper keeps provider
@@ -693,19 +696,19 @@ jobs:
   human-driven and CI-driven provisioning.
 
 Maintain strict secret hygiene: although GitHub Actions masks registered
-secrets, never echo or log credential values, including through debug statements
-or accidental `print` output. Avoid writing secrets to workspace files or
-committing them; prefer least-privilege, short-lived tokens, and rely on the
-platform's masking and secret redaction features when streaming data to Vault.
-Review workflow permissions regularly and provision dedicated secrets per
-environment so blast radius stays contained.
+secrets, never echo or log credential values, including through debug
+statements or accidental `print` output. Avoid writing secrets to workspace
+files or committing them; prefer least-privilege, short-lived tokens, and
+rely on the platform's masking and secret redaction features when streaming
+data to Vault. Review workflow permissions regularly and provision dedicated
+secrets per environment so blast radius stays contained.
 
 #### Idempotent bootstrap behaviour
 
 - The action's `scripts/bootstrap_doks.py` executes `tofu init`, `tofu plan`,
-  and `tofu apply` with `-refresh=true` and never issues destroy operations. It
-  uses `-target` only when reconciling newly added modules so re-runs simply
-  converge the cluster to the declared state.
+  and `tofu apply` with `-refresh=true` and never issues destroy operations.
+  It uses `-target` only when reconciling newly added modules so re-runs
+  simply converge the cluster to the declared state.
 - Generated credentials (Flux deploy key, kubeconfig, admin tokens) are only
   minted when Vault lacks the corresponding keys. The script first attempts a
   `vault kv get` and short-circuits secret generation if data already exists,
@@ -715,18 +718,20 @@ environment so blast radius stays contained.
   operator-added metadata untouched.
 - Flux bootstrap is invoked with `--components-upgrade` and
   `--reconcile-strategy=merge`, which makes it safe to run repeatedly. The
-  command is guarded by `kubectl apply --server-side --dry-run=client` checks
-  so configuration is validated before touching the cluster.
+  command is guarded by `kubectl apply --server-side --dry-run=client`
+  checks so configuration is validated before touching the cluster.
 - The final `git push` to `wildside-infra` happens only when `git status` is
   dirty, avoiding empty commits and ensuring the run is a no-op if nothing has
   changed.
 
 #### Bootstrap secrets required in repository settings
 
-- `DO_API_TOKEN`: DigitalOcean Personal Access Token (PAT) with write access to Kubernetes, droplets,
-  networking, and Spaces so the provider can create cluster assets.
-- `WILDSIDE_INFRA_PAT`: GitHub Personal Access Token (PAT) or deploy key with push rights to the
-  `wildside-infra` repository. Required for committing state artefacts.
+- `DO_API_TOKEN`: DigitalOcean Personal Access Token (PAT) with write access
+  to Kubernetes, droplets, networking, and Spaces so the provider can create
+  cluster assets.
+- `WILDSIDE_INFRA_PAT`: GitHub Personal Access Token (PAT) or deploy key with
+  push rights to the `wildside-infra` repository. Required for committing
+  state artefacts.
 - `VAULT_ADDR`: URL of the Vault cluster receiving generated credentials.
 - `VAULT_NAMESPACE` (optional): Populate when Vault uses namespaces; leave
   empty otherwise.
