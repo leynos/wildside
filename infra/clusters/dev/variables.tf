@@ -100,3 +100,146 @@ variable "expose_kubeconfig" {
   description = "Expose kubeconfig via module outputs (stores credentials in state)"
   default     = false
 }
+
+variable "should_install_flux" {
+  type        = bool
+  description = "Whether to install FluxCD on the cluster"
+  default     = false
+
+  validation {
+    condition     = !(var.should_install_flux && !var.should_create_cluster)
+    error_message = "should_install_flux requires should_create_cluster to be true"
+  }
+}
+
+variable "flux_namespace" {
+  type        = string
+  description = "Namespace where Flux resources will be installed"
+  default     = "flux-system"
+
+  validation {
+    condition = (
+      length(trimspace(var.flux_namespace)) > 0 &&
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.flux_namespace))
+    )
+    error_message = "flux_namespace must be a valid Kubernetes namespace name"
+  }
+}
+
+variable "flux_git_repository_name" {
+  type        = string
+  description = "Name for the Flux GitRepository resource"
+  default     = "flux-system"
+
+  validation {
+    condition     = length(trimspace(var.flux_git_repository_name)) > 0
+    error_message = "flux_git_repository_name must not be blank"
+  }
+}
+
+variable "flux_kustomization_name" {
+  type        = string
+  description = "Name for the Flux Kustomization resource"
+  default     = "flux-system"
+
+  validation {
+    condition     = length(trimspace(var.flux_kustomization_name)) > 0
+    error_message = "flux_kustomization_name must not be blank"
+  }
+}
+
+variable "flux_git_repository_url" {
+  type        = string
+  description = "URL of the Git repository Flux should watch"
+  default     = null
+
+  validation {
+    condition = (
+      !var.should_install_flux || (
+        length(trimspace(coalesce(var.flux_git_repository_url, ""))) > 0 &&
+        can(regex("^(https://|ssh://|git@|file://)", coalesce(var.flux_git_repository_url, "")))
+      )
+    )
+    error_message = "flux_git_repository_url must be set to an HTTPS, SSH, git@, or file URL when installing Flux"
+  }
+}
+
+variable "flux_git_repository_branch" {
+  type        = string
+  description = "Git branch Flux should reconcile"
+  default     = "main"
+
+  validation {
+    condition     = (!var.should_install_flux) || length(trimspace(var.flux_git_repository_branch)) > 0
+    error_message = "flux_git_repository_branch must not be blank when installing Flux"
+  }
+}
+
+variable "flux_git_repository_path" {
+  type        = string
+  description = "Relative path within the Git repository that hosts the cluster manifests"
+  default     = "clusters/dev"
+
+  validation {
+    condition = (
+      !var.should_install_flux || (
+        length(trimspace(var.flux_git_repository_path)) > 0 &&
+        !startswith(trimspace(var.flux_git_repository_path), "/")
+      )
+    )
+    error_message = "flux_git_repository_path must be a non-empty relative path when installing Flux"
+  }
+}
+
+variable "flux_git_repository_secret_name" {
+  type        = string
+  description = "Optional Kubernetes secret containing Git credentials"
+  default     = null
+
+  validation {
+    condition = (
+      var.flux_git_repository_secret_name == null || length(trimspace(var.flux_git_repository_secret_name)) > 0
+    )
+    error_message = "flux_git_repository_secret_name must not be blank when set"
+  }
+}
+
+variable "flux_reconcile_interval" {
+  type        = string
+  description = "Flux reconciliation interval"
+  default     = "1m"
+
+  validation {
+    condition     = (!var.should_install_flux) || can(regex("^([0-9]+(s|m|h|d|w))+$", trimspace(var.flux_reconcile_interval)))
+    error_message = "flux_reconcile_interval must be a valid duration string"
+  }
+}
+
+variable "flux_kustomization_prune" {
+  type        = bool
+  description = "Whether Flux should prune deleted resources"
+  default     = true
+}
+
+variable "flux_kustomization_suspend" {
+  type        = bool
+  description = "Whether to suspend Flux reconciliation"
+  default     = false
+}
+
+variable "flux_kustomization_timeout" {
+  type        = string
+  description = "Timeout for Flux Kustomization reconciliation"
+  default     = "5m"
+
+  validation {
+    condition     = (!var.should_install_flux) || can(regex("^([0-9]+(s|m|h|d|w))+$", trimspace(var.flux_kustomization_timeout)))
+    error_message = "flux_kustomization_timeout must be a valid duration string"
+  }
+}
+
+variable "flux_kubeconfig_path" {
+  type        = string
+  description = "Optional path to an existing kubeconfig for Flux installation"
+  default     = ""
+}

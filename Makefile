@@ -36,7 +36,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy \
+        lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
         dev-cluster-test workspace-sync
 
 workspace-sync:
@@ -204,3 +204,39 @@ doks-policy: conftest tofu
 
 dev-cluster-test: conftest tofu
 	DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) ./scripts/dev-cluster-test.sh
+
+fluxcd-test:
+	tofu fmt -check infra/modules/fluxcd
+	tofu -chdir=infra/modules/fluxcd/examples/basic init
+	tofu -chdir=infra/modules/fluxcd/examples/basic validate
+	command -v tflint >/dev/null
+	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/modules/fluxcd --policy infra/modules/fluxcd/policy --ignore ".terraform"
+	cd infra/modules/fluxcd/tests && KUBECONFIG=$(FLUX_KUBECONFIG_PATH) go test -v
+	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
+		tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
+			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
+			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-clusters/my-cluster}" \
+			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
+			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+	else \
+		echo "Skipping fluxcd plan -detailed-exitcode; set FLUX_KUBECONFIG_PATH to enable"; \
+	fi
+	$(MAKE) fluxcd-policy
+
+fluxcd-policy: conftest tofu
+	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
+		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
+	else \
+		tofu -chdir=infra/modules/fluxcd/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
+			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-clusters/my-cluster}" \
+			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
+			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		tofu -chdir=infra/modules/fluxcd/examples/basic show -json tfplan.binary > infra/modules/fluxcd/examples/basic/plan.json; \
+		conftest test infra/modules/fluxcd/examples/basic/plan.json --policy infra/modules/fluxcd/policy; \
+	fi

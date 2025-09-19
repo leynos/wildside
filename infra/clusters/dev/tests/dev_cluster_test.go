@@ -120,6 +120,38 @@ func TestDevClusterPolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
+func TestDevClusterFluxRequiresRepositoryUrl(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["should_install_flux"] = true
+	vars["flux_git_repository_url"] = ""
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "flux_git_repository_url")
+}
+
+func TestDevClusterFluxRequiresCluster(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["should_create_cluster"] = false
+	vars["should_install_flux"] = true
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should_install_flux requires should_create_cluster")
+}
+
 // testInvalidNodePoolConfig plans the dev cluster with the provided node pool
 // definitions and asserts that validation fails.
 //
