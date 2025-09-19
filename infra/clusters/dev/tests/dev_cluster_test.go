@@ -122,25 +122,26 @@ func TestDevClusterPolicy(t *testing.T) {
 
 func TestDevClusterFluxRequiresRepositoryUrl(t *testing.T) {
 	t.Parallel()
-	vars := testVars(t)
-	vars["should_install_flux"] = true
-	vars["flux_git_repository_url"] = ""
-	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-		SourceRootRel: "../../..",
-		TfSubDir:      "clusters/dev",
-		Vars:          vars,
-		EnvVars:       map[string]string{},
-	})
-	_, err := terraform.InitAndPlanE(t, opts)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "flux_git_repository_url")
+	testInvalidFluxConfig(t, map[string]interface{}{
+		"should_install_flux":     true,
+		"flux_git_repository_url": "",
+	}, "flux_git_repository_url")
 }
 
 func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	t.Parallel()
+	testInvalidFluxConfig(t, map[string]interface{}{
+		"should_create_cluster": false,
+		"should_install_flux":   true,
+	}, "should_install_flux requires should_create_cluster")
+}
+
+func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
+	t.Helper()
 	vars := testVars(t)
-	vars["should_create_cluster"] = false
-	vars["should_install_flux"] = true
+	for key, value := range varModifications {
+		vars[key] = value
+	}
 	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
@@ -149,7 +150,9 @@ func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should_install_flux requires should_create_cluster")
+	for _, substring := range wantErrSubstrings {
+		require.ErrorContains(t, err, substring)
+	}
 }
 
 // testInvalidNodePoolConfig plans the dev cluster with the provided node pool
