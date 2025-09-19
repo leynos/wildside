@@ -136,7 +136,7 @@ func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	}, "should_install_flux requires should_create_cluster")
 }
 
-func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
+func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
 	t.Helper()
 	vars := testVars(t)
 	for key, value := range varModifications {
@@ -153,6 +153,11 @@ func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}
 	for _, substring := range wantErrSubstrings {
 		require.ErrorContains(t, err, substring)
 	}
+}
+
+func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
+	t.Helper()
+	testInvalidConfig(t, varModifications, wantErrSubstrings...)
 }
 
 // testInvalidNodePoolConfig plans the dev cluster with the provided node pool
@@ -172,20 +177,10 @@ func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}
 //	})
 func testInvalidNodePoolConfig(t *testing.T, invalidNodePools []map[string]interface{}, wantErrSubstrings ...string) {
 	t.Helper()
-	vars := testVars(t)
-	vars["node_pools"] = invalidNodePools
-	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
-		SourceRootRel: "../../..",
-		TfSubDir:      "clusters/dev",
-		Vars:          vars,
-		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
-	})
-	_, err := terraform.InitAndPlanE(t, opts)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "node_pools")
-	for _, substring := range wantErrSubstrings {
-		require.ErrorContains(t, err, substring)
-	}
+	allErrSubstrings := append([]string{"node_pools"}, wantErrSubstrings...)
+	testInvalidConfig(t, map[string]interface{}{
+		"node_pools": invalidNodePools,
+	}, allErrSubstrings...)
 }
 
 func TestDevClusterInvalidNodePoolConfigs(t *testing.T) {
