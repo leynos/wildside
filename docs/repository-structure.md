@@ -555,16 +555,18 @@ intentional.
    - `tofu plan`: `timeout-minutes: 10`.
    - `tofu apply`: `timeout-minutes: 30` plus `TF_CLI_ARGS_apply` containing
      `-lock-timeout=5m -input=false`.
-   Honour `plan_only` by skipping apply, treat any timeout as a failure, and
-   capture the state lock identifier that `tofu` prints (for example, parse the
-   `ID` from `Acquiring state lock` messages) so it can be provided to
-   `tofu force-unlock <LOCK_ID>` when recovery is required. Only invoke
-   `tofu force-unlock` after confirming the run timed out or was aborted,
-   verifying the backend still lists this workflow as the lock owner, and
-   ensuring state backups exist. Normal failures should not use
-   `force-unlock`; instead, coordinate with the lock holder or retry once the
-   lock clears. The cleanup step continues to revoke Vault tokens and should
-   perform any unlock only after those safety checks pass.
+   Honour `plan_only` by skipping apply and treat any timeout as a failure.
+   When `tofu` prints `Acquiring state lock` it follows up with a `Lock Info`
+   block; parse the `ID` line (for example,
+   ``grep -m1 'Lock Info: ID' | awk '{print $4}'``) and persist the value as a
+   step output so it is available for `tofu force-unlock <LOCK_ID>` recovery.
+   Use that command only after confirming the workflow run timed out or was
+   explicitly aborted, the backend still reports this run as the lock owner,
+   and recent state backups exist. Normal execution errors must not trigger
+   `force-unlock`; retry the run or coordinate with the current lock holder
+   instead. When the safety checks justify an unlock, perform it before the
+   cleanup step that revokes Vault tokens so the revocation happens after the
+   state has been safely reconciled.
 6. After a successful apply:
    - Copy `terraform.tfstate` and JSON outputs into the checked out
      `wildside-infra` repository under
