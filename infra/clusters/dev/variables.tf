@@ -107,8 +107,12 @@ variable "should_install_flux" {
   default     = false
 
   validation {
-    condition     = !(var.should_install_flux && !var.should_create_cluster)
-    error_message = "should_install_flux requires should_create_cluster to be true"
+    condition = (
+      !var.should_install_flux ||
+      var.should_create_cluster ||
+      length(trimspace(var.flux_kubeconfig_path)) > 0
+    )
+    error_message = "should_install_flux requires should_create_cluster to be true or flux_kubeconfig_path to be set"
   }
 }
 

@@ -41,7 +41,7 @@ provider "helm" {
 }
 
 module "fluxcd" {
-  # Prefer a released tag or commit SHA for reproducibility
+  # A released tag or commit SHA should be used for reproducibility
   source = "git::https://github.com/OWNER/wildside.git//infra/modules/fluxcd?ref=<TAG_OR_SHA>"
 
   git_repository_url    = "https://github.com/OWNER/wildside-infra.git"
@@ -60,8 +60,8 @@ into the `flux-system` namespace and creates Flux `GitRepository` and
 `Kustomization` resources referencing the supplied Git repository and path.
 
 > Caution: Flux requires that the configured Git repository is reachable from
-> the cluster. Provide SSH credentials via the `git_repository_secret_name`
-> input and an accompanying Kubernetes secret when using private repositories.
+> the cluster. SSH credentials can be supplied via the `git_repository_secret_name`
+> input and an accompanying Kubernetes secret when private repositories are used.
 
 Retrieve the objects after applying the configuration:
 
@@ -71,7 +71,7 @@ tofu output git_repository_name
 tofu output kustomization_name
 ```
 
-Refer to the [Flux documentation](https://fluxcd.io/docs/) for options such as
-multi-tenancy lockdown and image automation. Override the Helm chart values via
-`helm_release` arguments in a wrapper module if you need additional
-customisation.
+The [Flux documentation](https://fluxcd.io/docs/) outlines options such as
+multi-tenancy lockdown and image automation. Helm chart values can be
+overridden via `helm_release` arguments in a wrapper module when additional
+customisation is required.

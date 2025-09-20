@@ -33,9 +33,8 @@ locals {
 }
 
 data "digitalocean_kubernetes_cluster" "flux" {
-  count      = local.should_fetch_cluster ? 1 : 0
-  cluster_id = local.doks_cluster_id
-  depends_on = [module.doks]
+  count = local.should_fetch_cluster ? 1 : 0
+  name  = var.cluster_name
 }
 
 locals {
@@ -51,7 +50,6 @@ provider "kubernetes" {
   token                  = local.flux_kubeconfig_path == "" ? local.flux_token : null
   cluster_ca_certificate = local.flux_kubeconfig_path == "" ? local.flux_ca_cert : null
   config_path            = local.flux_kubeconfig_path != "" ? local.flux_kubeconfig_path : null
-  load_config_file       = local.flux_kubeconfig_path != ""
 }
 
 provider "helm" {
@@ -62,12 +60,11 @@ provider "helm" {
     token                  = local.flux_kubeconfig_path == "" ? local.flux_token : null
     cluster_ca_certificate = local.flux_kubeconfig_path == "" ? local.flux_ca_cert : null
     config_path            = local.flux_kubeconfig_path != "" ? local.flux_kubeconfig_path : null
-    load_config_file       = local.flux_kubeconfig_path != ""
   }
 }
 
 module "fluxcd" {
-  count  = var.should_install_flux ? 1 : 0
+  count  = var.should_install_flux && (local.flux_kubeconfig_path != "" || var.should_create_cluster) ? 1 : 0
   source = "../../modules/fluxcd"
 
   providers = {
@@ -86,6 +83,13 @@ module "fluxcd" {
   kustomization_prune        = var.flux_kustomization_prune
   kustomization_suspend      = var.flux_kustomization_suspend
   kustomization_timeout      = var.flux_kustomization_timeout
+}
+
+check "flux_authentication_source" {
+  assert {
+    condition     = !var.should_install_flux || local.flux_kubeconfig_path != "" || var.should_create_cluster
+    error_message = "Flux install requires either flux_kubeconfig_path to be set or should_create_cluster=true."
+  }
 }
 
 output "cluster_id" {

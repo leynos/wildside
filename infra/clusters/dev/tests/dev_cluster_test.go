@@ -4,8 +4,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/require"
 	testutil "wildside/infra/testutil"
@@ -58,7 +60,7 @@ func TestDevClusterPlanUnauthenticated(t *testing.T) {
 		Vars:          testVars(t),
 		EnvVars:       map[string]string{},
 	})
-	_, err := terraform.InitAndPlanE(t, opts)
+	_, err := terraform.InitAndValidateE(t, opts)
 	require.NoError(t, err)
 }
 
@@ -120,12 +122,14 @@ func TestDevClusterPolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
-func TestDevClusterFluxRequiresRepositoryUrl(t *testing.T) {
+func TestDevClusterFluxRequiresRepositoryURL(t *testing.T) {
 	t.Parallel()
 	testInvalidFluxConfig(t, map[string]interface{}{
+		"should_create_cluster":   false,
 		"should_install_flux":     true,
+		"flux_kubeconfig_path":    "/tmp/kubeconfig",
 		"flux_git_repository_url": "",
-	}, "flux_git_repository_url")
+	}, "flux_git_repository_url must be set to an HTTPS, SSH, git@, or file URL when installing Flux")
 }
 
 func TestDevClusterFluxRequiresCluster(t *testing.T) {
@@ -133,7 +137,7 @@ func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	testInvalidFluxConfig(t, map[string]interface{}{
 		"should_create_cluster": false,
 		"should_install_flux":   true,
-	}, "should_install_flux requires should_create_cluster")
+	}, "should_install_flux requires should_create_cluster to be true or flux_kubeconfig_path to be set")
 }
 
 func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
@@ -148,10 +152,15 @@ func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wa
 		Vars:          vars,
 		EnvVars:       map[string]string{},
 	})
-	_, err := terraform.InitAndPlanE(t, opts)
+	opts.Logger = logger.Discard
+	terraform.Init(t, opts)
+	planArgs := terraform.FormatArgs(opts, "plan", "-input=false")
+	out, err := terraform.RunTerraformCommandE(t, opts, planArgs...)
 	require.Error(t, err)
+	combined := strings.Join([]string{out, err.Error()}, "\n")
+	normalised := strings.Join(strings.Fields(combined), " ")
 	for _, substring := range wantErrSubstrings {
-		require.ErrorContains(t, err, substring)
+		require.Contains(t, normalised, substring)
 	}
 }
 
