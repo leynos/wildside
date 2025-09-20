@@ -57,6 +57,8 @@
   for testing IaC modules. *Audience: infrastructure developers.*
 - [DOKS OpenTofu module design](doks-module-design.md) – design decisions for
   the DigitalOcean Kubernetes module. *Audience: infrastructure developers.*
+- [FluxCD OpenTofu module design](fluxcd-module-design.md) – design decisions for
+  the GitOps control plane module. *Audience: infrastructure developers.*
 
 ## Developer guidelines and tooling
 
