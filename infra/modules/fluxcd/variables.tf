@@ -66,9 +66,12 @@ variable "git_repository_path" {
   validation {
     condition = (
       length(trimspace(var.git_repository_path)) > 0 &&
-      !startswith(trimspace(var.git_repository_path), "/")
+      (
+        trimspace(var.git_repository_path) == "." ||
+        startswith(trimspace(var.git_repository_path), "./")
+      )
     )
-    error_message = "git_repository_path must be a non-empty relative path"
+    error_message = "git_repository_path must be a non-empty relative path starting with ./"
   }
 }
 

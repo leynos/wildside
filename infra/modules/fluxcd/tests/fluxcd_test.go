@@ -24,7 +24,7 @@ func testVars() map[string]interface{} {
 		"kustomization_name":         "flux-system",
 		"git_repository_url":         "https://github.com/fluxcd/flux2-kustomize-helm-example.git",
 		"git_repository_branch":      "main",
-		"git_repository_path":        "clusters/my-cluster",
+		"git_repository_path":        "./clusters/my-cluster",
 		"reconcile_interval":         "1m",
 		"kustomization_prune":        true,
 		"kustomization_suspend":      false,
@@ -65,7 +65,7 @@ func TestFluxModuleInvalidPath(t *testing.T) {
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path`), err.Error())
+	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path starting with \./`), err.Error())
 }
 
 func TestFluxModuleInvalidBranch(t *testing.T) {

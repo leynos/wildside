@@ -124,7 +124,8 @@ variable "flux_namespace" {
   validation {
     condition = (
       length(trimspace(var.flux_namespace)) > 0 &&
-      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.flux_namespace))
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.flux_namespace)) &&
+      length(var.flux_namespace) <= 63
     )
     error_message = "flux_namespace must be a valid Kubernetes namespace name"
   }
@@ -182,16 +183,19 @@ variable "flux_git_repository_branch" {
 variable "flux_git_repository_path" {
   type        = string
   description = "Relative path within the Git repository that hosts the cluster manifests"
-  default     = "clusters/dev"
+  default     = "./clusters/dev"
 
   validation {
     condition = (
       !var.should_install_flux || (
         length(trimspace(var.flux_git_repository_path)) > 0 &&
-        !startswith(trimspace(var.flux_git_repository_path), "/")
+        (
+          trimspace(var.flux_git_repository_path) == "." ||
+          startswith(trimspace(var.flux_git_repository_path), "./")
+        )
       )
     )
-    error_message = "flux_git_repository_path must be a non-empty relative path when installing Flux"
+    error_message = "flux_git_repository_path must be a non-empty relative path starting with ./ when installing Flux"
   }
 }
 

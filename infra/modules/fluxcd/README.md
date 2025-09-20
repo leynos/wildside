@@ -46,7 +46,7 @@ module "fluxcd" {
 
   git_repository_url    = "https://github.com/OWNER/wildside-infra.git"
   git_repository_branch = "main"
-  git_repository_path   = "clusters/dev"
+  git_repository_path   = "./clusters/dev"
   reconcile_interval    = "1m"
 }
 
