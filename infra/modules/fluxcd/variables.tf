@@ -6,6 +6,7 @@ variable "namespace" {
   validation {
     condition = (
       length(trimspace(var.namespace)) > 0 &&
+      length(trimspace(var.namespace)) <= 63 &&
       can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.namespace))
     )
     error_message = "namespace must be a valid Kubernetes namespace name"

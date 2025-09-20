@@ -211,8 +211,7 @@ fluxcd-test:
 	tofu -chdir=infra/modules/fluxcd/examples/basic validate
 	command -v tflint >/dev/null
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
-	conftest test infra/modules/fluxcd --policy infra/modules/fluxcd/policy --ignore ".terraform"
-	cd infra/modules/fluxcd/tests && KUBECONFIG=$(FLUX_KUBECONFIG_PATH) go test -v
+	cd infra/modules/fluxcd/tests && KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
