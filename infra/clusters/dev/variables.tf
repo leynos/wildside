@@ -100,3 +100,152 @@ variable "expose_kubeconfig" {
   description = "Expose kubeconfig via module outputs (stores credentials in state)"
   default     = false
 }
+
+variable "flux" {
+  description = "Flux configuration for the dev cluster"
+  type = object({
+    install         = bool
+    kubeconfig_path = string
+    namespace       = string
+    git_repository = object({
+      name        = string
+      url         = optional(string)
+      branch      = string
+      path        = string
+      secret_name = optional(string)
+    })
+    reconcile_interval = string
+    kustomization = object({
+      name    = string
+      prune   = bool
+      suspend = bool
+      timeout = string
+    })
+    helm = object({
+      release_name = string
+      repository   = string
+      chart        = string
+      version      = string
+      wait         = bool
+      timeout      = number
+      values       = optional(list(string), [])
+      values_files = optional(list(string), [])
+    })
+  })
+  default = {
+    install         = false
+    kubeconfig_path = ""
+    namespace       = "flux-system"
+    git_repository = {
+      name        = "flux-system"
+      url         = null
+      branch      = "main"
+      path        = "./clusters/dev"
+      secret_name = null
+    }
+    reconcile_interval = "1m"
+    kustomization = {
+      name    = "flux-system"
+      prune   = true
+      suspend = false
+      timeout = "5m"
+    }
+    helm = {
+      release_name = "flux-system"
+      repository   = "https://fluxcd-community.github.io/helm-charts"
+      chart        = "flux2"
+      version      = "2.16.4"
+      wait         = true
+      timeout      = 600
+      values       = []
+      values_files = []
+    }
+  }
+
+  validation {
+    condition = (
+      !var.flux.install ||
+      var.should_create_cluster ||
+      length(trimspace(var.flux.kubeconfig_path)) > 0
+    )
+    error_message = "flux.install requires should_create_cluster to be true or flux.kubeconfig_path to be set"
+  }
+
+  validation {
+    condition = (
+      length(trimspace(var.flux.namespace)) > 0 &&
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.flux.namespace)) &&
+      length(var.flux.namespace) <= 63
+    )
+    error_message = "flux.namespace must be a valid Kubernetes namespace name"
+  }
+
+  validation {
+    condition     = length(trimspace(var.flux.git_repository.name)) > 0
+    error_message = "flux.git_repository.name must not be blank"
+  }
+
+  validation {
+    condition     = length(trimspace(var.flux.kustomization.name)) > 0
+    error_message = "flux.kustomization.name must not be blank"
+  }
+
+  validation {
+    condition = (
+      !var.flux.install || (
+        length(trimspace(coalesce(var.flux.git_repository.url, ""))) > 0 &&
+        can(regex("^(https://|ssh://|git@|file://)", coalesce(var.flux.git_repository.url, "")))
+      )
+    )
+    error_message = "flux.git_repository.url must be set to an HTTPS, SSH, git@, or file:// URL when installing Flux"
+  }
+
+  validation {
+    condition     = (!var.flux.install) || length(trimspace(var.flux.git_repository.branch)) > 0
+    error_message = "flux.git_repository.branch must not be blank when installing Flux"
+  }
+
+  validation {
+    condition = (
+      !var.flux.install || (
+        length(trimspace(var.flux.git_repository.path)) > 0 &&
+        (
+          trimspace(var.flux.git_repository.path) == "." ||
+          startswith(trimspace(var.flux.git_repository.path), "./")
+        ) &&
+        length(regexall("\\.\\.", trimspace(var.flux.git_repository.path))) == 0
+      )
+    )
+    error_message = "flux.git_repository.path must be a non-empty relative path without traversal when installing Flux"
+  }
+
+  validation {
+    condition = (
+      var.flux.git_repository.secret_name == null ||
+      length(trimspace(var.flux.git_repository.secret_name)) > 0
+    )
+    error_message = "flux.git_repository.secret_name must not be blank when set"
+  }
+
+  validation {
+    condition     = (!var.flux.install) || can(regex("^([0-9]+(s|m|h|d|w))+$", trimspace(var.flux.reconcile_interval)))
+    error_message = "flux.reconcile_interval must be a valid duration string"
+  }
+
+  validation {
+    condition     = (!var.flux.install) || can(regex("^([0-9]+(s|m|h|d|w))+$", trimspace(var.flux.kustomization.timeout)))
+    error_message = "flux.kustomization.timeout must be a valid duration string"
+  }
+
+  validation {
+    condition     = var.flux.helm.timeout > 0
+    error_message = "flux.helm.timeout must be a positive number of seconds"
+  }
+
+  validation {
+    condition = alltrue([
+      for path in var.flux.helm.values_files : length(trimspace(path)) > 0
+    ])
+    error_message = "flux.helm.values_files must not contain blank file paths"
+  }
+}

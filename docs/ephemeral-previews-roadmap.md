@@ -39,13 +39,13 @@ modules defined in the wildside-infra repository.
 
 ### 2.2: GitOps control plane
 
-- [ ] **Create a `fluxcd` OpenTofu module**: This module will install FluxCD on
+- [x] **Create a `fluxcd` OpenTofu module**: This module will install FluxCD on
   the Kubernetes cluster.
 
-- [ ] **Define input variables**: The module should accept variables for the Git
+- [x] **Define input variables**: The module should accept variables for the Git
   repository URL and the path to the manifests.
 
-- [ ] **Instantiate the module**: Add the fluxcd module to the root OpenTofu
+- [x] **Instantiate the module**: Add the fluxcd module to the root OpenTofu
   configuration.
 
 - [ ] **Apply the changes**: Run `tofu apply` to install FluxCD.
