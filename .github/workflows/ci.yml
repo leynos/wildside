@@ -81,7 +81,7 @@ jobs:
         run: make typecheck
 
       # Backend
-      - uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
+      - uses: leynos/shared-actions/.github/actions/setup-rust@e9f6c1df15656bf00b2e6c5dbe779be994b382be
       - name: Rust build
         run: cargo build --manifest-path backend/Cargo.toml --release
       - name: Cache cargo
