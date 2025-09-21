@@ -84,6 +84,16 @@ func TestFluxModuleInvalidURL(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`git_repository_url`), err.Error())
 }
 
+func TestFluxExampleRequiresKubeconfigPath(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["kubeconfig_path"] = ""
+	_, opts := setup(t, vars)
+	_, err := terraform.InitAndValidateE(t, opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Set kubeconfig_path to a readable kubeconfig file before running the example")
+}
+
 func TestFluxModuleInvalidPath(t *testing.T) {
 	t.Parallel()
 	vars := testVars(t)

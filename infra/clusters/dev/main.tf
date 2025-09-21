@@ -14,9 +14,10 @@ locals {
     )
   ]
   flux_config = {
-    install         = var.flux.install
-    kubeconfig_path = trimspace(var.flux.kubeconfig_path)
-    namespace       = trimspace(var.flux.namespace)
+    install           = var.flux.install
+    kubeconfig_path   = trimspace(var.flux.kubeconfig_path)
+    allow_file_scheme = var.flux.allow_file_scheme
+    namespace         = trimspace(var.flux.namespace)
     git_repository = {
       name        = trimspace(var.flux.git_repository.name)
       url         = var.flux.git_repository.url == null ? null : trimspace(var.flux.git_repository.url)
@@ -133,6 +134,7 @@ module "fluxcd" {
   helm_timeout               = local.flux_config.helm.timeout
   helm_values                = local.flux_config.helm.values
   helm_values_files          = local.flux_config.helm.values_files
+  allow_file_scheme          = local.flux_config.allow_file_scheme
 }
 
 check "flux_authentication_source" {

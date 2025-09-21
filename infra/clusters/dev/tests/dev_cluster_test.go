@@ -15,9 +15,10 @@ import (
 
 func defaultFluxConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"install":         false,
-		"kubeconfig_path": "",
-		"namespace":       "flux-system",
+		"install":           false,
+		"kubeconfig_path":   "",
+		"allow_file_scheme": false,
+		"namespace":         "flux-system",
 		"git_repository": map[string]interface{}{
 			"name":        "flux-system",
 			"url":         nil,
@@ -43,6 +44,32 @@ func defaultFluxConfig() map[string]interface{} {
 			"values_files": []string{},
 		},
 	}
+}
+
+func writeStubKubeconfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kubeconfig")
+	const stubConfig = `apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://127.0.0.1
+  name: stub
+contexts:
+- context:
+    cluster: stub
+    user: stub
+  name: stub
+current-context: stub
+kind: Config
+users:
+- name: stub
+  user:
+    token: fake-token
+`
+	require.NoError(t, os.WriteFile(path, []byte(stubConfig), 0600))
+	return path
 }
 
 // testVars returns a baseline variable set matching the defaults in variables.tf.
@@ -162,20 +189,34 @@ func TestDevClusterFluxRequiresRepositoryURL(t *testing.T) {
 	flux["kubeconfig_path"] = "/tmp/kubeconfig"
 	fluxRepo := flux["git_repository"].(map[string]interface{})
 	fluxRepo["url"] = ""
-        testInvalidFluxConfig(t, map[string]interface{}{
-                "should_create_cluster": false,
-                "flux":                  flux,
-        }, "flux.git_repository.url must be HTTPS, SSH, or git@. Set allow_file_scheme=true to permit file:// URLs")
+	testInvalidFluxConfig(t, map[string]interface{}{
+		"should_create_cluster": false,
+		"flux":                  flux,
+	}, "flux.git_repository.url must be HTTPS, SSH, or git@. Set allow_file_scheme=true to permit file:// URLs")
+}
+
+func TestDevClusterFluxAllowsFileSchemeWhenOptedIn(t *testing.T) {
+	t.Parallel()
+	flux := defaultFluxConfig()
+	flux["install"] = true
+	flux["kubeconfig_path"] = writeStubKubeconfig(t)
+	flux["allow_file_scheme"] = true
+	fluxRepo := flux["git_repository"].(map[string]interface{})
+	fluxRepo["url"] = "file:///tmp/repo"
+	testValidFluxConfig(t, map[string]interface{}{
+		"should_create_cluster": false,
+		"flux":                  flux,
+	})
 }
 
 func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	t.Parallel()
 	flux := defaultFluxConfig()
 	flux["install"] = true
-        testInvalidFluxConfig(t, map[string]interface{}{
-                "should_create_cluster": false,
-                "flux":                  flux,
-        }, "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials.")
+	testInvalidFluxConfig(t, map[string]interface{}{
+		"should_create_cluster": false,
+		"flux":                  flux,
+	}, "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials.")
 }
 
 func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
@@ -205,6 +246,22 @@ func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wa
 func testInvalidFluxConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {
 	t.Helper()
 	testInvalidConfig(t, varModifications, wantErrSubstrings...)
+}
+
+func testValidFluxConfig(t *testing.T, varModifications map[string]interface{}) {
+	t.Helper()
+	vars := testVars(t)
+	for key, value := range varModifications {
+		vars[key] = value
+	}
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "../../..",
+		TfSubDir:      "clusters/dev",
+		Vars:          vars,
+		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
+	})
+	opts.Logger = logger.Discard
+	terraform.InitAndValidate(t, opts)
 }
 
 // testInvalidNodePoolConfig plans the dev cluster with the provided node pool
