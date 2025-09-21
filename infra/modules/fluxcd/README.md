@@ -1,4 +1,4 @@
-# FluxCD Module
+# FluxCD module
 
 Install the Flux GitOps toolkit on an existing Kubernetes cluster using
 OpenTofu and Helm.
@@ -55,13 +55,15 @@ output "flux_namespace" {
 }
 ```
 
-The module installs the [`flux2` Helm chart](https://github.com/fluxcd-community/helm-charts)
-into the `flux-system` namespace and creates Flux `GitRepository` and
-`Kustomization` resources referencing the supplied Git repository and path.
+The module installs the
+[`flux2` Helm chart](https://github.com/fluxcd-community/helm-charts) into the
+`flux-system` namespace and creates Flux `GitRepository` and `Kustomization`
+resources referencing the supplied Git repository and path.
 
-> Caution: Flux requires that the configured Git repository is reachable from
-> the cluster. SSH credentials can be supplied via the `git_repository_secret_name`
-> input and an accompanying Kubernetes secret when private repositories are used.
+> Caution: Flux requires that the configured Git repository is reachable from the
+> cluster. SSH credentials can be supplied via the `git_repository_secret_name`
+> input and an accompanying Kubernetes secret when private repositories are
+> used.
 
 Retrieve the objects after applying the configuration:
 

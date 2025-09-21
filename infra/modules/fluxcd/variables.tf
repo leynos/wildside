@@ -36,15 +36,15 @@ variable "kustomization_name" {
 }
 
 variable "git_repository_url" {
-  description = "URL of the Git repository containing Flux manifests"
+  description = "URL of the Git repository containing Flux manifests. Must be an HTTPS or SSH endpoint."
   type        = string
 
   validation {
     condition = (
       length(trimspace(var.git_repository_url)) > 0 &&
-      can(regex("^(https://|ssh://|git@|file://)", var.git_repository_url))
+      can(regex("^(https://|ssh://|git@)", var.git_repository_url))
     )
-    error_message = "git_repository_url must be a non-empty HTTPS, SSH, git@, or file URL"
+    error_message = "git_repository_url must be a non-empty HTTPS, SSH, or git@ URL"
   }
 }
 
@@ -70,8 +70,9 @@ variable "git_repository_path" {
         trimspace(var.git_repository_path) == "." ||
         startswith(trimspace(var.git_repository_path), "./")
       )
+      && length(regexall("\\.\\.", trimspace(var.git_repository_path))) == 0
     )
-    error_message = "git_repository_path must be a non-empty relative path starting with ./"
+    error_message = "git_repository_path must be a non-empty relative path without traversal"
   }
 }
 

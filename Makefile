@@ -108,6 +108,7 @@ lint-infra:
 	$(call ensure_tool,uvx)
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	uvx checkov -d infra
 
 test: workspace-sync deps typecheck
@@ -215,7 +216,7 @@ fluxcd-test:
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
-                        -var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
+			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
 			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
 			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
 		status=$$?; \
@@ -233,7 +234,7 @@ fluxcd-policy: conftest tofu
 		plan_path=infra/modules/fluxcd/examples/basic/tfplan.binary; \
 		tofu -chdir=infra/modules/fluxcd/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
-                        -var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
+			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
 			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
 			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
 		status=$$?; \

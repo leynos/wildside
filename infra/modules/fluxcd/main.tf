@@ -35,6 +35,7 @@ resource "helm_release" "flux" {
   namespace  = kubernetes_namespace.flux.metadata[0].name
   timeout    = local.helm_timeout
   wait       = var.helm_wait
+  atomic     = true
 
   create_namespace = false
   cleanup_on_fail  = true

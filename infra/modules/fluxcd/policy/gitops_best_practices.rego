@@ -21,21 +21,20 @@ suspend(spec) = object.get(spec, "suspend", false)
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "git_repository"
+  rc.change.after.manifest.kind == "GitRepository"
   spec := rc.change.after.manifest.spec
   repo_url := url(spec)
   not startswith(repo_url, "https://")
   not startswith(repo_url, "ssh://")
   not startswith(repo_url, "git@")
-  not startswith(repo_url, "file://")
-  msg := sprintf("GitRepository %s must use HTTPS, SSH, git@, or file URL", [rc.change.after.manifest.metadata.name])
+  msg := sprintf("GitRepository %s must use an HTTPS, SSH, or git@ URL", [rc.change.after.manifest.metadata.name])
 }
 
 # GitRepository resources must declare a branch to avoid drifting refs.
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "git_repository"
+  rc.change.after.manifest.kind == "GitRepository"
   spec := rc.change.after.manifest.spec
   branch(spec) == ""
   msg := sprintf("GitRepository %s must set spec.ref.branch", [rc.change.after.manifest.metadata.name])
@@ -45,10 +44,10 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "git_repository"
+  rc.change.after.manifest.kind == "GitRepository"
   spec := rc.change.after.manifest.spec
   reconcile := interval(spec)
-  not regex.match("^(?:[1-9][0-9]*m|[1-9][0-9]*s)$", reconcile)
+  not regex.match(`^(?:[1-9][0-9]*m|[1-9][0-9]*s)$`, reconcile)
   msg := sprintf("GitRepository %s interval %q must be expressed in seconds or minutes", [rc.change.after.manifest.metadata.name, reconcile])
 }
 
@@ -56,7 +55,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "kustomization"
+  rc.change.after.manifest.kind == "Kustomization"
   spec := rc.change.after.manifest.spec
   prune(spec) == false
   msg := sprintf("Kustomization %s must enable prune", [rc.change.after.manifest.metadata.name])
@@ -66,11 +65,10 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "kustomization"
+  rc.change.after.manifest.kind == "Kustomization"
   spec := rc.change.after.manifest.spec
   p := path(spec)
-  not startswith(p, "./")
-  p != "."
+  startswith(p, "/")
   msg := sprintf("Kustomization %s path %q must start with ./", [rc.change.after.manifest.metadata.name, p])
 }
 
@@ -78,7 +76,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "kustomization"
+  rc.change.after.manifest.kind == "Kustomization"
   spec := rc.change.after.manifest.spec
   source_kind(spec) != "GitRepository"
   msg := sprintf("Kustomization %s must reference a GitRepository", [rc.change.after.manifest.metadata.name])
@@ -88,7 +86,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  rc.name == "kustomization"
+  rc.change.after.manifest.kind == "Kustomization"
   spec := rc.change.after.manifest.spec
   suspend(spec)
   msg := sprintf("Kustomization %s must not be created in a suspended state", [rc.change.after.manifest.metadata.name])

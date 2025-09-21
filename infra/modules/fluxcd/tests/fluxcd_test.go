@@ -17,7 +17,13 @@ import (
 	testutil "wildside/infra/testutil"
 )
 
-func testVars() map[string]interface{} {
+func testVars(t *testing.T) map[string]interface{} {
+	t.Helper()
+	kubeconfigDir := t.TempDir()
+	kubeconfigPath := filepath.Join(kubeconfigDir, "kubeconfig")
+	stubConfig := []byte("apiVersion: v1\nkind: Config\nclusters: []\ncontexts: []\ncurrent-context: \"\"\nusers: []\n")
+	require.NoError(t, os.WriteFile(kubeconfigPath, stubConfig, 0600))
+
 	return map[string]interface{}{
 		"namespace":                  "flux-system",
 		"git_repository_name":        "flux-system",
@@ -29,6 +35,7 @@ func testVars() map[string]interface{} {
 		"kustomization_prune":        true,
 		"kustomization_suspend":      false,
 		"git_repository_secret_name": nil,
+		"kubeconfig_path":            kubeconfigPath,
 	}
 }
 
@@ -44,13 +51,13 @@ func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Option
 
 func TestFluxModuleValidate(t *testing.T) {
 	t.Parallel()
-	_, opts := setup(t, testVars())
+	_, opts := setup(t, testVars(t))
 	terraform.InitAndValidate(t, opts)
 }
 
 func TestFluxModuleInvalidURL(t *testing.T) {
 	t.Parallel()
-	vars := testVars()
+	vars := testVars(t)
 	vars["git_repository_url"] = "ftp://invalid"
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -60,17 +67,17 @@ func TestFluxModuleInvalidURL(t *testing.T) {
 
 func TestFluxModuleInvalidPath(t *testing.T) {
 	t.Parallel()
-	vars := testVars()
+	vars := testVars(t)
 	vars["git_repository_path"] = "/absolute/path"
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path starting with \./`), err.Error())
+    require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without traversal`), err.Error())
 }
 
 func TestFluxModuleInvalidBranch(t *testing.T) {
 	t.Parallel()
-	vars := testVars()
+	vars := testVars(t)
 	vars["git_repository_branch"] = ""
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -80,7 +87,7 @@ func TestFluxModuleInvalidBranch(t *testing.T) {
 
 func TestFluxModulePlanFailsWithoutKubeconfig(t *testing.T) {
 	t.Parallel()
-	vars := testVars()
+	vars := testVars(t)
 	vars["kubeconfig_path"] = "/nonexistent/kubeconfig"
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -95,7 +102,7 @@ func TestFluxModulePlanDetailedExitCode(t *testing.T) {
 	if kubeconfig == "" {
 		t.Skip("KUBECONFIG not set; skipping detailed exit code plan")
 	}
-	vars := testVars()
+	vars := testVars(t)
 	vars["namespace"] = fmt.Sprintf("flux-terratest-%s", strings.ToLower(random.UniqueId()))
 	vars["git_repository_name"] = fmt.Sprintf("flux-repo-%s", strings.ToLower(random.UniqueId()))
 	vars["kustomization_name"] = fmt.Sprintf("flux-kustomization-%s", strings.ToLower(random.UniqueId()))
@@ -123,7 +130,7 @@ func TestFluxModulePolicy(t *testing.T) {
 	if kubeconfig == "" {
 		t.Skip("KUBECONFIG not set; skipping policy test")
 	}
-	vars := testVars()
+	vars := testVars(t)
 	vars["namespace"] = fmt.Sprintf("flux-terratest-%s", strings.ToLower(random.UniqueId()))
 	vars["git_repository_name"] = fmt.Sprintf("flux-repo-%s", strings.ToLower(random.UniqueId()))
 	vars["kustomization_name"] = fmt.Sprintf("flux-kustomization-%s", strings.ToLower(random.UniqueId()))
@@ -148,6 +155,30 @@ func TestFluxModulePolicy(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
+
+	t.Run("PolicyViolation", func(t *testing.T) {
+		t.Parallel()
+		badPlan, err := os.CreateTemp("", "fluxcd-bad-plan-*.json")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(badPlan.Name()) })
+
+		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"invalid"},"spec":{"url":"ftp://invalid","interval":"15m"}}}}}]}`
+		_, err = badPlan.WriteString(payload)
+		require.NoError(t, err)
+		require.NoError(t, badPlan.Close())
+
+		vCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		violationCmd := exec.CommandContext(vCtx, "conftest", "test", badPlan.Name(), "--policy", policyPath)
+		violationCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
+		violationOut, violationErr := violationCmd.CombinedOutput()
+		require.NotEqual(t, context.DeadlineExceeded, vCtx.Err(), "negative policy run timed out")
+		require.Error(t, violationErr, "expected conftest to report a violation")
+		exitErr, ok := violationErr.(*exec.ExitError)
+		require.True(t, ok, "expected ExitError from conftest for policy violation")
+		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
+		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected policy violation output")
+	})
 }
 
 func TestFluxModuleApplyIfKubeconfigPresent(t *testing.T) {
@@ -158,7 +189,7 @@ func TestFluxModuleApplyIfKubeconfigPresent(t *testing.T) {
 	if os.Getenv("FLUXCD_ACCEPT_APPLY") == "" {
 		t.Skip("FLUXCD_ACCEPT_APPLY not set; skipping apply test")
 	}
-	vars := testVars()
+	vars := testVars(t)
 	vars["namespace"] = fmt.Sprintf("flux-terratest-%s", strings.ToLower(random.UniqueId()))
 	vars["git_repository_name"] = fmt.Sprintf("flux-repo-%s", strings.ToLower(random.UniqueId()))
 	vars["kustomization_name"] = fmt.Sprintf("flux-kustomization-%s", strings.ToLower(random.UniqueId()))

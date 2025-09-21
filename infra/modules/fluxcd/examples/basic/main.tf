@@ -2,6 +2,10 @@ variable "kubeconfig_path" {
   description = "Path to a kubeconfig file with cluster-admin access"
   type        = string
   default     = ""
+  validation {
+    condition     = length(trimspace(var.kubeconfig_path)) > 0
+    error_message = "kubeconfig_path must point to a kubeconfig file for the target cluster"
+  }
 }
 
 variable "namespace" {
@@ -62,6 +66,12 @@ variable "kustomization_suspend" {
   default     = false
 }
 
+variable "kustomization_timeout" {
+  description = "Timeout for Flux Kustomization reconciliation"
+  type        = string
+  default     = "5m"
+}
+
 locals {
   kubeconfig = trimspace(var.kubeconfig_path)
 }
@@ -89,6 +99,7 @@ module "fluxcd" {
   reconcile_interval    = var.reconcile_interval
   kustomization_prune   = var.kustomization_prune
   kustomization_suspend = var.kustomization_suspend
+  kustomization_timeout = var.kustomization_timeout
 }
 
 output "namespace" {
