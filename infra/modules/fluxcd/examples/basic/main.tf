@@ -1,9 +1,9 @@
 variable "kubeconfig_path" {
   description = "Path to a kubeconfig file with cluster-admin access"
   type        = string
-  default     = ""
+  default     = null
   validation {
-    condition     = length(trimspace(var.kubeconfig_path)) > 0
+    condition     = length(trimspace(coalesce(var.kubeconfig_path, ""))) > 0
     error_message = "kubeconfig_path must point to a kubeconfig file for the target cluster"
   }
 }
@@ -73,7 +73,7 @@ variable "kustomization_timeout" {
 }
 
 locals {
-  kubeconfig = trimspace(var.kubeconfig_path)
+  kubeconfig = trimspace(coalesce(var.kubeconfig_path, ""))
 }
 
 provider "kubernetes" {
@@ -89,17 +89,17 @@ provider "helm" {
 module "fluxcd" {
   source = "../.."
 
-  namespace             = var.namespace
-  git_repository_name   = var.git_repository_name
-  kustomization_name    = var.kustomization_name
-  git_repository_url    = var.git_repository_url
-  git_repository_branch = var.git_repository_branch
-  git_repository_path   = var.git_repository_path
+  namespace                  = var.namespace
+  git_repository_name        = var.git_repository_name
+  kustomization_name         = var.kustomization_name
+  git_repository_url         = var.git_repository_url
+  git_repository_branch      = var.git_repository_branch
+  git_repository_path        = var.git_repository_path
   git_repository_secret_name = var.git_repository_secret_name
-  reconcile_interval    = var.reconcile_interval
-  kustomization_prune   = var.kustomization_prune
-  kustomization_suspend = var.kustomization_suspend
-  kustomization_timeout = var.kustomization_timeout
+  reconcile_interval         = var.reconcile_interval
+  kustomization_prune        = var.kustomization_prune
+  kustomization_suspend      = var.kustomization_suspend
+  kustomization_timeout      = var.kustomization_timeout
 }
 
 output "namespace" {

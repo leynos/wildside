@@ -11,6 +11,14 @@ plugin "terraform" {
   preset  = "recommended"
 }
 
+# Temporary community OpenTofu ruleset until the upstream terraform-linters
+# ruleset publishes public releases. Tracks v0.1.7.
+plugin "tofu" {
+  enabled = true
+  version = "0.1.7"
+  source  = "github.com/calxus/tflint-ruleset-tofu"
+}
+
 rule "terraform_documented_variables" { enabled = true }
 rule "terraform_documented_outputs"   { enabled = true }
 rule "terraform_typed_variables"      { enabled = true }

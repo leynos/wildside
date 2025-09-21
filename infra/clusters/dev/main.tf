@@ -72,6 +72,13 @@ module "fluxcd" {
     helm       = helm.flux
   }
 
+  lifecycle {
+    precondition {
+      condition     = local.flux_kubeconfig_path != "" || var.should_create_cluster
+      error_message = "Flux install requires either flux_kubeconfig_path or should_create_cluster=true."
+    }
+  }
+
   namespace                  = var.flux_namespace
   git_repository_name        = var.flux_git_repository_name
   kustomization_name         = var.flux_kustomization_name

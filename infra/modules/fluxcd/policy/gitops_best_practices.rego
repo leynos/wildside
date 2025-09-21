@@ -1,4 +1,4 @@
-package main
+package fluxcd.policy
 
 import future.keywords.contains
 import future.keywords.if
@@ -69,7 +69,7 @@ deny contains msg if {
   spec := rc.change.after.manifest.spec
   p := path(spec)
   startswith(p, "/")
-  msg := sprintf("Kustomization %s path %q must start with ./", [rc.change.after.manifest.metadata.name, p])
+  msg := sprintf("Kustomization %s path %q must stay relative to the repository root", [rc.change.after.manifest.metadata.name, p])
 }
 
 # Enforce GitRepository as the source kind.
