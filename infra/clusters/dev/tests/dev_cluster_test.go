@@ -150,7 +150,7 @@ func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wa
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       map[string]string{},
+		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
 	})
 	opts.Logger = logger.Discard
 	terraform.Init(t, opts)
