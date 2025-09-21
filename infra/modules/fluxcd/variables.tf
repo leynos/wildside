@@ -24,6 +24,12 @@ variable "git_repository_name" {
   }
 }
 
+variable "allow_file_scheme" {
+  description = "Set to true to allow git_repository_url to use the file:// scheme for local testing"
+  type        = bool
+  default     = false
+}
+
 variable "kustomization_name" {
   description = "Name assigned to the Flux Kustomization resource"
   type        = string
@@ -42,9 +48,15 @@ variable "git_repository_url" {
   validation {
     condition = (
       length(trimspace(var.git_repository_url)) > 0 &&
-      can(regex("^(https://|ssh://|git@)", var.git_repository_url))
+      (
+        can(regex("^(https://|ssh://|git@)", var.git_repository_url)) ||
+        (
+          var.allow_file_scheme &&
+          can(regex("^file://", var.git_repository_url))
+        )
+      )
     )
-    error_message = "git_repository_url must be a non-empty HTTPS, SSH, or git@ URL"
+    error_message = "git_repository_url must be HTTPS, SSH, or git@. Set allow_file_scheme=true to permit file:// URLs"
   }
 }
 
@@ -69,10 +81,10 @@ variable "git_repository_path" {
       (
         trimspace(var.git_repository_path) == "." ||
         startswith(trimspace(var.git_repository_path), "./")
-      )
-      && length(regexall("\\.\\.", trimspace(var.git_repository_path))) == 0
+      ) &&
+      length(regexall("(^|/|\\\\)\\.\\.(?:/|\\\\|$)", trimspace(var.git_repository_path))) == 0
     )
-    error_message = "git_repository_path must be a non-empty relative path without traversal"
+    error_message = "git_repository_path must be a non-empty relative path without parent-directory traversal"
   }
 }
 

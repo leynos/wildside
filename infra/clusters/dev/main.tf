@@ -55,10 +55,12 @@ module "doks" {
 }
 
 locals {
-  flux_kubeconfig_path = local.flux_config.kubeconfig_path
-  doks_cluster_ids     = try([for m in module.doks : m.cluster_id], [])
-  doks_cluster_id      = length(local.doks_cluster_ids) > 0 ? local.doks_cluster_ids[0] : null
-  should_fetch_cluster = local.flux_config.install && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
+  flux_kubeconfig_path            = local.flux_config.kubeconfig_path
+  doks_cluster_ids                = try([for m in module.doks : m.cluster_id], [])
+  doks_cluster_id                 = length(local.doks_cluster_ids) > 0 ? local.doks_cluster_ids[0] : null
+  flux_auth_source_available      = local.flux_kubeconfig_path != "" || local.doks_cluster_id != null
+  should_fetch_cluster            = local.flux_config.install && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
+  should_configure_flux_providers = local.flux_config.install && local.flux_auth_source_available
 }
 
 data "digitalocean_kubernetes_cluster" "flux" {
@@ -67,11 +69,11 @@ data "digitalocean_kubernetes_cluster" "flux" {
 }
 
 locals {
-  flux_cluster = local.flux_kubeconfig_path == "" ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
-  flux_host    = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.endpoint, null) : null
-  flux_token   = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.kube_config[0].token, null) : null
-  flux_ca_cert = local.flux_kubeconfig_path == "" ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
-  flux_provider_auth = local.flux_kubeconfig_path == "" ? {
+  flux_cluster = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
+  flux_host    = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(local.flux_cluster.endpoint, null) : null
+  flux_token   = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(local.flux_cluster.kube_config[0].token, null) : null
+  flux_ca_cert = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
+  flux_provider_auth = !local.should_configure_flux_providers ? null : local.flux_kubeconfig_path == "" ? {
     host                   = local.flux_host
     token                  = local.flux_token
     cluster_ca_certificate = local.flux_ca_cert
@@ -86,25 +88,25 @@ locals {
 
 provider "kubernetes" {
   alias                  = "flux"
-  host                   = local.flux_provider_auth.host
-  token                  = local.flux_provider_auth.token
-  cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
-  config_path            = local.flux_provider_auth.config_path
+  host                   = try(local.flux_provider_auth.host, null)
+  token                  = try(local.flux_provider_auth.token, null)
+  cluster_ca_certificate = try(local.flux_provider_auth.cluster_ca_certificate, null)
+  config_path            = try(local.flux_provider_auth.config_path, null)
 }
 
 provider "helm" {
   alias = "flux"
 
   kubernetes {
-    host                   = local.flux_provider_auth.host
-    token                  = local.flux_provider_auth.token
-    cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
-    config_path            = local.flux_provider_auth.config_path
+    host                   = try(local.flux_provider_auth.host, null)
+    token                  = try(local.flux_provider_auth.token, null)
+    cluster_ca_certificate = try(local.flux_provider_auth.cluster_ca_certificate, null)
+    config_path            = try(local.flux_provider_auth.config_path, null)
   }
 }
 
 module "fluxcd" {
-  count  = local.flux_config.install && (local.flux_kubeconfig_path != "" || var.should_create_cluster) ? 1 : 0
+  count  = local.should_configure_flux_providers ? 1 : 0
   source = "../../modules/fluxcd"
 
   providers = {
@@ -135,8 +137,8 @@ module "fluxcd" {
 
 check "flux_authentication_source" {
   assert {
-    condition     = !local.flux_config.install || local.flux_kubeconfig_path != "" || var.should_create_cluster
-    error_message = "Flux install requires either flux.kubeconfig_path to be set or should_create_cluster=true."
+    condition     = !local.flux_config.install || local.flux_auth_source_available
+    error_message = "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials."
   }
 }
 
@@ -158,15 +160,15 @@ output "kubeconfig" {
 
 output "flux_namespace" {
   description = "Namespace where Flux is installed"
-  value       = var.flux.install ? module.fluxcd[0].namespace : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].namespace : null
 }
 
 output "flux_git_repository_name" {
   description = "Name of the Flux GitRepository resource"
-  value       = var.flux.install ? module.fluxcd[0].git_repository_name : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].git_repository_name : null
 }
 
 output "flux_kustomization_name" {
   description = "Name of the Flux Kustomization resource"
-  value       = var.flux.install ? module.fluxcd[0].kustomization_name : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].kustomization_name : null
 }

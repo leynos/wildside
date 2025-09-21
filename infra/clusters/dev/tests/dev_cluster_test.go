@@ -162,20 +162,20 @@ func TestDevClusterFluxRequiresRepositoryURL(t *testing.T) {
 	flux["kubeconfig_path"] = "/tmp/kubeconfig"
 	fluxRepo := flux["git_repository"].(map[string]interface{})
 	fluxRepo["url"] = ""
-	testInvalidFluxConfig(t, map[string]interface{}{
-		"should_create_cluster": false,
-		"flux":                  flux,
-	}, "flux.git_repository.url must be set to an HTTPS, SSH, git@, or file:// URL when installing Flux")
+        testInvalidFluxConfig(t, map[string]interface{}{
+                "should_create_cluster": false,
+                "flux":                  flux,
+        }, "flux.git_repository.url must be HTTPS, SSH, or git@. Set allow_file_scheme=true to permit file:// URLs")
 }
 
 func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	t.Parallel()
 	flux := defaultFluxConfig()
 	flux["install"] = true
-	testInvalidFluxConfig(t, map[string]interface{}{
-		"should_create_cluster": false,
-		"flux":                  flux,
-	}, "flux.install requires should_create_cluster to be true or flux.kubeconfig_path to be set")
+        testInvalidFluxConfig(t, map[string]interface{}{
+                "should_create_cluster": false,
+                "flux":                  flux,
+        }, "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials.")
 }
 
 func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {

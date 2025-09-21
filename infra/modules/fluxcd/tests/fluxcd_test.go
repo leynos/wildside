@@ -91,7 +91,7 @@ func TestFluxModuleInvalidPath(t *testing.T) {
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without traversal`), err.Error())
+	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without\s+parent-directory traversal`), err.Error())
 }
 
 func TestFluxModuleInvalidBranch(t *testing.T) {

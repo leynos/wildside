@@ -212,10 +212,11 @@ fluxcd-test:
 	tofu -chdir=infra/modules/fluxcd/examples/basic validate
 	command -v tflint >/dev/null
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/modules/fluxcd --policy infra/modules/fluxcd/policy --ignore ".terraform"
 	cd infra/modules/fluxcd/tests && KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
-		tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
-			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
+	        tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
+	                -var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
 			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
 			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
 			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
@@ -228,18 +229,23 @@ fluxcd-test:
 
 fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
-		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
+	        echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
-		tmp_json="$$(mktemp)"; \
-		plan_path=infra/modules/fluxcd/examples/basic/tfplan.binary; \
-		tofu -chdir=infra/modules/fluxcd/examples/basic plan -out=tfplan.binary -detailed-exitcode \
-			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
-			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
-			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
-			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
-		status=$$?; \
-		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then rm -f "$$tmp_json" "$$plan_path"; exit $$status; fi; \
-		tofu -chdir=infra/modules/fluxcd/examples/basic show -json tfplan.binary > "$$tmp_json"; \
-		conftest test "$$tmp_json" --policy infra/modules/fluxcd/policy; \
-		rm -f "$$tmp_json" "$$plan_path"; \
+	        tmp_json="$$(mktemp)"; \
+	        plan_path=infra/modules/fluxcd/examples/basic/tfplan.binary; \
+	        cleanup() { rm -f "$$tmp_json" "$$plan_path"; }; \
+	        trap 'cleanup' EXIT; \
+	        tofu -chdir=infra/modules/fluxcd/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+	                -var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
+	                -var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
+	                -var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
+	                -var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
+	        status=$$?; \
+	        if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+	        tofu -chdir=infra/modules/fluxcd/examples/basic show -json tfplan.binary > "$$tmp_json"; \
+	        status=$$?; \
+	        if [ $$status -ne 0 ]; then exit $$status; fi; \
+	        conftest test "$$tmp_json" --policy infra/modules/fluxcd/policy; \
+	        status=$$?; \
+	        exit $$status; \
 	fi
