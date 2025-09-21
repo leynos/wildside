@@ -187,3 +187,22 @@ variable "helm_timeout" {
     error_message = "helm_timeout must be a positive number of seconds"
   }
 }
+
+variable "helm_values" {
+  description = "Inline YAML values passed to the Flux Helm release"
+  type        = list(string)
+  default     = []
+}
+
+variable "helm_values_files" {
+  description = "Additional YAML files providing values for the Flux Helm release"
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for path in var.helm_values_files : length(trimspace(path)) > 0
+    ])
+    error_message = "helm_values_files must not contain blank file paths"
+  }
+}

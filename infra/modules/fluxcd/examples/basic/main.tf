@@ -72,6 +72,18 @@ variable "kustomization_timeout" {
   default     = "5m"
 }
 
+variable "helm_values" {
+  description = "Inline YAML values passed to the Flux Helm release"
+  type        = list(string)
+  default     = []
+}
+
+variable "helm_values_files" {
+  description = "Additional YAML files providing values for the Flux Helm release"
+  type        = list(string)
+  default     = []
+}
+
 locals {
   kubeconfig = trimspace(coalesce(var.kubeconfig_path, ""))
 }
@@ -100,6 +112,8 @@ module "fluxcd" {
   kustomization_prune        = var.kustomization_prune
   kustomization_suspend      = var.kustomization_suspend
   kustomization_timeout      = var.kustomization_timeout
+  helm_values                = var.helm_values
+  helm_values_files          = var.helm_values_files
 }
 
 output "namespace" {

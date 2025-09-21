@@ -13,6 +13,35 @@ locals {
       }
     )
   ]
+  flux_config = {
+    install         = var.flux.install
+    kubeconfig_path = trimspace(var.flux.kubeconfig_path)
+    namespace       = trimspace(var.flux.namespace)
+    git_repository = {
+      name        = trimspace(var.flux.git_repository.name)
+      url         = var.flux.git_repository.url == null ? null : trimspace(var.flux.git_repository.url)
+      branch      = trimspace(var.flux.git_repository.branch)
+      path        = trimspace(var.flux.git_repository.path)
+      secret_name = var.flux.git_repository.secret_name == null ? null : trimspace(var.flux.git_repository.secret_name)
+    }
+    reconcile_interval = trimspace(var.flux.reconcile_interval)
+    kustomization = {
+      name    = trimspace(var.flux.kustomization.name)
+      prune   = var.flux.kustomization.prune
+      suspend = var.flux.kustomization.suspend
+      timeout = trimspace(var.flux.kustomization.timeout)
+    }
+    helm = {
+      release_name = trimspace(var.flux.helm.release_name)
+      repository   = trimspace(var.flux.helm.repository)
+      chart        = trimspace(var.flux.helm.chart)
+      version      = trimspace(var.flux.helm.version)
+      wait         = var.flux.helm.wait
+      timeout      = var.flux.helm.timeout
+      values       = var.flux.helm.values
+      values_files = [for path in var.flux.helm.values_files : trimspace(path)]
+    }
+  }
 }
 
 module "doks" {
@@ -26,10 +55,10 @@ module "doks" {
 }
 
 locals {
-  flux_kubeconfig_path = trimspace(var.flux_kubeconfig_path)
+  flux_kubeconfig_path = local.flux_config.kubeconfig_path
   doks_cluster_ids     = try([for m in module.doks : m.cluster_id], [])
   doks_cluster_id      = length(local.doks_cluster_ids) > 0 ? local.doks_cluster_ids[0] : null
-  should_fetch_cluster = var.should_install_flux && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
+  should_fetch_cluster = local.flux_config.install && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
 }
 
 data "digitalocean_kubernetes_cluster" "flux" {
@@ -42,29 +71,40 @@ locals {
   flux_host    = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.endpoint, null) : null
   flux_token   = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.kube_config[0].token, null) : null
   flux_ca_cert = local.flux_kubeconfig_path == "" ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
+  flux_provider_auth = local.flux_kubeconfig_path == "" ? {
+    host                   = local.flux_host
+    token                  = local.flux_token
+    cluster_ca_certificate = local.flux_ca_cert
+    config_path            = null
+    } : {
+    host                   = null
+    token                  = null
+    cluster_ca_certificate = null
+    config_path            = local.flux_kubeconfig_path
+  }
 }
 
 provider "kubernetes" {
   alias                  = "flux"
-  host                   = local.flux_kubeconfig_path == "" ? local.flux_host : null
-  token                  = local.flux_kubeconfig_path == "" ? local.flux_token : null
-  cluster_ca_certificate = local.flux_kubeconfig_path == "" ? local.flux_ca_cert : null
-  config_path            = local.flux_kubeconfig_path != "" ? local.flux_kubeconfig_path : null
+  host                   = local.flux_provider_auth.host
+  token                  = local.flux_provider_auth.token
+  cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
+  config_path            = local.flux_provider_auth.config_path
 }
 
 provider "helm" {
   alias = "flux"
 
   kubernetes {
-    host                   = local.flux_kubeconfig_path == "" ? local.flux_host : null
-    token                  = local.flux_kubeconfig_path == "" ? local.flux_token : null
-    cluster_ca_certificate = local.flux_kubeconfig_path == "" ? local.flux_ca_cert : null
-    config_path            = local.flux_kubeconfig_path != "" ? local.flux_kubeconfig_path : null
+    host                   = local.flux_provider_auth.host
+    token                  = local.flux_provider_auth.token
+    cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
+    config_path            = local.flux_provider_auth.config_path
   }
 }
 
 module "fluxcd" {
-  count  = var.should_install_flux && (local.flux_kubeconfig_path != "" || var.should_create_cluster) ? 1 : 0
+  count  = local.flux_config.install && (local.flux_kubeconfig_path != "" || var.should_create_cluster) ? 1 : 0
   source = "../../modules/fluxcd"
 
   providers = {
@@ -72,30 +112,31 @@ module "fluxcd" {
     helm       = helm.flux
   }
 
-  lifecycle {
-    precondition {
-      condition     = local.flux_kubeconfig_path != "" || var.should_create_cluster
-      error_message = "Flux install requires either flux_kubeconfig_path or should_create_cluster=true."
-    }
-  }
-
-  namespace                  = var.flux_namespace
-  git_repository_name        = var.flux_git_repository_name
-  kustomization_name         = var.flux_kustomization_name
-  git_repository_url         = var.flux_git_repository_url
-  git_repository_branch      = var.flux_git_repository_branch
-  git_repository_path        = var.flux_git_repository_path
-  git_repository_secret_name = var.flux_git_repository_secret_name
-  reconcile_interval         = var.flux_reconcile_interval
-  kustomization_prune        = var.flux_kustomization_prune
-  kustomization_suspend      = var.flux_kustomization_suspend
-  kustomization_timeout      = var.flux_kustomization_timeout
+  namespace                  = local.flux_config.namespace
+  git_repository_name        = local.flux_config.git_repository.name
+  kustomization_name         = local.flux_config.kustomization.name
+  git_repository_url         = local.flux_config.git_repository.url
+  git_repository_branch      = local.flux_config.git_repository.branch
+  git_repository_path        = local.flux_config.git_repository.path
+  git_repository_secret_name = local.flux_config.git_repository.secret_name
+  reconcile_interval         = local.flux_config.reconcile_interval
+  kustomization_prune        = local.flux_config.kustomization.prune
+  kustomization_suspend      = local.flux_config.kustomization.suspend
+  kustomization_timeout      = local.flux_config.kustomization.timeout
+  helm_release_name          = local.flux_config.helm.release_name
+  chart_repository           = local.flux_config.helm.repository
+  chart_name                 = local.flux_config.helm.chart
+  chart_version              = local.flux_config.helm.version
+  helm_wait                  = local.flux_config.helm.wait
+  helm_timeout               = local.flux_config.helm.timeout
+  helm_values                = local.flux_config.helm.values
+  helm_values_files          = local.flux_config.helm.values_files
 }
 
 check "flux_authentication_source" {
   assert {
-    condition     = !var.should_install_flux || local.flux_kubeconfig_path != "" || var.should_create_cluster
-    error_message = "Flux install requires either flux_kubeconfig_path to be set or should_create_cluster=true."
+    condition     = !local.flux_config.install || local.flux_kubeconfig_path != "" || var.should_create_cluster
+    error_message = "Flux install requires either flux.kubeconfig_path to be set or should_create_cluster=true."
   }
 }
 
@@ -117,15 +158,15 @@ output "kubeconfig" {
 
 output "flux_namespace" {
   description = "Namespace where Flux is installed"
-  value       = var.should_install_flux ? module.fluxcd[0].namespace : null
+  value       = var.flux.install ? module.fluxcd[0].namespace : null
 }
 
 output "flux_git_repository_name" {
   description = "Name of the Flux GitRepository resource"
-  value       = var.should_install_flux ? module.fluxcd[0].git_repository_name : null
+  value       = var.flux.install ? module.fluxcd[0].git_repository_name : null
 }
 
 output "flux_kustomization_name" {
   description = "Name of the Flux Kustomization resource"
-  value       = var.should_install_flux ? module.fluxcd[0].kustomization_name : null
+  value       = var.flux.install ? module.fluxcd[0].kustomization_name : null
 }

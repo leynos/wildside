@@ -13,6 +13,38 @@ import (
 	testutil "wildside/infra/testutil"
 )
 
+func defaultFluxConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"install":         false,
+		"kubeconfig_path": "",
+		"namespace":       "flux-system",
+		"git_repository": map[string]interface{}{
+			"name":        "flux-system",
+			"url":         nil,
+			"branch":      "main",
+			"path":        "./clusters/dev",
+			"secret_name": nil,
+		},
+		"reconcile_interval": "1m",
+		"kustomization": map[string]interface{}{
+			"name":    "flux-system",
+			"prune":   true,
+			"suspend": false,
+			"timeout": "5m",
+		},
+		"helm": map[string]interface{}{
+			"release_name": "flux-system",
+			"repository":   "https://fluxcd-community.github.io/helm-charts",
+			"chart":        "flux2",
+			"version":      "2.16.4",
+			"wait":         true,
+			"timeout":      600,
+			"values":       []string{},
+			"values_files": []string{},
+		},
+	}
+}
+
 // testVars returns a baseline variable set matching the defaults in variables.tf.
 func testVars(t *testing.T) map[string]interface{} {
 	vars := map[string]interface{}{
@@ -32,6 +64,7 @@ func testVars(t *testing.T) map[string]interface{} {
 		},
 		"tags":              []string{"env:dev"},
 		"expose_kubeconfig": false,
+		"flux":              defaultFluxConfig(),
 	}
 	return vars
 }
@@ -124,20 +157,25 @@ func TestDevClusterPolicy(t *testing.T) {
 
 func TestDevClusterFluxRequiresRepositoryURL(t *testing.T) {
 	t.Parallel()
+	flux := defaultFluxConfig()
+	flux["install"] = true
+	flux["kubeconfig_path"] = "/tmp/kubeconfig"
+	fluxRepo := flux["git_repository"].(map[string]interface{})
+	fluxRepo["url"] = ""
 	testInvalidFluxConfig(t, map[string]interface{}{
-		"should_create_cluster":   false,
-		"should_install_flux":     true,
-		"flux_kubeconfig_path":    "/tmp/kubeconfig",
-		"flux_git_repository_url": "",
-	}, "flux_git_repository_url must be set to an HTTPS, SSH, git@, or file URL when installing Flux")
+		"should_create_cluster": false,
+		"flux":                  flux,
+	}, "flux.git_repository.url must be set to an HTTPS, SSH, git@, or file:// URL when installing Flux")
 }
 
 func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	t.Parallel()
+	flux := defaultFluxConfig()
+	flux["install"] = true
 	testInvalidFluxConfig(t, map[string]interface{}{
 		"should_create_cluster": false,
-		"should_install_flux":   true,
-	}, "should_install_flux requires should_create_cluster to be true or flux_kubeconfig_path to be set")
+		"flux":                  flux,
+	}, "flux.install requires should_create_cluster to be true or flux.kubeconfig_path to be set")
 }
 
 func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {

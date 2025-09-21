@@ -49,6 +49,8 @@ module "fluxcd" {
   git_repository_branch = "main"
   git_repository_path   = "./clusters/dev"
   reconcile_interval    = "1m"
+  helm_values           = ["installCRDs: true"]
+  helm_values_files     = [path.module.."/values/observability.yaml"]
 }
 
 output "flux_namespace" {
@@ -75,6 +77,7 @@ tofu output kustomization_name
 ```
 
 The [Flux documentation](https://fluxcd.io/docs/) outlines options such as
-multi-tenancy lockdown and image automation. Helm chart values can be
-overridden via `helm_release` arguments in a wrapper module when additional
-customisation is required.
+multi-tenancy lockdown and image automation. Supply chart overrides using the
+`helm_values` and `helm_values_files` inputs when additional customisation is
+required. Values files are read with `file(...)`, so relative paths should be
+anchored with `path.module`.

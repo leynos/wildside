@@ -11,6 +11,9 @@ locals {
   reconcile_interval    = trimspace(var.reconcile_interval)
   kustomization_timeout = trimspace(var.kustomization_timeout)
   helm_timeout          = var.helm_timeout
+  helm_inline_values    = var.helm_values
+  helm_value_files      = [for path in var.helm_values_files : trimspace(path)]
+  helm_values           = concat(local.helm_inline_values, [for path in local.helm_value_files : file(path)])
   secret_name           = var.git_repository_secret_name == null ? null : trimspace(var.git_repository_secret_name)
   common_labels = {
     "app.kubernetes.io/managed-by" = "opentofu"
@@ -40,6 +43,8 @@ resource "helm_release" "flux" {
   create_namespace = false
   cleanup_on_fail  = true
   max_history      = 3
+
+  values = local.helm_values
 
   depends_on = [kubernetes_namespace.flux]
 }

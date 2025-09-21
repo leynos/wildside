@@ -21,7 +21,24 @@ func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
 	kubeconfigPath := filepath.Join(kubeconfigDir, "kubeconfig")
-	stubConfig := []byte("apiVersion: v1\nkind: Config\nclusters: []\ncontexts: []\ncurrent-context: \"\"\nusers: []\n")
+	stubConfig := []byte(`apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://127.0.0.1
+  name: stub
+contexts:
+- context:
+    cluster: stub
+    user: stub
+  name: stub
+current-context: stub
+kind: Config
+users:
+- name: stub
+  user:
+    token: fake-token
+`)
 	require.NoError(t, os.WriteFile(kubeconfigPath, stubConfig, 0600))
 
 	return map[string]interface{}{
@@ -36,6 +53,8 @@ func testVars(t *testing.T) map[string]interface{} {
 		"kustomization_suspend":      false,
 		"git_repository_secret_name": nil,
 		"kubeconfig_path":            kubeconfigPath,
+		"helm_values":                []string{},
+		"helm_values_files":          []string{},
 	}
 }
 
@@ -72,7 +91,7 @@ func TestFluxModuleInvalidPath(t *testing.T) {
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-    require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without traversal`), err.Error())
+	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without traversal`), err.Error())
 }
 
 func TestFluxModuleInvalidBranch(t *testing.T) {
@@ -83,6 +102,23 @@ func TestFluxModuleInvalidBranch(t *testing.T) {
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
 	require.Regexp(t, regexp.MustCompile(`git_repository_branch must not be blank`), err.Error())
+}
+
+func TestFluxModuleSupportsHelmValues(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	valuesDir := t.TempDir()
+	valuesFile := filepath.Join(valuesDir, "values.yaml")
+	fileContent := "featureFlags:\n  tracing: true\n"
+	require.NoError(t, os.WriteFile(valuesFile, []byte(fileContent), 0600))
+	vars["helm_values"] = []string{"installCRDs: true"}
+	vars["helm_values_files"] = []string{valuesFile}
+	_, opts := setup(t, vars)
+	stdout, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Contains(t, stdout, "installCRDs: true")
+	require.Contains(t, stdout, "featureFlags")
+	require.Contains(t, stdout, "tracing: true")
 }
 
 func TestFluxModulePlanFailsWithoutKubeconfig(t *testing.T) {

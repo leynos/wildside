@@ -25,6 +25,9 @@ module.
   the module prevents suspended Kustomizations or absolute repository paths via
   input validation and OPA policies. Optional inputs allow callers to supply a
   Kubernetes secret for private repositories.
+- **Helm overrides as inputs.** The `helm_values` and `helm_values_files`
+  variables expose Flux chart customisation without forcing consumers to wrap
+  the module or fork the Helm release configuration.
 - **Dual authentication paths.** The parent configuration may either provide a
   kubeconfig path or allow the module to derive credentials from the DOKS API.
   When credentials are fetched remotely, the module decodes the DigitalOcean
@@ -42,14 +45,17 @@ module.
 
 ## Integration with the dev cluster configuration
 
-- **Conditional install.** `infra/clusters/dev` exposes a `should_install_flux`
-  flag. When enabled, the configuration instantiates the Flux module and
-  configures Helm/Kubernetes providers using either an operator-supplied
+- **Structured Flux input.** `infra/clusters/dev` now accepts a `flux` object
+  combining the install toggle, Git metadata, Helm settings, and kubeconfig
+  source. When `flux.install` is true the configuration instantiates the module
+  and configures Helm/Kubernetes providers using either an operator-supplied
   kubeconfig file or the cluster credentials fetched from DigitalOcean.
-- **Validations.** The root module validates that enabling Flux requires a
-  DOKS cluster and a Git repository URL. Tests assert these guard rails.
-- **Outputs.** The dev configuration now exports the Flux namespace, Git
-  repository name, and Kustomization name to simplify downstream automation.
+- **Validations.** The root module validates that enabling Flux requires a DOKS
+  cluster (or kubeconfig path) and ensures the object attributes, such as the
+  Git URL and repository path, remain policy compliant. Tests assert these guard
+  rails.
+- **Outputs.** The dev configuration exports the Flux namespace, Git repository
+  name, and Kustomization name to simplify downstream automation.
 
 ## Future work
 
