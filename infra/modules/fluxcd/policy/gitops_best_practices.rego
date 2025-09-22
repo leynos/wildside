@@ -7,9 +7,34 @@ branch(spec) = object.get(object.get(spec, "ref", {}), "branch", "")
 
 url(spec) = object.get(spec, "url", "")
 
+allowed_repo_url(repo_url) if {
+  startswith(repo_url, "https://")
+}
+
+allowed_repo_url(repo_url) if {
+  startswith(repo_url, "ssh://")
+}
+
+allowed_repo_url(repo_url) if {
+  startswith(repo_url, "git@")
+}
+
+allowed_repo_url(repo_url) if {
+  object.get(input, "allow_file_scheme", false)
+  startswith(repo_url, "file://")
+}
+
 interval(spec) = object.get(spec, "interval", "")
 
 path(spec) = object.get(spec, "path", "")
+
+invalid_kustomization_path(p) if {
+  startswith(p, "/")
+}
+
+invalid_kustomization_path(p) if {
+  regex.match(`(^|/|\\)\.\.($|/|\\)`, p)
+}
 
 source_kind(spec) = object.get(object.get(spec, "sourceRef", {}), "kind", "")
 
@@ -25,9 +50,7 @@ deny contains msg if {
   manifest.kind == "GitRepository"
   spec := manifest.spec
   repo_url := url(spec)
-  not startswith(repo_url, "https://")
-  not startswith(repo_url, "ssh://")
-  not startswith(repo_url, "git@")
+  not allowed_repo_url(repo_url)
   msg := sprintf("GitRepository %s must use an HTTPS, SSH, or git@ URL", [manifest.metadata.name])
 }
 
@@ -73,7 +96,7 @@ deny contains msg if {
   manifest.kind == "Kustomization"
   spec := manifest.spec
   p := path(spec)
-  startswith(p, "/")
+  invalid_kustomization_path(p)
   msg := sprintf("Kustomization %s path %q must stay relative to the repository root", [manifest.metadata.name, p])
 }
 

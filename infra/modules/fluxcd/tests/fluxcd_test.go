@@ -89,9 +89,11 @@ func TestFluxExampleRequiresKubeconfigPath(t *testing.T) {
 	vars := testVars(t)
 	vars["kubeconfig_path"] = ""
 	_, opts := setup(t, vars)
-	_, err := terraform.InitAndValidateE(t, opts)
+	stdout, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Set kubeconfig_path to a readable kubeconfig file before running the example")
+	combined := strings.Join([]string{stdout, err.Error()}, "\n")
+	require.Contains(t, combined, "Set kubeconfig_path to a readable kubeconfig file before running the example")
+	require.Contains(t, combined, "Check block assertion failed")
 }
 
 func TestFluxModuleInvalidPath(t *testing.T) {
@@ -224,6 +226,69 @@ func TestFluxModulePolicy(t *testing.T) {
 		require.True(t, ok, "expected ExitError from conftest for policy violation")
 		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
 		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected policy violation output")
+	})
+
+	t.Run("AllowsFileSchemeWhenOptedIn", func(t *testing.T) {
+		t.Parallel()
+		plan, err := os.CreateTemp("", "fluxcd-file-plan-*.json")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(plan.Name()) })
+
+		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"file"},"spec":{"url":"file:///tmp/repo","interval":"1m","ref":{"branch":"main"}}}}}}]}`
+		_, err = plan.WriteString(payload)
+		require.NoError(t, err)
+		require.NoError(t, plan.Close())
+
+		vCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		violationCmd := exec.CommandContext(vCtx, "conftest", "test", plan.Name(), "--policy", policyPath)
+		violationCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
+		violationOut, violationErr := violationCmd.CombinedOutput()
+		require.NotEqual(t, context.DeadlineExceeded, vCtx.Err(), "file-scheme policy run timed out")
+		require.Error(t, violationErr, "expected conftest to report a violation when file:// is disallowed")
+		exitErr, ok := violationErr.(*exec.ExitError)
+		require.True(t, ok, "expected ExitError from conftest for file-scheme violation")
+		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for file-scheme violation")
+		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected git repository policy violation output")
+
+		dataFile, err := os.CreateTemp("", "fluxcd-policy-data-*.json")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(dataFile.Name()) })
+		_, err = dataFile.WriteString(`{"allow_file_scheme":true}`)
+		require.NoError(t, err)
+		require.NoError(t, dataFile.Close())
+
+		allowCtx, allowCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer allowCancel()
+		allowCmd := exec.CommandContext(allowCtx, "conftest", "test", plan.Name(), "--policy", policyPath, "--data", dataFile.Name())
+		allowCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
+		allowOut, allowErr := allowCmd.CombinedOutput()
+		require.NotEqual(t, context.DeadlineExceeded, allowCtx.Err(), "allow-file policy run timed out")
+		require.NoErrorf(t, allowErr, "conftest unexpectedly failed when allow_file_scheme=true: %s", string(allowOut))
+	})
+
+	t.Run("RejectsParentDirectoryTraversal", func(t *testing.T) {
+		t.Parallel()
+		plan, err := os.CreateTemp("", "fluxcd-path-plan-*.json")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = os.Remove(plan.Name()) })
+
+		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"Kustomization","metadata":{"name":"invalid-path"},"spec":{"path":"../hack","prune":true,"suspend":false,"sourceRef":{"kind":"GitRepository"}}}}}}]}`
+		_, err = plan.WriteString(payload)
+		require.NoError(t, err)
+		require.NoError(t, plan.Close())
+
+		vCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		violationCmd := exec.CommandContext(vCtx, "conftest", "test", plan.Name(), "--policy", policyPath)
+		violationCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
+		violationOut, violationErr := violationCmd.CombinedOutput()
+		require.NotEqual(t, context.DeadlineExceeded, vCtx.Err(), "path policy run timed out")
+		require.Error(t, violationErr, "expected conftest to report a violation for parent traversal")
+		exitErr, ok := violationErr.(*exec.ExitError)
+		require.True(t, ok, "expected ExitError from conftest for parent traversal")
+		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for parent traversal violation")
+		require.Contains(t, strings.ToLower(string(violationOut)), "kustomization", "expected kustomization path violation output")
 	})
 }
 

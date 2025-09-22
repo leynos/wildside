@@ -56,24 +56,25 @@ module "doks" {
 }
 
 locals {
+  flux_install_requested          = local.flux_config.install
   flux_kubeconfig_path            = local.flux_config.kubeconfig_path
-  doks_cluster_ids                = try([for m in module.doks : m.cluster_id], [])
-  doks_cluster_id                 = length(local.doks_cluster_ids) > 0 ? local.doks_cluster_ids[0] : null
-  flux_auth_source_available      = local.flux_kubeconfig_path != "" || local.doks_cluster_id != null
-  should_fetch_cluster            = local.flux_config.install && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
-  should_configure_flux_providers = local.flux_config.install && local.flux_auth_source_available
+  flux_module_creates_cluster     = length(module.doks) > 0
+  flux_auth_source_available      = local.flux_kubeconfig_path != "" || local.flux_module_creates_cluster
+  flux_cluster_ids                = local.flux_install_requested && local.flux_kubeconfig_path == "" && local.flux_module_creates_cluster ? [for m in module.doks : m.cluster_id] : []
+  should_fetch_cluster            = length(local.flux_cluster_ids) > 0
+  should_configure_flux_providers = local.flux_install_requested && local.flux_auth_source_available
 }
 
 data "digitalocean_kubernetes_cluster" "flux" {
-  count = local.should_fetch_cluster ? 1 : 0
-  name  = var.cluster_name
+  count      = length(local.flux_cluster_ids)
+  cluster_id = local.flux_cluster_ids[count.index]
 }
 
 locals {
-  flux_cluster = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
-  flux_host    = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(local.flux_cluster.endpoint, null) : null
-  flux_token   = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(local.flux_cluster.kube_config[0].token, null) : null
-  flux_ca_cert = local.should_configure_flux_providers && local.flux_kubeconfig_path == "" ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
+  flux_cluster = local.should_fetch_cluster ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
+  flux_host    = local.should_fetch_cluster ? try(local.flux_cluster.endpoint, null) : null
+  flux_token   = local.should_fetch_cluster ? try(local.flux_cluster.kube_config[0].token, null) : null
+  flux_ca_cert = local.should_fetch_cluster ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
   flux_provider_auth = !local.should_configure_flux_providers ? null : local.flux_kubeconfig_path == "" ? {
     host                   = local.flux_host
     token                  = local.flux_token
