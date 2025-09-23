@@ -57,10 +57,24 @@ module "doks" {
 }
 
 locals {
+  # Respect the caller's `flux.install` flag without re-deriving the value in
+  # downstream expressions. Keeping the flag named here makes the intent
+  # obvious when referenced elsewhere.
   flux_install_requested = local.flux_config.install
-  flux_kubeconfig_path   = local.flux_config.kubeconfig_path
-  flux_using_kubeconfig  = local.flux_kubeconfig_path != ""
-  should_configure_flux  = local.flux_install_requested && local.flux_using_kubeconfig
+
+  # Store the trimmed kubeconfig once so the subsequent checks read clearly and
+  # avoid repeating the normalisation logic inline with boolean operations.
+  flux_kubeconfig_path = local.flux_config.kubeconfig_path
+
+  # Flux can only talk to the cluster when a kubeconfig path survives
+  # normalisation. An empty string means we have no credentials to work with.
+  flux_using_kubeconfig = local.flux_kubeconfig_path != ""
+
+  # We only render Flux resources when the caller requested an install and we
+  # have an authentication source (currently kubeconfig). This keeps the
+  # provider configuration evaluable at plan time and prevents misconfigured
+  # resources from being created.
+  should_configure_flux = local.flux_install_requested && local.flux_using_kubeconfig
 }
 
 provider "kubernetes" {

@@ -231,15 +231,18 @@ fluxcd-test:
 	fi
 	$(MAKE) fluxcd-policy
 
+# Delegate the Terraform plan and Conftest execution to a script so the target
+# stays readable while still supporting temporary files and clean shutdown.
 fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
-		FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
-		FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
-		FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
-		FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
-		FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
-		FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
-		./scripts/fluxcd-policy.sh; \
+		env \
+			FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
+			FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
+			FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
+			FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
+			FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
+			FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
+			./scripts/fluxcd-policy.sh; \
 	fi
