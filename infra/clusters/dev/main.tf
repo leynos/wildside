@@ -58,16 +58,16 @@ module "doks" {
 locals {
   flux_install_requested          = local.flux_config.install
   flux_kubeconfig_path            = local.flux_config.kubeconfig_path
-  flux_module_creates_cluster     = length(module.doks) > 0
-  flux_auth_source_available      = local.flux_kubeconfig_path != "" || local.flux_module_creates_cluster
-  flux_cluster_ids                = local.flux_install_requested && local.flux_kubeconfig_path == "" && local.flux_module_creates_cluster ? [for m in module.doks : m.cluster_id] : []
-  should_fetch_cluster            = length(local.flux_cluster_ids) > 0
+  flux_using_kubeconfig           = local.flux_kubeconfig_path != ""
+  flux_module_creates_cluster     = var.should_create_cluster
+  flux_auth_source_available      = local.flux_using_kubeconfig || local.flux_module_creates_cluster
+  should_fetch_cluster            = local.flux_install_requested && !local.flux_using_kubeconfig && local.flux_module_creates_cluster
   should_configure_flux_providers = local.flux_install_requested && local.flux_auth_source_available
 }
 
 data "digitalocean_kubernetes_cluster" "flux" {
-  count      = length(local.flux_cluster_ids)
-  cluster_id = local.flux_cluster_ids[count.index]
+  count      = local.should_fetch_cluster ? 1 : 0
+  cluster_id = module.doks[count.index].cluster_id
 }
 
 locals {
@@ -75,16 +75,16 @@ locals {
   flux_host    = local.should_fetch_cluster ? try(local.flux_cluster.endpoint, null) : null
   flux_token   = local.should_fetch_cluster ? try(local.flux_cluster.kube_config[0].token, null) : null
   flux_ca_cert = local.should_fetch_cluster ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
-  flux_provider_auth = !local.should_configure_flux_providers ? null : local.flux_kubeconfig_path == "" ? {
-    host                   = local.flux_host
-    token                  = local.flux_token
-    cluster_ca_certificate = local.flux_ca_cert
-    config_path            = null
-    } : {
+  flux_provider_auth = !local.should_configure_flux_providers ? null : local.flux_using_kubeconfig ? {
     host                   = null
     token                  = null
     cluster_ca_certificate = null
     config_path            = local.flux_kubeconfig_path
+    } : {
+    host                   = local.flux_host
+    token                  = local.flux_token
+    cluster_ca_certificate = local.flux_ca_cert
+    config_path            = null
   }
 }
 

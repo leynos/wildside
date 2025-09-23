@@ -96,6 +96,18 @@ func TestFluxExampleRequiresKubeconfigPath(t *testing.T) {
 	require.Contains(t, combined, "Check block assertion failed")
 }
 
+func TestFluxExampleRejectsWhitespaceKubeconfig(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["kubeconfig_path"] = " \n\t "
+	_, opts := setup(t, vars)
+	stdout, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	combined := strings.Join([]string{stdout, err.Error()}, "\n")
+	require.Contains(t, combined, "Set kubeconfig_path to a readable kubeconfig file before running the example")
+	require.Contains(t, combined, "Check block assertion failed")
+}
+
 func TestFluxModuleInvalidPath(t *testing.T) {
 	t.Parallel()
 	vars := testVars(t)
@@ -260,7 +272,7 @@ func TestFluxModulePolicy(t *testing.T) {
 
 		allowCtx, allowCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer allowCancel()
-		allowCmd := exec.CommandContext(allowCtx, "conftest", "test", plan.Name(), "--policy", policyPath, "--data", dataFile.Name())
+		allowCmd := exec.CommandContext(allowCtx, "conftest", "test", plan.Name(), "--policy", policyPath, "-d", dataFile.Name())
 		allowCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
 		allowOut, allowErr := allowCmd.CombinedOutput()
 		require.NotEqual(t, context.DeadlineExceeded, allowCtx.Err(), "allow-file policy run timed out")

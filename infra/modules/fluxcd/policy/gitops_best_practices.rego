@@ -20,7 +20,7 @@ allowed_repo_url(repo_url) if {
 }
 
 allowed_repo_url(repo_url) if {
-  object.get(input, "allow_file_scheme", false)
+  object.get(data, "allow_file_scheme", false)
   startswith(repo_url, "file://")
 }
 
