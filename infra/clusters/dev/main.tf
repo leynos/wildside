@@ -141,7 +141,7 @@ module "fluxcd" {
 check "flux_authentication_source" {
   assert {
     condition     = !local.flux_config.install || local.flux_auth_source_available
-    error_message = "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials."
+    error_message = "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials. Create the cluster first, then re-apply with kubeconfig configured."
   }
 }
 
