@@ -235,38 +235,11 @@ fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
-		set -euo pipefail; \
-		tmp_json="$$(mktemp)"; \
-		plan_path=infra/modules/fluxcd/examples/basic/tfplan.binary; \
-		tmp_data=""; \
-		cleanup() { rm -f "$$tmp_json" "$$plan_path"; if [ -n "$$tmp_data" ]; then rm -f "$$tmp_data"; fi; }; \
-		trap 'cleanup' EXIT; \
-		data_args=(); \
-		# Allow callers to provide policy parameters via JSON or an existing data file. \
-		if [ -n "$$FLUX_POLICY_PARAMS_JSON" ]; then \
-			tmp_data="$$(mktemp)"; \
-			printf '%s' "$$FLUX_POLICY_PARAMS_JSON" > "$$tmp_data"; \
-			data_args=(-d "$$tmp_data"); \
-		elif [ -n "$$FLUX_POLICY_DATA" ]; then \
-			data_args=(-d "$$FLUX_POLICY_DATA"); \
-		fi; \
-		set +e; \
-		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic plan -input=false -no-color -out=tfplan.binary -detailed-exitcode \
-			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
-			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
-			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
-			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
-		status=$$?; \
-		set -e; \
-		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
-		set +e; \
-		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic show -json tfplan.binary > "$$tmp_json"; \
-		status=$$?; \
-		set -e; \
-		if [ $$status -ne 0 ]; then exit $$status; fi; \
-		set +e; \
-		conftest test "$$tmp_json" --policy infra/modules/fluxcd/policy $${data_args[@]}; \
-		status=$$?; \
-		set -e; \
-		exit $$status; \
+		FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
+		FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
+		FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
+		FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
+		FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
+		FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
+		./scripts/fluxcd-policy.sh; \
 	fi
