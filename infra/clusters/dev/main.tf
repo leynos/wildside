@@ -15,7 +15,8 @@ locals {
   ]
   flux_config = {
     install           = var.flux.install
-    kubeconfig_path   = trimspace(var.flux.kubeconfig_path != null ? var.flux.kubeconfig_path : "")
+    # coalesce ignores empty strings; use whitespace so nulls normalise to blank after trim.
+    kubeconfig_path   = trimspace(coalesce(var.flux.kubeconfig_path, " "))
     allow_file_scheme = var.flux.allow_file_scheme
     namespace         = trimspace(var.flux.namespace)
     git_repository = {

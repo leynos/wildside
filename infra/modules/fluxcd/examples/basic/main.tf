@@ -85,7 +85,8 @@ variable "helm_values_files" {
 }
 
 locals {
-  kubeconfig = trimspace(var.kubeconfig_path != null ? var.kubeconfig_path : "")
+  # coalesce rejects empty strings; use a single space so trimspace still normalises to blank.
+  kubeconfig = trimspace(coalesce(var.kubeconfig_path, " "))
 }
 
 check "kubeconfig_path_present" {
