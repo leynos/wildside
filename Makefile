@@ -219,7 +219,7 @@ fluxcd-test:
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd/tests && KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
-		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic plan -input=false -detailed-exitcode -no-color \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic plan -input=false -no-color -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
 			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
 			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
