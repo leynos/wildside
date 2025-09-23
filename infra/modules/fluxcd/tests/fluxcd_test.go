@@ -116,14 +116,26 @@ func renderFluxPlan(t *testing.T, vars map[string]interface{}) (string, string) 
 	return tfDir, jsonPath
 }
 
-func runConftestAgainstPlan(t *testing.T, planPath, policyPath, kubeconfig string, timeout time.Duration, extraArgs ...string) ([]byte, error) {
+type conftestRun struct {
+	PlanPath   string
+	PolicyPath string
+	Kubeconfig string
+	ExtraArgs  []string
+	Timeout    time.Duration
+}
+
+func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
 	t.Helper()
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	args := append([]string{"test", planPath, "--policy", policyPath}, extraArgs...)
+	args := append([]string{"test", cfg.PlanPath, "--policy", cfg.PolicyPath}, cfg.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, "conftest", args...)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+cfg.Kubeconfig)
 	out, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 	return out, err
@@ -267,14 +279,24 @@ func TestFluxModulePolicy(t *testing.T) {
 	tfDir, planJSON := renderFluxPlan(t, vars)
 	policyPath := filepath.Join(tfDir, "..", "policy")
 
-	out, err := runConftestAgainstPlan(t, planJSON, policyPath, kubeconfig, 60*time.Second)
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   planJSON,
+		PolicyPath: policyPath,
+		Kubeconfig: kubeconfig,
+		Timeout:    60 * time.Second,
+	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 
 	t.Run("PolicyViolation", func(t *testing.T) {
 		t.Parallel()
 		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"invalid"},"spec":{"url":"ftp://invalid","interval":"15m"}}}}}]}`
 		planPath := writePlanFixture(t, payload)
-		violationOut, violationErr := runConftestAgainstPlan(t, planPath, policyPath, kubeconfig, 10*time.Second)
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
 		require.Error(t, violationErr, "expected conftest to report a violation")
 		exitErr, ok := violationErr.(*exec.ExitError)
 		require.True(t, ok, "expected ExitError from conftest for policy violation")
@@ -287,7 +309,12 @@ func TestFluxModulePolicy(t *testing.T) {
 		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"file"},"spec":{"url":"file:///tmp/repo","interval":"1m","ref":{"branch":"main"}}}}}}]}`
 		planPath := writePlanFixture(t, payload)
 
-		violationOut, violationErr := runConftestAgainstPlan(t, planPath, policyPath, kubeconfig, 10*time.Second)
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
 		require.Error(t, violationErr, "expected conftest to report a violation when file:// is disallowed")
 		exitErr, ok := violationErr.(*exec.ExitError)
 		require.True(t, ok, "expected ExitError from conftest for file-scheme violation")
@@ -295,7 +322,13 @@ func TestFluxModulePolicy(t *testing.T) {
 		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected git repository policy violation output")
 
 		dataFile := writePolicyDataFile(t, `{"allow_file_scheme":true}`)
-		allowOut, allowErr := runConftestAgainstPlan(t, planPath, policyPath, kubeconfig, 10*time.Second, "-d", dataFile)
+		allowOut, allowErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+			ExtraArgs:  []string{"-d", dataFile},
+		})
 		require.NoErrorf(t, allowErr, "conftest unexpectedly failed when allow_file_scheme=true: %s", string(allowOut))
 	})
 
@@ -303,7 +336,12 @@ func TestFluxModulePolicy(t *testing.T) {
 		t.Parallel()
 		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"Kustomization","metadata":{"name":"invalid-path"},"spec":{"path":"../hack","prune":true,"suspend":false,"sourceRef":{"kind":"GitRepository"}}}}}}]}`
 		planPath := writePlanFixture(t, payload)
-		violationOut, violationErr := runConftestAgainstPlan(t, planPath, policyPath, kubeconfig, 10*time.Second)
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
 		require.Error(t, violationErr, "expected conftest to report a violation for parent traversal")
 		exitErr, ok := violationErr.(*exec.ExitError)
 		require.True(t, ok, "expected ExitError from conftest for parent traversal")

@@ -96,12 +96,12 @@ check "kubeconfig_path_present" {
 }
 
 provider "kubernetes" {
-  config_path = local.kubeconfig
+  config_path = local.kubeconfig != "" ? local.kubeconfig : null
 }
 
 provider "helm" {
   kubernetes {
-    config_path = local.kubeconfig
+    config_path = local.kubeconfig != "" ? local.kubeconfig : null
   }
 }
 

@@ -216,7 +216,7 @@ func TestDevClusterFluxRequiresCluster(t *testing.T) {
 	testInvalidFluxConfig(t, map[string]interface{}{
 		"should_create_cluster": false,
 		"flux":                  flux,
-	}, "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials. Create the cluster first, then re-apply with kubeconfig configured.")
+	}, "Flux install requires flux.kubeconfig_path to reference a readable kubeconfig. Create the cluster first, export its credentials, then re-apply with kubeconfig configured.")
 }
 
 func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wantErrSubstrings ...string) {

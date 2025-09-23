@@ -15,7 +15,7 @@ locals {
   ]
   flux_config = {
     install           = var.flux.install
-    kubeconfig_path   = trimspace(var.flux.kubeconfig_path)
+    kubeconfig_path   = trimspace(var.flux.kubeconfig_path != null ? var.flux.kubeconfig_path : "")
     allow_file_scheme = var.flux.allow_file_scheme
     namespace         = trimspace(var.flux.namespace)
     git_repository = {
@@ -56,59 +56,27 @@ module "doks" {
 }
 
 locals {
-  flux_install_requested          = local.flux_config.install
-  flux_kubeconfig_path            = local.flux_config.kubeconfig_path
-  flux_using_kubeconfig           = local.flux_kubeconfig_path != ""
-  flux_module_creates_cluster     = var.should_create_cluster
-  flux_auth_source_available      = local.flux_using_kubeconfig || local.flux_module_creates_cluster
-  should_fetch_cluster            = local.flux_install_requested && !local.flux_using_kubeconfig && local.flux_module_creates_cluster
-  should_configure_flux_providers = local.flux_install_requested && local.flux_auth_source_available
-}
-
-data "digitalocean_kubernetes_cluster" "flux" {
-  count      = local.should_fetch_cluster ? 1 : 0
-  cluster_id = module.doks[count.index].cluster_id
-}
-
-locals {
-  flux_cluster = local.should_fetch_cluster ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
-  flux_host    = local.should_fetch_cluster ? try(local.flux_cluster.endpoint, null) : null
-  flux_token   = local.should_fetch_cluster ? try(local.flux_cluster.kube_config[0].token, null) : null
-  flux_ca_cert = local.should_fetch_cluster ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
-  flux_provider_auth = !local.should_configure_flux_providers ? null : local.flux_using_kubeconfig ? {
-    host                   = null
-    token                  = null
-    cluster_ca_certificate = null
-    config_path            = local.flux_kubeconfig_path
-    } : {
-    host                   = local.flux_host
-    token                  = local.flux_token
-    cluster_ca_certificate = local.flux_ca_cert
-    config_path            = null
-  }
+  flux_install_requested = local.flux_config.install
+  flux_kubeconfig_path   = local.flux_config.kubeconfig_path
+  flux_using_kubeconfig  = local.flux_kubeconfig_path != ""
+  should_configure_flux  = local.flux_install_requested && local.flux_using_kubeconfig
 }
 
 provider "kubernetes" {
-  alias                  = "flux"
-  host                   = try(local.flux_provider_auth.host, null)
-  token                  = try(local.flux_provider_auth.token, null)
-  cluster_ca_certificate = try(local.flux_provider_auth.cluster_ca_certificate, null)
-  config_path            = try(local.flux_provider_auth.config_path, null)
+  alias       = "flux"
+  config_path = local.flux_using_kubeconfig ? local.flux_kubeconfig_path : null
 }
 
 provider "helm" {
   alias = "flux"
 
   kubernetes {
-    host                   = try(local.flux_provider_auth.host, null)
-    token                  = try(local.flux_provider_auth.token, null)
-    cluster_ca_certificate = try(local.flux_provider_auth.cluster_ca_certificate, null)
-    config_path            = try(local.flux_provider_auth.config_path, null)
+    config_path = local.flux_using_kubeconfig ? local.flux_kubeconfig_path : null
   }
 }
 
 module "fluxcd" {
-  count  = local.should_configure_flux_providers ? 1 : 0
+  count  = local.should_configure_flux ? 1 : 0
   source = "../../modules/fluxcd"
 
   providers = {
@@ -140,8 +108,8 @@ module "fluxcd" {
 
 check "flux_authentication_source" {
   assert {
-    condition     = !local.flux_config.install || local.flux_auth_source_available
-    error_message = "Flux install requires flux.kubeconfig_path or should_create_cluster=true to provide credentials. Create the cluster first, then re-apply with kubeconfig configured."
+    condition     = !local.flux_config.install || local.flux_using_kubeconfig
+    error_message = "Flux install requires flux.kubeconfig_path to reference a readable kubeconfig. Create the cluster first, export its credentials, then re-apply with kubeconfig configured."
   }
 }
 
