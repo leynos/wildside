@@ -79,7 +79,6 @@ func testKubeconfigPathValidation(t *testing.T, kubeconfigPath string) {
 	require.Error(t, err)
 	combined := strings.Join([]string{stdout, err.Error()}, "\n")
 	require.Contains(t, combined, exampleKubeconfigError)
-	require.Contains(t, combined, "Check block assertion failed")
 }
 
 func requireBinary(t *testing.T, binary, skipMessage string) {

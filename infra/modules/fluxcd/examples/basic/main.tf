@@ -3,7 +3,7 @@ variable "kubeconfig_path" {
   type        = string
   default     = null
   validation {
-    condition     = var.kubeconfig_path != null
+    condition     = var.kubeconfig_path != null && trimspace(var.kubeconfig_path) != "" && fileexists(trimspace(var.kubeconfig_path))
     error_message = "Set kubeconfig_path to a readable kubeconfig file before running the example"
   }
 }
