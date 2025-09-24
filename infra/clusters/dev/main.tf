@@ -14,9 +14,11 @@ locals {
     )
   ]
   flux_config = {
-    install         = var.flux.install
-    kubeconfig_path = trimspace(var.flux.kubeconfig_path)
-    namespace       = trimspace(var.flux.namespace)
+    install           = var.flux.install
+    # coalesce ignores empty strings; use whitespace so nulls normalise to blank after trim.
+    kubeconfig_path   = trimspace(coalesce(var.flux.kubeconfig_path, " "))
+    allow_file_scheme = var.flux.allow_file_scheme
+    namespace         = trimspace(var.flux.namespace)
     git_repository = {
       name        = trimspace(var.flux.git_repository.name)
       url         = var.flux.git_repository.url == null ? null : trimspace(var.flux.git_repository.url)
@@ -55,56 +57,41 @@ module "doks" {
 }
 
 locals {
+  # Respect the caller's `flux.install` flag without re-deriving the value in
+  # downstream expressions. Keeping the flag named here makes the intent
+  # obvious when referenced elsewhere.
+  flux_install_requested = local.flux_config.install
+
+  # Store the trimmed kubeconfig once so the subsequent checks read clearly and
+  # avoid repeating the normalisation logic inline with boolean operations.
   flux_kubeconfig_path = local.flux_config.kubeconfig_path
-  doks_cluster_ids     = try([for m in module.doks : m.cluster_id], [])
-  doks_cluster_id      = length(local.doks_cluster_ids) > 0 ? local.doks_cluster_ids[0] : null
-  should_fetch_cluster = local.flux_config.install && local.flux_kubeconfig_path == "" && local.doks_cluster_id != null
-}
 
-data "digitalocean_kubernetes_cluster" "flux" {
-  count = local.should_fetch_cluster ? 1 : 0
-  name  = var.cluster_name
-}
+  # Flux can only talk to the cluster when a kubeconfig path survives
+  # normalisation. An empty string means we have no credentials to work with.
+  flux_using_kubeconfig = local.flux_kubeconfig_path != ""
 
-locals {
-  flux_cluster = local.flux_kubeconfig_path == "" ? try(data.digitalocean_kubernetes_cluster.flux[0], null) : null
-  flux_host    = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.endpoint, null) : null
-  flux_token   = local.flux_kubeconfig_path == "" ? try(local.flux_cluster.kube_config[0].token, null) : null
-  flux_ca_cert = local.flux_kubeconfig_path == "" ? try(base64decode(local.flux_cluster.kube_config[0].cluster_ca_certificate), null) : null
-  flux_provider_auth = local.flux_kubeconfig_path == "" ? {
-    host                   = local.flux_host
-    token                  = local.flux_token
-    cluster_ca_certificate = local.flux_ca_cert
-    config_path            = null
-    } : {
-    host                   = null
-    token                  = null
-    cluster_ca_certificate = null
-    config_path            = local.flux_kubeconfig_path
-  }
+  # We only render Flux resources when the caller requested an install and we
+  # have an authentication source (currently kubeconfig). This keeps the
+  # provider configuration evaluable at plan time and prevents misconfigured
+  # resources from being created.
+  should_configure_flux = local.flux_install_requested && local.flux_using_kubeconfig
 }
 
 provider "kubernetes" {
-  alias                  = "flux"
-  host                   = local.flux_provider_auth.host
-  token                  = local.flux_provider_auth.token
-  cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
-  config_path            = local.flux_provider_auth.config_path
+  alias       = "flux"
+  config_path = local.flux_using_kubeconfig ? local.flux_kubeconfig_path : null
 }
 
 provider "helm" {
   alias = "flux"
 
   kubernetes {
-    host                   = local.flux_provider_auth.host
-    token                  = local.flux_provider_auth.token
-    cluster_ca_certificate = local.flux_provider_auth.cluster_ca_certificate
-    config_path            = local.flux_provider_auth.config_path
+    config_path = local.flux_using_kubeconfig ? local.flux_kubeconfig_path : null
   }
 }
 
 module "fluxcd" {
-  count  = local.flux_config.install && (local.flux_kubeconfig_path != "" || var.should_create_cluster) ? 1 : 0
+  count  = local.should_configure_flux ? 1 : 0
   source = "../../modules/fluxcd"
 
   providers = {
@@ -131,12 +118,13 @@ module "fluxcd" {
   helm_timeout               = local.flux_config.helm.timeout
   helm_values                = local.flux_config.helm.values
   helm_values_files          = local.flux_config.helm.values_files
+  allow_file_scheme          = local.flux_config.allow_file_scheme
 }
 
 check "flux_authentication_source" {
   assert {
-    condition     = !local.flux_config.install || local.flux_kubeconfig_path != "" || var.should_create_cluster
-    error_message = "Flux install requires either flux.kubeconfig_path to be set or should_create_cluster=true."
+    condition     = !local.flux_config.install || local.flux_using_kubeconfig
+    error_message = "Flux install requires flux.kubeconfig_path to reference a readable kubeconfig. Create the cluster first, export its credentials, then re-apply with kubeconfig configured."
   }
 }
 
@@ -158,15 +146,15 @@ output "kubeconfig" {
 
 output "flux_namespace" {
   description = "Namespace where Flux is installed"
-  value       = var.flux.install ? module.fluxcd[0].namespace : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].namespace : null
 }
 
 output "flux_git_repository_name" {
   description = "Name of the Flux GitRepository resource"
-  value       = var.flux.install ? module.fluxcd[0].git_repository_name : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].git_repository_name : null
 }
 
 output "flux_kustomization_name" {
   description = "Name of the Flux Kustomization resource"
-  value       = var.flux.install ? module.fluxcd[0].kustomization_name : null
+  value       = length(module.fluxcd) > 0 ? module.fluxcd[0].kustomization_name : null
 }

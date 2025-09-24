@@ -104,9 +104,10 @@ variable "expose_kubeconfig" {
 variable "flux" {
   description = "Flux configuration for the dev cluster"
   type = object({
-    install         = bool
-    kubeconfig_path = string
-    namespace       = string
+    install           = bool
+    kubeconfig_path   = string
+    allow_file_scheme = bool
+    namespace         = string
     git_repository = object({
       name        = string
       url         = optional(string)
@@ -133,9 +134,10 @@ variable "flux" {
     })
   })
   default = {
-    install         = false
-    kubeconfig_path = ""
-    namespace       = "flux-system"
+    install           = false
+    kubeconfig_path   = ""
+    allow_file_scheme = false
+    namespace         = "flux-system"
     git_repository = {
       name        = "flux-system"
       url         = null
@@ -194,10 +196,16 @@ variable "flux" {
     condition = (
       !var.flux.install || (
         length(trimspace(coalesce(var.flux.git_repository.url, ""))) > 0 &&
-        can(regex("^(https://|ssh://|git@|file://)", coalesce(var.flux.git_repository.url, "")))
+        (
+          can(regex("^(https://|ssh://|git@)", coalesce(var.flux.git_repository.url, ""))) ||
+          (
+            var.flux.allow_file_scheme &&
+            can(regex("^file://", coalesce(var.flux.git_repository.url, "")))
+          )
+        )
       )
     )
-    error_message = "flux.git_repository.url must be set to an HTTPS, SSH, git@, or file:// URL when installing Flux"
+    error_message = "flux.git_repository.url must be HTTPS, SSH, or git@. Set allow_file_scheme=true to permit file:// URLs"
   }
 
   validation {

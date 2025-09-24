@@ -3,8 +3,8 @@ variable "kubeconfig_path" {
   type        = string
   default     = null
   validation {
-    condition     = length(trimspace(coalesce(var.kubeconfig_path, ""))) > 0
-    error_message = "kubeconfig_path must point to a kubeconfig file for the target cluster"
+    condition     = var.kubeconfig_path != null && trimspace(var.kubeconfig_path) != "" && fileexists(trimspace(var.kubeconfig_path))
+    error_message = "Set kubeconfig_path to a readable kubeconfig file before running the example"
   }
 }
 
@@ -85,7 +85,15 @@ variable "helm_values_files" {
 }
 
 locals {
-  kubeconfig = trimspace(coalesce(var.kubeconfig_path, ""))
+  # coalesce rejects empty strings; use a single space so trimspace still normalises to blank.
+  kubeconfig = trimspace(coalesce(var.kubeconfig_path, " "))
+}
+
+check "kubeconfig_path_present" {
+  assert {
+    condition     = local.kubeconfig != ""
+    error_message = "Set kubeconfig_path to a readable kubeconfig file before running the example"
+  }
 }
 
 provider "kubernetes" {

@@ -209,12 +209,17 @@ dev-cluster-test: conftest tofu
 fluxcd-test:
 	tofu fmt -check infra/modules/fluxcd
 	tofu -chdir=infra/modules/fluxcd/examples/basic init
-	tofu -chdir=infra/modules/fluxcd/examples/basic validate
+	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic validate -no-color \
+			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
+	else \
+		echo "Skipping fluxcd validate; set FLUX_KUBECONFIG_PATH to enable"; \
+	fi
 	command -v tflint >/dev/null
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd/tests && KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
-		tofu -chdir=infra/modules/fluxcd/examples/basic plan -detailed-exitcode \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic plan -input=false -no-color -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
 			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
 			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
@@ -226,20 +231,18 @@ fluxcd-test:
 	fi
 	$(MAKE) fluxcd-policy
 
+# Delegate the Terraform plan and Conftest execution to a script so the target
+# stays readable while still supporting temporary files and clean shutdown.
 fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
-		tmp_json="$$(mktemp)"; \
-		plan_path=infra/modules/fluxcd/examples/basic/tfplan.binary; \
-		tofu -chdir=infra/modules/fluxcd/examples/basic plan -out=tfplan.binary -detailed-exitcode \
-			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
-			-var "git_repository_path=${FLUX_GIT_REPOSITORY_PATH:-./clusters/my-cluster}" \
-			-var "git_repository_branch=${FLUX_GIT_REPOSITORY_BRANCH:-main}" \
-			-var "kubeconfig_path=$(FLUX_KUBECONFIG_PATH)"; \
-		status=$$?; \
-		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then rm -f "$$tmp_json" "$$plan_path"; exit $$status; fi; \
-		tofu -chdir=infra/modules/fluxcd/examples/basic show -json tfplan.binary > "$$tmp_json"; \
-		conftest test "$$tmp_json" --policy infra/modules/fluxcd/policy; \
-		rm -f "$$tmp_json" "$$plan_path"; \
+		env \
+			FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
+			FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
+			FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
+			FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
+			FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
+			FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
+			./scripts/fluxcd-policy.sh; \
 	fi

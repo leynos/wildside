@@ -17,6 +17,8 @@ import (
 	testutil "wildside/infra/testutil"
 )
 
+const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig file before running the example"
+
 func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
@@ -68,6 +70,100 @@ func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Option
 	})
 }
 
+func testKubeconfigPathValidation(t *testing.T, kubeconfigPath string) {
+	t.Helper()
+	vars := testVars(t)
+	vars["kubeconfig_path"] = kubeconfigPath
+	_, opts := setup(t, vars)
+	stdout, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	combined := strings.Join([]string{stdout, err.Error()}, "\n")
+	require.Contains(t, combined, exampleKubeconfigError)
+}
+
+func requireBinary(t *testing.T, binary, skipMessage string) {
+	t.Helper()
+	if _, err := exec.LookPath(binary); err != nil {
+		t.Skip(skipMessage)
+	}
+}
+
+func requireEnvVar(t *testing.T, key, skipMessage string) string {
+	t.Helper()
+	value := os.Getenv(key)
+	if value == "" {
+		t.Skip(skipMessage)
+	}
+	return value
+}
+
+func renderFluxPlan(t *testing.T, vars map[string]interface{}) (string, string) {
+	t.Helper()
+	tfDir, opts := setup(t, vars)
+	planFile := filepath.Join(tfDir, "tfplan.binary")
+	opts.PlanFilePath = planFile
+	terraform.InitAndPlan(t, opts)
+	t.Cleanup(func() { _ = os.Remove(planFile) })
+
+	show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
+	require.NoError(t, err)
+
+	jsonPath := filepath.Join(tfDir, "plan.json")
+	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
+	t.Cleanup(func() { _ = os.Remove(jsonPath) })
+
+	return tfDir, jsonPath
+}
+
+type conftestRun struct {
+	PlanPath   string
+	PolicyPath string
+	Kubeconfig string
+	ExtraArgs  []string
+	Timeout    time.Duration
+}
+
+func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
+	t.Helper()
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	args := append([]string{"test", cfg.PlanPath, "--policy", cfg.PolicyPath}, cfg.ExtraArgs...)
+	cmd := exec.CommandContext(ctx, "conftest", args...)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+cfg.Kubeconfig)
+	out, err := cmd.CombinedOutput()
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+	return out, err
+}
+
+func writePlanFixture(t *testing.T, payload string) string {
+	t.Helper()
+	plan, err := os.CreateTemp("", "fluxcd-plan-*.json")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(plan.Name()) })
+
+	_, err = plan.WriteString(payload)
+	require.NoError(t, err)
+	require.NoError(t, plan.Close())
+
+	return plan.Name()
+}
+
+func writePolicyDataFile(t *testing.T, payload string) string {
+	t.Helper()
+	file, err := os.CreateTemp("", "fluxcd-policy-data-*.json")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(file.Name()) })
+	_, err = file.WriteString(payload)
+	require.NoError(t, err)
+	require.NoError(t, file.Close())
+	return file.Name()
+}
+
 func TestFluxModuleValidate(t *testing.T) {
 	t.Parallel()
 	_, opts := setup(t, testVars(t))
@@ -84,6 +180,16 @@ func TestFluxModuleInvalidURL(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`git_repository_url`), err.Error())
 }
 
+func TestFluxExampleRequiresKubeconfigPath(t *testing.T) {
+	t.Parallel()
+	testKubeconfigPathValidation(t, "")
+}
+
+func TestFluxExampleRejectsWhitespaceKubeconfig(t *testing.T) {
+	t.Parallel()
+	testKubeconfigPathValidation(t, " \n\t ")
+}
+
 func TestFluxModuleInvalidPath(t *testing.T) {
 	t.Parallel()
 	vars := testVars(t)
@@ -91,7 +197,7 @@ func TestFluxModuleInvalidPath(t *testing.T) {
 	_, opts := setup(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
-	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without traversal`), err.Error())
+	require.Regexp(t, regexp.MustCompile(`git_repository_path must be a non-empty relative path without\s+parent-directory traversal`), err.Error())
 }
 
 func TestFluxModuleInvalidBranch(t *testing.T) {
@@ -134,6 +240,7 @@ func TestFluxModulePlanFailsWithoutKubeconfig(t *testing.T) {
 
 func TestFluxModulePlanDetailedExitCode(t *testing.T) {
 	t.Parallel()
+	requireBinary(t, "tofu", "tofu not found; skipping detailed exit code plan")
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		t.Skip("KUBECONFIG not set; skipping detailed exit code plan")
@@ -159,61 +266,86 @@ func TestFluxModulePlanDetailedExitCode(t *testing.T) {
 
 func TestFluxModulePolicy(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("conftest"); err != nil {
-		t.Skip("conftest not found; skipping policy test")
-	}
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		t.Skip("KUBECONFIG not set; skipping policy test")
-	}
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
+
 	vars := testVars(t)
 	vars["namespace"] = fmt.Sprintf("flux-terratest-%s", strings.ToLower(random.UniqueId()))
 	vars["git_repository_name"] = fmt.Sprintf("flux-repo-%s", strings.ToLower(random.UniqueId()))
 	vars["kustomization_name"] = fmt.Sprintf("flux-kustomization-%s", strings.ToLower(random.UniqueId()))
 	vars["kubeconfig_path"] = kubeconfig
-	tfDir, opts := setup(t, vars)
-	planFile := filepath.Join(tfDir, "tfplan.binary")
-	opts.PlanFilePath = planFile
-	terraform.InitAndPlan(t, opts)
-	t.Cleanup(func() { _ = os.Remove(planFile) })
 
-	show, err := terraform.RunTerraformCommandE(t, opts, "show", "-json", planFile)
-	require.NoError(t, err)
-	jsonPath := filepath.Join(tfDir, "plan.json")
-	require.NoError(t, os.WriteFile(jsonPath, []byte(show), 0600))
-	t.Cleanup(func() { _ = os.Remove(jsonPath) })
-
+	tfDir, planJSON := renderFluxPlan(t, vars)
 	policyPath := filepath.Join(tfDir, "..", "policy")
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "conftest", "test", jsonPath, "--policy", policyPath)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
-	out, err := cmd.CombinedOutput()
-	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   planJSON,
+		PolicyPath: policyPath,
+		Kubeconfig: kubeconfig,
+		Timeout:    60 * time.Second,
+	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 
 	t.Run("PolicyViolation", func(t *testing.T) {
 		t.Parallel()
-		badPlan, err := os.CreateTemp("", "fluxcd-bad-plan-*.json")
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = os.Remove(badPlan.Name()) })
-
 		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"invalid"},"spec":{"url":"ftp://invalid","interval":"15m"}}}}}]}`
-		_, err = badPlan.WriteString(payload)
-		require.NoError(t, err)
-		require.NoError(t, badPlan.Close())
-
-		vCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		violationCmd := exec.CommandContext(vCtx, "conftest", "test", badPlan.Name(), "--policy", policyPath)
-		violationCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+kubeconfig)
-		violationOut, violationErr := violationCmd.CombinedOutput()
-		require.NotEqual(t, context.DeadlineExceeded, vCtx.Err(), "negative policy run timed out")
+		planPath := writePlanFixture(t, payload)
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
 		require.Error(t, violationErr, "expected conftest to report a violation")
 		exitErr, ok := violationErr.(*exec.ExitError)
 		require.True(t, ok, "expected ExitError from conftest for policy violation")
 		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
 		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected policy violation output")
+	})
+
+	t.Run("AllowsFileSchemeWhenOptedIn", func(t *testing.T) {
+		t.Parallel()
+		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"GitRepository","metadata":{"name":"file"},"spec":{"url":"file:///tmp/repo","interval":"1m","ref":{"branch":"main"}}}}}}]}`
+		planPath := writePlanFixture(t, payload)
+
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
+		require.Error(t, violationErr, "expected conftest to report a violation when file:// is disallowed")
+		exitErr, ok := violationErr.(*exec.ExitError)
+		require.True(t, ok, "expected ExitError from conftest for file-scheme violation")
+		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for file-scheme violation")
+		require.Contains(t, strings.ToLower(string(violationOut)), "gitrepository", "expected git repository policy violation output")
+
+		dataFile := writePolicyDataFile(t, `{"allow_file_scheme":true}`)
+		allowOut, allowErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+			ExtraArgs:  []string{"-d", dataFile},
+		})
+		require.NoErrorf(t, allowErr, "conftest unexpectedly failed when allow_file_scheme=true: %s", string(allowOut))
+	})
+
+	t.Run("RejectsParentDirectoryTraversal", func(t *testing.T) {
+		t.Parallel()
+		payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"Kustomization","metadata":{"name":"invalid-path"},"spec":{"path":"../hack","prune":true,"suspend":false,"sourceRef":{"kind":"GitRepository"}}}}}}]}`
+		planPath := writePlanFixture(t, payload)
+		violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+			PlanPath:   planPath,
+			PolicyPath: policyPath,
+			Kubeconfig: kubeconfig,
+			Timeout:    10 * time.Second,
+		})
+		require.Error(t, violationErr, "expected conftest to report a violation for parent traversal")
+		exitErr, ok := violationErr.(*exec.ExitError)
+		require.True(t, ok, "expected ExitError from conftest for parent traversal")
+		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for parent traversal violation")
+		require.Contains(t, strings.ToLower(string(violationOut)), "kustomization", "expected kustomization path violation output")
 	})
 }
 
