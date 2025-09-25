@@ -92,6 +92,24 @@ func policyPath(t *testing.T) string {
 	return policyDir
 }
 
+func runConftestPolicyTest(t *testing.T, vars map[string]interface{}) ([]byte, error) {
+	t.Helper()
+
+	requireBinary(t, "conftest", "conftest not installed; skipping policy test")
+	_, planJSON := renderPlanJSON(t, vars)
+	policyDir := policyPath(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir)
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	output, err := cmd.CombinedOutput()
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+
+	return output, err
+}
+
 func TestVaultApplianceModuleValidate(t *testing.T) {
 	t.Parallel()
 	vars := baseVars(t)
@@ -113,42 +131,23 @@ func TestVaultAppliancePlanUnauthenticated(t *testing.T) {
 	require.Error(t, err, "expected unauthenticated plan/apply to fail")
 
 	combined := err.Error()
-       re := regexp.MustCompile(`(?i)(authentication|authenticate|token|unauthorised|credentials)`) // en-GB spelling for unauthorised
+	re := regexp.MustCompile(`(?i)(authentication|authenticate|token|unauthorised|credentials)`) // en-GB spelling for unauthorised
 	require.Truef(t, re.MatchString(combined), "error %q should reference authentication", combined)
 }
 
 func TestVaultAppliancePolicyPasses(t *testing.T) {
 	t.Parallel()
-	requireBinary(t, "conftest", "conftest not installed; skipping policy test")
 	vars := baseVars(t)
-	_, planJSON := renderPlanJSON(t, vars)
-	policyDir := policyPath(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
-	output, err := cmd.CombinedOutput()
-	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+	output, err := runConftestPolicyTest(t, vars)
 	require.NoErrorf(t, err, "conftest reported failure: %s", string(output))
 }
 
 func TestVaultAppliancePolicyRejectsOpenSSH(t *testing.T) {
 	t.Parallel()
-	requireBinary(t, "conftest", "conftest not installed; skipping policy test")
 	vars := baseVars(t)
 	vars["allowed_ssh_cidrs"] = []string{"0.0.0.0/0"}
-	_, planJSON := renderPlanJSON(t, vars)
-	policyDir := policyPath(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
-	output, err := cmd.CombinedOutput()
-	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+	output, err := runConftestPolicyTest(t, vars)
 	require.Error(t, err, "expected conftest to reject public SSH")
 	require.Contains(t, string(output), "must not expose SSH")
 }
