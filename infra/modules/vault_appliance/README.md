@@ -9,13 +9,13 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
 
 ## Quick start
 
-1. Export a DigitalOcean API token for the provider:
+1. A DigitalOcean API token must be exported for the provider:
 
    ```sh
    export DIGITALOCEAN_TOKEN="<DIGITALOCEAN_TOKEN>"
    ```
 
-2. Configure the provider, call the module, and surface the key outputs:
+2. The following configuration initialises the provider, calls the module, and surfaces the key outputs:
 
    ```hcl
    terraform {
@@ -65,10 +65,10 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    }
    ```
 
-   Replace `OWNER` with the GitHub organisation or account name and pin
-   `ref=<TAG_OR_SHA>` to a released tag or commit for reproducibility.
+   The placeholder `OWNER` must be set to the GitHub organisation or account
+   name. Pin `ref=<TAG_OR_SHA>` to a released tag or commit for reproducibility.
 
-3. Plan and apply:
+3. Initialise, plan, and apply the workspace:
 
    ```sh
    tofu init
@@ -76,7 +76,7 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    tofu apply
    ```
 
-4. Retrieve the bootstrap artefacts:
+4. Retrieve the bootstrap artefacts with:
 
    ```sh
    tofu output public_endpoint
@@ -85,9 +85,9 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    tofu output -json recovery_keys | jq -r '.[]'
    ```
 
-   Store recovery keys in an encrypted secret store. The generated CA and server
-   key pair are required by the bootstrap helper to configure Vault's listener
-   and to register the TLS bundle on the load balancer.
+   Recovery keys must be stored in an encrypted secret store. The generated CA
+   and server key pair are required by the bootstrap helper to configure Vault's
+   listener and to register the TLS bundle on the load balancer.
 
 ## Outputs
 
@@ -101,8 +101,8 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
 
 ## Operational notes
 
-- SSH ingress defaults to closed. Supply explicit CIDR ranges via
-  `allowed_ssh_cidrs` when break-glass access is required.
+- SSH ingress defaults to closed. Explicit CIDR ranges should be supplied via
+  `allowed_ssh_cidrs` when break-glass access is required by an operator.
 - Set `ha_enabled = true` to provision an HA pair. The module automatically
   expands the block storage, firewall rules, and recovery key generation to
   match the replica count.
@@ -111,5 +111,5 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
   and reapplying. The module automatically refreshes the managed load balancer
   certificate bundle.
 - The module publishes recovery material and TLS private keys as sensitive
-  outputs. Use a remote state backend with encryption at rest and strict access
-  controls.
+  outputs. A remote state backend with encryption at rest and strict access
+  controls should secure the module state.

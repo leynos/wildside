@@ -226,7 +226,7 @@ resource "random_password" "recovery_keys" {
   upper   = true
   lower   = true
   numeric = true
-  special = false
+  special = true
 }
 
 resource "digitalocean_project_resources" "vault" {
