@@ -81,9 +81,9 @@ standard `terraform` block syntax.
 
 4. Retrieve the bootstrap artefacts with:
 
-   Private keys should be handled ephemerally on a secure machine; move them
-   immediately to encrypted secret storage with restricted access, and delete
-   local copies.
+   Private key files must be handled ephemerally on a secure machine. Move them
+   immediately to encrypted secret storage with restricted access, delete local
+   copies, and store recovery keys in the same encrypted secret store.
 
    ```sh
    tofu output public_endpoint
@@ -92,11 +92,9 @@ standard `terraform` block syntax.
    tofu output -json recovery_keys | jq -r '.[]'
    ```
 
-   The private key file should be handled ephemerally and stored immediately in
-   a secure, encrypted secret store with restricted access. Recovery keys must
-   be stored in an encrypted secret store. The generated CA and server key pair
-   are required by the bootstrap helper to configure Vault's listener and to
-   register the TLS bundle on the load balancer.
+   The generated CA and server key pair are required by the bootstrap helper to
+   configure Vault's listener and to register the TLS bundle on the load
+   balancer.
 
 ## Outputs
 
