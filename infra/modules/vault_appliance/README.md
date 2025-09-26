@@ -15,7 +15,8 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    export DIGITALOCEAN_TOKEN="<DIGITALOCEAN_TOKEN>"
    ```
 
-2. The following configuration initialises the provider, calls the module, and surfaces the key outputs:
+2. The following configuration initialises the provider and calls the module,
+   surfacing the key outputs:
 
    ```hcl
    terraform {

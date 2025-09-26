@@ -200,6 +200,15 @@ resource "digitalocean_firewall" "vault" {
     source_load_balancer_uids = [digitalocean_loadbalancer.vault.id]
   }
 
+  dynamic "inbound_rule" {
+    for_each = local.healthcheck_port != var.api_port ? [local.healthcheck_port] : []
+    content {
+      protocol                  = "tcp"
+      port_range                = tostring(inbound_rule.value)
+      source_load_balancer_uids = [digitalocean_loadbalancer.vault.id]
+    }
+  }
+
   inbound_rule {
     protocol           = "tcp"
     port_range         = tostring(var.cluster_port)

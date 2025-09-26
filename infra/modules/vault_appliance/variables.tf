@@ -306,6 +306,11 @@ variable "healthcheck_timeout_seconds" {
     condition     = var.healthcheck_timeout_seconds >= 3
     error_message = "healthcheck_timeout_seconds must be at least 3 seconds."
   }
+
+  validation {
+    condition     = var.healthcheck_timeout_seconds < var.healthcheck_interval_seconds
+    error_message = "healthcheck_timeout_seconds must be less than healthcheck_interval_seconds."
+  }
 }
 
 variable "healthcheck_unhealthy_threshold" {

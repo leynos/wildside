@@ -1,20 +1,24 @@
-package main
+package policy
 
 default allow_public_ssh = false
 
 deny contains msg if {
+  some msg
   load_balancer_requires_https[msg]
 }
 
 deny contains msg if {
+  some msg
   load_balancer_must_redirect_http[msg]
 }
 
 deny contains msg if {
+  some msg
   firewall_requires_load_balancer[msg]
 }
 
 deny contains msg if {
+  some msg
   firewall_blocks_public_ssh[msg]
 }
 

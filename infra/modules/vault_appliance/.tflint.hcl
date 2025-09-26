@@ -1,7 +1,6 @@
 config {
-  call_module_type    = "all"
-  force               = true
-  disabled_by_default = true
+  call_module_type = "all"
+  force            = true
 }
 
 plugin "terraform" {

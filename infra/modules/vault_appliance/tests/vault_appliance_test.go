@@ -102,7 +102,7 @@ func runConftestPolicyTest(t *testing.T, vars map[string]interface{}) ([]byte, e
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir)
+	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir, "--namespace", "policy")
 	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
 	output, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")

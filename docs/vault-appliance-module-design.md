@@ -14,7 +14,7 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
 ## Design decisions
 
 - **Deterministic naming and tagging.** All resources derive their names from a
-  validated `name` prefix. The module normalises characters, truncates to
+  validated `name` prefix. The module normalizes characters, truncates to
   provider limits, and adds consistent tags (`vault` plus the base name) so
   supporting automation can discover the appliance reliably.
 - **HA-aware topology.** A single toggle (`ha_enabled`) controls whether to
