@@ -5,7 +5,9 @@ a dedicated droplet (or HA pair), attaches encrypted block storage, wraps the
 nodes behind a managed load balancer, and generates a private certificate
 authority plus recovery key material ready for bootstrap automation.
 
-Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
+Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later. OpenTofu
+uses the Terraform configuration language, so the module examples retain the
+standard `terraform` block syntax.
 
 ## Quick start
 
@@ -15,7 +17,7 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    export DIGITALOCEAN_TOKEN="<DIGITALOCEAN_TOKEN>"
    ```
 
-2. The following configuration initialises the provider and calls the module,
+2. The following configuration initializes the provider and calls the module,
    surfacing the key outputs:
 
    ```hcl
@@ -69,7 +71,7 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    The placeholder `OWNER` must be set to the GitHub organisation or account
    name. Pin `ref=<TAG_OR_SHA>` to a released tag or commit for reproducibility.
 
-3. Initialise, plan, and apply the workspace:
+3. Initialize, plan, and apply the workspace:
 
    ```sh
    tofu init
@@ -79,6 +81,10 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
 
 4. Retrieve the bootstrap artefacts with:
 
+   Private keys should be handled ephemerally on a secure machine; move them
+   immediately to encrypted secret storage with restricted access, and delete
+   local copies.
+
    ```sh
    tofu output public_endpoint
    tofu output -raw ca_certificate > vault-ca.pem
@@ -86,9 +92,11 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
    tofu output -json recovery_keys | jq -r '.[]'
    ```
 
-   Recovery keys must be stored in an encrypted secret store. The generated CA
-   and server key pair are required by the bootstrap helper to configure Vault's
-   listener and to register the TLS bundle on the load balancer.
+   The private key file should be handled ephemerally and stored immediately in
+   a secure, encrypted secret store with restricted access. Recovery keys must
+   be stored in an encrypted secret store. The generated CA and server key pair
+   are required by the bootstrap helper to configure Vault's listener and to
+   register the TLS bundle on the load balancer.
 
 ## Outputs
 

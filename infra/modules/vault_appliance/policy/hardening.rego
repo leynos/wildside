@@ -61,7 +61,7 @@ firewall_blocks_public_ssh contains msg if {
   rule := rules[_]
   object.get(rule, "port_range", "") == "22"
   addrs := object.get(rule, "source_addresses", [])
-  addrs[_] == "0.0.0.0/0"
+  "0.0.0.0/0" in addrs
   not allow_public_ssh
   msg := sprintf("firewall %s must not expose SSH to 0.0.0.0/0", [after.name])
 }
