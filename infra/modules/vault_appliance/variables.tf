@@ -8,8 +8,13 @@ variable "name" {
   }
 
   validation {
-    condition     = can(regex("^[a-zA-Z0-9-_]+$", var.name))
-    error_message = "name must contain only letters, numbers, hyphens, or underscores."
+    condition     = can(regex("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$", var.name))
+    error_message = "name must be lowercase alphanumeric, may contain hyphens, and must not start or end with a hyphen."
+  }
+
+  validation {
+    condition     = length(trimspace(var.name)) <= 63
+    error_message = "name must be 63 characters or fewer."
   }
 }
 
@@ -123,7 +128,7 @@ variable "allowed_ssh_cidrs" {
   validation {
     condition = alltrue([
       for cidr in var.allowed_ssh_cidrs :
-      can(cidrnetmask(cidr))
+      can(cidrhost(cidr, 0))
     ])
     error_message = "allowed_ssh_cidrs must contain valid CIDR blocks."
   }
@@ -181,9 +186,9 @@ variable "certificate_dns_names" {
   validation {
     condition = alltrue([
       for name in var.certificate_dns_names :
-      trimspace(name) != ""
+      can(regex("^(\\*\\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(name))))
     ])
-    error_message = "certificate_dns_names must not include empty values."
+    error_message = "certificate_dns_names must be valid DNS names (FQDNs); a leading wildcard (*.domain) is permitted."
   }
 }
 
@@ -261,6 +266,11 @@ variable "api_port" {
   description = "Vault API port exposed via the load balancer."
   type        = number
   default     = 8200
+
+  validation {
+    condition     = var.api_port >= 1 && var.api_port <= 65535
+    error_message = "api_port must be between 1 and 65535."
+  }
 }
 
 variable "cluster_port" {
