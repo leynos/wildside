@@ -97,6 +97,12 @@ func runConftestPolicyTest(t *testing.T, vars map[string]interface{}) ([]byte, e
 
 	requireBinary(t, "conftest", "conftest not installed; skipping policy test")
 	_, planJSON := renderPlanJSON(t, vars)
+	return runConftestWithPlan(t, planJSON)
+}
+
+func runConftestWithPlan(t *testing.T, planJSON string) ([]byte, error) {
+	t.Helper()
+
 	policyDir := policyPath(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -110,12 +116,130 @@ func runConftestPolicyTest(t *testing.T, vars map[string]interface{}) ([]byte, e
 	return output, err
 }
 
+func mutatePlanJSON(t *testing.T, planJSON string, mutate func(map[string]interface{})) string {
+	t.Helper()
+
+	data, err := os.ReadFile(planJSON)
+	require.NoError(t, err, "failed to read plan JSON")
+
+	var document map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &document), "failed to decode plan JSON")
+
+	mutate(document)
+
+	mutatedPath := filepath.Join(t.TempDir(), filepath.Base(planJSON))
+	mutated, err := json.MarshalIndent(document, "", "  ")
+	require.NoError(t, err, "failed to encode mutated plan JSON")
+	require.NoError(t, os.WriteFile(mutatedPath, mutated, 0600))
+
+	return mutatedPath
+}
+
+func mutateLoadBalancerForwardingRules(t *testing.T, doc map[string]interface{}, mutate func(map[string]interface{})) {
+	t.Helper()
+
+	changes, ok := doc["resource_changes"].([]interface{})
+	require.True(t, ok, "plan JSON missing resource_changes")
+
+	for _, changeRaw := range changes {
+		change, ok := changeRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if change["type"] != "digitalocean_loadbalancer" {
+			continue
+		}
+		delta, _ := change["change"].(map[string]interface{})
+		if delta == nil {
+			continue
+		}
+		after, _ := delta["after"].(map[string]interface{})
+		if after == nil {
+			continue
+		}
+		rules, _ := after["forwarding_rule"].([]interface{})
+		for _, ruleRaw := range rules {
+			rule, ok := ruleRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			mutate(rule)
+		}
+	}
+}
+
+func mutateFirewallInboundRules(t *testing.T, doc map[string]interface{}, mutate func(map[string]interface{})) {
+	t.Helper()
+
+	changes, ok := doc["resource_changes"].([]interface{})
+	require.True(t, ok, "plan JSON missing resource_changes")
+
+	for _, changeRaw := range changes {
+		change, ok := changeRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if change["type"] != "digitalocean_firewall" {
+			continue
+		}
+		delta, _ := change["change"].(map[string]interface{})
+		if delta == nil {
+			continue
+		}
+		after, _ := delta["after"].(map[string]interface{})
+		if after != nil {
+			rules, _ := after["inbound_rule"].([]interface{})
+			for _, ruleRaw := range rules {
+				rule, ok := ruleRaw.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				mutate(rule)
+			}
+		}
+
+		unknown, _ := delta["after_unknown"].(map[string]interface{})
+		if unknown != nil {
+			if entries, exists := unknown["inbound_rule"]; exists {
+				list, _ := entries.([]interface{})
+				for _, entryRaw := range list {
+					entry, ok := entryRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					mutate(entry)
+				}
+			}
+		}
+	}
+}
+
 func TestVaultApplianceModuleValidate(t *testing.T) {
 	t.Parallel()
 	vars := baseVars(t)
 	env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
 	_, opts := setupTerraform(t, vars, env)
 	terraform.InitAndValidate(t, opts)
+}
+
+func TestVaultApplianceModuleValidateMissingRequiredVars(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	delete(vars, "region")
+	env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
+	_, opts := setupTerraform(t, vars, env)
+	err := terraform.InitAndValidateE(t, opts)
+	require.Error(t, err, "validation should fail when required variable 'region' is missing")
+}
+
+func TestVaultApplianceModuleValidateInvalidOptionalVars(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	vars["load_balancer_algorithm"] = "invalid-algorithm"
+	env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
+	_, opts := setupTerraform(t, vars, env)
+	err := terraform.InitAndValidateE(t, opts)
+	require.Error(t, err, "validation should fail when optional variable 'load_balancer_algorithm' is invalid")
 }
 
 func TestVaultAppliancePlanUnauthenticated(t *testing.T) {
@@ -150,6 +274,47 @@ func TestVaultAppliancePolicyRejectsOpenSSH(t *testing.T) {
 	output, err := runConftestPolicyTest(t, vars)
 	require.Error(t, err, "expected conftest to reject public SSH")
 	require.Contains(t, string(output), "must not expose SSH")
+}
+
+func TestVaultAppliancePolicyEnforcesHTTPS(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	_, planJSON := renderPlanJSON(t, vars)
+	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+		mutateLoadBalancerForwardingRules(t, doc, func(rule map[string]interface{}) {
+			rule["entry_protocol"] = "http"
+			rule["entry_port"] = float64(80)
+		})
+	})
+
+	output, err := runConftestWithPlan(t, mutated)
+	require.Error(t, err, "expected conftest to reject HTTP-only load balancer rules")
+	require.Contains(t, string(output), "must terminate HTTPS on port 443")
+}
+
+func TestVaultAppliancePolicyRedirectsHTTPToHTTPS(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	vars["load_balancer_redirect_http_to_https"] = false
+
+	output, err := runConftestPolicyTest(t, vars)
+	require.Error(t, err, "expected conftest to require HTTP to HTTPS redirection")
+	require.Contains(t, string(output), "must redirect HTTP to HTTPS")
+}
+
+func TestVaultAppliancePolicyLoadBalancerFirewallRules(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	_, planJSON := renderPlanJSON(t, vars)
+	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+		mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
+			delete(rule, "source_load_balancer_uids")
+		})
+	})
+
+	output, err := runConftestWithPlan(t, mutated)
+	require.Error(t, err, "expected conftest to require load balancer firewall rules")
+	require.Contains(t, string(output), "must allow traffic from the managed load balancer")
 }
 
 func TestVaultApplianceInvalidRecoveryThreshold(t *testing.T) {
