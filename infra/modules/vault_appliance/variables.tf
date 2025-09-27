@@ -199,17 +199,27 @@ variable "certificate_ip_sans" {
 
   validation {
     condition = alltrue([
-      for ip in var.certificate_ip_sans :
-      trimspace(ip) != "" &&
-      can(
-        cidrhost(
-          format(
-            "%s/%d",
-            trimspace(ip),
-            contains(trimspace(ip), ":") ? 128 : 32,
-          ),
-          0
-        )
+      for raw in var.certificate_ip_sans :
+      trimspace(raw) != "" && (
+        (
+          length(split(".", trimspace(raw))) == 4 &&
+          alltrue([
+            for octet in split(".", trimspace(raw)) :
+            can(regex("^\\d+$", octet)) &&
+            can(tonumber(octet)) &&
+            tonumber(octet) >= 0 &&
+            tonumber(octet) <= 255
+          ])
+        ) ||
+        can(regex(
+          join("", [
+            "(?i)^(?:([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|",
+            "([0-9a-f]{1,4}:){1,7}:|",
+            ":(:[0-9a-f]{1,4}){1,7}|",
+            "([0-9a-f]{1,4}:){1,4}:(?:((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)))$",
+          ]),
+          trimspace(raw)
+        ))
       )
     ])
     error_message = "certificate_ip_sans must contain valid IPv4 or IPv6 addresses."
