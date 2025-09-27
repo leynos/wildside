@@ -267,6 +267,16 @@ variable "cluster_port" {
   description = "Vault cluster port used for intra-node communication."
   type        = number
   default     = 8201
+
+  validation {
+    condition     = var.cluster_port >= 1 && var.cluster_port <= 65535
+    error_message = "cluster_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition     = var.cluster_port != var.api_port
+    error_message = "cluster_port must not equal api_port."
+  }
 }
 
 variable "healthcheck_path" {
