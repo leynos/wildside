@@ -176,41 +176,62 @@ func mutateFirewallInboundRules(t *testing.T, doc map[string]interface{}, mutate
 
 	for _, changeRaw := range changes {
 		change, ok := changeRaw.(map[string]interface{})
+		if !ok || !isDigitalOceanFirewall(change) {
+			continue
+		}
+		processFirewallChange(change, mutate)
+	}
+}
+
+func isDigitalOceanFirewall(change map[string]interface{}) bool {
+	typ, ok := change["type"].(string)
+	return ok && typ == "digitalocean_firewall"
+}
+
+func processFirewallChange(change map[string]interface{}, mutate func(map[string]interface{})) {
+	delta, _ := change["change"].(map[string]interface{})
+	if delta == nil {
+		return
+	}
+
+	processAfterRules(delta, mutate)
+	processAfterUnknownRules(delta, mutate)
+}
+
+func processAfterRules(delta map[string]interface{}, mutate func(map[string]interface{})) {
+	after, _ := delta["after"].(map[string]interface{})
+	if after == nil {
+		return
+	}
+
+	rules, _ := after["inbound_rule"].([]interface{})
+	for _, ruleRaw := range rules {
+		rule, ok := ruleRaw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		if change["type"] != "digitalocean_firewall" {
-			continue
-		}
-		delta, _ := change["change"].(map[string]interface{})
-		if delta == nil {
-			continue
-		}
-		after, _ := delta["after"].(map[string]interface{})
-		if after != nil {
-			rules, _ := after["inbound_rule"].([]interface{})
-			for _, ruleRaw := range rules {
-				rule, ok := ruleRaw.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				mutate(rule)
-			}
-		}
+		mutate(rule)
+	}
+}
 
-		unknown, _ := delta["after_unknown"].(map[string]interface{})
-		if unknown != nil {
-			if entries, exists := unknown["inbound_rule"]; exists {
-				list, _ := entries.([]interface{})
-				for _, entryRaw := range list {
-					entry, ok := entryRaw.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					mutate(entry)
-				}
-			}
+func processAfterUnknownRules(delta map[string]interface{}, mutate func(map[string]interface{})) {
+	unknown, _ := delta["after_unknown"].(map[string]interface{})
+	if unknown == nil {
+		return
+	}
+
+	entries, exists := unknown["inbound_rule"]
+	if !exists {
+		return
+	}
+
+	list, _ := entries.([]interface{})
+	for _, entryRaw := range list {
+		entry, ok := entryRaw.(map[string]interface{})
+		if !ok {
+			continue
 		}
+		mutate(entry)
 	}
 }
 
