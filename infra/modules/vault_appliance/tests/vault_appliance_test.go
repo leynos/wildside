@@ -131,7 +131,7 @@ func TestVaultAppliancePlanUnauthenticated(t *testing.T) {
 	require.Error(t, err, "expected unauthenticated plan/apply to fail")
 
 	combined := err.Error()
-	re := regexp.MustCompile(`(?i)(authentication|authenticate|token|unauthorised|credentials)`) // en-GB spelling for unauthorised
+	re := regexp.MustCompile(`(?i)(authentication|authenticate|token|unauthori[sz]ed|credentials)`)
 	require.Truef(t, re.MatchString(combined), "error %q should reference authentication", combined)
 }
 
