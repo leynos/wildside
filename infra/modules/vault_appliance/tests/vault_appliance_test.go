@@ -176,19 +176,19 @@ func mutateFirewallInboundRules(t *testing.T, doc map[string]interface{}, mutate
 
 	for _, changeRaw := range changes {
 		change, ok := changeRaw.(map[string]interface{})
-		if !ok || !isDigitalOceanFirewall(change) {
+		if !ok {
 			continue
 		}
 		processFirewallChange(change, mutate)
 	}
 }
 
-func isDigitalOceanFirewall(change map[string]interface{}) bool {
-	typ, ok := change["type"].(string)
-	return ok && typ == "digitalocean_firewall"
-}
-
 func processFirewallChange(change map[string]interface{}, mutate func(map[string]interface{})) {
+	typ, ok := change["type"].(string)
+	if !ok || typ != "digitalocean_firewall" {
+		return
+	}
+
 	delta, _ := change["change"].(map[string]interface{})
 	if delta == nil {
 		return
@@ -204,14 +204,7 @@ func processAfterRules(delta map[string]interface{}, mutate func(map[string]inte
 		return
 	}
 
-	rules, _ := after["inbound_rule"].([]interface{})
-	for _, ruleRaw := range rules {
-		rule, ok := ruleRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		mutate(rule)
-	}
+	mutateRulesList(after["inbound_rule"], mutate)
 }
 
 func processAfterUnknownRules(delta map[string]interface{}, mutate func(map[string]interface{})) {
@@ -225,13 +218,17 @@ func processAfterUnknownRules(delta map[string]interface{}, mutate func(map[stri
 		return
 	}
 
-	list, _ := entries.([]interface{})
-	for _, entryRaw := range list {
-		entry, ok := entryRaw.(map[string]interface{})
+	mutateRulesList(entries, mutate)
+}
+
+func mutateRulesList(raw interface{}, mutate func(map[string]interface{})) {
+	rules, _ := raw.([]interface{})
+	for _, ruleRaw := range rules {
+		rule, ok := ruleRaw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		mutate(entry)
+		mutate(rule)
 	}
 }
 
