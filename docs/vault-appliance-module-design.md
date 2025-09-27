@@ -27,13 +27,16 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   future bootstrap automation can format and mount the disks predictably.
 - **Managed TLS chain.** A private Certificate Authority (CA) and server
   certificate are generated with the TLS provider. The server keypair is
-  uploaded to DigitalOcean as a custom
-  certificate and exposed via outputs so the bootstrap helper can install the
-  same bundle on the droplets. The CA certificate is returned for callers to
-  trust the load balancer endpoint.
+  uploaded to DigitalOcean as a custom certificate and exposed via outputs so
+  the bootstrap helper can install the same bundle on the droplets. The module
+  sanitises DNS names, trims whitespace, and validates IP Subject Alternative
+  Names by round-tripping them through `cidrhost`, ensuring malformed IPv4 or
+  IPv6 literals never reach the certificate request. The CA certificate is
+  returned for callers to trust the load balancer endpoint.
 - **Recovery material baked in.** Recovery keys are modelled as
   `random_password` resources. Callers can tune share count, threshold, and key
-  length, enabling the bootstrap workflow to unseal Vault without manual
+  length, and the generated shares include special characters to maximise
+  entropy. This enables the bootstrap workflow to unseal Vault without manual
   intervention. The keys are emitted as sensitive outputs to encourage storage
   in a secure backend.
 - **Secure perimeter.** The module provisions a firewall that only accepts SSH
