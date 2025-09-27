@@ -1,7 +1,9 @@
 locals {
-  name_lower     = lower(trimspace(var.name))
-  allowed_chars  = split("", "abcdefghijklmnopqrstuvwxyz0123456789-")
-  raw_name_chars = [for ch in split("", local.name_lower) : contains(local.allowed_chars, ch) ? ch : "-"]
+  name_lower = lower(trimspace(var.name))
+  name_chars = regexall(".", local.name_lower)
+  raw_name_chars = [
+    for ch in local.name_chars : can(regex("[a-z0-9-]", ch)) ? ch : "-"
+  ]
   deduped_name_chars = [
     for idx in range(length(local.raw_name_chars)) : (
       local.raw_name_chars[idx] == "-" && idx > 0 && local.raw_name_chars[idx - 1] == "-" ? "" : local.raw_name_chars[idx]
@@ -97,8 +99,6 @@ resource "tls_self_signed_cert" "ca" {
   allowed_uses = [
     "cert_signing",
     "crl_signing",
-    "key_encipherment",
-    "digital_signature",
   ]
 }
 
