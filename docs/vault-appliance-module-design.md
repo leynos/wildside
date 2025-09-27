@@ -25,8 +25,9 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   `digitalocean_volume`, mounted through `digitalocean_volume_attachment`. The
   volumes default to 50 GiB with an overridable filesystem label, ensuring
   future bootstrap automation can format and mount the disks predictably.
-- **Managed TLS chain.** A private Certificate Authority (CA) and server certificate are generated with
-  the TLS provider. The server keypair is uploaded to DigitalOcean as a custom
+- **Managed TLS chain.** A private Certificate Authority (CA) and server
+  certificate are generated with the TLS provider. The server keypair is
+  uploaded to DigitalOcean as a custom
   certificate and exposed via outputs so the bootstrap helper can install the
   same bundle on the droplets. The CA certificate is returned for callers to
   trust the load balancer endpoint.
