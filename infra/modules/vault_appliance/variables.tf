@@ -200,12 +200,13 @@ variable "certificate_ip_sans" {
   validation {
     condition = alltrue([
       for ip in var.certificate_ip_sans :
+      trimspace(ip) != "" &&
       can(
         cidrhost(
           format(
             "%s/%d",
-            ip,
-            contains(ip, ":") ? 128 : 32,
+            trimspace(ip),
+            contains(trimspace(ip), ":") ? 128 : 32,
           ),
           0
         )
