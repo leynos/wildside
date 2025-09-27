@@ -77,7 +77,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
 
 ### 2.4: Vault appliance bootstrap
 
-- [ ] **Author an OpenTofu `vault_appliance` module**: Provision a dedicated
+- [x] **Author an OpenTofu `vault_appliance` module**: Provision a dedicated
   DigitalOcean Droplet (or HA pair) with firewall rules, block storage, and
   load balancer attachment for Vault. Expose outputs for the public endpoint,
   CA certificate, and recovery keys.

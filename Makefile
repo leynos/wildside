@@ -37,7 +37,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-        dev-cluster-test workspace-sync
+        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -109,6 +109,7 @@ lint-infra:
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
 	uvx checkov -d infra
 
 test: workspace-sync deps typecheck
@@ -235,14 +236,47 @@ fluxcd-test:
 # stays readable while still supporting temporary files and clean shutdown.
 fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
-		echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
+	echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
-		env \
-			FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
-			FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
-			FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
-			FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
-			FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
-			FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
-			./scripts/fluxcd-policy.sh; \
+	env \
+	FLUX_KUBECONFIG_PATH="$(FLUX_KUBECONFIG_PATH)" \
+	FLUX_GIT_REPOSITORY_URL="$(FLUX_GIT_REPOSITORY_URL)" \
+	FLUX_GIT_REPOSITORY_PATH="$(FLUX_GIT_REPOSITORY_PATH)" \
+	FLUX_GIT_REPOSITORY_BRANCH="$(FLUX_GIT_REPOSITORY_BRANCH)" \
+	FLUX_POLICY_PARAMS_JSON="$(FLUX_POLICY_PARAMS_JSON)" \
+	FLUX_POLICY_DATA="$(FLUX_POLICY_DATA)" \
+	./scripts/fluxcd-policy.sh; \
 	fi
+
+vault-appliance-test:
+	tofu fmt -check infra/modules/vault_appliance
+	tofu -chdir=infra/modules/vault_appliance/examples/basic init
+	tofu -chdir=infra/modules/vault_appliance/examples/basic validate
+	command -v tflint >/dev/null
+	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	conftest test infra/modules/vault_appliance --policy infra/modules/vault_appliance/policy --ignore ".terraform"
+	cd infra/modules/vault_appliance/tests && go test -v
+	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic plan -detailed-exitcode \
+	-var name=vault-ci \
+	-var region=nyc1 \
+	-var 'allowed_ssh_cidrs=["203.0.113.10/32"]' \
+	-var certificate_common_name=vault-ci.example.test \
+	-var 'certificate_dns_names=["vault-ci.example.test"]' \
+	-var recovery_shares=5 \
+	-var recovery_threshold=3 \
+	|| test $$? -eq 2
+	$(MAKE) vault-appliance-policy
+
+vault-appliance-policy: conftest tofu
+	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+	-var name=vault-ci \
+	-var region=nyc1 \
+	-var 'allowed_ssh_cidrs=["203.0.113.10/32"]' \
+	-var certificate_common_name=vault-ci.example.test \
+	-var 'certificate_dns_names=["vault-ci.example.test"]' \
+	-var recovery_shares=5 \
+	-var recovery_threshold=3 \
+	|| test $$? -eq 2
+	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic show -json tfplan.binary > infra/modules/vault_appliance/examples/basic/plan.json
+	conftest test infra/modules/vault_appliance/examples/basic/plan.json --policy infra/modules/vault_appliance/policy
+	rm -f infra/modules/vault_appliance/examples/basic/tfplan.binary infra/modules/vault_appliance/examples/basic/plan.json

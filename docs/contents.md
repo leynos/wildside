@@ -59,6 +59,9 @@
   the DigitalOcean Kubernetes module. *Audience: infrastructure developers.*
 - [FluxCD OpenTofu module design](fluxcd-module-design.md) – design decisions for
   the GitOps control plane module. *Audience: infrastructure developers.*
+- [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
+  design decisions for the Vault infrastructure module. *Audience:
+  infrastructure developers.*
 
 ## Developer guidelines and tooling
 
