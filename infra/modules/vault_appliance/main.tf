@@ -1,17 +1,9 @@
 locals {
-  name_lower = lower(trimspace(var.name))
-  name_chars = regexall(".", local.name_lower)
-  raw_name_chars = [
-    for ch in local.name_chars : can(regex("[a-z0-9-]", ch)) ? ch : "-"
-  ]
-  deduped_name_chars = [
-    for idx in range(length(local.raw_name_chars)) : (
-      local.raw_name_chars[idx] == "-" && idx > 0 && local.raw_name_chars[idx - 1] == "-" ? "" : local.raw_name_chars[idx]
-    )
-  ]
-  sanitized_name = join("", compact(local.deduped_name_chars))
-  base_candidate = trim(local.sanitized_name, "-")
-  base_name      = substr(local.base_candidate != "" ? local.base_candidate : "vault", 0, 40)
+  name_lower         = lower(trimspace(var.name))
+  sanitized_segments = regexall("[a-z0-9]+", local.name_lower)
+  sanitized_name     = join("-", local.sanitized_segments)
+  base_candidate     = trim(local.sanitized_name, "-")
+  base_name          = substr(local.base_candidate != "" ? local.base_candidate : "vault", 0, 40)
 
   droplet_count = var.ha_enabled ? 2 : 1
   droplet_names = [
