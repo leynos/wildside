@@ -141,30 +141,42 @@ func mutateLoadBalancerForwardingRules(t *testing.T, doc map[string]interface{},
 	changes, ok := doc["resource_changes"].([]interface{})
 	require.True(t, ok, "plan JSON missing resource_changes")
 
-	for _, changeRaw := range changes {
-		change, ok := changeRaw.(map[string]interface{})
+	for _, raw := range changes {
+		change, ok := raw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		if change["type"] != "digitalocean_loadbalancer" {
+		processLoadBalancerChange(change, mutate)
+	}
+}
+
+func processLoadBalancerChange(change map[string]interface{}, mutate func(map[string]interface{})) {
+	typ, ok := change["type"].(string)
+	if !ok || typ != "digitalocean_loadbalancer" {
+		return
+	}
+
+	delta, _ := change["change"].(map[string]interface{})
+	if delta == nil {
+		return
+	}
+
+	after, _ := delta["after"].(map[string]interface{})
+	if after == nil {
+		return
+	}
+
+	mutateForwardingRulesList(after["forwarding_rule"], mutate)
+}
+
+func mutateForwardingRulesList(raw interface{}, mutate func(map[string]interface{})) {
+	rules, _ := raw.([]interface{})
+	for _, ruleRaw := range rules {
+		rule, ok := ruleRaw.(map[string]interface{})
+		if !ok {
 			continue
 		}
-		delta, _ := change["change"].(map[string]interface{})
-		if delta == nil {
-			continue
-		}
-		after, _ := delta["after"].(map[string]interface{})
-		if after == nil {
-			continue
-		}
-		rules, _ := after["forwarding_rule"].([]interface{})
-		for _, ruleRaw := range rules {
-			rule, ok := ruleRaw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			mutate(rule)
-		}
+		mutate(rule)
 	}
 }
 
