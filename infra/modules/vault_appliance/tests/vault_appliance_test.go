@@ -104,6 +104,7 @@ func runConftestPolicyTest(t *testing.T, vars map[string]interface{}) ([]byte, e
 func runConftestWithPlan(t *testing.T, planJSON string) ([]byte, error) {
 	t.Helper()
 
+	requireBinary(t, "conftest", "conftest not installed; skipping policy test")
 	policyDir := policyPath(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
