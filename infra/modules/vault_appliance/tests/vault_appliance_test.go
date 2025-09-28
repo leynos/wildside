@@ -207,13 +207,10 @@ func isResourceType(change map[string]interface{}, expected string) bool {
 }
 
 func mutateRulesInSection(t *testing.T, delta map[string]interface{}, selector ruleSelector, mutate func(map[string]interface{})) {
-	container, _ := delta[selector.section].(map[string]interface{})
-	if container == nil {
-		return
-	}
+	t.Helper()
 
-	raw, exists := container[selector.list]
-	if !exists {
+	_, raw, ok := accessRuleSection(delta, selector)
+	if !ok {
 		return
 	}
 
@@ -223,18 +220,27 @@ func mutateRulesInSection(t *testing.T, delta map[string]interface{}, selector r
 func mutateRuleList(t *testing.T, delta map[string]interface{}, selector ruleSelector, mutate func([]interface{}) []interface{}) {
 	t.Helper()
 
-	container, _ := delta[selector.section].(map[string]interface{})
-	if container == nil {
-		return
-	}
-
-	raw, exists := container[selector.list]
-	if !exists {
+	container, raw, ok := accessRuleSection(delta, selector)
+	if !ok {
 		return
 	}
 
 	rules, _ := raw.([]interface{})
 	container[selector.list] = mutate(rules)
+}
+
+func accessRuleSection(delta map[string]interface{}, selector ruleSelector) (map[string]interface{}, interface{}, bool) {
+	container, _ := delta[selector.section].(map[string]interface{})
+	if container == nil {
+		return nil, nil, false
+	}
+
+	raw, exists := container[selector.list]
+	if !exists {
+		return nil, nil, false
+	}
+
+	return container, raw, true
 }
 
 func mutateListEntries(t *testing.T, raw interface{}, mutate func(map[string]interface{})) {
@@ -471,36 +477,41 @@ func TestVaultAppliancePolicyRedirectsHTTPToHTTPS(t *testing.T) {
 	require.Contains(t, string(output), "must redirect HTTP to HTTPS")
 }
 
-func TestVaultAppliancePolicyLoadBalancerFirewallRules(t *testing.T) {
-	t.Parallel()
+func testFirewallPolicyViolation(t *testing.T, mutate func(map[string]interface{}), assert func(*testing.T, []byte, error)) {
+	t.Helper()
+
 	vars := baseVars(t)
 	_, planJSON := renderPlanJSON(t, vars)
-	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+	mutated := mutatePlanJSON(t, planJSON, mutate)
+
+	output, err := runConftestWithPlan(t, mutated)
+	assert(t, output, err)
+}
+
+func TestVaultAppliancePolicyLoadBalancerFirewallRules(t *testing.T) {
+	t.Parallel()
+	testFirewallPolicyViolation(t, func(doc map[string]interface{}) {
 		mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
 			delete(rule, "source_load_balancer_uids")
 		})
+	}, func(t *testing.T, output []byte, err error) {
+		require.Error(t, err, "expected conftest to require load balancer firewall rules")
+		require.Contains(t, string(output), "must allow traffic from the managed load balancer")
 	})
-
-	output, err := runConftestWithPlan(t, mutated)
-	require.Error(t, err, "expected conftest to require load balancer firewall rules")
-	require.Contains(t, string(output), "must allow traffic from the managed load balancer")
 }
 
 func TestVaultAppliancePolicyRejectsPublicLoadBalancerFirewallSources(t *testing.T) {
 	t.Parallel()
-	vars := baseVars(t)
-	_, planJSON := renderPlanJSON(t, vars)
-	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+	testFirewallPolicyViolation(t, func(doc map[string]interface{}) {
 		mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
 			rule["source_addresses"] = []interface{}{"0.0.0.0/0", "::/0"}
 			delete(rule, "source_load_balancer_uids")
 		})
+	}, func(t *testing.T, output []byte, err error) {
+		require.Error(t, err, "expected conftest to reject public firewall sources")
+		require.Contains(t, string(output), "must not allow traffic from 0.0.0.0/0")
+		require.Contains(t, string(output), "must not allow traffic from ::/0")
 	})
-
-	output, err := runConftestWithPlan(t, mutated)
-	require.Error(t, err, "expected conftest to reject public firewall sources")
-	require.Contains(t, string(output), "must not allow traffic from 0.0.0.0/0")
-	require.Contains(t, string(output), "must not allow traffic from ::/0")
 }
 
 func TestVaultAppliancePolicyRejectsUnknownPublicLoadBalancerFirewallSources(t *testing.T) {
