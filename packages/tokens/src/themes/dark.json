@@ -38,7 +38,7 @@
         "description": "Brand hover state"
       },
       "contrast": {
-        "value": "{color.neutral.900}",
+        "value": "{color.neutral.0}",
         "description": "Text on brand-coloured elements"
       }
     },
@@ -52,7 +52,7 @@
         "description": "Accent hover state"
       },
       "contrast": {
-        "value": "{color.neutral.900}",
+        "value": "{color.neutral.0}",
         "description": "Text on accent-coloured elements"
       }
     }
