@@ -167,7 +167,7 @@ func mutateResourceRules(t *testing.T, doc map[string]interface{}, resourceType 
 
 	mutateResourceChanges(t, doc, resourceType, func(delta map[string]interface{}) {
 		for _, selector := range selectors {
-			mutateRulesInSection(delta, selector, mutate)
+			mutateRulesInSection(t, delta, selector, mutate)
 		}
 	})
 }
@@ -206,7 +206,7 @@ func isResourceType(change map[string]interface{}, expected string) bool {
 	return ok && typ == expected
 }
 
-func mutateRulesInSection(delta map[string]interface{}, selector ruleSelector, mutate func(map[string]interface{})) {
+func mutateRulesInSection(t *testing.T, delta map[string]interface{}, selector ruleSelector, mutate func(map[string]interface{})) {
 	container, _ := delta[selector.section].(map[string]interface{})
 	if container == nil {
 		return
@@ -214,6 +214,11 @@ func mutateRulesInSection(delta map[string]interface{}, selector ruleSelector, m
 
 	raw, exists := container[selector.list]
 	if !exists {
+		return
+	}
+
+	if unresolved, ok := raw.(bool); ok && unresolved {
+		require.Fail(t, "plan JSON must materialise inbound rules for this test to run")
 		return
 	}
 
