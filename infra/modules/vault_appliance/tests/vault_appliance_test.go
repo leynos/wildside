@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -122,8 +123,11 @@ func mutatePlanJSON(t *testing.T, planJSON string, mutate func(map[string]interf
 	data, err := os.ReadFile(planJSON)
 	require.NoError(t, err, "failed to read plan JSON")
 
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+
 	var document map[string]interface{}
-	require.NoError(t, json.Unmarshal(data, &document), "failed to decode plan JSON")
+	require.NoError(t, decoder.Decode(&document), "failed to decode plan JSON")
 
 	mutate(document)
 
@@ -140,6 +144,7 @@ func mutateLoadBalancerForwardingRules(t *testing.T, doc map[string]interface{},
 
 	mutateResourceRules(t, doc, "digitalocean_loadbalancer", []ruleSelector{
 		{section: "after", list: "forwarding_rule"},
+		{section: "after_unknown", list: "forwarding_rule"},
 	}, mutate)
 }
 
@@ -338,7 +343,7 @@ func TestVaultAppliancePolicyEnforcesHTTPS(t *testing.T) {
 	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
 		mutateLoadBalancerForwardingRules(t, doc, func(rule map[string]interface{}) {
 			rule["entry_protocol"] = "http"
-			rule["entry_port"] = float64(80)
+			rule["entry_port"] = json.Number("80")
 		})
 	})
 
@@ -347,7 +352,7 @@ func TestVaultAppliancePolicyEnforcesHTTPS(t *testing.T) {
 	require.Contains(t, string(output), "must terminate HTTPS on port 443")
 }
 
-func TestVaultAppliancePolicyAllowsMixedHTTPAndHTTPSRules(t *testing.T) {
+func TestVaultAppliancePolicyRejectsMixedHTTPAndHTTPSRules(t *testing.T) {
 	t.Parallel()
 	vars := baseVars(t)
 	_, planJSON := renderPlanJSON(t, vars)
@@ -370,7 +375,7 @@ func TestVaultAppliancePolicyAllowsMixedHTTPAndHTTPSRules(t *testing.T) {
 			httpRule[k] = v
 		}
 		httpRule["entry_protocol"] = "http"
-		httpRule["entry_port"] = float64(80)
+		httpRule["entry_port"] = json.Number("80")
 		httpRule["target_protocol"] = "http"
 		delete(httpRule, "certificate_id")
 		delete(httpRule, "tls_passthrough")
@@ -379,7 +384,8 @@ func TestVaultAppliancePolicyAllowsMixedHTTPAndHTTPSRules(t *testing.T) {
 	})
 
 	output, err := runConftestWithPlan(t, mutated)
-	require.NoErrorf(t, err, "conftest should accept mixed HTTP/HTTPS rules: %s", string(output))
+	require.Error(t, err, "expected conftest to reject mixed HTTP/HTTPS forwarding rules")
+	require.Contains(t, string(output), "must not expose HTTP forwarding rules")
 }
 
 func TestVaultAppliancePolicyRedirectsHTTPToHTTPS(t *testing.T) {

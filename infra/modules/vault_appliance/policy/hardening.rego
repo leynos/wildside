@@ -9,6 +9,11 @@ deny contains msg if {
 
 deny contains msg if {
   some msg
+  load_balancer_blocks_http[msg]
+}
+
+deny contains msg if {
+  some msg
   load_balancer_must_redirect_http[msg]
 }
 
@@ -28,8 +33,20 @@ load_balancer_requires_https contains msg if {
   after := rc.change.after
   after != null
   rules := object.get(after, "forwarding_rule", [])
-  not https_rule_exists(rules)
+  unknown_rules := object.get(rc.change.after_unknown, "forwarding_rule", [])
+  not https_rule_exists(rules, unknown_rules)
   msg := sprintf("load balancer %s must terminate HTTPS on port 443", [after.name])
+}
+
+load_balancer_blocks_http contains msg if {
+  rc := input.resource_changes[_]
+  rc.type == "digitalocean_loadbalancer"
+  after := rc.change.after
+  after != null
+  rules := object.get(after, "forwarding_rule", [])
+  unknown_rules := object.get(rc.change.after_unknown, "forwarding_rule", [])
+  http_rule_exists(rules, unknown_rules)
+  msg := sprintf("load balancer %s must not expose HTTP forwarding rules", [after.name])
 }
 
 load_balancer_must_redirect_http contains msg if {
@@ -66,10 +83,26 @@ firewall_blocks_public_ssh contains msg if {
   msg := sprintf("firewall %s must not expose SSH to 0.0.0.0/0", [after.name])
 }
 
-https_rule_exists(rules) if {
+https_rule_exists(rules, unknown_rules) if {
   rule := rules[_]
   lower(object.get(rule, "entry_protocol", "")) == "https"
   object.get(rule, "entry_port", 0) == 443
+}
+
+https_rule_exists(rules, unknown_rules) if {
+  unknown := unknown_rules[_]
+  lower(object.get(unknown, "entry_protocol", "")) == "https"
+  object.get(unknown, "entry_port", 0) == 443
+}
+
+http_rule_exists(rules, unknown_rules) if {
+  rule := rules[_]
+  lower(object.get(rule, "entry_protocol", "")) == "http"
+}
+
+http_rule_exists(rules, unknown_rules) if {
+  unknown := unknown_rules[_]
+  lower(object.get(unknown, "entry_protocol", "")) == "http"
 }
 
 load_balancer_rule_exists(rules, unknown_rules) if {
