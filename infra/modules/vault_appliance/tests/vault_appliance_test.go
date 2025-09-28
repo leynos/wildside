@@ -256,6 +256,45 @@ func appendLoadBalancerForwardingRule(t *testing.T, doc map[string]interface{}, 
 	})
 }
 
+func TestMutateFirewallInboundRules_MalformedEntries(t *testing.T) {
+	t.Parallel()
+	doc := map[string]interface{}{
+		"resource_changes": []interface{}{
+			map[string]interface{}{
+				"type": "digitalocean_firewall",
+				"change": map[string]interface{}{
+					"after": map[string]interface{}{
+						"inbound_rule": []interface{}{
+							"not_a_map",
+							map[string]interface{}{"unexpected_field": 123},
+							map[string]interface{}{"source_load_balancer_uids": []interface{}{"lb-uid"}},
+						},
+					},
+					"after_unknown": map[string]interface{}{
+						"inbound_rule": []interface{}{
+							map[string]interface{}{"source_addresses": []interface{}{"10.0.0.1/32"}},
+							42,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mutated := 0
+	mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
+		if _, ok := rule["source_load_balancer_uids"]; ok {
+			mutated++
+			return
+		}
+		if _, ok := rule["source_addresses"]; ok {
+			mutated++
+		}
+	})
+
+	require.Equal(t, 2, mutated, "expected only well-formed inbound rules to be mutated")
+}
+
 func TestVaultApplianceModuleValidate(t *testing.T) {
 	t.Parallel()
 	vars := baseVars(t)
