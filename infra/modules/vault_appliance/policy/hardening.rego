@@ -27,6 +27,11 @@ deny contains msg if {
   firewall_blocks_public_ssh[msg]
 }
 
+deny contains msg if {
+  some msg
+  firewall_blocks_public_sources[msg]
+}
+
 load_balancer_requires_https contains msg if {
   rc := input.resource_changes[_]
   rc.type == "digitalocean_loadbalancer"
@@ -83,6 +88,38 @@ firewall_blocks_public_ssh contains msg if {
   msg := sprintf("firewall %s must not expose SSH to 0.0.0.0/0", [after.name])
 }
 
+firewall_blocks_public_sources contains msg if {
+  rc := input.resource_changes[_]
+  rc.type == "digitalocean_firewall"
+  after := rc.change.after
+  after != null
+  name := object.get(after, "name", rc.name)
+  rule := object.get(after, "inbound_rule", [])[_]
+  addr := public_source_address(rule)
+  msg := sprintf("firewall %s must not allow traffic from %s", [name, addr])
+}
+
+firewall_blocks_public_sources contains msg if {
+  rc := input.resource_changes[_]
+  rc.type == "digitalocean_firewall"
+  unknown_rules := object.get(rc.change.after_unknown, "inbound_rule", [])
+  addr := public_source_address(unknown_rules[_])
+  after := rc.change.after
+  name := rc.name
+  after != null
+  name := object.get(after, "name", name)
+  msg := sprintf("firewall %s must not allow traffic from %s", [name, addr])
+}
+
+firewall_blocks_public_sources contains msg if {
+  rc := input.resource_changes[_]
+  rc.type == "digitalocean_firewall"
+  rc.change.after == null
+  unknown_rules := object.get(rc.change.after_unknown, "inbound_rule", [])
+  addr := public_source_address(unknown_rules[_])
+  msg := sprintf("firewall %s must not allow traffic from %s", [rc.name, addr])
+}
+
 https_rule_exists(rules, unknown_rules) if {
   rule := rules[_]
   lower(object.get(rule, "entry_protocol", "")) == "https"
@@ -118,6 +155,20 @@ load_balancer_rule_exists(rules, unknown_rules) if {
   i < count(unknown_rules)
   unknown_rule := unknown_rules[i]
   object.get(unknown_rule, "source_load_balancer_uids", false)
+}
+
+public_source_address(rule) = addr if {
+  addrs := object.get(rule, "source_addresses", [])
+  addr := addrs[_]
+  public_source_cidr(addr)
+}
+
+public_source_cidr(addr) if {
+  addr == "0.0.0.0/0"
+}
+
+public_source_cidr(addr) if {
+  addr == "::/0"
 }
 
 allow_public_ssh if {

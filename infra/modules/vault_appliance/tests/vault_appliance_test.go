@@ -176,7 +176,7 @@ func mutateResourceRuleList(t *testing.T, doc map[string]interface{}, resourceTy
 	t.Helper()
 
 	mutateResourceChanges(t, doc, resourceType, func(delta map[string]interface{}) {
-		mutateRuleList(delta, selector, mutate)
+		mutateRuleList(t, delta, selector, mutate)
 	})
 }
 
@@ -220,7 +220,9 @@ func mutateRulesInSection(delta map[string]interface{}, selector ruleSelector, m
 	mutateListEntries(raw, mutate)
 }
 
-func mutateRuleList(delta map[string]interface{}, selector ruleSelector, mutate func([]interface{}) []interface{}) {
+func mutateRuleList(t *testing.T, delta map[string]interface{}, selector ruleSelector, mutate func([]interface{}) []interface{}) {
+	t.Helper()
+
 	container, _ := delta[selector.section].(map[string]interface{})
 	if container == nil {
 		return
@@ -411,6 +413,23 @@ func TestVaultAppliancePolicyLoadBalancerFirewallRules(t *testing.T) {
 	output, err := runConftestWithPlan(t, mutated)
 	require.Error(t, err, "expected conftest to require load balancer firewall rules")
 	require.Contains(t, string(output), "must allow traffic from the managed load balancer")
+}
+
+func TestVaultAppliancePolicyRejectsPublicLoadBalancerFirewallSources(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	_, planJSON := renderPlanJSON(t, vars)
+	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+		mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
+			rule["source_addresses"] = []interface{}{"0.0.0.0/0", "::/0"}
+			delete(rule, "source_load_balancer_uids")
+		})
+	})
+
+	output, err := runConftestWithPlan(t, mutated)
+	require.Error(t, err, "expected conftest to reject public firewall sources")
+	require.Contains(t, string(output), "must not allow traffic from 0.0.0.0/0")
+	require.Contains(t, string(output), "must not allow traffic from ::/0")
 }
 
 func TestVaultApplianceInvalidRecoveryThreshold(t *testing.T) {
