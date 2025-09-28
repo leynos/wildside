@@ -217,12 +217,7 @@ func mutateRulesInSection(t *testing.T, delta map[string]interface{}, selector r
 		return
 	}
 
-	if unresolved, ok := raw.(bool); ok && unresolved {
-		require.Fail(t, "plan JSON must materialise inbound rules for this test to run")
-		return
-	}
-
-	mutateListEntries(raw, mutate)
+	mutateListEntries(t, raw, mutate)
 }
 
 func mutateRuleList(t *testing.T, delta map[string]interface{}, selector ruleSelector, mutate func([]interface{}) []interface{}) {
@@ -242,7 +237,14 @@ func mutateRuleList(t *testing.T, delta map[string]interface{}, selector ruleSel
 	container[selector.list] = mutate(rules)
 }
 
-func mutateListEntries(raw interface{}, mutate func(map[string]interface{})) {
+func mutateListEntries(t *testing.T, raw interface{}, mutate func(map[string]interface{})) {
+	t.Helper()
+
+	if _, ok := raw.(bool); ok {
+		require.Fail(t, "cannot mutate unknown inbound_rule; ensure rules are materialised in the plan for this test")
+		return
+	}
+
 	rules, _ := raw.([]interface{})
 	for _, ruleRaw := range rules {
 		rule, ok := ruleRaw.(map[string]interface{})
@@ -298,6 +300,31 @@ func TestMutateFirewallInboundRules_MalformedEntries(t *testing.T) {
 	})
 
 	require.Equal(t, 2, mutated, "expected only well-formed inbound rules to be mutated")
+}
+
+func TestMutateFirewallInboundRulesFailsOnUnknownList(t *testing.T) {
+	t.Parallel()
+
+	doc := map[string]interface{}{
+		"resource_changes": []interface{}{
+			map[string]interface{}{
+				"type": "digitalocean_firewall",
+				"change": map[string]interface{}{
+					"after_unknown": map[string]interface{}{
+						"inbound_rule": true,
+					},
+				},
+			},
+		},
+	}
+
+	ok := t.Run("detect unknown inbound rules", func(t *testing.T) {
+		mutateFirewallInboundRules(t, doc, func(map[string]interface{}) {
+			t.Fatal("mutate callback must not be invoked for unknown inbound_rule")
+		})
+	})
+
+	require.False(t, ok, "mutateFirewallInboundRules must fail when inbound_rule is unknown")
 }
 
 func TestVaultApplianceModuleValidate(t *testing.T) {
