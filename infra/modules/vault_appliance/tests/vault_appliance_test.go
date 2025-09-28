@@ -138,102 +138,99 @@ func mutatePlanJSON(t *testing.T, planJSON string, mutate func(map[string]interf
 func mutateLoadBalancerForwardingRules(t *testing.T, doc map[string]interface{}, mutate func(map[string]interface{})) {
 	t.Helper()
 
-	changes, ok := doc["resource_changes"].([]interface{})
-	require.True(t, ok, "plan JSON missing resource_changes")
-
-	for _, raw := range changes {
-		change, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		processLoadBalancerChange(change, mutate)
-	}
-}
-
-func processLoadBalancerChange(change map[string]interface{}, mutate func(map[string]interface{})) {
-	typ, ok := change["type"].(string)
-	if !ok || typ != "digitalocean_loadbalancer" {
-		return
-	}
-
-	delta, _ := change["change"].(map[string]interface{})
-	if delta == nil {
-		return
-	}
-
-	after, _ := delta["after"].(map[string]interface{})
-	if after == nil {
-		return
-	}
-
-	mutateForwardingRulesList(after["forwarding_rule"], mutate)
-}
-
-func mutateForwardingRulesList(raw interface{}, mutate func(map[string]interface{})) {
-	rules, _ := raw.([]interface{})
-	for _, ruleRaw := range rules {
-		rule, ok := ruleRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		mutate(rule)
-	}
+	mutateResourceRules(t, doc, "digitalocean_loadbalancer", []ruleSelector{
+		{section: "after", list: "forwarding_rule"},
+	}, mutate)
 }
 
 func mutateFirewallInboundRules(t *testing.T, doc map[string]interface{}, mutate func(map[string]interface{})) {
 	t.Helper()
 
+	mutateResourceRules(t, doc, "digitalocean_firewall", []ruleSelector{
+		{section: "after", list: "inbound_rule"},
+		{section: "after_unknown", list: "inbound_rule"},
+	}, mutate)
+}
+
+type ruleSelector struct {
+	section string
+	list    string
+}
+
+func mutateResourceRules(t *testing.T, doc map[string]interface{}, resourceType string, selectors []ruleSelector, mutate func(map[string]interface{})) {
+	t.Helper()
+
+	mutateResourceChanges(t, doc, resourceType, func(delta map[string]interface{}) {
+		for _, selector := range selectors {
+			mutateRulesInSection(delta, selector, mutate)
+		}
+	})
+}
+
+func mutateResourceRuleList(t *testing.T, doc map[string]interface{}, resourceType string, selector ruleSelector, mutate func([]interface{}) []interface{}) {
+	t.Helper()
+
+	mutateResourceChanges(t, doc, resourceType, func(delta map[string]interface{}) {
+		mutateRuleList(delta, selector, mutate)
+	})
+}
+
+func mutateResourceChanges(t *testing.T, doc map[string]interface{}, resourceType string, visit func(map[string]interface{})) {
+	t.Helper()
+
 	changes, ok := doc["resource_changes"].([]interface{})
 	require.True(t, ok, "plan JSON missing resource_changes")
 
-	for _, changeRaw := range changes {
-		change, ok := changeRaw.(map[string]interface{})
-		if !ok {
+	for _, raw := range changes {
+		change, ok := raw.(map[string]interface{})
+		if !ok || !isResourceType(change, resourceType) {
 			continue
 		}
-		processFirewallChange(change, mutate)
+
+		delta, _ := change["change"].(map[string]interface{})
+		if delta == nil {
+			continue
+		}
+
+		visit(delta)
 	}
 }
 
-func processFirewallChange(change map[string]interface{}, mutate func(map[string]interface{})) {
+func isResourceType(change map[string]interface{}, expected string) bool {
 	typ, ok := change["type"].(string)
-	if !ok || typ != "digitalocean_firewall" {
-		return
-	}
-
-	delta, _ := change["change"].(map[string]interface{})
-	if delta == nil {
-		return
-	}
-
-	processAfterRules(delta, mutate)
-	processAfterUnknownRules(delta, mutate)
+	return ok && typ == expected
 }
 
-func processAfterRules(delta map[string]interface{}, mutate func(map[string]interface{})) {
-	after, _ := delta["after"].(map[string]interface{})
-	if after == nil {
+func mutateRulesInSection(delta map[string]interface{}, selector ruleSelector, mutate func(map[string]interface{})) {
+	container, _ := delta[selector.section].(map[string]interface{})
+	if container == nil {
 		return
 	}
 
-	mutateRulesList(after["inbound_rule"], mutate)
-}
-
-func processAfterUnknownRules(delta map[string]interface{}, mutate func(map[string]interface{})) {
-	unknown, _ := delta["after_unknown"].(map[string]interface{})
-	if unknown == nil {
-		return
-	}
-
-	entries, exists := unknown["inbound_rule"]
+	raw, exists := container[selector.list]
 	if !exists {
 		return
 	}
 
-	mutateRulesList(entries, mutate)
+	mutateListEntries(raw, mutate)
 }
 
-func mutateRulesList(raw interface{}, mutate func(map[string]interface{})) {
+func mutateRuleList(delta map[string]interface{}, selector ruleSelector, mutate func([]interface{}) []interface{}) {
+	container, _ := delta[selector.section].(map[string]interface{})
+	if container == nil {
+		return
+	}
+
+	raw, exists := container[selector.list]
+	if !exists {
+		return
+	}
+
+	rules, _ := raw.([]interface{})
+	container[selector.list] = mutate(rules)
+}
+
+func mutateListEntries(raw interface{}, mutate func(map[string]interface{})) {
 	rules, _ := raw.([]interface{})
 	for _, ruleRaw := range rules {
 		rule, ok := ruleRaw.(map[string]interface{})
@@ -242,6 +239,14 @@ func mutateRulesList(raw interface{}, mutate func(map[string]interface{})) {
 		}
 		mutate(rule)
 	}
+}
+
+func appendLoadBalancerForwardingRule(t *testing.T, doc map[string]interface{}, rule map[string]interface{}) {
+	t.Helper()
+
+	mutateResourceRuleList(t, doc, "digitalocean_loadbalancer", ruleSelector{section: "after", list: "forwarding_rule"}, func(rules []interface{}) []interface{} {
+		return append(rules, rule)
+	})
 }
 
 func TestVaultApplianceModuleValidate(t *testing.T) {
@@ -252,24 +257,44 @@ func TestVaultApplianceModuleValidate(t *testing.T) {
 	terraform.InitAndValidate(t, opts)
 }
 
-func TestVaultApplianceModuleValidateMissingRequiredVars(t *testing.T) {
+func TestVaultApplianceModuleValidateErrors(t *testing.T) {
 	t.Parallel()
-	vars := baseVars(t)
-	delete(vars, "region")
-	env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
-	_, opts := setupTerraform(t, vars, env)
-	err := terraform.InitAndValidateE(t, opts)
-	require.Error(t, err, "validation should fail when required variable 'region' is missing")
-}
 
-func TestVaultApplianceModuleValidateInvalidOptionalVars(t *testing.T) {
-	t.Parallel()
-	vars := baseVars(t)
-	vars["load_balancer_algorithm"] = "invalid-algorithm"
-	env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
-	_, opts := setupTerraform(t, vars, env)
-	err := terraform.InitAndValidateE(t, opts)
-	require.Error(t, err, "validation should fail when optional variable 'load_balancer_algorithm' is invalid")
+	tests := map[string]struct {
+		mutateVars     func(map[string]interface{})
+		expectedDetail string
+	}{
+		"missing region": {
+			mutateVars: func(vars map[string]interface{}) {
+				delete(vars, "region")
+			},
+			expectedDetail: "region",
+		},
+		"invalid load balancer algorithm": {
+			mutateVars: func(vars map[string]interface{}) {
+				vars["load_balancer_algorithm"] = "invalid-algorithm"
+			},
+			expectedDetail: "load_balancer_algorithm",
+		},
+	}
+
+	for name, tc := range tests {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			vars := baseVars(t)
+			tc.mutateVars(vars)
+			env := map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}
+			_, opts := setupTerraform(t, vars, env)
+
+			err := terraform.InitAndValidateE(t, opts)
+			require.Error(t, err, "expected validation to fail")
+			if tc.expectedDetail != "" {
+				require.Contains(t, err.Error(), tc.expectedDetail)
+			}
+		})
+	}
 }
 
 func TestVaultAppliancePlanUnauthenticated(t *testing.T) {
@@ -320,6 +345,41 @@ func TestVaultAppliancePolicyEnforcesHTTPS(t *testing.T) {
 	output, err := runConftestWithPlan(t, mutated)
 	require.Error(t, err, "expected conftest to reject HTTP-only load balancer rules")
 	require.Contains(t, string(output), "must terminate HTTPS on port 443")
+}
+
+func TestVaultAppliancePolicyAllowsMixedHTTPAndHTTPSRules(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	_, planJSON := renderPlanJSON(t, vars)
+	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+		var template map[string]interface{}
+		mutateLoadBalancerForwardingRules(t, doc, func(rule map[string]interface{}) {
+			if template != nil {
+				return
+			}
+			template = map[string]interface{}{}
+			for k, v := range rule {
+				template[k] = v
+			}
+		})
+
+		require.NotNil(t, template, "expected to capture existing forwarding rule template")
+
+		httpRule := map[string]interface{}{}
+		for k, v := range template {
+			httpRule[k] = v
+		}
+		httpRule["entry_protocol"] = "http"
+		httpRule["entry_port"] = float64(80)
+		httpRule["target_protocol"] = "http"
+		delete(httpRule, "certificate_id")
+		delete(httpRule, "tls_passthrough")
+
+		appendLoadBalancerForwardingRule(t, doc, httpRule)
+	})
+
+	output, err := runConftestWithPlan(t, mutated)
+	require.NoErrorf(t, err, "conftest should accept mixed HTTP/HTTPS rules: %s", string(output))
 }
 
 func TestVaultAppliancePolicyRedirectsHTTPToHTTPS(t *testing.T) {
