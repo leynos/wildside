@@ -432,6 +432,41 @@ func TestVaultAppliancePolicyRejectsPublicLoadBalancerFirewallSources(t *testing
 	require.Contains(t, string(output), "must not allow traffic from ::/0")
 }
 
+func TestVaultAppliancePolicyRejectsUnknownPublicLoadBalancerFirewallSources(t *testing.T) {
+	t.Parallel()
+	vars := baseVars(t)
+	_, planJSON := renderPlanJSON(t, vars)
+	mutated := mutatePlanJSON(t, planJSON, func(doc map[string]interface{}) {
+		var template map[string]interface{}
+		mutateFirewallInboundRules(t, doc, func(rule map[string]interface{}) {
+			if template != nil {
+				return
+			}
+			template = map[string]interface{}{}
+			for k, v := range rule {
+				template[k] = v
+			}
+		})
+
+		require.NotNil(t, template, "expected to capture existing inbound rule template")
+
+		mutateResourceRuleList(t, doc, "digitalocean_firewall", ruleSelector{section: "after_unknown", list: "inbound_rule"}, func(rules []interface{}) []interface{} {
+			cloned := append([]interface{}{}, rules...)
+			newRule := map[string]interface{}{}
+			for k, v := range template {
+				newRule[k] = v
+			}
+			newRule["source_addresses"] = []interface{}{"::/0"}
+			delete(newRule, "source_load_balancer_uids")
+			return append(cloned, newRule)
+		})
+	})
+
+	output, err := runConftestWithPlan(t, mutated)
+	require.Error(t, err, "expected conftest to reject public firewall sources in unknown rules")
+	require.Contains(t, string(output), "must not allow traffic from ::/0")
+}
+
 func TestVaultApplianceInvalidRecoveryThreshold(t *testing.T) {
 	t.Parallel()
 	vars := baseVars(t)
