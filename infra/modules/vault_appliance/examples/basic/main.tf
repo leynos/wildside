@@ -13,6 +13,7 @@ module "vault_appliance" {
   recovery_shares         = var.recovery_shares
   recovery_threshold      = var.recovery_threshold
   recovery_key_length     = var.recovery_key_length
+  ssh_keys                = var.ssh_keys
 }
 
 variable "name" {
@@ -82,6 +83,12 @@ variable "recovery_key_length" {
   type        = number
   description = "Length of each generated recovery key"
   default     = 32
+}
+
+variable "ssh_keys" {
+  type        = list(string)
+  description = "SSH key fingerprints or IDs to inject into droplets"
+  default     = ["example-ssh-key-fingerprint"]
 }
 
 output "public_endpoint" {
