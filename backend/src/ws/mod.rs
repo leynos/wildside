@@ -53,26 +53,41 @@ fn validate_origin(origin_header: &HeaderValue) -> actix_web::Result<()> {
     }
 }
 
+const PRIMARY_HOST: &str = "yourdomain.example";
+const LOCALHOST: &str = "localhost";
+const ALLOWED_SUBDOMAIN_SUFFIX: &str = ".yourdomain.example";
+
+/// Returns true when a parsed Origin belongs to the static allow-list.
+///
+/// The allow-list currently accepts HTTPS requests from the production root
+/// domain and any of its subdomains, and HTTP requests from localhost with an
+/// explicit port. Once configuration is available this should move into a
+/// runtime-controlled allow-list.
+///
+/// # Examples
+/// ```rust,ignore
+/// # use url::Url;
+/// # use wildside::ws::is_allowed_origin;
+/// let allowed = Url::parse("https://chat.yourdomain.example").unwrap();
+/// assert!(is_allowed_origin(&allowed));
+///
+/// let blocked = Url::parse("https://example.com").unwrap();
+/// assert!(!is_allowed_origin(&blocked));
+/// ```
+///
 /// TODO: Externalise the origin allow-list via configuration once available.
 fn is_allowed_origin(origin: &Url) -> bool {
-    match origin.scheme() {
-        "http" | "https" => {}
-        _ => return false,
-    }
-
-    let Some(host) = origin.host_str() else {
-        return false;
+    let host = match origin.host_str() {
+        Some(value) => value,
+        None => return false,
     };
 
-    if origin.scheme() == "http" && host == "localhost" {
-        return origin.port().is_some();
+    match origin.scheme() {
+        "http" if host == LOCALHOST => origin.port().is_some(),
+        "https" if host == PRIMARY_HOST => true,
+        "https" if host.strip_suffix(ALLOWED_SUBDOMAIN_SUFFIX).is_some() => true,
+        _ => false,
     }
-
-    if origin.scheme() == "https" && host == "yourdomain.example" {
-        return true;
-    }
-
-    host.ends_with(".yourdomain.example")
 }
 
 #[cfg(test)]
