@@ -41,6 +41,15 @@ communication. Clients upgrade the connection via `GET /ws`, authenticate with
 the same bearer token used for HTTP requests (for example, via the
 `Sec-WebSocket-Protocol` header or a cookie; avoid query parameters), and
 subscribe to `route_generation_status` events for a `request_id`.
+To prevent cross-site WebSocket hijacking the upgrade handler validates the
+`Origin` header against a strict allow-list before accepting the handshake. The
+allow-list currently admits `https://yourdomain.example`, any HTTPS subdomain of
+`yourdomain.example`, and explicit localhost HTTP origins such as
+`http://localhost:3000` for local development. Requests with a missing, malformed
+or unrecognised `Origin` fail fast with structured logging so operators can spot
+misconfiguration. The allow-list will migrate to configuration once the
+settings infrastructure is available, at which point the documentation should be
+updated accordingly.
 The server pushes updates asynchronously, which is useful for
 long-running processes and live features. For example, when a user requests a
 personalised route, the server immediately acknowledges the request, then
