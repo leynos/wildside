@@ -41,6 +41,7 @@ metrics = ["dep:actix-web-prom"]
 actix-rt = "2"
 rstest = "0.26"
 insta = { version = "1", features = ["json", "redactions"] }
+base64 = "0.21"
 
 [[bin]]
 name = "openapi-dump"

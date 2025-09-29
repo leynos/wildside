@@ -6,15 +6,19 @@ use actix_web::{
     test::{self, TestRequest},
     App,
 };
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use backend::ws;
 
 fn handshake_request() -> TestRequest {
+    let key = STANDARD.encode(b"wildside-test-key!");
+
     TestRequest::get()
         .uri("/ws")
         .insert_header((header::UPGRADE, "websocket"))
         .insert_header((header::CONNECTION, "Upgrade"))
         .insert_header((header::SEC_WEBSOCKET_VERSION, "13"))
-        .insert_header((header::SEC_WEBSOCKET_KEY, "dGhlIHNhbXBsZSBub25jZQ=="))
+        .insert_header((header::SEC_WEBSOCKET_KEY, key))
 }
 
 #[actix_rt::test]

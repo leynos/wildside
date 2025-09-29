@@ -377,6 +377,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "actix-web-prom",
+ "base64 0.21.7",
  "futures-util",
  "insta",
  "regex",
@@ -413,6 +414,12 @@ name = "base64"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
+
+[[package]]
+name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64"
