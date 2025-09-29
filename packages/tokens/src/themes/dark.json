@@ -30,29 +30,29 @@
     },
     "brand": {
       "default": {
-        "value": "{color.primary.700}",
+        "value": "{color.primary.500}",
         "description": "Primary brand colour (orange)"
       },
       "hover": {
-        "value": "{color.primary.800}",
+        "value": "{color.primary.400}",
         "description": "Brand hover state"
       },
       "contrast": {
-        "value": "{color.neutral.0}",
+        "value": "{color.neutral.900}",
         "description": "Text on brand-coloured elements"
       }
     },
     "accent": {
       "default": {
-        "value": "{color.secondary.700}",
+        "value": "{color.secondary.400}",
         "description": "Accent colour (teal)"
       },
       "hover": {
-        "value": "{color.secondary.800}",
+        "value": "{color.secondary.500}",
         "description": "Accent hover state"
       },
       "contrast": {
-        "value": "{color.neutral.0}",
+        "value": "{color.neutral.900}",
         "description": "Text on accent-coloured elements"
       }
     }
