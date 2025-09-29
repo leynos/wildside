@@ -32,10 +32,13 @@ pub async fn ws_entry(req: HttpRequest, stream: Payload) -> actix_web::Result<Ht
 }
 
 fn validate_origin(origin_header: &HeaderValue) -> actix_web::Result<()> {
-    let origin_value = origin_header.to_str().map_err(|error| {
-        error!(error = %error, "Failed to parse Origin header as string");
-        actix_web::error::ErrorBadRequest("Invalid Origin header")
-    })?;
+    let origin_value = match origin_header.to_str() {
+        Ok(value) => value,
+        Err(error) => {
+            error!(error = %error, "Failed to parse Origin header as string");
+            return Err(actix_web::error::ErrorBadRequest("Invalid Origin header"));
+        }
+    };
 
     let origin = Url::parse(origin_value).map_err(|error| {
         error!(error = %error, "Failed to parse Origin header as URL");
