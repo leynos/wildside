@@ -152,6 +152,7 @@ mod tests {
 
     #[rstest]
     #[case("http://localhost:4000", true)]
+    #[case("http://localhost:0", false)]
     #[case("http://localhost", false)]
     #[case("https://yourdomain.example", true)]
     #[case("https://chat.yourdomain.example", true)]
