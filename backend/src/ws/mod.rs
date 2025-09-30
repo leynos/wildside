@@ -91,7 +91,7 @@ fn is_allowed_origin(origin: &Url) -> bool {
     };
 
     match origin.scheme() {
-        "http" if host == LOCALHOST => origin.port().is_some(),
+        "http" if host == LOCALHOST => matches!(origin.port(), Some(port) if port != 0),
         "https" if host == PRIMARY_HOST => true,
         "https" if host.strip_suffix(ALLOWED_SUBDOMAIN_SUFFIX).is_some() => true,
         _ => false,

@@ -7,6 +7,7 @@ use actix_web::{
     App,
 };
 use backend::ws;
+use rstest::rstest;
 
 // Example Sec-WebSocket-Key from RFC 6455 section 1.3 used to satisfy handshake requirements.
 const RFC6455_SAMPLE_KEY: &str = "dGhlIHNhbXBsZSBub25jZQ==";
@@ -20,15 +21,14 @@ fn handshake_request() -> TestRequest {
         .insert_header((header::SEC_WEBSOCKET_KEY, RFC6455_SAMPLE_KEY))
 }
 
-#[actix_rt::test]
-async fn upgrades_when_origin_allowed() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+#[rstest]
+#[case("https://yourdomain.example")]
+#[case("https://chat.yourdomain.example")]
+#[case("http://localhost:3000")]
+fn upgrades_when_origin_allowed(#[case] origin: &str) {
+    actix_rt::System::new().block_on(async move {
+        let app = test::init_service(App::new().service(ws::ws_entry)).await;
 
-    for origin in [
-        "https://yourdomain.example",
-        "https://chat.yourdomain.example",
-        "http://localhost:3000",
-    ] {
         let req = handshake_request()
             .insert_header((header::ORIGIN, origin))
             .to_request();
@@ -38,7 +38,7 @@ async fn upgrades_when_origin_allowed() {
             StatusCode::SWITCHING_PROTOCOLS,
             "origin {origin}"
         );
-    }
+    });
 }
 
 #[actix_rt::test]

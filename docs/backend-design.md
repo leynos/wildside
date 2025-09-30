@@ -45,7 +45,7 @@ To prevent cross-site WebSocket hijacking the upgrade handler validates the
 `Origin` header against a strict allow-list before accepting the handshake. The
 allow-list currently admits `https://yourdomain.example`, any HTTPS subdomain of
 `yourdomain.example`, and explicit localhost HTTP origins such as
-`http://localhost:3000` for local development. Requests with a missing, malformed
+`http://localhost:3000` for local development. Requests with a missing, malformed,
 or unrecognised `Origin` fail fast with structured logging so operators can spot
 misconfiguration. The allow-list will migrate to configuration once the
 settings infrastructure is available (see [issue #18](https://github.com/leynos/wildside/issues/18)),
