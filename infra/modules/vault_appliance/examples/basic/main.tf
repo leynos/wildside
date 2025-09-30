@@ -88,7 +88,6 @@ variable "recovery_key_length" {
 variable "ssh_keys" {
   type        = list(string)
   description = "SSH key fingerprints or IDs to inject into droplets"
-  default     = ["example-ssh-key-fingerprint"]
 }
 
 output "public_endpoint" {

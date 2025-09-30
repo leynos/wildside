@@ -65,7 +65,12 @@ variable "droplet_image" {
 variable "ssh_keys" {
   description = "List of SSH key fingerprints or IDs to inject into droplets."
   type        = list(string)
-  default     = []
+  nullable    = false
+
+  validation {
+    condition     = length(var.ssh_keys) > 0
+    error_message = "ssh_keys must include at least one fingerprint or ID."
+  }
 }
 
 variable "user_data" {

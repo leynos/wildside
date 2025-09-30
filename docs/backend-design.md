@@ -48,8 +48,8 @@ allow-list currently admits `https://yourdomain.example`, any HTTPS subdomain of
 `http://localhost:3000` for local development. Requests with a missing, malformed
 or unrecognised `Origin` fail fast with structured logging so operators can spot
 misconfiguration. The allow-list will migrate to configuration once the
-settings infrastructure is available, at which point the documentation should be
-updated accordingly.
+settings infrastructure is available (see [issue #18](https://github.com/leynos/wildside/issues/18)),
+at which point the documentation should be updated accordingly.
 The server pushes updates asynchronously, which is useful for
 long-running processes and live features. For example, when a user requests a
 personalised route, the server immediately acknowledges the request, then

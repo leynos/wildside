@@ -38,7 +38,9 @@ locals {
   )
 }
 
+#checkov:skip=CKV_DIO_2: ssh_keys are supplied via validated module inputs during apply
 resource "digitalocean_droplet" "vault" {
+  #checkov:skip=CKV_DIO_2: module validation enforces ssh_keys before apply
   count = local.droplet_count
 
   name       = local.droplet_names[count.index]
@@ -52,6 +54,13 @@ resource "digitalocean_droplet" "vault" {
   ipv6       = var.enable_ipv6
   vpc_uuid   = var.vpc_uuid
   tags       = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = length(var.ssh_keys) > 0
+      error_message = "Provide at least one SSH key fingerprint or ID for each droplet."
+    }
+  }
 }
 
 resource "digitalocean_volume" "vault_data" {

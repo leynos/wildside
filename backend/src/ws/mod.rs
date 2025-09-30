@@ -7,7 +7,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use actix_web_actors::ws;
-use tracing::error;
+use tracing::{error, warn};
 use url::Url;
 
 pub mod display_name;
@@ -17,10 +17,15 @@ pub mod socket;
 /// Handle WebSocket upgrade for the `/ws` endpoint.
 #[get("/ws")]
 pub async fn ws_entry(req: HttpRequest, stream: Payload) -> actix_web::Result<HttpResponse> {
-    let origin_header = req.headers().get(ORIGIN).ok_or_else(|| {
+    let mut origin_iter = req.headers().get_all(ORIGIN);
+    let origin_header = origin_iter.next().ok_or_else(|| {
         error!("Missing Origin header on WebSocket upgrade");
         actix_web::error::ErrorForbidden("Origin not allowed")
     })?;
+    if origin_iter.next().is_some() {
+        error!("Multiple Origin headers on WebSocket upgrade");
+        return Err(actix_web::error::ErrorBadRequest("Invalid Origin header"));
+    }
 
     validate_origin(origin_header)?;
 
@@ -48,7 +53,7 @@ fn validate_origin(origin_header: &HeaderValue) -> actix_web::Result<()> {
     if is_allowed_origin(&origin) {
         Ok(())
     } else {
-        error!(
+        warn!(
             origin = origin_value,
             "Rejected WS upgrade due to disallowed Origin"
         );
@@ -78,7 +83,7 @@ const ALLOWED_SUBDOMAIN_SUFFIX: &str = ".yourdomain.example";
 /// assert!(!is_allowed_origin(&blocked));
 /// ```
 ///
-/// TODO: Externalise the origin allow-list via configuration once available.
+/// TODO: Externalise the origin allow-list via configuration once available (see https://github.com/leynos/wildside/issues/18).
 fn is_allowed_origin(origin: &Url) -> bool {
     let host = match origin.host_str() {
         Some(value) => value,
