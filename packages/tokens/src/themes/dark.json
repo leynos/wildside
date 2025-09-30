@@ -30,15 +30,15 @@
     },
     "brand": {
       "default": {
-        "value": "{color.primary.500}",
+        "value": "{color.primary.700}",
         "description": "Primary brand colour (orange)"
       },
       "hover": {
-        "value": "{color.primary.400}",
+        "value": "{color.primary.800}",
         "description": "Brand hover state"
       },
       "contrast": {
-        "value": "{color.neutral.900}",
+        "value": "{color.neutral.0}",
         "description": "Text on brand-coloured elements"
       }
     },
