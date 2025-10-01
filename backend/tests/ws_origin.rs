@@ -84,3 +84,14 @@ async fn rejects_malformed_origin_header() {
     let response = test::call_service(&app, req).await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+#[actix_rt::test]
+async fn rejects_localhost_zero_port_origin() {
+    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+
+    let req = handshake_request()
+        .insert_header((header::ORIGIN, "http://localhost:0"))
+        .to_request();
+    let response = test::call_service(&app, req).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
