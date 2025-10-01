@@ -68,8 +68,8 @@ const ALLOWED_SUBDOMAIN_SUFFIX: &str = ".yourdomain.example";
 /// Returns true when a parsed Origin belongs to the static allow-list.
 ///
 /// The allow-list currently accepts HTTPS requests from the production root
-/// domain and any of its subdomains, and HTTP requests from localhost with an
-/// explicit port. Once configuration is available this should move into a
+/// domain and any of its subdomains, and HTTP requests from localhost with a
+/// non-zero explicit port. Once configuration is available this should move into a
 /// runtime-controlled allow-list.
 ///
 /// # Examples
