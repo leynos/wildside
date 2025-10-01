@@ -85,9 +85,12 @@ variable "recovery_key_length" {
   default     = 32
 }
 
+# Provide real fingerprints or DigitalOcean key IDs via `terraform.tfvars`
+# or `-var` flags before applying this example configuration.
 variable "ssh_keys" {
   type        = list(string)
   description = "SSH key fingerprints or IDs to inject into droplets"
+  default     = []
 }
 
 output "public_endpoint" {
