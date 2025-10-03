@@ -20,6 +20,24 @@ jobs:
         with:
           bun-version: '1.2.21'
 
+      - name: Compute dependency cache keys
+        id: dependency-hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            pnpm_lock_hash=$(sha256sum pnpm-lock.yaml | awk '{print $1}')
+          else
+            pnpm_lock_hash=$(shasum -a 256 pnpm-lock.yaml | awk '{print $1}')
+          fi
+
+          frontend_hash=$(cd frontend-pwa && bun pm hash 2>/dev/null || echo 'no-frontend-lock')
+          tokens_hash=$(cd packages/tokens && bun pm hash 2>/dev/null || echo 'no-tokens-lock')
+
+          echo "modules=${pnpm_lock_hash}-${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
+          echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
+
       - name: Cache workspace node_modules
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -28,7 +46,7 @@ jobs:
             node_modules/.pnpm-install-*
             frontend-pwa/node_modules
             packages/tokens/node_modules
-          key: ${{ runner.os }}-modules-${{ hashFiles('pnpm-lock.yaml', 'bun.lock', 'frontend-pwa/package.json', 'packages/tokens/package.json') }}
+          key: ${{ runner.os }}-modules-${{ steps.dependency-hashes.outputs.modules }}
           restore-keys: ${{ runner.os }}-modules-
 
       - name: Cache Bun downloads
@@ -37,15 +55,17 @@ jobs:
           path: |
             ~/.bun/install/cache
             ~/.bun/install/global
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'frontend-pwa/package.json', 'packages/tokens/package.json') }}
+          key: ${{ runner.os }}-bun-${{ steps.dependency-hashes.outputs.bun }}
           restore-keys: ${{ runner.os }}-bun-
 
-      - name: Setup Rust toolchain
-        uses: rust-lang/setup-rust@v1
-        with:
-          rust-version: stable
-          components: rustfmt, clippy
-          profile: minimal
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          source "$HOME/.cargo/env"
+          rustup component add rustfmt clippy
+          echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
 
       - name: Install uv
         id: setup-uv
