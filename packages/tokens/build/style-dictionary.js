@@ -16,20 +16,10 @@ const sd = new StyleDictionary({
       buildPath: 'dist/css/',
       files: [{ destination: 'variables.css', format: 'css/variables' }],
     },
-    tailwind: {
-      transformGroup: 'js',
-      buildPath: 'dist/tw/',
-      files: [{ destination: 'preset.js', format: 'javascript/module' }],
-    },
-    daisy: {
-      transformGroup: 'js',
-      buildPath: 'dist/daisy/',
-      files: [{ destination: 'theme.js', format: 'javascript/module' }],
-    },
   },
 });
 
-sd.buildAllPlatforms();
+sd.buildPlatform('css');
 
 // Map tokens into Tailwind and DaisyUI presets
 /**
@@ -92,7 +82,10 @@ fs.writeFileSync(
 
 const themesUrl = new URL('../src/themes/', import.meta.url);
 // Convert the URL to a file-system path via `fileURLToPath` for cross-platform compatibility.
-const themeFiles = fs.readdirSync(fileURLToPath(themesUrl)).filter((f) => f.endsWith('.json'));
+const themeFiles = fs
+  .readdirSync(fileURLToPath(themesUrl))
+  .filter((fileName) => fileName.endsWith('.json'))
+  .sort((a, b) => a.localeCompare(b));
 const daisyThemes = themeFiles.map((file) => {
   const json = readJson(new URL(file, themesUrl));
   const semantic = unwrap(json.semantic ?? {});
