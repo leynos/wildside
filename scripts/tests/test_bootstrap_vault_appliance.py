@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from cmd_mox import CommandRegistry
+from cmd_mox import CommandRegistry, MockCommand
 
 from scripts.bootstrap_vault_appliance import BootstrapOptions, CommandRunner, bootstrap
 
@@ -25,15 +25,9 @@ def make_options() -> BootstrapOptions:
     )
 
 
-def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
-    registry = CommandRegistry()
-    doctl = registry.create("doctl")
-    vault = registry.create("vault")
-    ssh = registry.create("ssh")
-    runner = CommandRunner(local_module=registry.local_proxy)
-
-    options = make_options()
-
+def setup_droplet_discovery_mock(
+    doctl: MockCommand, ssh: MockCommand, options: BootstrapOptions, ip: str
+) -> None:
     doctl.queue(
         "compute",
         "droplet",
@@ -43,16 +37,19 @@ def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
         "--format",
         "PublicIPv4",
         "--no-header",
-        stdout="203.0.113.10\n",
+        stdout=f"{ip}\n",
     )
     ssh.queue(
-        f"{options.ssh_user}@203.0.113.10",
+        f"{options.ssh_user}@{ip}",
         "sudo",
         "systemctl",
         "is-active",
         "vault",
         stdout="active\n",
     )
+
+
+def setup_vault_init_mock(vault: MockCommand, doctl: MockCommand, options: BootstrapOptions) -> None:
     vault.queue(
         "status",
         "-format=json",
@@ -99,6 +96,9 @@ def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
         "--data",
         "root-token",
     )
+
+
+def setup_vault_unseal_mock(vault: MockCommand, options: BootstrapOptions) -> None:
     for index in range(1, options.key_threshold + 1):
         vault.queue("operator", "unseal", f"key-{index}")
     vault.queue(
@@ -106,6 +106,9 @@ def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
         "-format=json",
         stdout=json.dumps({"initialized": True, "sealed": False}),
     )
+
+
+def setup_kv_mount_mock(vault: MockCommand, options: BootstrapOptions) -> None:
     vault.queue(
         "secrets",
         "list",
@@ -119,6 +122,9 @@ def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
         options.mount_path,
         "kv-v2",
     )
+
+
+def setup_approle_mock(vault: MockCommand, doctl: MockCommand, options: BootstrapOptions) -> None:
     vault.queue(
         "auth",
         "list",
@@ -166,6 +172,22 @@ def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
         "--data",
         "secret-456",
     )
+
+
+def test_bootstrap_initialises_and_configures_vault(tmp_path) -> None:
+    registry = CommandRegistry()
+    doctl = registry.create("doctl")
+    vault = registry.create("vault")
+    ssh = registry.create("ssh")
+    runner = CommandRunner(local_module=registry.local_proxy)
+
+    options = make_options()
+
+    setup_droplet_discovery_mock(doctl, ssh, options, "203.0.113.10")
+    setup_vault_init_mock(vault, doctl, options)
+    setup_vault_unseal_mock(vault, options)
+    setup_kv_mount_mock(vault, options)
+    setup_approle_mock(vault, doctl, options)
 
     bootstrap(options, runner=runner)
 
