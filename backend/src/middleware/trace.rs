@@ -9,6 +9,7 @@ use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::{Error, HttpMessage};
 use futures_util::future::{ready, LocalBoxFuture, Ready};
+use tracing::error;
 use uuid::Uuid;
 
 /// Per-request trace identifier stored in request extensions.
@@ -95,14 +96,16 @@ where
         let fut = self.service.call(req);
         Box::pin(async move {
             let mut res = fut.await?;
-            res.response_mut().headers_mut().insert(
-                HeaderName::from_static("trace-id"),
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Trace IDs are UUIDs and valid header values"
-                )]
-                HeaderValue::from_str(&trace_id).expect("UUIDs produce valid header values"),
-            );
+            match HeaderValue::from_str(&trace_id) {
+                Ok(value) => {
+                    res.response_mut()
+                        .headers_mut()
+                        .insert(HeaderName::from_static("trace-id"), value);
+                }
+                Err(error) => {
+                    error!(%error, trace_id = %trace_id, "failed to encode trace identifier header");
+                }
+            }
             Ok(res)
         })
     }
