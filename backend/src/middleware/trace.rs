@@ -96,12 +96,15 @@ where
         let fut = self.service.call(req);
         Box::pin(async move {
             let mut res = fut.await?;
-            if let Err(error) = HeaderValue::from_str(&trace_id).map(|value| {
-                res.response_mut()
-                    .headers_mut()
-                    .insert(HeaderName::from_static("trace-id"), value);
-            }) {
-                error!(%error, trace_id = %trace_id, "failed to encode trace identifier header");
+            match HeaderValue::from_str(&trace_id) {
+                Ok(value) => {
+                    res.response_mut()
+                        .headers_mut()
+                        .insert(HeaderName::from_static("trace-id"), value);
+                }
+                Err(error) => {
+                    error!(%error, trace_id = %trace_id, "failed to encode trace identifier header");
+                }
             }
             Ok(res)
         })
