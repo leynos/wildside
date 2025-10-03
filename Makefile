@@ -42,7 +42,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 workspace-sync:
 	./scripts/sync_workspace_members.py
 
-all: fmt lint test
+all: check-fmt lint test
 
 clean:
 	cargo clean --manifest-path backend/Cargo.toml
