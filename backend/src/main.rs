@@ -196,26 +196,47 @@ async fn main() -> std::io::Result<()> {
     let same_site = same_site_from_env(cookie_secure)?;
     #[cfg(feature = "metrics")]
     let prometheus = match make_metrics() {
-        Ok(m) => m,
+        Ok(m) => Some(m),
         Err(e) => {
-            warn!(error = %e, "failed to initialise Prometheus metrics");
-            return Err(std::io::Error::other(e));
+            warn!(
+                error = %e,
+                "failed to initialise Prometheus metrics; continuing without metrics"
+            );
+            None
         }
     };
     let health_state = web::Data::new(HealthState::new());
     let server_health_state = health_state.clone();
+    let bind_address = bind_address();
+    #[cfg(feature = "metrics")]
+    if let Some(prometheus) = prometheus {
+        let server_health_state = server_health_state.clone();
+        let key = key.clone();
+        let server = HttpServer::new(move || {
+            build_app(
+                server_health_state.clone(),
+                key.clone(),
+                cookie_secure,
+                same_site,
+            )
+            .wrap(prometheus.clone())
+        })
+        .bind(bind_address.clone())?;
+
+        let server = server.run();
+        health_state.mark_ready();
+        return server.await;
+    }
+
     let server = HttpServer::new(move || {
-        let app = build_app(
+        build_app(
             server_health_state.clone(),
             key.clone(),
             cookie_secure,
             same_site,
-        );
-        #[cfg(feature = "metrics")]
-        let app = app.wrap(prometheus.clone());
-        app
+        )
     })
-    .bind(bind_address())?;
+    .bind(bind_address)?;
 
     let server = server.run();
     health_state.mark_ready();
