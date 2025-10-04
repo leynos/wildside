@@ -35,7 +35,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+        check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
         vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync
 
@@ -153,6 +153,9 @@ check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
 	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
 
+check-test-deps:
+	./scripts/check_test_dependencies.py
+
 markdownlint:
 	find . \
 	  \( -path './backend/target' -o -path './target' -o \
@@ -178,7 +181,7 @@ conftest:
 tofu:
 	$(call ensure_tool,tofu)
 
-doks-test:
+doks-test: check-test-deps
 	tofu fmt -check infra/modules/doks
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
@@ -195,7 +198,7 @@ doks-test:
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
-doks-policy: conftest tofu
+doks-policy: check-test-deps conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
@@ -205,10 +208,10 @@ doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
 
-dev-cluster-test: conftest tofu
+dev-cluster-test: check-test-deps conftest tofu
 	DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) ./scripts/dev-cluster-test.sh
 
-fluxcd-test:
+fluxcd-test: check-test-deps
 	tofu fmt -check infra/modules/fluxcd
 	tofu -chdir=infra/modules/fluxcd/examples/basic init
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
@@ -235,7 +238,7 @@ fluxcd-test:
 
 # Delegate the Terraform plan and Conftest execution to a script so the target
 # stays readable while still supporting temporary files and clean shutdown.
-fluxcd-policy: conftest tofu
+fluxcd-policy: check-test-deps conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
 	echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
@@ -249,7 +252,7 @@ fluxcd-policy: conftest tofu
 	./scripts/fluxcd-policy.sh; \
 	fi
 
-vault-appliance-test:
+vault-appliance-test: check-test-deps
 	tofu fmt -check infra/modules/vault_appliance
 	tofu -chdir=infra/modules/vault_appliance/examples/basic init
 	tofu -chdir=infra/modules/vault_appliance/examples/basic validate
@@ -268,7 +271,7 @@ vault-appliance-test:
 	|| test $$? -eq 2
 	$(MAKE) vault-appliance-policy
 
-vault-appliance-policy: conftest tofu
+vault-appliance-policy: check-test-deps conftest tofu
 	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var name=vault-ci \
 	-var region=nyc1 \
