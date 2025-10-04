@@ -66,7 +66,7 @@ func TestDoksModuleValidate(t *testing.T) {
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}),
 	})
 	terraform.InitAndValidate(t, opts)
 }
@@ -81,7 +81,7 @@ func TestDoksModulePlanUnauthenticated(t *testing.T) {
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": ""},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": ""}),
 	})
 
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -108,7 +108,7 @@ func TestDoksModuleApplyIfTokenPresent(t *testing.T) {
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 
 	defer terraform.Destroy(t, opts)
@@ -137,7 +137,7 @@ func TestDoksModulePolicy(t *testing.T) {
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}),
 	})
 
 	planFile := filepath.Join(tfDir, "tfplan.binary")
@@ -172,7 +172,7 @@ func TestDoksModulePolicy(t *testing.T) {
 
 	cmd := exec.CommandContext(ctx, "conftest", "test", jsonPath, "--policy", policyPath)
 	cmd.Dir = tfDir
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	cmd.Env = testutil.TerraformEnv(t, nil)
 	output, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 	require.NoErrorf(t, err, "conftest failed: %s", string(output))
@@ -306,7 +306,7 @@ func TestDoksModuleInvalidInputs(t *testing.T) {
 				SourceRootRel: "..",
 				TfSubDir:      "examples/basic",
 				Vars:          localVars,
-				EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+				EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}),
 			})
 			_, err := terraform.InitAndPlanE(t, opts)
 			require.Error(t, err)

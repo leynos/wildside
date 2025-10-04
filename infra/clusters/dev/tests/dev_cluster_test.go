@@ -102,7 +102,7 @@ func TestDevClusterValidate(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       map[string]string{},
+		EnvVars:       testutil.TerraformEnvVars(nil),
 	})
 	terraform.InitAndValidate(t, opts)
 }
@@ -118,7 +118,7 @@ func TestDevClusterPlanUnauthenticated(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       map[string]string{},
+		EnvVars:       testutil.TerraformEnvVars(nil),
 	})
 	_, err := terraform.InitAndValidateE(t, opts)
 	require.NoError(t, err)
@@ -134,12 +134,14 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
 	cmd.Dir = tfDir
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "DIGITALOCEAN_TOKEN="+token)
+	cmd.Env = testutil.TerraformEnv(t, map[string]string{
+		"DIGITALOCEAN_TOKEN": token,
+	})
 	err := cmd.Run()
 	if err == nil {
 		t.Fatalf("expected exit code 2 (changes present), got 0")
@@ -159,7 +161,7 @@ func TestDevClusterPolicy(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
+		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 	if _, err := exec.LookPath("conftest"); err != nil {
 		t.Skip("conftest not found; skipping policy test")
@@ -177,7 +179,9 @@ func TestDevClusterPolicy(t *testing.T) {
 	policyPath, err := filepath.Abs(filepath.Join(tfDir, "..", "..", "modules", "doks", "policy"))
 	require.NoError(t, err)
 	cmd := exec.Command("conftest", "test", planJSON, "--policy", policyPath)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "DIGITALOCEAN_TOKEN="+token)
+	cmd.Env = testutil.TerraformEnv(t, map[string]string{
+		"DIGITALOCEAN_TOKEN": token,
+	})
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
@@ -229,7 +233,7 @@ func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wa
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
+		EnvVars:       testutil.TerraformEnvVars(nil),
 	})
 	opts.Logger = logger.Discard
 	terraform.Init(t, opts)
@@ -258,7 +262,7 @@ func testValidFluxConfig(t *testing.T, varModifications map[string]interface{}) 
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       map[string]string{"TF_IN_AUTOMATION": "1"},
+		EnvVars:       testutil.TerraformEnvVars(nil),
 	})
 	opts.Logger = logger.Discard
 	terraform.InitAndValidate(t, opts)

@@ -66,7 +66,7 @@ func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Option
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       map[string]string{},
+		EnvVars:       testutil.TerraformEnvVars(nil),
 	})
 }
 
@@ -134,7 +134,9 @@ func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
 
 	args := append([]string{"test", cfg.PlanPath, "--policy", cfg.PolicyPath}, cfg.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, "conftest", args...)
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1", "KUBECONFIG="+cfg.Kubeconfig)
+	cmd.Env = testutil.TerraformEnv(t, map[string]string{
+		"KUBECONFIG": cfg.Kubeconfig,
+	})
 	out, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 	return out, err
@@ -254,7 +256,7 @@ func TestFluxModulePlanDetailedExitCode(t *testing.T) {
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
 	cmd.Dir = tfDir
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	cmd.Env = testutil.TerraformEnv(t, nil)
 	err := cmd.Run()
 	if err == nil {
 		t.Fatalf("expected exit code 2 indicating changes, got 0")
