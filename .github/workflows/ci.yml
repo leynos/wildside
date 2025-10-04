@@ -59,13 +59,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install Rust toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-          source "$HOME/.cargo/env"
-          rustup component add rustfmt clippy
-          echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
+        uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
 
       - name: Install uv
         id: setup-uv
