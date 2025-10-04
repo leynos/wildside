@@ -1,16 +1,25 @@
 /**
  * @file Vite configuration with tokens alias for the PWA.
  */
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+  const tokensDistPath = resolve(projectRoot, '../packages/tokens/dist');
+  if (!existsSync(tokensDistPath)) {
+    console.warn(
+      'Design tokens build output not found. Run `pnpm --filter @app/tokens build` to generate it.',
+    );
+  }
   return {
     resolve: {
       alias: {
-        '@app/tokens': resolve(__dirname, '../packages/tokens/dist'),
+        '@app/tokens': tokensDistPath,
       },
     },
     plugins: [react()],
