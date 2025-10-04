@@ -1,5 +1,6 @@
 //! Error response types.
 
+use crate::middleware::trace::TraceId;
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -61,6 +62,9 @@ pub struct Error {
 impl Error {
     /// Create a new error.
     ///
+    /// Captures the current [`TraceId`](crate::middleware::trace::TraceId) if one
+    /// is in scope so the error payload is correlated automatically.
+    ///
     /// # Examples
     /// ```
     /// use backend::models::{Error, ErrorCode};
@@ -71,7 +75,7 @@ impl Error {
         Self {
             code,
             message: message.into(),
-            trace_id: None,
+            trace_id: TraceId::current().map(TraceId::into_inner),
             details: None,
         }
     }
