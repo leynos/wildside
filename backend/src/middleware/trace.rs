@@ -1,38 +1,62 @@
 //! Tracing middleware attaching a request-scoped trace identifier.
 //!
-//! Each incoming request receives a UUID `trace_id` stored in request extensions
-//! for correlation across logs and error responses.
+//! Each incoming request receives a UUID `trace_id` stored in task-local
+//! storage for correlation across logs and error responses.
 
 use std::task::{Context, Poll};
 
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
-use actix_web::{Error, HttpMessage};
+use actix_web::Error;
 use futures_util::future::{ready, LocalBoxFuture, Ready};
+use tokio::task_local;
 use tracing::error;
 use uuid::Uuid;
 
-/// Per-request trace identifier stored in request extensions.
+task_local! {
+    static TRACE_ID: TraceId;
+}
+
+/// Per-request trace identifier exposed via task-local storage.
 ///
 /// # Examples
-/// ```ignore
-/// use actix_web::HttpRequest;
+/// ```
 /// use backend::middleware::trace::TraceId;
 ///
-/// fn handler(req: HttpRequest) {
-///     if let Some(id) = req.extensions().get::<TraceId>() {
-///         println!("trace id: {}", id.0);
+/// async fn handler() {
+///     if let Some(id) = TraceId::current() {
+///         println!("trace id: {}", id.as_str());
 ///     }
 /// }
 /// ```
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct TraceId(pub String);
+
+impl TraceId {
+    fn generate() -> Self {
+        Self(Uuid::new_v4().to_string())
+    }
+
+    /// Returns the current trace identifier if one is in scope.
+    pub fn current() -> Option<Self> {
+        TRACE_ID.try_with(|id| id.clone()).ok()
+    }
+
+    /// Borrow the trace identifier as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the identifier, yielding its owned string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
 
 /// Tracing middleware attaching a request-scoped UUID and
 /// adding a `Trace-Id` header to every response.
 ///
-/// Handlers can read the trace ID via `req.extensions().get::<TraceId>()`.
+/// Handlers can read the trace ID via [`TraceId::current`].
 ///
 /// # Examples
 /// ```
@@ -91,23 +115,26 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let trace_id = Uuid::new_v4().to_string();
-        req.extensions_mut().insert(TraceId(trace_id.clone()));
+        let trace_id = TraceId::generate();
         let fut = self.service.call(req);
-        Box::pin(async move {
+        Box::pin(TRACE_ID.scope(trace_id.clone(), async move {
             let mut res = fut.await?;
-            match HeaderValue::from_str(&trace_id) {
+            match HeaderValue::from_str(trace_id.as_str()) {
                 Ok(value) => {
                     res.response_mut()
                         .headers_mut()
                         .insert(HeaderName::from_static("trace-id"), value);
                 }
                 Err(error) => {
-                    error!(%error, trace_id = %trace_id, "failed to encode trace identifier header");
+                    error!(
+                        %error,
+                        trace_id = %trace_id.as_str(),
+                        "failed to encode trace identifier header"
+                    );
                 }
             }
             Ok(res)
-        })
+        }))
     }
 }
 
@@ -132,15 +159,11 @@ mod tests {
     #[actix_web::test]
     async fn propagates_trace_id_in_error() {
         use crate::models::{ApiResult, Error};
-        use actix_web::HttpRequest;
 
         let app = test::init_service(App::new().wrap(Trace).route(
             "/",
-            web::get().to(|req: HttpRequest| async move {
-                let id = req
-                    .extensions()
-                    .get::<TraceId>()
-                    .cloned()
+            web::get().to(|| async move {
+                let id = TraceId::current()
                     .ok_or_else(|| Error::internal("trace id missing"))?
                     .0;
                 ApiResult::<HttpResponse>::Err(Error::internal("boom").with_trace_id(id))
