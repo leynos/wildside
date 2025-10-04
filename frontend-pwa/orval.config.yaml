@@ -1,7 +1,0 @@
-input: ../spec/openapi.json
-output:
-  target: src/api/client.ts
-  client: fetch
-  override:
-    mutator:
-      path: src/api/fetcher.ts

@@ -20,6 +20,47 @@ jobs:
         with:
           bun-version: '1.2.21'
 
+      - name: Compute dependency cache keys
+        id: dependency-hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            pnpm_lock_hash=$(sha256sum pnpm-lock.yaml | awk '{print $1}')
+          else
+            pnpm_lock_hash=$(shasum -a 256 pnpm-lock.yaml | awk '{print $1}')
+          fi
+
+          frontend_hash=$(cd frontend-pwa && bun pm hash 2>/dev/null || echo 'no-frontend-lock')
+          tokens_hash=$(cd packages/tokens && bun pm hash 2>/dev/null || echo 'no-tokens-lock')
+
+          echo "modules=${pnpm_lock_hash}-${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
+          echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
+
+      - name: Cache workspace node_modules
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            node_modules
+            node_modules/.pnpm-install-*
+            frontend-pwa/node_modules
+            packages/tokens/node_modules
+          key: ${{ runner.os }}-modules-${{ steps.dependency-hashes.outputs.modules }}
+          restore-keys: ${{ runner.os }}-modules-
+
+      - name: Cache Bun downloads
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            ~/.bun/install/global
+          key: ${{ runner.os }}-bun-${{ steps.dependency-hashes.outputs.bun }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install Rust toolchain
+        uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
+
       - name: Install uv
         id: setup-uv
         # v6.4.3
@@ -32,7 +73,7 @@ jobs:
       - name: Check lockfile consistency
         run: make lockfile
       - name: Install dependencies (frozen)
-        run: pnpm install --frozen-lockfile
+        run: make deps
 
       - name: Install Mermaid CLI
         run: |
@@ -60,7 +101,9 @@ jobs:
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20
         with:
-          globs: '**/*.md'
+          globs: |
+            **/*.md
+            !**/node_modules/**
 
       - name: Setup Helm
         # v4.3.1
@@ -81,9 +124,6 @@ jobs:
         run: make typecheck
 
       # Backend
-      - uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
-      - name: Rust build
-        run: cargo build --manifest-path backend/Cargo.toml --release
       - name: Cache cargo
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
         with:
@@ -93,6 +133,8 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      - name: Rust build
+        run: cargo build --manifest-path backend/Cargo.toml --release
       - name: Rust fmt check
         run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
       - name: Rust clippy
@@ -101,16 +143,8 @@ jobs:
         run: RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 
       # OpenAPI dump (at runtime or via a small bin)
-      - name: Run backend to extract OpenAPI
-        run: |
-          mkdir -p spec
-          # Prefer generating from source; keep fallback only if generation is unavailable
-          if cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json; then
-            echo "OpenAPI generated from backend"
-          else
-            echo "openapi-dump bin not available; using existing spec or placeholder"
-            test -s spec/openapi.json || echo '{"openapi":"3.0.3","info":{"title":"placeholder","version":"0.0.0"},"paths":{}}' > spec/openapi.json
-          fi
+      - name: Generate OpenAPI specification
+        run: make openapi
 
       - name: Lint OpenAPI specification
         run: make lint-openapi
@@ -125,4 +159,5 @@ jobs:
         working-directory: frontend-pwa
         run: |
           bun install
+          bun run gen:api
           bun run build
