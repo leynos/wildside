@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -13,11 +14,11 @@ import (
 //
 // Example:
 //
-//	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+//	tfDir, opts := SetupTerraform(t, TerraformConfig{
 //	        SourceRootRel: "..",
 //	        TfSubDir:      "examples/basic",
 //	        Vars:          map[string]interface{}{"foo": "bar"},
-//	        EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
+//	        EnvVars:       TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}),
 //	})
 //
 // The function copies the Terraform configuration to a temporary directory,
@@ -42,8 +43,55 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 		TerraformDir:    tfDir,
 		TerraformBinary: "tofu",
 		Vars:            config.Vars,
-		EnvVars:         config.EnvVars,
+		EnvVars:         TerraformEnvVars(config.EnvVars),
 		NoColor:         true,
 	})
 	return tfDir, opts
+}
+
+// TerraformEnv configures environment variables for Terraform CLI processes in
+// tests. The helper ensures `TF_IN_AUTOMATION=1` is present and registers
+// clean-up using `t.Setenv` so each test receives an isolated environment.
+//
+// Example:
+//
+//	func TestPlan(t *testing.T) {
+//	        cmd := exec.Command("tofu", "plan")
+//	        cmd.Env = TerraformEnv(t, map[string]string{
+//	                "DIGITALOCEAN_TOKEN": "dummy",
+//	        })
+//	        // cmd.Env now includes TF_IN_AUTOMATION=1 alongside the
+//	        // additional variables passed above.
+//	}
+//
+// TerraformEnv returns the full environment slice suitable for assigning to an
+// `exec.Cmd`.
+func TerraformEnv(t *testing.T, extras map[string]string) []string {
+	t.Helper()
+	for key, value := range TerraformEnvVars(extras) {
+		t.Setenv(key, value)
+	}
+	return os.Environ()
+}
+
+// TerraformEnvVars merges Terraform-specific environment defaults with any
+// caller-supplied overrides. The returned map always includes
+// `TF_IN_AUTOMATION=1`, ensuring terse CLI output in automated tests.
+//
+// Example:
+//
+//	opts := &terraform.Options{
+//	        EnvVars: TerraformEnvVars(map[string]string{
+//	                "DIGITALOCEAN_TOKEN": "dummy",
+//	        }),
+//	}
+//
+// The returned map may be passed directly to terratest helpers or other
+// Terraform invocations.
+func TerraformEnvVars(extras map[string]string) map[string]string {
+	env := map[string]string{"TF_IN_AUTOMATION": "1"}
+	for key, value := range extras {
+		env[key] = value
+	}
+	return env
 }
