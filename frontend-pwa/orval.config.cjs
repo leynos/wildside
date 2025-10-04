@@ -6,7 +6,7 @@ module.exports = {
   frontendClient: {
     input: '../spec/openapi.json',
     output: {
-      target: 'src/api/client.ts',
+      target: 'src/api/generated/client.ts',
       client: 'fetch',
       override: {
         mutator: {

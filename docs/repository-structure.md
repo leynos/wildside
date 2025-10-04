@@ -192,7 +192,8 @@ ______________________________________________________________________
 
 - `frontend-pwa/orval.config.cjs` points to `../spec/openapi.json` (or the dev
   URL).
-- `bunx orval` writes `src/api/client.ts` with typed functions.
+- `bunx orval` writes `src/api/generated/client.ts`; `src/api/client.ts` wraps
+  the generated code with query helpers and runtime validation.
 - A small `src/api/fetcher.ts` centralizes base URL, auth, and error handling.
 - TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
