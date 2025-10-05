@@ -85,7 +85,7 @@ myapp/
 │  │  ├─ src/tokens.json
 │  │  ├─ src/themes/light.json
 │  │  ├─ src/themes/dark.json
-│  │  └─ build/style-dictionary.js    # emits CSS vars + TW preset + daisy theme
+│  │  └─ build/style-dictionary.js    # emits CSS vars + TW preset + daisy theme (sorted deterministically)
 │  ├─ types/                          # optional: shared TS helpers
 │  │  └─ src/index.ts
 │  └─ utils/                          # shared JS/TS utilities

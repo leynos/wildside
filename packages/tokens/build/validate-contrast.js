@@ -299,6 +299,7 @@ const themesUrl = new URL('../src/themes/', import.meta.url);
 const themeFiles = fs
   .readdirSync(fileURLToPath(themesUrl))
   .filter((f) => f.endsWith('.json'))
+  .sort((a, b) => a.localeCompare(b))
   .map((f) => new URL(f, themesUrl));
 
 let allErrors = [];
