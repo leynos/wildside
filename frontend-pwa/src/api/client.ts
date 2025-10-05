@@ -25,8 +25,11 @@ Object.freeze(usersQueryKey);
  */
 export const usersQueryKeys = {
   all: usersQueryKey,
-  byId: (id: User['id']): readonly [...typeof usersQueryKey, User['id']] =>
-    [...usersQueryKey, id] as const,
+  byId: (id: User['id']): readonly [...typeof usersQueryKey, User['id']] => {
+    const key = [...usersQueryKey, id] as const;
+
+    return Object.freeze(key) as typeof key;
+  },
 } as const;
 Object.freeze(usersQueryKeys);
 

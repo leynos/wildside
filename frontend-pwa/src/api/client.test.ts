@@ -25,7 +25,10 @@ describe('client wrappers', () => {
     expect(usersQueryKeys.all).toBe(usersQueryKey);
     const userId = UserIdSchema.parse('00000000-0000-0000-0000-000000000000');
 
-    expect(usersQueryKeys.byId(userId)).toEqual(['users', userId]);
+    const userKey = usersQueryKeys.byId(userId);
+
+    expect(userKey).toEqual(['users', userId]);
+    expect(Object.isFrozen(userKey)).toBe(true);
     expect(Object.isFrozen(usersQueryKeys)).toBe(true);
   });
 
@@ -47,5 +50,36 @@ describe('client wrappers', () => {
       signal: controller.signal,
     });
     expect(result).toBe(expected);
+  });
+
+  it('propagates schema validation failures from the fetcher', async () => {
+    const { listUsers } = await import('./client');
+    const validationError = new Error('Invalid user schema');
+
+    mockCustomFetchParsed.mockRejectedValueOnce(validationError);
+
+    await expect(listUsers()).rejects.toThrow('Invalid user schema');
+  });
+
+  it('surfaces network errors to the caller', async () => {
+    const { listUsers } = await import('./client');
+    const networkError = new Error('Network failure');
+
+    mockCustomFetchParsed.mockRejectedValueOnce(networkError);
+
+    await expect(listUsers()).rejects.toThrow('Network failure');
+  });
+
+  it('propagates abort errors when the request is cancelled', async () => {
+    const { listUsers } = await import('./client');
+    const controller = new AbortController();
+
+    controller.abort();
+
+    const abortError = new DOMException('AbortError', 'AbortError');
+
+    mockCustomFetchParsed.mockRejectedValueOnce(abortError);
+
+    await expect(listUsers(controller.signal)).rejects.toThrow('AbortError');
   });
 });
