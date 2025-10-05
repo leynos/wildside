@@ -39,7 +39,7 @@ jobs:
           echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
 
       - name: Cache workspace node_modules
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             node_modules
@@ -50,7 +50,7 @@ jobs:
           restore-keys: ${{ runner.os }}-modules-
 
       - name: Cache Bun downloads
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.bun/install/cache
@@ -125,7 +125,7 @@ jobs:
 
       # Backend
       - name: Cache cargo
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
