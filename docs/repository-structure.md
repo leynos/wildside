@@ -77,7 +77,7 @@ myapp/
 │  │  └─ lib/                         # utilities (form, date, etc.)
 │  ├─ vite.config.ts
 │  ├─ tailwind.config.cjs
-│  ├─ orval.config.yaml               # OpenAPI→TS client
+│  ├─ orval.config.cjs               # OpenAPI→TS client
 │  └─ package.json
 │
 ├─ packages/
@@ -190,9 +190,10 @@ ______________________________________________________________________
 
 **Frontend (sketch):**
 
-- `frontend-pwa/orval.config.yaml` points to `../spec/openapi.json` (or the dev
+- `frontend-pwa/orval.config.cjs` points to `../spec/openapi.json` (or the dev
   URL).
-- `bunx orval` writes `src/api/client.ts` with typed functions.
+- `bunx orval` writes `src/api/generated/client.ts`; `src/api/client.ts` wraps
+  the generated code with query helpers and runtime validation.
 - A small `src/api/fetcher.ts` centralizes base URL, auth, and error handling.
 - TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
@@ -281,7 +282,7 @@ ______________________________________________________________________
     "dev": "bun run -m 'dev:*'",
     "dev:tokens": "bun --cwd packages/tokens build",
     "dev:pwa": "bun --cwd frontend-pwa dev",
-    "gen:openapi": "bunx orval --config frontend-pwa/orval.config.yaml",
+    "gen:openapi": "bunx orval --config frontend-pwa/orval.config.cjs",
     "build": "bun run build:tokens && bun run build:pwa",
     "build:tokens": "bun --cwd packages/tokens build",
     "build:pwa": "bun --cwd frontend-pwa build"
@@ -774,7 +775,7 @@ openapi:
     cargo run --manifest-path backend/Cargo.toml --bin openapi-dump > spec/openapi.json
 
 gen:
-    bunx orval --config frontend-pwa/orval.config.yaml
+    bunx orval --config frontend-pwa/orval.config.cjs
 
 asyncapi:
     bunx @asyncapi/generator spec/asyncapi.yaml @asyncapi/html-template -o docs/asyncapi

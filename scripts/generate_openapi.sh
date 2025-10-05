@@ -14,6 +14,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cargo run --quiet --manifest-path "${ROOT_DIR}/backend/Cargo.toml" --bin openapi-dump > "${TMP_FILE}"
+cargo run --quiet --release --manifest-path "${ROOT_DIR}/backend/Cargo.toml" --bin openapi-dump > "${TMP_FILE}"
 jq -S . "${TMP_FILE}" > "${ROOT_DIR}/${TARGET}"
 trap - EXIT

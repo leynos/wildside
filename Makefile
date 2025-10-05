@@ -42,7 +42,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 workspace-sync:
 	./scripts/sync_workspace_members.py
 
-all: fmt lint test
+all: check-fmt lint test
 
 clean:
 	cargo clean --manifest-path backend/Cargo.toml
@@ -65,7 +65,7 @@ openapi: workspace-sync
 	./scripts/generate_openapi.sh $(OPENAPI_SPEC)
 
 gen: openapi
-	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.yaml,orval@$(ORVAL_VERSION))
+	cd frontend-pwa && $(call exec_or_bunx,orval,--config orval.config.cjs,orval@$(ORVAL_VERSION))
 
 docker-up:
 	cd deploy && docker compose up --build -d
