@@ -4,7 +4,7 @@
  * query key helpers and delegates requests through the shared fetcher.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { UsersSchema } from '@app/types';
+import { UserIdSchema, UsersSchema } from '@app/types';
 
 const mockCustomFetchParsed = vi.fn();
 
@@ -23,14 +23,21 @@ describe('client wrappers', () => {
     expect(usersQueryKey).toEqual(['users']);
     expect(Object.isFrozen(usersQueryKey)).toBe(true);
     expect(usersQueryKeys.all).toBe(usersQueryKey);
-    expect(usersQueryKeys.byId('abc')).toEqual(['users', 'abc']);
+    const userId = UserIdSchema.parse('00000000-0000-0000-0000-000000000000');
+
+    expect(usersQueryKeys.byId(userId)).toEqual(['users', userId]);
     expect(Object.isFrozen(usersQueryKeys)).toBe(true);
   });
 
   it('delegates listUsers to the shared fetcher with schema validation', async () => {
     const { listUsers } = await import('./client');
     const controller = new AbortController();
-    const expected = [{ id: 'u-1', displayName: 'Test User' }];
+    const expected = [
+      {
+        id: UserIdSchema.parse('11111111-2222-3333-4444-555555555555'),
+        displayName: 'Test User',
+      },
+    ];
 
     mockCustomFetchParsed.mockResolvedValueOnce(expected);
 
