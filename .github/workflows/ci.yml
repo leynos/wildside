@@ -59,7 +59,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
+        uses: leynos/shared-actions/.github/actions/setup-rust@7f2d179056fc80b4ebc571ff83abc2ce898eb048
 
       - name: Install uv
         id: setup-uv
