@@ -2,17 +2,29 @@
 #![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
+#[cfg(feature = "metrics")]
+use actix_service::{
+    boxed::{self, BoxService},
+    Service, Transform,
+};
 use actix_session::{
     config::{CookieContentSecurity, PersistentSession},
     storage::CookieSessionStore,
     SessionMiddleware,
 };
+use actix_web::body::BoxBody;
 use actix_web::cookie::{Key, SameSite};
-use actix_web::dev::{ServiceFactory, ServiceRequest, ServiceResponse};
+use actix_web::dev::{Server, ServiceFactory, ServiceRequest, ServiceResponse};
+#[cfg(feature = "metrics")]
+use actix_web::middleware::{Compat, Identity};
 use actix_web::{web, App, HttpServer};
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
+#[cfg(feature = "metrics")]
+use futures_util::future::LocalBoxFuture;
 use std::env;
+#[cfg(feature = "metrics")]
+use std::sync::Arc;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 #[cfg(debug_assertions)]
@@ -81,6 +93,24 @@ fn make_metrics(
     PrometheusMetricsBuilder::new("wildside")
         .endpoint("/metrics")
         .build()
+}
+
+#[cfg(feature = "metrics")]
+fn initialize_metrics<F, E>(make: F) -> Option<actix_web_prom::PrometheusMetrics>
+where
+    F: FnOnce() -> Result<actix_web_prom::PrometheusMetrics, E>,
+    E: std::fmt::Display,
+{
+    match make() {
+        Ok(metrics) => Some(metrics),
+        Err(error) => {
+            warn!(
+                error = %error,
+                "failed to initialize Prometheus metrics; continuing without metrics"
+            );
+            None
+        }
+    }
 }
 
 fn load_session_key() -> std::io::Result<Key> {
@@ -195,50 +225,213 @@ async fn main() -> std::io::Result<()> {
     let cookie_secure = cookie_secure_from_env();
     let same_site = same_site_from_env(cookie_secure)?;
     #[cfg(feature = "metrics")]
-    let prometheus = match make_metrics() {
-        Ok(m) => Some(m),
-        Err(e) => {
-            warn!(
-                error = %e,
-                "failed to initialise Prometheus metrics; continuing without metrics"
-            );
-            None
-        }
-    };
+    let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
+    let server = create_server(
+        health_state.clone(),
+        key,
+        cookie_secure,
+        same_site,
+        bind_address(),
+        #[cfg(feature = "metrics")]
+        prometheus,
+    )?;
+    server.await
+}
+
+#[cfg(feature = "metrics")]
+fn create_server(
+    health_state: web::Data<HealthState>,
+    key: Key,
+    cookie_secure: bool,
+    same_site: SameSite,
+    bind_address: (String, u16),
+    prometheus: Option<actix_web_prom::PrometheusMetrics>,
+) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-    let bind_address = bind_address();
-    #[cfg(feature = "metrics")]
-    if let Some(prometheus) = prometheus {
-        let server_health_state = server_health_state.clone();
-        let key = key.clone();
-        let server = HttpServer::new(move || {
-            build_app(
-                server_health_state.clone(),
-                key.clone(),
-                cookie_secure,
-                same_site,
-            )
-            .wrap(prometheus.clone())
-        })
-        .bind(bind_address.clone())?;
+    let metrics = prometheus;
+    let key_clone = key;
+    let server = HttpServer::new(move || {
+        let app = build_app(
+            server_health_state.clone(),
+            key_clone.clone(),
+            cookie_secure,
+            same_site,
+        );
 
-        let server = server.run();
-        health_state.mark_ready();
-        return server.await;
-    }
+        let middleware = MetricsLayer::from_option(metrics.clone());
 
+        app.wrap(middleware)
+    })
+    .bind(bind_address)?
+    .run();
+
+    health_state.mark_ready();
+    Ok(server)
+}
+
+#[cfg(not(feature = "metrics"))]
+fn create_server(
+    health_state: web::Data<HealthState>,
+    key: Key,
+    cookie_secure: bool,
+    same_site: SameSite,
+    bind_address: (String, u16),
+) -> std::io::Result<Server> {
+    let server_health_state = health_state.clone();
+    let key_clone = key;
     let server = HttpServer::new(move || {
         build_app(
             server_health_state.clone(),
-            key.clone(),
+            key_clone.clone(),
             cookie_secure,
             same_site,
         )
     })
-    .bind(bind_address)?;
+    .bind(bind_address)?
+    .run();
 
-    let server = server.run();
     health_state.mark_ready();
-    server.await
+    Ok(server)
+}
+
+#[cfg(feature = "metrics")]
+#[derive(Clone)]
+enum MetricsLayer {
+    Enabled(Arc<actix_web_prom::PrometheusMetrics>),
+    Disabled,
+}
+
+#[cfg(feature = "metrics")]
+impl MetricsLayer {
+    fn from_option(metrics: Option<actix_web_prom::PrometheusMetrics>) -> Self {
+        match metrics {
+            Some(metrics) => Self::Enabled(Arc::new(metrics)),
+            None => Self::Disabled,
+        }
+    }
+}
+
+#[cfg(feature = "metrics")]
+impl<S, B> Transform<S, ServiceRequest> for MetricsLayer
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error> + 'static,
+    B: actix_web::body::MessageBody + 'static,
+{
+    type Response = ServiceResponse<BoxBody>;
+    type Error = actix_web::Error;
+    type InitError = ();
+    type Transform = BoxService<ServiceRequest, ServiceResponse<BoxBody>, actix_web::Error>;
+    type Future = LocalBoxFuture<'static, Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        match self.clone() {
+            MetricsLayer::Enabled(metrics) => {
+                let fut = Compat::new((*metrics).clone()).new_transform(service);
+                Box::pin(async move {
+                    let svc = fut.await?;
+                    Ok(boxed::service(svc))
+                })
+            }
+            MetricsLayer::Disabled => {
+                let fut = Compat::new(Identity::default()).new_transform(service);
+                Box::pin(async move {
+                    let svc = fut.await?;
+                    Ok(boxed::service(svc))
+                })
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::cookie::SameSite;
+
+    #[cfg(feature = "metrics")]
+    #[test]
+    fn initialize_metrics_returns_none_on_error() {
+        let metrics = initialize_metrics(|| -> Result<_, &str> { Err("boom") });
+        assert!(metrics.is_none(), "expected metrics to be absent on error");
+    }
+
+    #[cfg(feature = "metrics")]
+    #[test]
+    fn initialize_metrics_returns_metrics_on_success() {
+        let metrics = initialize_metrics(|| {
+            PrometheusMetricsBuilder::new("test")
+                .endpoint("/metrics")
+                .build()
+        });
+
+        assert!(
+            metrics.is_some(),
+            "expected metrics to be present on success"
+        );
+    }
+
+    #[cfg(feature = "metrics")]
+    #[actix_rt::test]
+    async fn create_server_marks_ready_without_metrics() {
+        let state = web::Data::new(HealthState::new());
+        assert!(!state.is_ready(), "state should start unready");
+
+        let server = create_server(
+            state.clone(),
+            Key::generate(),
+            false,
+            SameSite::Lax,
+            ("127.0.0.1".into(), 0),
+            None,
+        )
+        .expect("server should build without metrics");
+
+        assert!(state.is_ready(), "server creation should mark readiness");
+        drop(server);
+    }
+
+    #[cfg(feature = "metrics")]
+    #[actix_rt::test]
+    async fn create_server_marks_ready_with_metrics() {
+        let state = web::Data::new(HealthState::new());
+        assert!(!state.is_ready(), "state should start unready");
+
+        let prometheus = PrometheusMetricsBuilder::new("test")
+            .endpoint("/metrics")
+            .build()
+            .expect("metrics should build for tests");
+
+        let server = create_server(
+            state.clone(),
+            Key::generate(),
+            false,
+            SameSite::Lax,
+            ("127.0.0.1".into(), 0),
+            Some(prometheus),
+        )
+        .expect("server should build with metrics");
+
+        assert!(state.is_ready(), "server creation should mark readiness");
+        drop(server);
+    }
+
+    #[cfg(not(feature = "metrics"))]
+    #[actix_rt::test]
+    async fn create_server_marks_ready_without_metrics() {
+        let state = web::Data::new(HealthState::new());
+        assert!(!state.is_ready(), "state should start unready");
+
+        let server = create_server(
+            state.clone(),
+            Key::generate(),
+            false,
+            SameSite::Lax,
+            ("127.0.0.1".into(), 0),
+        )
+        .expect("server should build without metrics");
+
+        assert!(state.is_ready(), "server creation should mark readiness");
+        drop(server);
+    }
 }
