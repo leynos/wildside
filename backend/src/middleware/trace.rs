@@ -2,6 +2,10 @@
 //!
 //! Each incoming request receives a UUID `trace_id` stored in task-local
 //! storage for correlation across logs and error responses.
+//!
+//! Tokio task-local variables are not inherited across spawned tasks. Use
+//! [`TraceId::scope`] when spawning new tasks or moving work onto blocking
+//! threads to ensure the active trace identifier propagates correctly.
 
 use std::task::{Context, Poll};
 
@@ -9,6 +13,7 @@ use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::Error;
 use futures_util::future::{ready, LocalBoxFuture, Ready};
+use std::future::Future;
 use tokio::task_local;
 use tracing::error;
 use uuid::Uuid;
@@ -25,31 +30,52 @@ task_local! {
 ///
 /// async fn handler() {
 ///     if let Some(id) = TraceId::current() {
-///         println!("trace id: {}", id.as_str());
+///         println!("trace id: {}", id);
 ///     }
 /// }
 /// ```
-#[derive(Debug, Clone)]
-pub struct TraceId(pub String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TraceId(pub(crate) Uuid);
 
 impl TraceId {
-    fn generate() -> Self {
-        Self(Uuid::new_v4().to_string())
-    }
+    #[rustfmt::skip]
+    fn generate() -> Self { Self(Uuid::new_v4()) }
 
     /// Returns the current trace identifier if one is in scope.
-    pub fn current() -> Option<Self> {
-        TRACE_ID.try_with(|id| id.clone()).ok()
-    }
+    #[rustfmt::skip]
+    pub fn current() -> Option<Self> { TRACE_ID.try_with(|id| *id).ok() }
 
-    /// Borrow the trace identifier as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// Execute the provided future with the supplied trace identifier in scope.
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::middleware::trace::TraceId;
+    ///
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// let trace_id = TraceId::generate();
+    /// let observed = TraceId::scope(trace_id, async move { TraceId::current() }).await;
+    /// assert_eq!(observed, Some(trace_id));
+    /// # });
+    /// ```
+    pub async fn scope<Fut>(trace_id: TraceId, fut: Fut) -> Fut::Output
+    where
+        Fut: Future,
+    {
+        TRACE_ID.scope(trace_id, fut).await
     }
+}
 
-    /// Consume the identifier, yielding its owned string.
-    pub fn into_inner(self) -> String {
-        self.0
+impl std::fmt::Display for TraceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for TraceId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
     }
 }
 
@@ -116,10 +142,11 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let trace_id = TraceId::generate();
+        let header_value = trace_id.to_string();
         let fut = self.service.call(req);
-        Box::pin(TRACE_ID.scope(trace_id.clone(), async move {
+        Box::pin(TraceId::scope(trace_id, async move {
             let mut res = fut.await?;
-            match HeaderValue::from_str(trace_id.as_str()) {
+            match HeaderValue::from_str(&header_value) {
                 Ok(value) => {
                     res.response_mut()
                         .headers_mut()
@@ -128,7 +155,7 @@ where
                 Err(error) => {
                     error!(
                         %error,
-                        trace_id = %trace_id.as_str(),
+                        trace_id = %trace_id,
                         "failed to encode trace identifier header"
                     );
                 }
@@ -142,6 +169,31 @@ where
 mod tests {
     use super::*;
     use actix_web::{test, web, App, HttpResponse};
+    #[tokio::test]
+    async fn trace_id_generate_produces_uuid() {
+        let trace_id = TraceId::generate();
+        let parsed = Uuid::parse_str(&trace_id.to_string()).expect("valid UUID");
+        assert_eq!(parsed.to_string(), trace_id.to_string());
+    }
+
+    #[tokio::test]
+    async fn trace_id_current_reflects_scope() {
+        let expected = TraceId::generate();
+        let observed = TraceId::scope(expected, async move { TraceId::current() }).await;
+        assert_eq!(observed, Some(expected));
+    }
+
+    #[tokio::test]
+    async fn trace_id_current_is_none_out_of_scope() {
+        assert!(TraceId::current().is_none());
+    }
+
+    #[tokio::test]
+    async fn trace_id_from_str_round_trips() {
+        let uuid = Uuid::nil();
+        let trace_id: TraceId = uuid.to_string().parse().expect("parse uuid");
+        assert_eq!(trace_id.to_string(), uuid.to_string());
+    }
 
     #[actix_web::test]
     async fn adds_trace_id_header() {
@@ -157,6 +209,31 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn exposes_trace_id_in_handler() {
+        let app = test::init_service(App::new().wrap(Trace).route(
+            "/",
+            web::get().to(|| async move {
+                let id = TraceId::current().expect("trace id in scope");
+                HttpResponse::Ok().body(id.to_string())
+            }),
+        ))
+        .await;
+
+        let req = test::TestRequest::get().uri("/").to_request();
+        let res = test::call_service(&app, req).await;
+        let header = res
+            .headers()
+            .get("trace-id")
+            .expect("trace id header")
+            .to_str()
+            .expect("header is ascii")
+            .to_owned();
+        let body = test::read_body(res).await;
+        let body = std::str::from_utf8(&body).expect("utf8 body");
+        assert_eq!(header, body);
+    }
+
+    #[actix_web::test]
     async fn propagates_trace_id_in_error() {
         use crate::models::{ApiResult, Error};
 
@@ -165,7 +242,7 @@ mod tests {
             web::get().to(|| async move {
                 let id = TraceId::current()
                     .ok_or_else(|| Error::internal("trace id missing"))?
-                    .0;
+                    .to_string();
                 ApiResult::<HttpResponse>::Err(Error::internal("boom").with_trace_id(id))
             }),
         ))
