@@ -75,7 +75,7 @@ impl Error {
         Self {
             code,
             message: message.into(),
-            trace_id: TraceId::current().map(TraceId::into_inner),
+            trace_id: TraceId::current().map(|id| id.to_string()),
             details: None,
         }
     }
@@ -219,11 +219,29 @@ impl ResponseError for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::middleware::trace::TraceId;
 
     #[test]
     fn invalid_request_constructor_sets_code() {
         let err = Error::invalid_request("bad");
         assert_eq!(err.code, ErrorCode::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn new_captures_trace_id_in_scope() {
+        let trace_id: TraceId = "00000000-0000-0000-0000-000000000000".parse().unwrap();
+        let expected = trace_id.to_string();
+        let error = TraceId::scope(trace_id, async move {
+            Error::new(ErrorCode::InternalError, "boom")
+        })
+        .await;
+        assert_eq!(error.trace_id.as_deref(), Some(expected.as_str()));
+    }
+
+    #[test]
+    fn new_returns_none_when_out_of_scope() {
+        let error = Error::new(ErrorCode::InternalError, "boom");
+        assert!(error.trace_id.is_none());
     }
 
     #[test]
