@@ -161,6 +161,7 @@ markdownlint:
 	     xargs -0 -- markdownlint
 
 nixie:
+	node scripts/install-mermaid-browser.mjs
 	# CI currently requires --no-sandbox; remove once nixie supports
 	# environment variable control for this option
 	nixie --no-sandbox
