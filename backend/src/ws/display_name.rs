@@ -12,7 +12,7 @@ pub const DISPLAY_NAME_MAX: usize = 32;
 /// Only alphanumeric characters, underscores and spaces are allowed.
 ///
 /// ```
-/// use wildside::ws::display_name::is_valid_display_name;
+/// use backend::ws::display_name::is_valid_display_name;
 /// assert!(matches!(is_valid_display_name("Alice"), Ok(true)));
 /// assert!(matches!(is_valid_display_name("bad$char"), Ok(false)));
 /// ```
