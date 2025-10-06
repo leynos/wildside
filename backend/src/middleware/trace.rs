@@ -210,49 +210,53 @@ mod tests {
         assert!(res.headers().contains_key("trace-id"));
     }
 
-    #[actix_web::test]
-    async fn exposes_trace_id_in_handler() {
-        let app = test::init_service(App::new().wrap(Trace).route(
-            "/",
-            web::get().to(|| async move {
-                let id = TraceId::current().expect("trace id in scope");
-                HttpResponse::Ok().body(id.to_string())
-            }),
-        ))
-        .await;
-
+    async fn test_trace_with_handler<F, Fut, Res>(
+        handler: F,
+    ) -> (
+        actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+        String,
+    )
+    where
+        F: Fn() -> Fut + Clone + 'static,
+        Fut: std::future::Future<Output = Res> + 'static,
+        Res: actix_web::Responder + 'static,
+    {
+        let app =
+            test::init_service(App::new().wrap(Trace).route("/", web::get().to(handler))).await;
         let req = test::TestRequest::get().uri("/").to_request();
         let res = test::call_service(&app, req).await;
-        let header = res
+        let trace_id = res
             .headers()
             .get("trace-id")
             .expect("trace id header")
             .to_str()
             .expect("header is ascii")
             .to_owned();
+        (res, trace_id)
+    }
+
+    #[actix_web::test]
+    async fn exposes_trace_id_in_handler() {
+        let (res, trace_id) = test_trace_with_handler(|| async move {
+            let id = TraceId::current().expect("trace id in scope");
+            HttpResponse::Ok().body(id.to_string())
+        })
+        .await;
         let body = test::read_body(res).await;
         let body = std::str::from_utf8(&body).expect("utf8 body");
-        assert_eq!(header, body);
+        assert_eq!(trace_id, body);
     }
 
     #[actix_web::test]
     async fn propagates_trace_id_in_error() {
         use crate::models::{ApiResult, Error};
 
-        let app = test::init_service(App::new().wrap(Trace).route(
-            "/",
-            web::get().to(|| async move {
-                let id = TraceId::current()
-                    .ok_or_else(|| Error::internal("trace id missing"))?
-                    .to_string();
-                ApiResult::<HttpResponse>::Err(Error::internal("boom").with_trace_id(id))
-            }),
-        ))
+        let (res, trace_id) = test_trace_with_handler(|| async move {
+            // Error::internal captures the scoped TraceId automatically.
+            ApiResult::<HttpResponse>::Err(Error::internal("boom"))
+        })
         .await;
-        let req = test::TestRequest::get().uri("/").to_request();
-        let res = test::call_service(&app, req).await;
-        assert!(res.headers().contains_key("trace-id"));
         let body: Error = test::read_body_json(res).await;
-        assert!(body.trace_id.is_some());
+        assert_eq!(body.trace_id.as_deref(), Some(trace_id.as_str()));
     }
 }
