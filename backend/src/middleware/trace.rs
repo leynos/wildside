@@ -52,7 +52,9 @@ impl TraceId {
     /// use backend::middleware::trace::TraceId;
     ///
     /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-    /// let trace_id = TraceId::generate();
+    /// let trace_id: TraceId = "00000000-0000-0000-0000-000000000000"
+    ///     .parse()
+    ///     .expect("valid UUID");
     /// let observed = TraceId::scope(trace_id, async move { TraceId::current() }).await;
     /// assert_eq!(observed, Some(trace_id));
     /// # });
