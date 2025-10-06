@@ -66,38 +66,45 @@ func TestTerraformEnvVarsAllowsOverrides(t *testing.T) {
 	}
 }
 
-func TestTerraformEnvSetsProcessEnvironment(t *testing.T) {
+func TestTerraformEnvDoesNotMutateProcessEnvironment(t *testing.T) {
+	const fooKey = "WILDSIDE_TERRAFORM_ENV_FOO"
+
+	t.Setenv("PATH", "/tmp/wildside:test")
 	t.Setenv("SHOULD_NOT_LEAK", "1")
-	envSlice := TerraformEnv(t, map[string]string{"FOO": "bar"})
+	t.Setenv(fooKey, "existing")
+
+	envSlice := TerraformEnv(t, map[string]string{fooKey: "override"})
 	env := envEntriesToMap(envSlice)
 
-	if got := os.Getenv("FOO"); got != "bar" {
-		t.Fatalf("process env missing FOO=bar, got %q", got)
+	if got := os.Getenv(fooKey); got != "existing" {
+		t.Fatalf("process environment mutated for %s: got %q", fooKey, got)
 	}
-	if got := os.Getenv("TF_IN_AUTOMATION"); got != "1" {
-		t.Fatalf("process env missing TF_IN_AUTOMATION=1, got %q", got)
+	if got := env[fooKey]; got != "override" {
+		t.Fatalf("env slice missing override for %s, got %q", fooKey, got)
+	}
+	if got := env["TF_IN_AUTOMATION"]; got != "1" {
+		t.Fatalf("env slice missing TF_IN_AUTOMATION=1 entry, got %q", got)
+	}
+	if got := env["PATH"]; got != "/tmp/wildside:test" {
+		t.Fatalf("env slice did not propagate PATH, got %q", got)
 	}
 	if _, ok := env["SHOULD_NOT_LEAK"]; ok {
-		t.Fatalf("unexpected leaked variable in env slice: %v", env)
-	}
-	if _, ok := env["FOO"]; !ok {
-		t.Fatalf("env slice missing FOO entry: %v", env)
-	}
-	if _, ok := env["TF_IN_AUTOMATION"]; !ok {
-		t.Fatalf("env slice missing TF_IN_AUTOMATION entry: %v", env)
-	}
-	if _, ok := os.LookupEnv("PATH"); ok {
-		if _, present := env["PATH"]; !present {
-			t.Fatalf("PATH not propagated to child environment: %v", env)
-		}
+		t.Fatalf("env slice leaked parent variable: %v", env)
 	}
 }
 
 func TestTerraformEnvIsolatesPerTest(t *testing.T) {
-	const key = "ISOLATED_VAR"
+	const key = "WILDSIDE_TERRAFORM_ENV_ISOLATION"
 
 	t.Run("first", func(t *testing.T) {
-		TerraformEnv(t, map[string]string{key: "one"})
+		envSlice := TerraformEnv(t, map[string]string{key: "one"})
+		env := envEntriesToMap(envSlice)
+		if got := env[key]; got != "one" {
+			t.Fatalf("env slice missing override, got %q", got)
+		}
+		if _, ok := os.LookupEnv(key); ok {
+			t.Fatalf("process environment mutated for key %q", key)
+		}
 	})
 
 	t.Run("second", func(t *testing.T) {

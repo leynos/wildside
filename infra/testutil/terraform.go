@@ -52,8 +52,9 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 }
 
 // TerraformEnv configures environment variables for Terraform CLI processes in
-// tests. The helper ensures `TF_IN_AUTOMATION=1` is present and registers
-// clean-up using `t.Setenv` so each test receives an isolated environment.
+// tests. The helper ensures `TF_IN_AUTOMATION=1` is present and returns a fresh
+// slice without mutating the parent process environment so parallel tests stay
+// isolated.
 //
 // Example:
 //
@@ -91,9 +92,7 @@ func TerraformEnv(t *testing.T, extras map[string]string) []string {
 
 	env := make([]string, 0, len(keys))
 	for _, key := range keys {
-		value := merged[key]
-		t.Setenv(key, value)
-		env = append(env, fmt.Sprintf("%s=%s", key, value))
+		env = append(env, fmt.Sprintf("%s=%s", key, merged[key]))
 	}
 	return env
 }

@@ -927,8 +927,8 @@ opts := &terraform.Options{
 
 When the test shells out to additional binaries (for example `tofu`,
 `conftest`, or custom drift detectors) the companion `TerraformEnv` helper
-applies the same defaults using `t.Setenv` so each sub-process inherits a tidy
-environment and Go's testing framework handles clean-up automatically:
+returns a curated environment slice so each sub-process inherits the same
+automation defaults without mutating the parent environment:
 
 ```go
 cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
