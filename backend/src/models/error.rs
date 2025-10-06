@@ -251,7 +251,9 @@ mod tests {
 
     #[tokio::test]
     async fn new_captures_trace_id_in_scope() {
-        let trace_id: TraceId = "00000000-0000-0000-0000-000000000000".parse().unwrap();
+        let trace_id: TraceId = "00000000-0000-0000-0000-000000000000"
+            .parse()
+            .expect("valid UUID");
         let expected = trace_id.to_string();
         let error = TraceId::scope(trace_id, async move {
             Error::new(ErrorCode::InternalError, "boom")

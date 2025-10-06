@@ -242,17 +242,21 @@ mod tests {
         let app = test::init_service(App::new().wrap(Trace).route(
             "/",
             web::get().to(|| async move {
-                let id = TraceId::current()
-                    .ok_or_else(|| Error::internal("trace id missing"))?
-                    .to_string();
-                ApiResult::<HttpResponse>::Err(Error::internal("boom").with_trace_id(id))
+                // Error::internal captures the scoped TraceId automatically.
+                ApiResult::<HttpResponse>::Err(Error::internal("boom"))
             }),
         ))
         .await;
         let req = test::TestRequest::get().uri("/").to_request();
         let res = test::call_service(&app, req).await;
-        assert!(res.headers().contains_key("trace-id"));
+        let header = res
+            .headers()
+            .get("trace-id")
+            .expect("trace id header")
+            .to_str()
+            .expect("header is ascii")
+            .to_owned();
         let body: Error = test::read_body_json(res).await;
-        assert!(body.trace_id.is_some());
+        assert_eq!(body.trace_id.as_deref(), Some(header.as_str()));
     }
 }
