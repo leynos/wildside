@@ -3,8 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @app/tokens build",
     "dev": "vite",
+    "prebuild": "pnpm --filter @app/tokens build",
     "build": "vite build",
+    "prepreview": "pnpm --filter @app/tokens build",
     "preview": "vite preview",
     "gen:api": "bunx orval --config orval.config.cjs",
     "test": "vitest run",
