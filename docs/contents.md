@@ -55,7 +55,7 @@
   HCL syntax and workflows. *Audience: infrastructure developers.*
 - [Unit testing OpenTofu modules and scripts][opentofu-testing] – strategies
   for testing IaC modules. *Audience: infrastructure developers.*
-- [Infrastructure test dependency checklist](infrastructure-test-dependencies.md)
+- [Infrastructure test dependency checklist][infra-test-deps]
   – validates CLI prerequisites before running Terraform policy suites.
   *Audience: infrastructure developers and CI engineers.*
 - [DOKS OpenTofu module design](doks-module-design.md) – design decisions for
@@ -89,6 +89,7 @@
 [rust-rstest]: rust-testing-with-rstest-fixtures.md
 [cloud-previews]: cloud-native-ephemeral-previews.md
 [cloudflare-opentofu]: using-cloudflare-dns-with-opentofu.md
+[infra-test-deps]: infrastructure-test-dependencies.md
 [opentofu-hcl]: opentofu-hcl-syntax-guide.md
 [opentofu-testing]: opentofu-module-unit-testing-guide.md
 [complexity-guide]: complexity-antipatterns-and-refactoring-strategies.md

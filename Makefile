@@ -153,8 +153,19 @@ check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
 	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
 
+INFRA_TEST_TARGETS := \
+        doks-test \
+        doks-policy \
+        dev-cluster-test \
+        fluxcd-test \
+        fluxcd-policy \
+        vault-appliance-test \
+        vault-appliance-policy
+
+$(INFRA_TEST_TARGETS): check-test-deps
+
 check-test-deps:
-	./scripts/check_test_dependencies.py
+        ./scripts/check_test_dependencies.py
 
 markdownlint:
 	find . \
@@ -181,7 +192,7 @@ conftest:
 tofu:
 	$(call ensure_tool,tofu)
 
-doks-test: check-test-deps
+doks-test:
 	tofu fmt -check infra/modules/doks
 	tofu -chdir=infra/modules/doks/examples/basic init
 	tofu -chdir=infra/modules/doks/examples/basic validate
@@ -198,7 +209,7 @@ doks-test: check-test-deps
 	|| test $$? -eq 2
 	$(MAKE) doks-policy
 
-doks-policy: check-test-deps conftest tofu
+doks-policy: conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var cluster_name=test \
 	-var region=nyc1 \
@@ -208,10 +219,10 @@ doks-policy: check-test-deps conftest tofu
 	tofu -chdir=infra/modules/doks/examples/basic show -json tfplan.binary > infra/modules/doks/examples/basic/plan.json
 	conftest test infra/modules/doks/examples/basic/plan.json --policy infra/modules/doks/policy
 
-dev-cluster-test: check-test-deps conftest tofu
+dev-cluster-test: conftest tofu
 	DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) ./scripts/dev-cluster-test.sh
 
-fluxcd-test: check-test-deps
+fluxcd-test:
 	tofu fmt -check infra/modules/fluxcd
 	tofu -chdir=infra/modules/fluxcd/examples/basic init
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
@@ -238,7 +249,7 @@ fluxcd-test: check-test-deps
 
 # Delegate the Terraform plan and Conftest execution to a script so the target
 # stays readable while still supporting temporary files and clean shutdown.
-fluxcd-policy: check-test-deps conftest tofu
+fluxcd-policy: conftest tofu
 	if [ -z "$(FLUX_KUBECONFIG_PATH)" ]; then \
 	echo "Skipping fluxcd-policy; set FLUX_KUBECONFIG_PATH to run"; \
 	else \
@@ -252,7 +263,7 @@ fluxcd-policy: check-test-deps conftest tofu
 	./scripts/fluxcd-policy.sh; \
 	fi
 
-vault-appliance-test: check-test-deps
+vault-appliance-test:
 	tofu fmt -check infra/modules/vault_appliance
 	tofu -chdir=infra/modules/vault_appliance/examples/basic init
 	tofu -chdir=infra/modules/vault_appliance/examples/basic validate
@@ -271,7 +282,7 @@ vault-appliance-test: check-test-deps
 	|| test $$? -eq 2
 	$(MAKE) vault-appliance-policy
 
-vault-appliance-policy: check-test-deps conftest tofu
+vault-appliance-policy: conftest tofu
 	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic plan -out=tfplan.binary -detailed-exitcode \
 	-var name=vault-ci \
 	-var region=nyc1 \
