@@ -98,8 +98,9 @@ func TerraformEnv(t *testing.T, extras map[string]string) []string {
 }
 
 // TerraformEnvVars merges Terraform-specific environment defaults with any
-// caller-supplied overrides. The returned map always includes
-// `TF_IN_AUTOMATION=1`, ensuring terse CLI output in automated tests.
+// caller-supplied overrides. The returned map includes `TF_IN_AUTOMATION=1` by
+// default, which extras may override if necessary to emulate alternative
+// automation contexts.
 //
 // Example:
 //
