@@ -249,17 +249,15 @@ fn create_server(
     prometheus: Option<actix_web_prom::PrometheusMetrics>,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-    let metrics = prometheus;
-    let key_clone = key;
     let server = HttpServer::new(move || {
         let app = build_app(
             server_health_state.clone(),
-            key_clone.clone(),
+            key.clone(),
             cookie_secure,
             same_site,
         );
 
-        let middleware = MetricsLayer::from_option(metrics.clone());
+        let middleware = MetricsLayer::from_option(prometheus.clone());
 
         app.wrap(middleware)
     })
@@ -279,11 +277,10 @@ fn create_server(
     bind_address: (String, u16),
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-    let key_clone = key;
     let server = HttpServer::new(move || {
         build_app(
             server_health_state.clone(),
-            key_clone.clone(),
+            key.clone(),
             cookie_secure,
             same_site,
         )
