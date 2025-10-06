@@ -3,8 +3,9 @@
  * These tests ensure the generated OpenAPI client continues to expose the
  * query key helpers and delegates requests through the shared fetcher.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { UserIdSchema, UsersSchema } from '@app/types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockCustomFetchParsed = vi.fn();
 
