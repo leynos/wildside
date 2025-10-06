@@ -205,7 +205,7 @@ impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
         let mut builder = HttpResponse::build(self.status_code());
         if let Some(id) = &self.trace_id {
-            builder.insert_header(("Trace-Id", id.clone()));
+            builder.insert_header(("trace-id", id.clone()));
         }
         if matches!(self.code, ErrorCode::InternalError) {
             let mut redacted = self.clone();
@@ -229,7 +229,8 @@ mod tests {
 
         let trace_id = response
             .headers()
-            .get("Trace-Id")
+            .get("trace-id")
+            .or_else(|| response.headers().get("Trace-Id"))
             .expect("Trace-Id header is set by Error::error_response")
             .to_str()
             .expect("Trace-Id not valid UTF-8");
