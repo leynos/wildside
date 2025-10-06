@@ -936,7 +936,10 @@ cmd.Env = testutil.TerraformEnv(t, map[string]string{"DIGITALOCEAN_TOKEN": "stub
 ```
 
 Both helpers encapsulate the canonical Terraform automation settings so tests
-remain concise while ensuring deterministic behaviour across runs.
+remain concise while ensuring deterministic behaviour across runs. TerraformEnv
+intentionally limits the propagated environment to the provided overrides and a
+handful of essentials (PATH, HOME, TMPDIR) so credentials defined in the outer
+shell never reach subprocesses by accident.
 
 #### OpenTofu Compatibility
 

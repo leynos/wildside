@@ -1,9 +1,11 @@
 package testutil
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -18,7 +20,7 @@ import (
 //	        SourceRootRel: "..",
 //	        TfSubDir:      "examples/basic",
 //	        Vars:          map[string]interface{}{"foo": "bar"},
-//	        EnvVars:       TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": "dummy"}),
+//	        EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": "dummy"},
 //	})
 //
 // The function copies the Terraform configuration to a temporary directory,
@@ -64,14 +66,36 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 //	        // additional variables passed above.
 //	}
 //
-// TerraformEnv returns the full environment slice suitable for assigning to an
-// `exec.Cmd`.
+// TerraformEnv returns the merged Terraform environment slice suitable for
+// assigning to an `exec.Cmd`. The helper includes a handful of essential host
+// variables (currently PATH, HOME, and TMPDIR when present) so child processes
+// can locate binaries and temporary directories without inheriting unrelated
+// secrets from the parent shell.
 func TerraformEnv(t *testing.T, extras map[string]string) []string {
 	t.Helper()
-	for key, value := range TerraformEnvVars(extras) {
-		t.Setenv(key, value)
+	merged := TerraformEnvVars(extras)
+	for _, key := range []string{"PATH", "HOME", "TMPDIR"} {
+		if _, exists := merged[key]; exists {
+			continue
+		}
+		if value, ok := os.LookupEnv(key); ok {
+			merged[key] = value
+		}
 	}
-	return os.Environ()
+
+	keys := make([]string, 0, len(merged))
+	for key := range merged {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	env := make([]string, 0, len(keys))
+	for _, key := range keys {
+		value := merged[key]
+		t.Setenv(key, value)
+		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	}
+	return env
 }
 
 // TerraformEnvVars merges Terraform-specific environment defaults with any
