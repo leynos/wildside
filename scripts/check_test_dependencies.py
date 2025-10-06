@@ -110,8 +110,30 @@ def parse_version_from_output(output: str) -> str | None:
     return match.group(1)
 
 
-def probe_version(dependency: Dependency) -> VersionProbeResult:
-    """Run the version command for *dependency* and parse the response."""
+def _validate_dependency_safety(dependency: Dependency) -> Dependency:
+    """Ensure *dependency* matches the allow-listed command configuration.
+
+    Parameters
+    ----------
+    dependency : Dependency
+        The dependency configuration proposed for a version probe.
+
+    Returns
+    -------
+    Dependency
+        The canonical allow-listed dependency configuration.
+
+    Raises
+    ------
+    ValueError
+        If the dependency is not recognised or its version arguments differ
+        from the allow-listed configuration.
+
+    Examples
+    --------
+    >>> _validate_dependency_safety(REQUIRED_DEPENDENCIES[0]).version_args
+    ('version',)
+    """
 
     allowed_dependency = ALLOWED_DEPENDENCIES.get(dependency.name)
     if allowed_dependency is None:
@@ -122,19 +144,49 @@ def probe_version(dependency: Dependency) -> VersionProbeResult:
         raise ValueError(
             "Refusing to execute version probe for unexpected argument sequence"
         )
+    return allowed_dependency
+
+
+def _execute_version_command(dependency: Dependency) -> str | None:
+    """Execute the version command for *dependency* and capture its output.
+
+    Parameters
+    ----------
+    dependency : Dependency
+        The allow-listed dependency to probe.
+
+    Returns
+    -------
+    str | None
+        The combined standard output or standard error emitted by the version
+        command, stripped of trailing whitespace, or ``None`` if the command
+        failed or produced no output.
+
+    Examples
+    --------
+    >>> _execute_version_command(REQUIRED_DEPENDENCIES[0]) is None
+    True
+    """
 
     try:
-        command = [allowed_dependency.name, *allowed_dependency.version_args]
         process = subprocess.run(
-            command,
+            [dependency.name, *dependency.version_args],
             capture_output=True,
             text=True,
             check=True,
         )
     except (OSError, subprocess.CalledProcessError):
-        return VersionProbeResult(parsed_version=None, raw_output=None)
+        return None
 
-    output = process.stdout.strip() or process.stderr.strip() or None
+    output = process.stdout.strip() or process.stderr.strip()
+    return output or None
+
+
+def probe_version(dependency: Dependency) -> VersionProbeResult:
+    """Run the version command for *dependency* and parse the response."""
+
+    allowed_dependency = _validate_dependency_safety(dependency)
+    output = _execute_version_command(allowed_dependency)
     if output is None:
         return VersionProbeResult(parsed_version=None, raw_output=None)
 
