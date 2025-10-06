@@ -50,7 +50,9 @@ REQUIRED_DEPENDENCIES: tuple[Dependency, ...] = (
     ),
 )
 
-ALLOWED_DEPENDENCY_NAMES = {dependency.name for dependency in REQUIRED_DEPENDENCIES}
+ALLOWED_DEPENDENCIES = {
+    dependency.name: dependency for dependency in REQUIRED_DEPENDENCIES
+}
 
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
 
@@ -66,7 +68,24 @@ def collect_missing(dependencies: Iterable[Dependency]) -> list[Dependency]:
 
 
 def to_int_tuple(version: str) -> tuple[int, ...]:
-    """Convert a dotted version string into a tuple of integers."""
+    """Convert a dotted version string into a tuple of integers.
+
+    Parameters
+    ----------
+    version : str
+        A version string with dot-separated numeric components (for example,
+        ``"1.7.0"``).
+
+    Returns
+    -------
+    tuple[int, ...]
+        The integer components of the supplied version string.
+
+    Examples
+    --------
+    >>> to_int_tuple("1.7.0")
+    (1, 7, 0)
+    """
 
     return tuple(int(part) for part in version.split("."))
 
@@ -94,13 +113,18 @@ def parse_version_from_output(output: str) -> str | None:
 def probe_version(dependency: Dependency) -> VersionProbeResult:
     """Run the version command for *dependency* and parse the response."""
 
-    if dependency.name not in ALLOWED_DEPENDENCY_NAMES:
+    allowed_dependency = ALLOWED_DEPENDENCIES.get(dependency.name)
+    if allowed_dependency is None:
         raise ValueError(
             "Refusing to execute version probe for unrecognised dependency name"
         )
+    if dependency.version_args != allowed_dependency.version_args:
+        raise ValueError(
+            "Refusing to execute version probe for unexpected argument sequence"
+        )
 
     try:
-        command = [dependency.name, *dependency.version_args]
+        command = [allowed_dependency.name, *allowed_dependency.version_args]
         process = subprocess.run(
             command,
             capture_output=True,
@@ -121,7 +145,26 @@ def probe_version(dependency: Dependency) -> VersionProbeResult:
 def validate_dependencies(
     dependencies: Iterable[Dependency],
 ) -> tuple[list[Dependency], list[tuple[Dependency, str | None]]]:
-    """Check for missing dependencies and incompatible versions."""
+    """Check for missing dependencies and incompatible versions.
+
+    Parameters
+    ----------
+    dependencies : Iterable[Dependency]
+        The dependencies to validate.
+
+    Returns
+    -------
+    tuple[list[Dependency], list[tuple[Dependency, str | None]]]
+        A pair containing the missing dependencies and the dependencies whose
+        versions could not be validated or failed the minimum requirement. Each
+        incompatible dependency is paired with the raw version output when
+        available.
+
+    Examples
+    --------
+    >>> validate_dependencies(REQUIRED_DEPENDENCIES)
+    ([], [])
+    """
 
     missing = collect_missing(dependencies)
     incompatible: list[tuple[Dependency, str | None]] = []
@@ -185,7 +228,24 @@ def format_failure_message(
 
 
 def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
-    """Render a Markdown table describing *dependencies*."""
+    """Render a Markdown table describing dependencies.
+
+    Parameters
+    ----------
+    dependencies : Sequence[Dependency]
+        The dependencies to include in the table.
+
+    Returns
+    -------
+    str
+        A Markdown-formatted table with columns for the tool name, minimum
+        supported version, and purpose.
+
+    Examples
+    --------
+    >>> format_markdown_table(REQUIRED_DEPENDENCIES).splitlines()[0]
+    '| Tool | Minimum version | Purpose |'
+    """
 
     lines = [
         "| Tool | Minimum version | Purpose |",
@@ -199,7 +259,18 @@ def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct the command-line interface for the script."""
+    """Construct the command-line interface for the script.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        The configured argument parser for the dependency validation script.
+
+    Examples
+    --------
+    >>> build_parser().parse_args(["--emit-markdown"]).emit_markdown
+    True
+    """
 
     parser = argparse.ArgumentParser(
         description=(
