@@ -220,6 +220,27 @@ impl ResponseError for Error {
 mod tests {
     use super::*;
     use crate::middleware::trace::TraceId;
+    use actix_web::{body::to_bytes, http::StatusCode};
+    use serde_json::json;
+
+    async fn assert_error_response(error: Error, expected_status: StatusCode) -> Error {
+        let response = error.error_response();
+        assert_eq!(response.status(), expected_status);
+
+        let trace_id = response
+            .headers()
+            .get("Trace-Id")
+            .expect("Trace-Id header is set by Error::error_response")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8");
+        assert_eq!(trace_id, "abc");
+
+        let bytes = to_bytes(response.into_body())
+            .await
+            .expect("reading response body succeeds");
+
+        serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds")
+    }
 
     #[test]
     fn invalid_request_constructor_sets_code() {
@@ -266,52 +287,20 @@ mod tests {
 
     #[actix_web::test]
     async fn internal_error_response_is_redacted() {
-        use actix_web::body::to_bytes;
-        use actix_web::http::StatusCode;
-        use serde_json::json;
         let err = Error::internal("boom")
             .with_trace_id("abc")
             .with_details(json!({"secret": "x"}));
-        let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        let trace_id = res
-            .headers()
-            .get("Trace-Id")
-            .expect("Trace-Id header is set by Error::error_response")
-            .to_str()
-            .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, "abc");
-        let bytes = to_bytes(res.into_body())
-            .await
-            .expect("reading response body succeeds");
-        let payload: Error =
-            serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds");
+        let payload = assert_error_response(err, StatusCode::INTERNAL_SERVER_ERROR).await;
         assert_eq!(payload.message, "Internal server error");
         assert!(payload.details.is_none());
         assert_eq!(payload.trace_id.as_deref(), Some("abc"));
     }
     #[actix_web::test]
     async fn error_response_includes_details_and_header() {
-        use actix_web::body::to_bytes;
-        use actix_web::http::StatusCode;
-        use serde_json::json;
         let err = Error::invalid_request("bad")
             .with_trace_id("abc")
             .with_details(json!({"field": "name"}));
-        let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-        let trace_id = res
-            .headers()
-            .get("Trace-Id")
-            .expect("Trace-Id header is set by Error::error_response")
-            .to_str()
-            .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, "abc");
-        let bytes = to_bytes(res.into_body())
-            .await
-            .expect("reading response body succeeds");
-        let payload: Error =
-            serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds");
+        let payload = assert_error_response(err, StatusCode::BAD_REQUEST).await;
         assert_eq!(payload.code, ErrorCode::InvalidRequest);
         assert_eq!(payload.message, "bad");
         assert_eq!(payload.details, Some(json!({"field": "name"})));
