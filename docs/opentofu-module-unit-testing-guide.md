@@ -911,6 +911,36 @@ deploys a simple web server demonstrates Terratest's power.
   effectively validating that the server provisioned correctly and is
   operational.23
 
+#### Shared environment helpers
+
+Wildside's Terratest suites share a small `infra/testutil` package to avoid
+repeating boilerplate such as environment variable setup. The
+`TerraformEnvVars` helper injects `TF_IN_AUTOMATION=1` and merges any test
+specific overrides before handing the map to Terratest:
+
+```go
+opts := &terraform.Options{
+    TerraformDir: "../modules/example",
+    EnvVars:      testutil.TerraformEnvVars(map[string]string{"FOO": "bar"}),
+}
+```
+
+When the test shells out to additional binaries (for example `tofu`,
+`conftest`, or custom drift detectors) the companion `TerraformEnv` helper
+returns a curated environment slice so each sub-process inherits the same
+automation defaults without mutating the parent environment:
+
+```go
+cmd := exec.Command("tofu", "plan", "-detailed-exitcode")
+cmd.Env = testutil.TerraformEnv(t, map[string]string{"DIGITALOCEAN_TOKEN": "stub"})
+```
+
+Both helpers encapsulate the canonical Terraform automation settings so tests
+remain concise while ensuring deterministic behaviour across runs. TerraformEnv
+intentionally limits the propagated environment to the provided overrides and a
+handful of essentials (PATH, HOME, TMPDIR) so credentials defined in the outer
+shell never reach subprocesses by accident.
+
 #### OpenTofu Compatibility
 
 Terratest is fully compatible with OpenTofu. Following HashiCorp's license

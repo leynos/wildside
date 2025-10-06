@@ -46,7 +46,7 @@ func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]st
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       env,
+		EnvVars:       testutil.TerraformEnvVars(env),
 	})
 }
 
@@ -111,7 +111,7 @@ func runConftestWithPlan(t *testing.T, planJSON string) ([]byte, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "conftest", "test", planJSON, "--policy", policyDir, "--namespace", "policy")
-	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	cmd.Env = testutil.TerraformEnv(t, nil)
 	output, err := cmd.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
 
@@ -587,22 +587,13 @@ func TestVaultApplianceDetailedExitCode(t *testing.T) {
 	args := terraform.FormatArgs(opts, "plan", "-detailed-exitcode")
 	command := exec.CommandContext(ctx, "tofu", args...)
 	command.Dir = opts.TerraformDir
-	command.Env = append(os.Environ(), formatEnvVars(opts.EnvVars)...)
-	command.Env = append(command.Env, "TF_IN_AUTOMATION=1")
+	command.Env = testutil.TerraformEnv(t, opts.EnvVars)
 	output, err := command.CombinedOutput()
 	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "terraform plan timed out")
 	exitErr := &exec.ExitError{}
 	require.ErrorAs(t, err, &exitErr, "expected detailed exit code to produce non-zero exit status")
 	require.Equal(t, 2, exitErr.ExitCode(), "expected plan to return detailed exit code 2 when creating resources\nOutput: %s", string(output))
 	t.Cleanup(func() { _ = os.Remove(filepath.Join(tfDir, "terraform.tfstate")) })
-}
-
-func formatEnvVars(env map[string]string) []string {
-	items := make([]string, 0, len(env))
-	for k, v := range env {
-		items = append(items, fmt.Sprintf("%s=%s", k, v))
-	}
-	return items
 }
 
 func TestVaultApplianceApplyWhenExplicitlyAuthorised(t *testing.T) {
