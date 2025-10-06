@@ -12,6 +12,7 @@ use actix_session::{
     storage::CookieSessionStore,
     SessionMiddleware,
 };
+#[cfg(feature = "metrics")]
 use actix_web::body::BoxBody;
 use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{Server, ServiceFactory, ServiceRequest, ServiceResponse};
