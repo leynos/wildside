@@ -22,7 +22,6 @@ function hasLocalBrowser() {
   } catch (error) {
     if (
       error instanceof Error &&
-      typeof error.message === 'string' &&
       error.message.includes(MISSING_BROWSER_MESSAGE_FRAGMENT)
     ) {
       return false;
