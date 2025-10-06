@@ -10,6 +10,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { executablePath } from 'puppeteer';
 import { downloadBrowsers } from 'puppeteer/lib/esm/puppeteer/node/install.js';
 
@@ -45,4 +46,18 @@ async function ensureBrowsersInstalled() {
   }
 }
 
-await ensureBrowsersInstalled();
+export async function main() {
+  await ensureBrowsersInstalled();
+}
+
+const executedScriptUrl =
+  process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href;
+
+if (executedScriptUrl === import.meta.url) {
+  // Preserve the original side effect for the `make nixie` workflow while
+  // allowing other modules to import `main` without triggering a download.
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
