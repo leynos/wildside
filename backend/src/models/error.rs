@@ -218,6 +218,8 @@ impl ResponseError for Error {
 }
 #[cfg(test)]
 mod tests {
+    //! Tests for the error response payload formatting and propagation.
+
     use super::*;
     use crate::middleware::trace::TraceId;
     use actix_web::{body::to_bytes, http::StatusCode};
@@ -225,7 +227,11 @@ mod tests {
 
     const TRACE_ID: &str = "abc";
 
-    async fn assert_error_response(error: Error, expected_status: StatusCode) -> Error {
+    async fn extract_and_assert_error_response(
+        error: Error,
+        expected_status: StatusCode,
+        expected_trace_id: &str,
+    ) -> Error {
         let response = error.error_response();
         assert_eq!(response.status(), expected_status);
 
@@ -236,7 +242,7 @@ mod tests {
             .expect("Trace-Id header is set by Error::error_response")
             .to_str()
             .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, TRACE_ID);
+        assert_eq!(trace_id, expected_trace_id);
 
         let bytes = to_bytes(response.into_body())
             .await
@@ -253,6 +259,7 @@ mod tests {
         expected_code: ErrorCode,
         expected_message: &'static str,
         expected_details: fn() -> Option<Value>,
+        expected_trace_id: &'static str,
     }
 
     fn internal_error_case() -> Error {
@@ -330,6 +337,7 @@ mod tests {
                 expected_code: ErrorCode::InternalError,
                 expected_message: "Internal server error",
                 expected_details: internal_error_details,
+                expected_trace_id: TRACE_ID,
             },
             ErrorResponseCase {
                 name: "invalid requests expose details",
@@ -338,11 +346,17 @@ mod tests {
                 expected_code: ErrorCode::InvalidRequest,
                 expected_message: "bad",
                 expected_details: invalid_request_details,
+                expected_trace_id: TRACE_ID,
             },
         ];
 
         for case in cases {
-            let payload = assert_error_response((case.make_error)(), case.expected_status).await;
+            let payload = extract_and_assert_error_response(
+                (case.make_error)(),
+                case.expected_status,
+                case.expected_trace_id,
+            )
+            .await;
             assert_eq!(payload.code, case.expected_code, "{}: code", case.name);
             assert_eq!(
                 payload.message, case.expected_message,
