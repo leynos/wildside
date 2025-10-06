@@ -1,5 +1,6 @@
 //! Error response types.
 
+use crate::middleware::trace::TraceId;
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -61,6 +62,9 @@ pub struct Error {
 impl Error {
     /// Create a new error.
     ///
+    /// Captures the current [`TraceId`](crate::middleware::trace::TraceId) if one
+    /// is in scope so the error payload is correlated automatically.
+    ///
     /// # Examples
     /// ```
     /// use backend::models::{Error, ErrorCode};
@@ -71,7 +75,7 @@ impl Error {
         Self {
             code,
             message: message.into(),
-            trace_id: None,
+            trace_id: TraceId::current().map(|id| id.to_string()),
             details: None,
         }
     }
@@ -201,7 +205,7 @@ impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
         let mut builder = HttpResponse::build(self.status_code());
         if let Some(id) = &self.trace_id {
-            builder.insert_header(("Trace-Id", id.clone()));
+            builder.insert_header(("trace-id", id.clone()));
         }
         if matches!(self.code, ErrorCode::InternalError) {
             let mut redacted = self.clone();
@@ -214,12 +218,93 @@ impl ResponseError for Error {
 }
 #[cfg(test)]
 mod tests {
+    //! Tests for the error response payload formatting and propagation.
+
     use super::*;
+    use crate::middleware::trace::TraceId;
+    use actix_web::{body::to_bytes, http::StatusCode};
+    use serde_json::{json, Value};
+
+    const TRACE_ID: &str = "abc";
+
+    async fn extract_and_assert_error_response(
+        error: Error,
+        expected_status: StatusCode,
+        expected_trace_id: &str,
+    ) -> Error {
+        let response = error.error_response();
+        assert_eq!(response.status(), expected_status);
+
+        let trace_id = response
+            .headers()
+            .get("trace-id")
+            .or_else(|| response.headers().get("Trace-Id"))
+            .expect("Trace-Id header is set by Error::error_response")
+            .to_str()
+            .expect("Trace-Id not valid UTF-8");
+        assert_eq!(trace_id, expected_trace_id);
+
+        let bytes = to_bytes(response.into_body())
+            .await
+            .expect("reading response body succeeds");
+
+        serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds")
+    }
+
+    #[derive(Clone, Copy)]
+    struct ErrorResponseCase {
+        name: &'static str,
+        make_error: fn() -> Error,
+        expected_status: StatusCode,
+        expected_code: ErrorCode,
+        expected_message: &'static str,
+        expected_details: fn() -> Option<Value>,
+        expected_trace_id: &'static str,
+    }
+
+    fn internal_error_case() -> Error {
+        Error::internal("boom")
+            .with_trace_id(TRACE_ID)
+            .with_details(json!({"secret": "x"}))
+    }
+
+    fn internal_error_details() -> Option<Value> {
+        None
+    }
+
+    fn invalid_request_case() -> Error {
+        Error::invalid_request("bad")
+            .with_trace_id(TRACE_ID)
+            .with_details(json!({"field": "name"}))
+    }
+
+    fn invalid_request_details() -> Option<Value> {
+        Some(json!({"field": "name"}))
+    }
 
     #[test]
     fn invalid_request_constructor_sets_code() {
         let err = Error::invalid_request("bad");
         assert_eq!(err.code, ErrorCode::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn new_captures_trace_id_in_scope() {
+        let trace_id: TraceId = "00000000-0000-0000-0000-000000000000"
+            .parse()
+            .expect("valid UUID");
+        let expected = trace_id.to_string();
+        let error = TraceId::scope(trace_id, async move {
+            Error::new(ErrorCode::InternalError, "boom")
+        })
+        .await;
+        assert_eq!(error.trace_id.as_deref(), Some(expected.as_str()));
+    }
+
+    #[test]
+    fn new_returns_none_when_out_of_scope() {
+        let error = Error::new(ErrorCode::InternalError, "boom");
+        assert!(error.trace_id.is_none());
     }
 
     #[test]
@@ -243,56 +328,53 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn internal_error_response_is_redacted() {
-        use actix_web::body::to_bytes;
-        use actix_web::http::StatusCode;
-        use serde_json::json;
-        let err = Error::internal("boom")
-            .with_trace_id("abc")
-            .with_details(json!({"secret": "x"}));
-        let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        let trace_id = res
-            .headers()
-            .get("Trace-Id")
-            .expect("Trace-Id header is set by Error::error_response")
-            .to_str()
-            .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, "abc");
-        let bytes = to_bytes(res.into_body())
-            .await
-            .expect("reading response body succeeds");
-        let payload: Error =
-            serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds");
-        assert_eq!(payload.message, "Internal server error");
-        assert!(payload.details.is_none());
-        assert_eq!(payload.trace_id.as_deref(), Some("abc"));
-    }
-    #[actix_web::test]
-    async fn error_response_includes_details_and_header() {
-        use actix_web::body::to_bytes;
-        use actix_web::http::StatusCode;
-        use serde_json::json;
-        let err = Error::invalid_request("bad")
-            .with_trace_id("abc")
-            .with_details(json!({"field": "name"}));
-        let res = err.error_response();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-        let trace_id = res
-            .headers()
-            .get("Trace-Id")
-            .expect("Trace-Id header is set by Error::error_response")
-            .to_str()
-            .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, "abc");
-        let bytes = to_bytes(res.into_body())
-            .await
-            .expect("reading response body succeeds");
-        let payload: Error =
-            serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds");
-        assert_eq!(payload.code, ErrorCode::InvalidRequest);
-        assert_eq!(payload.message, "bad");
-        assert_eq!(payload.details, Some(json!({"field": "name"})));
-        assert_eq!(payload.trace_id.as_deref(), Some("abc"));
+    async fn error_responses_include_trace_id_and_payloads() {
+        let cases = [
+            ErrorResponseCase {
+                name: "internal errors are redacted",
+                make_error: internal_error_case,
+                expected_status: StatusCode::INTERNAL_SERVER_ERROR,
+                expected_code: ErrorCode::InternalError,
+                expected_message: "Internal server error",
+                expected_details: internal_error_details,
+                expected_trace_id: TRACE_ID,
+            },
+            ErrorResponseCase {
+                name: "invalid requests expose details",
+                make_error: invalid_request_case,
+                expected_status: StatusCode::BAD_REQUEST,
+                expected_code: ErrorCode::InvalidRequest,
+                expected_message: "bad",
+                expected_details: invalid_request_details,
+                expected_trace_id: TRACE_ID,
+            },
+        ];
+
+        for case in cases {
+            let payload = extract_and_assert_error_response(
+                (case.make_error)(),
+                case.expected_status,
+                case.expected_trace_id,
+            )
+            .await;
+            assert_eq!(payload.code, case.expected_code, "{}: code", case.name);
+            assert_eq!(
+                payload.message, case.expected_message,
+                "{}: message",
+                case.name
+            );
+            assert_eq!(
+                payload.details,
+                (case.expected_details)(),
+                "{}: details",
+                case.name
+            );
+            assert_eq!(
+                payload.trace_id.as_deref(),
+                Some(TRACE_ID),
+                "{}: trace id",
+                case.name
+            );
+        }
     }
 }
