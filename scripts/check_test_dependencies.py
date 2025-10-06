@@ -50,6 +50,8 @@ REQUIRED_DEPENDENCIES: tuple[Dependency, ...] = (
     ),
 )
 
+ALLOWED_DEPENDENCY_NAMES = {dependency.name for dependency in REQUIRED_DEPENDENCIES}
+
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
 
 
@@ -92,9 +94,15 @@ def parse_version_from_output(output: str) -> str | None:
 def probe_version(dependency: Dependency) -> VersionProbeResult:
     """Run the version command for *dependency* and parse the response."""
 
+    if dependency.name not in ALLOWED_DEPENDENCY_NAMES:
+        raise ValueError(
+            "Refusing to execute version probe for unrecognised dependency name"
+        )
+
     try:
+        command = [dependency.name, *dependency.version_args]
         process = subprocess.run(
-            (dependency.name, *dependency.version_args),
+            command,
             capture_output=True,
             text=True,
             check=True,

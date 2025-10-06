@@ -165,7 +165,7 @@ INFRA_TEST_TARGETS := \
 $(INFRA_TEST_TARGETS): check-test-deps
 
 check-test-deps:
-        ./scripts/check_test_dependencies.py
+	./scripts/check_test_dependencies.py
 
 markdownlint:
 	find . \

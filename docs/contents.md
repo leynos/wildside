@@ -57,11 +57,13 @@
   for testing IaC modules. *Audience: infrastructure developers.*
 - [Infrastructure test dependency checklist][infra-test-deps]
   – validates CLI prerequisites before running Terraform policy suites.
-  *Audience: infrastructure developers and CI engineers.*
+  *Audience: infrastructure developers and Continuous Integration
+  (CI) engineers.*
 - [DOKS OpenTofu module design](doks-module-design.md) – design decisions for
   the DigitalOcean Kubernetes module. *Audience: infrastructure developers.*
-- [FluxCD OpenTofu module design](fluxcd-module-design.md) – design decisions for
-  the GitOps control plane module. *Audience: infrastructure developers.*
+- [FluxCD OpenTofu module design](fluxcd-module-design.md)
+  – design decisions for the GitOps control plane module. *Audience:
+  infrastructure developers.*
 - [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
   design decisions for the Vault infrastructure module. *Audience:
   infrastructure developers.*
