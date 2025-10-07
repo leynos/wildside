@@ -58,7 +58,23 @@ VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
 
 
 def collect_missing(dependencies: Iterable[Dependency]) -> list[Dependency]:
-    """Return the subset of *dependencies* that are not discoverable on PATH."""
+    """Return the subset of dependencies that are not discoverable on PATH.
+
+    Parameters
+    ----------
+    dependencies : Iterable[Dependency]
+        The collection of dependencies to validate.
+
+    Returns
+    -------
+    list[Dependency]
+        Dependencies whose executables are not found on the system PATH.
+
+    Examples
+    --------
+    >>> collect_missing([])
+    []
+    """
 
     return [
         dependency
@@ -91,7 +107,25 @@ def to_int_tuple(version: str) -> tuple[int, ...]:
 
 
 def is_version_sufficient(installed: str, minimum: str) -> bool:
-    """Return ``True`` if *installed* satisfies the *minimum* requirement."""
+    """Return ``True`` if the installed version satisfies the minimum requirement.
+
+    Parameters
+    ----------
+    installed : str
+        The installed version string.
+    minimum : str
+        The minimum required version string.
+
+    Returns
+    -------
+    bool
+        True if the installed version meets or exceeds the minimum version.
+
+    Examples
+    --------
+    >>> is_version_sufficient("1.2.0", "1.1.0")
+    True
+    """
 
     installed_parts = to_int_tuple(installed)
     minimum_parts = to_int_tuple(minimum)
@@ -102,7 +136,23 @@ def is_version_sufficient(installed: str, minimum: str) -> bool:
 
 
 def parse_version_from_output(output: str) -> str | None:
-    """Extract a dotted version string from *output*, if present."""
+    """Extract a dotted version string from command output.
+
+    Parameters
+    ----------
+    output : str
+        The raw output from a version command.
+
+    Returns
+    -------
+    str | None
+        The extracted version string, or None if no version pattern is found.
+
+    Examples
+    --------
+    >>> parse_version_from_output("tofu version 1.7.1")
+    '1.7.1'
+    """
 
     match = VERSION_PATTERN.search(output)
     if match is None:
@@ -183,7 +233,29 @@ def _execute_version_command(dependency: Dependency) -> str | None:
 
 
 def probe_version(dependency: Dependency) -> VersionProbeResult:
-    """Run the version command for *dependency* and parse the response."""
+    """Run the version command for a dependency and parse the response.
+
+    Parameters
+    ----------
+    dependency : Dependency
+        The dependency to probe.
+
+    Returns
+    -------
+    VersionProbeResult
+        The parsed version and raw output, or None values if the probe fails.
+
+    Raises
+    ------
+    ValueError
+        If the dependency name is not in the allowed list or if the version
+        arguments do not match the expected sequence.
+
+    Examples
+    --------
+    >>> probe_version(REQUIRED_DEPENDENCIES[0]).raw_output is None
+    True
+    """
 
     allowed_dependency = _validate_dependency_safety(dependency)
     output = _execute_version_command(allowed_dependency)
