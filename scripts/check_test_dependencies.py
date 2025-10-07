@@ -218,9 +218,13 @@ def _execute_version_command(dependency: Dependency) -> str | None:
     True
     """
 
+    command = [dependency.name, *dependency.version_args]
+    # NOTE: ``dependency`` originates from ``_validate_dependency_safety`` which
+    # constrains both the executable name and argument vector to a known
+    # allow-list, preventing user-controlled input reaching this subprocess call.
     try:
-        process = subprocess.run(
-            [dependency.name, *dependency.version_args],
+        process = subprocess.run(  # noqa: S603
+            command,
             capture_output=True,
             text=True,
             check=True,
@@ -314,7 +318,28 @@ def format_failure_message(
     missing: Iterable[Dependency],
     incompatible: Iterable[tuple[Dependency, str | None]],
 ) -> str:
-    """Create a human-readable report for dependency validation failures."""
+    """Create a human-readable report for dependency validation failures.
+
+    Parameters
+    ----------
+    missing : Iterable[Dependency]
+        Dependencies that were not found on the system ``PATH``.
+    incompatible : Iterable[tuple[Dependency, str | None]]
+        Dependencies paired with the raw output from their version probe when
+        the detected version could not be parsed or failed the minimum
+        requirement.
+
+    Returns
+    -------
+    str
+        A formatted multi-line message that lists missing dependencies and
+        those that require an upgrade.
+
+    Examples
+    --------
+    >>> format_failure_message([], [])
+    'Required test dependencies failed validation.'
+    """
 
     missing_list = list(missing)
     incompatible_list = list(incompatible)
