@@ -227,7 +227,7 @@ mod tests {
 
     const TRACE_ID: &str = "abc";
 
-    async fn extract_and_assert_error_response(
+    async fn assert_error_response(
         error: Error,
         expected_status: StatusCode,
         expected_trace_id: &str,
@@ -351,7 +351,7 @@ mod tests {
         ];
 
         for case in cases {
-            let payload = extract_and_assert_error_response(
+            let payload = assert_error_response(
                 (case.make_error)(),
                 case.expected_status,
                 case.expected_trace_id,

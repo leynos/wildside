@@ -161,7 +161,7 @@ def parse_version_from_output(output: str) -> str | None:
 
 
 def _validate_dependency_safety(dependency: Dependency) -> Dependency:
-    """Ensure *dependency* matches the allow-listed command configuration.
+    """Ensure the dependency matches the allow-listed command configuration.
 
     Parameters
     ----------
@@ -198,7 +198,7 @@ def _validate_dependency_safety(dependency: Dependency) -> Dependency:
 
 
 def _execute_version_command(dependency: Dependency) -> str | None:
-    """Execute the version command for *dependency* and capture its output.
+    """Execute the version command for a dependency and capture its output.
 
     Parameters
     ----------
@@ -411,6 +411,30 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Execute the pre-flight dependency check.
+
+    Parse command-line arguments, validate required dependencies, and write
+    diagnostic output to stdout or stderr.
+
+    Parameters
+    ----------
+    argv : Sequence[str] | None, optional
+        The command-line arguments to parse. If ``None``, defaults to
+        ``sys.argv``.
+
+    Returns
+    -------
+    int
+        Exit status: 0 if all dependencies are present and compatible, or if
+        the ``--emit-markdown`` flag is used; 1 if any dependencies are
+        missing or incompatible.
+
+    Examples
+    --------
+    >>> main(["--emit-markdown"])
+    0
+    """
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
