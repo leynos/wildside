@@ -230,19 +230,30 @@ mod tests {
     async fn assert_error_response(
         error: Error,
         expected_status: StatusCode,
-        expected_trace_id: &str,
+        expected_trace_id: Option<&str>,
     ) -> Error {
         let response = error.error_response();
         assert_eq!(response.status(), expected_status);
 
-        let trace_id = response
+        let header = response
             .headers()
             .get("trace-id")
-            .or_else(|| response.headers().get("Trace-Id"))
-            .expect("Trace-Id header is set by Error::error_response")
-            .to_str()
-            .expect("Trace-Id not valid UTF-8");
-        assert_eq!(trace_id, expected_trace_id);
+            .or_else(|| response.headers().get("Trace-Id"));
+        match expected_trace_id {
+            Some(expected) => {
+                let trace_id = header
+                    .expect("Trace-Id header is set by Error::error_response")
+                    .to_str()
+                    .expect("Trace-Id not valid UTF-8");
+                assert_eq!(trace_id, expected);
+            }
+            None => {
+                assert!(
+                    header.is_none(),
+                    "Trace-Id header is absent when not expected"
+                );
+            }
+        }
 
         let bytes = to_bytes(response.into_body())
             .await
@@ -259,7 +270,7 @@ mod tests {
         expected_code: ErrorCode,
         expected_message: &'static str,
         expected_details: fn() -> Option<Value>,
-        expected_trace_id: &'static str,
+        expected_trace_id: Option<&'static str>,
     }
 
     fn internal_error_case() -> Error {
@@ -337,7 +348,7 @@ mod tests {
                 expected_code: ErrorCode::InternalError,
                 expected_message: "Internal server error",
                 expected_details: internal_error_details,
-                expected_trace_id: TRACE_ID,
+                expected_trace_id: Some(TRACE_ID),
             },
             ErrorResponseCase {
                 name: "invalid requests expose details",
@@ -346,7 +357,7 @@ mod tests {
                 expected_code: ErrorCode::InvalidRequest,
                 expected_message: "bad",
                 expected_details: invalid_request_details,
-                expected_trace_id: TRACE_ID,
+                expected_trace_id: Some(TRACE_ID),
             },
         ];
 
@@ -371,7 +382,7 @@ mod tests {
             );
             assert_eq!(
                 payload.trace_id.as_deref(),
-                Some(TRACE_ID),
+                case.expected_trace_id,
                 "{}: trace id",
                 case.name
             );
