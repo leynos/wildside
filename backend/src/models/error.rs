@@ -250,7 +250,7 @@ mod tests {
             None => {
                 assert!(
                     header.is_none(),
-                    "Trace-Id header is absent when not expected"
+                    "Trace-Id header should not be present"
                 );
             }
         }
