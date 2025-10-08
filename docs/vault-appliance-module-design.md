@@ -56,6 +56,20 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   volumes, and load balancer to a DigitalOcean project via
   `digitalocean_project_resources`, keeping billing and governance aligned with
   wider platform conventions.
+- **Bootstrap helper strategy (2024-12-06).** The Python bootstrapper resolves
+  the appliance IP via DigitalOcean tags before touching Vault. It records the
+  generated root token and unseal shares in DigitalOcean Secrets Manager using
+  a configurable prefix so repeated runs converge without manual data capture.
+  Subsequent invocations read the stored material, unseal Vault only when
+  necessary, and ensure the `secret/` KV v2 engine plus the `doks` AppRole exist
+  with deterministic TTLs. The helper writes the AppRole policy from a
+  temporary file to sidestep shell heredocs and stores the resulting role and
+  secret identifiers alongside the unseal keys for reuse by CI workflows. Tests
+  exercise happy and unhappy paths via `cmd-mox` backed command mocks to
+  validate DigitalOcean, Vault, and SSH interactions without hitting live APIs.
+  Operators can override the Vault address when routing through the managed
+  load balancer and supply a custom CA bundle so Vault CLI calls validate the
+  TLS chain without disabling verification.
 
 ## Future work
 
