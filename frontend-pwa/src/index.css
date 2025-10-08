@@ -1,4 +1,4 @@
-@import '@app/tokens/css/variables.css';
+@import "@app/tokens/css/variables.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

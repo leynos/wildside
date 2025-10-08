@@ -12,13 +12,12 @@ export default defineConfig(({ mode }) => {
   const projectRoot = fileURLToPath(new URL('.', import.meta.url));
   const tokensDistPath = resolve(projectRoot, '../packages/tokens/dist');
   if (!existsSync(tokensDistPath)) {
-    console.warn(
-      [
-        'Design tokens build output not found.',
-        'The pre-scripts should have built it automatically.',
-        'If this persists, run `pnpm --filter @app/tokens build` manually.',
-      ].join(' '),
-    );
+    const warningMessage = [
+      'Design tokens build output not found.',
+      'The pre-scripts should have built it automatically.',
+      'If this persists, run `pnpm --filter @app/tokens build` manually.',
+    ].join(' ');
+    process.stderr.write(`${warningMessage}\n`);
   }
   return {
     resolve: {

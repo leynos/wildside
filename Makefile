@@ -35,7 +35,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
+        check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
         vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync
 
@@ -152,6 +152,20 @@ lockfile:
 check-fmt:
 	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
 	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
+
+INFRA_TEST_TARGETS := \
+        doks-test \
+        doks-policy \
+        dev-cluster-test \
+        fluxcd-test \
+        fluxcd-policy \
+        vault-appliance-test \
+        vault-appliance-policy
+
+$(INFRA_TEST_TARGETS): check-test-deps
+
+check-test-deps:
+	./scripts/check_test_dependencies.py
 
 markdownlint:
 	find . \
