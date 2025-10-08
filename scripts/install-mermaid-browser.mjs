@@ -21,10 +21,7 @@ function hasLocalBrowser() {
     const browserPath = executablePath();
     return Boolean(browserPath) && existsSync(browserPath);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes(MISSING_BROWSER_MESSAGE_FRAGMENT)
-    ) {
+    if (error instanceof Error && error.message.includes(MISSING_BROWSER_MESSAGE_FRAGMENT)) {
       return false;
     }
 
@@ -40,9 +37,7 @@ async function ensureBrowsersInstalled() {
   await downloadBrowsers();
 
   if (!hasLocalBrowser()) {
-    throw new Error(
-      'Puppeteer still cannot locate Chrome after downloading browser artefacts.'
-    );
+    throw new Error('Puppeteer still cannot locate Chrome after downloading browser artefacts.');
   }
 }
 
