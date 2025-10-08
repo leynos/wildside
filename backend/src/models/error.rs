@@ -227,6 +227,14 @@ mod tests {
 
     const TRACE_ID: &str = "abc";
 
+    /// Assert that an error produces the expected HTTP response.
+    ///
+    /// Verifies the response status, checks the `Trace-Id` header against
+    /// `expected_trace_id` (present when `Some`, absent when `None`), and
+    /// deserialises the response body to an `Error` payload.
+    ///
+    /// Returns the deserialised `Error` for further assertions on message,
+    /// code, and details.
     async fn assert_error_response(
         error: Error,
         expected_status: StatusCode,
@@ -248,10 +256,7 @@ mod tests {
                 assert_eq!(trace_id, expected);
             }
             None => {
-                assert!(
-                    header.is_none(),
-                    "Trace-Id header should not be present"
-                );
+                assert!(header.is_none(), "Trace-Id header should not be present");
             }
         }
 
