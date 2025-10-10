@@ -2,7 +2,8 @@
  * @file Orval configuration used to generate the typed frontend API client.
  * Aligns with the backend OpenAPI dump and reuses the custom fetch mutator.
  */
-module.exports = {
+/** @type {import('orval').Config} */
+const config = {
   frontendClient: {
     input: '../spec/openapi.json',
     output: {
@@ -11,6 +12,7 @@ module.exports = {
       override: {
         mutator: {
           path: 'src/api/fetcher.ts',
+          // Use the named export to avoid generating a default import.
           name: 'customFetch',
           default: false,
         },
@@ -18,3 +20,5 @@ module.exports = {
     },
   },
 };
+
+module.exports = config;
