@@ -1,4 +1,5 @@
 # Design: Keyset Pagination Crate for Wildside Backend
+<!-- markdownlint-disable MD013 -->
 
 ## Overview and Goals
 
@@ -22,8 +23,8 @@ The `pagination` crate provides core types and functions for implementing cursor
 
 - **Cursor Representation:** An opaque cursor token encapsulates a position in the ordered dataset. Internally, we'll represent this with a `Cursor<K>` struct (where `K` is a struct or tuple of key fields), plus an enumeration for direction (next vs previous). For example:
 
-```
-rustCopy code`use serde::{Serialize, Deserialize};
+```rust
+use serde::{Serialize, Deserialize};
 
 /// Direction of pagination relative to the cursor.
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq)]
@@ -38,15 +39,14 @@ struct Cursor<K> {
     dir: Direction,
     key: K,
 }
-`
 ```
 
 The `key: K` holds the values of the sort key for the boundary item, e.g. for users it might be `(DateTime, Uuid)`. The `dir` indicates whether this cursor is meant as the starting point for a **next-page** (`Next`) or a **previous-page** (`Prev`) query. This allows using a single `cursor` query parameter for both directions – the server can infer how to apply the key from the cursor content.
 
 - **Cursor Encoding/Decoding:** We use **JSON encoding** for `Cursor<K>` combined with URL-safe Base64 for transport. The crate will provide helper methods to encode a cursor to string and decode a cursor from string:
 
-```
-rustCopy code`impl<K: Serialize + for<'de> Deserialize<'de>> Cursor<K> {
+```rust
+impl<K: Serialize + for<'de> Deserialize<'de>> Cursor<K> {
     /// Encode the cursor into a base64url string (opaque to clients).
     pub fn encode(&self) -> String {
         let json = serde_json::to_vec(self).expect("Cursor serialization failed");
@@ -60,41 +60,38 @@ rustCopy code`impl<K: Serialize + for<'de> Deserialize<'de>> Cursor<K> {
         serde_json::from_slice(&bytes)
     }
 }
-`
 ```
 
 Example: A JSON representation might be `{"dir":"Next","key":{"created_at":"2025-10-10T19:17:56Z","id":"...uuid..."}}`. After base64url encoding, the client sees a string like `**eyJkaXIiOiJOZXh0Iiwia2V5Ijp7ImNyZWF0ZWRfYXQiOiIyMDI1LTEwLTEwVDE5OjE3OjU2WiIsImlkIjoi...**` (opaque and not easily guessable). **No signing or encryption** is applied in this phase (to keep things simple), but the format is designed to be wrapped or signed later if needed for security.
 
 - **Key Type (`K`) and Trait:** Each paginated endpoint will define its own key struct (or use a tuple) corresponding to the sort key. For example, for users we might use:
 
-```
-rustCopy code`#[derive(Serialize, Deserialize, Debug)]
+```rust
+#[derive(Serialize, Deserialize, Debug)]
 struct UserCursorKey {
     created_at: chrono::DateTime<chrono::Utc>,
     id: uuid::Uuid,
 }
-`
 ```
 
 We expect that `(created_at, id)` forms a unique, **totally ordered key** for the `users` table. In general, **the combination of fields in the key must correspond to an existing composite index in Postgres** for efficient queries. Here we assume an index on `users(created_at, id)` so that queries using this key for pagination are index-assisted.
 
 The crate can provide a marker trait or helper for such key types (e.g., a trait `PaginationKey` with perhaps an associated Diesel column tuple), but it may be simplest to rely on explicit usage in each context. For instance, we might implement a conversion from a `User` model to `UserCursorKey`:
 
-```
-rustCopy code`impl From<&User> for UserCursorKey {
+```rust
+impl From<&User> for UserCursorKey {
     fn from(u: &User) -> Self {
         UserCursorKey { created_at: u.created_at, id: u.id }
     }
 }
-`
 ```
 
 This makes it easy to get a key from a model instance when generating cursors.
 
 - **Paginated Response Envelope:** The crate defines a generic container for paginated responses. We’ll call it `Paginated<T>` with fields for the data list, limit, and links:
 
-```
-rustCopy code`use serde::Serialize;
+```rust
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct PaginationLinks {
@@ -109,13 +106,12 @@ pub struct Paginated<T: Serialize> {
     pub limit: u32,
     pub links: PaginationLinks,
 }
-`
 ```
 
 Here `T` is the item type (e.g. `User` DTO). We use `self_` as the field name for the self link (since `self` is reserved in Rust). The `next` and `prev` fields are `Option<String>` and omitted (or null in JSON) if no such page exists. This structure aligns with the intended OpenAPI schema([1](https://github.com/leynos/wildside/issues/52#L34-L43))([1](https://github.com/leynos/wildside/issues/52#L48-L57)):
 
-```
-yamlCopy code`PaginationLinks:
+```yaml
+PaginationLinks:
   type: object
   properties:
     self:
@@ -141,21 +137,19 @@ PaginatedUsers:
       description: Number of users requested
     links:
       $ref: "#/components/schemas/PaginationLinks"
-`
 ```
 
 In implementation, we will likely use derives like `Serialize` and our OpenAPI tool (e.g. **utoipa** or similar) to generate these schema components. We’ll ensure `Paginated<T>` implements or derives the appropriate schema trait (e.g. `utoipa::ToSchema`) so that the OpenAPI spec includes these new components. The `maxItems: 100` note indicates the maximum page size.
 
 - **Page Parameter Extractor:** For convenience, the crate can define a struct to represent incoming pagination query params, e.g.:
 
-```
-rustCopy code`use serde::Deserialize;
+```rust
+use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct PageParams {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
 }
-`
 ```
 
 This struct can be used with Actix-web’s query extractor: `web::Query<PageParams>` in handler signatures. The `cursor` will be the opaque string from the client (if provided), and `limit` is the requested page size (we’ll apply a default and max as needed). The crate might also provide a default constant for `DEFAULT_PAGE_SIZE` (e.g. 20) and `MAX_PAGE_SIZE` (100), or enforce those limits in the handler logic.
@@ -180,9 +174,8 @@ This scheme lets us implement `prev` page without a separate parameter. An alter
 
 **Examples:** Suppose the users are sorted by join date. If a client requests the first page (no cursor), they get the first N users (`order_by created_at ASC, id ASC`). The response might include a `next` link like:
 
-```
-bashCopy code`"next": "/api/users?cursor=eyJkaXIiOiJOZXh0Iiwia2V5eyJjcmVhdGVkX2F0Ijoi2023...
-`
+```bash
+"next": "/api/users?cursor=eyJkaXIiOiJOZXh0Iiwia2V5eyJjcmVhdGVkX2F0Ijoi2023...
 ```
 
 If they follow that `next` link, the server will decode the cursor to `{dir: Next, key: {created_at: X, id: Y}}`. It will then fetch users **where `(created_at, id)` > `(X, Y)`** (continuing forward). The response will include both a `prev` link (to go back to the earlier page) and possibly another `next` if more users remain.
@@ -211,8 +204,8 @@ To use this in the actual Actix handlers (like for `/api/users`), we will follow
 
 - **Parse Request Query:** Use `web::Query<PageParams>` to get the optional `cursor` and `limit`. For example:
 
-```
-rustCopy code`async fn list_users(
+```rust
+async fn list_users(
     db_pool: Data<DbPool>, 
     query: Query<PageParams>
 ) -> Result<HttpResponse, ApiError> {
@@ -225,15 +218,14 @@ rustCopy code`async fn list_users(
               .map_err(|e| ApiError::BadRequest("Invalid cursor".into()))?;
     ...
 }
-`
 ```
 
 Here `DbPool` is our async pool (could be Deadpool or bb8 – either yields an `AsyncPgConnection`). We cap the page size at 100 to enforce the guardrail([1](https://github.com/leynos/wildside/issues/52#L54-L61))([1](https://github.com/leynos/wildside/issues/52#L70-L74)). If `cursor` is present, we attempt to decode it into a `Cursor<UserCursorKey>`.
 
 - **Build Diesel Query:** Using Diesel’s query builder, start from the base table and apply filters based on the cursor:
 
-```
-rustCopy code`    use schema::users::dsl as users;  // Diesel schema import
+```rust
+    use schema::users::dsl as users;  // Diesel schema import
     let mut query = users::users.into_boxed(); // start building a query
  
     if let Some(ref cur) = decoded_cursor {
@@ -259,7 +251,6 @@ rustCopy code`    use schema::users::dsl as users;  // Diesel schema import
     // Apply ordering and limit (note: important to sort by the same key fields)
     query = query.order_by(users::created_at.asc()).then_order_by(users::id.asc())
                  .limit((page_size + 1) as i64);
-`
 ```
 
 A few notes on this:
@@ -282,19 +273,18 @@ A few notes on this:
 
 - **Execute Query (Async Diesel):** Acquire a DB connection from the pool and load the results:
 
-```
-rustCopy code`    let mut conn = db_pool.get().await?;  // Get an AsyncPgConnection
+```rust
+    let mut conn = db_pool.get().await?;  // Get an AsyncPgConnection
     use diesel_async::RunQueryDsl;
     let mut users_page: Vec<User> = query.load(&mut conn).await?;
-`
 ```
 
 This yields up to `page_size + 1` user records in ascending order.
 
 - **Determine Page Boundaries:** After fetching, we determine which links to include and trim the results to `page_size`:
 
-```
-rustCopy code`    let mut next_cursor_str = None;
+```rust
+    let mut next_cursor_str = None;
     let mut prev_cursor_str = None;
     if users_page.len() as u32 > page_size {
         // More results exist beyond this page
@@ -336,7 +326,6 @@ rustCopy code`    let mut next_cursor_str = None;
             // if no cursor was provided (first page), prev_cursor_str remains None
         }
     }
-`
 ```
 
 Let’s clarify the logic:
@@ -361,8 +350,8 @@ After this, we have at most `page_size` items in `users_page`, and the appropria
 
 - **Generate Hypermedia Links:** Using the cursor strings and current request info, build the `PaginationLinks`. We need the **self URL**, which is the URL of the current request. Actix’s `HttpRequest` can be used to get the path and query. For simplicity, we can reconstruct it:
 
-```
-rustCopy code`    let base_path = "/api/users"; // or derive from request route name
+```rust
+    let base_path = "/api/users"; // or derive from request route name
     // Reconstruct self link: current path plus original cursor if any
     let self_link = if let Some(cur_str) = &cursor {
         format!("{}?cursor={}&limit={}", base_path, cur_str, page_size)
@@ -379,7 +368,6 @@ rustCopy code`    let base_path = "/api/users"; // or derive from request route 
         next: next_cursor_str.as_ref().map(|c| format!("{}?cursor={}&limit={}", base_path, c, page_size)),
         prev: prev_cursor_str.as_ref().map(|c| format!("{}?cursor={}&limit={}", base_path, c, page_size)),
     };
-`
 ```
 
 A few details:
@@ -392,21 +380,20 @@ A few details:
 
 - **Return Response:** Finally, package the data and metadata into our `Paginated` struct and return as JSON:
 
-```
-rustCopy code`    let response_body = Paginated {
+```rust
+    let response_body = Paginated {
         data: users_page,
         limit: page_size,
         links,
     };
     Ok(HttpResponse::Ok().json(response_body))
 }
-`
 ```
 
 The JSON output will look like:
 
-```
-jsonCopy code`{
+```json
+{
   "data": [ { /* user1 */ }, { /* user2 */ }, ... ],
   "limit": 20,
   "links": {
@@ -415,7 +402,6 @@ jsonCopy code`{
     "prev": null
   }
 }
-`
 ```
 
 On a subsequent page, `prev` would be a URL and `self` would include the `cursor` used.
@@ -426,15 +412,14 @@ On a subsequent page, `prev` would be a URL and `self` would include the `cursor
 
 - **Components:** Add `PaginationLinks` and a paginated response schema for each resource (or a generic one parameterized by item type). In our case, `PaginatedUsers` is defined as above([1](https://github.com/leynos/wildside/issues/52#L48-L57)). If using **utoipa**, we can implement `ToSchema` for `PaginationLinks` and `Paginated<T>` and use them in the endpoint documentation, for example:
 
-```
-rustCopy code`/// Response for a paginated users list.
+```rust
+/// Response for a paginated users list.
 #[derive(utoipa::ToSchema)]
 struct PaginatedUsersResponse {
     data: Vec<User>,   // assuming User has ToSchema
     limit: u32,
     links: PaginationLinks,
 }
-`
 ```
 
 We ensure the schema’s `maxItems` constraint for `data` (Max 100) is captured — utoipa allows using attributes like `#[schema(max_items = 100)]` on the field if needed, or we enforce via validation logic. The OpenAPI description should note that `next`/`prev` may be omitted or null if no such page.
@@ -447,9 +432,8 @@ Using Diesel with keyset pagination requires careful use of indices and query co
 
 **Index Alignment:** Ensure that the database has an index matching the sort key. For example, on the `users` table:
 
-```
-sqlCopy code`CREATE INDEX idx_users_created_at_id ON users (created_at, id);
-`
+```sql
+CREATE INDEX idx_users_created_at_id ON users (created_at, id);
 ```
 
 This index allows the query with `created_at > X OR (created_at = X AND id > Y)` to use an index range scan, rather than a full table scan. Similarly, that index covers the `ORDER BY created_at, id` so the results are already sorted from the index.
@@ -460,30 +444,27 @@ This index allows the query with `created_at > X OR (created_at = X AND id > Y)`
 
 - Query in **reverse order** (descending) for a `Prev` request to fetch the preceding page more directly, then reverse the results in memory. For example, for a `Prev` cursor, do:
 
-```
-rustCopy code`query = query.order_by(users::created_at.desc()).then_order_by(users::id.desc())
+```rust
+query = query.order_by(users::created_at.desc()).then_order_by(users::id.desc())
              .limit(page_size + 1);
 // filter: created_at < c_ts OR (created_at = c_ts AND id < c_id)
-`
 ```
 
 This would retrieve one extra older item beyond the page. You would then trim the extra and **reverse** the list before returning, to still present ascending order to the client. This approach is more complex in code (because you have to branch the sorting and remember to reverse output), so our design sticks to a single sort order (asc) and handles prev via logic. Both approaches are valid; the chosen method favors simplicity of maintaining one ordering code path.
 
 **Usage Example for Another Endpoint:** To demonstrate reuse, imagine an endpoint `/api/points` that lists points of interest sorted by `name` (alphabetically) then `id` to break ties. We could define:
 
-```
-rustCopy code`struct PointCursorKey { name: String, id: Uuid }
-`
+```rust
+struct PointCursorKey { name: String, id: Uuid }
 ```
 
 and similar logic: filter with `name > last_name OR (name = last_name AND id > last_id)` etc. As long as there’s an index on `(name, id)`, the performance will be good. The crate’s `Cursor` type and encoding work the same way for `PointCursorKey`. We’d just integrate it in the handler for points.
 
 **Connection Pool (bb8) Compatibility:** Our design is agnostic to the pooling mechanism. We get an `AsyncPgConnection` from the pool (`bb8` or `deadpool` or Diesel’s own connection manager). The Diesel async API (via `diesel_async::RunQueryDsl`) operates on `&mut AsyncPgConnection`, which is exactly what pools provide. For example, using bb8:
 
-```
-rustCopy code`let conn = pool.get().await?; // pool is bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>
+```rust
+let conn = pool.get().await?; // pool is bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>
 let results = query.load(&mut *conn).await?;
-`
 ```
 
 This is essentially identical to deadpool’s usage (deadpool’s `Object` dereferences to `AsyncPgConnection` via `DerefMut`). The pagination crate does not need to know which pool is used; it only deals with the connection or query builder. If needed, we could provide a utility in the crate like `async fn fetch_page<Q, C, I, K>(query: Q, conn: &mut C, cursor: Option<Cursor<K>>, page_size: u32) -> Result<Paginated<I>>` where `Q` is a Diesel query and `C` is an AsyncConnection, but in practice it might be clearer to write the few lines of logic in the handler as we did above.
@@ -516,8 +497,8 @@ As mentioned, we will update the OpenAPI documentation to include the new pagina
 
 If using code-first documentation (utoipa), ensure the handler function or its context is annotated accordingly, e.g.:
 
-```
-rustCopy code`/// List users (paginated).
+```rust
+/// List users (paginated).
 #[utoipa::path(
     get, path = "/api/users", security=[("bearerAuth" = [])],
     params(
@@ -528,7 +509,6 @@ rustCopy code`/// List users (paginated).
         (status = 200, description = "Successful list of users", body = PaginatedUsersResponse)
     )
 )]
-`
 ```
 
 The above would reference the `PaginatedUsersResponse` schema we defined.
