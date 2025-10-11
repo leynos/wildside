@@ -19,11 +19,11 @@
   "packageManager": "pnpm@10.15.1",
   "scripts": {
     "build": "pnpm -r run build",
-    "fmt": "bun run fmt --workspaces",
-    "lint": "bun run lint --workspaces",
-    "typecheck": "bun run typecheck --workspaces",
-    "test": "bun run test --workspaces",
-    "audit": "bun run audit --workspaces",
+    "fmt": "node ./scripts/run-workspace-script.mjs fmt",
+    "lint": "node ./scripts/run-workspace-script.mjs lint",
+    "typecheck": "node ./scripts/run-workspace-script.mjs typecheck",
+    "test": "node ./scripts/run-workspace-script.mjs test",
+    "audit": "node ./scripts/run-workspace-script.mjs audit",
     "audit:validate": "node security/validate-audit.js"
   },
   "engines": {
