@@ -195,7 +195,7 @@ ______________________________________________________________________
 - `bunx orval` writes `src/api/generated/client.ts`; `src/api/client.ts` wraps
   the generated code with query helpers and runtime validation.
 - A small `src/api/fetcher.ts` centralizes base URL, auth, and error handling.
-- `orval.config.cjs` pins the mutator to the named `customFetch` export so the
+- `orval.config.cjs` pins the mutator to the named `customFetch` export, so the
   generator does not try to import a default export.
 - TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
