@@ -6,14 +6,25 @@ these rules to keep the documentation clear and consistent for developers.
 ## Spelling
 
 - Use British English based on the
-  [Oxford English Dictionary](https://public.oed.com/) (en-oxendict).
+  [Oxford English Dictionary](https://public.oed.com/) (en-GB-oxendict):
+  - suffix -ize in words like _realize_ and _organization_ instead of
+     -ise endings,
+  - suffix ‑lyse in words not traced to the Greek ‑izo, ‑izein suffixes,
+     such as _analyse_, _paralyse_ and _catalyse_,
+  - suffix -our in words such as _colour_, _behaviour_ and _neighbour_,
+  - suffix -re in words such as _calibre_, _centre_ and fibre,
+  - double "l" in words such as _cancelled_, _counsellor_ and _cruellest_,
+  - maintain the "e" in words such as _likeable_, _liveable_ and _rateable_,
+  - suffix -ogue in words such as _analogue_ and _catalogue_,
+  - and so forth.
 - The word **"outwith"** is acceptable.
 - Keep US spelling when used in an API, for example `color`.
 - The project licence file is spelled `LICENSE` for community consistency.
 
 ## Punctuation and grammar
 
-- Use the Oxford comma: "ships, planes, and hovercraft".
+- Use the Oxford comma: "ships, planes, and hovercraft" where it aids
+  comprehension.
 - Company names are treated as collective nouns: "Lille Industries are
   expanding".
 
