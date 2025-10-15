@@ -129,8 +129,14 @@ assertValidSchema(data);
 assertNoExpired(data);
 
 try {
-  const { json: auditJson } = runAuditJson();
+  const { json: auditJson, status } = runAuditJson();
   const advisories = collectAdvisories(auditJson);
+
+  if (status !== 0 && advisories.length === 0) {
+    throw new Error(
+      `pnpm audit failed without reporting advisories (exit status ${status}).`,
+    );
+  }
   assertMitigated(data, advisories);
 
   console.log('Audit exceptions valid and vulnerabilities accounted for');
