@@ -45,6 +45,7 @@
 - Documentation must use en-GB-oxendict ("-ize" / "-yse" / "-our") spelling
   and grammar. (EXCEPTION: the naming of the "LICENSE" file, which is to be
   left unchanged for community consistency.)
+- A documentation style guide is provided at `docs/documentation-style-guide.md`.
 
 ## Change Quality & Committing
 
@@ -545,6 +546,31 @@ The following tooling is available in this environment:
   and enables editing by syntax tree patterns.
 - `difft` **(Difftastic)** – Semantic diff tool that compares code structure
   rather than just text differences.
+
+## Python Development Guidelines
+
+For Python development, refer to the detailed guidelines in the `.rules/`
+directory:
+
+- [Python Code Style Guidelines](.rules/python-00.md) - Core Python 3.13 style
+  conventions
+- [Python Context Managers](.rules/python-context-managers.md) - Best practices
+  for context managers
+- [Python Exceptions and
+  Logging(.rules/python-exception-design-raising-handling-and-logging.md) -
+  Throwing, catching and logging exceptions.
+- [Python Generators](.rules/python-generators.md) - Generator and iterator
+  patterns
+- [Python Project Configuration](.rules/python-pyproject.md) - pyproject.toml
+  and packaging
+- [Python Return Patterns](.rules/python-return.md) - Function return
+  conventions
+- [Python Typing](.rules/python-typing.md) - Type annotation best practices
+
+Additional docs:
+
+- [Scripting Standards](docs/scripting-standards.md) - Guidance for writing
+  robust scripts
 
 ## Key Takeaway
 
