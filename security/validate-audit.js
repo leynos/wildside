@@ -1,6 +1,13 @@
 /** @file Validate audit exception entries against schema and expiry. */
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { isValidatorPatched } from './validator-patch.js';
+import {
+  collectAdvisories,
+  partitionAdvisoriesById,
+  reportUnexpectedAdvisories,
+  runAuditJson,
+} from './audit-utils.js';
 
 /**
  * Load a JSON file using the import attribute supported by the current Node
@@ -84,7 +91,44 @@ function assertNoExpired(entries) {
   }
 }
 
+function assertMitigated(entries, advisories) {
+  if (advisories.length === 0) {
+    return;
+  }
+
+  const exceptionsById = new Map(entries.map((entry) => [entry.advisory, entry]));
+  const { expected, unexpected } = partitionAdvisoriesById(
+    advisories,
+    exceptionsById.keys(),
+  );
+
+  if (
+    reportUnexpectedAdvisories(
+      unexpected,
+      'pnpm audit reported vulnerabilities without exceptions:',
+    )
+  ) {
+    process.exit(1);
+  }
+
+  for (const advisory of expected) {
+    if (
+      advisory.github_advisory_id === 'GHSA-9965-vmph-33xx' &&
+      !isValidatorPatched()
+    ) {
+      console.error(
+        'Validator vulnerability GHSA-9965-vmph-33xx reported but local patch is missing.',
+      );
+      process.exit(1);
+    }
+  }
+}
+
 assertValidSchema(data);
 assertNoExpired(data);
 
-console.log('Audit exceptions valid');
+const { json: auditJson } = runAuditJson();
+const advisories = collectAdvisories(auditJson);
+assertMitigated(data, advisories);
+
+console.log('Audit exceptions valid and vulnerabilities accounted for');

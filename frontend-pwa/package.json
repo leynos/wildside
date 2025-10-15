@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "gen:api": "bunx orval --config orval.config.cjs",
     "test": "vitest run",
-    "audit": "pnpm audit",
+    "audit": "node ./scripts/run-audit.mjs",
     "audit:snyk": "bun x snyk test"
   },
   "engines": {
