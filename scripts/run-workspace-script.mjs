@@ -32,7 +32,7 @@ const forwardedArgs = separatorIndex === -1 ? rawArgs : rawArgs.slice(separatorI
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(new URL(import.meta.url))), '..');
 
-async function main() {
+async function getWorkspacePackages() {
   const rootPackage = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
 
   const { stdout } = await execFileAsync('pnpm', ['-r', 'ls', '--depth', '-1', '--json'], {
@@ -41,21 +41,61 @@ async function main() {
   });
 
   const workspaceEntries = JSON.parse(stdout);
-  const workspacePackages = workspaceEntries
+
+  return workspaceEntries
     .filter((entry) => path.resolve(entry.path) !== repoRoot)
     .filter((entry) => entry.name !== rootPackage.name)
     .sort((a, b) => a.path.localeCompare(b.path));
+}
 
+async function loadPackageManifest(manifestPath, pkgPath) {
+  try {
+    return JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch (error) {
+    console.warn(`Skipping ${pkgPath}: unable to read package manifest (${error.message}).`);
+    return null;
+  }
+}
+
+async function runScriptInPackage(scriptName, args, pkgPath, pkgName) {
+  void pkgName;
+
+  const exitMeta = await new Promise((resolve) => {
+    const child = spawn('bun', ['run', scriptName, ...args], {
+      cwd: pkgPath,
+      stdio: 'inherit',
+      env: process.env,
+    });
+
+    child.on('error', (error) => {
+      console.error(`Failed to start bun in ${pkgPath}: ${error.message}`);
+      resolve({ code: 1, signal: null });
+    });
+
+    child.on('exit', (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
+
+  if (exitMeta.signal) {
+    console.error(`bun run ${scriptName} terminated by signal ${exitMeta.signal} in ${pkgPath}`);
+    process.exit(exitMeta.signal ? 1 : 0);
+  }
+
+  if (exitMeta.code !== 0) {
+    process.exit(exitMeta.code ?? 1);
+  }
+}
+
+async function main() {
+  const workspacePackages = await getWorkspacePackages();
   let invokedCount = 0;
 
   for (const pkg of workspacePackages) {
     const manifestPath = path.join(pkg.path, 'package.json');
-    let manifest;
+    const manifest = await loadPackageManifest(manifestPath, pkg.path);
 
-    try {
-      manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-    } catch (error) {
-      console.warn(`Skipping ${pkg.path}: unable to read package manifest (${error.message}).`);
+    if (!manifest) {
       continue;
     }
 
@@ -67,31 +107,7 @@ async function main() {
     const displayArgs = forwardedArgs.length ? ` ${forwardedArgs.join(' ')}` : '';
     console.log(`\n[workspace:${manifest.name}] bun run ${maybeScriptName}${displayArgs}`);
 
-    const exitMeta = await new Promise((resolve) => {
-      const child = spawn('bun', ['run', maybeScriptName, ...forwardedArgs], {
-        cwd: pkg.path,
-        stdio: 'inherit',
-        env: process.env,
-      });
-
-      child.on('error', (error) => {
-        console.error(`Failed to start bun in ${pkg.path}: ${error.message}`);
-        resolve({ code: 1, signal: null });
-      });
-
-      child.on('exit', (code, signal) => {
-        resolve({ code, signal });
-      });
-    });
-
-    if (exitMeta.signal) {
-      console.error(`bun run ${maybeScriptName} terminated by signal ${exitMeta.signal} in ${pkg.path}`);
-      process.exit(exitMeta.signal ? 1 : 0);
-    }
-
-    if (exitMeta.code !== 0) {
-      process.exit(exitMeta.code ?? 1);
-    }
+    await runScriptInPackage(maybeScriptName, forwardedArgs, pkg.path, manifest.name);
   }
 
   if (invokedCount === 0) {
