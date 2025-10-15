@@ -250,10 +250,10 @@ Tailwind/daisyUI and any future native shells.
 
 - Tailwind `presets: [require('@app/tokens/dist/tw/preset.cjs')]`.
 - daisyUI `daisyui: require('@app/tokens/dist/daisy/theme.cjs')`.
-- Import CSS vars once in `src/index.css` to keep presentation concerns in the
-  stylesheet entrypoint.
-- Vite auto-builds the tokens package on demand, so a fresh clone can run the
-  frontend without a manual `pnpm --filter @app/tokens build` step.
+- Import CSS vars once in `src/index.css` to keep presentation concerns in
+  the stylesheet entrypoint.
+- Vite auto-builds the tokens package on demand, so a fresh clone can run
+  the frontend without a manual `pnpm --filter @app/tokens build` step.
 
 This keeps the visual system consistent across PWA, desktop (Tauri), and mobile
 (Capacitor) shells.
