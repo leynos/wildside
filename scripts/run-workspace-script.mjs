@@ -6,9 +6,11 @@
  * The earlier approach relied on `bun run <script> --workspaces`, which re-entered
  * the root package because Bun treats the aggregator as part of the workspace
  * graph. This helper enumerates packages via `pnpm`, skips the root manifest, and
- * delegates to `bun run` only when the target script exists. The guards prevent
- * infinite recursion and avoid noisy "script not found" errors for packages that
- * do not yet expose the requested entry point.
+ * delegates to `bun run` only when the target script exists. Any arguments after
+ * a literal `--` are forwarded; if the separator is absent, every additional
+ * argument is passed through verbatim. The guards prevent infinite recursion and
+ * avoid noisy "script not found" errors for packages that do not yet expose the
+ * requested entry point.
  */
 
 import { execFile, spawn } from 'node:child_process';
@@ -30,7 +32,7 @@ if (!maybeScriptName || maybeScriptName === '-h' || maybeScriptName === '--help'
 const separatorIndex = rawArgs.indexOf('--');
 const forwardedArgs = separatorIndex === -1 ? rawArgs : rawArgs.slice(separatorIndex + 1);
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(new URL(import.meta.url))), '..');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function getWorkspacePackages() {
   const rootPackage = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
@@ -57,9 +59,7 @@ async function loadPackageManifest(manifestPath, pkgPath) {
   }
 }
 
-async function runScriptInPackage(scriptName, args, pkgPath, pkgName) {
-  void pkgName;
-
+async function runScriptInPackage(scriptName, args, pkgPath) {
   const exitMeta = await new Promise((resolve) => {
     const child = spawn('bun', ['run', scriptName, ...args], {
       cwd: pkgPath,
@@ -107,7 +107,7 @@ async function main() {
     const displayArgs = forwardedArgs.length ? ` ${forwardedArgs.join(' ')}` : '';
     console.log(`\n[workspace:${manifest.name}] bun run ${maybeScriptName}${displayArgs}`);
 
-    await runScriptInPackage(maybeScriptName, forwardedArgs, pkg.path, manifest.name);
+    await runScriptInPackage(maybeScriptName, forwardedArgs, pkg.path);
   }
 
   if (invokedCount === 0) {
