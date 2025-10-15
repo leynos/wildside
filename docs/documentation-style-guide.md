@@ -119,4 +119,42 @@ flowchart TD
     C --> D[Merge]
 ```
 
+## Roadmap Task Writing Guidelines
+
+When documenting development roadmap items, write them so that they are
+achievable, measurable, and structured. This ensures the roadmap functions as a
+practical planning tool rather than a vague wishlist. Do not commit to
+timeframes in the roadmap. Development effort should be roughly consistent from
+task to task.
+
+### Principles for Roadmap Tasks
+
+- Define outcomes, not intentions: Phrase tasks in terms of the capability
+  delivered (e.g. “Implement role-based access control for API endpoints”), not
+  aspirations like “Improve security”.
+- Quantify completion criteria: Attach measurable finish lines (e.g. “90%
+  test coverage for new modules”, “response times under 200ms”, “all endpoints
+  migrated”).
+- Break into atomic increments: Ensure tasks can be completed in weeks, not
+  quarters. Large goals should be decomposed into clear, deliverable units.
+- Tie to dependencies and sequencing: Document prerequisites so tasks can be
+  scheduled realistically (e.g. “Introduce central logging service” before “Add
+  error dashboards”).
+- Bound scope explicitly: Note both in-scope and out-of-scope elements (e.g.
+  “Build analytics dashboard (excluding churn prediction)”).
+
+### Hierarchy of Scope
+
+Roadmaps should be expressed in three layers of scope to maintain clarity and
+navigability:
+
+- Phases (strategic milestones) – Broad outcome-driven stages that represent
+  significant capability shifts. Why the work matters.
+- Steps (epics / workstreams) – Mid-sized clusters of related tasks grouped
+  under a phase. What will be built.
+- Tasks (execution units) – Small, measurable pieces of work with clear
+  acceptance criteria. How it gets done.
+
+______________________________________________________________________
+
 [^markdownlint]: A linter that enforces consistent Markdown formatting.
