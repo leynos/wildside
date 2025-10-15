@@ -108,7 +108,9 @@ function assertMitigated(entries, advisories) {
       'pnpm audit reported vulnerabilities without exceptions:',
     )
   ) {
-    process.exit(1);
+    throw new Error(
+      'Unexpected vulnerabilities reported by pnpm audit; review stderr for details.',
+    );
   }
 
   for (const advisory of expected) {
@@ -116,10 +118,9 @@ function assertMitigated(entries, advisories) {
       advisory.github_advisory_id === 'GHSA-9965-vmph-33xx' &&
       !isValidatorPatched()
     ) {
-      console.error(
+      throw new Error(
         'Validator vulnerability GHSA-9965-vmph-33xx reported but local patch is missing.',
       );
-      process.exit(1);
     }
   }
 }
@@ -127,8 +128,13 @@ function assertMitigated(entries, advisories) {
 assertValidSchema(data);
 assertNoExpired(data);
 
-const { json: auditJson } = runAuditJson();
-const advisories = collectAdvisories(auditJson);
-assertMitigated(data, advisories);
+try {
+  const { json: auditJson } = runAuditJson();
+  const advisories = collectAdvisories(auditJson);
+  assertMitigated(data, advisories);
 
-console.log('Audit exceptions valid and vulnerabilities accounted for');
+  console.log('Audit exceptions valid and vulnerabilities accounted for');
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
