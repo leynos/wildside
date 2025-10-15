@@ -35,27 +35,39 @@ const DEFAULT_PACKAGE_PATH = 'packages/tokens';
 const DEFAULT_DIST_PATH = 'dist';
 const DEFAULT_ALIAS = '@app/tokens';
 
-export function detectPackageManager(workspaceRoot: string): PackageManager {
+const LOCKFILE_LOOKUP: Array<[PackageManager, string]> = [
+  ['pnpm', 'pnpm-lock.yaml'],
+  ['yarn', 'yarn.lock'],
+  ['bun', 'bun.lock'],
+  ['npm', 'package-lock.json'],
+];
+
+function detectFromUserAgent(): PackageManager | null {
   const agent = process.env.npm_config_user_agent;
-  if (agent?.includes('pnpm')) return 'pnpm';
-  if (agent?.includes('yarn')) return 'yarn';
-  if (agent?.includes('bun')) return 'bun';
-  if (agent?.includes('npm')) return 'npm';
+  if (!agent) return null;
 
-  const lookup: Array<[PackageManager, string]> = [
-    ['pnpm', 'pnpm-lock.yaml'],
-    ['yarn', 'yarn.lock'],
-    ['bun', 'bun.lock'],
-    ['npm', 'package-lock.json'],
-  ];
+  const managers: PackageManager[] = ['pnpm', 'yarn', 'bun', 'npm'];
+  for (const manager of managers) {
+    if (agent.includes(manager)) {
+      return manager;
+    }
+  }
 
-  for (const [manager, lockfile] of lookup) {
+  return null;
+}
+
+function detectFromLockfile(workspaceRoot: string): PackageManager | null {
+  for (const [manager, lockfile] of LOCKFILE_LOOKUP) {
     if (existsSync(resolve(workspaceRoot, lockfile))) {
       return manager;
     }
   }
 
-  return 'pnpm';
+  return null;
+}
+
+export function detectPackageManager(workspaceRoot: string): PackageManager {
+  return detectFromUserAgent() ?? detectFromLockfile(workspaceRoot) ?? 'pnpm';
 }
 
 function buildCommandFor(packageManager: PackageManager, packageName: string): BuildCommand {

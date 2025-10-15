@@ -67,6 +67,18 @@ describe('ensureTokensDist', () => {
     logger = createMockLogger();
   });
 
+  /**
+   * Configures the dist lookup to simulate a missing build whilst keeping the
+   * package manager detection lockfile available.
+   */
+  function mockDistMissing(): void {
+    existsSyncMock.mockImplementation((path) => {
+      const target = pathToString(path);
+      if (target.endsWith('pnpm-lock.yaml')) return true;
+      return false;
+    });
+  }
+
   it('returns immediately when the dist directory already exists', () => {
     existsSyncMock.mockImplementation((path) => pathToString(path) === distPath);
 
@@ -96,11 +108,7 @@ describe('ensureTokensDist', () => {
   });
 
   it('throws when the build command fails', () => {
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
-      return false;
-    });
+    mockDistMissing();
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(
@@ -109,11 +117,7 @@ describe('ensureTokensDist', () => {
   });
 
   it('throws when the dist directory is still missing after a successful build', () => {
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
-      return false;
-    });
+    mockDistMissing();
     spawnSyncMock.mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(
