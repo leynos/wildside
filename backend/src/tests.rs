@@ -19,6 +19,16 @@ fn bind_address() -> (String, u16) {
     ("127.0.0.1".into(), 0)
 }
 
+#[fixture]
+fn cookie_secure() -> bool {
+    false
+}
+
+#[fixture]
+fn same_site_policy() -> SameSite {
+    SameSite::Lax
+}
+
 #[cfg(feature = "metrics")]
 #[test]
 fn initialize_metrics_returns_none_on_error() {
@@ -57,14 +67,16 @@ async fn create_server_marks_ready_without_metrics(
     health_state: web::Data<HealthState>,
     session_key: Key,
     bind_address: (String, u16),
+    cookie_secure: bool,
+    same_site_policy: SameSite,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let server = create_server(
+    let _server = create_server(
         health_state.clone(),
         session_key,
-        false,
-        SameSite::Lax,
+        cookie_secure,
+        same_site_policy,
         bind_address,
         None,
     )
@@ -74,7 +86,6 @@ async fn create_server_marks_ready_without_metrics(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    drop(server);
 }
 
 #[cfg(feature = "metrics")]
@@ -85,14 +96,16 @@ async fn create_server_marks_ready_with_metrics(
     session_key: Key,
     bind_address: (String, u16),
     prometheus_metrics: actix_web_prom::PrometheusMetrics,
+    cookie_secure: bool,
+    same_site_policy: SameSite,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let server = create_server(
+    let _server = create_server(
         health_state.clone(),
         session_key,
-        false,
-        SameSite::Lax,
+        cookie_secure,
+        same_site_policy,
         bind_address,
         Some(prometheus_metrics),
     )
@@ -102,7 +115,6 @@ async fn create_server_marks_ready_with_metrics(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    drop(server);
 }
 
 #[cfg(not(feature = "metrics"))]
@@ -112,14 +124,16 @@ async fn create_server_marks_ready_non_metrics_build(
     health_state: web::Data<HealthState>,
     session_key: Key,
     bind_address: (String, u16),
+    cookie_secure: bool,
+    same_site_policy: SameSite,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let server = create_server(
+    let _server = create_server(
         health_state.clone(),
         session_key,
-        false,
-        SameSite::Lax,
+        cookie_secure,
+        same_site_policy,
         bind_address,
     )
     .expect("server should build without metrics");
@@ -128,5 +142,4 @@ async fn create_server_marks_ready_non_metrics_build(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    drop(server);
 }
