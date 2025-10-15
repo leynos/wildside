@@ -9,6 +9,11 @@ overrides:
   ws: 8.18.3
   pino: 9.13.1
 
+patchedDependencies:
+  validator@13.15.15:
+    hash: 28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040
+    path: patches/validator@13.15.15.patch
+
 importers:
 
   .:
@@ -4068,7 +4073,7 @@ snapshots:
       loglevel: 1.9.2
       loglevel-plugin-prefix: 0.8.4
       minimatch: 6.2.0
-      validator: 13.15.15
+      validator: 13.15.15(patch_hash=28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040)
     transitivePeerDependencies:
       - encoding
 
@@ -7632,7 +7637,7 @@ snapshots:
 
   uuid@11.1.0: {}
 
-  validator@13.15.15: {}
+  validator@13.15.15(patch_hash=28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040): {}
 
   vite-node@3.2.4(@types/node@20.19.13)(jiti@1.21.7)(yaml@2.8.1):
     dependencies:
