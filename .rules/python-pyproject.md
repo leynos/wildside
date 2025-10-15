@@ -58,8 +58,8 @@ dependencies = [
   include your README as the long description. (Astral Docs[^1], Python Packaging[^4])
 - **`requires-python`:** Constrains which Python interpreters your package
   supports (e.g. `>=3.10`). (Python Packaging[^4], Reddit[^5])
-- **`license = { text = "MIT" }`:** You can specify a license either as a SPDX
-  identifier (via `license = { text = "MIT" }`) or by pointing to a file (e.g.
+- **`license`:** Specify a licence as an SPDX identifier (via
+  `license = { text = "ISC" }`) or point to a file (e.g.
   `license = { file = "LICENSE" }`). (Python Packaging[^4], Reddit[^5])
 - **`authors`:** A list of tables with `name` and `email`. Many registries
   (e.g., PyPI) pull this for display. (Python Packaging[^4], Reddit[^5])
@@ -306,11 +306,11 @@ A "modern" `pyproject.toml` for an Astral `uv` project should:
 Following these conventions ensures that your project is fully PEP-compliant,
 easy to maintain, and integrates seamlessly with Astral `uv`.
 
-[^1]: [Working on projects | uv - Astral Docs](https://docs.astral.sh/uv/guides/projects/?utm_source=chatgpt.com)
-[^2]: [UV Tutorial: A Fast Python Package and Project Manager](https://www.ridgerun.ai/post/uv-tutorial-a-fast-python-package-and-project-manager?utm_source=chatgpt.com)
-[^3]: [Modern Python Development with pyproject.toml and UV](https://levelup.gitconnected.com/modern-python-development-with-pyproject-toml-and-uv-405dfb8b6ec8?utm_source=chatgpt.com)
-[^4]: [Writing your pyproject.toml – Python Packaging User Guide](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/?utm_source=chatgpt.com)
-[^5]: [Anyone used UV package manager in production? (Reddit)](https://www.reddit.com/r/Python/comments/1ixryec/anyone_used_uv_package_manager_in_production/?utm_source=chatgpt.com)
-[^6]: [The Complete Guide to pyproject.toml – devsjc blogs](https://devsjc.github.io/blog/20240627-the-complete-guide-to-pyproject-toml/?utm_source=chatgpt.com)
-[^7]: [Start Using UV Python Package Manager for Better Dependency Management](https://medium.com/%40gnetkov/start-using-uv-python-package-manager-for-better-dependency-management-183e7e428760?utm_source=chatgpt.com)
-[^8]: [Configuring projects | uv - Astral Docs](https://docs.astral.sh/uv/concepts/projects/config/?utm_source=chatgpt.com)
+[^1]: [Working on projects | uv - Astral Docs](https://docs.astral.sh/uv/guides/projects/)
+[^2]: [UV Tutorial: A Fast Python Package and Project Manager](https://www.ridgerun.ai/post/uv-tutorial-a-fast-python-package-and-project-manager)
+[^3]: [Modern Python Development with pyproject.toml and UV](https://levelup.gitconnected.com/modern-python-development-with-pyproject-toml-and-uv-405dfb8b6ec8)
+[^4]: [Writing your pyproject.toml – Python Packaging User Guide](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
+[^5]: [Anyone used UV package manager in production? (Reddit)](https://www.reddit.com/r/Python/comments/1ixryec/anyone_used_uv_package_manager_in_production/)
+[^6]: [The Complete Guide to pyproject.toml – devsjc blogs](https://devsjc.github.io/blog/20240627-the-complete-guide-to-pyproject-toml/)
+[^7]: [Start Using UV Python Package Manager for Better Dependency Management](https://medium.com/%40gnetkov/start-using-uv-python-package-manager-for-better-dependency-management-183e7e428760)
+[^8]: [Configuring projects | uv - Astral Docs](https://docs.astral.sh/uv/concepts/projects/config/)
