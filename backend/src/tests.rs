@@ -2,6 +2,22 @@
 
 use super::*;
 use actix_web::cookie::SameSite;
+use rstest::{fixture, rstest};
+
+#[fixture]
+fn health_state() -> web::Data<HealthState> {
+    web::Data::new(HealthState::new())
+}
+
+#[fixture]
+fn session_key() -> Key {
+    Key::generate()
+}
+
+#[fixture]
+fn bind_address() -> (String, u16) {
+    ("127.0.0.1".into(), 0)
+}
 
 #[cfg(feature = "metrics")]
 #[test]
@@ -26,65 +42,91 @@ fn initialize_metrics_returns_metrics_on_success() {
 }
 
 #[cfg(feature = "metrics")]
+#[fixture]
+fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
+    PrometheusMetricsBuilder::new("test")
+        .endpoint("/metrics")
+        .build()
+        .expect("metrics should build for tests")
+}
+
+#[cfg(feature = "metrics")]
+#[rstest]
 #[actix_rt::test]
-async fn create_server_marks_ready_without_metrics() {
-    let state = web::Data::new(HealthState::new());
-    assert!(!state.is_ready(), "state should start unready");
+async fn create_server_marks_ready_without_metrics(
+    health_state: web::Data<HealthState>,
+    session_key: Key,
+    bind_address: (String, u16),
+) {
+    assert!(!health_state.is_ready(), "state should start unready");
 
     let server = create_server(
-        state.clone(),
-        Key::generate(),
+        health_state.clone(),
+        session_key,
         false,
         SameSite::Lax,
-        ("127.0.0.1".into(), 0),
+        bind_address,
         None,
     )
     .expect("server should build without metrics");
 
-    assert!(state.is_ready(), "server creation should mark readiness");
+    assert!(
+        health_state.is_ready(),
+        "server creation should mark readiness"
+    );
     drop(server);
 }
 
 #[cfg(feature = "metrics")]
+#[rstest]
 #[actix_rt::test]
-async fn create_server_marks_ready_with_metrics() {
-    let state = web::Data::new(HealthState::new());
-    assert!(!state.is_ready(), "state should start unready");
-
-    let prometheus = PrometheusMetricsBuilder::new("test")
-        .endpoint("/metrics")
-        .build()
-        .expect("metrics should build for tests");
+async fn create_server_marks_ready_with_metrics(
+    health_state: web::Data<HealthState>,
+    session_key: Key,
+    bind_address: (String, u16),
+    prometheus_metrics: actix_web_prom::PrometheusMetrics,
+) {
+    assert!(!health_state.is_ready(), "state should start unready");
 
     let server = create_server(
-        state.clone(),
-        Key::generate(),
+        health_state.clone(),
+        session_key,
         false,
         SameSite::Lax,
-        ("127.0.0.1".into(), 0),
-        Some(prometheus),
+        bind_address,
+        Some(prometheus_metrics),
     )
     .expect("server should build with metrics");
 
-    assert!(state.is_ready(), "server creation should mark readiness");
+    assert!(
+        health_state.is_ready(),
+        "server creation should mark readiness"
+    );
     drop(server);
 }
 
 #[cfg(not(feature = "metrics"))]
+#[rstest]
 #[actix_rt::test]
-async fn create_server_marks_ready_without_metrics() {
-    let state = web::Data::new(HealthState::new());
-    assert!(!state.is_ready(), "state should start unready");
+async fn create_server_marks_ready_non_metrics_build(
+    health_state: web::Data<HealthState>,
+    session_key: Key,
+    bind_address: (String, u16),
+) {
+    assert!(!health_state.is_ready(), "state should start unready");
 
     let server = create_server(
-        state.clone(),
-        Key::generate(),
+        health_state.clone(),
+        session_key,
         false,
         SameSite::Lax,
-        ("127.0.0.1".into(), 0),
+        bind_address,
     )
     .expect("server should build without metrics");
 
-    assert!(state.is_ready(), "server creation should mark readiness");
+    assert!(
+        health_state.is_ready(),
+        "server creation should mark readiness"
+    );
     drop(server);
 }
