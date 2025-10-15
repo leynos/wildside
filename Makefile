@@ -168,11 +168,7 @@ check-test-deps:
 	./scripts/check_test_dependencies.py
 
 markdownlint:
-	find . \
-	  \( -path './backend/target' -o -path './target' -o \
-	     -path './node_modules' -o -path '*/node_modules' -o \
-	     -path '*/.git' \) -prune -o -type f -name '*.md' -print0 | \
-	     xargs -0 -- markdownlint
+	markdownlint-cli2 '**/*.md'
 
 nixie:
 	node scripts/install-mermaid-browser.mjs
