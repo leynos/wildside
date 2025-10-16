@@ -40,6 +40,7 @@ async function getWorkspacePackages() {
   const { stdout } = await execFileAsync('pnpm', ['-r', 'ls', '--depth', '-1', '--json'], {
     cwd: repoRoot,
     encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024, // 10MB for large monorepos
   });
 
   const workspaceEntries = JSON.parse(stdout);
