@@ -1251,59 +1251,10 @@ CI must run all three layers. Pull requests that add new ports must also add
 matching doubles and update `tests/README.md` with usage notes. When adapters
 gain new behaviour (e.g. caching policies), extend the contract suite first to
 reflect the desired semantics, then adjust implementations until the suite
-passes.
+passes. The active delivery roadmap is maintained separately in
+`docs/roadmap.md`.
 
-## Implementation Roadmap
-
-The roadmap below consolidates the original delivery checklists. Each item
-links back to the relevant architecture section for detail.
-
-### Phase 1 – Core Access and Sessions
-
-- [x] Implement `POST /api/v1/login` to establish signed-cookie sessions
-      (**Web API and WebSocket Layer**).
-- [ ] Wire `/api/v1/users/me`, `PUT /api/v1/users/me/interests`, and related
-      profile endpoints with session middleware (**Web API and WebSocket
-      Layer**).
-- [ ] Enforce `Idempotency-Key` persistence for route submissions and surface
-      conflict errors (**REST API Specification**).
-
-### Phase 2 – Data Platform Foundation
-
-- [ ] Complete Diesel migrations for the schema documented in
-      **Data Persistence Layer**, including GiST/GIN indices.
-- [ ] Ship the `ingest-osm` CLI and document seeding steps
-      (**Data Seeding and Enrichment Workflow**).
-- [ ] Integrate Overpass enrichment workers with quota enforcement
-      (**Data Seeding and Enrichment Workflow**, **Background Job Execution**).
-
-### Phase 3 – Background Jobs and Caching
-
-- [ ] Deploy Apalis workers in Kubernetes with dedicated queues and
-      retry/dead-letter policies (**Background Job Execution**).
-- [ ] Finalise Redis caching strategy with canonicalised keys and TTL jitter
-      (**Data Seeding and Enrichment Workflow**, **Caching Layer**).
-
-### Phase 4 – Map Delivery and Observability
-
-- [ ] Deploy Martin with POI and route tile sources
-      (**Map Tile Service (Martin)**).
-- [ ] Implement the `get_route_tile` PostGIS function and JWT validation
-      (**Map Tile Service (Martin)**).
-- [ ] Install Prometheus exporters and Grafana dashboards covering API, jobs,
-      database, cache, and tile performance (**Observability and Telemetry**).
-
-### Phase 5 – GitOps and Environments
-
-- [ ] Harden FluxCD pipelines, ensuring manifests in `deploy/` reconcile to
-      each environment (**Deployment and Operations**).
-- [ ] Automate ephemeral preview environments with isolated secrets and data
-      stores (**Deployment and Operations**).
-- [ ] Document runbooks for rolling upgrades, session key rotation, and
-      Martin/worker scaling (**Session Configuration**, **Map Tile Service**,
-      **Deployment and Operations**).
-
-## Hexagonal Refactor Guide
+## Hexagonal refactor guide
 
 The backend already follows ports-and-adapters concepts, but the refactor plan
 below keeps the transition deliberate and testable.
