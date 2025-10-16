@@ -93,17 +93,37 @@ function assertNoExpired(entries) {
 }
 
 /**
- * Ensure reported advisories are covered by exceptions and mitigations.
+ * Validate that `pnpm audit` advisories align with the configured exceptions.
  *
- * Enforces that every advisory returned by `pnpm audit` has a matching
- * exception entry and, for the validator advisory, that the local patch remains
- * applied so the upstream bypass fix cannot regress silently.
+ * Advisories are partitioned against the exception list; unexpected entries are
+ * surfaced via {@link reportUnexpectedAdvisories}. The validator advisory
+ * (GHSA-9965-vmph-33xx) additionally requires {@link isValidatorPatched} to
+ * return `true`, otherwise an error reading "Validator vulnerability
+ * GHSA-9965-vmph-33xx reported but local patch is missing." is thrown. When
+ * `reportUnexpectedAdvisories` emits output the function throws an error with
+ * the message "Unexpected vulnerabilities reported by pnpm audit; review
+ * stderr for details.".
  *
  * @param {typeof data} entries Exception ledger entries keyed by advisory ID.
  * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
  *   by `pnpm audit`.
- * @throws {Error} When an unexpected advisory is reported or when the
- *   validator patch is missing despite the advisory being tolerated.
+ * @returns {void} Returns undefined when all advisories are mitigated.
+ * @throws {Error} When unexpected advisories are reported or the validator
+ *   patch is absent.
+ * @example
+ * assertMitigated(
+ *   [
+ *     {
+ *       id: 'validator-allowlist',
+ *       package: 'validator',
+ *       advisory: 'GHSA-9965-vmph-33xx',
+ *       reason: 'Patched locally pending upstream fix',
+ *       addedAt: '2024-01-01',
+ *       expiresAt: '2024-12-31',
+ *     },
+ *   ],
+ *   [{ github_advisory_id: 'GHSA-9965-vmph-33xx' }],
+ * );
  */
 function assertMitigated(entries, advisories) {
   if (advisories.length === 0) {
