@@ -219,32 +219,32 @@ literals to complex queries and transformations.9
 
 ### 1.4 The OpenTofu Project: Standard File Structure
 
-While OpenTofu processes all `.tofu` and `.tf` files in a directory as a single
+While OpenTofu processes all `.tf` and `.tf` files in a directory as a single
 logical configuration, adopting a standard file structure is a critical best
 practice for maintainability and collaboration.13 A well-organized root module
 typically uses the following file layout 8:
 
-- `main.tofu`: This file serves as the primary entrypoint for the
+- `main.tf`: This file serves as the primary entrypoint for the
   configuration. It should contain the core resource definitions and calls to
   any child modules. For complex configurations, resources can be logically
-  split into additional files like `network.tofu` or `compute.tofu`.
+  split into additional files like `network.tf` or `compute.tf`.
 
-- `variables.tofu`: This file should contain the declarations for all input
+- `variables.tf`: This file should contain the declarations for all input
   variables using `variable` blocks. This centralizes the module's "API" and
   makes it easy to understand what inputs are required or optional.
 
-- `outputs.tofu`: This file should contain the declarations for all output
+- `outputs.tf`: This file should contain the declarations for all output
   values using `output` blocks. This defines what data the module exposes to
   its parent or to the user after an apply.
 
-- `versions.tofu`: A highly recommended file that contains the top-level
+- `versions.tf`: A highly recommended file that contains the top-level
   `terraform` block. This block is used to specify the required version of
   OpenTofu itself (`required_version`) and, most importantly, the versions of
   all providers used (`required_providers`). Pinning provider versions is
   essential for preventing unexpected breaking changes from automatic provider
   updates.8
 
-- `providers.tofu`: An optional but useful file for explicitly configuring
+- `providers.tf`: An optional but useful file for explicitly configuring
   providers (e.g., setting the AWS region). This separates provider
   configuration from resource definitions.8
 
@@ -275,7 +275,7 @@ an OpenTofu project should include 8:
 
 In addition to its native syntax, OpenTofu supports an alternative,
 machine-friendly syntax that is JSON-compatible. OpenTofu processes files
-ending in `.tf.json` or `.tofu.json` as this JSON variant.16 This syntax is
+ending in `.tf.json` or `.tf.json` as this JSON variant.16 This syntax is
 primarily intended for programmatic generation of configurations by other
 tools, as many languages have robust JSON libraries.6
 
@@ -492,7 +492,7 @@ features, often configured via nested blocks.
 - `import` **Block**: To bring existing, manually-created infrastructure under
   OpenTofu's management, you can use an `import` block. You specify the target
   resource address (`to`) and the resource's unique import ID (`id`). After
-  running `tofu plan -generate-config-out=generated.tofu`, OpenTofu will
+  running `tofu plan -generate-config-out=generated.tf`, OpenTofu will
   inspect the existing resource and generate a corresponding HCL configuration
   file. This generated code serves as a starting point that can be reviewed and
   integrated into your main configuration.3
@@ -1026,7 +1026,7 @@ of operations for creating, updating, and destroying resources.
 ### 3.4 Modularization and Code Reuse
 
 Modules are the primary mechanism for code reuse, abstraction, and organization
-in OpenTofu. A module is a self-contained collection of `.tofu` files that can
+in OpenTofu. A module is a self-contained collection of `.tf` files that can
 be called from other configurations.39
 
 #### The `module` Block
@@ -1076,8 +1076,8 @@ principles 8:
    later than to remove an existing one that is widely used.8
 
 5. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
-   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
+   standard file structure (`README.md`, `main.tf`, `variables.tf`,
+   `outputs.tf`, `LICENSE`) and include an `examples/` directory to
    demonstrate usage. A well-documented `README.md` is essential for
    usability.14
 
@@ -1103,7 +1103,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
   provider. This can silently introduce breaking changes from a new major
   provider release, causing future plans and applies to fail unexpectedly.
 
-  - **Best Practice**: Always define a `versions.tofu` file and use pessimistic
+  - **Best Practice**: Always define a `versions.tf` file and use pessimistic
     version constraints (`~>`) in the `required_providers` block. For example,
     `version = "~> 5.0"` allows new patch releases (e.g., 5.0.1, 5.1.0) but
     prevents an upgrade to a new major version (e.g., 6.0.0).13
@@ -1148,7 +1148,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 #### Configuration Smells
 
 - **Hardcoding Secrets**: Committing secrets (passwords, API keys,
-  certificates) directly into `.tofu` or `.tfvars` files is a severe security
+  certificates) directly into `.tf` or `.tfvars` files is a severe security
   vulnerability. Once in version control history, they are difficult to fully
   purge.13
 
@@ -1157,7 +1157,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
     runtime via environment variables or fetched using data sources within the
     configuration.
 
-- **Inconsistent Naming and Structure**: Projects with monolithic `.tofu` files
+- **Inconsistent Naming and Structure**: Projects with monolithic `.tf` files
   containing dozens of unrelated resources and inconsistently named variables
   are a maintenance nightmare. This makes the code difficult to navigate,
   debug, and refactor.8
@@ -1311,7 +1311,7 @@ to configurations that are robust, maintainable, secure, and scalable.
     and robust.2
 
  2. **Be Explicit with Versions**: Always pin provider versions using
-    pessimistic constraints (`~>`) in a `versions.tofu` file. This is the
+    pessimistic constraints (`~>`) in a `versions.tf` file. This is the
     single most effective way to prevent unexpected failures caused by breaking
     changes in provider updates.13
 
