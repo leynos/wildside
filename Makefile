@@ -31,6 +31,7 @@ REDOCLY_CLI_VERSION ?= 2.1.0
 ORVAL_VERSION ?= 7.11.2
 BIOME_VERSION ?= 2.2.4
 TSC_VERSION ?= 5.9.2
+MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
@@ -168,11 +169,7 @@ check-test-deps:
 	./scripts/check_test_dependencies.py
 
 markdownlint:
-	find . \
-	  \( -path './backend/target' -o -path './target' -o \
-	     -path './node_modules' -o -path '*/node_modules' -o \
-	     -path '*/.git' \) -prune -o -type f -name '*.md' -print0 | \
-	     xargs -0 -- markdownlint
+	$(call exec_or_bunx,markdownlint-cli2,'**/*.md',markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION))
 
 nixie:
 	node scripts/install-mermaid-browser.mjs
