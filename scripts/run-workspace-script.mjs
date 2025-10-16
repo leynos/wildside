@@ -79,7 +79,7 @@ async function runScriptInPackage(scriptName, args, pkgPath) {
 
   if (exitMeta.signal) {
     console.error(`bun run ${scriptName} terminated by signal ${exitMeta.signal} in ${pkgPath}`);
-    process.exit(exitMeta.signal ? 1 : 0);
+    process.exit(1);
   }
 
   if (exitMeta.code !== 0) {
