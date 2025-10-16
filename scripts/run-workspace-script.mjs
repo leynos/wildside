@@ -35,15 +35,30 @@ const forwardedArgs = separatorIndex === -1 ? rawArgs : rawArgs.slice(separatorI
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function getWorkspacePackages() {
-  const rootPackage = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+  let rootPackage;
+  try {
+    rootPackage = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+  } catch (error) {
+    throw new Error(`Failed to read root package.json: ${error.message}`);
+  }
 
-  const { stdout } = await execFileAsync('pnpm', ['-r', 'ls', '--depth', '-1', '--json'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024, // 10MB for large monorepos
-  });
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync('pnpm', ['-r', 'ls', '--depth', '-1', '--json'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024, // 10MB for large monorepos
+    }));
+  } catch (error) {
+    throw new Error(`Failed to enumerate workspace packages: ${error.message}`);
+  }
 
-  const workspaceEntries = JSON.parse(stdout);
+  let workspaceEntries;
+  try {
+    workspaceEntries = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to parse workspace list: ${error.message}`);
+  }
 
   return workspaceEntries
     .filter((entry) => path.resolve(entry.path) !== repoRoot)
