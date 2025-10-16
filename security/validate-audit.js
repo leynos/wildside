@@ -153,6 +153,12 @@ try {
   }
   assertMitigated(data, advisories);
 
+  if (status !== 0) {
+    throw new Error(
+      `pnpm audit exited with status ${status}; resolve reported advisories before rerunning.`,
+    );
+  }
+
   console.log('Audit exceptions valid and vulnerabilities accounted for');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
