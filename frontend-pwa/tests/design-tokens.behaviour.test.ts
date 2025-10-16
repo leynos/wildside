@@ -1,15 +1,16 @@
 /**
  * @file Behavioural tests for the design tokens Vite plugin.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ResolvedConfig } from 'vite';
-import { designTokensPlugin } from '../vite/plugins/designTokens';
-import { existsSync } from 'node:fs';
-import type { PathLike } from 'node:fs';
+
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createMockLogger } from './testLogger';
-import type { Plugin } from 'vite';
+import type { Plugin, ResolvedConfig } from 'vite';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { designTokensPlugin } from '../vite/plugins/design-tokens';
+import { pathToString } from './test-helpers';
+import { createMockLogger } from './test-logger';
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
@@ -21,10 +22,6 @@ vi.mock('node:child_process', () => ({
 
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
-
-function pathToString(path: PathLike): string {
-  return typeof path === 'string' ? path : path.toString();
-}
 
 async function invokeConfigHook(plugin: Plugin) {
   const hook = plugin.config;
@@ -64,13 +61,16 @@ describe('designTokensPlugin', () => {
     vi.resetAllMocks();
     existsSyncMock.mockReset();
     spawnSyncMock.mockReset();
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
   });
 
   it('exposes a @app/tokens alias from the config hook', async () => {
     const plugin = designTokensPlugin({ workspaceRoot });
-    const config = (await invokeConfigHook(plugin)) as any;
-    expect(config?.resolve?.alias?.['@app/tokens']).toBe(distPath);
+    const config = (await invokeConfigHook(plugin)) as {
+      resolve?: { alias?: Record<string, string> };
+    };
+    expect(config.resolve?.alias?.['@app/tokens']).toBe(distPath);
   });
 
   it('runs the build when the dist directory is missing', () => {

@@ -1,14 +1,16 @@
 /**
  * @file Unit tests for the design tokens plugin utilities.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Logger } from 'vite';
-import { ensureTokensDist, detectPackageManager } from '../vite/plugins/designTokens';
-import { existsSync } from 'node:fs';
-import type { PathLike } from 'node:fs';
+
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createMockLogger } from './testLogger';
+import type { Logger } from 'vite';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { detectPackageManager, ensureTokensDist } from '../vite/plugins/design-tokens';
+import { pathToString } from './test-helpers';
+import { createMockLogger } from './test-logger';
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
@@ -21,30 +23,27 @@ vi.mock('node:child_process', () => ({
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
 
-function pathToString(path: PathLike): string {
-  return typeof path === 'string' ? path : path.toString();
-}
-
 describe('detectPackageManager', () => {
   const workspaceRoot = '/workspace/project';
 
   beforeEach(() => {
     vi.resetAllMocks();
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
   });
 
   it('prefers npm_config_user_agent hints when available', () => {
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     process.env.npm_config_user_agent = 'pnpm/9.0.0 npm/? node/?';
     expect(detectPackageManager(workspaceRoot)).toBe('pnpm');
 
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     process.env.npm_config_user_agent = 'yarn/4.0.0 npm/? node/?';
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
   });
 
   it('falls back to lockfile discovery', () => {
-    existsSyncMock.mockImplementation((path) =>
-      pathToString(path).endsWith('yarn.lock'),
-    );
+    existsSyncMock.mockImplementation((path) => pathToString(path).endsWith('yarn.lock'));
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
   });
 
@@ -61,6 +60,7 @@ describe('ensureTokensDist', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
     existsSyncMock.mockReset();
     spawnSyncMock.mockReset();
@@ -104,6 +104,29 @@ describe('ensureTokensDist', () => {
       'pnpm',
       ['--filter', '@app/tokens', 'build'],
       expect.objectContaining({ cwd: workspaceRoot }),
+    );
+  });
+
+  it('runs the bun build from the package directory when bun is detected', () => {
+    const packagePath = resolve(workspaceRoot, 'packages/tokens');
+    let distExists = false;
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
+    process.env.npm_config_user_agent = 'bun/1.0.0 npm/? node/?';
+    existsSyncMock.mockImplementation((path) => {
+      const target = pathToString(path);
+      if (target === distPath) return distExists;
+      return false;
+    });
+    spawnSyncMock.mockImplementation(() => {
+      distExists = true;
+      return { status: 0 } as ReturnType<typeof spawnSync>;
+    });
+
+    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      'bun',
+      ['run', 'build'],
+      expect.objectContaining({ cwd: packagePath }),
     );
   });
 

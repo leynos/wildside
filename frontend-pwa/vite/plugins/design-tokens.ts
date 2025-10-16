@@ -28,21 +28,23 @@ interface BuildCommand {
   command: string;
   args: string[];
   pretty: string;
+  cwd?: string;
 }
 
-const DEFAULT_PACKAGE_NAME = '@app/tokens';
-const DEFAULT_PACKAGE_PATH = 'packages/tokens';
-const DEFAULT_DIST_PATH = 'dist';
-const DEFAULT_ALIAS = '@app/tokens';
+const defaultPackageName = '@app/tokens';
+const defaultPackagePath = 'packages/tokens';
+const defaultDistPath = 'dist';
+const defaultAlias = '@app/tokens';
 
-const LOCKFILE_LOOKUP: Array<[PackageManager, string]> = [
+const lockfileLookup: [PackageManager, string][] = [
   ['pnpm', 'pnpm-lock.yaml'],
   ['yarn', 'yarn.lock'],
-  ['bun', 'bun.lock'],
+  ['bun', 'bun.lockb'],
   ['npm', 'package-lock.json'],
 ];
 
 function detectFromUserAgent(): PackageManager | null {
+  // biome-ignore lint/style/noProcessEnv: environment hints come from npm.
   const agent = process.env.npm_config_user_agent;
   if (!agent) return null;
 
@@ -57,7 +59,7 @@ function detectFromUserAgent(): PackageManager | null {
 }
 
 function detectFromLockfile(workspaceRoot: string): PackageManager | null {
-  for (const [manager, lockfile] of LOCKFILE_LOOKUP) {
+  for (const [manager, lockfile] of lockfileLookup) {
     if (existsSync(resolve(workspaceRoot, lockfile))) {
       return manager;
     }
@@ -70,7 +72,11 @@ export function detectPackageManager(workspaceRoot: string): PackageManager {
   return detectFromUserAgent() ?? detectFromLockfile(workspaceRoot) ?? 'pnpm';
 }
 
-function buildCommandFor(packageManager: PackageManager, packageName: string): BuildCommand {
+function buildCommandFor(
+  packageManager: PackageManager,
+  packageName: string,
+  packagePath: string,
+): BuildCommand {
   switch (packageManager) {
     case 'pnpm':
       return {
@@ -93,8 +99,9 @@ function buildCommandFor(packageManager: PackageManager, packageName: string): B
     case 'bun':
       return {
         command: 'bun',
-        args: ['run', '--filter', packageName, 'build'],
-        pretty: `bun run --filter ${packageName} build`,
+        args: ['run', 'build'],
+        pretty: `bun run build (from ${packageName})`,
+        cwd: packagePath,
       };
     default: {
       const exhaustive: never = packageManager;
@@ -104,35 +111,36 @@ function buildCommandFor(packageManager: PackageManager, packageName: string): B
 }
 
 export function ensureTokensDist(options: EnsureTokensDistOptions): string {
-  const packageName = options.packageName ?? DEFAULT_PACKAGE_NAME;
+  const packageName = options.packageName ?? defaultPackageName;
   const packagePath = resolve(
     options.workspaceRoot,
-    options.packageRelativePath ?? DEFAULT_PACKAGE_PATH,
+    options.packageRelativePath ?? defaultPackagePath,
   );
-  const distPath = resolve(packagePath, options.distRelativePath ?? DEFAULT_DIST_PATH);
+  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
 
   if (existsSync(distPath)) {
     return distPath;
   }
 
   const manager = detectPackageManager(options.workspaceRoot);
-  const buildCommand = buildCommandFor(manager, packageName);
-  options.logger.info(
-    `Design tokens dist missing, running \`${buildCommand.pretty}\` to rebuild.`,
-  );
+  const buildCommand = buildCommandFor(manager, packageName, packagePath);
+  options.logger.info(`Design tokens dist missing, running \`${buildCommand.pretty}\` to rebuild.`);
   const result = spawnSync(buildCommand.command, buildCommand.args, {
-    cwd: options.workspaceRoot,
+    cwd: buildCommand.cwd ?? options.workspaceRoot,
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });
 
-  if (result.status !== 0) {
+  if (result.error || result.status === null || result.status !== 0) {
     options.logger.error(
       [
         'Design tokens build failed.',
         `Command: ${buildCommand.pretty}.`,
         'Check the output above for details.',
-      ].join(' '),
+        result.error ? `Error: ${result.error.message}` : undefined,
+      ]
+        .filter((segment): segment is string => Boolean(segment))
+        .join(' '),
     );
     throw new Error('Design tokens build failed.');
   }
@@ -151,16 +159,14 @@ export function ensureTokensDist(options: EnsureTokensDistOptions): string {
   return distPath;
 }
 
-export function designTokensPlugin(
-  options: DesignTokensPluginOptions,
-): Plugin {
-  const packageName = options.packageName ?? DEFAULT_PACKAGE_NAME;
-  const alias = options.alias ?? DEFAULT_ALIAS;
+export function designTokensPlugin(options: DesignTokensPluginOptions): Plugin {
+  const packageName = options.packageName ?? defaultPackageName;
+  const alias = options.alias ?? defaultAlias;
   const packagePath = resolve(
     options.workspaceRoot,
-    options.packageRelativePath ?? DEFAULT_PACKAGE_PATH,
+    options.packageRelativePath ?? defaultPackagePath,
   );
-  const distPath = resolve(packagePath, options.distRelativePath ?? DEFAULT_DIST_PATH);
+  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
 
   return {
     name: 'wildside-design-tokens',

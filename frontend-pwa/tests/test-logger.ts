@@ -1,8 +1,9 @@
 /**
  * @file Test helpers for working with the Vite logger interface.
  */
-import { vi } from 'vitest';
+
 import type { Logger } from 'vite';
+import { vi } from 'vitest';
 
 export function createMockLogger(): Logger {
   const info = vi.fn();
@@ -14,6 +15,7 @@ export function createMockLogger(): Logger {
   const timeEnd = vi.fn();
   const debug = vi.fn();
   const fatal = vi.fn();
+  const hasErrorLogged = vi.fn(() => false);
 
   return {
     hasWarned: false,
@@ -26,5 +28,6 @@ export function createMockLogger(): Logger {
     timeEnd,
     debug,
     fatal,
+    hasErrorLogged,
   } as unknown as Logger;
 }
