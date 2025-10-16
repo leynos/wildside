@@ -5,6 +5,7 @@
  * code is present. Any additional vulnerabilities remain fatal.
  */
 
+import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import {
   collectAdvisories,
@@ -12,7 +13,7 @@ import {
   reportUnexpectedAdvisories,
   runAuditJson,
 } from '../../security/audit-utils.js';
-const TARGET_ADVISORY = 'GHSA-9965-vmph-33xx';
+const TARGET_ADVISORY = VALIDATOR_ADVISORY_ID;
 
 function main() {
   const { json, status } = runAuditJson();

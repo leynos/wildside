@@ -1,6 +1,7 @@
 /** @file Validate audit exception entries against schema and expiry. */
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { VALIDATOR_ADVISORY_ID } from './constants.js';
 import { isValidatorPatched } from './validator-patch.js';
 import {
   collectAdvisories,
@@ -91,6 +92,17 @@ function assertNoExpired(entries) {
   }
 }
 
+/**
+ * Ensure reported advisories are covered by exceptions and mitigations.
+ *
+ * Enforces that every advisory returned by `pnpm audit` has a matching
+ * exception entry and, for the validator advisory, that the local patch remains
+ * applied.
+ *
+ * @param {typeof data} entries Exception ledger entries.
+ * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
+ * by `pnpm audit`.
+ */
 function assertMitigated(entries, advisories) {
   if (advisories.length === 0) {
     return;
@@ -115,7 +127,7 @@ function assertMitigated(entries, advisories) {
 
   for (const advisory of expected) {
     if (
-      advisory.github_advisory_id === 'GHSA-9965-vmph-33xx' &&
+      advisory.github_advisory_id === VALIDATOR_ADVISORY_ID &&
       !isValidatorPatched()
     ) {
       throw new Error(

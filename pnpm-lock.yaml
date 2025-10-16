@@ -11,7 +11,7 @@ overrides:
 
 patchedDependencies:
   validator@13.15.15:
-    hash: 28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040
+    hash: e84224a6f402f6474b5388f6858956f829fe0268724e4905c76d04493baf3fe3
     path: patches/validator@13.15.15.patch
 
 importers:
@@ -39,6 +39,9 @@ importers:
       puppeteer:
         specifier: ^23.11.1
         version: 23.11.1(typescript@5.9.2)
+      validator:
+        specifier: 13.15.15
+        version: 13.15.15(patch_hash=e84224a6f402f6474b5388f6858956f829fe0268724e4905c76d04493baf3fe3)
       vite:
         specifier: ^7.1.9
         version: 7.1.9(@types/node@24.3.1)(jiti@1.21.7)(yaml@2.8.1)
@@ -4073,7 +4076,7 @@ snapshots:
       loglevel: 1.9.2
       loglevel-plugin-prefix: 0.8.4
       minimatch: 6.2.0
-      validator: 13.15.15(patch_hash=28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040)
+      validator: 13.15.15(patch_hash=e84224a6f402f6474b5388f6858956f829fe0268724e4905c76d04493baf3fe3)
     transitivePeerDependencies:
       - encoding
 
@@ -7637,7 +7640,7 @@ snapshots:
 
   uuid@11.1.0: {}
 
-  validator@13.15.15(patch_hash=28077a6217dc248eb3fda0bc08d598bedffd85302f7ebdb2eb8f8353620f9040): {}
+  validator@13.15.15(patch_hash=e84224a6f402f6474b5388f6858956f829fe0268724e4905c76d04493baf3fe3): {}
 
   vite-node@3.2.4(@types/node@20.19.13)(jiti@1.21.7)(yaml@2.8.1):
     dependencies:
