@@ -130,6 +130,29 @@ describe('ensureTokensDist', () => {
     );
   });
 
+  it('runs the yarn workspace build script via yarn run when yarn is detected', () => {
+    let distExists = false;
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
+    process.env.npm_config_user_agent = 'yarn/4.0.0 npm/? node/?';
+    existsSyncMock.mockImplementation((path) => {
+      const target = pathToString(path);
+      if (target.endsWith('pnpm-lock.yaml')) return true;
+      if (target === distPath) return distExists;
+      return false;
+    });
+    spawnSyncMock.mockImplementation(() => {
+      distExists = true;
+      return { status: 0 } as ReturnType<typeof spawnSync>;
+    });
+
+    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      'yarn',
+      ['workspace', '@app/tokens', 'run', 'build'],
+      expect.objectContaining({ cwd: workspaceRoot }),
+    );
+  });
+
   it('throws when the build command fails', () => {
     mockDistMissing();
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);

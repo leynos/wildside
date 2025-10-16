@@ -37,12 +37,29 @@ const defaultPackagePath = 'packages/tokens';
 const defaultDistPath = 'dist';
 const defaultAlias = '@app/tokens';
 
-const lockfileLookup: [PackageManager, string][] = [
+const lockfileLookup = [
   ['pnpm', 'pnpm-lock.yaml'],
   ['yarn', 'yarn.lock'],
   ['bun', 'bun.lockb'],
   ['npm', 'package-lock.json'],
-];
+] as const satisfies ReadonlyArray<readonly [PackageManager, string]>;
+
+interface ResolvedPaths {
+  packageName: string;
+  packagePath: string;
+  distPath: string;
+}
+
+function resolveTokensPaths(options: EnsureTokensDistOptions): ResolvedPaths {
+  const packageName = options.packageName ?? defaultPackageName;
+  const packagePath = resolve(
+    options.workspaceRoot,
+    options.packageRelativePath ?? defaultPackagePath,
+  );
+  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
+
+  return { packageName, packagePath, distPath };
+}
 
 function detectFromUserAgent(): PackageManager | null {
   // biome-ignore lint/style/noProcessEnv: environment hints come from npm.
@@ -103,8 +120,8 @@ function buildCommandFor(
     case 'yarn':
       return {
         command: 'yarn',
-        args: ['workspace', packageName, 'build'],
-        pretty: `yarn workspace ${packageName} build`,
+        args: ['workspace', packageName, 'run', 'build'],
+        pretty: `yarn workspace ${packageName} run build`,
       };
     case 'npm':
       return {
@@ -127,12 +144,7 @@ function buildCommandFor(
 }
 
 export function ensureTokensDist(options: EnsureTokensDistOptions): string {
-  const packageName = options.packageName ?? defaultPackageName;
-  const packagePath = resolve(
-    options.workspaceRoot,
-    options.packageRelativePath ?? defaultPackagePath,
-  );
-  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
+  const { packageName, packagePath, distPath } = resolveTokensPaths(options);
 
   if (existsSync(distPath)) {
     return distPath;
