@@ -32,19 +32,32 @@ describe('detectPackageManager', () => {
     delete process.env.npm_config_user_agent;
   });
 
-  it('prefers npm_config_user_agent hints when available', () => {
+  it('detects pnpm from npm_config_user_agent hints when available', () => {
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     process.env.npm_config_user_agent = 'pnpm/9.0.0 npm/? node/?';
     expect(detectPackageManager(workspaceRoot)).toBe('pnpm');
+  });
 
+  it('detects yarn from npm_config_user_agent hints when available', () => {
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     process.env.npm_config_user_agent = 'yarn/4.0.0 npm/? node/?';
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
   });
 
-  it('falls back to lockfile discovery', () => {
+  it('detects npm from npm_config_user_agent hints when available', () => {
+    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
+    process.env.npm_config_user_agent = 'npm/10.0.0 node/?';
+    expect(detectPackageManager(workspaceRoot)).toBe('npm');
+  });
+
+  it('falls back to yarn lockfile discovery when user agent is missing', () => {
     existsSyncMock.mockImplementation((path) => pathToString(path).endsWith('yarn.lock'));
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
+  });
+
+  it('falls back to npm lockfile discovery when user agent is missing', () => {
+    existsSyncMock.mockImplementation((path) => pathToString(path).endsWith('package-lock.json'));
+    expect(detectPackageManager(workspaceRoot)).toBe('npm');
   });
 
   it('defaults to pnpm when nothing matches', () => {
@@ -159,7 +172,7 @@ describe('ensureTokensDist', () => {
     testPackageManagerBuild({
       packageManager: 'yarn',
       userAgent: 'yarn/4.0.0 npm/? node/?',
-      lockfileCheck: (path) => path.endsWith('pnpm-lock.yaml'),
+      lockfileCheck: (path) => path.endsWith('yarn.lock'),
       expectedCommand: 'yarn',
       expectedArgs: ['workspace', '@app/tokens', 'run', 'build'],
       expectedCwd: workspaceRoot,
