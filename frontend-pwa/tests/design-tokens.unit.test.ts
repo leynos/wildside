@@ -79,6 +79,54 @@ describe('ensureTokensDist', () => {
     });
   }
 
+  /**
+   * Exercises the happy-path build flow for a specific package manager.
+   *
+   * @param options.packageManager - The manager expected to be detected.
+   * @param options.userAgent - Optional CLI user agent hint to seed detection.
+   * @param options.lockfileCheck - Optional matcher for lockfile discovery.
+   * @param options.expectedCommand - The binary the build should invoke.
+   * @param options.expectedArgs - Arguments forwarded to the build command.
+   * @param options.expectedCwd - Working directory expected for the spawn call.
+   */
+  function testPackageManagerBuild(options: {
+    packageManager: string;
+    userAgent?: string;
+    lockfileCheck?: (path: string) => boolean;
+    expectedCommand: string;
+    expectedArgs: string[];
+    expectedCwd: string;
+  }): void {
+    const { packageManager, userAgent, lockfileCheck, expectedCommand, expectedArgs, expectedCwd } =
+      options;
+    let distExists = false;
+
+    if (userAgent) {
+      // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
+      process.env.npm_config_user_agent = userAgent;
+    }
+
+    existsSyncMock.mockImplementation((path) => {
+      const target = pathToString(path);
+      if (lockfileCheck?.(target)) return true;
+      if (target === distPath) return distExists;
+      return false;
+    });
+
+    spawnSyncMock.mockImplementation(() => {
+      distExists = true;
+      return { status: 0 } as ReturnType<typeof spawnSync>;
+    });
+
+    expect(detectPackageManager(workspaceRoot)).toBe(packageManager);
+    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      expectedCommand,
+      expectedArgs,
+      expect.objectContaining({ cwd: expectedCwd }),
+    );
+  }
+
   it('returns immediately when the dist directory already exists', () => {
     existsSyncMock.mockImplementation((path) => pathToString(path) === distPath);
 
@@ -87,70 +135,35 @@ describe('ensureTokensDist', () => {
   });
 
   it('builds the tokens package when the dist directory is missing', () => {
-    let distExists = false;
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
-      if (target === distPath) return distExists;
-      return false;
+    testPackageManagerBuild({
+      packageManager: 'pnpm',
+      lockfileCheck: (path) => path.endsWith('pnpm-lock.yaml'),
+      expectedCommand: 'pnpm',
+      expectedArgs: ['--filter', '@app/tokens', 'build'],
+      expectedCwd: workspaceRoot,
     });
-    spawnSyncMock.mockImplementation(() => {
-      distExists = true;
-      return { status: 0 } as ReturnType<typeof spawnSync>;
-    });
-
-    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
-    expect(spawnSyncMock).toHaveBeenCalledWith(
-      'pnpm',
-      ['--filter', '@app/tokens', 'build'],
-      expect.objectContaining({ cwd: workspaceRoot }),
-    );
   });
 
   it('runs the bun build from the package directory when bun is detected', () => {
     const packagePath = resolve(workspaceRoot, 'packages/tokens');
-    let distExists = false;
-    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
-    process.env.npm_config_user_agent = 'bun/1.0.0 npm/? node/?';
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target === distPath) return distExists;
-      return false;
+    testPackageManagerBuild({
+      packageManager: 'bun',
+      userAgent: 'bun/1.0.0 npm/? node/?',
+      expectedCommand: 'bun',
+      expectedArgs: ['run', 'build'],
+      expectedCwd: packagePath,
     });
-    spawnSyncMock.mockImplementation(() => {
-      distExists = true;
-      return { status: 0 } as ReturnType<typeof spawnSync>;
-    });
-
-    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
-    expect(spawnSyncMock).toHaveBeenCalledWith(
-      'bun',
-      ['run', 'build'],
-      expect.objectContaining({ cwd: packagePath }),
-    );
   });
 
   it('runs the yarn workspace build script via yarn run when yarn is detected', () => {
-    let distExists = false;
-    // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
-    process.env.npm_config_user_agent = 'yarn/4.0.0 npm/? node/?';
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
-      if (target === distPath) return distExists;
-      return false;
+    testPackageManagerBuild({
+      packageManager: 'yarn',
+      userAgent: 'yarn/4.0.0 npm/? node/?',
+      lockfileCheck: (path) => path.endsWith('pnpm-lock.yaml'),
+      expectedCommand: 'yarn',
+      expectedArgs: ['workspace', '@app/tokens', 'run', 'build'],
+      expectedCwd: workspaceRoot,
     });
-    spawnSyncMock.mockImplementation(() => {
-      distExists = true;
-      return { status: 0 } as ReturnType<typeof spawnSync>;
-    });
-
-    expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
-    expect(spawnSyncMock).toHaveBeenCalledWith(
-      'yarn',
-      ['workspace', '@app/tokens', 'run', 'build'],
-      expect.objectContaining({ cwd: workspaceRoot }),
-    );
   });
 
   it('throws when the build command fails', () => {
