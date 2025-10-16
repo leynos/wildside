@@ -1,6 +1,7 @@
 /**
  * @file Vite plugin that ensures the design tokens package is built and aliased.
  */
+import type { SpawnSyncReturns } from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -72,6 +73,21 @@ export function detectPackageManager(workspaceRoot: string): PackageManager {
   return detectFromUserAgent() ?? detectFromLockfile(workspaceRoot) ?? 'pnpm';
 }
 
+function buildFailed(result: SpawnSyncReturns<Buffer>): boolean {
+  return Boolean(result.error) || result.status === null || result.status !== 0;
+}
+
+function buildFailureMessage(command: BuildCommand, result: SpawnSyncReturns<Buffer>): string {
+  const segments = [
+    'Design tokens build failed.',
+    `Command: ${command.pretty}.`,
+    'Check the output above for details.',
+    result.error ? `Error: ${result.error.message}` : undefined,
+  ];
+
+  return segments.filter((segment): segment is string => Boolean(segment)).join(' ');
+}
+
 function buildCommandFor(
   packageManager: PackageManager,
   packageName: string,
@@ -131,17 +147,8 @@ export function ensureTokensDist(options: EnsureTokensDistOptions): string {
     shell: process.platform === 'win32',
   });
 
-  if (result.error || result.status === null || result.status !== 0) {
-    options.logger.error(
-      [
-        'Design tokens build failed.',
-        `Command: ${buildCommand.pretty}.`,
-        'Check the output above for details.',
-        result.error ? `Error: ${result.error.message}` : undefined,
-      ]
-        .filter((segment): segment is string => Boolean(segment))
-        .join(' '),
-    );
+  if (buildFailed(result)) {
+    options.logger.error(buildFailureMessage(buildCommand, result));
     throw new Error('Design tokens build failed.');
   }
 
