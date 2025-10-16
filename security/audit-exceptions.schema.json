@@ -5,6 +5,7 @@
   "description": "Declarative allowlist of time-bound dependency audit exceptions.",
   "type": "array",
   "minItems": 0,
+  "uniqueItems": true,
   "items": {
     "type": "object",
     "additionalProperties": false,

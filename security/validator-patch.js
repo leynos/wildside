@@ -19,7 +19,9 @@ function resolveRulesetRequire() {
     return createRequire(coreRequire.resolve('@ibm-cloud/openapi-ruleset/package.json'));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to resolve validator dependency chain: ${message}`);
+    throw new Error(`Failed to resolve validator dependency chain: ${message}`, {
+      cause: error,
+    });
   }
 }
 
