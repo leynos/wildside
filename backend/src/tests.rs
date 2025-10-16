@@ -1,7 +1,11 @@
-//! Tests for the backend application bootstrap.
+//! Tests for the backend application bootstrap, covering metrics initialisation
+//! and readiness signalling.
 
-use super::*;
-use actix_web::cookie::SameSite;
+use super::{create_server, HealthState};
+#[cfg(feature = "metrics")]
+use super::{initialize_metrics, PrometheusMetricsBuilder};
+use actix_web::cookie::{Key, SameSite};
+use actix_web::web;
 use rstest::{fixture, rstest};
 
 #[fixture]
