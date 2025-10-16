@@ -2,7 +2,7 @@ diff --git a/es/lib/isURL.js b/es/lib/isURL.js
 index 368e97d9f41baffe6a8db0164e2da3fa459a0be1..c79fe301aff2fa40b769a8443405f99e4df0f407 100644
 --- a/es/lib/isURL.js
 +++ b/es/lib/isURL.js
-@@ -91,6 +91,24 @@ export default function isURL(url, options) {
+@@ -91,6 +91,26 @@ export default function isURL(url, options) {
        return false;
      }
      split[0] = url.slice(2);
@@ -14,6 +14,8 @@ index 368e97d9f41baffe6a8db0164e2da3fa459a0be1..c79fe301aff2fa40b769a8443405f99e
 +      var potentialProtocol = url.slice(0, firstColon).toLowerCase();
 +      var isRecognised = options.protocols.indexOf(potentialProtocol) !== -1;
 +      var nonHierarchicalProtocols = ['mailto', 'tel', 'sms', 'geo', 'urn', 'cid', 'mid', 'news'];
++      // Extend this allow-list if supporting additional single-segment schemes
++      // (for example `magnet:`) to avoid blocking legitimate URLs.
 +      var expectsSlashes =
 +        isRecognised && nonHierarchicalProtocols.indexOf(potentialProtocol) === -1;
 +
@@ -31,7 +33,7 @@ diff --git a/lib/isURL.js b/lib/isURL.js
 index fdd5ea64fb108c2d81bb9b3b1c88abd9c0272bea..00a3d0e3faf2467c6cfbfb5146dd4fd4bbae3e6c 100644
 --- a/lib/isURL.js
 +++ b/lib/isURL.js
-@@ -97,6 +97,24 @@ function isURL(url, options) {
+@@ -97,6 +97,26 @@ function isURL(url, options) {
        return false;
      }
      split[0] = url.slice(2);
@@ -43,6 +45,8 @@ index fdd5ea64fb108c2d81bb9b3b1c88abd9c0272bea..00a3d0e3faf2467c6cfbfb5146dd4fd4
 +      var potentialProtocol = url.slice(0, firstColon).toLowerCase();
 +      var isRecognised = options.protocols.indexOf(potentialProtocol) !== -1;
 +      var nonHierarchicalProtocols = ['mailto', 'tel', 'sms', 'geo', 'urn', 'cid', 'mid', 'news'];
++      // Extend this allow-list if supporting additional single-segment schemes
++      // (for example `magnet:`) to avoid blocking legitimate URLs.
 +      var expectsSlashes =
 +        isRecognised && nonHierarchicalProtocols.indexOf(potentialProtocol) === -1;
 +

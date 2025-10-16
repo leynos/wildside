@@ -15,7 +15,10 @@ import { spawnSync } from 'node:child_process';
  * status. Whitespace-only output is treated as an empty advisory list so that
  * callers can rely on deterministic results even when pnpm prints nothing.
  *
- * @returns {{ json: { advisories?: Record<string, unknown> }, status: number }} Parsed audit
+ * @returns {{
+ *   json: { advisories?: Record<string, unknown> },
+ *   status: number,
+ * }} Parsed audit
  *   output and the pnpm exit status (defaults to zero when undefined).
  * @example
  * const { json, status } = runAuditJson();

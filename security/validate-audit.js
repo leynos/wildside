@@ -97,11 +97,13 @@ function assertNoExpired(entries) {
  *
  * Enforces that every advisory returned by `pnpm audit` has a matching
  * exception entry and, for the validator advisory, that the local patch remains
- * applied.
+ * applied so the upstream bypass fix cannot regress silently.
  *
- * @param {typeof data} entries Exception ledger entries.
+ * @param {typeof data} entries Exception ledger entries keyed by advisory ID.
  * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
- * by `pnpm audit`.
+ *   by `pnpm audit`.
+ * @throws {Error} When an unexpected advisory is reported or when the
+ *   validator patch is missing despite the advisory being tolerated.
  */
 function assertMitigated(entries, advisories) {
   if (advisories.length === 0) {
