@@ -40,17 +40,20 @@ async function invokeConfigHook(plugin: Plugin) {
   );
 }
 
+type ConfigResolvedHook = (config: ResolvedConfig) => void | Promise<void>;
+
+function assertResolvedConfig(config: Partial<ResolvedConfig>): asserts config is ResolvedConfig {
+  if (!config.logger) {
+    throw new Error('Resolved config mock must define a logger.');
+  }
+}
+
 function invokeConfigResolved(plugin: Plugin, resolvedConfig: Partial<ResolvedConfig>) {
   const hook = plugin.configResolved;
   if (!hook) return;
-  if (typeof hook === 'function') {
-    return (hook as unknown as (config: ResolvedConfig) => unknown)(
-      resolvedConfig as ResolvedConfig,
-    );
-  }
-  return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(
-    resolvedConfig as ResolvedConfig,
-  );
+  assertResolvedConfig(resolvedConfig);
+  const handler: ConfigResolvedHook = typeof hook === 'function' ? hook : hook.handler;
+  return handler(resolvedConfig);
 }
 
 /**
