@@ -140,6 +140,9 @@ describe('ensureTokensDist', () => {
       expectedArgs,
       expect.objectContaining({ cwd: expectedCwd }),
     );
+
+    existsSyncMock.mockReset();
+    spawnSyncMock.mockReset();
   }
 
   it('returns immediately when the dist directory already exists', () => {
@@ -177,6 +180,16 @@ describe('ensureTokensDist', () => {
       lockfileCheck: (path) => path.endsWith('yarn.lock'),
       expectedCommand: 'yarn',
       expectedArgs: ['workspace', '@app/tokens', 'run', 'build'],
+      expectedCwd: workspaceRoot,
+    });
+  });
+
+  it('runs the npm workspace build script when npm is detected', () => {
+    testPackageManagerBuild({
+      packageManager: 'npm',
+      userAgent: 'npm/10.0.0 node/?',
+      expectedCommand: 'npm',
+      expectedArgs: ['run', 'build', '--workspace', '@app/tokens'],
       expectedCwd: workspaceRoot,
     });
   });
