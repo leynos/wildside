@@ -7,7 +7,7 @@ import type { Plugin, ResolvedConfig } from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, type PathLike } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { designTokensPlugin } from '../vite/plugins/design-tokens';
@@ -67,6 +67,21 @@ describe('designTokensPlugin', () => {
     delete process.env.npm_config_user_agent;
   });
 
+  /**
+   * Configures the filesystem mock to simulate a missing design tokens dist
+   * directory whilst leaving the pnpm lockfile visible.
+   */
+  function mockDistMissing() {
+    const fallback = (path: PathLike) => {
+      const target = pathToString(path);
+      if (target.endsWith('pnpm-lock.yaml')) return true;
+      if (target === distPath) return false;
+      return false;
+    };
+    existsSyncMock.mockImplementation(fallback);
+    return fallback;
+  }
+
   it('exposes a @app/tokens alias from the config hook', async () => {
     const plugin = designTokensPlugin({ workspaceRoot });
     const config = (await invokeConfigHook(plugin)) as {
@@ -76,12 +91,12 @@ describe('designTokensPlugin', () => {
   });
 
   it('runs the build when the dist directory is missing', () => {
+    const fallback = mockDistMissing();
     let distExists = false;
     existsSyncMock.mockImplementation((path) => {
       const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
       if (target === distPath) return distExists;
-      return false;
+      return fallback(path);
     });
     spawnSyncMock.mockImplementation(() => {
       distExists = true;
@@ -100,11 +115,7 @@ describe('designTokensPlugin', () => {
   });
 
   it('throws when the rebuild fails', () => {
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
-      return false;
-    });
+    mockDistMissing();
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     const plugin = designTokensPlugin({ workspaceRoot });
