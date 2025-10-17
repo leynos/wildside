@@ -2,8 +2,17 @@
  * @file Unit tests for the design tokens plugin utilities.
  */
 
+// biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
 import type { Logger } from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { detectPackageManager, ensureTokensDist } from '../vite/plugins/design-tokens';
+import { pathToString } from './test-helpers';
+import { createMockLogger } from './test-logger';
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
@@ -12,13 +21,6 @@ vi.mock('node:fs', () => ({
 vi.mock('node:child_process', () => ({
   spawnSync: vi.fn(),
 }));
-
-const { spawnSync } = await import('node:child_process');
-const { existsSync } = await import('node:fs');
-const { resolve } = await import('node:path');
-const { detectPackageManager, ensureTokensDist } = await import('../vite/plugins/design-tokens');
-const { pathToString } = await import('./test-helpers');
-const { createMockLogger } = await import('./test-logger');
 
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
@@ -83,11 +85,13 @@ describe('ensureTokensDist', () => {
   /**
    * Configures the dist lookup to simulate a missing build whilst keeping the
    * package manager detection lockfile available.
+   *
+   * @param lockfileCheck - Optional matcher for lockfile discovery.
    */
-  function mockDistMissing(): void {
+  function mockDistMissing(lockfileCheck?: (path: string) => boolean): void {
     existsSyncMock.mockImplementation((path) => {
       const target = pathToString(path);
-      if (target.endsWith('pnpm-lock.yaml')) return true;
+      if (lockfileCheck?.(target)) return true;
       return false;
     });
   }
@@ -180,7 +184,7 @@ describe('ensureTokensDist', () => {
   });
 
   it('throws when the build command fails', () => {
-    mockDistMissing();
+    mockDistMissing((path) => path.endsWith('pnpm-lock.yaml'));
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(
@@ -189,7 +193,7 @@ describe('ensureTokensDist', () => {
   });
 
   it('throws when the dist directory is still missing after a successful build', () => {
-    mockDistMissing();
+    mockDistMissing((path) => path.endsWith('pnpm-lock.yaml'));
     spawnSyncMock.mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(
