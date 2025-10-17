@@ -61,8 +61,6 @@ describe('designTokensPlugin', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    existsSyncMock.mockReset();
-    spawnSyncMock.mockReset();
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
   });

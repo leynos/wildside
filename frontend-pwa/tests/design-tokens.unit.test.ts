@@ -77,8 +77,6 @@ describe('ensureTokensDist', () => {
     vi.resetAllMocks();
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
-    existsSyncMock.mockReset();
-    spawnSyncMock.mockReset();
     logger = createMockLogger();
   });
 
@@ -107,7 +105,7 @@ describe('ensureTokensDist', () => {
    * @param options.expectedCwd - Working directory expected for the spawn call.
    */
   function testPackageManagerBuild(options: {
-    packageManager: string;
+    packageManager: 'pnpm' | 'yarn' | 'npm' | 'bun';
     userAgent?: string;
     lockfileCheck?: (path: string) => boolean;
     expectedCommand: string;
