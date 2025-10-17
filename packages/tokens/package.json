@@ -11,10 +11,10 @@
     "test": "node build/validate-contrast.js"
   },
   "devDependencies": {
-    "color": "^5.0.0",
-    "style-dictionary": "^5.0.4",
+    "color": "^5.0.2",
+    "style-dictionary": "^5.1.1",
     "markdownlint-cli": "^0.45.0",
-    "vite": "^7.1.9",
+    "vite": "^7.1.10",
     "@types/node": "^20"
   },
   "contrastThreshold": 4.5,
