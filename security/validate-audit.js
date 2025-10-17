@@ -1,6 +1,14 @@
 /** @file Validate audit exception entries against schema and expiry. */
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { VALIDATOR_ADVISORY_ID } from './constants.js';
+import { isValidatorPatched } from './validator-patch.js';
+import {
+  collectAdvisories,
+  partitionAdvisoriesById,
+  reportUnexpectedAdvisories,
+  runAuditJson,
+} from './audit-utils.js';
 
 /**
  * Load a JSON file using the import attribute supported by the current Node
@@ -84,7 +92,89 @@ function assertNoExpired(entries) {
   }
 }
 
+/**
+ * Validate that `pnpm audit` advisories align with the configured exceptions.
+ *
+ * Advisories are partitioned against the exception list; unexpected entries are
+ * surfaced via {@link reportUnexpectedAdvisories}. The validator advisory
+ * (GHSA-9965-vmph-33xx) additionally requires {@link isValidatorPatched} to
+ * return `true`, otherwise an error reading "Validator vulnerability
+ * GHSA-9965-vmph-33xx reported but local patch is missing." is thrown. When
+ * `reportUnexpectedAdvisories` emits output the function throws an error with
+ * the message "Unexpected vulnerabilities reported by pnpm audit; review
+ * stderr for details.".
+ *
+ * @param {typeof data} entries Exception ledger entries keyed by advisory ID.
+ * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
+ *   by `pnpm audit`.
+ * @returns {void} Returns undefined when all advisories are mitigated.
+ * @throws {Error} When unexpected advisories are reported or the validator
+ *   patch is absent.
+ * @example
+ * assertMitigated(
+ *   [
+ *     {
+ *       id: 'validator-allowlist',
+ *       package: 'validator',
+ *       advisory: 'GHSA-9965-vmph-33xx',
+ *       reason: 'Patched locally pending upstream fix',
+ *       addedAt: '2024-01-01',
+ *       expiresAt: '2024-12-31',
+ *     },
+ *   ],
+ *   [{ github_advisory_id: 'GHSA-9965-vmph-33xx' }],
+ * );
+ */
+function assertMitigated(entries, advisories) {
+  if (advisories.length === 0) {
+    return;
+  }
+
+  const exceptionsById = new Map(entries.map((entry) => [entry.advisory, entry]));
+  const { expected, unexpected } = partitionAdvisoriesById(
+    advisories,
+    exceptionsById.keys(),
+  );
+
+  if (
+    reportUnexpectedAdvisories(
+      unexpected,
+      'pnpm audit reported vulnerabilities without exceptions:',
+    )
+  ) {
+    throw new Error(
+      'Unexpected vulnerabilities reported by pnpm audit; review stderr for details.',
+    );
+  }
+
+  for (const advisory of expected) {
+    if (
+      advisory.github_advisory_id === VALIDATOR_ADVISORY_ID &&
+      !isValidatorPatched()
+    ) {
+      throw new Error(
+        'Validator vulnerability GHSA-9965-vmph-33xx reported but local patch is missing.',
+      );
+    }
+  }
+}
+
 assertValidSchema(data);
 assertNoExpired(data);
 
-console.log('Audit exceptions valid');
+try {
+  const { json: auditJson, status } = runAuditJson();
+  const advisories = collectAdvisories(auditJson);
+
+  if (status !== 0 && advisories.length === 0) {
+    throw new Error(
+      `pnpm audit failed without reporting advisories (exit status ${status}).`,
+    );
+  }
+  assertMitigated(data, advisories);
+
+  console.log('Audit exceptions valid and vulnerabilities accounted for');
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
