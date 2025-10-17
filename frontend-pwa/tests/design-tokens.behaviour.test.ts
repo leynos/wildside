@@ -67,17 +67,23 @@ describe('designTokensPlugin', () => {
 
   /**
    * Configures the filesystem mock to simulate a missing design tokens dist
-   * directory whilst leaving the pnpm lockfile visible.
+   * directory whilst leaving the pnpm lockfile visible. Tests can flip the
+   * dist state via the returned controller to emulate rebuild outcomes.
    */
   function mockDistMissing() {
+    let distExists = false;
     const fallback = (path: PathLike) => {
       const target = pathToString(path);
       if (target.endsWith('pnpm-lock.yaml')) return true;
-      if (target === distPath) return false;
+      if (target === distPath) return distExists;
       return false;
     };
     existsSyncMock.mockImplementation(fallback);
-    return fallback;
+    return {
+      setDistExists(value: boolean) {
+        distExists = value;
+      },
+    };
   }
 
   it('exposes a @app/tokens alias from the config hook', async () => {
@@ -89,15 +95,9 @@ describe('designTokensPlugin', () => {
   });
 
   it('runs the build when the dist directory is missing', () => {
-    const fallback = mockDistMissing();
-    let distExists = false;
-    existsSyncMock.mockImplementation((path) => {
-      const target = pathToString(path);
-      if (target === distPath) return distExists;
-      return fallback(path);
-    });
+    const distController = mockDistMissing();
     spawnSyncMock.mockImplementation(() => {
-      distExists = true;
+      distController.setDistExists(true);
       return { status: 0 } as ReturnType<typeof spawnSync>;
     });
 
