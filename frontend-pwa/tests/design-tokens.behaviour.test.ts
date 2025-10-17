@@ -3,7 +3,7 @@
  */
 
 // biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
-import type { Plugin, ResolvedConfig } from 'vite';
+import type { Logger, Plugin, ResolvedConfig } from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnSync } from 'node:child_process';
@@ -49,9 +49,9 @@ function invokeConfigResolved(plugin: Plugin, resolvedConfig: ResolvedConfig) {
   return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
 }
 
-function createResolvedConfig(): ResolvedConfig {
+function createResolvedConfig(logger: Logger = createMockLogger()): ResolvedConfig {
   return {
-    logger: createMockLogger(),
+    logger,
   } as unknown as ResolvedConfig;
 }
 
@@ -114,13 +114,15 @@ describe('designTokensPlugin', () => {
 
   it('throws when the rebuild fails', () => {
     mockDistMissing();
+    const logger = createMockLogger();
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     const plugin = designTokensPlugin({ workspaceRoot });
-    const resolvedConfig = createResolvedConfig();
+    const resolvedConfig = createResolvedConfig(logger);
 
     expect(() => invokeConfigResolved(plugin, resolvedConfig)).toThrow(
       'Design tokens build failed.',
     );
+    expect(logger.error).toHaveBeenCalled();
   });
 });
