@@ -49,9 +49,13 @@ function invokeConfigResolved(plugin: Plugin, resolvedConfig: ResolvedConfig) {
   return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
 }
 
-function createResolvedConfig(logger: Logger = createMockLogger()): ResolvedConfig {
+/**
+ * Creates a minimal resolved config with a mock logger by default so tests can
+ * override the logger when verifying error reporting behaviour.
+ */
+function createResolvedConfig(logger?: Logger): ResolvedConfig {
   return {
-    logger,
+    logger: logger ?? createMockLogger(),
   } as unknown as ResolvedConfig;
 }
 
