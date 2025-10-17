@@ -40,23 +40,27 @@ async function invokeConfigHook(plugin: Plugin) {
   );
 }
 
-function invokeConfigResolved(plugin: Plugin, resolvedConfig: ResolvedConfig) {
+function invokeConfigResolved(plugin: Plugin, resolvedConfig: Partial<ResolvedConfig>) {
   const hook = plugin.configResolved;
   if (!hook) return;
   if (typeof hook === 'function') {
-    return (hook as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
+    return (hook as unknown as (config: ResolvedConfig) => unknown)(
+      resolvedConfig as ResolvedConfig,
+    );
   }
-  return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
+  return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(
+    resolvedConfig as ResolvedConfig,
+  );
 }
 
 /**
  * Creates a minimal resolved config with a mock logger by default so tests can
  * override the logger when verifying error reporting behaviour.
  */
-function createResolvedConfig(logger?: Logger): ResolvedConfig {
+function createResolvedConfig(logger?: Logger): Partial<ResolvedConfig> {
   return {
     logger: logger ?? createMockLogger(),
-  } as unknown as ResolvedConfig;
+  } satisfies Partial<ResolvedConfig>;
 }
 
 describe('designTokensPlugin', () => {
