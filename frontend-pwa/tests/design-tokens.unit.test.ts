@@ -2,15 +2,8 @@
  * @file Unit tests for the design tokens plugin utilities.
  */
 
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { Logger } from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { detectPackageManager, ensureTokensDist } from '../vite/plugins/design-tokens';
-import { pathToString } from './test-helpers';
-import { createMockLogger } from './test-logger';
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
@@ -19,6 +12,13 @@ vi.mock('node:fs', () => ({
 vi.mock('node:child_process', () => ({
   spawnSync: vi.fn(),
 }));
+
+const { spawnSync } = await import('node:child_process');
+const { existsSync } = await import('node:fs');
+const { resolve } = await import('node:path');
+const { detectPackageManager, ensureTokensDist } = await import('../vite/plugins/design-tokens');
+const { pathToString } = await import('./test-helpers');
+const { createMockLogger } = await import('./test-logger');
 
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
