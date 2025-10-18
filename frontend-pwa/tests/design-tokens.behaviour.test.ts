@@ -3,7 +3,14 @@
  */
 
 // biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
-import type { Plugin, ResolvedConfig } from 'vite';
+import type {
+  ConfigEnv,
+  ConfigPluginContext,
+  Logger,
+  Plugin,
+  ResolvedConfig,
+  UserConfig,
+} from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnSync } from 'node:child_process';
@@ -25,34 +32,67 @@ vi.mock('node:child_process', () => ({
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
 
-async function invokeConfigHook(plugin: Plugin) {
-  const hook = plugin.config;
-  if (!hook) return undefined;
-  if (typeof hook === 'function') {
-    return (hook as unknown as (config: unknown, env: unknown) => unknown)(
-      {},
-      { command: 'serve', mode: 'development' },
-    );
-  }
-  return (hook.handler as unknown as (config: unknown, env: unknown) => unknown)(
-    {},
-    { command: 'serve', mode: 'development' },
+type ConfigHook = NonNullable<Plugin['config']>;
+type ConfigHookHandler = Extract<
+  ConfigHook,
+  (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown
+>;
+type ConfigHookDescriptor = Extract<
+  ConfigHook,
+  { handler: (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown }
+>;
+
+function isConfigHookHandler(hook: Plugin['config']): hook is ConfigHookHandler {
+  return typeof hook === 'function';
+}
+
+function isConfigHookDescriptor(hook: Plugin['config']): hook is ConfigHookDescriptor {
+  return (
+    typeof hook === 'object' &&
+    hook !== null &&
+    'handler' in hook &&
+    typeof hook.handler === 'function'
   );
 }
 
-function invokeConfigResolved(plugin: Plugin, resolvedConfig: ResolvedConfig) {
-  const hook = plugin.configResolved;
-  if (!hook) return;
-  if (typeof hook === 'function') {
-    return (hook as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
+async function invokeConfigHook(plugin: Plugin) {
+  const hook = plugin.config;
+  if (!hook) return undefined;
+  const initialConfig = {} satisfies UserConfig;
+  const env: ConfigEnv = { command: 'serve', mode: 'development' };
+  if (isConfigHookHandler(hook)) {
+    return hook.bind({} as ConfigPluginContext)(initialConfig, env);
   }
-  return (hook.handler as unknown as (config: ResolvedConfig) => unknown)(resolvedConfig);
+  if (isConfigHookDescriptor(hook)) {
+    return hook.handler.bind({} as ConfigPluginContext)(initialConfig, env);
+  }
+  return hook;
 }
 
-function createResolvedConfig(): ResolvedConfig {
+type ConfigResolvedHook = (config: ResolvedConfig) => void | Promise<void>;
+
+function assertResolvedConfig(config: Partial<ResolvedConfig>): asserts config is ResolvedConfig {
+  if (!config.logger) {
+    throw new Error('Resolved config mock must define a logger.');
+  }
+}
+
+function invokeConfigResolved(plugin: Plugin, resolvedConfig: Partial<ResolvedConfig>) {
+  const hook = plugin.configResolved;
+  if (!hook) return;
+  assertResolvedConfig(resolvedConfig);
+  const handler: ConfigResolvedHook = typeof hook === 'function' ? hook : hook.handler;
+  return handler(resolvedConfig);
+}
+
+/**
+ * Creates a minimal resolved config with a mock logger by default so tests can
+ * override the logger when verifying error reporting behaviour.
+ */
+function createResolvedConfig(logger?: Logger): Partial<ResolvedConfig> {
   return {
-    logger: createMockLogger(),
-  } as unknown as ResolvedConfig;
+    logger: logger ?? createMockLogger(),
+  } satisfies Partial<ResolvedConfig>;
 }
 
 describe('designTokensPlugin', () => {
@@ -103,7 +143,9 @@ describe('designTokensPlugin', () => {
 
     const plugin = designTokensPlugin({ workspaceRoot });
     const resolvedConfig = createResolvedConfig();
-    invokeConfigResolved(plugin, resolvedConfig);
+    const result = invokeConfigResolved(plugin, resolvedConfig);
+
+    expect(result).toBeUndefined();
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
       'pnpm',
@@ -114,13 +156,15 @@ describe('designTokensPlugin', () => {
 
   it('throws when the rebuild fails', () => {
     mockDistMissing();
+    const logger = createMockLogger();
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     const plugin = designTokensPlugin({ workspaceRoot });
-    const resolvedConfig = createResolvedConfig();
+    const resolvedConfig = createResolvedConfig(logger);
 
     expect(() => invokeConfigResolved(plugin, resolvedConfig)).toThrow(
       'Design tokens build failed.',
     );
+    expect(logger.error).toHaveBeenCalled();
   });
 });
