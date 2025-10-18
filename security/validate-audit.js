@@ -131,10 +131,7 @@ function assertMitigated(entries, advisories) {
   }
 
   const exceptionsById = new Map(entries.map((entry) => [entry.advisory, entry]));
-  const { expected, unexpected } = partitionAdvisoriesById(
-    advisories,
-    exceptionsById.keys(),
-  );
+  const { expected, unexpected } = partitionAdvisoriesById(advisories, exceptionsById.keys());
 
   if (
     reportUnexpectedAdvisories(
@@ -148,10 +145,7 @@ function assertMitigated(entries, advisories) {
   }
 
   for (const advisory of expected) {
-    if (
-      advisory.github_advisory_id === VALIDATOR_ADVISORY_ID &&
-      !isValidatorPatched()
-    ) {
+    if (advisory.github_advisory_id === VALIDATOR_ADVISORY_ID && !isValidatorPatched()) {
       throw new Error(
         'Validator vulnerability GHSA-9965-vmph-33xx reported but local patch is missing.',
       );
@@ -167,9 +161,7 @@ try {
   const advisories = collectAdvisories(auditJson);
 
   if (status !== 0 && advisories.length === 0) {
-    throw new Error(
-      `pnpm audit failed without reporting advisories (exit status ${status}).`,
-    );
+    throw new Error(`pnpm audit failed without reporting advisories (exit status ${status}).`);
   }
   assertMitigated(data, advisories);
 

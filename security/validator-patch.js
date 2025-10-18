@@ -13,7 +13,9 @@ import { createRequire } from 'node:module';
  */
 function resolveRulesetRequire() {
   try {
-    const workspaceRequire = createRequire(new URL('../frontend-pwa/package.json', import.meta.url));
+    const workspaceRequire = createRequire(
+      new URL('../frontend-pwa/package.json', import.meta.url),
+    );
     const orvalRequire = createRequire(workspaceRequire.resolve('orval/package.json'));
     const coreRequire = createRequire(orvalRequire.resolve('@orval/core/package.json'));
     return createRequire(coreRequire.resolve('@ibm-cloud/openapi-ruleset/package.json'));
