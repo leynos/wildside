@@ -3,7 +3,14 @@
  */
 
 // biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
-import type { Logger, Plugin, ResolvedConfig } from 'vite';
+import type {
+  ConfigEnv,
+  ConfigPluginContext,
+  Logger,
+  Plugin,
+  ResolvedConfig,
+  UserConfig,
+} from 'vite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnSync } from 'node:child_process';
@@ -25,19 +32,41 @@ vi.mock('node:child_process', () => ({
 const existsSyncMock = vi.mocked(existsSync);
 const spawnSyncMock = vi.mocked(spawnSync);
 
+type ConfigHook = NonNullable<Plugin['config']>;
+type ConfigHookHandler = Extract<
+  ConfigHook,
+  (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown
+>;
+type ConfigHookDescriptor = Extract<
+  ConfigHook,
+  { handler: (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown }
+>;
+
+function isConfigHookHandler(hook: Plugin['config']): hook is ConfigHookHandler {
+  return typeof hook === 'function';
+}
+
+function isConfigHookDescriptor(hook: Plugin['config']): hook is ConfigHookDescriptor {
+  return (
+    typeof hook === 'object' &&
+    hook !== null &&
+    'handler' in hook &&
+    typeof hook.handler === 'function'
+  );
+}
+
 async function invokeConfigHook(plugin: Plugin) {
   const hook = plugin.config;
   if (!hook) return undefined;
-  if (typeof hook === 'function') {
-    return (hook as unknown as (config: unknown, env: unknown) => unknown)(
-      {},
-      { command: 'serve', mode: 'development' },
-    );
+  const initialConfig = {} satisfies UserConfig;
+  const env: ConfigEnv = { command: 'serve', mode: 'development' };
+  if (isConfigHookHandler(hook)) {
+    return hook.bind({} as ConfigPluginContext)(initialConfig, env);
   }
-  return (hook.handler as unknown as (config: unknown, env: unknown) => unknown)(
-    {},
-    { command: 'serve', mode: 'development' },
-  );
+  if (isConfigHookDescriptor(hook)) {
+    return hook.handler.bind({} as ConfigPluginContext)(initialConfig, env);
+  }
+  return hook;
 }
 
 type ConfigResolvedHook = (config: ResolvedConfig) => void | Promise<void>;
@@ -114,7 +143,9 @@ describe('designTokensPlugin', () => {
 
     const plugin = designTokensPlugin({ workspaceRoot });
     const resolvedConfig = createResolvedConfig();
-    invokeConfigResolved(plugin, resolvedConfig);
+    const result = invokeConfigResolved(plugin, resolvedConfig);
+
+    expect(result).toBeUndefined();
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
       'pnpm',
