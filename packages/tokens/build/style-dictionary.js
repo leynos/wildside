@@ -9,7 +9,7 @@ import StyleDictionary from 'style-dictionary';
 import { readJson } from '../build-utils/read-json.js';
 
 const sd = new StyleDictionary({
-  source: ['src/tokens.json', 'src/themes/*.json'],
+  source: ['src/tokens.json'],
   platforms: {
     css: {
       transformGroup: 'css',
