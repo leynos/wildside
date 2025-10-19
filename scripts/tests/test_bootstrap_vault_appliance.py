@@ -1,0 +1,240 @@
+"""Tests for the Vault appliance bootstrap helper."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+from cmd_mox import CmdMox, Response
+from plumbum import local
+
+SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from _vault_bootstrap import (  # noqa: E402  # imported after sys.path mutation
+    bootstrap,
+)
+from _vault_state import VaultBootstrapConfig, VaultBootstrapState, VaultBootstrapError
+
+
+def _make_config(tmp_path: Path, **overrides: object) -> VaultBootstrapConfig:
+    state_file = tmp_path / "state.json"
+    defaults: dict[str, object] = {
+        "vault_addr": "https://vault.example",
+        "droplet_tag": "vault-dev",
+        "state_file": state_file,
+    }
+    defaults.update(overrides)
+    return VaultBootstrapConfig(**defaults)
+
+
+def _sync_plumbum_path() -> None:
+    """Align ``plumbum.local`` with the real environment variables."""
+
+    local.env["PATH"] = os.environ["PATH"]
+
+    desired_cmd_vars = {key for key in os.environ if key.startswith("CMOX_")}
+    active_cmd_vars = {
+        key for key in local.env.keys() if key.startswith("CMOX_")
+    }
+
+    for key in desired_cmd_vars:
+        local.env[key] = os.environ[key]
+
+    for key in active_cmd_vars - desired_cmd_vars:
+        local.env.pop(key, None)
+
+
+def _stub_doctl(mox: CmdMox, ip: str) -> None:
+    mox.stub("doctl").with_args(
+        "compute",
+        "droplet",
+        "list",
+        "--tag-name",
+        "vault-dev",
+        "--output",
+        "json",
+    ).returns(
+        stdout=json.dumps(
+            [
+                {
+                    "networks": {
+                        "v4": [
+                            {
+                                "type": "public",
+                                "ip_address": ip,
+                            }
+                        ]
+                    }
+                }
+            ]
+        )
+    ).times(1)
+
+
+def _stub_ssh(mox: CmdMox, ip: str, *, user: str = "root") -> None:
+    mox.stub("ssh").with_args(
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
+        f"{user}@{ip}",
+        "systemctl",
+        "is-active",
+        "vault",
+    ).returns(stdout="active\n").times(1)
+
+
+def test_bootstrap_initialises_vault(tmp_path: Path) -> None:
+    """Initial bootstrap initialises, unseals, and provisions the AppRole."""
+
+    policy = tmp_path / "policy.hcl"
+    policy_content = "path \"secret/data/*\" { capabilities = [\"read\"] }\n"
+    policy.write_text(policy_content, encoding="utf-8")
+
+    config = _make_config(tmp_path, approle_policy_path=policy)
+
+    vault_state = {
+        "status_calls": 0,
+        "unseal_calls": 0,
+    }
+
+    def vault_handler(invocation) -> Response:
+        args = invocation.args
+        env = invocation.env
+        assert env["VAULT_ADDR"] == config.vault_addr
+        if args == ["status", "-format=json"]:
+            vault_state["status_calls"] += 1
+            match vault_state["status_calls"]:
+                case 1:
+                    payload = {"initialized": False, "sealed": True}
+                case 2:
+                    payload = {"initialized": True, "sealed": True}
+                case _:
+                    payload = {"initialized": True, "sealed": False}
+            return Response(stdout=json.dumps(payload))
+        if args[:3] == ["operator", "init", "-key-shares"]:
+            return Response(
+                stdout=json.dumps(
+                    {
+                        "unseal_keys_b64": ["key1", "key2", "key3"],
+                        "root_token": "root-token",
+                    }
+                )
+            )
+        if args[:3] == ["operator", "unseal", "-format=json"]:
+            vault_state["unseal_calls"] += 1
+            sealed = vault_state["unseal_calls"] < 3
+            return Response(stdout=json.dumps({"sealed": sealed}))
+        if args[:3] == ["secrets", "list", "-format=json"]:
+            return Response(stdout=json.dumps({}))
+        if args[:2] == ["secrets", "enable"]:
+            return Response(stdout="")
+        if args[:3] == ["auth", "list", "-format=json"]:
+            return Response(stdout=json.dumps({}))
+        if args[:2] == ["auth", "enable"]:
+            return Response(stdout="")
+        if args[:2] == ["policy", "write"]:
+            assert invocation.stdin == policy_content
+            return Response(stdout="")
+        if args[0:2] == ["write", f"auth/approle/role/{config.approle_name}"]:
+            return Response(stdout="")
+        if args[:2] == ["read", "-field=role_id"]:
+            return Response(stdout="role-id\n")
+        if args[:3] == ["write", "-force", "-format=json"]:
+            return Response(stdout=json.dumps({"data": {"secret_id": "secret-id"}}))
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    with CmdMox() as mox:
+        _stub_doctl(mox, "203.0.113.10")
+        _stub_ssh(mox, "203.0.113.10")
+        mox.stub("vault").runs(vault_handler)
+        mox.replay()
+        _sync_plumbum_path()
+        state = bootstrap(config)
+
+    _sync_plumbum_path()
+
+    assert state.root_token == "root-token"
+    assert state.approle_role_id == "role-id"
+    assert state.approle_secret_id == "secret-id"
+
+    saved = json.loads(config.state_file.read_text(encoding="utf-8"))
+    assert saved["root_token"] == "root-token"
+    assert saved["approle_secret_id"] == "secret-id"
+
+
+def test_bootstrap_skips_when_already_configured(tmp_path: Path) -> None:
+    """A subsequent run verifies mounts and retains the existing secret ID."""
+
+    state = VaultBootstrapState(
+        unseal_keys=["key1", "key2", "key3"],
+        root_token="root-token",
+        approle_role_id="role-id",
+        approle_secret_id="existing-secret",
+    )
+    config = _make_config(tmp_path)
+    config.state_file.write_text(json.dumps(state.to_mapping()), encoding="utf-8")
+
+    def vault_handler(invocation) -> Response:
+        args = invocation.args
+        if args == ["status", "-format=json"]:
+            return Response(stdout=json.dumps({"initialized": True, "sealed": False}))
+        if args[:3] == ["secrets", "list", "-format=json"]:
+            payload = {
+                "secret/": {"type": "kv", "options": {"version": "2"}},
+            }
+            return Response(stdout=json.dumps(payload))
+        if args[:3] == ["auth", "list", "-format=json"]:
+            return Response(stdout=json.dumps({"approle/": {"type": "approle"}}))
+        if args[:2] == ["policy", "write"]:
+            return Response(stdout="")
+        if args[0:2] == ["write", f"auth/approle/role/{config.approle_name}"]:
+            return Response(stdout="")
+        if args[:2] == ["read", "-field=role_id"]:
+            return Response(stdout="role-id\n")
+        if args[:3] == ["write", "-force", "-format=json"]:
+            raise AssertionError("secret-id rotation should be skipped")
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    with CmdMox() as mox:
+        _stub_doctl(mox, "203.0.113.10")
+        _stub_ssh(mox, "203.0.113.10")
+        mox.stub("vault").runs(vault_handler)
+        mox.replay()
+        _sync_plumbum_path()
+        result_state = bootstrap(config)
+
+    _sync_plumbum_path()
+
+    assert result_state.approle_secret_id == "existing-secret"
+
+
+def test_bootstrap_errors_when_unseal_keys_missing(tmp_path: Path) -> None:
+    """Fail fast when Vault is sealed but the state file lacks key shares."""
+
+    config = _make_config(tmp_path)
+    config.state_file.write_text(json.dumps({"root_token": "root-token"}), encoding="utf-8")
+
+    def vault_handler(invocation) -> Response:
+        args = invocation.args
+        if args == ["status", "-format=json"]:
+            return Response(stdout=json.dumps({"initialized": True, "sealed": True}))
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    with CmdMox() as mox:
+        _stub_doctl(mox, "203.0.113.10")
+        _stub_ssh(mox, "203.0.113.10")
+        mox.stub("vault").runs(vault_handler)
+        mox.replay()
+        _sync_plumbum_path()
+        with pytest.raises(VaultBootstrapError) as exc:
+            bootstrap(config)
+
+    _sync_plumbum_path()
+
+    assert "no unseal keys" in str(exc.value)

@@ -82,7 +82,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   load balancer attachment for Vault. Expose outputs for the public endpoint,
   CA certificate, and recovery keys.
 
-- [ ] **Ship a Python bootstrap helper**: Create
+- [x] **Ship a Python bootstrap helper**: Create
   `scripts/bootstrap_vault_appliance.py` using the
   [scripting standards](scripting-standards.md) to initialise Vault (init if
   sealed, unseal with stored shares, enable the KV v2 mount, and provision the

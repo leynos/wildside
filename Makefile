@@ -116,6 +116,15 @@ lint-infra:
 test: workspace-sync deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	pnpm -r --if-present --silent run test
+	$(MAKE) scripts-test
+
+.PHONY: scripts-test
+scripts-test:
+	uv run \
+		--with pytest \
+		--with plumbum \
+		--with "cmd-mox@git+https://github.com/leynos/cmd-mox@28acd288975f15e4c360d62e431950820dbcb27a" \
+		pytest scripts/tests
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml
