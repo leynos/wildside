@@ -771,7 +771,7 @@ appliance is treated as first-class infrastructure with three building blocks:
 
 2. **Python bootstrap helper (`scripts/bootstrap_vault_appliance.py`)** follows
    the [scripting standards](scripting-standards.md). It uses `plumbum` to run
-   `ssh`, `vault`, and `doctl` commands, initialises Vault if required, stores
+  `ssh`, `vault`, and `doctl` commands, initializes Vault if required, stores
    generated unseal keys in a secure secrets store, and enables the KV v2 engine
    plus the AppRole required by the DOKS deployment workflow. The helper is
    idempotent—re-running it simply verifies that the appliance state matches the

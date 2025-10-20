@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -106,8 +109,21 @@ def save_state(path: Path, state: VaultBootstrapState) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(state.to_mapping(), indent=2), encoding="utf-8")
+    payload = json.dumps(state.to_mapping(), indent=2)
+
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        with suppress(FileNotFoundError):
+            os.unlink(tmp_path)
+        raise
+
     tmp_path.replace(path)
+    os.chmod(path, 0o600)
 
 
 __all__ = [

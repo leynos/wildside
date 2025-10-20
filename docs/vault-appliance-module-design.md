@@ -40,7 +40,7 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   intervention. The keys are emitted as sensitive outputs to encourage storage
   in a secure backend.
 - **Scripted bootstrap with state capture.** The repository ships a dedicated
-  Python helper (`scripts/bootstrap_vault_appliance.py`) that initialises Vault,
+  Python helper (`scripts/bootstrap_vault_appliance.py`) that initializes Vault,
   records the generated recovery material in a local state file, unseals the
   appliance, enables the KV v2 secrets engine, and provisions the DOKS AppRole.
   The helper is idempotent—re-running it verifies mounts and rotates the AppRole

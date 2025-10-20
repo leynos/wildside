@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -93,7 +94,7 @@ def _stub_ssh(mox: CmdMox, ip: str, *, user: str = "root") -> None:
 
 def _build_configured_vault_handler(
     config: VaultBootstrapConfig,
-) -> callable:
+) -> Callable:
     """Return a Vault handler for an already configured cluster.
 
     Example:

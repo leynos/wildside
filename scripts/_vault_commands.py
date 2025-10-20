@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from plumbum import local
@@ -17,12 +19,19 @@ from ._vault_state import (
 )
 
 
+@dataclass(slots=True)
+class CommandContext:
+    """Execution options for :func:`run_command`."""
+
+    env: dict[str, str] | None = None
+    stdin: str | None = None
+    timeout: int | None = None
+
+
 def run_command(
     command: str,
     *args: str,
-    env: dict[str, str] | None = None,
-    stdin: str | None = None,
-    timeout: int | None = None,
+    context: CommandContext | None = None,
 ) -> str:
     """Execute an external command and return its standard output.
 
@@ -32,12 +41,13 @@ def run_command(
     'hello'
     """
 
+    ctx = context or CommandContext()
     bound = local[command][list(args)]
     try:
-        if stdin is None:
-            _, stdout, _ = bound.run(env=env, timeout=timeout)
+        if ctx.stdin is None:
+            _, stdout, _ = bound.run(env=ctx.env, timeout=ctx.timeout)
         else:
-            _, stdout, _ = (bound << stdin).run(env=env, timeout=timeout)
+            _, stdout, _ = (bound << ctx.stdin).run(env=ctx.env, timeout=ctx.timeout)
     except ProcessExecutionError as exc:  # pragma: no cover - surface error
         msg = f"Command {command!r} failed: {exc.stderr.strip()}"
         raise VaultBootstrapError(msg) from exc
@@ -90,24 +100,19 @@ def collect_droplet_ips(tag: str) -> list[str]:
     if not isinstance(droplets, list):
         msg = "doctl JSON root must be a list"
         raise VaultBootstrapError(msg)
-    addresses = [
-        ip
-        for droplet in droplets
-        for interface in droplet.get("networks", {}).get("v4", [])
-        if interface.get("type") == "public"
-        and (ip := interface.get("ip_address"))
-    ]
+    addresses = list(
+        dict.fromkeys(
+            ip
+            for droplet in droplets
+            for interface in droplet.get("networks", {}).get("v4", [])
+            if interface.get("type") == "public"
+            and (ip := interface.get("ip_address"))
+        )
+    )
     if not addresses:
         msg = f"No public IPv4 addresses found for Droplets tagged {tag!r}"
         raise VaultBootstrapError(msg)
-    seen: set[str] = set()
-    deduped = []
-    for ip in addresses:
-        if ip in seen:
-            continue
-        seen.add(ip)
-        deduped.append(ip)
-    return deduped
+    return addresses
 
 
 def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig) -> None:
@@ -120,16 +125,41 @@ def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig)
     ...     mox.stub('ssh').with_args('-o','BatchMode=yes','-o','StrictHostKeyChecking=no','root@203.0.113.10','systemctl','is-active','vault').returns(stdout='active\n'); mox.replay(); verify_vault_service(['203.0.113.10'], cfg)
     """
 
-    ssh_args_base = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"]
+    ssh_args_base = [
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=10",
+    ]
     if config.ssh_identity is not None:
         ssh_args_base.extend(["-i", str(config.ssh_identity)])
     for address in addresses:
         target = f"{config.ssh_user}@{address}"
         ssh_args = [*ssh_args_base, target, "systemctl", "is-active", "vault"]
-        output = run_command("ssh", *ssh_args).strip()
-        if output != "active":
-            msg = f"Vault service on {address} is not active (reported: {output!r})"
-            raise VaultBootstrapError(msg)
+        last_error: VaultBootstrapError | None = None
+        for attempt in range(3):
+            try:
+                output = run_command(
+                    "ssh",
+                    *ssh_args,
+                    context=CommandContext(timeout=30),
+                ).strip()
+            except VaultBootstrapError as exc:
+                last_error = exc
+            else:
+                if output == "active":
+                    break
+                last_error = VaultBootstrapError(
+                    f"Vault service on {address} is not active (reported: {output!r})"
+                )
+            if attempt < 2:
+                time.sleep(2)
+        else:
+            raise last_error or VaultBootstrapError(
+                f"Vault service on {address} did not report as active"
+            )
 
 
 def fetch_vault_status(env: dict[str, str]) -> dict[str, Any]:
@@ -142,7 +172,12 @@ def fetch_vault_status(env: dict[str, str]) -> dict[str, Any]:
     False
     """
 
-    stdout = run_command("vault", "status", "-format=json", env=env)
+    stdout = run_command(
+        "vault",
+        "status",
+        "-format=json",
+        context=CommandContext(env=env),
+    )
     try:
         return json.loads(stdout)
     except json.JSONDecodeError as exc:
@@ -169,7 +204,7 @@ def initialise_vault(config: VaultBootstrapConfig, env: dict[str, str]) -> Vault
         "-key-threshold",
         str(config.key_threshold),
         "-format=json",
-        env=env,
+        context=CommandContext(env=env),
     )
     try:
         payload = json.loads(stdout)
@@ -204,7 +239,7 @@ def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
             "unseal",
             "-format=json",
             key,
-            env=env,
+            context=CommandContext(env=env),
         )
         try:
             payload = json.loads(stdout)
@@ -226,7 +261,13 @@ def ensure_kv_engine(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
     ...     mox.stub('vault').runs(lambda inv: Response(stdout='{}') if inv.args[:3]==['secrets','list','-format=json'] else Response(stdout='')); mox.replay(); ensure_kv_engine(cfg, {})
     """
 
-    stdout = run_command("vault", "secrets", "list", "-format=json", env=env)
+    stdout = run_command(
+        "vault",
+        "secrets",
+        "list",
+        "-format=json",
+        context=CommandContext(env=env),
+    )
     try:
         mounts = json.loads(stdout)
     except json.JSONDecodeError as exc:
@@ -241,7 +282,7 @@ def ensure_kv_engine(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
             f"-path={config.kv_mount_path}",
             "-version=2",
             "kv",
-            env=env,
+            context=CommandContext(env=env),
         )
         return
     if existing.get("type") != "kv":
@@ -295,13 +336,25 @@ def _ensure_approle_auth_enabled(env: dict[str, str]) -> None:
     True
     """
 
-    stdout = run_command("vault", "auth", "list", "-format=json", env=env)
+    stdout = run_command(
+        "vault",
+        "auth",
+        "list",
+        "-format=json",
+        context=CommandContext(env=env),
+    )
     try:
         mounts = json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise VaultBootstrapError(f"Invalid JSON from auth list: {exc}") from exc
     if "approle/" not in mounts:
-        run_command("vault", "auth", "enable", "approle", env=env)
+        run_command(
+            "vault",
+            "auth",
+            "enable",
+            "approle",
+            context=CommandContext(env=env),
+        )
 
 
 def _write_approle_policy(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
@@ -329,8 +382,7 @@ def _write_approle_policy(config: VaultBootstrapConfig, env: dict[str, str]) -> 
         "write",
         config.approle_policy_name,
         "-",
-        env=env,
-        stdin=policy_content,
+        context=CommandContext(env=env, stdin=policy_content),
     )
 
 
@@ -358,7 +410,7 @@ def _configure_approle_role(config: VaultBootstrapConfig, env: dict[str, str]) -
         f"token_ttl={config.token_ttl}",
         f"token_max_ttl={config.token_max_ttl}",
         "token_num_uses=0",
-        env=env,
+        context=CommandContext(env=env),
     )
 
 
@@ -381,7 +433,7 @@ def _fetch_role_id(config: VaultBootstrapConfig, env: dict[str, str]) -> str | N
         "read",
         "-field=role_id",
         f"{role_path}/role-id",
-        env=env,
+        context=CommandContext(env=env),
     )
     role_id = stdout.strip()
     return role_id or None
@@ -407,7 +459,7 @@ def _generate_secret_id(config: VaultBootstrapConfig, env: dict[str, str]) -> st
         "-force",
         "-format=json",
         f"{role_path}/secret-id",
-        env=env,
+        context=CommandContext(env=env),
     )
     try:
         payload = json.loads(stdout)
@@ -453,6 +505,7 @@ def ensure_approle(config: VaultBootstrapConfig, env: dict[str, str], state: Vau
 
 
 __all__ = [
+    "CommandContext",
     "_configure_approle_role",
     "_default_policy",
     "_ensure_approle_auth_enabled",

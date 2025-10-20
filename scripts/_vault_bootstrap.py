@@ -103,7 +103,6 @@ def _ensure_initialized(
 
 
 def _ensure_unsealed(
-    config: VaultBootstrapConfig,
     state: VaultBootstrapState,
     env: dict[str, str],
     status: dict[str, Any],
@@ -113,8 +112,6 @@ def _ensure_unsealed(
     Examples
     --------
     >>> from cmd_mox import CmdMox, Response
-    >>> from pathlib import Path
-    >>> cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json'))
     >>> state = VaultBootstrapState(unseal_keys=['k1'])
     >>> with CmdMox() as mox:
     ...     calls = [
@@ -130,7 +127,7 @@ def _ensure_unsealed(
     ...         raise AssertionError(invocation.args)
     ...     mox.stub('vault').runs(handler); mox.replay()
     ...     status = {'sealed': True}
-    ...     _ensure_unsealed(cfg, state, {}, status); status['sealed']
+    ...     _ensure_unsealed(state, {}, status); status['sealed']
     False
     """
 
@@ -203,7 +200,7 @@ def bootstrap(config: VaultBootstrapConfig) -> VaultBootstrapState:
     state = load_state(config.state_file)
     env_without_token = build_vault_env(config, token=None)
     state, status = _ensure_initialized(config, state, env_without_token)
-    _ensure_unsealed(config, state, env_without_token, status)
+    _ensure_unsealed(state, env_without_token, status)
 
     if state.root_token is None:
         msg = "Missing root token in state; cannot continue"
