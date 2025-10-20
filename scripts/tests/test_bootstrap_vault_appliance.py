@@ -89,6 +89,57 @@ def _stub_ssh(mox: CmdMox, ip: str, *, user: str = "root") -> None:
     ).returns(stdout="active\n").times(1)
 
 
+def _build_configured_vault_handler(
+    config: VaultBootstrapConfig,
+) -> callable:
+    """Return a Vault handler for an already configured cluster.
+
+    Example:
+        >>> from pathlib import Path
+        >>> config = VaultBootstrapConfig("https://vault", "tag", Path("state.json"))
+        >>> handler = _build_configured_vault_handler(config)
+        >>> invocation = type("Invocation", (), {"args": ["status", "-format=json"]})
+        >>> handler(invocation).stdout
+        '{"initialized": true, "sealed": false}'
+    """
+
+    command_responses: dict[tuple[str, ...], Response] = {
+        ("status", "-format=json"): Response(
+            stdout=json.dumps({"initialized": True, "sealed": False})
+        ),
+        ("secrets", "list", "-format=json"): Response(
+            stdout=json.dumps(
+                {"secret/": {"type": "kv", "options": {"version": "2"}}}
+            )
+        ),
+        ("auth", "list", "-format=json"): Response(
+            stdout=json.dumps({"approle/": {"type": "approle"}})
+        ),
+        (
+            "read",
+            "-field=role_id",
+            f"auth/approle/role/{config.approle_name}/role-id",
+        ): Response(stdout="role-id\n"),
+    }
+
+    def handler(invocation) -> Response:
+        args = tuple(invocation.args)
+        if args in command_responses:
+            return command_responses[args]
+        if args[:2] == ("policy", "write"):
+            return Response(stdout="")
+        if args[:2] == (
+            "write",
+            f"auth/approle/role/{config.approle_name}",
+        ):
+            return Response(stdout="")
+        if args[:3] == ("write", "-force", "-format=json"):
+            raise AssertionError("secret-id rotation should be skipped")
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    return handler
+
+
 def test_bootstrap_initialises_vault(tmp_path: Path) -> None:
     """Initial bootstrap initialises, unseals, and provisions the AppRole."""
 
@@ -180,31 +231,10 @@ def test_bootstrap_skips_when_already_configured(tmp_path: Path) -> None:
     config = _make_config(tmp_path)
     config.state_file.write_text(json.dumps(state.to_mapping()), encoding="utf-8")
 
-    def vault_handler(invocation) -> Response:
-        args = invocation.args
-        if args == ["status", "-format=json"]:
-            return Response(stdout=json.dumps({"initialized": True, "sealed": False}))
-        if args[:3] == ["secrets", "list", "-format=json"]:
-            payload = {
-                "secret/": {"type": "kv", "options": {"version": "2"}},
-            }
-            return Response(stdout=json.dumps(payload))
-        if args[:3] == ["auth", "list", "-format=json"]:
-            return Response(stdout=json.dumps({"approle/": {"type": "approle"}}))
-        if args[:2] == ["policy", "write"]:
-            return Response(stdout="")
-        if args[0:2] == ["write", f"auth/approle/role/{config.approle_name}"]:
-            return Response(stdout="")
-        if args[:2] == ["read", "-field=role_id"]:
-            return Response(stdout="role-id\n")
-        if args[:3] == ["write", "-force", "-format=json"]:
-            raise AssertionError("secret-id rotation should be skipped")
-        raise AssertionError(f"Unexpected vault invocation: {args}")
-
     with CmdMox() as mox:
         _stub_doctl(mox, "203.0.113.10")
         _stub_ssh(mox, "203.0.113.10")
-        mox.stub("vault").runs(vault_handler)
+        mox.stub("vault").runs(_build_configured_vault_handler(config))
         mox.replay()
         _sync_plumbum_path()
         result_state = bootstrap(config)
