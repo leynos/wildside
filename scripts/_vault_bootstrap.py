@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from _vault_commands import (
+from ._vault_commands import (
     build_vault_env,
     collect_droplet_ips,
     ensure_approle,
@@ -15,7 +15,7 @@ from _vault_commands import (
     unseal_vault,
     verify_vault_service,
 )
-from _vault_state import (
+from ._vault_state import (
     VaultBootstrapConfig,
     VaultBootstrapError,
     VaultBootstrapState,
@@ -146,7 +146,8 @@ def _ensure_unsealed(
     status.clear()
     status.update(refreshed)
     if status.get("sealed", False):
-        raise VaultBootstrapError("Vault remains sealed after unseal attempts")
+        msg = "Vault remains sealed after unseal attempts"
+        raise VaultBootstrapError(msg)
 
 
 def _configure_vault(
@@ -205,7 +206,8 @@ def bootstrap(config: VaultBootstrapConfig) -> VaultBootstrapState:
     _ensure_unsealed(config, state, env_without_token, status)
 
     if state.root_token is None:
-        raise VaultBootstrapError("Missing root token in state; cannot continue")
+        msg = "Missing root token in state; cannot continue"
+        raise VaultBootstrapError(msg)
 
     env_with_token = build_vault_env(config, token=state.root_token)
     _configure_vault(config, state, env_with_token)

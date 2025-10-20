@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from plumbum import local
 from plumbum.commands.processes import ProcessExecutionError
 
-from _vault_state import VaultBootstrapConfig, VaultBootstrapError, VaultBootstrapState
+from ._vault_state import (
+    VaultBootstrapConfig,
+    VaultBootstrapError,
+    VaultBootstrapState,
+)
 
 
 def run_command(
@@ -17,6 +22,7 @@ def run_command(
     *args: str,
     env: dict[str, str] | None = None,
     stdin: str | None = None,
+    timeout: int | None = None,
 ) -> str:
     """Execute an external command and return its standard output.
 
@@ -29,9 +35,9 @@ def run_command(
     bound = local[command][list(args)]
     try:
         if stdin is None:
-            _, stdout, _ = bound.run(env=env)
+            _, stdout, _ = bound.run(env=env, timeout=timeout)
         else:
-            _, stdout, _ = (bound << stdin).run(env=env)
+            _, stdout, _ = (bound << stdin).run(env=env, timeout=timeout)
     except ProcessExecutionError as exc:  # pragma: no cover - surface error
         msg = f"Command {command!r} failed: {exc.stderr.strip()}"
         raise VaultBootstrapError(msg) from exc
@@ -81,6 +87,9 @@ def collect_droplet_ips(tag: str) -> list[str]:
     except json.JSONDecodeError as exc:
         msg = f"doctl returned invalid JSON for tag {tag!r}: {exc}"
         raise VaultBootstrapError(msg) from exc
+    if not isinstance(droplets, list):
+        msg = "doctl JSON root must be a list"
+        raise VaultBootstrapError(msg)
     addresses = [
         ip
         for droplet in droplets
@@ -91,7 +100,14 @@ def collect_droplet_ips(tag: str) -> list[str]:
     if not addresses:
         msg = f"No public IPv4 addresses found for Droplets tagged {tag!r}"
         raise VaultBootstrapError(msg)
-    return addresses
+    seen: set[str] = set()
+    deduped = []
+    for ip in addresses:
+        if ip in seen:
+            continue
+        seen.add(ip)
+        deduped.append(ip)
+    return deduped
 
 
 def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig) -> None:
@@ -437,8 +453,8 @@ def ensure_approle(config: VaultBootstrapConfig, env: dict[str, str], state: Vau
 
 
 __all__ = [
-    "_default_policy",
     "_configure_approle_role",
+    "_default_policy",
     "_ensure_approle_auth_enabled",
     "_fetch_role_id",
     "_generate_secret_id",

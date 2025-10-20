@@ -11,14 +11,16 @@ import pytest
 from cmd_mox import CmdMox, Response
 from plumbum import local
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[1]
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from _vault_bootstrap import (  # noqa: E402  # imported after sys.path mutation
-    bootstrap,
+from scripts._vault_bootstrap import bootstrap  # noqa: E402  # imported after sys.path mutation
+from scripts._vault_state import (  # noqa: E402  # imported after sys.path mutation
+    VaultBootstrapConfig,
+    VaultBootstrapError,
+    VaultBootstrapState,
 )
-from _vault_state import VaultBootstrapConfig, VaultBootstrapState, VaultBootstrapError
 
 
 def _make_config(tmp_path: Path, **overrides: object) -> VaultBootstrapConfig:
