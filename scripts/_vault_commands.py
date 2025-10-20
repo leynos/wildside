@@ -266,6 +266,143 @@ def _default_policy(config: VaultBootstrapConfig) -> str:
     )
 
 
+def _ensure_approle_auth_enabled(env: dict[str, str]) -> None:
+    """Ensure the AppRole auth method is enabled in Vault.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response; calls = []
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda inv: calls.append(inv.args) or Response(stdout='{}' if inv.args[:3] == ('auth','list','-format=json') else ''))
+    ...     mox.replay(); _ensure_approle_auth_enabled({})
+    >>> any(args[:2] == ('auth', 'enable') for args in calls)
+    True
+    """
+
+    stdout = run_command("vault", "auth", "list", "-format=json", env=env)
+    try:
+        mounts = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise VaultBootstrapError(f"Invalid JSON from auth list: {exc}") from exc
+    if "approle/" not in mounts:
+        run_command("vault", "auth", "enable", "approle", env=env)
+
+
+def _write_approle_policy(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
+    """Write the AppRole policy to Vault, loading overrides when configured.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response; from pathlib import Path
+    >>> cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json')); captured = {}
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda inv: captured.setdefault('stdin', inv.stdin) or Response(stdout=''))
+    ...     mox.replay(); _write_approle_policy(cfg, {})
+    >>> bool(captured['stdin'])
+    True
+    """
+
+    policy_content = (
+        config.approle_policy_path.read_text(encoding="utf-8")
+        if config.approle_policy_path is not None
+        else _default_policy(config)
+    )
+    run_command(
+        "vault",
+        "policy",
+        "write",
+        config.approle_policy_name,
+        "-",
+        env=env,
+        stdin=policy_content,
+    )
+
+
+def _configure_approle_role(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
+    """Configure the AppRole with the desired policies and TTL values.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response; from pathlib import Path
+    >>> cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json')); seen = []
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda inv: seen.append(inv.args[:2]) or Response(stdout=''))
+    ...     mox.replay(); _configure_approle_role(cfg, {})
+    >>> ('write', f'auth/approle/role/{cfg.approle_name}') in seen
+    True
+    """
+
+    role_path = f"auth/approle/role/{config.approle_name}"
+    run_command(
+        "vault",
+        "write",
+        role_path,
+        f"token_policies={config.approle_policy_name}",
+        f"secret_id_ttl={config.secret_id_ttl}",
+        f"token_ttl={config.token_ttl}",
+        f"token_max_ttl={config.token_max_ttl}",
+        "token_num_uses=0",
+        env=env,
+    )
+
+
+def _fetch_role_id(config: VaultBootstrapConfig, env: dict[str, str]) -> str | None:
+    """Return the AppRole role_id if Vault reports one.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response; from pathlib import Path
+    >>> cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json'))
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda _: Response(stdout='role-id\n'))
+    ...     mox.replay(); _fetch_role_id(cfg, {})
+    'role-id'
+    """
+
+    role_path = f"auth/approle/role/{config.approle_name}"
+    stdout = run_command(
+        "vault",
+        "read",
+        "-field=role_id",
+        f"{role_path}/role-id",
+        env=env,
+    )
+    role_id = stdout.strip()
+    return role_id or None
+
+
+def _generate_secret_id(config: VaultBootstrapConfig, env: dict[str, str]) -> str:
+    """Generate and return a fresh AppRole secret_id.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response; from pathlib import Path
+    >>> cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json'))
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda _: Response(stdout='{"data": {"secret_id": "secret"}}'))
+    ...     mox.replay(); _generate_secret_id(cfg, {})
+    'secret'
+    """
+
+    role_path = f"auth/approle/role/{config.approle_name}"
+    stdout = run_command(
+        "vault",
+        "write",
+        "-force",
+        "-format=json",
+        f"{role_path}/secret-id",
+        env=env,
+    )
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise VaultBootstrapError(f"Invalid JSON from secret-id write: {exc}") from exc
+    secret_id = payload.get("data", {}).get("secret_id")
+    if secret_id is None:
+        raise VaultBootstrapError("Failed to retrieve secret_id from Vault")
+    return secret_id
+
+
 def ensure_approle(config: VaultBootstrapConfig, env: dict[str, str], state: VaultBootstrapState) -> None:
     """Provision the DOKS AppRole and capture its credentials.
 
@@ -288,73 +425,24 @@ def ensure_approle(config: VaultBootstrapConfig, env: dict[str, str], state: Vau
     'secret'
     """
 
-    stdout = run_command("vault", "auth", "list", "-format=json", env=env)
-    try:
-        mounts = json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise VaultBootstrapError(f"Invalid JSON from auth list: {exc}") from exc
-    if "approle/" not in mounts:
-        run_command("vault", "auth", "enable", "approle", env=env)
+    _ensure_approle_auth_enabled(env)
+    _write_approle_policy(config, env)
+    _configure_approle_role(config, env)
 
-    policy_content = (
-        config.approle_policy_path.read_text(encoding="utf-8")
-        if config.approle_policy_path is not None
-        else _default_policy(config)
-    )
-    run_command(
-        "vault",
-        "policy",
-        "write",
-        config.approle_policy_name,
-        "-",
-        env=env,
-        stdin=policy_content,
-    )
-
-    role_path = f"auth/approle/role/{config.approle_name}"
-    run_command(
-        "vault",
-        "write",
-        role_path,
-        f"token_policies={config.approle_policy_name}",
-        f"secret_id_ttl={config.secret_id_ttl}",
-        f"token_ttl={config.token_ttl}",
-        f"token_max_ttl={config.token_max_ttl}",
-        "token_num_uses=0",
-        env=env,
-    )
-
-    role_id = run_command(
-        "vault",
-        "read",
-        "-field=role_id",
-        f"{role_path}/role-id",
-        env=env,
-    ).strip()
-    state.approle_role_id = role_id or None
+    state.approle_role_id = _fetch_role_id(config, env)
 
     should_rotate = config.rotate_secret_id or not state.approle_secret_id
     if should_rotate:
-        stdout = run_command(
-            "vault",
-            "write",
-            "-force",
-            "-format=json",
-            f"{role_path}/secret-id",
-            env=env,
-        )
-        try:
-            payload = json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise VaultBootstrapError(f"Invalid JSON from secret-id write: {exc}") from exc
-        secret_id = payload.get("data", {}).get("secret_id")
-        if secret_id is None:
-            raise VaultBootstrapError("Failed to retrieve secret_id from Vault")
-        state.approle_secret_id = secret_id
+        state.approle_secret_id = _generate_secret_id(config, env)
 
 
 __all__ = [
     "_default_policy",
+    "_configure_approle_role",
+    "_ensure_approle_auth_enabled",
+    "_fetch_role_id",
+    "_generate_secret_id",
+    "_write_approle_policy",
     "build_vault_env",
     "collect_droplet_ips",
     "ensure_approle",
