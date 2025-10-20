@@ -81,14 +81,13 @@ def collect_droplet_ips(tag: str) -> list[str]:
     except json.JSONDecodeError as exc:
         msg = f"doctl returned invalid JSON for tag {tag!r}: {exc}"
         raise VaultBootstrapError(msg) from exc
-    addresses: list[str] = []
-    for droplet in droplets:
-        networks = droplet.get("networks", {})
-        for interface in networks.get("v4", []):
-            if interface.get("type") == "public":
-                ip = interface.get("ip_address")
-                if ip:
-                    addresses.append(ip)
+    addresses = [
+        ip
+        for droplet in droplets
+        for interface in droplet.get("networks", {}).get("v4", [])
+        if interface.get("type") == "public"
+        and (ip := interface.get("ip_address"))
+    ]
     if not addresses:
         msg = f"No public IPv4 addresses found for Droplets tagged {tag!r}"
         raise VaultBootstrapError(msg)
