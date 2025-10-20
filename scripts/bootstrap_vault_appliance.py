@@ -18,10 +18,9 @@ from _vault_bootstrap import (
 )
 
 
-def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
-    """Parse command-line arguments into a configuration object."""
+def _add_infrastructure_args(parser: argparse.ArgumentParser) -> None:
+    """Add infrastructure and connection arguments to the parser."""
 
-    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault-addr", required=True, help="Vault HTTPS endpoint")
     parser.add_argument("--droplet-tag", required=True, help="DigitalOcean tag")
     parser.add_argument(
@@ -41,10 +40,42 @@ def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
         help="Optional SSH identity file passed via -i",
     )
     parser.add_argument(
+        "--ca-certificate",
+        type=Path,
+        help="Path to the Vault CA certificate for TLS verification",
+    )
+
+
+def _add_vault_init_args(parser: argparse.ArgumentParser) -> None:
+    """Add Vault initialisation arguments to the parser."""
+
+    parser.add_argument(
+        "--key-shares",
+        type=int,
+        default=5,
+        help="Number of unseal key shares to generate",
+    )
+    parser.add_argument(
+        "--key-threshold",
+        type=int,
+        default=3,
+        help="Number of shares required to unseal Vault",
+    )
+
+
+def _add_kv_args(parser: argparse.ArgumentParser) -> None:
+    """Add KV secrets engine arguments to the parser."""
+
+    parser.add_argument(
         "--kv-mount-path",
         default="secret",
         help="Mount path for the KV v2 secrets engine",
     )
+
+
+def _add_approle_args(parser: argparse.ArgumentParser) -> None:
+    """Add AppRole configuration arguments to the parser."""
+
     parser.add_argument(
         "--approle-name",
         default="doks-deployer",
@@ -59,18 +90,6 @@ def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
         "--approle-policy-path",
         type=Path,
         help="Path to a policy file overriding the default capabilities",
-    )
-    parser.add_argument(
-        "--key-shares",
-        type=int,
-        default=5,
-        help="Number of unseal key shares to generate",
-    )
-    parser.add_argument(
-        "--key-threshold",
-        type=int,
-        default=3,
-        help="Number of shares required to unseal Vault",
     )
     parser.add_argument(
         "--token-ttl",
@@ -92,11 +111,16 @@ def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
         action="store_true",
         help="Rotate the AppRole secret ID even if one is already recorded",
     )
-    parser.add_argument(
-        "--ca-certificate",
-        type=Path,
-        help="Path to the Vault CA certificate for TLS verification",
-    )
+
+
+def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
+    """Parse command-line arguments into a configuration object."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    _add_infrastructure_args(parser)
+    _add_vault_init_args(parser)
+    _add_kv_args(parser)
+    _add_approle_args(parser)
     args = parser.parse_args(argv)
     return VaultBootstrapConfig(
         vault_addr=args.vault_addr,
