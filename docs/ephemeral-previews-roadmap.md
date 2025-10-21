@@ -84,7 +84,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
 
 - [x] **Ship a Python bootstrap helper**: Create
   `scripts/bootstrap_vault_appliance.py` using the
-  [scripting standards](scripting-standards.md) to initialise Vault (init if
+  [scripting standards](scripting-standards.md) to initialize Vault (init if
   sealed, unseal with stored shares, enable the KV v2 mount, and provision the
   AppRole used by the DOKS workflow). Include pytest coverage with
   `cmd-mox`-backed mocks for `vault`, `doctl`, and `ssh` interactions.
