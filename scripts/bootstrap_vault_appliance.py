@@ -127,6 +127,8 @@ def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
     _add_kv_args(parser)
     _add_approle_args(parser)
     args = parser.parse_args(argv)
+    if args.key_threshold > args.key_shares:
+        parser.error("--key-threshold must be ≤ --key-shares")
     return VaultBootstrapConfig(
         vault_addr=args.vault_addr,
         droplet_tag=args.droplet_tag,
@@ -154,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         state = bootstrap(config)
     except VaultBootstrapError as exc:
-        print(f"error: {exc}")
+        print(f"error: {exc}", file=sys.stderr)
         return 1
     print("Vault appliance bootstrap complete.")
     if state.approle_role_id and state.approle_secret_id:

@@ -16,12 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts._vault_bootstrap import bootstrap  # noqa: E402  # imported after sys.path mutation
-from scripts._vault_state import (  # noqa: E402  # imported after sys.path mutation
+from scripts._vault_bootstrap import bootstrap  # imported after sys.path mutation
+from scripts._vault_state import (  # imported after sys.path mutation
     VaultBootstrapConfig,
     VaultBootstrapError,
     VaultBootstrapState,
 )
+from scripts.bootstrap_vault_appliance import parse_args  # imported after sys.path mutation
 
 
 def _make_config(tmp_path: Path, **overrides: object) -> VaultBootstrapConfig:
@@ -271,3 +272,30 @@ def test_bootstrap_errors_when_unseal_keys_missing(tmp_path: Path) -> None:
     _sync_plumbum_path()
 
     assert "no unseal keys" in str(exc.value)
+
+
+def test_parse_args_validates_threshold_not_exceeding_shares(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CLI parsing rejects a key threshold larger than the number of shares."""
+
+    state_file = tmp_path / "state.json"
+    argv = [
+        "--vault-addr",
+        "https://vault.example",
+        "--droplet-tag",
+        "vault-dev",
+        "--state-file",
+        str(state_file),
+        "--key-shares",
+        "3",
+        "--key-threshold",
+        "4",
+    ]
+
+    with pytest.raises(SystemExit) as excinfo:
+        parse_args(argv)
+
+    assert excinfo.value.code == 2
+    captured = capsys.readouterr()
+    assert "--key-threshold must be ≤ --key-shares" in captured.err
