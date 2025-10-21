@@ -97,10 +97,26 @@ def load_state(path: Path) -> VaultBootstrapState:
         msg = f"Failed to parse state file {path}: {exc}"
         raise VaultBootstrapError(msg) from exc
     state = VaultBootstrapState()
-    state.unseal_keys = list(payload.get("unseal_keys", []))
-    state.root_token = payload.get("root_token")
-    state.approle_role_id = payload.get("approle_role_id")
-    state.approle_secret_id = payload.get("approle_secret_id")
+    keys = payload.get("unseal_keys", [])
+    if not isinstance(keys, list) or not all(isinstance(item, str) for item in keys):
+        msg = "State field 'unseal_keys' must be list[str]"
+        raise VaultBootstrapError(msg)
+    root_token = payload.get("root_token")
+    if root_token is not None and not isinstance(root_token, str):
+        msg = "State field 'root_token' must be str | None"
+        raise VaultBootstrapError(msg)
+    role_id = payload.get("approle_role_id")
+    if role_id is not None and not isinstance(role_id, str):
+        msg = "State field 'approle_role_id' must be str | None"
+        raise VaultBootstrapError(msg)
+    secret_id = payload.get("approle_secret_id")
+    if secret_id is not None and not isinstance(secret_id, str):
+        msg = "State field 'approle_secret_id' must be str | None"
+        raise VaultBootstrapError(msg)
+    state.unseal_keys = list(keys)
+    state.root_token = root_token
+    state.approle_role_id = role_id
+    state.approle_secret_id = secret_id
     return state
 
 

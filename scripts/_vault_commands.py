@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,14 +72,16 @@ def build_vault_env(config: VaultBootstrapConfig, token: str | None) -> dict[str
     return env
 
 
-def collect_droplet_ips(tag: str) -> list[str]:
-    """Return public IPv4 addresses for Droplets tagged with *tag*.
+def _load_droplets(tag: str) -> list[Any]:
+    """Return the JSON payload describing Droplets for *tag*.
 
     Examples
     --------
-    >>> from cmd_mox import CmdMox; with CmdMox() as mox: ...
-    ...     _ = mox.stub('doctl').returns(stdout='[{"networks":{"v4":[{"type":"public","ip_address":"203.0.113.10"}]}}]'); mox.replay(); collect_droplet_ips('vault-dev')
-    ['203.0.113.10']
+    >>> from cmd_mox import CmdMox
+    >>> with CmdMox() as mox:
+    ...     _ = mox.stub('doctl').returns(stdout='[{"networks": {"v4": []}}]')
+    ...     mox.replay(); _load_droplets('vault-dev')[0]['networks']
+    {'v4': []}
     """
 
     stdout = run_command(
@@ -94,25 +96,97 @@ def collect_droplet_ips(tag: str) -> list[str]:
     )
     try:
         droplets = json.loads(stdout)
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
         msg = f"doctl returned invalid JSON for tag {tag!r}: {exc}"
         raise VaultBootstrapError(msg) from exc
     if not isinstance(droplets, list):
         msg = "doctl JSON root must be a list"
         raise VaultBootstrapError(msg)
-    addresses = list(
-        dict.fromkeys(
-            ip
-            for droplet in droplets
-            for interface in droplet.get("networks", {}).get("v4", [])
-            if interface.get("type") == "public"
-            and (ip := interface.get("ip_address"))
-        )
-    )
+    return droplets
+
+
+def _iter_public_ipv4(droplets: Iterable[dict[str, Any]]) -> Iterator[str]:
+    """Yield deduplicated public IPv4 addresses from *droplets*.
+
+    Examples
+    --------
+    >>> list(_iter_public_ipv4([
+    ...     {"networks": {"v4": [
+    ...         {"type": "public", "ip_address": "203.0.113.10"},
+    ...         {"type": "private", "ip_address": "10.0.0.5"},
+    ...     ]}}
+    ... ]))
+    ['203.0.113.10']
+    """
+
+    seen: dict[str, None] = {}
+    for droplet in droplets:
+        networks = droplet.get("networks", {})
+        for interface in networks.get("v4", []):
+            if interface.get("type") != "public":
+                continue
+            ip = interface.get("ip_address")
+            if not ip or ip in seen:
+                continue
+            seen[ip] = None
+            yield ip
+
+
+def collect_droplet_ips(tag: str) -> list[str]:
+    """Return public IPv4 addresses for Droplets tagged with *tag*.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox; with CmdMox() as mox: ...
+    ...     _ = mox.stub('doctl').returns(stdout='[{"networks":{"v4":[{"type":"public","ip_address":"203.0.113.10"}]}}]'); mox.replay(); collect_droplet_ips('vault-dev')
+    ['203.0.113.10']
+    """
+
+    droplets = _load_droplets(tag)
+    addresses = list(_iter_public_ipv4(droplets))
     if not addresses:
         msg = f"No public IPv4 addresses found for Droplets tagged {tag!r}"
         raise VaultBootstrapError(msg)
     return addresses
+
+
+def _probe_vault_service(address: str, ssh_args: list[str]) -> None:
+    """Assert the Vault systemd unit reports as active for *address*.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox
+    >>> ssh_args = ['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
+    ...             '-o', 'ConnectTimeout=10', 'root@203.0.113.10',
+    ...             'systemctl', 'is-active', 'vault']
+    >>> with CmdMox() as mox:
+    ...     mox.stub('ssh').with_args(*ssh_args).returns(stdout='active\n')
+    ...     mox.replay(); _probe_vault_service('203.0.113.10', ssh_args)
+    """
+
+    last_error: VaultBootstrapError | None = None
+    for attempt in range(3):
+        try:
+            output = run_command(
+                "ssh",
+                *ssh_args,
+                context=CommandContext(timeout=30),
+            ).strip()
+        except VaultBootstrapError as exc:
+            last_error = exc
+        else:
+            if output == "active":
+                return
+            msg = (
+                "Vault service on {address} is not active "
+                "(reported: {output!r})"
+            )
+            last_error = VaultBootstrapError(msg.format(address=address, output=output))
+        if attempt < 2:
+            time.sleep(2)
+    raise last_error or VaultBootstrapError(
+        f"Vault service on {address} did not report as active"
+    )
 
 
 def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig) -> None:
@@ -122,7 +196,7 @@ def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig)
     --------
     >>> from cmd_mox import CmdMox; from pathlib import Path; cfg = VaultBootstrapConfig('https://vault','tag', Path('state.json'))
     >>> with CmdMox() as mox:
-    ...     mox.stub('ssh').with_args('-o','BatchMode=yes','-o','StrictHostKeyChecking=no','root@203.0.113.10','systemctl','is-active','vault').returns(stdout='active\n'); mox.replay(); verify_vault_service(['203.0.113.10'], cfg)
+    ...     mox.stub('ssh').with_args('-o','BatchMode=yes','-o','StrictHostKeyChecking=accept-new','-o','ConnectTimeout=10','root@203.0.113.10','systemctl','is-active','vault').returns(stdout='active\n'); mox.replay(); verify_vault_service(['203.0.113.10'], cfg)
     """
 
     ssh_args_base = [
@@ -138,28 +212,7 @@ def verify_vault_service(addresses: Iterable[str], config: VaultBootstrapConfig)
     for address in addresses:
         target = f"{config.ssh_user}@{address}"
         ssh_args = [*ssh_args_base, target, "systemctl", "is-active", "vault"]
-        last_error: VaultBootstrapError | None = None
-        for attempt in range(3):
-            try:
-                output = run_command(
-                    "ssh",
-                    *ssh_args,
-                    context=CommandContext(timeout=30),
-                ).strip()
-            except VaultBootstrapError as exc:
-                last_error = exc
-            else:
-                if output == "active":
-                    break
-                last_error = VaultBootstrapError(
-                    f"Vault service on {address} is not active (reported: {output!r})"
-                )
-            if attempt < 2:
-                time.sleep(2)
-        else:
-            raise last_error or VaultBootstrapError(
-                f"Vault service on {address} did not report as active"
-            )
+        _probe_vault_service(address, ssh_args)
 
 
 def fetch_vault_status(env: dict[str, str]) -> dict[str, Any]:
@@ -231,7 +284,8 @@ def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
     """
 
     if not state.unseal_keys:
-        raise VaultBootstrapError("No unseal keys recorded; cannot unseal Vault")
+        msg = "No unseal keys recorded; cannot unseal Vault"
+        raise VaultBootstrapError(msg)
     for key in state.unseal_keys:
         stdout = run_command(
             "vault",
@@ -244,11 +298,13 @@ def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
         try:
             payload = json.loads(stdout)
         except json.JSONDecodeError as exc:
-            raise VaultBootstrapError(f"Invalid JSON from operator unseal: {exc}") from exc
+            msg = f"Invalid JSON from operator unseal: {exc}"
+            raise VaultBootstrapError(msg) from exc
         if not payload.get("sealed", True):
             break
     else:
-        raise VaultBootstrapError("Vault remains sealed after applying all key shares")
+        msg = "Vault remains sealed after applying all key shares"
+        raise VaultBootstrapError(msg)
 
 
 def ensure_kv_engine(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
@@ -511,6 +567,9 @@ __all__ = [
     "_ensure_approle_auth_enabled",
     "_fetch_role_id",
     "_generate_secret_id",
+    "_iter_public_ipv4",
+    "_load_droplets",
+    "_probe_vault_service",
     "_write_approle_policy",
     "build_vault_env",
     "collect_droplet_ips",

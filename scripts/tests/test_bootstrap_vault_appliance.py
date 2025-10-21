@@ -143,8 +143,8 @@ def _build_configured_vault_handler(
     return handler
 
 
-def test_bootstrap_initialises_vault(tmp_path: Path) -> None:
-    """Initial bootstrap initialises, unseals, and provisions the AppRole."""
+def test_bootstrap_initializes_vault(tmp_path: Path) -> None:
+    """Initial bootstrap initializes, unseals, and provisions the AppRole."""
 
     policy = tmp_path / "policy.hcl"
     policy_content = "path \"secret/data/*\" { capabilities = [\"read\"] }\n"
