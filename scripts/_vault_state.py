@@ -77,6 +77,40 @@ class VaultBootstrapError(RuntimeError):
     """Raised when bootstrap actions fail."""
 
 
+def _validate_list_str_field(value: Any, field_name: str) -> list[str]:
+    """Validate and return a list[str] field from state payload.
+
+    Examples
+    --------
+    >>> _validate_list_str_field(["a", "b"], "unseal_keys")
+    ['a', 'b']
+    >>> _validate_list_str_field([], "unseal_keys")
+    []
+    """
+
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        msg = f"State field {field_name!r} must be list[str]"
+        raise VaultBootstrapError(msg)
+    return list(value)
+
+
+def _validate_optional_str_field(value: Any, field_name: str) -> str | None:
+    """Validate and return an optional string field from state payload.
+
+    Examples
+    --------
+    >>> _validate_optional_str_field("token", "root_token")
+    'token'
+    >>> _validate_optional_str_field(None, "root_token") is None
+    True
+    """
+
+    if value is not None and not isinstance(value, str):
+        msg = f"State field {field_name!r} must be str | None"
+        raise VaultBootstrapError(msg)
+    return value
+
+
 def load_state(path: Path) -> VaultBootstrapState:
     """Load bootstrap state or return an empty object.
 
@@ -97,26 +131,18 @@ def load_state(path: Path) -> VaultBootstrapState:
         msg = f"Failed to parse state file {path}: {exc}"
         raise VaultBootstrapError(msg) from exc
     state = VaultBootstrapState()
-    keys = payload.get("unseal_keys", [])
-    if not isinstance(keys, list) or not all(isinstance(item, str) for item in keys):
-        msg = "State field 'unseal_keys' must be list[str]"
-        raise VaultBootstrapError(msg)
-    root_token = payload.get("root_token")
-    if root_token is not None and not isinstance(root_token, str):
-        msg = "State field 'root_token' must be str | None"
-        raise VaultBootstrapError(msg)
-    role_id = payload.get("approle_role_id")
-    if role_id is not None and not isinstance(role_id, str):
-        msg = "State field 'approle_role_id' must be str | None"
-        raise VaultBootstrapError(msg)
-    secret_id = payload.get("approle_secret_id")
-    if secret_id is not None and not isinstance(secret_id, str):
-        msg = "State field 'approle_secret_id' must be str | None"
-        raise VaultBootstrapError(msg)
-    state.unseal_keys = list(keys)
-    state.root_token = root_token
-    state.approle_role_id = role_id
-    state.approle_secret_id = secret_id
+    state.unseal_keys = _validate_list_str_field(
+        payload.get("unseal_keys", []), "unseal_keys"
+    )
+    state.root_token = _validate_optional_str_field(
+        payload.get("root_token"), "root_token"
+    )
+    state.approle_role_id = _validate_optional_str_field(
+        payload.get("approle_role_id"), "approle_role_id"
+    )
+    state.approle_secret_id = _validate_optional_str_field(
+        payload.get("approle_secret_id"), "approle_secret_id"
+    )
     return state
 
 
