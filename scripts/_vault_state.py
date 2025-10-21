@@ -155,6 +155,10 @@ def save_state(path: Path, state: VaultBootstrapState) -> None:
 
     fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        else:  # pragma: no cover - Windows fallback
+            os.chmod(tmp_path, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(payload)
             handle.flush()
