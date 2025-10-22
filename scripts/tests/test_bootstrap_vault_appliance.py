@@ -248,6 +248,80 @@ def test_bootstrap_skips_when_already_configured(tmp_path: Path) -> None:
     assert result_state.approle_secret_id == "existing-secret"
 
 
+@pytest.mark.parametrize(
+    ("rotate_secret_id", "expected_secret", "should_rotate"),
+    [
+        pytest.param(False, "existing-secret", False, id="retain"),
+        pytest.param(True, "rotated-secret", True, id="rotate"),
+    ],
+)
+def test_bootstrap_respects_secret_rotation(
+    tmp_path: Path,
+    rotate_secret_id: bool,
+    expected_secret: str,
+    should_rotate: bool,
+) -> None:
+    """Bootstrap honours the secret rotation flag when configuring Vault."""
+
+    state = VaultBootstrapState(
+        unseal_keys=["key1", "key2", "key3"],
+        root_token="root-token",
+        approle_role_id="role-id",
+        approle_secret_id="existing-secret",
+    )
+    config = _make_config(tmp_path, rotate_secret_id=rotate_secret_id)
+    config.state_file.write_text(json.dumps(state.to_mapping()), encoding="utf-8")
+
+    rotation_invocations = 0
+
+    def vault_handler(invocation) -> Response:
+        nonlocal rotation_invocations
+        args = tuple(invocation.args)
+        if args == ("status", "-format=json"):
+            return Response(stdout=json.dumps({"initialized": True, "sealed": False}))
+        if args == ("secrets", "list", "-format=json"):
+            return Response(
+                stdout=json.dumps(
+                    {"secret/": {"type": "kv", "options": {"version": "2"}}}
+                )
+            )
+        if args == ("auth", "list", "-format=json"):
+            return Response(stdout=json.dumps({"approle/": {"type": "approle"}}))
+        if args[:2] == ("policy", "write"):
+            return Response(stdout="")
+        if args[:2] == (
+            "write",
+            f"auth/approle/role/{config.approle_name}",
+        ):
+            return Response(stdout="")
+        if args[:3] == ("write", "-force", "-format=json"):
+            rotation_invocations += 1
+            if not should_rotate:
+                raise AssertionError("secret-id rotation should be skipped")
+            payload = json.dumps({"data": {"secret_id": "rotated-secret"}})
+            return Response(stdout=payload)
+        if args[:3] == (
+            "read",
+            "-field=role_id",
+            f"auth/approle/role/{config.approle_name}/role-id",
+        ):
+            return Response(stdout="role-id\n")
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    with CmdMox() as mox:
+        _stub_doctl(mox, "203.0.113.10")
+        _stub_ssh(mox, "203.0.113.10")
+        mox.stub("vault").runs(vault_handler)
+        mox.replay()
+        _sync_plumbum_path()
+        result_state = bootstrap(config)
+
+    _sync_plumbum_path()
+
+    assert rotation_invocations == int(should_rotate)
+    assert result_state.approle_secret_id == expected_secret
+
+
 def test_bootstrap_errors_when_unseal_keys_missing(tmp_path: Path) -> None:
     """Fail fast when Vault is sealed but the state file lacks key shares."""
 

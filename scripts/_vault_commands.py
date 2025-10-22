@@ -408,7 +408,8 @@ def _ensure_approle_auth_enabled(env: dict[str, str]) -> None:
     try:
         mounts = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise VaultBootstrapError(f"Invalid JSON from auth list: {exc}") from exc
+        msg = f"Invalid JSON from auth list: {exc}"
+        raise VaultBootstrapError(msg) from exc
     if "approle/" not in mounts:
         run_command(
             "vault",
@@ -526,10 +527,12 @@ def _generate_secret_id(config: VaultBootstrapConfig, env: dict[str, str]) -> st
     try:
         payload = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise VaultBootstrapError(f"Invalid JSON from secret-id write: {exc}") from exc
+        msg = f"Invalid JSON from secret-id write: {exc}"
+        raise VaultBootstrapError(msg) from exc
     secret_id = payload.get("data", {}).get("secret_id")
     if secret_id is None:
-        raise VaultBootstrapError("Failed to retrieve secret_id from Vault")
+        msg = "Failed to retrieve secret_id from Vault"
+        raise VaultBootstrapError(msg)
     return secret_id
 
 
