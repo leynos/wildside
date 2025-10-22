@@ -150,6 +150,29 @@ def collect_droplet_ips(tag: str) -> list[str]:
     return addresses
 
 
+def _attempt_service_check(ssh_args: list[str]) -> str:
+    """Execute a single SSH service check and return the output.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox
+    >>> ssh_args = ['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
+    ...             '-o', 'ConnectTimeout=10', 'root@203.0.113.10',
+    ...             'systemctl', 'is-active', 'vault']
+    >>> with CmdMox() as mox:
+    ...     mox.stub('ssh').with_args(*ssh_args).returns(stdout='active\n')
+    ...     mox.replay(); _attempt_service_check(ssh_args)
+    'active'
+    """
+
+    output = run_command(
+        "ssh",
+        *ssh_args,
+        context=CommandContext(timeout=30),
+    )
+    return output.strip()
+
+
 def _probe_vault_service(address: str, ssh_args: list[str]) -> None:
     """Assert the Vault systemd unit reports as active for *address*.
 
@@ -167,11 +190,7 @@ def _probe_vault_service(address: str, ssh_args: list[str]) -> None:
     last_error: VaultBootstrapError | None = None
     for attempt in range(3):
         try:
-            output = run_command(
-                "ssh",
-                *ssh_args,
-                context=CommandContext(timeout=30),
-            ).strip()
+            output = _attempt_service_check(ssh_args)
         except VaultBootstrapError as exc:
             last_error = exc
         else:
@@ -273,6 +292,34 @@ def initialise_vault(config: VaultBootstrapConfig, env: dict[str, str]) -> Vault
     return state
 
 
+def _attempt_unseal(key: str, env: dict[str, str]) -> bool:
+    """Apply an unseal key and return True if Vault is now unsealed.
+
+    Examples
+    --------
+    >>> from cmd_mox import CmdMox, Response
+    >>> with CmdMox() as mox:
+    ...     mox.stub('vault').runs(lambda _: Response(stdout='{"sealed": false}'))
+    ...     mox.replay(); _attempt_unseal('k1', {})
+    True
+    """
+
+    stdout = run_command(
+        "vault",
+        "operator",
+        "unseal",
+        "-format=json",
+        key,
+        context=CommandContext(env=env),
+    )
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        msg = f"Invalid JSON from operator unseal: {exc}"
+        raise VaultBootstrapError(msg) from exc
+    return not payload.get("sealed", True)
+
+
 def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
     """Unseal Vault using the stored key shares.
 
@@ -287,24 +334,10 @@ def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
         msg = "No unseal keys recorded; cannot unseal Vault"
         raise VaultBootstrapError(msg)
     for key in state.unseal_keys:
-        stdout = run_command(
-            "vault",
-            "operator",
-            "unseal",
-            "-format=json",
-            key,
-            context=CommandContext(env=env),
-        )
-        try:
-            payload = json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            msg = f"Invalid JSON from operator unseal: {exc}"
-            raise VaultBootstrapError(msg) from exc
-        if not payload.get("sealed", True):
-            break
-    else:
-        msg = "Vault remains sealed after applying all key shares"
-        raise VaultBootstrapError(msg)
+        if _attempt_unseal(key, env):
+            return
+    msg = "Vault remains sealed after applying all key shares"
+    raise VaultBootstrapError(msg)
 
 
 def _validate_kv_mount(mount_key: str, existing: dict[str, Any]) -> None:
@@ -571,6 +604,8 @@ def ensure_approle(config: VaultBootstrapConfig, env: dict[str, str], state: Vau
 
 __all__ = [
     "CommandContext",
+    "_attempt_service_check",
+    "_attempt_unseal",
     "_configure_approle_role",
     "_default_policy",
     "_ensure_approle_auth_enabled",
