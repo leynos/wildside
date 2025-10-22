@@ -307,6 +307,18 @@ def unseal_vault(env: dict[str, str], state: VaultBootstrapState) -> None:
         raise VaultBootstrapError(msg)
 
 
+def _validate_kv_mount(mount_key: str, existing: dict[str, Any]) -> None:
+    """Validate that an existing mount is a KV v2 engine."""
+
+    if existing.get("type") != "kv":
+        msg = f"Existing mount at {mount_key} is not a KV engine"
+        raise VaultBootstrapError(msg)
+    options = existing.get("options", {})
+    if options.get("version") != "2":
+        msg = f"Existing mount at {mount_key} is not KV v2"
+        raise VaultBootstrapError(msg)
+
+
 def ensure_kv_engine(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
     """Enable the KV v2 secrets engine when missing.
 
@@ -341,13 +353,7 @@ def ensure_kv_engine(config: VaultBootstrapConfig, env: dict[str, str]) -> None:
             context=CommandContext(env=env),
         )
         return
-    if existing.get("type") != "kv":
-        msg = f"Existing mount at {mount_key} is not a KV engine"
-        raise VaultBootstrapError(msg)
-    options = existing.get("options", {})
-    if options.get("version") != "2":
-        msg = f"Existing mount at {mount_key} is not KV v2"
-        raise VaultBootstrapError(msg)
+    _validate_kv_mount(mount_key, existing)
 
 
 def _default_policy(config: VaultBootstrapConfig) -> str:
@@ -570,6 +576,7 @@ __all__ = [
     "_iter_public_ipv4",
     "_load_droplets",
     "_probe_vault_service",
+    "_validate_kv_mount",
     "_write_approle_policy",
     "build_vault_env",
     "collect_droplet_ips",
