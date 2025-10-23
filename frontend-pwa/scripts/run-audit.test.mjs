@@ -54,6 +54,33 @@ async function loadEvaluateAudit() {
   return evaluateAudit;
 }
 
+const evaluateAuditScenarios = [
+  {
+    name: 'returns success when advisories are covered by the ledger',
+    advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+    spyFactory: () => vi.spyOn(console, 'info').mockImplementation(() => {}),
+    expectedExitCode: 0,
+    expectedValidatorCalls: 1,
+    assertSpy: (spy) => {
+      expect(spy).toHaveBeenCalledWith(
+        `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+      );
+    },
+  },
+  {
+    name: 'propagates failure when unexpected advisories are reported',
+    advisories: [createAdvisory('GHSA-abcd-1234-efgh', 'Unexpected vulnerability')],
+    spyFactory: () => vi.spyOn(console, 'error').mockImplementation(() => {}),
+    expectedExitCode: 1,
+    expectedValidatorCalls: 0,
+    assertSpy: (spy) => {
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
+      );
+    },
+  },
+];
+
 describe('evaluateAudit', () => {
   beforeEach(() => {
     resetLedgerEntries();
@@ -66,32 +93,7 @@ describe('evaluateAudit', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    {
-      name: 'returns success when advisories are covered by the ledger',
-      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-      spyFactory: () => vi.spyOn(console, 'info').mockImplementation(() => {}),
-      expectedExitCode: 0,
-      expectedValidatorCalls: 1,
-      assertSpy: (spy) => {
-        expect(spy).toHaveBeenCalledWith(
-          `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
-        );
-      },
-    },
-    {
-      name: 'propagates failure when unexpected advisories are reported',
-      advisories: [createAdvisory('GHSA-abcd-1234-efgh', 'Unexpected vulnerability')],
-      spyFactory: () => vi.spyOn(console, 'error').mockImplementation(() => {}),
-      expectedExitCode: 1,
-      expectedValidatorCalls: 0,
-      assertSpy: (spy) => {
-        expect(spy).toHaveBeenCalledWith(
-          expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
-        );
-      },
-    },
-  ])(
+  it.each(evaluateAuditScenarios)(
     '$name',
     async ({ advisories, spyFactory, expectedExitCode, expectedValidatorCalls, assertSpy }) => {
       const evaluateAudit = await loadEvaluateAudit();
@@ -100,7 +102,9 @@ describe('evaluateAudit', () => {
       const exitCode = evaluateAudit({ advisories, status: 1 });
 
       expect(exitCode).toBe(expectedExitCode);
-      expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
+      if (typeof expectedValidatorCalls === 'number') {
+        expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
+      }
       assertSpy(consoleSpy);
     },
   );
@@ -116,6 +120,7 @@ describe('evaluateAudit', () => {
     });
 
     expect(exitCode).toBe(1);
+    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
     expect(errorSpy).toHaveBeenCalledWith(
       `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
     );
@@ -142,6 +147,7 @@ describe('evaluateAudit', () => {
     });
 
     expect(exitCode).toBe(0);
+    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
     expect(infoSpy).toHaveBeenCalledWith(
       `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes. (1 additional advisory covered by ledger)`,
     );
