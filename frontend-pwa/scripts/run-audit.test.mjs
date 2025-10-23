@@ -153,6 +153,68 @@ describe('evaluateAudit', () => {
     );
   });
 
+  it('notes plural additional ledger-covered advisories when validator patch applies', async () => {
+    ledgerEntries.push(
+      {
+        id: 'VAL-2025-0003',
+        package: 'frontend-pwa',
+        advisory: 'GHSA-wxyz-9876-hijk',
+        reason: 'Secondary advisory accepted temporarily for the frontend.',
+        addedAt: '2025-02-14',
+        expiresAt: '2026-02-14',
+      },
+      {
+        id: 'VAL-2025-0004',
+        package: 'frontend-pwa',
+        advisory: 'GHSA-lmno-5432-pqrs',
+        reason: 'Tertiary advisory accepted temporarily for the frontend.',
+        addedAt: '2025-02-14',
+        expiresAt: '2026-02-14',
+      },
+    );
+    const evaluateAudit = await loadEvaluateAudit();
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [
+        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+        createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
+        createAdvisory('GHSA-lmno-5432-pqrs', 'tertiary issue'),
+      ],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
+    expect(infoSpy).toHaveBeenCalledWith(
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes. (2 additional advisories covered by ledger)`,
+    );
+  });
+
+  it('returns success when only ledger-covered non-validator advisories are reported', async () => {
+    ledgerEntries.push({
+      id: 'VAL-2025-0003',
+      package: 'frontend-pwa',
+      advisory: 'GHSA-wxyz-9876-hijk',
+      reason: 'Non-validator advisory accepted temporarily for the frontend.',
+      addedAt: '2025-02-14',
+      expiresAt: '2026-02-14',
+    });
+    const evaluateAudit = await loadEvaluateAudit();
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue')],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(validatorPatchMock).not.toHaveBeenCalled();
+    expect(infoSpy).toHaveBeenCalledWith(
+      'All reported advisories are covered by the audit exception ledger.',
+    );
+  });
+
   const ledgerExpiryErrorScenarios = [
     {
       name: 'fails when a ledger exception has expired',
@@ -182,29 +244,5 @@ describe('evaluateAudit', () => {
 
     expect(exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
-  });
-
-  it('reports coverage when advisories are covered solely by the ledger', async () => {
-    ledgerEntries.push({
-      id: 'VAL-2025-0004',
-      package: 'frontend-pwa',
-      advisory: 'GHSA-ledg-erpk-1000',
-      reason: 'Non-validator advisory permitted temporarily for the frontend.',
-      addedAt: '2025-02-14',
-      expiresAt: '2026-02-14',
-    });
-    const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [createAdvisory('GHSA-ledg-erpk-1000', 'example permitted advisory')],
-      status: 1,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(infoSpy).toHaveBeenCalledWith(
-      'All reported advisories are covered by the audit exception ledger.',
-    );
-    expect(validatorPatchMock).not.toHaveBeenCalled();
   });
 });
