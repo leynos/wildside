@@ -5,7 +5,9 @@
  * required fix locally and treat the advisory as mitigated when the patched
  * code is present. Any additional vulnerabilities remain fatal.
  */
+// biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
 import { resolve } from 'node:path';
+// biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
 import { fileURLToPath } from 'node:url';
 
 import auditExceptions from '../../security/audit-exceptions.json' with { type: 'json' };
@@ -37,13 +39,18 @@ const UNEXPECTED_HEADING = 'Unexpected vulnerabilities detected by pnpm audit:';
  * }
  */
 function isExecutedDirectly(meta) {
-  if (!process.argv[1]) {
+  const invokedPath = process.argv?.[1];
+  if (!invokedPath) {
     return false;
   }
 
-  const scriptPath = fileURLToPath(meta.url);
-  const invokedPath = resolve(process.argv[1]);
-  return scriptPath === invokedPath;
+  try {
+    const scriptPath = fileURLToPath(meta.url);
+    const absoluteInvokedPath = resolve(invokedPath);
+    return scriptPath === absoluteInvokedPath;
+  } catch {
+    return false;
+  }
 }
 
 /**
