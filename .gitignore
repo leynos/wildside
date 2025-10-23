@@ -43,6 +43,8 @@ terraform.rc
 # Misc
 .DS_Store
 bun.lockb
+**/__pycache__/
+*.py[cod]
 
 # Environment
 .env

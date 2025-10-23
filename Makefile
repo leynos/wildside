@@ -38,7 +38,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync
+        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -116,6 +116,15 @@ lint-infra:
 test: workspace-sync deps typecheck
 	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 	pnpm -r --if-present --silent run test
+	$(MAKE) scripts-test
+
+scripts-test:
+	$(call ensure_tool,uv)
+	uv run \
+		--with pytest \
+		--with plumbum \
+		--with "cmd-mox@git+https://github.com/leynos/cmd-mox@28acd288975f15e4c360d62e431950820dbcb27a" \
+		pytest scripts/tests
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml
