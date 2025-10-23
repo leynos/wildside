@@ -24,9 +24,21 @@ import packageJson from '../package.json' with { type: 'json' };
 const frontendPackageName = packageJson.name;
 const workspaceKeys = new Set([
   frontendPackageName,
-  frontendPackageName.includes('/') ? frontendPackageName.split('/').pop() : frontendPackageName,
+  frontendPackageName.includes('/')
+    ? frontendPackageName.slice(frontendPackageName.lastIndexOf('/') + 1)
+    : frontendPackageName,
 ]);
-const UNEXPECTED_HEADING = 'Unexpected vulnerabilities detected by pnpm audit:';
+const frontendLedgerEntries = auditExceptions
+  .filter((entry) => workspaceKeys.has(entry.package))
+  .map((entry) => ({
+    ...entry,
+    expiryDate: entry.expiresAt ? new Date(entry.expiresAt) : null,
+  }));
+const frontendLedgerByAdvisoryId = new Map(
+  frontendLedgerEntries.map((entry) => [entry.advisory, entry]),
+);
+const frontendAdvisoryIds = frontendLedgerEntries.map((entry) => entry.advisory);
+const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
 
 /**
  * Determine whether the current module is executed as the entry script.
@@ -54,81 +66,72 @@ function isExecutedDirectly(meta) {
 }
 
 /**
- * Ensure the audit exception entry remains valid.
+ * Determine whether a ledger entry has expired relative to the provided date.
  *
- * @param {{ id?: string, advisory?: string, package?: string, expiresAt?: string }} entry
- *   Ledger entry describing an allowed advisory.
- * @param {Date} [now=new Date()] Timestamp used to evaluate expiry.
- * @throws {Error} When the entry has expired or the expiry timestamp is invalid.
+ * @param {{ expiryDate: Date | null, expiresAt?: string }} entry Ledger entry
+ *   augmented with a parsed expiry date.
+ * @param {Date} [referenceDate=new Date()] Optional override for deterministic
+ *   testing.
+ * @returns {boolean} True when the ledger entry has lapsed or has an invalid
+ *   expiry value.
  * @example
- * assertExceptionActive({ advisory: 'GHSA-1', expiresAt: '2099-01-01' });
+ * const expired = isLedgerEntryExpired({ expiryDate: new Date('2000-01-01'), expiresAt: '2000-01-01' });
+ * console.log(expired);
  */
-function assertExceptionActive(entry, now = new Date()) {
+function isLedgerEntryExpired(entry, referenceDate = new Date()) {
+  if (!entry) {
+    return false;
+  }
+
   if (!entry.expiresAt) {
-    return;
+    return false;
   }
 
-  const expiry = new Date(entry.expiresAt);
-  if (Number.isNaN(expiry.getTime())) {
-    throw new Error(
-      `Ledger exception ${entry.id ?? entry.advisory ?? entry.package} has invalid expiry`,
-    );
+  if (!(entry.expiryDate instanceof Date) || Number.isNaN(entry.expiryDate.valueOf())) {
+    return true;
   }
 
-  if (expiry < now) {
-    throw new Error(
-      `Ledger exception ${entry.id ?? entry.advisory ?? entry.package} expired on ${entry.expiresAt}`,
-    );
-  }
-}
-
-/**
- * Load advisory IDs that this workspace may treat as mitigated.
- *
- * @param {Date} [now=new Date()] Timestamp used to validate ledger expiry.
- * @returns {string[]} Advisory identifiers permitted for this workspace.
- * @example
- * const allowed = loadWorkspaceAdvisoryIds(new Date('2025-02-15'));
- * console.log(allowed.includes('GHSA-9965-vmph-33xx'));
- */
-function loadWorkspaceAdvisoryIds(now = new Date()) {
-  const ids = [];
-
-  for (const entry of auditExceptions) {
-    if (!workspaceKeys.has(entry.package)) {
-      continue;
-    }
-
-    assertExceptionActive(entry, now);
-    ids.push(entry.advisory);
-  }
-
-  return ids;
+  return entry.expiryDate.getTime() < referenceDate.getTime();
 }
 
 /**
  * Evaluate pnpm audit output and determine the appropriate exit code.
  *
- * @param {{ advisories: Array<Record<string, unknown>>, status: number }} payload Audit
+ * @param {{ advisories?: Array<Record<string, unknown>>, status?: number }} payload Audit
  *   result containing advisories and the pnpm exit status.
- * @param {{ now?: Date }} [options] Optional evaluation parameters.
+ * @param {{ now?: Date }} [options] Optional evaluation parameters, primarily
+ *   used by unit tests.
  * @returns {number} Exit code that should be returned to the shell.
  * @example
  * const exitCode = evaluateAudit({ advisories: [], status: 0 });
  * console.log(exitCode);
  */
 export function evaluateAudit(payload, options = {}) {
-  const now = options.now ?? new Date();
-  const allowedIds = loadWorkspaceAdvisoryIds(now);
-  const advisories = payload.advisories ?? [];
-  const { expected, unexpected } = partitionAdvisoriesById(advisories, allowedIds);
+  const { advisories: rawAdvisories = [], status } = payload;
+  const statusCode = status ?? 0;
+  const referenceDate = options.now ?? new Date();
+  const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, frontendAdvisoryIds);
 
-  if (reportUnexpectedAdvisories(unexpected, UNEXPECTED_HEADING)) {
+  const expiredEntries = expected
+    .map((advisory) => frontendLedgerByAdvisoryId.get(advisory.github_advisory_id))
+    .filter((entry) => isLedgerEntryExpired(entry, referenceDate));
+
+  if (expiredEntries.length > 0) {
+    for (const entry of expiredEntries) {
+      // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
+      console.error(
+        `Audit exception ${entry.id ?? entry.advisory} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`,
+      );
+    }
+    return 1;
+  }
+
+  if (reportUnexpectedAdvisories(unexpected, unexpectedHeading)) {
     return 1;
   }
 
   if (expected.length === 0) {
-    return payload.status;
+    return statusCode;
   }
 
   const hasValidatorAdvisory = expected.some(
@@ -144,9 +147,14 @@ export function evaluateAudit(payload, options = {}) {
   }
 
   if (hasValidatorAdvisory) {
+    const additionalCount = expected.length - 1;
+    const suffix =
+      additionalCount > 0
+        ? ` (${additionalCount} additional ${additionalCount === 1 ? 'advisory' : 'advisories'} covered by ledger)`
+        : '';
     // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
     console.info(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.${suffix}`,
     );
   } else {
     // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
