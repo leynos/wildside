@@ -1,7 +1,7 @@
 [
   {
     "id": "VAL-2025-0001",
-    "package": "validator",
+    "package": "frontend-pwa",
     "advisory": "GHSA-9965-vmph-33xx",
     "introducedBy": "validator@13.15.15",
     "reason": "Local patch hardens isURL protocol parsing until upstream ships a fix.",
