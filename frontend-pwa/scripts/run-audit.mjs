@@ -1,4 +1,5 @@
-/** @file Ensures `pnpm audit` only fails for known, patched validator vulnerability.
+/** @file Ensures `pnpm audit` only fails for advisories covered by the
+ * frontend workspace ledger and a locally patched validator dependency.
  *
  * The validator package currently has no upstream patch release. We vendor the
  * required fix locally and treat the advisory as mitigated when the patched
@@ -23,6 +24,7 @@ const workspaceKeys = new Set([
   frontendPackageName,
   frontendPackageName.includes('/') ? frontendPackageName.split('/').pop() : frontendPackageName,
 ]);
+const UNEXPECTED_HEADING = 'Unexpected vulnerabilities detected by pnpm audit:';
 
 /**
  * Determine whether the current module is executed as the entry script.
@@ -114,21 +116,19 @@ export function evaluateAudit(payload, options = {}) {
   const advisories = payload.advisories ?? [];
   const { expected, unexpected } = partitionAdvisoriesById(advisories, allowedIds);
 
-  if (
-    reportUnexpectedAdvisories(unexpected, 'Unexpected vulnerabilities detected by pnpm audit:')
-  ) {
+  if (reportUnexpectedAdvisories(unexpected, UNEXPECTED_HEADING)) {
     return 1;
   }
 
-  const targetFinding = expected.find(
-    (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
-  );
-
-  if (!targetFinding) {
+  if (expected.length === 0) {
     return payload.status;
   }
 
-  if (!isValidatorPatched()) {
+  const hasValidatorAdvisory = expected.some(
+    (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
+  );
+
+  if (hasValidatorAdvisory && !isValidatorPatched()) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
     console.error(
       `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
@@ -136,10 +136,16 @@ export function evaluateAudit(payload, options = {}) {
     return 1;
   }
 
-  // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
-  console.info(
-    `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
-  );
+  if (hasValidatorAdvisory) {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
+    console.info(
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+    );
+  } else {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
+    console.info('All reported advisories are covered by the audit exception ledger.');
+  }
+
   return 0;
 }
 

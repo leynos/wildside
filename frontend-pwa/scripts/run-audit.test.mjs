@@ -1,6 +1,6 @@
 /** @file Unit tests for the run-audit CLI helper. */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
 
@@ -10,6 +10,24 @@ const ledgerFixture = [
     id: 'VAL-TEST-0001',
     package: 'frontend-pwa',
     advisory: VALIDATOR_ADVISORY_ID,
+    reason: 'Local patch hardens validator URL handling until upstream ships a fix.',
+    addedAt: '2025-02-14',
+    expiresAt: '2099-01-01',
+  },
+  {
+    id: 'VAL-TEST-0002',
+    package: 'frontend-pwa',
+    advisory: 'GHSA-ledg-erpk-1000',
+    reason: 'Example ledger entry ensuring non-validator advisories pass cleanly.',
+    addedAt: '2025-02-14',
+    expiresAt: '2099-01-01',
+  },
+  {
+    id: 'VAL-TEST-0003',
+    package: 'backend-service',
+    advisory: 'GHSA-aaaa-bbbb-cccc',
+    reason: 'Backend exception verifies workspace-level filtering.',
+    addedAt: '2025-02-14',
     expiresAt: '2099-01-01',
   },
 ];
@@ -62,17 +80,18 @@ async function testValidatorAdvisory({
   });
 
   expect(exitCode).toBe(expectedExitCode);
-
-  if (patchApplied) {
-    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
-  }
-
+  expect(validatorPatchMock).toHaveBeenCalledTimes(1);
   expect(consoleSpy).toHaveBeenCalledWith(expectedMessage);
 }
 
 describe('evaluateAudit', () => {
-  afterEach(() => {
+  beforeEach(() => {
+    vi.resetModules();
     validatorPatchMock.mockReset();
+    validatorPatchMock.mockReturnValue(true);
+  });
+
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 
@@ -96,7 +115,6 @@ describe('evaluateAudit', () => {
 
   it('fails when unexpected advisories are reported', async () => {
     const { evaluateAudit } = await import('./run-audit.mjs');
-    validatorPatchMock.mockReturnValue(true);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
@@ -105,8 +123,23 @@ describe('evaluateAudit', () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
+    expect(errorSpy).toHaveBeenCalled();
+    expect(errorSpy.mock.calls[0][0]).toBe('Unexpected vulnerabilities detected by pnpm audit:');
+  });
+
+  it('reports coverage when advisories are covered by the ledger', async () => {
+    const { evaluateAudit } = await import('./run-audit.mjs');
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [buildAdvisory('GHSA-ledg-erpk-1000', 'Example permitted advisory')],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(infoSpy).toHaveBeenCalledWith(
+      'All reported advisories are covered by the audit exception ledger.',
     );
+    expect(validatorPatchMock).not.toHaveBeenCalled();
   });
 });
