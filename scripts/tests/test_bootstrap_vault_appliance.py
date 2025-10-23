@@ -248,6 +248,75 @@ def test_bootstrap_skips_when_already_configured(tmp_path: Path) -> None:
     assert result_state.approle_secret_id == "existing-secret"
 
 
+def _build_rotation_test_handler(
+    config: VaultBootstrapConfig, should_rotate: bool
+) -> tuple[Callable, Callable[[], int]]:
+    """Build a vault command handler for testing secret rotation behaviour.
+
+    Returns a tuple of (handler_function, get_rotation_count_function).
+
+    Example:
+        >>> from pathlib import Path
+        >>> config = VaultBootstrapConfig("https://vault", "tag", Path("state.json"))
+        >>> handler, get_count = _build_rotation_test_handler(config, True)
+        >>> invocation = type(
+        ...     "Invocation",
+        ...     (),
+        ...     {"args": ("status", "-format=json"), "env": {"VAULT_ADDR": config.vault_addr}},
+        ... )
+        >>> handler(invocation).stdout
+        '{"initialized": true, "sealed": false}'
+        >>> get_count()
+        0
+    """
+
+    rotation_invocations = 0
+
+    command_responses: dict[tuple[str, ...], Response] = {
+        ("status", "-format=json"): Response(
+            stdout=json.dumps({"initialized": True, "sealed": False})
+        ),
+        ("secrets", "list", "-format=json"): Response(
+            stdout=json.dumps(
+                {"secret/": {"type": "kv", "options": {"version": "2"}}}
+            )
+        ),
+        ("auth", "list", "-format=json"): Response(
+            stdout=json.dumps({"approle/": {"type": "approle"}})
+        ),
+        (
+            "read",
+            "-field=role_id",
+            f"auth/approle/role/{config.approle_name}/role-id",
+        ): Response(stdout="role-id\n"),
+    }
+
+    def get_rotation_count() -> int:
+        return rotation_invocations
+
+    def handler(invocation) -> Response:
+        nonlocal rotation_invocations
+        args = tuple(invocation.args)
+        if args in command_responses:
+            return command_responses[args]
+        if args[:2] == ("policy", "write"):
+            return Response(stdout="")
+        if args[:2] == (
+            "write",
+            f"auth/approle/role/{config.approle_name}",
+        ):
+            return Response(stdout="")
+        if args[:3] == ("write", "-force", "-format=json"):
+            rotation_invocations += 1
+            if not should_rotate:
+                raise AssertionError("secret-id rotation should be skipped")
+            payload = json.dumps({"data": {"secret_id": "rotated-secret"}})
+            return Response(stdout=payload)
+        raise AssertionError(f"Unexpected vault invocation: {args}")
+
+    return handler, get_rotation_count
+
+
 @pytest.mark.parametrize(
     ("rotate_secret_id", "expected_secret", "should_rotate"),
     [
@@ -272,41 +341,9 @@ def test_bootstrap_respects_secret_rotation(
     config = _make_config(tmp_path, rotate_secret_id=rotate_secret_id)
     config.state_file.write_text(json.dumps(state.to_mapping()), encoding="utf-8")
 
-    rotation_invocations = 0
-
-    def vault_handler(invocation) -> Response:
-        nonlocal rotation_invocations
-        args = tuple(invocation.args)
-        if args == ("status", "-format=json"):
-            return Response(stdout=json.dumps({"initialized": True, "sealed": False}))
-        if args == ("secrets", "list", "-format=json"):
-            return Response(
-                stdout=json.dumps(
-                    {"secret/": {"type": "kv", "options": {"version": "2"}}}
-                )
-            )
-        if args == ("auth", "list", "-format=json"):
-            return Response(stdout=json.dumps({"approle/": {"type": "approle"}}))
-        if args[:2] == ("policy", "write"):
-            return Response(stdout="")
-        if args[:2] == (
-            "write",
-            f"auth/approle/role/{config.approle_name}",
-        ):
-            return Response(stdout="")
-        if args[:3] == ("write", "-force", "-format=json"):
-            rotation_invocations += 1
-            if not should_rotate:
-                raise AssertionError("secret-id rotation should be skipped")
-            payload = json.dumps({"data": {"secret_id": "rotated-secret"}})
-            return Response(stdout=payload)
-        if args[:3] == (
-            "read",
-            "-field=role_id",
-            f"auth/approle/role/{config.approle_name}/role-id",
-        ):
-            return Response(stdout="role-id\n")
-        raise AssertionError(f"Unexpected vault invocation: {args}")
+    vault_handler, get_rotation_count = _build_rotation_test_handler(
+        config, should_rotate
+    )
 
     with CmdMox() as mox:
         _stub_doctl(mox, "203.0.113.10")
@@ -318,7 +355,7 @@ def test_bootstrap_respects_secret_rotation(
 
     _sync_plumbum_path()
 
-    assert rotation_invocations == int(should_rotate)
+    assert get_rotation_count() == int(should_rotate)
     assert result_state.approle_secret_id == expected_secret
 
 
