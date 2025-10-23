@@ -1,7 +1,33 @@
 /** @file Helpers for verifying the locally patched validator dependency. */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+
+/**
+ * Resolve the absolute path to a dependency's package.json without relying on
+ * subpath exports. Some dependencies restrict access to package.json via the
+ * "exports" field; we instead resolve the entry point and walk upwards.
+ *
+ * @param {NodeRequire} requireFn createRequire instance anchored at a package.
+ * @param {string} specifier Module identifier to resolve within the package.
+ * @returns {string} Absolute filesystem path to the package.json.
+ * @throws {Error} When package.json cannot be located.
+ */
+function resolvePackageJsonPath(requireFn, specifier) {
+  const entryPoint = requireFn.resolve(specifier);
+  let current = dirname(entryPoint);
+
+  while (!existsSync(join(current, 'package.json'))) {
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error(`Could not locate package.json for ${specifier}`);
+    }
+    current = parent;
+  }
+
+  return join(current, 'package.json');
+}
 
 /**
  * Resolve the require function anchored at @ibm-cloud/openapi-ruleset.
@@ -16,9 +42,11 @@ function resolveRulesetRequire() {
     const workspaceRequire = createRequire(
       new URL('../frontend-pwa/package.json', import.meta.url),
     );
-    const orvalRequire = createRequire(workspaceRequire.resolve('orval/package.json'));
-    const coreRequire = createRequire(orvalRequire.resolve('@orval/core/package.json'));
-    return createRequire(coreRequire.resolve('@ibm-cloud/openapi-ruleset/package.json'));
+    const orvalRequire = createRequire(resolvePackageJsonPath(workspaceRequire, 'orval'));
+    const coreRequire = createRequire(resolvePackageJsonPath(orvalRequire, '@orval/core'));
+    return createRequire(
+      resolvePackageJsonPath(coreRequire, '@ibm-cloud/openapi-ruleset'),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to resolve validator dependency chain: ${message}`, {
