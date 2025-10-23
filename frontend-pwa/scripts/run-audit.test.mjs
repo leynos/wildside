@@ -153,8 +153,25 @@ describe('evaluateAudit', () => {
     );
   });
 
-  it('fails when a ledger exception has expired', async () => {
-    ledgerEntries[0].expiresAt = '2024-02-14';
+  const ledgerExpiryErrorScenarios = [
+    {
+      name: 'fails when a ledger exception has expired',
+      setupAction: () => {
+        ledgerEntries[0].expiresAt = '2024-02-14';
+      },
+      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2024-02-14.`,
+    },
+    {
+      name: 'fails when a ledger exception is missing an expiry date',
+      setupAction: () => {
+        delete ledgerEntries[0].expiresAt;
+      },
+      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
+    },
+  ];
+
+  it.each(ledgerExpiryErrorScenarios)('$name', async ({ setupAction, expectedErrorMessage }) => {
+    setupAction();
     const evaluateAudit = await loadEvaluateAudit();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -164,25 +181,7 @@ describe('evaluateAudit', () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2024-02-14.`,
-    );
-  });
-
-  it('fails when a ledger exception is missing an expiry date', async () => {
-    delete ledgerEntries[0].expiresAt;
-    const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-      status: 1,
-    });
-
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
   });
 
   it('reports coverage when advisories are covered solely by the ledger', async () => {
