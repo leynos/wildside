@@ -39,6 +39,37 @@ function buildAdvisory(id, title) {
   };
 }
 
+/**
+ * Run evaluateAudit against the validator advisory with configurable outcome expectations.
+ *
+ * @param {{ patchApplied: boolean, expectedExitCode: number, consoleMethod: 'info' | 'error', expectedMessage: string }} options
+ *   Parameters describing the desired test scenario.
+ * @returns {Promise<void>} Resolves once evaluateAudit assertions complete.
+ */
+async function testValidatorAdvisory({
+  patchApplied,
+  expectedExitCode,
+  consoleMethod,
+  expectedMessage,
+}) {
+  const { evaluateAudit } = await import('./run-audit.mjs');
+  validatorPatchMock.mockReturnValue(patchApplied);
+  const consoleSpy = vi.spyOn(console, consoleMethod).mockImplementation(() => {});
+
+  const exitCode = evaluateAudit({
+    advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID)],
+    status: 1,
+  });
+
+  expect(exitCode).toBe(expectedExitCode);
+
+  if (patchApplied) {
+    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
+  }
+
+  expect(consoleSpy).toHaveBeenCalledWith(expectedMessage);
+}
+
 describe('evaluateAudit', () => {
   afterEach(() => {
     validatorPatchMock.mockReset();
@@ -46,36 +77,21 @@ describe('evaluateAudit', () => {
   });
 
   it('passes when the validator advisory is mitigated locally', async () => {
-    const { evaluateAudit } = await import('./run-audit.mjs');
-    validatorPatchMock.mockReturnValue(true);
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID)],
-      status: 1,
+    await testValidatorAdvisory({
+      patchApplied: true,
+      expectedExitCode: 0,
+      consoleMethod: 'info',
+      expectedMessage: `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
     });
-
-    expect(exitCode).toBe(0);
-    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
-    );
   });
 
   it('fails when the validator advisory is present but the patch is missing', async () => {
-    const { evaluateAudit } = await import('./run-audit.mjs');
-    validatorPatchMock.mockReturnValue(false);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID)],
-      status: 1,
+    await testValidatorAdvisory({
+      patchApplied: false,
+      expectedExitCode: 1,
+      consoleMethod: 'error',
+      expectedMessage: `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
     });
-
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
-    );
   });
 
   it('fails when unexpected advisories are reported', async () => {
