@@ -162,6 +162,23 @@ describe('evaluateAudit', () => {
     );
   });
 
+  it('fails when a ledger exception is missing an expiry date', async () => {
+    delete ledgerEntries[0].expiresAt;
+    const { evaluateAudit } = await import('./run-audit.mjs');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
+    );
+  });
+
+<<<<<<< HEAD
   it('reports coverage when advisories are covered solely by the ledger', async () => {
     ledgerEntries.push({
       id: 'VAL-2025-0004',
@@ -184,5 +201,25 @@ describe('evaluateAudit', () => {
       'All reported advisories are covered by the audit exception ledger.',
     );
     expect(validatorPatchMock).not.toHaveBeenCalled();
+||||||| parent of 72d653e (Enforce audit exception expiry)
+=======
+  it('fails when a ledger exception is missing an expiry date', async () => {
+    delete ledgerEntries[0].expiresAt;
+    const { evaluateAudit } = await import('./run-audit.mjs');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [
+        // biome-ignore lint/style/useNamingConvention: matches pnpm audit JSON keys.
+        { github_advisory_id: VALIDATOR_ADVISORY_ID, title: 'validator vulnerability' },
+      ],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
+    );
+>>>>>>> 72d653e (Enforce audit exception expiry)
   });
 });

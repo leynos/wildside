@@ -66,32 +66,39 @@ function isExecutedDirectly(meta) {
 }
 
 /**
- * Determine whether a ledger entry has expired relative to the provided date.
+ * Determine whether a ledger entry has a valid, non-expired expiry date.
  *
- * @param {{ expiryDate: Date | null, expiresAt?: string }} entry Ledger entry
- *   augmented with a parsed expiry date.
+ * @param {{ expiryDate: Date | null, expiresAt?: string, id?: string, advisory: string }} entry
+ *   Ledger entry augmented with a parsed expiry date.
  * @param {Date} [referenceDate=new Date()] Optional override for deterministic
  *   testing.
- * @returns {boolean} True when the ledger entry has lapsed or has an invalid
- *   expiry value.
+ * @returns {string | null} Error message describing the failure when the entry
+ *   is missing an expiry date, has an invalid value, or has lapsed. Returns
+ *   `null` when the entry remains valid.
  * @example
- * const expired = isLedgerEntryExpired({ expiryDate: new Date('2000-01-01'), expiresAt: '2000-01-01' });
- * console.log(expired);
+ * const error = getLedgerExpiryError({ expiryDate: new Date('2000-01-01'), expiresAt: '2000-01-01', advisory: 'GHSA-1' });
+ * console.log(error);
  */
-function isLedgerEntryExpired(entry, referenceDate = new Date()) {
+function getLedgerExpiryError(entry, referenceDate = new Date()) {
   if (!entry) {
-    return false;
+    return null;
   }
 
+  const entryLabel = entry.id ?? entry.advisory;
+
   if (!entry.expiresAt) {
-    return false;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} is missing an expiry date.`;
   }
 
   if (!(entry.expiryDate instanceof Date) || Number.isNaN(entry.expiryDate.valueOf())) {
-    return true;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (${entry.expiresAt}).`;
   }
 
-  return entry.expiryDate.getTime() < referenceDate.getTime();
+  if (entry.expiryDate.getTime() < referenceDate.getTime()) {
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`;
+  }
+
+  return null;
 }
 
 /**
@@ -112,16 +119,15 @@ export function evaluateAudit(payload, options = {}) {
   const referenceDate = options.now ?? new Date();
   const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, frontendAdvisoryIds);
 
-  const expiredEntries = expected
+  const expiryErrors = expected
     .map((advisory) => frontendLedgerByAdvisoryId.get(advisory.github_advisory_id))
-    .filter((entry) => isLedgerEntryExpired(entry, referenceDate));
+    .map((entry) => getLedgerExpiryError(entry, referenceDate))
+    .filter((error) => Boolean(error));
 
-  if (expiredEntries.length > 0) {
-    for (const entry of expiredEntries) {
+  if (expiryErrors.length > 0) {
+    for (const error of expiryErrors) {
       // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
-      console.error(
-        `Audit exception ${entry.id ?? entry.advisory} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`,
-      );
+      console.error(error);
     }
     return 1;
   }
