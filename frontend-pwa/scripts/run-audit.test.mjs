@@ -43,22 +43,15 @@ vi.mock('../../security/validator-patch.js', () => ({
   isValidatorPatched: validatorPatchMock,
 }));
 
-/**
- * Build a pnpm advisory object matching the audit schema.
- *
- * @param {string} id GitHub advisory identifier.
- * @param {string} [title] Human-readable title when present.
- * @returns {Record<string, unknown>} Advisory payload for tests.
- * @example
- * const advisory = buildAdvisory('GHSA-1', 'Example');
- * console.log(advisory.github_advisory_id);
- */
-function buildAdvisory(id, title) {
-  return {
-    // biome-ignore lint/style/useNamingConvention: matches pnpm audit schema.
-    github_advisory_id: id,
-    title,
-  };
+const createAdvisory = (id, title) => ({
+  // biome-ignore lint/style/useNamingConvention: matches pnpm audit JSON keys.
+  github_advisory_id: id,
+  title,
+});
+
+async function loadEvaluateAudit() {
+  const { evaluateAudit } = await import('./run-audit.mjs');
+  return evaluateAudit;
 }
 
 describe('evaluateAudit', () => {
@@ -73,44 +66,52 @@ describe('evaluateAudit', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns success when advisories are covered by the ledger', async () => {
-    const { evaluateAudit } = await import('./run-audit.mjs');
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+  it.each([
+    {
+      name: 'returns success when advisories are covered by the ledger',
+      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+      spyFactory: () => vi.spyOn(console, 'info').mockImplementation(() => {}),
+      expectedExitCode: 0,
+      expectedValidatorCalls: 1,
+      assertSpy: (spy) => {
+        expect(spy).toHaveBeenCalledWith(
+          `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+        );
+      },
+    },
+    {
+      name: 'propagates failure when unexpected advisories are reported',
+      advisories: [createAdvisory('GHSA-abcd-1234-efgh', 'Unexpected vulnerability')],
+      spyFactory: () => vi.spyOn(console, 'error').mockImplementation(() => {}),
+      expectedExitCode: 1,
+      expectedValidatorCalls: 0,
+      assertSpy: (spy) => {
+        expect(spy).toHaveBeenCalledWith(
+          expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
+        );
+      },
+    },
+  ])(
+    '$name',
+    async ({ advisories, spyFactory, expectedExitCode, expectedValidatorCalls, assertSpy }) => {
+      const evaluateAudit = await loadEvaluateAudit();
+      const consoleSpy = spyFactory();
 
-    const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-      status: 1,
-    });
+      const exitCode = evaluateAudit({ advisories, status: 1 });
 
-    expect(exitCode).toBe(0);
-    expect(validatorPatchMock).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
-    );
-  });
-
-  it('propagates failure when unexpected advisories are reported', async () => {
-    const { evaluateAudit } = await import('./run-audit.mjs');
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [buildAdvisory('GHSA-abcd-1234-efgh', 'Unexpected vulnerability')],
-      status: 1,
-    });
-
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
-    );
-  });
+      expect(exitCode).toBe(expectedExitCode);
+      expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
+      assertSpy(consoleSpy);
+    },
+  );
 
   it('fails when validator advisory is present but local patch is missing', async () => {
-    const { evaluateAudit } = await import('./run-audit.mjs');
+    const evaluateAudit = await loadEvaluateAudit();
     validatorPatchMock.mockReturnValue(false);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
       status: 1,
     });
 
@@ -129,13 +130,13 @@ describe('evaluateAudit', () => {
       addedAt: '2025-02-14',
       expiresAt: '2026-02-14',
     });
-    const { evaluateAudit } = await import('./run-audit.mjs');
+    const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
       advisories: [
-        buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
-        buildAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
+        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+        createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
       ],
       status: 1,
     });
@@ -148,11 +149,11 @@ describe('evaluateAudit', () => {
 
   it('fails when a ledger exception has expired', async () => {
     ledgerEntries[0].expiresAt = '2024-02-14';
-    const { evaluateAudit } = await import('./run-audit.mjs');
+    const evaluateAudit = await loadEvaluateAudit();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
       status: 1,
     });
 
@@ -164,11 +165,11 @@ describe('evaluateAudit', () => {
 
   it('fails when a ledger exception is missing an expiry date', async () => {
     delete ledgerEntries[0].expiresAt;
-    const { evaluateAudit } = await import('./run-audit.mjs');
+    const evaluateAudit = await loadEvaluateAudit();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
-      advisories: [buildAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
       status: 1,
     });
 
@@ -178,7 +179,6 @@ describe('evaluateAudit', () => {
     );
   });
 
-<<<<<<< HEAD
   it('reports coverage when advisories are covered solely by the ledger', async () => {
     ledgerEntries.push({
       id: 'VAL-2025-0004',
@@ -188,11 +188,11 @@ describe('evaluateAudit', () => {
       addedAt: '2025-02-14',
       expiresAt: '2026-02-14',
     });
-    const { evaluateAudit } = await import('./run-audit.mjs');
+    const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
-      advisories: [buildAdvisory('GHSA-ledg-erpk-1000', 'example permitted advisory')],
+      advisories: [createAdvisory('GHSA-ledg-erpk-1000', 'example permitted advisory')],
       status: 1,
     });
 
@@ -201,25 +201,5 @@ describe('evaluateAudit', () => {
       'All reported advisories are covered by the audit exception ledger.',
     );
     expect(validatorPatchMock).not.toHaveBeenCalled();
-||||||| parent of 72d653e (Enforce audit exception expiry)
-=======
-  it('fails when a ledger exception is missing an expiry date', async () => {
-    delete ledgerEntries[0].expiresAt;
-    const { evaluateAudit } = await import('./run-audit.mjs');
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const exitCode = evaluateAudit({
-      advisories: [
-        // biome-ignore lint/style/useNamingConvention: matches pnpm audit JSON keys.
-        { github_advisory_id: VALIDATOR_ADVISORY_ID, title: 'validator vulnerability' },
-      ],
-      status: 1,
-    });
-
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
-    );
->>>>>>> 72d653e (Enforce audit exception expiry)
   });
 });
