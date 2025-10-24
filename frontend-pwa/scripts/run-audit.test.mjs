@@ -230,19 +230,52 @@ describe('evaluateAudit', () => {
       },
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
     },
+    {
+      name: 'fails once a date-only expiry boundary passes',
+      setupAction: () => {
+        ledgerEntries[0].expiresAt = '2025-02-14';
+      },
+      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2025-02-14.`,
+      referenceDate: new Date('2025-02-15T00:00:00.001Z'),
+    },
   ];
 
-  it.each(ledgerExpiryErrorScenarios)('$name', async ({ setupAction, expectedErrorMessage }) => {
-    setupAction();
+  it.each(ledgerExpiryErrorScenarios)(
+    '$name',
+    async ({ setupAction, expectedErrorMessage, referenceDate }) => {
+      setupAction();
+      const evaluateAudit = await loadEvaluateAudit();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const exitCode = evaluateAudit(
+        {
+          advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+          status: 1,
+        },
+        referenceDate ? { now: referenceDate } : undefined,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
+    },
+  );
+
+  it('allows date-only expiry on the same day', async () => {
+    ledgerEntries[0].expiresAt = '2025-02-14';
     const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+        status: 1,
+      },
+      { now: new Date('2025-02-14T23:59:59.000Z') },
+    );
 
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
+    expect(exitCode).toBe(0);
+    expect(infoSpy).toHaveBeenCalledWith(
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+    );
   });
 });

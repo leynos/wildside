@@ -39,11 +39,7 @@ function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
       continue;
     }
 
-    const ledgerEntry = {
-      ...entry,
-      expiryDate: entry.expiresAt ? new Date(entry.expiresAt) : null,
-    };
-    ledgerByAdvisory.set(entry.advisory, ledgerEntry);
+    ledgerByAdvisory.set(entry.advisory, entry);
     allowedIds.push(entry.advisory);
   }
 
@@ -61,11 +57,19 @@ function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} is missing an expiry date.`;
   }
 
-  if (!(entry.expiryDate instanceof Date) || Number.isNaN(entry.expiryDate.valueOf())) {
+  const rawExpiry = entry.expiresAt;
+  const expiryDate = new Date(rawExpiry);
+
+  if (Number.isNaN(expiryDate.valueOf())) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (${entry.expiresAt}).`;
   }
 
-  if (entry.expiryDate.getTime() < referenceDateValue) {
+  const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+  const expiryBoundary = dateOnlyPattern.test(rawExpiry)
+    ? expiryDate.getTime() + 24 * 60 * 60 * 1000
+    : expiryDate.getTime();
+
+  if (expiryBoundary <= referenceDateValue) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`;
   }
 
