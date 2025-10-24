@@ -170,14 +170,20 @@ export function evaluateAudit(payload, options = {}) {
 
   const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, allowedIds);
 
+  let hasFailure = false;
+
   const expiryError = validateAdvisoryExpiry(expected, ledgerByAdvisory, referenceDateValue);
   if (expiryError) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
     console.error(expiryError);
-    return 1;
+    hasFailure = true;
   }
 
   if (reportUnexpectedAdvisories(unexpected, unexpectedHeading)) {
+    hasFailure = true;
+  }
+
+  if (hasFailure) {
     return 1;
   }
 
