@@ -202,6 +202,7 @@ describe('evaluateAudit', () => {
     });
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const exitCode = evaluateAudit({
       advisories: [createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue')],
@@ -213,6 +214,7 @@ describe('evaluateAudit', () => {
     expect(infoSpy).toHaveBeenCalledWith(
       'All reported advisories are covered by the audit exception ledger.',
     );
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   const ledgerExpiryErrorScenarios = [
