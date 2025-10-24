@@ -278,4 +278,18 @@ describe('evaluateAudit', () => {
       `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
     );
   });
+
+  it('passes through status when no advisories are present', async () => {
+    const evaluateAudit = await loadEvaluateAudit();
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const successCode = evaluateAudit({ advisories: [], status: 0 });
+    const failureCode = evaluateAudit({ advisories: [], status: 1 });
+
+    expect(successCode).toBe(0);
+    expect(failureCode).toBe(1);
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 });
