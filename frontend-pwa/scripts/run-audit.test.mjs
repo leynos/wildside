@@ -240,6 +240,13 @@ describe('evaluateAudit', () => {
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2025-02-14.`,
       referenceDate: new Date('2025-02-15T00:00:00.001Z'),
     },
+    {
+      name: 'fails when a ledger exception has an invalid expiry date',
+      setupAction: () => {
+        ledgerEntries[0].expiresAt = 'not-a-date';
+      },
+      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} has an invalid expiry date (not-a-date).`,
+    },
   ];
 
   it.each(ledgerExpiryErrorScenarios)(
