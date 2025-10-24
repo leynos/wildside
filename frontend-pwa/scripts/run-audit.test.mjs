@@ -288,6 +288,28 @@ describe('evaluateAudit', () => {
     );
   });
 
+  it('logs both expiry and unexpected advisory failures in one run', async () => {
+    ledgerEntries[0].expiresAt = '2024-02-14';
+    const evaluateAudit = await loadEvaluateAudit();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const exitCode = evaluateAudit({
+      advisories: [
+        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+        createAdvisory('GHSA-unexp-0000-0000', 'unexpected advisory'),
+      ],
+      status: 1,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2024-02-14.`,
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Unexpected vulnerabilities detected by pnpm audit:'),
+    );
+  });
+
   it('passes through status when no advisories are present', async () => {
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});

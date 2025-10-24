@@ -76,16 +76,18 @@ function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
   return null;
 }
 
-function validateAdvisoryExpiry(advisories, ledgerByAdvisory, referenceDateValue) {
+function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDateValue) {
+  const errors = [];
+
   for (const advisory of advisories) {
     const entry = ledgerByAdvisory.get(advisory.github_advisory_id ?? '');
     const error = getLedgerExpiryError(entry, advisory.github_advisory_id, referenceDateValue);
     if (error) {
-      return error;
+      errors.push(error);
     }
   }
 
-  return null;
+  return errors;
 }
 
 function reportValidatorOutcome(expected) {
@@ -172,10 +174,12 @@ export function evaluateAudit(payload, options = {}) {
 
   let hasFailure = false;
 
-  const expiryError = validateAdvisoryExpiry(expected, ledgerByAdvisory, referenceDateValue);
-  if (expiryError) {
+  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
+  for (const error of expiryErrors) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
-    console.error(expiryError);
+    console.error(error);
+  }
+  if (expiryErrors.length > 0) {
     hasFailure = true;
   }
 
