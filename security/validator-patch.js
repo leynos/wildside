@@ -44,9 +44,7 @@ function resolveRulesetRequire() {
     );
     const orvalRequire = createRequire(resolvePackageJsonPath(workspaceRequire, 'orval'));
     const coreRequire = createRequire(resolvePackageJsonPath(orvalRequire, '@orval/core'));
-    return createRequire(
-      resolvePackageJsonPath(coreRequire, '@ibm-cloud/openapi-ruleset'),
-    );
+    return createRequire(resolvePackageJsonPath(coreRequire, '@ibm-cloud/openapi-ruleset'));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to resolve validator dependency chain: ${message}`, {

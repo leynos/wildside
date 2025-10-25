@@ -1,4 +1,5 @@
-/** @file Ensures `pnpm audit` only fails for known, patched validator vulnerability.
+/** @file Ensures `pnpm audit` only fails for advisories covered by the
+ * frontend workspace ledger and a locally patched validator dependency.
  *
  * The validator package currently has no upstream patch release. We vendor the
  * required fix locally and treat the advisory as mitigated when the patched
@@ -21,8 +22,104 @@ import packageJson from '../package.json' with { type: 'json' };
 const frontendPackageName = packageJson.name;
 const workspaceKeys = new Set([
   frontendPackageName,
-  frontendPackageName.includes('/') ? frontendPackageName.split('/').pop() : frontendPackageName,
+  frontendPackageName.includes('/')
+    ? frontendPackageName.slice(frontendPackageName.lastIndexOf('/') + 1)
+    : frontendPackageName,
 ]);
+const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
+
+function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
+  referenceDate.getTime();
+
+  const ledgerByAdvisory = new Map();
+  const allowedIds = [];
+
+  for (const entry of auditEntries) {
+    if (!workspaceKeys.has(entry.package)) {
+      continue;
+    }
+
+    ledgerByAdvisory.set(entry.advisory, entry);
+    allowedIds.push(entry.advisory);
+  }
+
+  return { ledgerByAdvisory, allowedIds };
+}
+
+function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
+  if (!entry) {
+    return `Audit ledger entry missing for advisory ${advisoryId ?? 'unknown'}.`;
+  }
+
+  const entryLabel = entry.id ?? entry.advisory;
+
+  if (!entry.expiresAt) {
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} is missing an expiry date.`;
+  }
+
+  const rawExpiry = entry.expiresAt;
+  const expiryDate = new Date(rawExpiry);
+
+  if (Number.isNaN(expiryDate.valueOf())) {
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (${entry.expiresAt}).`;
+  }
+
+  const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+  const expiryBoundary = dateOnlyPattern.test(rawExpiry)
+    ? expiryDate.getTime() + 24 * 60 * 60 * 1000
+    : expiryDate.getTime();
+
+  if (expiryBoundary <= referenceDateValue) {
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`;
+  }
+
+  return null;
+}
+
+function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDateValue) {
+  const errors = [];
+
+  for (const advisory of advisories) {
+    const entry = ledgerByAdvisory.get(advisory.github_advisory_id ?? '');
+    const error = getLedgerExpiryError(entry, advisory.github_advisory_id, referenceDateValue);
+    if (error) {
+      errors.push(error);
+    }
+  }
+
+  return errors;
+}
+
+function reportValidatorOutcome(expected) {
+  const sawValidator = expected.some(
+    (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
+  );
+
+  if (!sawValidator) {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
+    console.info('All reported advisories are covered by the audit exception ledger.');
+    return 0;
+  }
+
+  if (!isValidatorPatched()) {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
+    console.error(
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
+    );
+    return 1;
+  }
+
+  const additionalCount = expected.length - 1;
+  const suffix =
+    additionalCount > 0
+      ? ` (${additionalCount} additional ${additionalCount === 1 ? 'advisory' : 'advisories'} covered by ledger)`
+      : '';
+  // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
+  console.info(
+    `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.${suffix}`,
+  );
+  return 0;
+}
 
 /**
  * Determine whether the current module is executed as the entry script.
@@ -35,112 +132,70 @@ const workspaceKeys = new Set([
  * }
  */
 function isExecutedDirectly(meta) {
-  if (!process.argv[1]) {
+  const invokedPath = process.argv?.[1];
+  if (!invokedPath) {
     return false;
   }
 
-  const scriptPath = fileURLToPath(meta.url);
-  const invokedPath = resolve(process.argv[1]);
-  return scriptPath === invokedPath;
-}
-
-/**
- * Ensure the audit exception entry remains valid.
- *
- * @param {{ id?: string, advisory?: string, package?: string, expiresAt?: string }} entry
- *   Ledger entry describing an allowed advisory.
- * @param {Date} [now=new Date()] Timestamp used to evaluate expiry.
- * @throws {Error} When the entry has expired or the expiry timestamp is invalid.
- * @example
- * assertExceptionActive({ advisory: 'GHSA-1', expiresAt: '2099-01-01' });
- */
-function assertExceptionActive(entry, now = new Date()) {
-  if (!entry.expiresAt) {
-    return;
+  try {
+    const scriptPath = fileURLToPath(meta.url);
+    const absoluteInvokedPath = resolve(invokedPath);
+    return scriptPath === absoluteInvokedPath;
+  } catch {
+    return false;
   }
-
-  const expiry = new Date(entry.expiresAt);
-  if (Number.isNaN(expiry.getTime())) {
-    throw new Error(
-      `Ledger exception ${entry.id ?? entry.advisory ?? entry.package} has invalid expiry`,
-    );
-  }
-
-  if (expiry < now) {
-    throw new Error(
-      `Ledger exception ${entry.id ?? entry.advisory ?? entry.package} expired on ${entry.expiresAt}`,
-    );
-  }
-}
-
-/**
- * Load advisory IDs that this workspace may treat as mitigated.
- *
- * @param {Date} [now=new Date()] Timestamp used to validate ledger expiry.
- * @returns {string[]} Advisory identifiers permitted for this workspace.
- * @example
- * const allowed = loadWorkspaceAdvisoryIds(new Date('2025-02-15'));
- * console.log(allowed.includes('GHSA-9965-vmph-33xx'));
- */
-function loadWorkspaceAdvisoryIds(now = new Date()) {
-  const ids = [];
-
-  for (const entry of auditExceptions) {
-    if (!workspaceKeys.has(entry.package)) {
-      continue;
-    }
-
-    assertExceptionActive(entry, now);
-    ids.push(entry.advisory);
-  }
-
-  return ids;
 }
 
 /**
  * Evaluate pnpm audit output and determine the appropriate exit code.
  *
- * @param {{ advisories: Array<Record<string, unknown>>, status: number }} payload Audit
+ * @param {{ advisories?: Array<Record<string, unknown>>, status?: number }} payload Audit
  *   result containing advisories and the pnpm exit status.
- * @param {{ now?: Date }} [options] Optional evaluation parameters.
+ * @param {{ now?: Date }} [options] Optional evaluation parameters, primarily
+ *   used by unit tests.
  * @returns {number} Exit code that should be returned to the shell.
  * @example
  * const exitCode = evaluateAudit({ advisories: [], status: 0 });
  * console.log(exitCode);
  */
 export function evaluateAudit(payload, options = {}) {
-  const now = options.now ?? new Date();
-  const allowedIds = loadWorkspaceAdvisoryIds(now);
-  const advisories = payload.advisories ?? [];
-  const { expected, unexpected } = partitionAdvisoriesById(advisories, allowedIds);
+  const referenceDate = options.now ?? new Date();
+  const referenceDateValue = referenceDate.getTime();
+  const rawAdvisories = payload.advisories ?? [];
+  const statusCode = payload.status ?? 0;
 
-  if (
-    reportUnexpectedAdvisories(unexpected, 'Unexpected vulnerabilities detected by pnpm audit:')
-  ) {
-    return 1;
-  }
-
-  const targetFinding = expected.find(
-    (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
+  const { ledgerByAdvisory, allowedIds } = buildLedgerMaps(
+    workspaceKeys,
+    auditExceptions,
+    referenceDate,
   );
 
-  if (!targetFinding) {
-    return payload.status;
-  }
+  const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, allowedIds);
 
-  if (!isValidatorPatched()) {
+  let hasFailure = false;
+
+  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
+  for (const error of expiryErrors) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
-    console.error(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
-    );
+    console.error(error);
+  }
+  if (expiryErrors.length > 0) {
+    hasFailure = true;
+  }
+
+  if (reportUnexpectedAdvisories(unexpected, unexpectedHeading)) {
+    hasFailure = true;
+  }
+
+  if (hasFailure) {
     return 1;
   }
 
-  // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
-  console.info(
-    `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
-  );
-  return 0;
+  if (expected.length === 0) {
+    return statusCode;
+  }
+
+  return reportValidatorOutcome(expected);
 }
 
 /**
