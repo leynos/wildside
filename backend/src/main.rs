@@ -1,92 +1,21 @@
 #![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
-#![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
+// Keep unwrap banned; allow `expect` so call sites can document assumptions.
 //! Backend entry-point: wires REST endpoints, WebSocket entry, and OpenAPI docs.
 
-#[cfg(feature = "metrics")]
-use actix_service::{
-    boxed::{self, BoxService},
-    Service, Transform,
-};
-use actix_session::{
-    config::{CookieContentSecurity, PersistentSession},
-    storage::CookieSessionStore,
-    SessionMiddleware,
-};
-#[cfg(feature = "metrics")]
-use actix_web::body::BoxBody;
 use actix_web::cookie::{Key, SameSite};
-use actix_web::dev::{Server, ServiceFactory, ServiceRequest, ServiceResponse};
-#[cfg(feature = "metrics")]
-use actix_web::middleware::{Compat, Identity};
-use actix_web::{web, App, HttpServer};
+use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
-#[cfg(feature = "metrics")]
-use futures_util::future::LocalBoxFuture;
 use std::env;
-#[cfg(feature = "metrics")]
-use std::sync::Arc;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
-#[cfg(debug_assertions)]
-use utoipa_swagger_ui::SwaggerUi;
 use zeroize::Zeroize;
 
-use backend::api::health::{live, ready, HealthState};
-use backend::api::users::{list_users, login};
-#[cfg(debug_assertions)]
-use backend::doc::ApiDoc;
-use backend::ws;
-use backend::Trace;
-#[cfg(debug_assertions)]
-use utoipa::OpenApi;
+use backend::api::health::HealthState;
 
-fn build_app(
-    health_state: web::Data<HealthState>,
-    key: Key,
-    cookie_secure: bool,
-    same_site: SameSite,
-) -> App<
-    impl ServiceFactory<
-        ServiceRequest,
-        Config = (),
-        Response = ServiceResponse,
-        Error = actix_web::Error,
-        InitError = (),
-    >,
-> {
-    let session = SessionMiddleware::builder(CookieSessionStore::default(), key)
-        .cookie_name("session".into())
-        .cookie_path("/".into())
-        .cookie_secure(cookie_secure)
-        .cookie_http_only(true)
-        .cookie_content_security(CookieContentSecurity::Private)
-        .cookie_same_site(same_site)
-        .session_lifecycle(
-            PersistentSession::default().session_ttl(actix_web::cookie::time::Duration::hours(2)),
-        )
-        .build();
+mod server;
 
-    let api = web::scope("/api/v1")
-        .wrap(session)
-        .service(login)
-        .service(list_users);
-
-    let app = App::new()
-        .app_data(health_state)
-        .wrap(Trace)
-        .service(api)
-        .service(ws::ws_entry)
-        .service(ready)
-        .service(live);
-
-    #[cfg(debug_assertions)]
-    let app = app.service(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()));
-    #[cfg(not(debug_assertions))]
-    let app = app;
-
-    app
-}
+use server::{create_server, ServerConfig};
 
 #[cfg(feature = "metrics")]
 fn make_metrics(
@@ -236,190 +165,6 @@ async fn main() -> std::io::Result<()> {
     };
     let server = create_server(health_state.clone(), server_config)?;
     server.await
-}
-
-/// Configuration required to build the HTTP server.
-///
-/// # Examples
-/// ```
-/// use actix_web::cookie::{Key, SameSite};
-/// use crate::ServerConfig;
-///
-/// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0));
-/// assert_eq!(config.bind_address().1, 0);
-/// ```
-pub struct ServerConfig {
-    key: Key,
-    cookie_secure: bool,
-    same_site: SameSite,
-    bind_address: (String, u16),
-    #[cfg(feature = "metrics")]
-    prometheus: Option<actix_web_prom::PrometheusMetrics>,
-}
-
-impl ServerConfig {
-    /// Construct a server configuration using application preferences.
-    ///
-    /// # Examples
-    /// ```
-    /// use actix_web::cookie::{Key, SameSite};
-    /// use crate::ServerConfig;
-    ///
-    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 8080));
-    /// assert_eq!(config.bind_address().1, 8080);
-    /// ```
-    pub fn new(
-        key: Key,
-        cookie_secure: bool,
-        same_site: SameSite,
-        bind_address: (String, u16),
-    ) -> Self {
-        Self {
-            key,
-            cookie_secure,
-            same_site,
-            bind_address,
-            #[cfg(feature = "metrics")]
-            prometheus: None,
-        }
-    }
-
-    /// Return the socket address the server will bind to.
-    ///
-    /// # Examples
-    /// ```
-    /// use actix_web::cookie::{Key, SameSite};
-    /// use crate::ServerConfig;
-    ///
-    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0));
-    /// assert_eq!(config.bind_address().0, "127.0.0.1");
-    /// ```
-    pub fn bind_address(&self) -> &(String, u16) {
-        &self.bind_address
-    }
-
-    #[cfg(feature = "metrics")]
-    /// Attach Prometheus middleware to the configuration.
-    ///
-    /// # Examples
-    /// ```
-    /// use actix_web::cookie::{Key, SameSite};
-    /// use actix_web_prom::PrometheusMetricsBuilder;
-    /// use crate::ServerConfig;
-    ///
-    /// let metrics = PrometheusMetricsBuilder::new("test").endpoint("/metrics").build().ok();
-    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0))
-    ///     .with_metrics(metrics);
-    /// assert!(config.metrics().is_some());
-    /// ```
-    pub fn with_metrics(mut self, prometheus: Option<actix_web_prom::PrometheusMetrics>) -> Self {
-        self.prometheus = prometheus;
-        self
-    }
-
-    #[cfg(feature = "metrics")]
-    /// Return the configured Prometheus middleware, if any.
-    ///
-    /// # Examples
-    /// ```
-    /// use actix_web::cookie::{Key, SameSite};
-    /// use actix_web_prom::PrometheusMetricsBuilder;
-    /// use crate::ServerConfig;
-    ///
-    /// let metrics = PrometheusMetricsBuilder::new("test").endpoint("/metrics").build().ok();
-    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0))
-    ///     .with_metrics(metrics);
-    /// assert!(config.metrics().is_some());
-    /// ```
-    pub fn metrics(&self) -> Option<&actix_web_prom::PrometheusMetrics> {
-        self.prometheus.as_ref()
-    }
-}
-
-fn create_server(
-    health_state: web::Data<HealthState>,
-    config: ServerConfig,
-) -> std::io::Result<Server> {
-    let server_health_state = health_state.clone();
-    let ServerConfig {
-        key,
-        cookie_secure,
-        same_site,
-        bind_address,
-        #[cfg(feature = "metrics")]
-        prometheus,
-    } = config;
-
-    #[cfg(feature = "metrics")]
-    let metrics_layer = MetricsLayer::from_option(prometheus);
-
-    let server = HttpServer::new(move || {
-        let app = build_app(
-            server_health_state.clone(),
-            key.clone(),
-            cookie_secure,
-            same_site,
-        );
-
-        #[cfg(feature = "metrics")]
-        let app = app.wrap(metrics_layer.clone());
-
-        app
-    })
-    .bind(bind_address)?
-    .run();
-
-    health_state.mark_ready();
-    Ok(server)
-}
-
-#[cfg(feature = "metrics")]
-#[derive(Clone)]
-enum MetricsLayer {
-    Enabled(Arc<actix_web_prom::PrometheusMetrics>),
-    Disabled,
-}
-
-#[cfg(feature = "metrics")]
-impl MetricsLayer {
-    fn from_option(metrics: Option<actix_web_prom::PrometheusMetrics>) -> Self {
-        match metrics {
-            Some(metrics) => Self::Enabled(Arc::new(metrics)),
-            None => Self::Disabled,
-        }
-    }
-}
-
-#[cfg(feature = "metrics")]
-impl<S, B> Transform<S, ServiceRequest> for MetricsLayer
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error> + 'static,
-    B: actix_web::body::MessageBody + 'static,
-{
-    type Response = ServiceResponse<BoxBody>;
-    type Error = actix_web::Error;
-    type InitError = ();
-    type Transform = BoxService<ServiceRequest, ServiceResponse<BoxBody>, actix_web::Error>;
-    type Future = LocalBoxFuture<'static, Result<Self::Transform, Self::InitError>>;
-
-    fn new_transform(&self, service: S) -> Self::Future {
-        match self.clone() {
-            MetricsLayer::Enabled(metrics) => {
-                let fut = Compat::new((*metrics).clone()).new_transform(service);
-                Box::pin(async move {
-                    let svc = fut.await?;
-                    Ok(boxed::service(svc))
-                })
-            }
-            MetricsLayer::Disabled => {
-                let fut = Compat::new(Identity::default()).new_transform(service);
-                Box::pin(async move {
-                    let svc = fut.await?;
-                    Ok(boxed::service(svc))
-                })
-            }
-        }
-    }
 }
 
 #[cfg(test)]
