@@ -27,9 +27,13 @@ const workspaceKeys = new Set([
     : frontendPackageName,
 ]);
 const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
+// biome-ignore lint/style/useNamingConvention: constant emphasises unit size.
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
-  referenceDate.getTime();
+  if (!(referenceDate instanceof Date) || Number.isNaN(referenceDate.getTime())) {
+    throw new TypeError('Invalid reference date');
+  }
 
   const ledgerByAdvisory = new Map();
   const allowedIds = [];
@@ -57,20 +61,20 @@ function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} is missing an expiry date.`;
   }
 
-  const rawExpiry = entry.expiresAt;
+  const rawExpiry = String(entry.expiresAt).trim();
   const expiryDate = new Date(rawExpiry);
 
   if (Number.isNaN(expiryDate.valueOf())) {
-    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (${entry.expiresAt}).`;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (raw: ${rawExpiry || '<empty>'}, expected ISO 8601).`;
   }
 
   const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
   const expiryBoundary = dateOnlyPattern.test(rawExpiry)
-    ? expiryDate.getTime() + 24 * 60 * 60 * 1000
+    ? expiryDate.getTime() + DAY_MS
     : expiryDate.getTime();
 
   if (expiryBoundary <= referenceDateValue) {
-    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${rawExpiry}.`;
   }
 
   return null;

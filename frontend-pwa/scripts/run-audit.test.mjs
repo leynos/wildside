@@ -57,6 +57,9 @@ const createAdvisory = (id, title) => ({
   title,
 });
 
+// biome-ignore lint/style/useNamingConvention: constant date shared across cases.
+const DEFAULT_NOW = new Date('2025-03-01T00:00:00.000Z');
+
 async function loadEvaluateAudit() {
   const { evaluateAudit } = await import('./run-audit.mjs');
   return evaluateAudit;
@@ -93,6 +96,7 @@ describe('evaluateAudit', () => {
   beforeEach(() => {
     setLedgerEntries();
     vi.resetModules();
+    vi.clearAllMocks();
     validatorPatchMock.mockReset();
     validatorPatchMock.mockReturnValue(true);
   });
@@ -107,7 +111,7 @@ describe('evaluateAudit', () => {
       const evaluateAudit = await loadEvaluateAudit();
       const consoleSpy = spyFactory();
 
-      const exitCode = evaluateAudit({ advisories, status: 1 });
+      const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
 
       expect(exitCode).toBe(expectedExitCode);
       if (typeof expectedValidatorCalls === 'number') {
@@ -122,10 +126,13 @@ describe('evaluateAudit', () => {
     validatorPatchMock.mockReturnValue(false);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+        status: 1,
+      },
+      { now: DEFAULT_NOW },
+    );
 
     expect(exitCode).toBe(1);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
@@ -149,13 +156,16 @@ describe('evaluateAudit', () => {
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [
-        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
-        createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
-      ],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [
+          createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+          createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
+        ],
+        status: 1,
+      },
+      { now: DEFAULT_NOW },
+    );
 
     expect(exitCode).toBe(0);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
@@ -189,14 +199,17 @@ describe('evaluateAudit', () => {
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [
-        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
-        createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
-        createAdvisory('GHSA-lmno-5432-pqrs', 'tertiary issue'),
-      ],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [
+          createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+          createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue'),
+          createAdvisory('GHSA-lmno-5432-pqrs', 'tertiary issue'),
+        ],
+        status: 1,
+      },
+      { now: DEFAULT_NOW },
+    );
 
     expect(exitCode).toBe(0);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
@@ -221,10 +234,13 @@ describe('evaluateAudit', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue')],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [createAdvisory('GHSA-wxyz-9876-hijk', 'secondary issue')],
+        status: 1,
+      },
+      { now: DEFAULT_NOW },
+    );
 
     expect(exitCode).toBe(0);
     expect(validatorPatchMock).not.toHaveBeenCalled();
@@ -274,7 +290,7 @@ describe('evaluateAudit', () => {
           return entries;
         });
       },
-      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} has an invalid expiry date (not-a-date).`,
+      expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} has an invalid expiry date (raw: not-a-date, expected ISO 8601).`,
     },
   ];
 
@@ -290,7 +306,7 @@ describe('evaluateAudit', () => {
           advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
           status: 1,
         },
-        referenceDate ? { now: referenceDate } : undefined,
+        { now: referenceDate ?? DEFAULT_NOW },
       );
 
       expect(exitCode).toBe(1);
@@ -311,7 +327,7 @@ describe('evaluateAudit', () => {
         advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
         status: 1,
       },
-      { now: new Date('2025-02-14T23:59:59.000Z') },
+      { now: new Date('2025-02-14T23:59:59.999Z') },
     );
 
     expect(exitCode).toBe(0);
@@ -328,13 +344,16 @@ describe('evaluateAudit', () => {
     const evaluateAudit = await loadEvaluateAudit();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit({
-      advisories: [
-        createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
-        createAdvisory('GHSA-unexp-0000-0000', 'unexpected advisory'),
-      ],
-      status: 1,
-    });
+    const exitCode = evaluateAudit(
+      {
+        advisories: [
+          createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability'),
+          createAdvisory('GHSA-unexp-0000-0000', 'unexpected advisory'),
+        ],
+        status: 1,
+      },
+      { now: DEFAULT_NOW },
+    );
 
     expect(exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(
@@ -350,8 +369,8 @@ describe('evaluateAudit', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const successCode = evaluateAudit({ advisories: [], status: 0 });
-    const failureCode = evaluateAudit({ advisories: [], status: 1 });
+    const successCode = evaluateAudit({ advisories: [], status: 0 }, { now: DEFAULT_NOW });
+    const failureCode = evaluateAudit({ advisories: [], status: 1 }, { now: DEFAULT_NOW });
 
     expect(successCode).toBe(0);
     expect(failureCode).toBe(1);
