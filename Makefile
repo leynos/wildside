@@ -26,6 +26,11 @@ define exec_or_bunx
 	fi
 endef
 
+RUSTFLAGS_STRICT := -D warnings
+RUST_FLAGS ?= $(RUSTFLAGS_STRICT)
+RUST_FLAGS_ENV := RUSTFLAGS="$(RUST_FLAGS)"
+RUSTDOC_FLAGS ?= --cfg docsrs -D warnings
+
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
 ORVAL_VERSION ?= 7.11.2
@@ -75,11 +80,12 @@ docker-down:
 	cd deploy && docker compose down
 
 fmt: workspace-sync
-	cargo fmt --manifest-path backend/Cargo.toml --all
+	cargo fmt --workspace --all
 	$(call exec_or_bunx,biome,format --write,@biomejs/biome@$(BIOME_VERSION))
 
 lint: workspace-sync
-	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
+	cargo clippy --manifest-path --workspace --all-targets --all-features -- $(RUST_FLAGS)
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
 
@@ -114,7 +120,7 @@ lint-infra:
 	uvx checkov -d infra
 
 test: workspace-sync deps typecheck
-	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) cargo test --workspace --all-targets --all-features
 	pnpm -r --if-present --silent run test
 	$(MAKE) scripts-test
 
