@@ -5,7 +5,6 @@ use super::{create_server, HealthState, ServerConfig};
 #[cfg(feature = "metrics")]
 use super::{initialize_metrics, PrometheusMetricsBuilder};
 use actix_web::cookie::{Key, SameSite};
-use actix_web::dev::{Server, ServerHandle};
 use actix_web::web;
 use rstest::{fixture, rstest};
 use std::net::SocketAddr;
@@ -121,18 +120,21 @@ fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
 async fn assert_server_marks_ready(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
-) -> (Server, ServerHandle) {
+) {
     assert!(!health_state.is_ready(), "state should start unready");
 
     let server = create_server(health_state.clone(), server_config)
         .expect("server should build from configuration");
     let handle = server.handle();
+    let server_join = actix_rt::spawn(server);
 
     assert!(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    (server, handle)
+    handle.stop(true).await;
+    let join_result = server_join.await.expect("server task should not panic");
+    join_result.expect("server should stop without IO errors");
 }
 
 #[cfg(feature = "metrics")]
@@ -143,10 +145,7 @@ async fn create_server_marks_ready_without_metrics(
     server_config: ServerConfig,
 ) {
     let config = server_config.with_metrics(None);
-    let (server, handle) = assert_server_marks_ready(health_state, config).await;
-    drop(handle.stop(true));
-    drop(handle);
-    drop(server);
+    assert_server_marks_ready(health_state, config).await;
 }
 
 #[cfg(feature = "metrics")]
@@ -158,10 +157,7 @@ async fn create_server_marks_ready_with_metrics(
     prometheus_metrics: actix_web_prom::PrometheusMetrics,
 ) {
     let config = server_config.with_metrics(Some(prometheus_metrics));
-    let (server, handle) = assert_server_marks_ready(health_state, config).await;
-    drop(handle.stop(true));
-    drop(handle);
-    drop(server);
+    assert_server_marks_ready(health_state, config).await;
 }
 
 #[cfg(not(feature = "metrics"))]
@@ -171,8 +167,5 @@ async fn create_server_marks_ready_non_metrics_build(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
 ) {
-    let (server, handle) = assert_server_marks_ready(health_state, server_config).await;
-    drop(handle.stop(true));
-    drop(handle);
-    drop(server);
+    assert_server_marks_ready(health_state, server_config).await;
 }
