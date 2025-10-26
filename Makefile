@@ -85,7 +85,7 @@ fmt: workspace-sync
 
 lint: workspace-sync
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
-	cargo clippy --manifest-path --workspace --all-targets --all-features -- $(RUST_FLAGS)
+	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
 
@@ -117,7 +117,8 @@ lint-infra:
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
-	uvx checkov -d infra
+	mkdir -p .uv-cache
+	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
 test: workspace-sync deps typecheck
 	$(RUST_FLAGS_ENV) cargo test --workspace --all-targets --all-features
