@@ -31,7 +31,13 @@ impl ServerConfig {
     }
 
     /// Return the socket address the server will bind to.
-    #[cfg_attr(not(any(test, doctest)), allow(dead_code))]
+    #[cfg_attr(
+        not(any(test, doctest)),
+        expect(
+            dead_code,
+            reason = "Exercised by integration tests; retained for fixture access"
+        )
+    )]
     #[must_use]
     pub fn bind_addr(&self) -> SocketAddr {
         self.bind_addr
@@ -47,7 +53,13 @@ impl ServerConfig {
 
     #[cfg(feature = "metrics")]
     /// Return the configured Prometheus middleware, if any.
-    #[cfg_attr(not(any(test, doctest)), allow(dead_code))]
+    #[cfg_attr(
+        not(any(test, doctest)),
+        expect(
+            dead_code,
+            reason = "Exercised by integration tests behind feature flags"
+        )
+    )]
     #[must_use]
     pub fn metrics(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()
