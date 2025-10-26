@@ -1,6 +1,7 @@
 //! HTTP server configuration object and helpers.
 
 use actix_web::cookie::{Key, SameSite};
+use std::net::SocketAddr;
 
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetrics;
@@ -10,7 +11,7 @@ pub struct ServerConfig {
     pub(crate) key: Key,
     pub(crate) cookie_secure: bool,
     pub(crate) same_site: SameSite,
-    pub(crate) bind_address: (String, u16),
+    pub(crate) bind_addr: SocketAddr,
     #[cfg(feature = "metrics")]
     pub(crate) prometheus: Option<PrometheusMetrics>,
 }
@@ -18,17 +19,12 @@ pub struct ServerConfig {
 impl ServerConfig {
     /// Construct a server configuration using application preferences.
     #[must_use]
-    pub fn new(
-        key: Key,
-        cookie_secure: bool,
-        same_site: SameSite,
-        bind_address: (String, u16),
-    ) -> Self {
+    pub fn new(key: Key, cookie_secure: bool, same_site: SameSite, bind_addr: SocketAddr) -> Self {
         Self {
             key,
             cookie_secure,
             same_site,
-            bind_address,
+            bind_addr,
             #[cfg(feature = "metrics")]
             prometheus: None,
         }
@@ -37,8 +33,8 @@ impl ServerConfig {
     /// Return the socket address the server will bind to.
     #[cfg_attr(not(any(test, doctest)), allow(dead_code))]
     #[must_use]
-    pub fn bind_address(&self) -> &(String, u16) {
-        &self.bind_address
+    pub fn bind_addr(&self) -> SocketAddr {
+        self.bind_addr
     }
 
     #[cfg(feature = "metrics")]

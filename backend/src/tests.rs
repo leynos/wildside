@@ -8,6 +8,7 @@ use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{Server, ServerHandle};
 use actix_web::web;
 use rstest::{fixture, rstest};
+use std::net::SocketAddr;
 
 #[fixture]
 fn health_state() -> web::Data<HealthState> {
@@ -20,8 +21,8 @@ fn session_key() -> Key {
 }
 
 #[fixture]
-fn bind_address() -> (String, u16) {
-    ("127.0.0.1".into(), 0)
+fn bind_addr() -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], 0))
 }
 
 #[fixture]
@@ -35,15 +36,10 @@ fn same_site_policy() -> SameSite {
 }
 
 #[test]
-fn server_config_bind_address_round_trips() {
-    let bind_address = ("127.0.0.1".into(), 8080);
-    let config = ServerConfig::new(
-        Key::generate(),
-        true,
-        SameSite::Strict,
-        bind_address.clone(),
-    );
-    assert_eq!(config.bind_address(), &bind_address);
+fn server_config_bind_addr_round_trips() {
+    let bind_addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let config = ServerConfig::new(Key::generate(), true, SameSite::Strict, bind_addr);
+    assert_eq!(config.bind_addr(), bind_addr);
 }
 
 #[cfg(feature = "metrics")]
@@ -53,7 +49,7 @@ fn server_config_metrics_default_to_none() {
         Key::generate(),
         false,
         SameSite::Lax,
-        ("127.0.0.1".into(), 0),
+        SocketAddr::from(([127, 0, 0, 1], 0)),
     );
     assert!(
         config.metrics().is_none(),
@@ -72,7 +68,7 @@ fn server_config_with_metrics_preserves_value() {
         Key::generate(),
         false,
         SameSite::Lax,
-        ("127.0.0.1".into(), 0),
+        SocketAddr::from(([127, 0, 0, 1], 0)),
     )
     .with_metrics(Some(metrics));
 
@@ -85,11 +81,11 @@ fn server_config_with_metrics_preserves_value() {
 #[fixture]
 fn server_config(
     session_key: Key,
-    bind_address: (String, u16),
+    bind_addr: SocketAddr,
     cookie_secure: bool,
     same_site_policy: SameSite,
 ) -> ServerConfig {
-    ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_address)
+    ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr)
 }
 
 #[cfg(feature = "metrics")]

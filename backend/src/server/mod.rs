@@ -85,7 +85,7 @@ pub fn create_server(
         key,
         cookie_secure,
         same_site,
-        bind_address,
+        bind_addr,
         #[cfg(feature = "metrics")]
         prometheus,
     } = config;
@@ -106,7 +106,7 @@ pub fn create_server(
 
         app
     })
-    .bind(bind_address)?
+    .bind(bind_addr)?
     .run();
 
     health_state.mark_ready();

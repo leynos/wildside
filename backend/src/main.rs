@@ -7,6 +7,7 @@ use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
 use std::env;
+use std::net::SocketAddr;
 use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 use zeroize::Zeroize;
@@ -124,20 +125,27 @@ fn same_site_from_env(cookie_secure: bool) -> std::io::Result<SameSite> {
     })
 }
 
-fn bind_address() -> (String, u16) {
-    (
-        env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into()),
-        match env::var("PORT") {
-            Ok(p) => match p.parse::<u16>() {
-                Ok(n) => n,
-                Err(_) => {
-                    warn!(value = %p, "invalid PORT; falling back to 8080");
-                    8080u16
-                }
-            },
-            Err(_) => 8080u16,
+fn bind_addr() -> SocketAddr {
+    let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
+    let port = match env::var("PORT") {
+        Ok(p) => match p.parse::<u16>() {
+            Ok(n) => n,
+            Err(_) => {
+                warn!(value = %p, "invalid PORT; falling back to 8080");
+                8080u16
+            }
         },
-    )
+        Err(_) => 8080u16,
+    };
+
+    let candidate = format!("{host}:{port}");
+    match candidate.parse::<SocketAddr>() {
+        Ok(addr) => addr,
+        Err(error) => {
+            warn!(address = %candidate, %error, "invalid HOST/PORT combination; falling back to 0.0.0.0:8080");
+            SocketAddr::from(([0, 0, 0, 0], 8080))
+        }
+    }
 }
 
 /// Application bootstrap.
@@ -158,7 +166,7 @@ async fn main() -> std::io::Result<()> {
     let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
     let server_config = {
-        let config = ServerConfig::new(key, cookie_secure, same_site, bind_address());
+        let config = ServerConfig::new(key, cookie_secure, same_site, bind_addr());
         #[cfg(feature = "metrics")]
         let config = config.with_metrics(prometheus);
         config
