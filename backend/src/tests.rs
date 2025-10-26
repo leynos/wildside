@@ -42,14 +42,14 @@ fn server_config_bind_addr_round_trips(session_key: Key, bind_addr: SocketAddr) 
 }
 
 #[cfg(feature = "metrics")]
-#[test]
-fn server_config_metrics_default_to_none() {
-    let config = ServerConfig::new(
-        Key::generate(),
-        false,
-        SameSite::Lax,
-        SocketAddr::from(([127, 0, 0, 1], 0)),
-    );
+#[rstest]
+fn server_config_metrics_default_to_none(
+    session_key: Key,
+    bind_addr: SocketAddr,
+    cookie_secure: bool,
+    same_site_policy: SameSite,
+) {
+    let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr);
     assert!(
         config.metrics().is_none(),
         "expected metrics to default to None"
