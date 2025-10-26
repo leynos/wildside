@@ -167,8 +167,12 @@ lockfile:
 	git diff --exit-code pnpm-lock.yaml
 
 check-fmt:
-	cargo fmt --all -- --check
-	$(call exec_or_bunx,biome,format frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	@if cargo fmt --help | grep -q -- '--workspace'; then \
+		cargo fmt --workspace --all -- --check; \
+	else \
+		cargo fmt --all -- --check; \
+	fi
+	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 INFRA_TEST_TARGETS := \
         doks-test \
