@@ -149,6 +149,7 @@ async fn create_server_marks_ready_without_metrics(
 ) {
     let config = server_config.with_metrics(None);
     let (server, handle) = assert_server_marks_ready(health_state, config).await;
+    drop(handle.stop(true));
     drop(handle);
     drop(server);
 }
@@ -163,6 +164,7 @@ async fn create_server_marks_ready_with_metrics(
 ) {
     let config = server_config.with_metrics(Some(prometheus_metrics));
     let (server, handle) = assert_server_marks_ready(health_state, config).await;
+    drop(handle.stop(true));
     drop(handle);
     drop(server);
 }
@@ -175,6 +177,7 @@ async fn create_server_marks_ready_non_metrics_build(
     server_config: ServerConfig,
 ) {
     let (server, handle) = assert_server_marks_ready(health_state, server_config).await;
+    drop(handle.stop(true));
     drop(handle);
     drop(server);
 }
