@@ -80,8 +80,8 @@ docker-down:
 	cd deploy && docker compose down
 
 fmt: workspace-sync
-	cargo fmt --workspace --all
-	$(call exec_or_bunx,biome,format --write,@biomejs/biome@$(BIOME_VERSION))
+	cargo fmt --all
+	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 lint: workspace-sync
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
@@ -121,7 +121,7 @@ lint-infra:
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
 test: workspace-sync deps typecheck
-	$(RUST_FLAGS_ENV) cargo test --workspace --all-targets --all-features
+	$(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
 	pnpm -r --if-present --silent run test
 	$(MAKE) scripts-test
 
@@ -167,8 +167,8 @@ lockfile:
 	git diff --exit-code pnpm-lock.yaml
 
 check-fmt:
-	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
-	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
+	cargo fmt --all -- --check
+	$(call exec_or_bunx,biome,format frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 INFRA_TEST_TARGETS := \
         doks-test \
