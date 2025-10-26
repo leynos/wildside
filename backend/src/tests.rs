@@ -5,6 +5,7 @@ use super::{create_server, HealthState, ServerConfig};
 #[cfg(feature = "metrics")]
 use super::{initialize_metrics, PrometheusMetricsBuilder};
 use actix_web::cookie::{Key, SameSite};
+use actix_web::dev::{Server, ServerHandle};
 use actix_web::web;
 use rstest::{fixture, rstest};
 
@@ -125,16 +126,18 @@ fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
 async fn assert_server_marks_ready(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
-) {
+) -> (Server, ServerHandle) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let _server = create_server(health_state.clone(), server_config)
+    let server = create_server(health_state.clone(), server_config)
         .expect("server should build from configuration");
+    let handle = server.handle();
 
     assert!(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
+    (server, handle)
 }
 
 #[cfg(feature = "metrics")]
@@ -145,7 +148,9 @@ async fn create_server_marks_ready_without_metrics(
     server_config: ServerConfig,
 ) {
     let config = server_config.with_metrics(None);
-    assert_server_marks_ready(health_state, config).await;
+    let (server, handle) = assert_server_marks_ready(health_state, config).await;
+    drop(handle);
+    drop(server);
 }
 
 #[cfg(feature = "metrics")]
@@ -157,7 +162,9 @@ async fn create_server_marks_ready_with_metrics(
     prometheus_metrics: actix_web_prom::PrometheusMetrics,
 ) {
     let config = server_config.with_metrics(Some(prometheus_metrics));
-    assert_server_marks_ready(health_state, config).await;
+    let (server, handle) = assert_server_marks_ready(health_state, config).await;
+    drop(handle);
+    drop(server);
 }
 
 #[cfg(not(feature = "metrics"))]
@@ -167,5 +174,7 @@ async fn create_server_marks_ready_non_metrics_build(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
 ) {
-    assert_server_marks_ready(health_state, server_config).await;
+    let (server, handle) = assert_server_marks_ready(health_state, server_config).await;
+    drop(handle);
+    drop(server);
 }
