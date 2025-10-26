@@ -122,6 +122,21 @@ fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
         .expect("metrics should build for tests")
 }
 
+async fn assert_server_marks_ready(
+    health_state: web::Data<HealthState>,
+    server_config: ServerConfig,
+) {
+    assert!(!health_state.is_ready(), "state should start unready");
+
+    let _server = create_server(health_state.clone(), server_config)
+        .expect("server should build from configuration");
+
+    assert!(
+        health_state.is_ready(),
+        "server creation should mark readiness"
+    );
+}
+
 #[cfg(feature = "metrics")]
 #[rstest]
 #[actix_rt::test]
@@ -129,16 +144,8 @@ async fn create_server_marks_ready_without_metrics(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
 ) {
-    assert!(!health_state.is_ready(), "state should start unready");
-
     let config = server_config.with_metrics(None);
-    let _server =
-        create_server(health_state.clone(), config).expect("server should build without metrics");
-
-    assert!(
-        health_state.is_ready(),
-        "server creation should mark readiness"
-    );
+    assert_server_marks_ready(health_state, config).await;
 }
 
 #[cfg(feature = "metrics")]
@@ -149,16 +156,8 @@ async fn create_server_marks_ready_with_metrics(
     server_config: ServerConfig,
     prometheus_metrics: actix_web_prom::PrometheusMetrics,
 ) {
-    assert!(!health_state.is_ready(), "state should start unready");
-
     let config = server_config.with_metrics(Some(prometheus_metrics));
-    let _server =
-        create_server(health_state.clone(), config).expect("server should build with metrics");
-
-    assert!(
-        health_state.is_ready(),
-        "server creation should mark readiness"
-    );
+    assert_server_marks_ready(health_state, config).await;
 }
 
 #[cfg(not(feature = "metrics"))]
@@ -168,13 +167,5 @@ async fn create_server_marks_ready_non_metrics_build(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
 ) {
-    assert!(!health_state.is_ready(), "state should start unready");
-
-    let _server = create_server(health_state.clone(), server_config)
-        .expect("server should build without metrics");
-
-    assert!(
-        health_state.is_ready(),
-        "server creation should mark readiness"
-    );
+    assert_server_marks_ready(health_state, server_config).await;
 }
