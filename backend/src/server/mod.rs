@@ -76,6 +76,17 @@ fn build_app(
     app
 }
 
+/// Construct an Actix HTTP server using the provided health state and configuration.
+///
+/// # Parameters
+/// - `health_state`: shared readiness state updated once the server is initialised.
+/// - `config`: pre-built [`ServerConfig`] containing session, binding, and optional metrics settings.
+///
+/// # Returns
+/// A spawned [`Server`] that must be awaited to drive the listener.
+///
+/// # Errors
+/// Propagates [`std::io::Error`] when binding the socket or starting the server fails.
 pub fn create_server(
     health_state: web::Data<HealthState>,
     config: ServerConfig,
