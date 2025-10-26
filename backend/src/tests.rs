@@ -1,7 +1,7 @@
 //! Tests for the backend application bootstrap, covering metrics initialisation
 //! and readiness signalling.
 
-use super::{create_server, HealthState};
+use super::{create_server, HealthState, ServerConfig};
 #[cfg(feature = "metrics")]
 use super::{initialize_metrics, PrometheusMetricsBuilder};
 use actix_web::cookie::{Key, SameSite};
@@ -31,6 +31,16 @@ fn cookie_secure() -> bool {
 #[fixture]
 fn same_site_policy() -> SameSite {
     SameSite::Lax
+}
+
+#[fixture]
+fn server_config(
+    session_key: Key,
+    bind_address: (String, u16),
+    cookie_secure: bool,
+    same_site_policy: SameSite,
+) -> ServerConfig {
+    ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_address)
 }
 
 #[cfg(feature = "metrics")]
@@ -69,22 +79,13 @@ fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
 #[actix_rt::test]
 async fn create_server_marks_ready_without_metrics(
     health_state: web::Data<HealthState>,
-    session_key: Key,
-    bind_address: (String, u16),
-    cookie_secure: bool,
-    same_site_policy: SameSite,
+    server_config: ServerConfig,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let _server = create_server(
-        health_state.clone(),
-        session_key,
-        cookie_secure,
-        same_site_policy,
-        bind_address,
-        None,
-    )
-    .expect("server should build without metrics");
+    let config = server_config.with_metrics(None);
+    let _server =
+        create_server(health_state.clone(), config).expect("server should build without metrics");
 
     assert!(
         health_state.is_ready(),
@@ -97,23 +98,14 @@ async fn create_server_marks_ready_without_metrics(
 #[actix_rt::test]
 async fn create_server_marks_ready_with_metrics(
     health_state: web::Data<HealthState>,
-    session_key: Key,
-    bind_address: (String, u16),
+    server_config: ServerConfig,
     prometheus_metrics: actix_web_prom::PrometheusMetrics,
-    cookie_secure: bool,
-    same_site_policy: SameSite,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let _server = create_server(
-        health_state.clone(),
-        session_key,
-        cookie_secure,
-        same_site_policy,
-        bind_address,
-        Some(prometheus_metrics),
-    )
-    .expect("server should build with metrics");
+    let config = server_config.with_metrics(Some(prometheus_metrics));
+    let _server =
+        create_server(health_state.clone(), config).expect("server should build with metrics");
 
     assert!(
         health_state.is_ready(),
@@ -126,21 +118,12 @@ async fn create_server_marks_ready_with_metrics(
 #[actix_rt::test]
 async fn create_server_marks_ready_non_metrics_build(
     health_state: web::Data<HealthState>,
-    session_key: Key,
-    bind_address: (String, u16),
-    cookie_secure: bool,
-    same_site_policy: SameSite,
+    server_config: ServerConfig,
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let _server = create_server(
-        health_state.clone(),
-        session_key,
-        cookie_secure,
-        same_site_policy,
-        bind_address,
-    )
-    .expect("server should build without metrics");
+    let _server = create_server(health_state.clone(), server_config)
+        .expect("server should build without metrics");
 
     assert!(
         health_state.is_ready(),

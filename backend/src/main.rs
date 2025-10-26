@@ -228,28 +228,127 @@ async fn main() -> std::io::Result<()> {
     #[cfg(feature = "metrics")]
     let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
-    let server = create_server(
-        health_state.clone(),
-        key,
-        cookie_secure,
-        same_site,
-        bind_address(),
-        #[cfg(feature = "metrics")]
-        prometheus,
-    )?;
+    #[cfg(feature = "metrics")]
+    let server_config =
+        ServerConfig::new(key, cookie_secure, same_site, bind_address()).with_metrics(prometheus);
+    #[cfg(not(feature = "metrics"))]
+    let server_config = ServerConfig::new(key, cookie_secure, same_site, bind_address());
+    let server = create_server(health_state.clone(), server_config)?;
     server.await
+}
+
+/// Configuration required to build the HTTP server.
+///
+/// # Examples
+/// ```
+/// use actix_web::cookie::{Key, SameSite};
+/// use crate::ServerConfig;
+///
+/// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0));
+/// assert_eq!(config.bind_address().1, 0);
+/// ```
+pub struct ServerConfig {
+    key: Key,
+    cookie_secure: bool,
+    same_site: SameSite,
+    bind_address: (String, u16),
+    #[cfg(feature = "metrics")]
+    prometheus: Option<actix_web_prom::PrometheusMetrics>,
+}
+
+impl ServerConfig {
+    /// Construct a server configuration using application preferences.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use crate::ServerConfig;
+    ///
+    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 8080));
+    /// assert_eq!(config.bind_address().1, 8080);
+    /// ```
+    pub fn new(
+        key: Key,
+        cookie_secure: bool,
+        same_site: SameSite,
+        bind_address: (String, u16),
+    ) -> Self {
+        Self {
+            key,
+            cookie_secure,
+            same_site,
+            bind_address,
+            #[cfg(feature = "metrics")]
+            prometheus: None,
+        }
+    }
+
+    /// Return the socket address the server will bind to.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use crate::ServerConfig;
+    ///
+    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0));
+    /// assert_eq!(config.bind_address().0, "127.0.0.1");
+    /// ```
+    pub fn bind_address(&self) -> &(String, u16) {
+        &self.bind_address
+    }
+
+    #[cfg(feature = "metrics")]
+    /// Attach Prometheus middleware to the configuration.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use actix_web_prom::PrometheusMetricsBuilder;
+    /// use crate::ServerConfig;
+    ///
+    /// let metrics = PrometheusMetricsBuilder::new("test").endpoint("/metrics").build().ok();
+    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0))
+    ///     .with_metrics(metrics);
+    /// assert!(config.metrics().is_some());
+    /// ```
+    pub fn with_metrics(mut self, prometheus: Option<actix_web_prom::PrometheusMetrics>) -> Self {
+        self.prometheus = prometheus;
+        self
+    }
+
+    #[cfg(feature = "metrics")]
+    /// Return the configured Prometheus middleware, if any.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use actix_web_prom::PrometheusMetricsBuilder;
+    /// use crate::ServerConfig;
+    ///
+    /// let metrics = PrometheusMetricsBuilder::new("test").endpoint("/metrics").build().ok();
+    /// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, ("127.0.0.1".into(), 0))
+    ///     .with_metrics(metrics);
+    /// assert!(config.metrics().is_some());
+    /// ```
+    pub fn metrics(&self) -> Option<&actix_web_prom::PrometheusMetrics> {
+        self.prometheus.as_ref()
+    }
 }
 
 #[cfg(feature = "metrics")]
 fn create_server(
     health_state: web::Data<HealthState>,
-    key: Key,
-    cookie_secure: bool,
-    same_site: SameSite,
-    bind_address: (String, u16),
-    prometheus: Option<actix_web_prom::PrometheusMetrics>,
+    config: ServerConfig,
 ) -> std::io::Result<Server> {
+    let ServerConfig {
+        key,
+        cookie_secure,
+        same_site,
+        bind_address,
+        prometheus,
+    } = config;
     let server_health_state = health_state.clone();
+    let metrics_layer = MetricsLayer::from_option(prometheus);
     let server = HttpServer::new(move || {
         let app = build_app(
             server_health_state.clone(),
@@ -258,9 +357,7 @@ fn create_server(
             same_site,
         );
 
-        let middleware = MetricsLayer::from_option(prometheus.clone());
-
-        app.wrap(middleware)
+        app.wrap(metrics_layer.clone())
     })
     .bind(bind_address)?
     .run();
@@ -272,11 +369,15 @@ fn create_server(
 #[cfg(not(feature = "metrics"))]
 fn create_server(
     health_state: web::Data<HealthState>,
-    key: Key,
-    cookie_secure: bool,
-    same_site: SameSite,
-    bind_address: (String, u16),
+    config: ServerConfig,
 ) -> std::io::Result<Server> {
+    let ServerConfig {
+        key,
+        cookie_secure,
+        same_site,
+        bind_address,
+        ..
+    } = config;
     let server_health_state = health_state.clone();
     let server = HttpServer::new(move || {
         build_app(
