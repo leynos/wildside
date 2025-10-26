@@ -5,6 +5,7 @@
  * required fix locally and treat the advisory as mitigated when the patched
  * code is present. Any additional vulnerabilities remain fatal.
  */
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -163,7 +164,9 @@ function isExecutedDirectly(meta) {
   try {
     const scriptPath = fileURLToPath(meta.url);
     const absoluteInvokedPath = resolve(invokedPath);
-    return scriptPath === absoluteInvokedPath;
+    const normalise = (path) =>
+      typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
+    return normalise(scriptPath) === normalise(absoluteInvokedPath);
   } catch {
     return false;
   }
