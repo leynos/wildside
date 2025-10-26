@@ -57,19 +57,19 @@ fn server_config_metrics_default_to_none(
 }
 
 #[cfg(feature = "metrics")]
-#[test]
-fn server_config_with_metrics_preserves_value() {
+#[rstest]
+fn server_config_with_metrics_preserves_value(
+    session_key: Key,
+    bind_addr: SocketAddr,
+    cookie_secure: bool,
+    same_site_policy: SameSite,
+) {
     let metrics = PrometheusMetricsBuilder::new("test")
         .endpoint("/metrics")
         .build()
         .expect("metrics should be buildable in tests");
-    let config = ServerConfig::new(
-        Key::generate(),
-        false,
-        SameSite::Lax,
-        SocketAddr::from(([127, 0, 0, 1], 0)),
-    )
-    .with_metrics(Some(metrics));
+    let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr)
+        .with_metrics(Some(metrics));
 
     assert!(
         config.metrics().is_some(),
