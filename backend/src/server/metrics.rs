@@ -18,6 +18,7 @@ pub(crate) enum MetricsLayer {
 }
 
 impl MetricsLayer {
+    #[must_use]
     pub(crate) fn from_option(metrics: Option<PrometheusMetrics>) -> Self {
         match metrics {
             Some(metrics) => Self::Enabled(Arc::new(metrics)),
