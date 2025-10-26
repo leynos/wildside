@@ -25,18 +25,26 @@ const baselineLedgerEntries = [
   },
 ];
 
-function cloneLedgerEntries() {
-  return baselineLedgerEntries.map((entry) => ({ ...entry }));
-}
+const cloneLedgerEntries = (entries = baselineLedgerEntries) =>
+  entries.map((entry) => ({ ...entry }));
 
-const ledgerEntries = cloneLedgerEntries();
+let nextLedgerEntries = cloneLedgerEntries();
 
-function resetLedgerEntries() {
-  ledgerEntries.splice(0, ledgerEntries.length, ...cloneLedgerEntries());
+function setLedgerEntries(mutator) {
+  const snapshot = cloneLedgerEntries();
+  if (typeof mutator === 'function') {
+    const result = mutator(snapshot);
+    nextLedgerEntries = Array.isArray(result) ? result : snapshot;
+    return;
+  }
+
+  nextLedgerEntries = snapshot;
 }
 
 vi.mock('../../security/audit-exceptions.json', () => ({
-  default: ledgerEntries,
+  get default() {
+    return cloneLedgerEntries(nextLedgerEntries);
+  },
 }));
 
 vi.mock('../../security/validator-patch.js', () => ({
@@ -83,7 +91,7 @@ const evaluateAuditScenarios = [
 
 describe('evaluateAudit', () => {
   beforeEach(() => {
-    resetLedgerEntries();
+    setLedgerEntries();
     vi.resetModules();
     validatorPatchMock.mockReset();
     validatorPatchMock.mockReturnValue(true);
@@ -127,13 +135,16 @@ describe('evaluateAudit', () => {
   });
 
   it('notes additional ledger-covered advisories when validator patch applies', async () => {
-    ledgerEntries.push({
-      id: 'VAL-2025-0003',
-      package: 'frontend-pwa',
-      advisory: 'GHSA-wxyz-9876-hijk',
-      reason: 'Secondary advisory accepted temporarily for the frontend.',
-      addedAt: '2025-02-14',
-      expiresAt: '2026-02-14',
+    setLedgerEntries((entries) => {
+      entries.push({
+        id: 'VAL-2025-0003',
+        package: 'frontend-pwa',
+        advisory: 'GHSA-wxyz-9876-hijk',
+        reason: 'Secondary advisory accepted temporarily for the frontend.',
+        addedAt: '2025-02-14',
+        expiresAt: '2026-02-14',
+      });
+      return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -154,24 +165,27 @@ describe('evaluateAudit', () => {
   });
 
   it('notes plural additional ledger-covered advisories when validator patch applies', async () => {
-    ledgerEntries.push(
-      {
-        id: 'VAL-2025-0003',
-        package: 'frontend-pwa',
-        advisory: 'GHSA-wxyz-9876-hijk',
-        reason: 'Secondary advisory accepted temporarily for the frontend.',
-        addedAt: '2025-02-14',
-        expiresAt: '2026-02-14',
-      },
-      {
-        id: 'VAL-2025-0004',
-        package: 'frontend-pwa',
-        advisory: 'GHSA-lmno-5432-pqrs',
-        reason: 'Tertiary advisory accepted temporarily for the frontend.',
-        addedAt: '2025-02-14',
-        expiresAt: '2026-02-14',
-      },
-    );
+    setLedgerEntries((entries) => {
+      entries.push(
+        {
+          id: 'VAL-2025-0003',
+          package: 'frontend-pwa',
+          advisory: 'GHSA-wxyz-9876-hijk',
+          reason: 'Secondary advisory accepted temporarily for the frontend.',
+          addedAt: '2025-02-14',
+          expiresAt: '2026-02-14',
+        },
+        {
+          id: 'VAL-2025-0004',
+          package: 'frontend-pwa',
+          advisory: 'GHSA-lmno-5432-pqrs',
+          reason: 'Tertiary advisory accepted temporarily for the frontend.',
+          addedAt: '2025-02-14',
+          expiresAt: '2026-02-14',
+        },
+      );
+      return entries;
+    });
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
@@ -192,13 +206,16 @@ describe('evaluateAudit', () => {
   });
 
   it('returns success when only ledger-covered non-validator advisories are reported', async () => {
-    ledgerEntries.push({
-      id: 'VAL-2025-0003',
-      package: 'frontend-pwa',
-      advisory: 'GHSA-wxyz-9876-hijk',
-      reason: 'Non-validator advisory accepted temporarily for the frontend.',
-      addedAt: '2025-02-14',
-      expiresAt: '2026-02-14',
+    setLedgerEntries((entries) => {
+      entries.push({
+        id: 'VAL-2025-0003',
+        package: 'frontend-pwa',
+        advisory: 'GHSA-wxyz-9876-hijk',
+        reason: 'Non-validator advisory accepted temporarily for the frontend.',
+        addedAt: '2025-02-14',
+        expiresAt: '2026-02-14',
+      });
+      return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -221,21 +238,30 @@ describe('evaluateAudit', () => {
     {
       name: 'fails when a ledger exception has expired',
       setupAction: () => {
-        ledgerEntries[0].expiresAt = '2024-02-14';
+        setLedgerEntries((entries) => {
+          entries[0].expiresAt = '2024-02-14';
+          return entries;
+        });
       },
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2024-02-14.`,
     },
     {
       name: 'fails when a ledger exception is missing an expiry date',
       setupAction: () => {
-        delete ledgerEntries[0].expiresAt;
+        setLedgerEntries((entries) => {
+          delete entries[0].expiresAt;
+          return entries;
+        });
       },
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} is missing an expiry date.`,
     },
     {
       name: 'fails once a date-only expiry boundary passes',
       setupAction: () => {
-        ledgerEntries[0].expiresAt = '2025-02-14';
+        setLedgerEntries((entries) => {
+          entries[0].expiresAt = '2025-02-14';
+          return entries;
+        });
       },
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} expired on 2025-02-14.`,
       referenceDate: new Date('2025-02-15T00:00:00.001Z'),
@@ -243,7 +269,10 @@ describe('evaluateAudit', () => {
     {
       name: 'fails when a ledger exception has an invalid expiry date',
       setupAction: () => {
-        ledgerEntries[0].expiresAt = 'not-a-date';
+        setLedgerEntries((entries) => {
+          entries[0].expiresAt = 'not-a-date';
+          return entries;
+        });
       },
       expectedErrorMessage: `Audit exception VAL-2025-0001 for advisory ${VALIDATOR_ADVISORY_ID} has an invalid expiry date (not-a-date).`,
     },
@@ -270,7 +299,10 @@ describe('evaluateAudit', () => {
   );
 
   it('allows date-only expiry on the same day', async () => {
-    ledgerEntries[0].expiresAt = '2025-02-14';
+    setLedgerEntries((entries) => {
+      entries[0].expiresAt = '2025-02-14';
+      return entries;
+    });
     const evaluateAudit = await loadEvaluateAudit();
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
@@ -289,7 +321,10 @@ describe('evaluateAudit', () => {
   });
 
   it('logs both expiry and unexpected advisory failures in one run', async () => {
-    ledgerEntries[0].expiresAt = '2024-02-14';
+    setLedgerEntries((entries) => {
+      entries[0].expiresAt = '2024-02-14';
+      return entries;
+    });
     const evaluateAudit = await loadEvaluateAudit();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

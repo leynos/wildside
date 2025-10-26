@@ -90,6 +90,25 @@ function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDate
   return errors;
 }
 
+function reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue) {
+  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
+
+  if (expiryErrors.length === 0) {
+    return false;
+  }
+
+  for (const error of expiryErrors) {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
+    console.error(error);
+  }
+
+  return true;
+}
+
+function reportUnexpectedFailures(unexpected) {
+  return reportUnexpectedAdvisories(unexpected, unexpectedHeading);
+}
+
 function reportValidatorOutcome(expected) {
   const sawValidator = expected.some(
     (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
@@ -172,22 +191,10 @@ export function evaluateAudit(payload, options = {}) {
 
   const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, allowedIds);
 
-  let hasFailure = false;
+  const hasExpiredEntries = reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue);
+  const hasUnexpectedAdvisories = reportUnexpectedFailures(unexpected);
 
-  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
-  for (const error of expiryErrors) {
-    // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
-    console.error(error);
-  }
-  if (expiryErrors.length > 0) {
-    hasFailure = true;
-  }
-
-  if (reportUnexpectedAdvisories(unexpected, unexpectedHeading)) {
-    hasFailure = true;
-  }
-
-  if (hasFailure) {
+  if (hasExpiredEntries || hasUnexpectedAdvisories) {
     return 1;
   }
 
