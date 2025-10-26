@@ -228,11 +228,12 @@ async fn main() -> std::io::Result<()> {
     #[cfg(feature = "metrics")]
     let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
-    #[cfg(feature = "metrics")]
-    let server_config =
-        ServerConfig::new(key, cookie_secure, same_site, bind_address()).with_metrics(prometheus);
-    #[cfg(not(feature = "metrics"))]
-    let server_config = ServerConfig::new(key, cookie_secure, same_site, bind_address());
+    let server_config = {
+        let config = ServerConfig::new(key, cookie_secure, same_site, bind_address());
+        #[cfg(feature = "metrics")]
+        let config = config.with_metrics(prometheus);
+        config
+    };
     let server = create_server(health_state.clone(), server_config)?;
     server.await
 }
@@ -335,20 +336,23 @@ impl ServerConfig {
     }
 }
 
-#[cfg(feature = "metrics")]
 fn create_server(
     health_state: web::Data<HealthState>,
     config: ServerConfig,
 ) -> std::io::Result<Server> {
+    let server_health_state = health_state.clone();
     let ServerConfig {
         key,
         cookie_secure,
         same_site,
         bind_address,
+        #[cfg(feature = "metrics")]
         prometheus,
     } = config;
-    let server_health_state = health_state.clone();
+
+    #[cfg(feature = "metrics")]
     let metrics_layer = MetricsLayer::from_option(prometheus);
+
     let server = HttpServer::new(move || {
         let app = build_app(
             server_health_state.clone(),
@@ -357,35 +361,10 @@ fn create_server(
             same_site,
         );
 
-        app.wrap(metrics_layer.clone())
-    })
-    .bind(bind_address)?
-    .run();
+        #[cfg(feature = "metrics")]
+        let app = app.wrap(metrics_layer.clone());
 
-    health_state.mark_ready();
-    Ok(server)
-}
-
-#[cfg(not(feature = "metrics"))]
-fn create_server(
-    health_state: web::Data<HealthState>,
-    config: ServerConfig,
-) -> std::io::Result<Server> {
-    let ServerConfig {
-        key,
-        cookie_secure,
-        same_site,
-        bind_address,
-        ..
-    } = config;
-    let server_health_state = health_state.clone();
-    let server = HttpServer::new(move || {
-        build_app(
-            server_health_state.clone(),
-            key.clone(),
-            cookie_secure,
-            same_site,
-        )
+        app
     })
     .bind(bind_address)?
     .run();

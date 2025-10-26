@@ -33,6 +33,54 @@ fn same_site_policy() -> SameSite {
     SameSite::Lax
 }
 
+#[test]
+fn server_config_bind_address_round_trips() {
+    let bind_address = ("127.0.0.1".into(), 8080);
+    let config = ServerConfig::new(
+        Key::generate(),
+        true,
+        SameSite::Strict,
+        bind_address.clone(),
+    );
+    assert_eq!(config.bind_address(), &bind_address);
+}
+
+#[cfg(feature = "metrics")]
+#[test]
+fn server_config_metrics_default_to_none() {
+    let config = ServerConfig::new(
+        Key::generate(),
+        false,
+        SameSite::Lax,
+        ("127.0.0.1".into(), 0),
+    );
+    assert!(
+        config.metrics().is_none(),
+        "expected metrics to default to None"
+    );
+}
+
+#[cfg(feature = "metrics")]
+#[test]
+fn server_config_with_metrics_preserves_value() {
+    let metrics = PrometheusMetricsBuilder::new("test")
+        .endpoint("/metrics")
+        .build()
+        .expect("metrics should be buildable in tests");
+    let config = ServerConfig::new(
+        Key::generate(),
+        false,
+        SameSite::Lax,
+        ("127.0.0.1".into(), 0),
+    )
+    .with_metrics(Some(metrics));
+
+    assert!(
+        config.metrics().is_some(),
+        "metrics helper should retain provided value"
+    );
+}
+
 #[fixture]
 fn server_config(
     session_key: Key,
