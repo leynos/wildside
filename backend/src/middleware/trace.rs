@@ -84,7 +84,7 @@ impl std::str::FromStr for TraceId {
 /// Tracing middleware attaching a request-scoped UUID and
 /// adding a `Trace-Id` header to every response.
 ///
-/// Handlers can read the trace ID via [`TraceId::current`].
+/// Handlers can read the trace ID via the `TraceId::current` helper.
 ///
 /// # Examples
 /// ```
