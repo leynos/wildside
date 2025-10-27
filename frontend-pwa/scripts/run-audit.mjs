@@ -20,6 +20,9 @@ import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import packageJson from '../package.json' with { type: 'json' };
 
+const normalise = (path) =>
+  typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
+
 const frontendPackageName = packageJson.name;
 const workspaceKeys = new Set([
   frontendPackageName,
@@ -160,8 +163,6 @@ function isExecutedDirectly(meta) {
   try {
     const scriptPath = fileURLToPath(meta.url);
     const absoluteInvokedPath = resolve(invokedPath);
-    const normalise = (path) =>
-      typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
     return normalise(scriptPath) === normalise(absoluteInvokedPath);
   } catch {
     return false;
