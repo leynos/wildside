@@ -37,8 +37,13 @@ fn same_site_policy() -> SameSite {
 }
 
 #[rstest]
-fn server_config_bind_addr_round_trips(session_key: Key, bind_addr: SocketAddr) {
-    let config = ServerConfig::new(session_key, true, SameSite::Strict, bind_addr);
+fn server_config_bind_addr_round_trips(
+    session_key: Key,
+    bind_addr: SocketAddr,
+    cookie_secure: bool,
+    same_site_policy: SameSite,
+) {
+    let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr);
     assert_eq!(
         config.bind_addr(),
         bind_addr,
