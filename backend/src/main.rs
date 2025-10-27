@@ -27,7 +27,7 @@ fn make_metrics(
 }
 
 #[cfg(feature = "metrics")]
-fn initialize_metrics<F, E>(make: F) -> Option<actix_web_prom::PrometheusMetrics>
+pub(crate) fn initialize_metrics<F, E>(make: F) -> Option<actix_web_prom::PrometheusMetrics>
 where
     F: FnOnce() -> Result<actix_web_prom::PrometheusMetrics, E>,
     E: std::fmt::Display,

@@ -1,11 +1,13 @@
 //! Tests for the backend application bootstrap, covering metrics initialisation
 //! and readiness signalling.
 
-use super::{create_server, HealthState, ServerConfig};
 #[cfg(feature = "metrics")]
-use super::{initialize_metrics, PrometheusMetricsBuilder};
+use super::initialize_metrics;
+use super::{create_server, HealthState, ServerConfig};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::web;
+#[cfg(feature = "metrics")]
+use actix_web_prom::PrometheusMetricsBuilder;
 use rstest::{fixture, rstest};
 use std::net::SocketAddr;
 
