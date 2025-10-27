@@ -110,10 +110,6 @@ function reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue) {
   return true;
 }
 
-function reportUnexpectedFailures(unexpected) {
-  return reportUnexpectedAdvisories(unexpected, unexpectedHeading);
-}
-
 function reportValidatorOutcome(expected) {
   const sawValidator = expected.some(
     (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
@@ -199,7 +195,7 @@ export function evaluateAudit(payload, options = {}) {
   const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, allowedIds);
 
   const hasExpiredEntries = reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue);
-  const hasUnexpectedAdvisories = reportUnexpectedFailures(unexpected);
+  const hasUnexpectedAdvisories = reportUnexpectedAdvisories(unexpected, unexpectedHeading);
 
   if (hasExpiredEntries || hasUnexpectedAdvisories) {
     return 1;
