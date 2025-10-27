@@ -10,6 +10,7 @@ use actix_web::web;
 use actix_web_prom::PrometheusMetricsBuilder;
 use rstest::{fixture, rstest};
 use std::net::SocketAddr;
+use tokio::time::{timeout, Duration};
 
 #[fixture]
 fn health_state() -> web::Data<HealthState> {
@@ -136,8 +137,13 @@ async fn assert_server_marks_ready(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    handle.stop(true).await;
-    let join_result = server_join.await.expect("server task should not panic");
+    timeout(Duration::from_secs(5), handle.stop(true))
+        .await
+        .expect("timed out waiting for server.stop");
+    let join_result = timeout(Duration::from_secs(5), server_join)
+        .await
+        .expect("timed out waiting for server task join")
+        .expect("server task should not panic");
     join_result.expect("server should stop without IO errors");
 }
 
