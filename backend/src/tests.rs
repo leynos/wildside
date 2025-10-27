@@ -114,15 +114,6 @@ fn initialize_metrics_returns_metrics_on_success() {
     );
 }
 
-#[cfg(feature = "metrics")]
-#[fixture]
-fn prometheus_metrics() -> actix_web_prom::PrometheusMetrics {
-    PrometheusMetricsBuilder::new("test")
-        .endpoint("/metrics")
-        .build()
-        .expect("metrics should build for tests")
-}
-
 async fn assert_server_marks_ready(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
@@ -145,24 +136,23 @@ async fn assert_server_marks_ready(
 
 #[cfg(feature = "metrics")]
 #[rstest]
+#[case(false)]
+#[case(true)]
 #[actix_rt::test]
-async fn create_server_marks_ready_without_metrics(
+async fn create_server_marks_ready_with_optional_metrics(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
+    #[case] with_metrics: bool,
 ) {
-    let config = server_config.with_metrics(None);
-    assert_server_marks_ready(health_state, config).await;
-}
-
-#[cfg(feature = "metrics")]
-#[rstest]
-#[actix_rt::test]
-async fn create_server_marks_ready_with_metrics(
-    health_state: web::Data<HealthState>,
-    server_config: ServerConfig,
-    prometheus_metrics: actix_web_prom::PrometheusMetrics,
-) {
-    let config = server_config.with_metrics(Some(prometheus_metrics));
+    let config = if with_metrics {
+        let metrics = PrometheusMetricsBuilder::new("test")
+            .endpoint("/metrics")
+            .build()
+            .expect("metrics should build in tests");
+        server_config.with_metrics(Some(metrics))
+    } else {
+        server_config.with_metrics(None)
+    };
     assert_server_marks_ready(health_state, config).await;
 }
 
