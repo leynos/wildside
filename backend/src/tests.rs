@@ -37,7 +37,13 @@ fn same_site_policy() -> SameSite {
 #[rstest]
 fn server_config_bind_addr_round_trips(session_key: Key, bind_addr: SocketAddr) {
     let config = ServerConfig::new(session_key, true, SameSite::Strict, bind_addr);
-    assert_eq!(config.bind_addr(), bind_addr);
+    assert_eq!(
+        config.bind_addr(),
+        bind_addr,
+        "bind_addr mismatch: expected {expected} but got {actual}",
+        expected = bind_addr,
+        actual = config.bind_addr()
+    );
 }
 
 #[cfg(feature = "metrics")]
