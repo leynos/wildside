@@ -80,6 +80,7 @@
       "style": {
         "noInferrableTypes": "error",
         "noParameterAssign": "error",
+        "noNonNullAssertion": "error",
         "noProcessEnv": "error",
         "useArrayLiterals": "error",
         "useConsistentArrayType": "error",
@@ -150,7 +151,6 @@
       "nursery": {
         "noFloatingPromises": "error",
         "noImportCycles": "error",
-        "noNonNullAssertedOptionalChain": "error",
         // Prefer @ts-expect-error over @ts-ignore (no direct Biome rule in 2.2.2)
         "useExhaustiveSwitchCases": "error"
       }
