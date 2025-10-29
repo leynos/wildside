@@ -31,14 +31,15 @@ const cloneLedgerEntries = (entries = baselineLedgerEntries) =>
 let nextLedgerEntries = cloneLedgerEntries();
 
 function setLedgerEntries(mutator) {
-  const snapshot = cloneLedgerEntries();
+  // Allow tests to layer mutations while still supporting easy resets.
   if (typeof mutator === 'function') {
+    const snapshot = cloneLedgerEntries(nextLedgerEntries);
     const result = mutator(snapshot);
     nextLedgerEntries = Array.isArray(result) ? result : snapshot;
     return;
   }
 
-  nextLedgerEntries = snapshot;
+  nextLedgerEntries = cloneLedgerEntries(baselineLedgerEntries);
 }
 
 vi.mock('../../security/audit-exceptions.json', () => ({
