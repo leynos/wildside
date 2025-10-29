@@ -125,18 +125,22 @@ fn same_site_from_env(cookie_secure: bool) -> std::io::Result<SameSite> {
     })
 }
 
+fn parse_port_with_fallback(port_str: &str) -> u16 {
+    match port_str.parse::<u16>() {
+        Ok(port) => port,
+        Err(_) => {
+            warn!(value = %port_str, "invalid PORT; falling back to 8080");
+            8080u16
+        }
+    }
+}
+
 fn bind_addr() -> SocketAddr {
     let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
-    let port = match env::var("PORT") {
-        Ok(p) => match p.parse::<u16>() {
-            Ok(n) => n,
-            Err(_) => {
-                warn!(value = %p, "invalid PORT; falling back to 8080");
-                8080u16
-            }
-        },
-        Err(_) => 8080u16,
-    };
+    let port = env::var("PORT")
+        .as_deref()
+        .map(parse_port_with_fallback)
+        .unwrap_or(8080u16);
 
     let candidate = format!("{host}:{port}");
     match candidate.parse::<SocketAddr>() {
