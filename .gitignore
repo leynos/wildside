@@ -45,6 +45,7 @@ terraform.rc
 bun.lockb
 **/__pycache__/
 *.py[cod]
+.uv-cache/
 
 # Environment
 .env

@@ -26,10 +26,15 @@ define exec_or_bunx
 	fi
 endef
 
+RUSTFLAGS_STRICT := -D warnings
+RUST_FLAGS ?= $(RUSTFLAGS_STRICT)
+RUST_FLAGS_ENV := RUSTFLAGS="$(RUST_FLAGS)"
+RUSTDOC_FLAGS ?= --cfg docsrs -D warnings
+
 ASYNCAPI_CLI_VERSION ?= 3.4.2
 REDOCLY_CLI_VERSION ?= 2.1.0
 ORVAL_VERSION ?= 7.11.2
-BIOME_VERSION ?= 2.2.4
+BIOME_VERSION ?= 2.3.1
 TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 OPENAPI_SPEC ?= spec/openapi.json
@@ -75,11 +80,12 @@ docker-down:
 	cd deploy && docker compose down
 
 fmt: workspace-sync
-	cargo fmt --manifest-path backend/Cargo.toml --all
-	$(call exec_or_bunx,biome,format --write,@biomejs/biome@$(BIOME_VERSION))
+	cargo fmt --workspace --all
+	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 lint: workspace-sync
-	cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
+	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
 
@@ -111,10 +117,11 @@ lint-infra:
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
-	uvx checkov -d infra
+	mkdir -p .uv-cache
+	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
 test: workspace-sync deps typecheck
-	RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
 	pnpm -r --if-present --silent run test
 	$(MAKE) scripts-test
 
@@ -160,8 +167,12 @@ lockfile:
 	git diff --exit-code pnpm-lock.yaml
 
 check-fmt:
-	cargo fmt --manifest-path backend/Cargo.toml --all -- --check
-	$(call exec_or_bunx,biome,format,@biomejs/biome@$(BIOME_VERSION))
+	@if cargo fmt --help | grep -q -- '--workspace'; then \
+		cargo fmt --workspace --all -- --check; \
+	else \
+		cargo fmt --all -- --check; \
+	fi
+	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 INFRA_TEST_TARGETS := \
         doks-test \

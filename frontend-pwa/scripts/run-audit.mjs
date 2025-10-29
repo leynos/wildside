@@ -5,6 +5,7 @@
  * required fix locally and treat the advisory as mitigated when the patched
  * code is present. Any additional vulnerabilities remain fatal.
  */
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,9 @@ import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import packageJson from '../package.json' with { type: 'json' };
 
+const normalise = (path) =>
+  typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
+
 const frontendPackageName = packageJson.name;
 const workspaceKeys = new Set([
   frontendPackageName,
@@ -27,9 +31,13 @@ const workspaceKeys = new Set([
     : frontendPackageName,
 ]);
 const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
+// biome-ignore lint/style/useNamingConvention: constant emphasises unit size.
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
-  referenceDate.getTime();
+  if (!(referenceDate instanceof Date) || Number.isNaN(referenceDate.getTime())) {
+    throw new TypeError('Invalid reference date');
+  }
 
   const ledgerByAdvisory = new Map();
   const allowedIds = [];
@@ -57,20 +65,20 @@ function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} is missing an expiry date.`;
   }
 
-  const rawExpiry = entry.expiresAt;
+  const rawExpiry = String(entry.expiresAt).trim();
   const expiryDate = new Date(rawExpiry);
 
   if (Number.isNaN(expiryDate.valueOf())) {
-    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (${entry.expiresAt}).`;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} has an invalid expiry date (raw: ${rawExpiry || '<empty>'}, expected ISO 8601).`;
   }
 
   const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
   const expiryBoundary = dateOnlyPattern.test(rawExpiry)
-    ? expiryDate.getTime() + 24 * 60 * 60 * 1000
+    ? expiryDate.getTime() + DAY_MS
     : expiryDate.getTime();
 
   if (expiryBoundary <= referenceDateValue) {
-    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${entry.expiresAt}.`;
+    return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${rawExpiry}.`;
   }
 
   return null;
@@ -88,6 +96,21 @@ function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDate
   }
 
   return errors;
+}
+
+function reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue) {
+  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
+
+  if (expiryErrors.length === 0) {
+    return false;
+  }
+
+  for (const error of expiryErrors) {
+    // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
+    console.error(error);
+  }
+
+  return true;
 }
 
 function reportValidatorOutcome(expected) {
@@ -140,7 +163,7 @@ function isExecutedDirectly(meta) {
   try {
     const scriptPath = fileURLToPath(meta.url);
     const absoluteInvokedPath = resolve(invokedPath);
-    return scriptPath === absoluteInvokedPath;
+    return normalise(scriptPath) === normalise(absoluteInvokedPath);
   } catch {
     return false;
   }
@@ -172,22 +195,10 @@ export function evaluateAudit(payload, options = {}) {
 
   const { expected, unexpected } = partitionAdvisoriesById(rawAdvisories, allowedIds);
 
-  let hasFailure = false;
+  const hasExpiredEntries = reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue);
+  const hasUnexpectedAdvisories = reportUnexpectedAdvisories(unexpected, unexpectedHeading);
 
-  const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
-  for (const error of expiryErrors) {
-    // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
-    console.error(error);
-  }
-  if (expiryErrors.length > 0) {
-    hasFailure = true;
-  }
-
-  if (reportUnexpectedAdvisories(unexpected, unexpectedHeading)) {
-    hasFailure = true;
-  }
-
-  if (hasFailure) {
+  if (hasExpiredEntries || hasUnexpectedAdvisories) {
     return 1;
   }
 

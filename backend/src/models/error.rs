@@ -62,8 +62,8 @@ pub struct Error {
 impl Error {
     /// Create a new error.
     ///
-    /// Captures the current [`TraceId`](crate::middleware::trace::TraceId) if one
-    /// is in scope so the error payload is correlated automatically.
+    /// Captures the current trace identifier if one is in scope so the error
+    /// payload is correlated automatically.
     ///
     /// # Examples
     /// ```

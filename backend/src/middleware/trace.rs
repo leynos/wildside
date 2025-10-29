@@ -38,10 +38,12 @@ task_local! {
 pub struct TraceId(pub(crate) Uuid);
 
 impl TraceId {
+    #[must_use]
     #[rustfmt::skip]
     fn generate() -> Self { Self(Uuid::new_v4()) }
 
     /// Returns the current trace identifier if one is in scope.
+    #[must_use]
     #[rustfmt::skip]
     pub fn current() -> Option<Self> { TRACE_ID.try_with(|id| *id).ok() }
 
@@ -84,7 +86,7 @@ impl std::str::FromStr for TraceId {
 /// Tracing middleware attaching a request-scoped UUID and
 /// adding a `Trace-Id` header to every response.
 ///
-/// Handlers can read the trace ID via [`TraceId::current`].
+/// Handlers can read the trace ID via the `TraceId::current` helper.
 ///
 /// # Examples
 /// ```
