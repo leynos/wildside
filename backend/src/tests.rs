@@ -38,15 +38,9 @@ fn same_site_policy() -> SameSite {
 }
 
 #[rstest]
-fn server_config_bind_addr_round_trips(
-    session_key: Key,
-    bind_addr: SocketAddr,
-    cookie_secure: bool,
-    same_site_policy: SameSite,
-) {
-    let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr);
+fn server_config_bind_addr_round_trips(server_config: ServerConfig, bind_addr: SocketAddr) {
     assert_eq!(
-        config.bind_addr(),
+        server_config.bind_addr(),
         bind_addr,
         "bind_addr should round-trip through ServerConfig"
     );
@@ -54,15 +48,9 @@ fn server_config_bind_addr_round_trips(
 
 #[cfg(feature = "metrics")]
 #[rstest]
-fn server_config_metrics_default_to_none(
-    session_key: Key,
-    bind_addr: SocketAddr,
-    cookie_secure: bool,
-    same_site_policy: SameSite,
-) {
-    let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr);
+fn server_config_metrics_default_to_none(server_config: ServerConfig) {
     assert!(
-        config.metrics().is_none(),
+        server_config.metrics().is_none(),
         "expected metrics to default to None"
     );
 }
