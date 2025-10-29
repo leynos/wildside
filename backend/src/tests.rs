@@ -48,9 +48,7 @@ fn server_config_bind_addr_round_trips(
     assert_eq!(
         config.bind_addr(),
         bind_addr,
-        "bind_addr mismatch: expected {expected} but got {actual}",
-        expected = bind_addr,
-        actual = config.bind_addr()
+        "bind_addr should round-trip through ServerConfig"
     );
 }
 
