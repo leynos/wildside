@@ -90,7 +90,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 
 ## Phase 2 – Data platform foundation
 
-Ensure schema and ingestion work expose their operations through domain ports
+Ensure schema and ingestion work expose their operations through domain ports,
 so persistence details stay confined to outbound adapters.
 
 ### Step: Schema baseline
