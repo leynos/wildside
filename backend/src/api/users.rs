@@ -5,7 +5,7 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::models::{ApiResult, Error, ErrorCode, User};
+use crate::domain::{ApiResult, Error, User};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
@@ -46,13 +46,7 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
         Ok(HttpResponse::Ok().finish())
     } else {
         // Map to the shared Error type so ResponseError renders the JSON body.
-        Err(Error {
-            code: ErrorCode::Unauthorized,
-            message: "invalid credentials".into(),
-            trace_id: None,
-            details: None,
-        }
-        .into())
+        Err(Error::unauthorized("invalid credentials").into())
     }
 }
 //
@@ -89,10 +83,10 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     {
         return Err(Error::unauthorized("login required"));
     }
-    let data = vec![User {
-        id: "3fa85f64-5717-4562-b3fc-2c963f66afa6".into(),
-        display_name: "Ada Lovelace".into(),
-    }];
+    let data = vec![User::new(
+        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "Ada Lovelace",
+    )];
     Ok(web::Json(data))
 }
 

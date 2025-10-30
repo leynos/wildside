@@ -251,7 +251,7 @@ mod tests {
 
     #[actix_web::test]
     async fn propagates_trace_id_in_error() {
-        use crate::models::{ApiResult, Error};
+        use crate::domain::{ApiResult, Error};
 
         let (res, trace_id) = test_trace_with_handler(|| async move {
             // Error::internal captures the scoped TraceId automatically.
@@ -259,6 +259,6 @@ mod tests {
         })
         .await;
         let body: Error = test::read_body_json(res).await;
-        assert_eq!(body.trace_id.as_deref(), Some(trace_id.as_str()));
+        assert_eq!(body.trace_id(), Some(trace_id.as_str()));
     }
 }

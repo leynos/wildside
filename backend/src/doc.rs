@@ -1,6 +1,6 @@
 //! OpenAPI documentation setup.
 
-use crate::models::{Error, ErrorCode, User};
+use crate::domain::{Error, ErrorCode, User};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 

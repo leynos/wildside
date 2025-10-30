@@ -505,15 +505,26 @@ profiles), **preferences** (storing user interest tags), and any
 domain-specific rules (e.g., limiting how frequently a user can request routes,
 or business rules about POI selection). These domain rules are kept in the
 domain layer, while any database schema or web-specific code is kept out. Data
-is passed in plain structs or enums defined in the `domain` or `models` module.
-For instance, there might be a `User` struct in `models` that is used across
-layers (with serde for JSON and Diesel mappings, but the business logic might
-use a slightly different representation or simpler one like `NewUser` for
-creation). The domain might also implement invariant checks (ensuring valid
-display name formats, etc.). In fact, some of these validations are reflected
-in the AsyncAPI spec we maintain for events (e.g., the display name regex and
-length are documented in the spec and enforced in domain
-logic)([6](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/spec/asyncapi.yaml#L190-L198)).
+now flows exclusively through types defined in `backend::domain`, replacing the
+previous `models` module. Each type exposes constructor functions (e.g.
+`User::try_new`) that validate invariants such as UUID formats or non-empty
+display names, ensuring adapters cannot introduce invalid state. The domain may
+add lighter convenience wrappers (for example `User::new`) when the inputs are
+compile-time constants, but runtime code is expected to call the fallible
+constructors and propagate the domain errors. These invariants mirror the
+validation rules captured in the AsyncAPI spec we maintain for events (e.g.,
+the display name regex and length documented in the
+spec)([6](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/spec/asyncapi.yaml#L190-L198)).
+
+> **Design decision (2025-10-30):** Establish a `backend::domain` module that
+> owns all primitives previously exposed from `backend::models`. Domain types
+> now enforce invariants in their constructors (`try_new`/`try_with_*`) and
+> expose read-only accessors instead of public fields. Adapters interact with
+> these types via the validated constructors, keeping state immutable once
+> created. HTTP error envelopes use the same pattern, guaranteeing that blank
+> messages or trace identifiers never enter the system. This decision underpins
+> future port introductions by ensuring every domain primitive is immutable and
+> validated at the boundary.
 
 #### Domain Models and Invariants
 

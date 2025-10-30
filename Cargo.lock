@@ -382,6 +382,7 @@ dependencies = [
  "insta",
  "regex",
  "rstest",
+ "rstest-bdd",
  "serde",
  "serde_json",
  "tokio",
@@ -1505,6 +1506,10 @@ dependencies = [
  "futures-util",
  "rstest_macros",
 ]
+
+[[package]]
+name = "rstest-bdd"
+version = "0.1.0-alpha4"
 
 [[package]]
 name = "rstest_macros"
