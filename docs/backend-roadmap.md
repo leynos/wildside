@@ -95,7 +95,7 @@ so persistence details stay confined to outbound adapters.
 
 ### Step: Schema baseline
 
-- [ ] Deliver Diesel migrations that materialise the schema in
+- [ ] Deliver Diesel migrations that materialize the schema in
   `docs/wildside-backend-architecture.md`, including GiST/GIN indices and
   unique constraints for composite keys.
 - [ ] Generate ER-diagram snapshots from migrations and store them alongside
