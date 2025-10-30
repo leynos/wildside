@@ -15,6 +15,9 @@ pub mod user;
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::user::{User, UserValidationError};
 
+/// HTTP header name used to propagate trace identifiers.
+pub const TRACE_ID_HEADER: &str = "trace-id";
+
 /// Convenient API result alias.
 ///
 /// # Examples

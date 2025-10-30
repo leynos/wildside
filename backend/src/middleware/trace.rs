@@ -9,6 +9,7 @@
 
 use std::task::{Context, Poll};
 
+use crate::domain::TRACE_ID_HEADER;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::Error;
@@ -154,7 +155,7 @@ where
                 Ok(value) => {
                     res.response_mut()
                         .headers_mut()
-                        .insert(HeaderName::from_static("trace-id"), value);
+                        .insert(HeaderName::from_static(TRACE_ID_HEADER), value);
                 }
                 Err(error) => {
                     error!(
@@ -209,7 +210,7 @@ mod tests {
         .await;
         let req = test::TestRequest::get().uri("/").to_request();
         let res = test::call_service(&app, req).await;
-        assert!(res.headers().contains_key("trace-id"));
+        assert!(res.headers().contains_key(TRACE_ID_HEADER));
     }
 
     async fn test_trace_with_handler<F, Fut, Res>(
@@ -229,7 +230,7 @@ mod tests {
         let res = test::call_service(&app, req).await;
         let trace_id = res
             .headers()
-            .get("trace-id")
+            .get(TRACE_ID_HEADER)
             .expect("trace id header")
             .to_str()
             .expect("header is ascii")

@@ -56,10 +56,13 @@ impl User {
         display_name: impl Into<String>,
     ) -> Result<Self, UserValidationError> {
         let id = id.into();
-        if id.trim().is_empty() {
+        if id.is_empty() {
             return Err(UserValidationError::EmptyId);
         }
-        Uuid::parse_str(id.trim()).map_err(|_| UserValidationError::InvalidId)?;
+        if id.trim() != id {
+            return Err(UserValidationError::InvalidId);
+        }
+        Uuid::parse_str(&id).map_err(|_| UserValidationError::InvalidId)?;
 
         let display_name = display_name.into();
         if display_name.trim().is_empty() {
@@ -133,6 +136,13 @@ mod tests {
     #[rstest]
     fn try_new_rejects_invalid_uuid(valid_display_name: &str) {
         let result = User::try_new("not-a-uuid", valid_display_name);
+        assert!(matches!(result, Err(UserValidationError::InvalidId)));
+    }
+
+    #[rstest]
+    fn try_new_rejects_uuid_with_whitespace(valid_display_name: &str) {
+        let id = format!(" {VALID_ID} ");
+        let result = User::try_new(id, valid_display_name);
         assert!(matches!(result, Err(UserValidationError::InvalidId)));
     }
 

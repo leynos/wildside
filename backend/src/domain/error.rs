@@ -1,6 +1,6 @@
 //! Error response types.
 
-use crate::middleware::trace::TraceId;
+use crate::{domain::TRACE_ID_HEADER, middleware::trace::TraceId};
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -267,7 +267,7 @@ impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
         let mut builder = HttpResponse::build(self.status_code());
         if let Some(id) = &self.trace_id {
-            builder.insert_header(("trace-id", id.clone()));
+            builder.insert_header((TRACE_ID_HEADER, id.clone()));
         }
         if matches!(self.code, ErrorCode::InternalError) {
             let mut redacted = self.clone();
@@ -417,7 +417,7 @@ mod tests {
 
         let header = response
             .headers()
-            .get("trace-id")
+            .get(TRACE_ID_HEADER)
             .or_else(|| response.headers().get("Trace-Id"));
         match expected_trace_id {
             Some(expected) => {

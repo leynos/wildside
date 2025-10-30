@@ -505,12 +505,12 @@ profiles), **preferences** (storing user interest tags), and any
 domain-specific rules (e.g., limiting how frequently a user can request routes,
 or business rules about POI selection). These domain rules are kept in the
 domain layer, while any database schema or web-specific code is kept out. Data
-now flows exclusively through types defined in `backend::domain`, replacing the
-previous `models` module. Each type exposes constructor functions (e.g.
+now flows exclusively through types defined in `backend::domain`, replacing
+the previous `models` module. Each type exposes constructor functions (e.g.
 `User::try_new`) that validate invariants such as UUID formats or non-empty
-display names, ensuring adapters cannot introduce invalid state. The domain may
-add lighter convenience wrappers (for example `User::new`) when the inputs are
-compile-time constants, but runtime code is expected to call the fallible
+display names, ensuring adapters cannot introduce invalid state. The domain
+may add lighter convenience wrappers (for example `User::new`) when the inputs
+are compile-time constants, but runtime code is expected to call the fallible
 constructors and propagate the domain errors. These invariants mirror the
 validation rules captured in the AsyncAPI spec we maintain for events (e.g.,
 the display name regex and length documented in the
