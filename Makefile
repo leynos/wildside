@@ -80,7 +80,7 @@ docker-down:
 	cd deploy && docker compose down
 
 fmt: workspace-sync
-	cargo fmt --workspace --all
+	cargo fmt --all
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 lint: workspace-sync
