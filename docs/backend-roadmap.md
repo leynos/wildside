@@ -157,12 +157,12 @@ the queue, cache, and repository ports defined in Phase 0.
 
 ### Step: Caching strategy
 
-- [ ] Finalise the Redis caching adapter so requests share canonicalised keys,
+- [ ] Finalize the Redis caching adapter so requests share canonicalized keys,
   jittered TTLs, and metrics for hit/miss ratios before enabling caching in
   production.
 - [ ] Implement cache invalidation hooks for schema or engine version
   upgrades, including namespace suffix rotation and eviction-safe rollouts.
-- [ ] Add contract tests verifying canonicalisation rules (sorted themes,
+- [ ] Add contract tests verifying canonicalization rules (sorted themes,
   rounded coordinates, SHA-256 key format).
 
 ## Phase 5 – Map delivery and observability
