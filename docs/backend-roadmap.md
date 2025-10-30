@@ -15,7 +15,7 @@ be considered done if it violates these constraints.
 ## Phase 0 – Hexagonal foundations
 
 These steps gate all other phases. Complete them before tackling feature
-delivery so future work remains inside the hexagonal boundaries.
+delivery, so future work remains inside the hexagonal boundaries.
 
 ### Step: Domain and ports baseline
 
@@ -53,7 +53,7 @@ delivery so future work remains inside the hexagonal boundaries.
 
 - [ ] Extend `docs/wildside-backend-architecture.md` with inbound/outbound
   module diagrams, port usage examples, and a checklist for introducing new
-  adapters so the boundaries stay visible.
+  adapters, so the boundaries stay visible.
 - [ ] Add an architectural lint (e.g. dependency allowlists enforced via
   `cargo deny` or a custom build script) that fails when inbound adapters
   import outbound modules or infrastructure crates directly, and wire it into
@@ -157,9 +157,9 @@ the queue, cache, and repository ports defined in Phase 0.
 
 ### Step: Caching strategy
 
-- [ ] Finalize the Redis caching adapter so requests share canonicalized keys,
-  jittered TTLs, and metrics for hit/miss ratios before enabling caching in
-  production.
+- [ ] Finalize the Redis caching adapter, so requests share canonicalized
+  keys, jittered TTLs, and metrics for hit/miss ratios before enabling caching
+  in production.
 - [ ] Implement cache invalidation hooks for schema or engine version
   upgrades, including namespace suffix rotation and eviction-safe rollouts.
 - [ ] Add contract tests verifying canonicalization rules (sorted themes,
