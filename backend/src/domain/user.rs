@@ -1,5 +1,7 @@
 //! User data model.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -12,8 +14,8 @@ pub enum UserValidationError {
     EmptyDisplayName,
 }
 
-impl std::fmt::Display for UserValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for UserValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyId => write!(f, "user id must not be empty"),
             Self::InvalidId => write!(f, "user id must be a valid UUID"),
@@ -23,6 +25,108 @@ impl std::fmt::Display for UserValidationError {
 }
 
 impl std::error::Error for UserValidationError {}
+
+/// Stable user identifier stored as a UUID.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct UserId(Uuid, String);
+
+impl UserId {
+    /// Validate and construct a [`UserId`] from borrowed input.
+    pub fn new(id: impl AsRef<str>) -> Result<Self, UserValidationError> {
+        Self::from_owned(id.as_ref().to_owned())
+    }
+
+    fn from_owned(id: String) -> Result<Self, UserValidationError> {
+        if id.is_empty() {
+            return Err(UserValidationError::EmptyId);
+        }
+        if id.trim() != id {
+            return Err(UserValidationError::InvalidId);
+        }
+
+        let parsed = Uuid::parse_str(&id).map_err(|_| UserValidationError::InvalidId)?;
+        Ok(Self(parsed, id))
+    }
+
+    /// Access the underlying UUID.
+    pub fn as_uuid(&self) -> &Uuid {
+        &self.0
+    }
+}
+
+impl AsRef<str> for UserId {
+    fn as_ref(&self) -> &str {
+        self.1.as_str()
+    }
+}
+
+impl fmt::Display for UserId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl From<UserId> for String {
+    fn from(value: UserId) -> Self {
+        let UserId(_, raw) = value;
+        raw
+    }
+}
+
+impl TryFrom<String> for UserId {
+    type Error = UserValidationError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_owned(value)
+    }
+}
+
+/// Human readable display name for the user.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct DisplayName(String);
+
+impl DisplayName {
+    /// Validate and construct a [`DisplayName`] from owned input.
+    pub fn new(display_name: impl Into<String>) -> Result<Self, UserValidationError> {
+        Self::from_owned(display_name.into())
+    }
+
+    fn from_owned(display_name: String) -> Result<Self, UserValidationError> {
+        if display_name.trim().is_empty() {
+            return Err(UserValidationError::EmptyDisplayName);
+        }
+
+        Ok(Self(display_name))
+    }
+}
+
+impl AsRef<str> for DisplayName {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for DisplayName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl From<DisplayName> for String {
+    fn from(value: DisplayName) -> Self {
+        value.0
+    }
+}
+
+impl TryFrom<String> for DisplayName {
+    type Error = UserValidationError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_owned(value)
+    }
+}
 
 /// Application user.
 ///
@@ -34,16 +138,16 @@ impl std::error::Error for UserValidationError {}
 #[serde(deny_unknown_fields)]
 #[serde(try_from = "UserDto", into = "UserDto")]
 pub struct User {
-    #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
-    id: String,
-    #[schema(example = "Ada Lovelace")]
+    #[schema(value_type = String, example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    id: UserId,
+    #[schema(value_type = String, example = "Ada Lovelace")]
     #[serde(alias = "display_name")]
-    display_name: String,
+    display_name: DisplayName,
 }
 
 impl User {
     /// Build a new [`User`], panicking if validation fails.
-    pub fn new(id: impl Into<String>, display_name: impl Into<String>) -> Self {
+    pub fn new(id: impl AsRef<str>, display_name: impl Into<String>) -> Self {
         match Self::try_new(id, display_name) {
             Ok(value) => value,
             Err(err) => panic!("user values must satisfy validation: {err}"),
@@ -52,34 +156,23 @@ impl User {
 
     /// Fallible constructor enforcing identifier and display name invariants.
     pub fn try_new(
-        id: impl Into<String>,
+        id: impl AsRef<str>,
         display_name: impl Into<String>,
     ) -> Result<Self, UserValidationError> {
-        let id = id.into();
-        if id.is_empty() {
-            return Err(UserValidationError::EmptyId);
-        }
-        if id.trim() != id {
-            return Err(UserValidationError::InvalidId);
-        }
-        Uuid::parse_str(&id).map_err(|_| UserValidationError::InvalidId)?;
-
-        let display_name = display_name.into();
-        if display_name.trim().is_empty() {
-            return Err(UserValidationError::EmptyDisplayName);
-        }
+        let id = UserId::new(id)?;
+        let display_name = DisplayName::new(display_name)?;
 
         Ok(Self { id, display_name })
     }
 
     /// Stable user identifier.
-    pub fn id(&self) -> &str {
-        self.id.as_str()
+    pub fn id(&self) -> &UserId {
+        &self.id
     }
 
     /// Display name shown to other users.
-    pub fn display_name(&self) -> &str {
-        self.display_name.as_str()
+    pub fn display_name(&self) -> &DisplayName {
+        &self.display_name
     }
 }
 
@@ -93,9 +186,10 @@ struct UserDto {
 
 impl From<User> for UserDto {
     fn from(value: User) -> Self {
+        let User { id, display_name } = value;
         Self {
-            id: value.id,
-            display_name: value.display_name,
+            id: id.to_string(),
+            display_name: display_name.into(),
         }
     }
 }
@@ -155,8 +249,8 @@ mod tests {
     #[rstest]
     fn try_new_accepts_valid_inputs(valid_id: &str, valid_display_name: &str) {
         let user = User::try_new(valid_id, valid_display_name).expect("valid inputs");
-        assert_eq!(user.id(), valid_id);
-        assert_eq!(user.display_name(), valid_display_name);
+        assert_eq!(user.id().as_ref(), valid_id);
+        assert_eq!(user.display_name().as_ref(), valid_display_name);
     }
 
     #[rstest]
@@ -188,7 +282,7 @@ mod tests {
     #[then("the user is returned")]
     fn the_user_is_returned(result: Result<User, UserValidationError>, valid_id: &str) {
         let user = result.expect("user should be created");
-        assert_eq!(user.id(), valid_id);
+        assert_eq!(user.id().as_ref(), valid_id);
     }
 
     #[rstest]

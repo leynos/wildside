@@ -13,7 +13,7 @@ pub mod error;
 pub mod user;
 
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
-pub use self::user::{User, UserValidationError};
+pub use self::user::{DisplayName, User, UserId, UserValidationError};
 
 /// HTTP header name used to propagate trace identifiers.
 pub const TRACE_ID_HEADER: &str = "trace-id";
