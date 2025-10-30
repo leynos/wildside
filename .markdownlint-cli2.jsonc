@@ -16,6 +16,8 @@
     "**/node_modules/**",
     "**/target/**",
     ".terraform/**",
-    "**/.terraform/**"
+    "**/.terraform/**",
+    ".uv-cache/**",
+    "**/.uv-cache/**"
   ]
 }

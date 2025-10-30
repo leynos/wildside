@@ -56,11 +56,33 @@ These tasks deliver the shared fixtures that `wildside-infra-k8s` converges on
 each time it runs. The action consumes OpenTofu modules from the `infra`
 repository and commits Flux-ready manifests into `wildside-infra`.
 
-- [ ] **Publish reusable OpenTofu modules**: Add modules for Traefik,
-  ExternalDNS, cert-manager, Vault + External Secrets Operator, CloudNativePG,
-  and Redis under `infra/modules`. Each module should expose inputs/outputs the
-  action can pass between components (e.g., DNS zones, certificate issuers,
-  database connection details).
+- [ ] **Publish reusable OpenTofu modules**: Deliver composable modules under
+  `infra/modules` that the action can wire together.
+
+  - [ ] **Traefik gateway module**: Template CRDs, HelmRelease values, and
+    service annotations; publish outputs for dashboard hostnames and the
+    default certificate issuer.
+
+  - [ ] **ExternalDNS module**: Support multi-zone providers, accept DNS zone
+    mappings, and emit managed zone IDs for downstream consumers.
+
+  - [ ] **cert-manager module**: Configure ClusterIssuers for ACME and Vault;
+    expose issuer resource names, secret refs, and CA bundle material.
+
+  - [ ] **Vault + External Secrets Operator module**: Provision the Vault helm
+    release, ESO configuration, and a sync policy contract that hands back
+    secret store names for workloads.
+
+  - [ ] **CloudNativePG module**: Model cluster, replica, and backup settings;
+    surface connection endpoints, admin credentials, and secret read handles
+    for applications.
+
+  - [ ] **Redis module**: Package high-availability settings, persistence
+    options, and export primary/endpoints plus secret keys for clients.
+
+  - [ ] **Module interoperability contract**: Document shared variables and
+    outputs in module READMEs so the `wildside-infra-k8s` action can thread DNS
+    zones, issuers, and credential handles between modules.
 
 - [ ] **Lay out the `wildside-infra` GitOps tree**: Ensure the repository hosts
   `clusters/<cluster>/`, `modules/`, and a `platform` directory with
