@@ -59,8 +59,8 @@ delivery so future work remains inside the hexagonal boundaries.
   import outbound modules or infrastructure crates directly, and wire it into
   `make lint`.
 - [ ] Provide integration tests that exercise HTTP and WebSocket handlers
-  against mocked ports to ensure adapters remain side-effect free and domain
-  logic stays framework agnostic.
+  against mocked ports to ensure adapters remain side effect free and domain
+  logic stays framework-agnostic.
 
 ## Phase 1 – Core access and sessions
 
