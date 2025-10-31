@@ -307,11 +307,20 @@ impl TryFrom<ErrorDto> for Error {
     type Error = ErrorValidationError;
 
     fn try_from(value: ErrorDto) -> Result<Self, Self::Error> {
-        let mut error = Error::try_new(value.code, value.message)?;
-        if let Some(trace_id) = value.trace_id {
+        let ErrorDto {
+            code,
+            message,
+            trace_id,
+            details,
+        } = value;
+
+        let mut error = Error::try_new(code, message)?;
+        if let Some(trace_id) = trace_id {
             error = error.try_with_trace_id(trace_id)?;
+        } else {
+            error.trace_id = None;
         }
-        error.details = value.details;
+        error.details = details;
         Ok(error)
     }
 }
@@ -390,6 +399,27 @@ mod tests {
         .await;
 
         assert_eq!(error.trace_id(), Some(expected_trace_id));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn try_from_error_dto_clears_ambient_trace(expected_trace_id: &'static str) {
+        let trace_id: TraceId = expected_trace_id
+            .parse()
+            .expect("fixtures provide a valid UUID");
+        let dto = ErrorDto {
+            code: ErrorCode::InvalidRequest,
+            message: "bad".to_string(),
+            trace_id: None,
+            details: None,
+        };
+
+        let error = TraceId::scope(trace_id, async move {
+            Error::try_from(dto).expect("conversion succeeds for valid payload without trace")
+        })
+        .await;
+
+        assert!(error.trace_id().is_none());
     }
 
     #[rstest]

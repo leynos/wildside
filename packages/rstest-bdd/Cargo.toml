@@ -1,7 +1,7 @@
 [package]
 name = "rstest-bdd"
 version = "0.1.0-alpha4"
-edition = "2021"
+edition = "2024"
 description = "Minimal rstest-bdd shim for behavioural-style attributes on stable Rust"
 license = "ISC"
 
