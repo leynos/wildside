@@ -333,14 +333,14 @@ mod tests {
     use crate::middleware::trace::TraceId;
     use actix_web::{body::to_bytes, http::StatusCode};
     use rstest::{fixture, rstest};
-    use rstest_bdd::{given, then, when};
+    use rstest_bdd_macros::{given, then, when};
     use serde_json::json;
 
     const TRACE_ID: &str = "00000000-0000-0000-0000-000000000000";
 
     #[fixture]
-    fn expected_trace_id() -> &'static str {
-        TRACE_ID
+    fn expected_trace_id() -> String {
+        TRACE_ID.to_owned()
     }
 
     #[fixture]
@@ -349,16 +349,16 @@ mod tests {
     }
 
     #[fixture]
-    fn internal_error_case(expected_trace_id: &'static str) -> Error {
+    fn internal_error_case(expected_trace_id: String) -> Error {
         Error::internal("boom")
-            .with_trace_id(expected_trace_id.to_owned())
+            .with_trace_id(expected_trace_id)
             .with_details(json!({"secret": "x"}))
     }
 
     #[fixture]
-    fn invalid_request_case(expected_trace_id: &'static str) -> Error {
+    fn invalid_request_case(expected_trace_id: String) -> Error {
         Error::invalid_request("bad")
-            .with_trace_id(expected_trace_id.to_owned())
+            .with_trace_id(expected_trace_id)
             .with_details(json!({"field": "name"}))
     }
 
@@ -388,7 +388,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn new_captures_trace_id_in_scope(expected_trace_id: &'static str) {
+    async fn new_captures_trace_id_in_scope(expected_trace_id: String) {
         let trace_id: TraceId = expected_trace_id
             .parse()
             .expect("fixtures provide a valid UUID");
@@ -398,12 +398,12 @@ mod tests {
         })
         .await;
 
-        assert_eq!(error.trace_id(), Some(expected_trace_id));
+        assert_eq!(error.trace_id(), Some(expected_trace_id.as_str()));
     }
 
     #[rstest]
     #[tokio::test]
-    async fn try_from_error_dto_clears_ambient_trace(expected_trace_id: &'static str) {
+    async fn try_from_error_dto_clears_ambient_trace(expected_trace_id: String) {
         let trace_id: TraceId = expected_trace_id
             .parse()
             .expect("fixtures provide a valid UUID");
@@ -474,12 +474,12 @@ mod tests {
     async fn error_responses_include_trace_id_and_payloads(
         #[from(internal_error_case)] internal_error: Error,
         #[from(invalid_request_case)] invalid_request: Error,
-        expected_trace_id: &'static str,
+        expected_trace_id: String,
     ) {
         let redacted = assert_error_response(
             internal_error,
             StatusCode::INTERNAL_SERVER_ERROR,
-            Some(expected_trace_id),
+            Some(expected_trace_id.as_str()),
         )
         .await;
         assert_eq!(redacted.code(), ErrorCode::InternalError);
@@ -489,7 +489,7 @@ mod tests {
         let payload = assert_error_response(
             invalid_request,
             StatusCode::BAD_REQUEST,
-            Some(expected_trace_id),
+            Some(expected_trace_id.as_str()),
         )
         .await;
         assert_eq!(payload.code(), ErrorCode::InvalidRequest);
@@ -497,44 +497,60 @@ mod tests {
         assert_eq!(payload.details(), Some(&json!({"field": "name"})));
     }
 
+    #[derive(Debug, Clone)]
+    enum ConstructedError {
+        Success,
+        Failure(ErrorValidationError),
+    }
+
+    impl ConstructedError {
+        fn from_result(result: Result<Error, ErrorValidationError>) -> Self {
+            match result {
+                Ok(_) => Self::Success,
+                Err(err) => Self::Failure(err),
+            }
+        }
+    }
+
     #[given("a valid error payload")]
-    fn a_valid_error_payload() -> (ErrorCode, &'static str) {
-        (ErrorCode::InvalidRequest, "well formed")
+    fn a_valid_error_payload() -> (ErrorCode, String) {
+        (ErrorCode::InvalidRequest, "well formed".to_owned())
     }
 
     #[when("the error is constructed")]
-    fn the_error_is_constructed(
-        payload: (ErrorCode, &'static str),
-    ) -> Result<Error, ErrorValidationError> {
-        Error::try_new(payload.0, payload.1)
+    fn the_error_is_constructed(payload: (ErrorCode, String)) -> ConstructedError {
+        ConstructedError::from_result(Error::try_new(payload.0, payload.1))
     }
 
     #[then("the construction succeeds")]
-    fn the_construction_succeeds(result: Result<Error, ErrorValidationError>) {
-        assert!(result.is_ok());
+    fn the_construction_succeeds(result: ConstructedError) {
+        assert!(matches!(result, ConstructedError::Success));
     }
 
     #[rstest]
     fn constructing_an_error_happy_path() {
         let payload = a_valid_error_payload();
-        let result = the_error_is_constructed(payload);
+        let result = the_error_is_constructed((payload.0, payload.1.clone()));
         the_construction_succeeds(result);
     }
 
     #[given("an empty error message")]
-    fn an_empty_error_message() -> (ErrorCode, &'static str) {
-        (ErrorCode::InvalidRequest, "   ")
+    fn an_empty_error_message() -> (ErrorCode, String) {
+        (ErrorCode::InvalidRequest, "   ".to_owned())
     }
 
     #[then("construction fails with an empty message")]
-    fn construction_fails_with_empty_message(result: Result<Error, ErrorValidationError>) {
-        assert!(matches!(result, Err(ErrorValidationError::EmptyMessage)));
+    fn construction_fails_with_empty_message(result: ConstructedError) {
+        assert!(matches!(
+            result,
+            ConstructedError::Failure(ErrorValidationError::EmptyMessage)
+        ));
     }
 
     #[rstest]
     fn constructing_an_error_unhappy_path() {
         let payload = an_empty_error_message();
-        let result = the_error_is_constructed(payload);
+        let result = the_error_is_constructed((payload.0, payload.1.clone()));
         construction_fails_with_empty_message(result);
     }
 }

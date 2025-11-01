@@ -3,13 +3,18 @@
 Testing is an indispensable part of modern software development, ensuring code
 reliability, maintainability, and correctness. In the Rust ecosystem, while the
 built-in testing framework provides a solid foundation, managing test
-dependencies and creating parameterized tests can become verbose. The `rstest`
+dependencies and creating parameterised tests can become verbose. The `rstest`
 crate (<https://github.com/la10736/rstest>) emerges as a powerful solution,
-offering a sophisticated fixture-based and parameterized testing framework that
+offering a sophisticated fixture-based and parameterised testing framework that
 significantly simplifies these tasks through the use of procedural macros. This
 document provides a comprehensive exploration of `rstest`, from fundamental
 concepts to advanced techniques, enabling Rust developers to write cleaner,
 more expressive, and robust tests.
+
+> **Toolchain note (2025-11-01):** Behavioural scenarios in the backend pair
+> `rstest` with `rstest-bdd`, which currently requires the nightly compiler.
+> The workspace pins the nightly toolchain via `rust-toolchain.toml` until the
+> crate publishes a stable MSRV of Rust 1.75 or newer.
 
 ## I. Introduction to `rstest` and Test Fixtures in Rust
 

@@ -95,5 +95,3 @@ globs = [
     "cli/*",
 ]
 
-[patch.crates-io]
-rstest-bdd = { path = "packages/rstest-bdd" }
