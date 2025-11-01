@@ -42,6 +42,8 @@ metrics = ["dep:actix-web-prom"]
 [dev-dependencies]
 actix-rt = "2"
 rstest = "0.26"
+rstest-bdd = "0.1.0-alpha4"
+rstest-bdd-macros = "0.1.0-alpha4"
 insta = { version = "1", features = ["json", "redactions"] }
 
 [[bin]]
