@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Validation errors returned by [`User::try_new`].
+/// Validation errors returned by [`User::try_from_strings`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserValidationError {
     EmptyId,
@@ -146,23 +146,32 @@ pub struct User {
 }
 
 impl User {
-    /// Build a new [`User`], panicking if validation fails.
-    pub fn new(id: impl AsRef<str>, display_name: impl Into<String>) -> Self {
-        match Self::try_new(id, display_name) {
+    /// Build a new [`User`] from validated components.
+    pub fn new(id: UserId, display_name: DisplayName) -> Self {
+        Self { id, display_name }
+    }
+
+    /// Build a new [`User`] from string inputs, panicking if validation fails.
+    ///
+    /// Prefer [`User::new`] when components are already validated.
+    pub fn from_strings(id: impl AsRef<str>, display_name: impl Into<String>) -> Self {
+        match Self::try_from_strings(id, display_name) {
             Ok(value) => value,
-            Err(err) => panic!("user values must satisfy validation: {err}"),
+            Err(err) => panic!("user string values must satisfy validation: {err}"),
         }
     }
 
     /// Fallible constructor enforcing identifier and display name invariants.
-    pub fn try_new(
+    ///
+    /// Prefer [`User::new`] when components are already validated.
+    pub fn try_from_strings(
         id: impl AsRef<str>,
         display_name: impl Into<String>,
     ) -> Result<Self, UserValidationError> {
         let id = UserId::new(id)?;
         let display_name = DisplayName::new(display_name)?;
 
-        Ok(Self { id, display_name })
+        Ok(Self::new(id, display_name))
     }
 
     /// Stable user identifier.
@@ -198,7 +207,7 @@ impl TryFrom<UserDto> for User {
     type Error = UserValidationError;
 
     fn try_from(value: UserDto) -> Result<Self, Self::Error> {
-        User::try_new(value.id, value.display_name)
+        User::try_from_strings(value.id, value.display_name)
     }
 }
 
@@ -223,32 +232,32 @@ mod tests {
 
     #[rstest]
     fn new_panics_when_invalid_id() {
-        let result = std::panic::catch_unwind(|| User::new("", "Ada"));
+        let result = std::panic::catch_unwind(|| User::from_strings("", "Ada"));
         assert!(result.is_err());
     }
 
     #[rstest]
     fn try_new_rejects_invalid_uuid(valid_display_name: &str) {
-        let result = User::try_new("not-a-uuid", valid_display_name);
+        let result = User::try_from_strings("not-a-uuid", valid_display_name);
         assert!(matches!(result, Err(UserValidationError::InvalidId)));
     }
 
     #[rstest]
     fn try_new_rejects_uuid_with_whitespace(valid_display_name: &str) {
         let id = format!(" {VALID_ID} ");
-        let result = User::try_new(id, valid_display_name);
+        let result = User::try_from_strings(id, valid_display_name);
         assert!(matches!(result, Err(UserValidationError::InvalidId)));
     }
 
     #[rstest]
     fn try_new_rejects_empty_display_name(valid_id: &str) {
-        let result = User::try_new(valid_id, "   ");
+        let result = User::try_from_strings(valid_id, "   ");
         assert!(matches!(result, Err(UserValidationError::EmptyDisplayName)));
     }
 
     #[rstest]
     fn try_new_accepts_valid_inputs(valid_id: &str, valid_display_name: &str) {
-        let user = User::try_new(valid_id, valid_display_name).expect("valid inputs");
+        let user = User::try_from_strings(valid_id, valid_display_name).expect("valid inputs");
         assert_eq!(user.id().as_ref(), valid_id);
         assert_eq!(user.display_name().as_ref(), valid_display_name);
     }
@@ -276,7 +285,7 @@ mod tests {
 
     #[when("the user is constructed")]
     fn the_user_is_constructed(payload: (String, String)) -> Result<User, UserValidationError> {
-        User::try_new(payload.0, payload.1)
+        User::try_from_strings(payload.0, payload.1)
     }
 
     #[then("the user is returned")]

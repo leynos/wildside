@@ -83,7 +83,7 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     {
         return Err(Error::unauthorized("login required"));
     }
-    let data = vec![User::new(
+    let data = vec![User::from_strings(
         "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "Ada Lovelace",
     )];
