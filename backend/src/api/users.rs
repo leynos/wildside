@@ -5,7 +5,7 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{ApiResult, Error, User};
+use crate::domain::{ApiResult, DisplayName, Error, User, UserId};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
@@ -83,10 +83,11 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     {
         return Err(Error::unauthorized("login required"));
     }
-    let data = vec![User::from_strings(
-        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "Ada Lovelace",
-    )];
+    let id = UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+        .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))?;
+    let display_name = DisplayName::new("Ada Lovelace")
+        .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
+    let data = vec![User::new(id, display_name)];
     Ok(web::Json(data))
 }
 
