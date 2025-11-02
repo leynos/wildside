@@ -83,9 +83,14 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     {
         return Err(Error::unauthorized("login required"));
     }
-    let id = UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+    const FIXTURE_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+    const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
+
+    // These values are compile-time constants; surface invalid data as an
+    // internal error so automated checks catch accidental regressions.
+    let id = UserId::new(FIXTURE_ID)
         .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))?;
-    let display_name = DisplayName::new("Ada Lovelace")
+    let display_name = DisplayName::new(FIXTURE_DISPLAY_NAME)
         .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
     let data = vec![User::new(id, display_name)];
     Ok(web::Json(data))
