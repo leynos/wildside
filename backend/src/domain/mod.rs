@@ -1,4 +1,4 @@
-//! Domain data models.
+//! Domain primitives and aggregates.
 //!
 //! Purpose: Define strongly typed domain entities used by the API and
 //! persistence layers. Keep types immutable and document invariants and
@@ -11,15 +11,19 @@
 
 pub mod error;
 pub mod user;
-pub use self::error::{Error, ErrorCode};
-pub use self::user::User;
+
+pub use self::error::{Error, ErrorCode, ErrorValidationError};
+pub use self::user::{DisplayName, User, UserId, UserValidationError};
+
+/// HTTP header name used to propagate trace identifiers.
+pub const TRACE_ID_HEADER: &str = "trace-id";
 
 /// Convenient API result alias.
 ///
 /// # Examples
 /// ```
 /// use actix_web::HttpResponse;
-/// use backend::models::{ApiResult, Error};
+/// use backend::domain::{ApiResult, Error};
 ///
 /// fn handler() -> ApiResult<HttpResponse> {
 ///     Err(Error::forbidden("nope"))

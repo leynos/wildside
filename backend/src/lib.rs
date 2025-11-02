@@ -6,7 +6,7 @@ pub mod api;
 pub mod doc;
 mod middleware;
 pub use middleware::Trace;
-pub mod models;
+pub mod domain;
 pub mod ws;
 
 /// Public OpenAPI surface used by Swagger UI and tooling.

@@ -11,6 +11,11 @@ document provides a comprehensive exploration of `rstest`, from fundamental
 concepts to advanced techniques, enabling Rust developers to write cleaner,
 more expressive, and robust tests.
 
+> **Toolchain note (2025-11-01):** Behavioural scenarios in the backend pair
+> `rstest` with `rstest-bdd`, which currently requires the nightly compiler.
+> The workspace pins the nightly toolchain via `rust-toolchain.toml` until the
+> crate publishes a stable MSRV of Rust 1.75 or newer.
+
 ## I. Introduction to `rstest` and Test Fixtures in Rust
 
 ### A. What are Test Fixtures and Why Use Them?

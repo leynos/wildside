@@ -168,7 +168,7 @@
     "schemas": {
       "Error": {
         "type": "object",
-        "description": "API error response payload.\n\n# Examples\n```\nuse backend::models::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code, ErrorCode::NotFound);\n```",
+        "description": "API error response payload.\n\n# Examples\n```\nuse backend::domain::{Error, ErrorCode};\n\nlet err = Error::new(ErrorCode::NotFound, \"missing\");\nassert_eq!(err.code(), ErrorCode::NotFound);\n```",
         "required": ["code", "message"],
         "properties": {
           "code": {

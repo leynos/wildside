@@ -19,7 +19,7 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 ### Step: Domain and ports baseline
 
-- [ ] Create `backend/src/domain/mod.rs` by moving the existing
+- [x] Create `backend/src/domain/mod.rs` by moving the existing
   `backend/src/models` module (errors, users, future route entities) and
   enforcing constructor validation plus immutable state.
 - [ ] Introduce explicit port traits inside `backend/src/domain/ports.rs`
