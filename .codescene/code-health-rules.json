@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "string-heavy-function-arguments": {
+      "threshold-by-pattern": {
+        "**/domain/*.rs": 100
+      }
+    }
+  }
+}
