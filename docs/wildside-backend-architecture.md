@@ -528,6 +528,20 @@ spec)([6](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11
 > future port introductions by ensuring every domain primitive is immutable and
 > validated at the boundary.
 
+> **Design decision (2025-11-09):** Establish `backend::domain::ports` as the
+> canonical home for outbound port traits and their error enums. The module now
+> exposes `RouteRepository`, `RouteCache`, `RouteQueue`, `RouteMetrics`, and
+> `UserRepository`, each guarded by strongly typed errors such as
+> `RoutePersistenceError` and `UserPersistenceError`. Introducing
+> `RouteCacheKey` keeps cache identifiers validated inside the domain so caches
+> cannot rely on ad hoc string keys. Driven adapters must map their backend
+> failures into these enums, eliminating the previous `anyhow::Result` usage
+> that obscured root causes and complicated retries. Contract tests exercise
+> the new ports against ephemeral PostgreSQL instances provided by
+> `pg_embedded_setup_unpriv`. A lightweight `pg_worker` binary now ships with
+> the backend crate so root test environments can drop privileges safely when
+> spinning up embedded clusters.
+
 #### Domain Models and Invariants
 
 Every inbound adapter converts wire-friendly DTOs into validated domain types

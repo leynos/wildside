@@ -18,6 +18,12 @@ serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
 regex = "1"
 
+async-trait = "0.1.89"
+color-eyre = "0.6.5"
+pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv", version = "0.1.0" }
+postgresql_embedded = { version = "0.20.0", features = ["tokio"] }
+thiserror = "2.0.17"
+
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 futures-util = "0.3"
@@ -45,8 +51,12 @@ rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
 rstest-bdd-macros = "0.1.0-alpha4"
 insta = { version = "1", features = ["json", "redactions"] }
+postgres = { version = "0.19.12", features = ["with-uuid-1"] }
 
 [[bin]]
 name = "openapi-dump"
 path = "src/bin/openapi_dump.rs"
 
+[[bin]]
+name = "pg_worker"
+path = "src/bin/pg_worker.rs"

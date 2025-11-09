@@ -10,6 +10,7 @@
 //! - User (alias to `user::User`) — domain user identity and display name.
 
 pub mod error;
+pub mod ports;
 pub mod user;
 
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
