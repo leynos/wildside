@@ -120,10 +120,16 @@ lint-infra:
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
-test: workspace-sync deps typecheck
-	$(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
+test: workspace-sync deps typecheck prepare-pg-worker
+	PG_EMBEDDED_WORKER=/var/tmp/pg_worker $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
 	pnpm -r --if-present --silent run test
 	$(MAKE) scripts-test
+
+.PHONY: prepare-pg-worker
+prepare-pg-worker:
+	$(RUST_FLAGS_ENV) cargo build -p backend --bin pg_worker
+	install -m 0755 target/debug/pg_worker /var/tmp/pg_worker
+	find /var/tmp -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} +
 
 scripts-test:
 	$(call ensure_tool,uv)
