@@ -527,7 +527,7 @@ spec)([6](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11
 > messages or trace identifiers never enter the system. This decision underpins
 > future port introductions by ensuring every domain primitive is immutable and
 > validated at the boundary.
-
+>
 > **Design decision (2025-11-09):** Establish `backend::domain::ports` as the
 > canonical home for outbound port traits and their error enums. The module now
 > exposes `RouteRepository`, `RouteCache`, `RouteQueue`, `RouteMetrics`, and
