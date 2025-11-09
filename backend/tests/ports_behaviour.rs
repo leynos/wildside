@@ -93,18 +93,12 @@ struct RepoContext {
 
 type SharedContext = Arc<Mutex<RepoContext>>;
 
-enum RepoInitError {
-    Skip(String),
-    Persistence(UserPersistenceError),
-}
-
-fn init_repo_context() -> Result<RepoContext, RepoInitError> {
-    let cluster = TestCluster::new().map_err(|err| RepoInitError::Skip(err.to_string()))?;
-    reset_database(&cluster).map_err(RepoInitError::Persistence)?;
+fn init_repo_context() -> Result<RepoContext, String> {
+    let cluster = TestCluster::new().map_err(|err| err.to_string())?;
+    reset_database(&cluster).map_err(|err| err.to_string())?;
     let database_url = cluster.connection().database_url(CONTRACT_DB);
-    migrate_schema(&database_url).map_err(RepoInitError::Persistence)?;
-    let repository =
-        PgUserRepository::connect(&database_url).map_err(RepoInitError::Persistence)?;
+    migrate_schema(&database_url).map_err(|err| err.to_string())?;
+    let repository = PgUserRepository::connect(&database_url).map_err(|err| err.to_string())?;
     Ok(RepoContext {
         cluster,
         repository,
@@ -120,12 +114,9 @@ fn init_repo_context() -> Result<RepoContext, RepoInitError> {
 fn repo_world() -> Option<SharedContext> {
     match init_repo_context() {
         Ok(context) => Some(Arc::new(Mutex::new(context))),
-        Err(RepoInitError::Skip(reason)) => {
+        Err(reason) => {
             eprintln!("SKIP-TEST-CLUSTER: {reason}");
             None
-        }
-        Err(RepoInitError::Persistence(err)) => {
-            panic!("failed to initialise repository context: {err:?}");
         }
     }
 }
