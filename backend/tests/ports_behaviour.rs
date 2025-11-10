@@ -81,8 +81,7 @@ impl UserRepository for PgUserRepository {
 }
 
 struct RepoContext {
-    #[allow(dead_code)]
-    cluster: TestCluster,
+    _cluster: TestCluster,
     repository: PgUserRepository,
     database_url: String,
     last_write_error: Option<UserPersistenceError>,
@@ -100,7 +99,7 @@ fn init_repo_context() -> Result<RepoContext, String> {
     migrate_schema(&database_url).map_err(|err| err.to_string())?;
     let repository = PgUserRepository::connect(&database_url).map_err(|err| err.to_string())?;
     Ok(RepoContext {
-        cluster,
+        _cluster: cluster,
         repository,
         database_url,
         last_write_error: None,
