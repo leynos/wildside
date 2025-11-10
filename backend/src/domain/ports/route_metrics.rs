@@ -1,3 +1,4 @@
+//! Domain port surface for recording route cache hit/miss metrics.
 use async_trait::async_trait;
 
 use super::define_port_error;

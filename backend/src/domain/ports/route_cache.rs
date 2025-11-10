@@ -1,3 +1,4 @@
+//! Port interface for caching computed route plans.
 use async_trait::async_trait;
 
 use super::{define_port_error, RouteCacheKey};

@@ -1,3 +1,4 @@
+//! Domain port abstraction for persisting and retrieving route plans.
 use async_trait::async_trait;
 
 use super::define_port_error;

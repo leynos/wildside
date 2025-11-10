@@ -1,3 +1,4 @@
+//! Port abstraction for user persistence adapters and their errors.
 use async_trait::async_trait;
 
 use crate::domain::{User, UserId};

@@ -1,3 +1,4 @@
+//! Domain cache key type shared by route cache adapters.
 use thiserror::Error;
 
 /// Cache key used to store and retrieve canonicalised route plans.

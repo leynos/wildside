@@ -1,3 +1,5 @@
+//! Defines helper macros for generating domain port error enums.
+
 macro_rules! define_port_error {
     (
         $(#[$outer:meta])*

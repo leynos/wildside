@@ -1,3 +1,4 @@
+//! Domain port describing queue dispatch semantics for route jobs.
 use async_trait::async_trait;
 
 use super::define_port_error;
