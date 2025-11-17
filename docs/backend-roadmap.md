@@ -25,7 +25,7 @@ delivery, so future work remains inside the hexagonal boundaries.
 - [x] Introduce explicit port traits inside `backend/src/domain/ports.rs`
   (e.g. `RouteRepository`, `RouteCache`, `RouteQueue`, `RouteMetrics`,
   `UserRepository`) with strongly typed error enums instead of `anyhow::Result`.
-- [ ] Replace direct DTO usage in `backend/src/api/*` with domain factories
+- [x] Replace direct DTO usage in `backend/src/api/*` with domain factories
   (e.g. `RouteRequest::try_from_login_payload`) so inbound adapters never
   construct domain structs manually.
 - [ ] Convert shared error handling in `backend/src/models/error.rs` into

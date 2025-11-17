@@ -5,7 +5,9 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{ApiResult, DisplayName, Error, User, UserId};
+use crate::domain::{
+    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
+};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
@@ -19,6 +21,13 @@ use serde::{Deserialize, Serialize};
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+}
+
+impl LoginCredentials {
+    /// Convert an HTTP login payload into validated credentials.
+    pub fn try_from_login_payload(payload: LoginRequest) -> Result<Self, LoginValidationError> {
+        Self::try_from_parts(payload.username, payload.password)
+    }
 }
 
 /// Authenticate user and establish a session.
@@ -40,7 +49,9 @@ pub struct LoginRequest {
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
-    if payload.username == "admin" && payload.password == "password" {
+    let credentials = LoginCredentials::try_from_login_payload(payload.into_inner())
+        .map_err(|err| Error::invalid_request(err.to_string()))?;
+    if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.
         session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
         Ok(HttpResponse::Ok().finish())
@@ -103,6 +114,32 @@ mod tests {
     use actix_web::cookie::Key;
     use actix_web::{test, web, App};
     use serde_json::Value;
+
+    #[actix_web::test]
+    async fn login_rejects_invalid_payload() {
+        let app = test::init_service(
+            App::new()
+                .wrap(
+                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                        .cookie_name("actix-session".to_owned())
+                        .cookie_secure(false)
+                        .build(),
+                )
+                .service(web::scope("/api/v1").service(login)),
+        )
+        .await;
+
+        let request = test::TestRequest::post()
+            .uri("/api/v1/login")
+            .set_json(&LoginRequest {
+                username: "   ".into(),
+                password: "password".into(),
+            })
+            .to_request();
+
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    }
 
     #[actix_web::test]
     async fn list_users_returns_camel_case_json() {

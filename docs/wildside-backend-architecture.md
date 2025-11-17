@@ -554,6 +554,18 @@ before invoking a port. Canonical examples include:
 - `CacheKey` — encapsulates the canonical hash input for caching so that the
   service, rather than the handler, is responsible for namespacing and TTL
   rules.
+- `LoginCredentials` — trims usernames, zeroises passwords via the `zeroize`
+  crate, and exposes `LoginCredentials::try_from_login_payload` so
+  `POST /api/v1/login` handlers never poke at DTO fields directly.
+
+> **Design decision (2025-11-17):** The login endpoint now converts inbound
+> payloads into `LoginCredentials` using the domain factory
+> `LoginCredentials::try_from_login_payload`. This keeps username/password
+> validation (trimming whitespace, rejecting blank inputs, zeroising the secret
+> when dropped) inside the domain and prevents adapter code from constructing
+> domain structs by hand. The change also unblocks future work that will swap
+> the hard-coded credential check for a real `UserRepository` because the
+> adapter already deals with a validated domain object.
 
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents
