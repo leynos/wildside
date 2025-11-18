@@ -1,13 +1,13 @@
 {
   "devDependencies": {
-    "@biomejs/biome": "^2.3.1",
+    "@biomejs/biome": "^2.3.6",
     "@mermaid-js/mermaid-cli": "^11.12.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "markdownlint-cli": "^0.45.0",
     "puppeteer": "^23.11.1",
     "validator": "13.15.15",
-    "vite": "^7.1.12"
+    "vite": "^7.2.2"
   },
   "name": "myapp",
   "private": true,
