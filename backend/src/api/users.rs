@@ -5,9 +5,7 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{
-    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
-};
+use crate::domain::{ApiResult, DisplayName, Error, LoginCredentials, User, UserId};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
@@ -21,13 +19,6 @@ use serde::{Deserialize, Serialize};
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
-}
-
-impl LoginCredentials {
-    /// Convert an HTTP login payload into validated credentials.
-    pub fn try_from_login_payload(payload: LoginRequest) -> Result<Self, LoginValidationError> {
-        Self::try_from_parts(payload.username, payload.password)
-    }
 }
 
 /// Authenticate user and establish a session.
@@ -49,7 +40,8 @@ impl LoginCredentials {
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
-    let credentials = LoginCredentials::try_from_login_payload(payload.into_inner())
+    let payload = payload.into_inner();
+    let credentials = LoginCredentials::try_from_parts(payload.username, payload.password)
         .map_err(|err| Error::invalid_request(err.to_string()))?;
     if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.

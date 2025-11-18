@@ -49,6 +49,15 @@ pub struct LoginCredentials {
 }
 
 impl LoginCredentials {
+    /// Convert username/password strings from inbound adapters into validated
+    /// credentials.
+    pub fn try_from_login_payload(
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Result<Self, LoginValidationError> {
+        Self::try_from_parts(username, password)
+    }
+
     /// Construct credentials from raw username/password inputs.
     pub fn try_from_parts(
         username: impl Into<String>,
