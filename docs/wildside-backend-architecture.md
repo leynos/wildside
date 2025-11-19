@@ -555,12 +555,12 @@ before invoking a port. Canonical examples include:
   service, rather than the handler, is responsible for namespacing and TTL
   rules.
 - `LoginCredentials` — trims usernames, zeroises passwords via the `zeroize`
-  crate, and exposes `LoginCredentials::try_from_login_payload` so
+  crate, and exposes `LoginCredentials::try_from_parts` so
   `POST /api/v1/login` handlers never poke at DTO fields directly.
 
 > **Design decision (2025-11-17):** The login endpoint now converts inbound
 > payloads into `LoginCredentials` using the domain factory
-> `LoginCredentials::try_from_login_payload`. This keeps username/password
+> `LoginCredentials::try_from_parts`. This keeps username/password
 > validation (trimming whitespace, rejecting blank inputs, zeroising the secret
 > when dropped) inside the domain and prevents adapter code from constructing
 > domain structs by hand. The change also unblocks future work that will swap

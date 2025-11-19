@@ -5,10 +5,13 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{ApiResult, DisplayName, Error, LoginCredentials, User, UserId};
+use crate::domain::{
+    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
+};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 /// Login request body for `POST /api/v1/login`.
 ///
@@ -40,9 +43,9 @@ pub struct LoginRequest {
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
-    let payload = payload.into_inner();
-    let credentials = LoginCredentials::try_from_parts(payload.username, payload.password)
-        .map_err(|err| Error::invalid_request(err.to_string()))?;
+    let LoginRequest { username, password } = payload.into_inner();
+    let credentials = LoginCredentials::try_from_parts(&username, &password)
+        .map_err(map_login_validation_error)?;
     if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.
         session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
@@ -50,6 +53,15 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result
     } else {
         // Map to the shared Error type so ResponseError renders the JSON body.
         Err(Error::unauthorized("invalid credentials").into())
+    }
+}
+
+fn map_login_validation_error(err: LoginValidationError) -> Error {
+    match err {
+        LoginValidationError::EmptyUsername => Error::invalid_request("username must not be empty")
+            .with_details(json!({ "field": "username", "code": "empty_username" })),
+        LoginValidationError::EmptyPassword => Error::invalid_request("password must not be empty")
+            .with_details(json!({ "field": "password", "code": "empty_password" })),
     }
 }
 //
@@ -131,6 +143,44 @@ mod tests {
 
         let response = test::call_service(&app, request).await;
         assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+        let body = test::read_body(response).await;
+        let value: Value = serde_json::from_slice(&body).expect("error payload");
+        assert_eq!(
+            value.get("message").and_then(Value::as_str),
+            Some("username must not be empty")
+        );
+    }
+
+    #[actix_web::test]
+    async fn login_rejects_empty_password() {
+        let app = test::init_service(
+            App::new()
+                .wrap(
+                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                        .cookie_name("actix-session".to_owned())
+                        .cookie_secure(false)
+                        .build(),
+                )
+                .service(web::scope("/api/v1").service(login)),
+        )
+        .await;
+
+        let request = test::TestRequest::post()
+            .uri("/api/v1/login")
+            .set_json(&LoginRequest {
+                username: "admin".into(),
+                password: String::new(),
+            })
+            .to_request();
+
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+        let body = test::read_body(response).await;
+        let value: Value = serde_json::from_slice(&body).expect("error payload");
+        assert_eq!(
+            value.get("message").and_then(Value::as_str),
+            Some("password must not be empty")
+        );
     }
 
     #[actix_web::test]

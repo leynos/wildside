@@ -49,34 +49,20 @@ pub struct LoginCredentials {
 }
 
 impl LoginCredentials {
-    /// Convert username/password strings from inbound adapters into validated
-    /// credentials.
-    pub fn try_from_login_payload(
-        username: impl Into<String>,
-        password: impl Into<String>,
-    ) -> Result<Self, LoginValidationError> {
-        Self::try_from_parts(username, password)
-    }
-
     /// Construct credentials from raw username/password inputs.
-    pub fn try_from_parts(
-        username: impl Into<String>,
-        password: impl Into<String>,
-    ) -> Result<Self, LoginValidationError> {
-        let username = username.into();
+    pub fn try_from_parts(username: &str, password: &str) -> Result<Self, LoginValidationError> {
         let normalized = username.trim();
         if normalized.is_empty() {
             return Err(LoginValidationError::EmptyUsername);
         }
 
-        let password = password.into();
         if password.is_empty() {
             return Err(LoginValidationError::EmptyPassword);
         }
 
         Ok(Self {
             username: normalized.to_owned(),
-            password: Zeroizing::new(password),
+            password: Zeroizing::new(password.to_owned()),
         })
     }
 
@@ -94,86 +80,29 @@ impl LoginCredentials {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::{fixture, rstest};
-    use rstest_bdd_macros::{given, then, when};
+    use rstest::rstest;
 
-    const VALID_USERNAME: &str = "admin@example.com";
-    const VALID_PASSWORD: &str = "correct horse battery staple";
-
-    #[fixture]
-    fn username() -> String {
-        VALID_USERNAME.into()
-    }
-
-    #[fixture]
-    fn password() -> String {
-        VALID_PASSWORD.into()
+    #[rstest]
+    #[case("", "pw", LoginValidationError::EmptyUsername)]
+    #[case("   ", "pw", LoginValidationError::EmptyUsername)]
+    #[case("user", "", LoginValidationError::EmptyPassword)]
+    fn invalid_credentials(
+        #[case] username: &str,
+        #[case] password: &str,
+        #[case] expected: LoginValidationError,
+    ) {
+        let err = LoginCredentials::try_from_parts(username, password)
+            .expect_err("invalid inputs must fail");
+        assert_eq!(err, expected);
     }
 
     #[rstest]
-    fn rejects_empty_username(password: String) {
-        let result = LoginCredentials::try_from_parts("", password);
-        assert!(matches!(result, Err(LoginValidationError::EmptyUsername)));
-    }
-
-    #[rstest]
-    fn rejects_whitespace_username(password: String) {
-        let result = LoginCredentials::try_from_parts("   ", password);
-        assert!(matches!(result, Err(LoginValidationError::EmptyUsername)));
-    }
-
-    #[rstest]
-    fn trims_username(password: String) {
-        let creds = LoginCredentials::try_from_parts("  admin  ", password)
-            .expect("username should be trimmed");
-        assert_eq!(creds.username(), "admin");
-    }
-
-    #[rstest]
-    fn rejects_empty_password(username: String) {
-        let result = LoginCredentials::try_from_parts(username, "");
-        assert!(matches!(result, Err(LoginValidationError::EmptyPassword)));
-    }
-
-    #[given("a valid login payload")]
-    fn a_valid_login_payload(username: String, password: String) -> (String, String) {
-        (username, password)
-    }
-
-    #[when("credentials are constructed")]
-    fn credentials_are_constructed(
-        payload: (String, String),
-    ) -> Result<LoginCredentials, LoginValidationError> {
-        LoginCredentials::try_from_parts(payload.0, payload.1)
-    }
-
-    #[then("the username is preserved")]
-    fn the_username_is_preserved(result: Result<LoginCredentials, LoginValidationError>) {
-        let creds = result.expect("credentials should be built");
-        assert_eq!(creds.username(), VALID_USERNAME);
-    }
-
-    #[rstest]
-    fn constructing_credentials_happy_path(username: String, password: String) {
-        let payload = a_valid_login_payload(username, password);
-        let result = credentials_are_constructed(payload);
-        the_username_is_preserved(result);
-    }
-
-    #[given("a payload missing the password")]
-    fn a_payload_missing_password(username: String) -> (String, String) {
-        (username, String::new())
-    }
-
-    #[then("credential construction fails")]
-    fn credential_construction_fails(result: Result<LoginCredentials, LoginValidationError>) {
-        assert!(matches!(result, Err(LoginValidationError::EmptyPassword)));
-    }
-
-    #[rstest]
-    fn constructing_credentials_unhappy_path(username: String) {
-        let payload = a_payload_missing_password(username);
-        let result = credentials_are_constructed(payload);
-        credential_construction_fails(result);
+    #[case("  admin  ", "secret")]
+    #[case("alice", "correct horse battery staple")]
+    fn valid_credentials_trim_username(#[case] username: &str, #[case] password: &str) {
+        let creds = LoginCredentials::try_from_parts(username, password)
+            .expect("valid inputs should succeed");
+        assert_eq!(creds.username(), username.trim());
+        assert_eq!(creds.password(), password);
     }
 }
