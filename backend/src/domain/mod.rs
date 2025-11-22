@@ -8,11 +8,14 @@
 //! - Error (alias to `error::Error`) — API error response payload.
 //! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier.
 //! - User (alias to `user::User`) — domain user identity and display name.
+//! - LoginCredentials — validated username/password inputs for authentication.
 
+pub mod auth;
 pub mod error;
 pub mod ports;
 pub mod user;
 
+pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 
