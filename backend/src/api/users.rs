@@ -24,6 +24,14 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+impl TryFrom<LoginRequest> for LoginCredentials {
+    type Error = LoginValidationError;
+
+    fn try_from(value: LoginRequest) -> Result<Self, Self::Error> {
+        Self::try_from_parts(&value.username, &value.password)
+    }
+}
+
 /// Authenticate user and establish a session.
 ///
 /// Uses the centralised `Error` type so clients get a consistent
@@ -43,9 +51,8 @@ pub struct LoginRequest {
 )]
 #[post("/login")]
 pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
-    let LoginRequest { username, password } = payload.into_inner();
-    let credentials = LoginCredentials::try_from_parts(&username, &password)
-        .map_err(map_login_validation_error)?;
+    let credentials =
+        LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
     if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.
         session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
