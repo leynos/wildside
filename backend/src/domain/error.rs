@@ -1,10 +1,11 @@
-//! Error response types.
+//! Domain error representation shared across adapters.
+//!
+//! Keep this module free from HTTP or framework concerns so the same error
+//! shape can be mapped by any adapter (HTTP, WebSocket, background workers).
 
-use crate::{domain::TRACE_ID_HEADER, middleware::trace::TraceId};
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::error;
+use thiserror::Error;
 use utoipa::ToSchema;
 
 /// Stable machine-readable error code.
@@ -24,7 +25,7 @@ pub enum ErrorCode {
     InternalError,
 }
 
-/// API error response payload.
+/// Domain error payload consumed by adapters.
 ///
 /// ## Invariants
 /// - `message` must be non-empty once trimmed of whitespace.
@@ -37,10 +38,11 @@ pub enum ErrorCode {
 /// let err = Error::new(ErrorCode::NotFound, "missing");
 /// assert_eq!(err.code(), ErrorCode::NotFound);
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, Error)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 #[serde(try_from = "ErrorDto", into = "ErrorDto")]
+#[error("{message}")]
 pub struct Error {
     #[schema(example = "invalid_request")]
     code: ErrorCode,
@@ -74,9 +76,6 @@ impl std::error::Error for ErrorValidationError {}
 impl Error {
     /// Create a new error.
     ///
-    /// Captures the current trace identifier if one is in scope so the error
-    /// payload is correlated automatically.
-    ///
     /// # Examples
     /// ```
     /// use backend::domain::{Error, ErrorCode};
@@ -102,7 +101,7 @@ impl Error {
         Ok(Self {
             code,
             message,
-            trace_id: TraceId::current().map(|id| id.to_string()),
+            trace_id: None,
             details: None,
         })
     }
@@ -229,53 +228,30 @@ impl Error {
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InternalError, message)
     }
-}
 
-impl From<actix_web::Error> for Error {
-    fn from(err: actix_web::Error) -> Self {
-        // Do not leak implementation details to clients.
-        error!(error = %err, "actix error promoted to API error");
-        Error::internal("Internal server error")
-    }
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl ErrorCode {
-    fn as_status_code(&self) -> StatusCode {
-        match self {
-            ErrorCode::InvalidRequest => StatusCode::BAD_REQUEST,
-            ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
-            ErrorCode::Forbidden => StatusCode::FORBIDDEN,
-            ErrorCode::NotFound => StatusCode::NOT_FOUND,
-            ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+    /// Provide a trace identifier if absent.
+    pub fn with_optional_trace_id(
+        self,
+        trace_id: Option<String>,
+    ) -> Result<Self, ErrorValidationError> {
+        match trace_id {
+            Some(id) => self.try_with_trace_id(id),
+            None => Ok(self),
         }
     }
-}
 
-impl ResponseError for Error {
-    fn status_code(&self) -> StatusCode {
-        self.code.as_status_code()
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        let mut builder = HttpResponse::build(self.status_code());
-        if let Some(id) = &self.trace_id {
-            builder.insert_header((TRACE_ID_HEADER, id.clone()));
+    /// Redact server-side details so the payload is safe to expose to clients.
+    ///
+    /// Internal errors keep their code and trace identifier but replace the
+    /// message with a generic explanation and drop structured details.
+    pub fn redacted_for_clients(&self) -> Self {
+        if !matches!(self.code, ErrorCode::InternalError) {
+            return self.clone();
         }
-        if matches!(self.code, ErrorCode::InternalError) {
-            let mut redacted = self.clone();
-            redacted.message = "Internal server error".to_string();
-            redacted.details = None;
-            return builder.json(redacted);
-        }
-        builder.json(self)
+        let mut redacted = self.clone();
+        redacted.message = "Internal server error".to_string();
+        redacted.details = None;
+        redacted
     }
 }
 

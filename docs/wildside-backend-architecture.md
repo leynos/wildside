@@ -100,6 +100,18 @@ job execution. The design emphasizes clear domain boundaries, scalability (via
 potential service extraction or horizontal scaling of the monolith and
 workers), and thorough observability for both technical and product metrics.
 
+### Error handling boundaries
+
+- Domain errors are transport-agnostic (`Error` and `ErrorCode`) and keep only
+  the code, message, optional trace identifier, and optional structured
+  details. They never depend on Actix or HTTP primitives.
+- Inbound adapters translate domain errors into protocol responses, mapping
+  codes to status codes, attaching the request `Trace-Id`, and redacting
+  internal error messages and details before sending payloads to clients.
+- Behavioural tests use the `pg_embedded_setup_unpriv` fixture to start a local
+  Postgres instance when required, keeping adapter error handling deterministic
+  even when database context is present.
+
 ## Core Components and Layers
 
 ### Web API and WebSocket Layer (Actix Web)

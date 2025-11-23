@@ -5,11 +5,10 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{
-    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
-};
+use crate::api::ApiResult;
+use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
 use actix_session::Session;
-use actix_web::{get, post, web, HttpResponse, Result};
+use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -50,7 +49,7 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     security([])
 )]
 #[post("/login")]
-pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
+pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> ApiResult<HttpResponse> {
     let credentials =
         LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
     if credentials.username() == "admin" && credentials.password() == "password" {
