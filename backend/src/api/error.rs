@@ -33,12 +33,12 @@ impl ApiError {
         let mut payload = self.0.clone();
         if payload.trace_id().is_none() {
             if let Some(trace_id) = TraceId::current() {
-                payload = payload
-                    .with_optional_trace_id(Some(trace_id.to_string()))
-                    .unwrap_or_else(|err| {
+                match payload.with_optional_trace_id(Some(trace_id.to_string())) {
+                    Ok(updated) => payload = updated,
+                    Err(err) => {
                         error!(%err, "failed to attach trace identifier to error payload");
-                        payload.clone()
-                    });
+                    }
+                }
             }
         }
         if matches!(payload.code(), ErrorCode::InternalError) {

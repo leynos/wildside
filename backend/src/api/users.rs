@@ -5,12 +5,13 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::error;
 
 /// Login request body for `POST /api/v1/login`.
 ///
@@ -54,7 +55,12 @@ pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> ApiRes
         LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
     if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.
-        session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
+        session
+            .insert("user_id", "123e4567-e89b-12d3-a456-426614174000")
+            .map_err(|err| {
+                error!(%err, "failed to write session cookie");
+                ApiError::from(Error::internal("failed to establish session"))
+            })?;
         Ok(HttpResponse::Ok().finish())
     } else {
         // Map to the shared Error type so ResponseError renders the JSON body.
@@ -102,7 +108,7 @@ pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
         .map_err(actix_web::Error::from)?
         .is_none()
     {
-        return Err(Error::unauthorized("login required"));
+        return Err(Error::unauthorized("login required").into());
     }
     const FIXTURE_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
     const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
