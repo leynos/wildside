@@ -5,9 +5,19 @@
   "$schema": "https://biomejs.dev/schemas/stable/schema.json",
   "root": true,
   "files": {
-    "includes": ["**"],
-    // Use .biomeignore for ignore patterns
-    // Skip diagnostics for unrecognised file types
+    "includes": [
+      "frontend-pwa/**",
+      "packages/**",
+      "spec/**",
+      "!node_modules",
+      "!**/dist/",
+      "!**/build/",
+      "!coverage",
+      "!.git/",
+      "!**/target/",
+      "!**/*.min.*",
+      "!**/*.d.ts"
+    ],
     "ignoreUnknown": true
   },
   "formatter": {
