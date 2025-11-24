@@ -1,0 +1,3 @@
+# Exclude Rust build artefacts pulled in via workspace targets.
+../target
+../target/**

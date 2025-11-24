@@ -6,7 +6,6 @@ use crate::middleware::trace::TraceId;
 use actix_web::body::to_bytes;
 use actix_web::http::StatusCode;
 use rstest::{fixture, rstest};
-use rstest_bdd_macros::{given, then, when};
 use serde_json::json;
 
 #[fixture]
@@ -63,8 +62,9 @@ async fn error_response_captures_trace_id(invalid_request: DomainError) {
     })
     .await;
 
+    let expected = trace_id.to_string();
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(header.as_deref(), Some(&trace_id.to_string()));
+    assert_eq!(header.as_deref(), Some(expected.as_str()));
     assert_eq!(body.message(), "bad payload");
     assert_eq!(body.code(), ErrorCode::InvalidRequest);
     assert_eq!(body.details(), Some(&json!({"field": "name"})));
@@ -81,8 +81,9 @@ async fn internal_errors_are_redacted(internal_failure: DomainError) {
     })
     .await;
 
+    let expected = trace_id.to_string();
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(header.as_deref(), Some(&trace_id.to_string()));
+    assert_eq!(header.as_deref(), Some(expected.as_str()));
     assert_eq!(body.message(), "Internal server error");
     assert!(body.details().is_none());
 }
@@ -95,27 +96,9 @@ fn actix_errors_map_to_internal() {
     assert_eq!(api_err.message(), "Internal server error");
 }
 
-#[derive(Debug, Clone)]
-struct MappedError(ApiError);
-
-#[given("a domain invalid request error")]
-fn a_domain_invalid_request_error() -> DomainError {
-    DomainError::invalid_request("oops")
-}
-
-#[when("the adapter maps it to ApiError")]
-fn the_adapter_maps_it(error: DomainError) -> MappedError {
-    MappedError(ApiError::from(error))
-}
-
-#[then("the ApiError preserves the code and message")]
-fn the_api_error_preserves_fields(mapped: MappedError) {
-    assert_eq!(mapped.0.code(), ErrorCode::InvalidRequest);
-    assert_eq!(mapped.0.message(), "oops");
-}
-
 #[rstest]
-fn mapping_a_domain_error_happy_path() {
-    let mapped = the_adapter_maps_it(a_domain_invalid_request_error());
-    the_api_error_preserves_fields(mapped);
+fn mapping_domain_error_preserves_fields() {
+    let api_error = ApiError::from(DomainError::invalid_request("oops"));
+    assert_eq!(api_error.code(), ErrorCode::InvalidRequest);
+    assert_eq!(api_error.message(), "oops");
 }

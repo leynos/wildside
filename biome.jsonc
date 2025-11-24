@@ -5,7 +5,7 @@
   "$schema": "https://biomejs.dev/schemas/stable/schema.json",
   "root": true,
   "files": {
-    "includes": ["**"],
+    "includes": ["frontend-pwa/**", "packages/**"],
     // Use .biomeignore for ignore patterns
     // Skip diagnostics for unrecognised file types
     "ignoreUnknown": true

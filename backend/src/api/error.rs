@@ -5,6 +5,7 @@
 
 use crate::domain::{DomainError, ErrorCode, TRACE_ID_HEADER};
 use crate::middleware::trace::TraceId;
+use actix_session::{SessionGetError, SessionInsertError};
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -128,6 +129,18 @@ impl From<actix_web::Error> for ApiError {
             trace_id: TraceId::current().map(|id| id.to_string()),
             details: None,
         }
+    }
+}
+
+impl From<SessionInsertError> for ApiError {
+    fn from(err: SessionInsertError) -> Self {
+        ApiError::from(actix_web::Error::from(err))
+    }
+}
+
+impl From<SessionGetError> for ApiError {
+    fn from(err: SessionGetError) -> Self {
+        ApiError::from(actix_web::Error::from(err))
     }
 }
 

@@ -1,0 +1,3 @@
+# Exclude workspace build outputs to prevent Biome from scanning generated JS.
+../target
+../target/**
