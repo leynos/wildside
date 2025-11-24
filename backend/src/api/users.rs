@@ -5,9 +5,8 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{
-    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
-};
+use crate::api::ApiResult;
+use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
