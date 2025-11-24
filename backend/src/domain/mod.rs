@@ -5,7 +5,7 @@
 //! serialisation contracts (serde) in each type's Rustdoc.
 //!
 //! Public surface:
-//! - Error (alias to `error::Error`) — API error response payload.
+//! - DomainError (alias to `error::DomainError`) — transport-agnostic error payload.
 //! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier.
 //! - User (alias to `user::User`) — domain user identity and display name.
 //! - LoginCredentials — validated username/password inputs for authentication.
@@ -16,21 +16,17 @@ pub mod ports;
 pub mod user;
 
 pub use self::auth::{LoginCredentials, LoginValidationError};
-pub use self::error::{Error, ErrorCode, ErrorValidationError};
+pub use self::error::{DomainError, ErrorCode, ErrorValidationError};
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 
-/// HTTP header name used to propagate trace identifiers.
-pub const TRACE_ID_HEADER: &str = "trace-id";
-
-/// Convenient API result alias.
+/// Convenient domain result alias.
 ///
 /// # Examples
 /// ```
-/// use actix_web::HttpResponse;
-/// use backend::domain::{ApiResult, Error};
+/// use backend::domain::{DomainError, DomainResult, ErrorCode};
 ///
-/// fn handler() -> ApiResult<HttpResponse> {
-///     Err(Error::forbidden("nope"))
+/// fn sample_operation() -> DomainResult<()> {
+///     Err(DomainError::not_found("missing"))
 /// }
 /// ```
-pub type ApiResult<T> = Result<T, Error>;
+pub type DomainResult<T> = Result<T, DomainError>;

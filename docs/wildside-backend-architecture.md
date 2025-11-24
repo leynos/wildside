@@ -566,6 +566,13 @@ before invoking a port. Canonical examples include:
 > domain structs by hand. The change also unblocks future work that will swap
 > the hard-coded credential check for a real `UserRepository` because the
 > adapter already deals with a validated domain object.
+>
+> **Design decision (2025-11-24):** Domain errors are now transport-agnostic
+> `DomainError` values. HTTP adapters map them into `ApiError` responses,
+> attaching trace identifiers from the `Trace` middleware and redacting
+> internal messages at the edge. This keeps Actix-specific `ResponseError`
+> logic out of the domain while preserving the stable error code contract
+> required by clients.
 
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents

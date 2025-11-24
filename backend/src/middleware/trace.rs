@@ -9,7 +9,6 @@
 
 use std::task::{Context, Poll};
 
-use crate::domain::TRACE_ID_HEADER;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::Error;
@@ -18,6 +17,9 @@ use std::future::Future;
 use tokio::task_local;
 use tracing::error;
 use uuid::Uuid;
+
+/// HTTP header name used to propagate trace identifiers.
+pub const TRACE_ID_HEADER: &str = "trace-id";
 
 task_local! {
     static TRACE_ID: TraceId;
@@ -252,14 +254,14 @@ mod tests {
 
     #[actix_web::test]
     async fn propagates_trace_id_in_error() {
-        use crate::domain::{ApiResult, Error};
+        use crate::api::error::{ApiError, ApiResult};
+        use crate::domain::DomainError;
 
         let (res, trace_id) = test_trace_with_handler(|| async move {
-            // Error::internal captures the scoped TraceId automatically.
-            ApiResult::<HttpResponse>::Err(Error::internal("boom"))
+            ApiResult::<HttpResponse>::Err(ApiError::from(DomainError::internal("boom")))
         })
         .await;
-        let body: Error = test::read_body_json(res).await;
+        let body: ApiError = test::read_body_json(res).await;
         assert_eq!(body.trace_id(), Some(trace_id.as_str()));
     }
 }
