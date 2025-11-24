@@ -28,7 +28,7 @@ delivery, so future work remains inside the hexagonal boundaries.
 - [x] Replace direct DTO usage in `backend/src/api/*` with domain factories
   (e.g. `RouteRequest::try_from_login_payload`) so inbound adapters never
   construct domain structs manually.
-- [ ] Convert shared error handling in `backend/src/models/error.rs` into
+- [x] Convert shared error handling in `backend/src/models/error.rs` into
   domain error types that translate to HTTP responses via adapter-level
   mapping.
 

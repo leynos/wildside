@@ -5,11 +5,12 @@
 //! GET /api/v1/users
 //! ```
 
+use crate::api::error::{map_domain_error, ApiError, ApiResult};
 use crate::domain::{
-    ApiResult, DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId,
+    DisplayName, DomainError, LoginCredentials, LoginValidationError, User, UserId,
 };
 use actix_session::Session;
-use actix_web::{get, post, web, HttpResponse, Result};
+use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -34,7 +35,7 @@ impl TryFrom<LoginRequest> for LoginCredentials {
 
 /// Authenticate user and establish a session.
 ///
-/// Uses the centralised `Error` type so clients get a consistent
+/// Uses the centralised `ApiError` mapping so clients get a consistent
 /// error schema across all endpoints.
 #[utoipa::path(
     post,
@@ -42,7 +43,7 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login success", headers(("Set-Cookie" = String, description = "Session cookie"))),
-        (status = 401, description = "Invalid credentials", body = Error),
+        (status = 401, description = "Invalid credentials", body = ApiError),
         (status = 500, description = "Internal server error")
     ),
     tags = ["users"],
@@ -50,25 +51,33 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     security([])
 )]
 #[post("/login")]
-pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
-    let credentials =
-        LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
+pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> ApiResult<HttpResponse> {
+    let credentials = LoginCredentials::try_from(payload.into_inner())
+        .map_err(|err| map_domain_error(map_login_validation_error(err)))?;
     if credentials.username() == "admin" && credentials.password() == "password" {
         // In a real system, insert the authenticated user's ID.
-        session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
+        session
+            .insert("user_id", "123e4567-e89b-12d3-a456-426614174000")
+            .map_err(ApiError::from)?;
         Ok(HttpResponse::Ok().finish())
     } else {
         // Map to the shared Error type so ResponseError renders the JSON body.
-        Err(Error::unauthorized("invalid credentials").into())
+        Err(map_domain_error(DomainError::unauthorized(
+            "invalid credentials",
+        )))
     }
 }
 
-fn map_login_validation_error(err: LoginValidationError) -> Error {
+fn map_login_validation_error(err: LoginValidationError) -> DomainError {
     match err {
-        LoginValidationError::EmptyUsername => Error::invalid_request("username must not be empty")
-            .with_details(json!({ "field": "username", "code": "empty_username" })),
-        LoginValidationError::EmptyPassword => Error::invalid_request("password must not be empty")
-            .with_details(json!({ "field": "password", "code": "empty_password" })),
+        LoginValidationError::EmptyUsername => {
+            DomainError::invalid_request("username must not be empty")
+                .with_details(json!({ "field": "username", "code": "empty_username" }))
+        }
+        LoginValidationError::EmptyPassword => {
+            DomainError::invalid_request("password must not be empty")
+                .with_details(json!({ "field": "password", "code": "empty_password" }))
+        }
     }
 }
 //
@@ -87,11 +96,11 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
     path = "/api/v1/users",
     responses(
         (status = 200, description = "Users", body = [User]),
-        (status = 400, description = "Invalid request", body = Error),
-        (status = 401, description = "Unauthorised", body = Error),
-        (status = 403, description = "Forbidden", body = Error),
-        (status = 404, description = "Not found", body = Error),
-        (status = 500, description = "Internal server error", body = Error)
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Unauthorised", body = ApiError),
+        (status = 403, description = "Forbidden", body = ApiError),
+        (status = 404, description = "Not found", body = ApiError),
+        (status = 500, description = "Internal server error", body = ApiError)
     ),
     tags = ["users"],
     operation_id = "listUsers"
@@ -100,20 +109,28 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
 pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
     if session
         .get::<String>("user_id")
-        .map_err(actix_web::Error::from)?
+        .map_err(ApiError::from)?
         .is_none()
     {
-        return Err(Error::unauthorized("login required"));
+        return Err(map_domain_error(DomainError::unauthorized(
+            "login required",
+        )));
     }
     const FIXTURE_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
     const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
 
     // These values are compile-time constants; surface invalid data as an
     // internal error so automated checks catch accidental regressions.
-    let id = UserId::new(FIXTURE_ID)
-        .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))?;
-    let display_name = DisplayName::new(FIXTURE_DISPLAY_NAME)
-        .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
+    let id = UserId::new(FIXTURE_ID).map_err(|err| {
+        map_domain_error(DomainError::internal(format!(
+            "invalid fixture user id: {err}"
+        )))
+    })?;
+    let display_name = DisplayName::new(FIXTURE_DISPLAY_NAME).map_err(|err| {
+        map_domain_error(DomainError::internal(format!(
+            "invalid fixture display name: {err}"
+        )))
+    })?;
     let data = vec![User::new(id, display_name)];
     Ok(web::Json(data))
 }

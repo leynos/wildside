@@ -567,6 +567,14 @@ before invoking a port. Canonical examples include:
 > the hard-coded credential check for a real `UserRepository` because the
 > adapter already deals with a validated domain object.
 
+> **Design decision (2025-11-24):** Domain errors now live in
+> `backend::domain::error` as the transport-agnostic
+> `DomainError`/`ErrorCode` pair. HTTP adapters translate these into `ApiError`
+> responses in `backend::api::error`, attaching trace identifiers and
+> redacting internal messages as needed. This keeps Actix-specific status codes
+> and headers outside the domain while preserving the standardised error
+> envelope.
+
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents
 transport-specific representations (JSON strings, query params) from leaking

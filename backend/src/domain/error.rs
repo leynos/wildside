@@ -1,13 +1,13 @@
-//! Error response types.
+//! Domain-level error types.
+//!
+//! These errors are transport agnostic. Inbound adapters map them to HTTP
+//! responses, WebSocket frames, or any other protocol-specific envelope.
 
-use crate::{domain::TRACE_ID_HEADER, middleware::trace::TraceId};
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::error;
 use utoipa::ToSchema;
 
-/// Stable machine-readable error code.
+/// Stable machine-readable error code describing the failure category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
@@ -20,69 +20,53 @@ pub enum ErrorCode {
     Forbidden,
     /// The requested resource does not exist.
     NotFound,
-    /// An unexpected error occurred on the server.
+    /// An unexpected error occurred inside the domain.
     InternalError,
 }
 
-/// API error response payload.
+/// Domain error payload.
 ///
 /// ## Invariants
 /// - `message` must be non-empty once trimmed of whitespace.
-/// - `trace_id`, when present, must be non-empty.
 ///
 /// # Examples
 /// ```
-/// use backend::domain::{Error, ErrorCode};
+/// use backend::domain::{DomainError, ErrorCode};
 ///
-/// let err = Error::new(ErrorCode::NotFound, "missing");
+/// let err = DomainError::new(ErrorCode::NotFound, "missing");
 /// assert_eq!(err.code(), ErrorCode::NotFound);
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-#[serde(try_from = "ErrorDto", into = "ErrorDto")]
-pub struct Error {
+#[serde(try_from = "DomainErrorDto", into = "DomainErrorDto")]
+pub struct DomainError {
     #[schema(example = "invalid_request")]
     code: ErrorCode,
     #[schema(example = "Something went wrong")]
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
-    #[serde(alias = "trace_id")]
-    trace_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     details: Option<Value>,
 }
 
+/// Validation errors emitted by the constructors.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorValidationError {
+pub enum DomainErrorValidationError {
     EmptyMessage,
-    EmptyTraceId,
 }
 
-impl std::fmt::Display for ErrorValidationError {
+impl std::fmt::Display for DomainErrorValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EmptyMessage => write!(f, "error message must not be empty"),
-            Self::EmptyTraceId => write!(f, "trace identifier must not be empty"),
         }
     }
 }
 
-impl std::error::Error for ErrorValidationError {}
+impl std::error::Error for DomainErrorValidationError {}
 
-impl Error {
-    /// Create a new error.
-    ///
-    /// Captures the current trace identifier if one is in scope so the error
-    /// payload is correlated automatically.
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::{Error, ErrorCode};
-    /// let err = Error::new(ErrorCode::InvalidRequest, "bad");
-    /// assert_eq!(err.code(), ErrorCode::InvalidRequest);
-    /// ```
+impl DomainError {
+    /// Create a new error, panicking if validation fails.
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         match Self::try_new(code, message) {
             Ok(value) => value,
@@ -94,15 +78,14 @@ impl Error {
     pub fn try_new(
         code: ErrorCode,
         message: impl Into<String>,
-    ) -> Result<Self, ErrorValidationError> {
+    ) -> Result<Self, DomainErrorValidationError> {
         let message = message.into();
         if message.trim().is_empty() {
-            return Err(ErrorValidationError::EmptyMessage);
+            return Err(DomainErrorValidationError::EmptyMessage);
         }
         Ok(Self {
             code,
             message,
-            trace_id: TraceId::current().map(|id| id.to_string()),
             details: None,
         })
     }
@@ -112,56 +95,24 @@ impl Error {
         self.code
     }
 
-    /// Human-readable message returned to clients.
+    /// Human-readable message returned to adapters.
     pub fn message(&self) -> &str {
         self.message.as_str()
     }
 
-    /// Correlation identifier for tracing this error across systems.
-    pub fn trace_id(&self) -> Option<&str> {
-        self.trace_id.as_deref()
-    }
-
-    /// Supplementary error details for clients.
+    /// Supplementary error details for adapters.
     pub fn details(&self) -> Option<&Value> {
         self.details.as_ref()
-    }
-
-    /// Attach a trace identifier to the error.
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::{Error, ErrorCode};
-    /// let err = Error::new(ErrorCode::Forbidden, "nope").with_trace_id("abc");
-    /// assert_eq!(err.trace_id(), Some("abc"));
-    /// ```
-    pub fn with_trace_id(self, id: impl Into<String>) -> Self {
-        match self.try_with_trace_id(id) {
-            Ok(value) => value,
-            Err(err) => panic!("trace identifiers must satisfy validation: {err}"),
-        }
-    }
-
-    /// Fallible variant of [`Self::with_trace_id`].
-    pub fn try_with_trace_id(
-        mut self,
-        id: impl Into<String>,
-    ) -> Result<Self, ErrorValidationError> {
-        let id = id.into();
-        if id.trim().is_empty() {
-            return Err(ErrorValidationError::EmptyTraceId);
-        }
-        self.trace_id = Some(id);
-        Ok(self)
     }
 
     /// Attach structured details to the error.
     ///
     /// # Examples
     /// ```
-    /// use backend::domain::{Error, ErrorCode};
+    /// use backend::domain::{DomainError, ErrorCode};
     /// use serde_json::json;
-    /// let err = Error::new(ErrorCode::InvalidRequest, "bad")
+    ///
+    /// let err = DomainError::new(ErrorCode::InvalidRequest, "bad")
     ///     .with_details(json!({ "field": "name" }));
     /// assert!(err.details().is_some());
     /// ```
@@ -171,155 +122,69 @@ impl Error {
     }
 
     /// Convenience constructor for [`ErrorCode::InvalidRequest`].
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::Error;
-    ///
-    /// let err = Error::invalid_request("bad input");
-    /// ```
     pub fn invalid_request(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvalidRequest, message)
     }
 
     /// Convenience constructor for [`ErrorCode::Unauthorized`].
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::Error;
-    ///
-    /// let err = Error::unauthorized("no token");
-    /// ```
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message)
     }
 
     /// Convenience constructor for [`ErrorCode::Forbidden`].
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::Error;
-    ///
-    /// let err = Error::forbidden("nope");
-    /// ```
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Forbidden, message)
     }
 
     /// Convenience constructor for [`ErrorCode::NotFound`].
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::Error;
-    ///
-    /// let err = Error::not_found("missing");
-    /// ```
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::NotFound, message)
     }
 
     /// Convenience constructor for [`ErrorCode::InternalError`].
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::domain::Error;
-    ///
-    /// let err = Error::internal("boom");
-    /// ```
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InternalError, message)
     }
 }
 
-impl From<actix_web::Error> for Error {
-    fn from(err: actix_web::Error) -> Self {
-        // Do not leak implementation details to clients.
-        error!(error = %err, "actix error promoted to API error");
-        Error::internal("Internal server error")
-    }
-}
-
-impl std::fmt::Display for Error {
+impl std::fmt::Display for DomainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl std::error::Error for Error {}
-
-impl ErrorCode {
-    fn as_status_code(&self) -> StatusCode {
-        match self {
-            ErrorCode::InvalidRequest => StatusCode::BAD_REQUEST,
-            ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
-            ErrorCode::Forbidden => StatusCode::FORBIDDEN,
-            ErrorCode::NotFound => StatusCode::NOT_FOUND,
-            ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
-impl ResponseError for Error {
-    fn status_code(&self) -> StatusCode {
-        self.code.as_status_code()
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        let mut builder = HttpResponse::build(self.status_code());
-        if let Some(id) = &self.trace_id {
-            builder.insert_header((TRACE_ID_HEADER, id.clone()));
-        }
-        if matches!(self.code, ErrorCode::InternalError) {
-            let mut redacted = self.clone();
-            redacted.message = "Internal server error".to_string();
-            redacted.details = None;
-            return builder.json(redacted);
-        }
-        builder.json(self)
-    }
-}
+impl std::error::Error for DomainError {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct ErrorDto {
+struct DomainErrorDto {
     code: ErrorCode,
     message: String,
-    #[serde(alias = "trace_id")]
-    #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     details: Option<Value>,
 }
 
-impl From<Error> for ErrorDto {
-    fn from(value: Error) -> Self {
+impl From<DomainError> for DomainErrorDto {
+    fn from(value: DomainError) -> Self {
         Self {
             code: value.code,
             message: value.message,
-            trace_id: value.trace_id,
             details: value.details,
         }
     }
 }
 
-impl TryFrom<ErrorDto> for Error {
-    type Error = ErrorValidationError;
+impl TryFrom<DomainErrorDto> for DomainError {
+    type Error = DomainErrorValidationError;
 
-    fn try_from(value: ErrorDto) -> Result<Self, Self::Error> {
-        let ErrorDto {
+    fn try_from(value: DomainErrorDto) -> Result<Self, Self::Error> {
+        let DomainErrorDto {
             code,
             message,
-            trace_id,
             details,
         } = value;
 
-        let mut error = Error::try_new(code, message)?;
-        if let Some(trace_id) = trace_id {
-            error = error.try_with_trace_id(trace_id)?;
-        } else {
-            error.trace_id = None;
-        }
+        let mut error = DomainError::try_new(code, message)?;
         error.details = details;
         Ok(error)
     }

@@ -1,6 +1,7 @@
 //! OpenAPI documentation setup.
 
-use crate::domain::{Error, ErrorCode, User};
+use crate::api::error::ApiError;
+use crate::domain::{ErrorCode, User};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
@@ -46,7 +47,7 @@ impl Modify for SecurityAddon {
         crate::api::health::ready,
         crate::api::health::live,
     ),
-    components(schemas(User, Error, ErrorCode)),
+    components(schemas(User, ApiError, ErrorCode)),
     tags(
         (name = "users", description = "Operations related to users"),
         (name = "health", description = "Endpoints for health checks")
