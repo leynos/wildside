@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::Error;
 use actix_web::body::to_bytes;
 use actix_web::http::StatusCode;
+use actix_web::ResponseError;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;
@@ -101,6 +102,18 @@ async fn error_responses_include_trace_id_and_payloads(
     assert_eq!(payload.details(), Some(&json!({"field": "name"})));
 }
 
+#[rstest]
+#[actix_web::test]
+async fn error_without_trace_id_omits_trace_header() {
+    let error = Error::invalid_request("bad").with_details(json!({"field": "name"}));
+
+    let payload = assert_error_response(error, StatusCode::BAD_REQUEST, None).await;
+    assert_eq!(payload.code(), ErrorCode::InvalidRequest);
+    assert_eq!(payload.message(), "bad");
+    assert_eq!(payload.trace_id(), None);
+    assert_eq!(payload.details(), Some(&json!({"field": "name"})));
+}
+
 #[given("a forbidden error code")]
 fn a_forbidden_error_code() -> ErrorCode {
     ErrorCode::Forbidden
@@ -138,4 +151,17 @@ fn the_adapter_redacts_the_client_payload(template: (ErrorCode, &'static str)) -
 #[then("clients see the generic internal error message")]
 fn clients_see_the_generic_internal_error_message(message: String) {
     assert_eq!(message, "Internal server error");
+}
+
+#[test]
+fn from_actix_error_is_redacted_internal_error() {
+    use actix_web::error;
+
+    let actix_err = error::ErrorBadRequest("boom");
+    let err: Error = actix_err.into();
+
+    assert_eq!(err.code(), ErrorCode::InternalError);
+    assert_eq!(err.message(), "Internal server error");
+    assert_eq!(err.trace_id(), None);
+    assert_eq!(err.details(), None);
 }

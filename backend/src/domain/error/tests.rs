@@ -88,6 +88,27 @@ fn with_details_attaches_payload() {
     assert_eq!(err.details(), Some(&details));
 }
 
+#[rstest]
+#[tokio::test]
+async fn try_from_error_dto_ignores_ambient_trace_when_absent(expected_trace_id: String) {
+    let ambient: TraceId = expected_trace_id
+        .parse()
+        .expect("fixtures provide a valid UUID");
+    let dto = ErrorDto {
+        code: ErrorCode::InvalidRequest,
+        message: "bad".to_string(),
+        trace_id: None,
+        details: None,
+    };
+
+    let err = TraceId::scope(ambient, async move {
+        Error::try_from(dto).expect("conversion succeeds for valid payload without trace")
+    })
+    .await;
+
+    assert_eq!(err.trace_id(), None);
+}
+
 #[derive(Debug, Clone)]
 enum ConstructedError {
     Success,
