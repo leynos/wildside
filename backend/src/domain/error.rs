@@ -1,10 +1,8 @@
-//! Error response types.
+//! Domain error types shared across adapters.
 
-use crate::{domain::TRACE_ID_HEADER, middleware::trace::TraceId};
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use crate::middleware::trace::TraceId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::error;
 use utoipa::ToSchema;
 
 /// Stable machine-readable error code.
@@ -231,14 +229,6 @@ impl Error {
     }
 }
 
-impl From<actix_web::Error> for Error {
-    fn from(err: actix_web::Error) -> Self {
-        // Do not leak implementation details to clients.
-        error!(error = %err, "actix error promoted to API error");
-        Error::internal("Internal server error")
-    }
-}
-
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
@@ -246,38 +236,6 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
-
-impl ErrorCode {
-    fn as_status_code(&self) -> StatusCode {
-        match self {
-            ErrorCode::InvalidRequest => StatusCode::BAD_REQUEST,
-            ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
-            ErrorCode::Forbidden => StatusCode::FORBIDDEN,
-            ErrorCode::NotFound => StatusCode::NOT_FOUND,
-            ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
-impl ResponseError for Error {
-    fn status_code(&self) -> StatusCode {
-        self.code.as_status_code()
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        let mut builder = HttpResponse::build(self.status_code());
-        if let Some(id) = &self.trace_id {
-            builder.insert_header((TRACE_ID_HEADER, id.clone()));
-        }
-        if matches!(self.code, ErrorCode::InternalError) {
-            let mut redacted = self.clone();
-            redacted.message = "Internal server error".to_string();
-            redacted.details = None;
-            return builder.json(redacted);
-        }
-        builder.json(self)
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

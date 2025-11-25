@@ -91,7 +91,9 @@ lint: workspace-sync
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
-	if [ -f spec/asyncapi.yaml ]; then $(call exec_or_bunx,asyncapi,validate spec/asyncapi.yaml,@asyncapi/cli@$(ASYNCAPI_CLI_VERSION)); fi
+	if [ -f spec/asyncapi.yaml ]; then \
+	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml; \
+	fi
 
 # Lint OpenAPI spec with Redocly CLI
 lint-openapi:

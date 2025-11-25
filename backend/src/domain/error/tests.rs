@@ -1,8 +1,7 @@
-//! Tests for the error response payload formatting and propagation.
+//! Tests for constructing and validating domain error payloads.
 
 use super::*;
 use crate::middleware::trace::TraceId;
-use actix_web::{body::to_bytes, http::StatusCode};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;
@@ -17,20 +16,6 @@ fn expected_trace_id() -> String {
 #[fixture]
 fn base_error() -> Error {
     Error::invalid_request("bad")
-}
-
-#[fixture]
-fn internal_error_case(expected_trace_id: String) -> Error {
-    Error::internal("boom")
-        .with_trace_id(expected_trace_id)
-        .with_details(json!({"secret": "x"}))
-}
-
-#[fixture]
-fn invalid_request_case(expected_trace_id: String) -> Error {
-    Error::invalid_request("bad")
-        .with_trace_id(expected_trace_id)
-        .with_details(json!({"field": "name"}))
 }
 
 #[rstest]
@@ -74,8 +59,39 @@ async fn new_captures_trace_id_in_scope(expected_trace_id: String) {
 
 #[rstest]
 #[tokio::test]
-async fn try_from_error_dto_clears_ambient_trace(expected_trace_id: String) {
+async fn try_from_error_dto_preserves_payload(expected_trace_id: String) {
     let trace_id: TraceId = expected_trace_id
+        .parse()
+        .expect("fixtures provide a valid UUID");
+    let dto = ErrorDto {
+        code: ErrorCode::InvalidRequest,
+        message: "bad".to_string(),
+        trace_id: Some(trace_id.to_string()),
+        details: Some(json!({"field": "name"})),
+    };
+
+    let error = TraceId::scope(trace_id, async move {
+        Error::try_from(dto).expect("conversion succeeds for valid payload")
+    })
+    .await;
+
+    assert_eq!(error.code(), ErrorCode::InvalidRequest);
+    assert_eq!(error.message(), "bad");
+    assert_eq!(error.trace_id(), Some(expected_trace_id.as_str()));
+    assert_eq!(error.details(), Some(&json!({"field": "name"})));
+}
+
+#[rstest]
+fn with_details_attaches_payload() {
+    let details = json!({"field": "name"});
+    let err = Error::invalid_request("bad").with_details(details.clone());
+    assert_eq!(err.details(), Some(&details));
+}
+
+#[rstest]
+#[tokio::test]
+async fn try_from_error_dto_ignores_ambient_trace_when_absent(expected_trace_id: String) {
+    let ambient: TraceId = expected_trace_id
         .parse()
         .expect("fixtures provide a valid UUID");
     let dto = ErrorDto {
@@ -85,87 +101,12 @@ async fn try_from_error_dto_clears_ambient_trace(expected_trace_id: String) {
         details: None,
     };
 
-    let error = TraceId::scope(trace_id, async move {
+    let err = TraceId::scope(ambient, async move {
         Error::try_from(dto).expect("conversion succeeds for valid payload without trace")
     })
     .await;
 
-    assert!(error.trace_id().is_none());
-}
-
-#[rstest]
-fn status_code_matches_error_code() {
-    use actix_web::http::StatusCode;
-    let cases = [
-        (Error::invalid_request("bad"), StatusCode::BAD_REQUEST),
-        (Error::unauthorized("no auth"), StatusCode::UNAUTHORIZED),
-        (Error::forbidden("denied"), StatusCode::FORBIDDEN),
-        (Error::not_found("missing"), StatusCode::NOT_FOUND),
-        (Error::internal("boom"), StatusCode::INTERNAL_SERVER_ERROR),
-    ];
-    for (err, status) in cases {
-        assert_eq!(err.status_code(), status);
-    }
-}
-
-async fn assert_error_response(
-    error: Error,
-    expected_status: StatusCode,
-    expected_trace_id: Option<&str>,
-) -> Error {
-    let response = error.error_response();
-    assert_eq!(response.status(), expected_status);
-
-    let header = response
-        .headers()
-        .get(TRACE_ID_HEADER)
-        .or_else(|| response.headers().get("Trace-Id"));
-    match expected_trace_id {
-        Some(expected) => {
-            let trace_id = header
-                .expect("Trace-Id header is set by Error::error_response")
-                .to_str()
-                .expect("Trace-Id not valid UTF-8");
-            assert_eq!(trace_id, expected);
-        }
-        None => {
-            assert!(header.is_none(), "Trace-Id header should not be present");
-        }
-    }
-
-    let bytes = to_bytes(response.into_body())
-        .await
-        .expect("reading response body succeeds");
-
-    serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds")
-}
-
-#[rstest]
-#[actix_web::test]
-async fn error_responses_include_trace_id_and_payloads(
-    #[from(internal_error_case)] internal_error: Error,
-    #[from(invalid_request_case)] invalid_request: Error,
-    expected_trace_id: String,
-) {
-    let redacted = assert_error_response(
-        internal_error,
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Some(expected_trace_id.as_str()),
-    )
-    .await;
-    assert_eq!(redacted.code(), ErrorCode::InternalError);
-    assert_eq!(redacted.message(), "Internal server error");
-    assert!(redacted.details().is_none());
-
-    let payload = assert_error_response(
-        invalid_request,
-        StatusCode::BAD_REQUEST,
-        Some(expected_trace_id.as_str()),
-    )
-    .await;
-    assert_eq!(payload.code(), ErrorCode::InvalidRequest);
-    assert_eq!(payload.message(), "bad");
-    assert_eq!(payload.details(), Some(&json!({"field": "name"})));
+    assert_eq!(err.trace_id(), None);
 }
 
 #[derive(Debug, Clone)]
