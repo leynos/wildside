@@ -68,6 +68,28 @@ def _append_output(output_file: Path, lines: list[str]) -> None:
             handle.write(f"{line}\n")
 
 
+def _read_state(state_file: Path) -> dict:
+    """Read and parse the bootstrap state file."""
+
+    if not state_file.exists():
+        msg = f"State file not found: {state_file}"
+        raise FileNotFoundError(msg)
+    return json.loads(state_file.read_text(encoding="utf-8"))
+
+
+def _mask_secrets(
+    mask: Mask,
+    approle_secret_id: str,
+    root_token: str,
+    unseal_keys: list[str],
+) -> None:
+    """Mask secret values so they do not leak in logs."""
+
+    for secret in [approle_secret_id, root_token, *unseal_keys]:
+        if secret:
+            mask(f"::add-mask::{secret}")
+
+
 def publish_bootstrap_outputs(
     *,
     vault_config: VaultEnvironmentConfig,
@@ -83,20 +105,14 @@ def publish_bootstrap_outputs(
         raise SystemExit("GITHUB_OUTPUT is required")
 
     state_file = vault_config.state_path
-    if not state_file.exists():
-        msg = f"State file not found: {state_file}"
-        raise FileNotFoundError(msg)
-
-    state = json.loads(state_file.read_text(encoding="utf-8"))
+    state = _read_state(state_file)
 
     approle_role_id = state.get("approle_role_id") or ""
     approle_secret_id = state.get("approle_secret_id") or ""
     root_token = state.get("root_token") or ""
     unseal_keys = state.get("unseal_keys") or []
 
-    for secret in [approle_secret_id, root_token, *unseal_keys]:
-        if secret:
-            github_context.mask(f"::add-mask::{secret}")
+    _mask_secrets(github_context.mask, approle_secret_id, root_token, unseal_keys)
 
     ca_certificate_path = None
     ca_candidate = state_file.parent / "vault-ca.pem"
