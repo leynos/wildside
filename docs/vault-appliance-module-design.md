@@ -51,6 +51,14 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   Conftest policies enforce HTTPS termination, HTTP→HTTPS redirects, and forbid
   exposing SSH to the public internet by default. Additional inputs allow the
   appliance to live inside a custom VPC and project.
+- **Reusable GitHub Action.** A composite action lives at
+  `.github/actions/bootstrap-vault-appliance` to drive the Python helper. It
+  installs `uv`, `doctl`, and the Vault CLI, derives the droplet tag as
+  `vault-<environment>` when one is not supplied, and writes bootstrap state to
+  `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`. Inputs accept raw or
+  base64 JSON/PEM payloads for the state file and CA bundle, while secrets
+  (unseal keys, root token, AppRole credentials) are masked before outputs are
+  published so idempotent re-runs cannot leak credentials.
 - **Detailed drift checks.** Behavioural tests execute
   `tofu plan -detailed-exitcode` to verify that creating the appliance produces
   exit code 2, proving the safety rails that guard destructive operations. The

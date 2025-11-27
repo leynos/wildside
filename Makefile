@@ -138,6 +138,7 @@ scripts-test:
 	uv run \
 		--with pytest \
 		--with plumbum \
+		--with pyyaml \
 		--with "cmd-mox@git+https://github.com/leynos/cmd-mox@28acd288975f15e4c360d62e431950820dbcb27a" \
 		pytest scripts/tests
 
