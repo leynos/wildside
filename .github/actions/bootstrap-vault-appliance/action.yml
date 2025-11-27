@@ -94,7 +94,7 @@ inputs:
   vault_cli_version:
     description: Version of the Vault CLI to install (e.g. 1.17.6).
     required: false
-    default: 1.17.6
+    default: "1.17.6"
 
 outputs:
   vault-address:
