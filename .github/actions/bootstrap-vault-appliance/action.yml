@@ -125,73 +125,7 @@ runs:
         INPUT_SSH_KEY: ${{ inputs.ssh_private_key }}
         INPUT_STATE_PATH: ${{ inputs.state_path }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}
-      run: |
-        set -euo pipefail
-
-        ENVIRONMENT="${INPUT_ENVIRONMENT}"
-        DROPLET_TAG="${{ inputs.droplet_tag }}"
-        if [ -z "${DROPLET_TAG}" ]; then
-          DROPLET_TAG="vault-${ENVIRONMENT}"
-        fi
-
-        STATE_FILE="${INPUT_STATE_PATH:-${RUNNER_TEMP}/vault-bootstrap/${ENVIRONMENT}/state.json}"
-        mkdir -p "$(dirname "${STATE_FILE}")"
-
-        write_payload_file() {
-          local payload="$1" path="$2"
-          if [ -z "${payload}" ]; then
-            return 0
-          fi
-
-          python -c "import base64,binascii,json,pathlib,sys,textwrap; code = textwrap.dedent('''\
-        payload = sys.argv[1]
-        path = pathlib.Path(sys.argv[2])
-        candidate = payload
-        if not candidate.strip():
-            sys.exit(0)
-        try:
-            decoded = base64.b64decode(candidate, validate=True)
-            candidate = decoded.decode('utf-8')
-        except (binascii.Error, UnicodeDecodeError):
-            candidate = payload
-        if path.suffix == '.json':
-            try:
-                parsed = json.loads(candidate)
-            except json.JSONDecodeError as exc:
-                raise SystemExit(f'Invalid JSON supplied for {path.name}: {exc}')
-            candidate = json.dumps(parsed, indent=2)
-        path.write_text(candidate, encoding='utf-8')
-        path.chmod(0o600)
-        '''); exec(code)" "${payload}" "${path}"
-        }
-
-        if [ ! -f "${STATE_FILE}" ] && [ -n "${INPUT_BOOTSTRAP_STATE}" ]; then
-          write_payload_file "${INPUT_BOOTSTRAP_STATE}" "${STATE_FILE}"
-        fi
-
-        CA_CERT_PATH=""
-        if [ -n "${INPUT_CA_CERTIFICATE}" ]; then
-          CA_CERT_PATH="$(dirname "${STATE_FILE}")/vault-ca.pem"
-          write_payload_file "${INPUT_CA_CERTIFICATE}" "${CA_CERT_PATH}"
-        fi
-
-        SSH_IDENTITY=""
-        if [ -n "${INPUT_SSH_KEY}" ]; then
-          SSH_IDENTITY="$(dirname "${STATE_FILE}")/vault-ssh-key"
-          umask 077
-          printf "%s\n" "${INPUT_SSH_KEY}" >"${SSH_IDENTITY}"
-          chmod 600 "${SSH_IDENTITY}"
-          echo "::add-mask::${INPUT_SSH_KEY}"
-        fi
-
-        echo "DROPLET_TAG=${DROPLET_TAG}" >>"${GITHUB_ENV}"
-        echo "STATE_FILE=${STATE_FILE}" >>"${GITHUB_ENV}"
-        if [ -n "${CA_CERT_PATH}" ]; then
-          echo "CA_CERT_PATH=${CA_CERT_PATH}" >>"${GITHUB_ENV}"
-        fi
-        if [ -n "${SSH_IDENTITY}" ]; then
-          echo "SSH_IDENTITY=${SSH_IDENTITY}" >>"${GITHUB_ENV}"
-        fi
+      run: uv run scripts/prepare_bootstrap_inputs.py
 
     - name: Install uv
       id: install-uv
@@ -274,27 +208,4 @@ runs:
         STATE_FILE: ${{ env.STATE_FILE }}
         VAULT_ADDRESS: ${{ inputs.vault_address }}
         CA_CERT_PATH: ${{ env.CA_CERT_PATH }}
-      run: |
-        set -euo pipefail
-
-        python -c "import json, os, textwrap; from pathlib import Path; code = textwrap.dedent('''\
-        state_path = Path(os.environ['STATE_FILE'])
-        out_path = Path(os.environ['GITHUB_OUTPUT'])
-        state = json.loads(state_path.read_text(encoding='utf-8'))
-
-        approle_role_id = state.get('approle_role_id') or ''
-        approle_secret_id = state.get('approle_secret_id') or ''
-        root_token = state.get('root_token') or ''
-        unseal_keys = state.get('unseal_keys') or []
-
-        for secret in [approle_secret_id, root_token, *unseal_keys]:
-            if secret:
-                print(f\"::add-mask::{secret}\")
-
-        with out_path.open('a', encoding='utf-8') as handle:
-            handle.write(f\"vault-address={os.environ['VAULT_ADDRESS']}\\n\")
-            handle.write(f\"state-file={state_path}\\n\")
-            handle.write(f\"approle-role-id={approle_role_id}\\n\")
-            handle.write(f\"approle-secret-id={approle_secret_id}\\n\")
-            handle.write(f\"ca-certificate-path={os.environ.get('CA_CERT_PATH', '')}\\n\")
-        '''); exec(code)"
+      run: uv run scripts/publish_bootstrap_outputs.py

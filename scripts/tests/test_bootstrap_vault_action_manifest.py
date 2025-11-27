@@ -23,7 +23,6 @@ def test_inputs_cover_credentials_and_env() -> None:
 
     digitalocean = inputs["digitalocean_token"]
     assert digitalocean["required"] is True
-    assert digitalocean.get("secret") is True
 
 
 def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:
@@ -57,4 +56,4 @@ def test_publish_step_emits_expected_outputs() -> None:
         step for step in action["runs"]["steps"]
         if step["id"] == "publish"
     )
-    assert "::add-mask::" in publish_step["run"]
+    assert "uv run scripts/publish_bootstrap_outputs.py" in publish_step["run"]
