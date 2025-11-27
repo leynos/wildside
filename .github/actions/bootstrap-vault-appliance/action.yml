@@ -196,14 +196,17 @@ runs:
         fi
 
     - name: Install uv
+      id: install-uv
       uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
 
     - name: Install doctl
+      id: install-doctl
       uses: digitalocean/action-doctl@135ac0aa0eed4437d547c6f12c364d3006b42824
       with:
         token: ${{ inputs.digitalocean_token }}
 
     - name: Install Vault CLI
+      id: install-vault-cli
       shell: bash
       env:
         VAULT_VERSION: ${{ inputs.vault_cli_version }}
@@ -223,6 +226,7 @@ runs:
         echo "${RUNNER_TEMP}/bin" >>"${GITHUB_PATH}"
 
     - name: Bootstrap Vault appliance
+      id: bootstrap-helper
       shell: bash
       env:
         DIGITALOCEAN_ACCESS_TOKEN: ${{ inputs.digitalocean_token }}
