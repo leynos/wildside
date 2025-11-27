@@ -201,6 +201,28 @@ def prepare_bootstrap_inputs(
     )
 
 
+def _resolve_input(
+    param_value: str | Path | None,
+    env_key: str,
+    default: str | Path | None = None,
+    required: bool = False,
+    as_path: bool = False,
+) -> str | Path | None:
+    """Resolve input from parameter, environment variable, or default."""
+
+    if param_value is not None:
+        return param_value
+
+    env_value = os.environ.get(env_key)
+    if env_value is not None:
+        return Path(env_value) if as_path else env_value
+
+    if required:
+        raise SystemExit(f"{env_key} is required")
+
+    return default
+
+
 @app.command()
 def main(
     environment: str | None = Parameter(),
@@ -214,38 +236,56 @@ def main(
 ) -> None:
     """CLI entrypoint used by the composite action."""
 
-    environment = environment or os.environ.get("INPUT_ENVIRONMENT")
-    if environment is None:
-        raise SystemExit("INPUT_ENVIRONMENT is required")
-
-    runner_temp = runner_temp or Path(os.environ.get("RUNNER_TEMP", "/tmp"))
-    github_env = github_env or Path(
-        os.environ.get("GITHUB_ENV", "/tmp/github-env-undefined")
+    resolved_environment = _resolve_input(
+        environment,
+        "INPUT_ENVIRONMENT",
+        required=True,
     )
-    droplet_tag = droplet_tag or os.environ.get("INPUT_DROPLET_TAG")
-    state_path = state_path or (
-        Path(os.environ["INPUT_STATE_PATH"])
-        if "INPUT_STATE_PATH" in os.environ
-        else None
+    resolved_runner_temp = _resolve_input(
+        runner_temp,
+        "RUNNER_TEMP",
+        default=Path("/tmp"),
+        as_path=True,
     )
-    bootstrap_state = bootstrap_state or os.environ.get("INPUT_BOOTSTRAP_STATE")
-    ca_certificate = ca_certificate or os.environ.get("INPUT_CA_CERTIFICATE")
-    ssh_key = ssh_key or os.environ.get("INPUT_SSH_KEY")
+    resolved_github_env = _resolve_input(
+        github_env,
+        "GITHUB_ENV",
+        default=Path("/tmp/github-env-undefined"),
+        as_path=True,
+    )
+    resolved_droplet_tag = _resolve_input(droplet_tag, "INPUT_DROPLET_TAG")
+    resolved_state_path = _resolve_input(
+        state_path,
+        "INPUT_STATE_PATH",
+        as_path=True,
+    )
+    resolved_bootstrap_state = _resolve_input(
+        bootstrap_state,
+        "INPUT_BOOTSTRAP_STATE",
+    )
+    resolved_ca_certificate = _resolve_input(
+        ca_certificate,
+        "INPUT_CA_CERTIFICATE",
+    )
+    resolved_ssh_key = _resolve_input(
+        ssh_key,
+        "INPUT_SSH_KEY",
+    )
 
     vault_config = VaultEnvironmentConfig(
-        environment=environment,
-        droplet_tag=droplet_tag,
-        state_path=state_path,
+        environment=str(resolved_environment),
+        droplet_tag=resolved_droplet_tag if isinstance(resolved_droplet_tag, str) else None,
+        state_path=resolved_state_path if isinstance(resolved_state_path, Path) else None,
         vault_address=None,
     )
     payloads = BootstrapPayloads(
-        bootstrap_state=bootstrap_state,
-        ca_certificate=ca_certificate,
-        ssh_key=ssh_key,
+        bootstrap_state=resolved_bootstrap_state if isinstance(resolved_bootstrap_state, str) else None,
+        ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, str) else None,
+        ssh_key=resolved_ssh_key if isinstance(resolved_ssh_key, str) else None,
     )
     github_context = GitHubActionContext(
-        runner_temp=runner_temp,
-        github_env=github_env,
+        runner_temp=resolved_runner_temp if isinstance(resolved_runner_temp, Path) else Path("/tmp"),
+        github_env=resolved_github_env if isinstance(resolved_github_env, Path) else Path("/tmp/github-env-undefined"),
         github_output=None,
         mask=print,
     )
