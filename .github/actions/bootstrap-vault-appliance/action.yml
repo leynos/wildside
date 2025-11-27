@@ -23,7 +23,6 @@ inputs:
   digitalocean_token:
     description: DigitalOcean API token with read access to the droplet tag.
     required: true
-    secret: true
   ca_certificate:
     description: >-
       PEM-encoded CA certificate used to validate the Vault endpoint. Accepts raw
@@ -51,7 +50,6 @@ inputs:
       written to a temporary file with 0600 permissions and passed via
       --ssh-identity.
     required: false
-    secret: true
   kv_mount_path:
     description: Mount path for the KV v2 secrets engine.
     required: false
