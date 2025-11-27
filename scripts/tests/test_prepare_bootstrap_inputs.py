@@ -8,7 +8,10 @@ from pathlib import Path
 import pytest
 
 from scripts.prepare_bootstrap_inputs import (
+    BootstrapPayloads,
+    GitHubActionContext,
     PreparedPaths,
+    VaultEnvironmentConfig,
     prepare_bootstrap_inputs,
 )
 
@@ -21,15 +24,23 @@ def test_writes_state_and_exports_env(tmp_path: Path) -> None:
 
     masks: list[str] = []
     paths = prepare_bootstrap_inputs(
-        environment="dev",
-        runner_temp=runner_temp,
-        droplet_tag=None,
-        state_path=None,
-        bootstrap_state=state_payload,
-        ca_certificate=ca_payload,
-        ssh_key="ssh-secret",
-        github_env=env_file,
-        mask=masks.append,
+        vault_config=VaultEnvironmentConfig(
+            environment="dev",
+            droplet_tag=None,
+            state_path=None,
+            vault_address=None,
+        ),
+        payloads=BootstrapPayloads(
+            bootstrap_state=state_payload,
+            ca_certificate=ca_payload,
+            ssh_key="ssh-secret",
+        ),
+        github_context=GitHubActionContext(
+            runner_temp=runner_temp,
+            github_env=env_file,
+            mask=masks.append,
+            github_output=None,
+        ),
     )
 
     expected_state = runner_temp / "vault-bootstrap" / "dev" / "state.json"
@@ -57,15 +68,23 @@ def test_respects_explicit_paths_and_skips_blank_payloads(tmp_path: Path) -> Non
     state_path = tmp_path / "state.json"
 
     paths = prepare_bootstrap_inputs(
-        environment="prod",
-        runner_temp=tmp_path,
-        droplet_tag="vault-prod",
-        state_path=state_path,
-        bootstrap_state=None,
-        ca_certificate="",
-        ssh_key="",
-        github_env=env_file,
-        mask=lambda _secret: None,
+        vault_config=VaultEnvironmentConfig(
+            environment="prod",
+            droplet_tag="vault-prod",
+            state_path=state_path,
+            vault_address=None,
+        ),
+        payloads=BootstrapPayloads(
+            bootstrap_state=None,
+            ca_certificate="",
+            ssh_key="",
+        ),
+        github_context=GitHubActionContext(
+            runner_temp=tmp_path,
+            github_env=env_file,
+            github_output=None,
+            mask=lambda _secret: None,
+        ),
     )
 
     assert paths.state_file == state_path
@@ -85,13 +104,21 @@ def test_invalid_json_raises(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit):
         prepare_bootstrap_inputs(
-            environment="dev",
-            runner_temp=tmp_path,
-            droplet_tag=None,
-            state_path=None,
-            bootstrap_state="not-json",
-            ca_certificate=None,
-            ssh_key=None,
-            github_env=env_file,
-            mask=lambda _secret: None,
+            vault_config=VaultEnvironmentConfig(
+                environment="dev",
+                droplet_tag=None,
+                state_path=None,
+                vault_address=None,
+            ),
+            payloads=BootstrapPayloads(
+                bootstrap_state="not-json",
+                ca_certificate=None,
+                ssh_key=None,
+            ),
+            github_context=GitHubActionContext(
+                runner_temp=tmp_path,
+                github_env=env_file,
+                github_output=None,
+                mask=lambda _secret: None,
+            ),
         )

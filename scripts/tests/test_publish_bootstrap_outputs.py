@@ -8,6 +8,8 @@ import pytest
 
 from scripts.publish_bootstrap_outputs import (
     BootstrapOutputs,
+    GitHubActionContext,
+    VaultEnvironmentConfig,
     publish_bootstrap_outputs,
 )
 
@@ -26,14 +28,23 @@ def test_masks_secrets_and_writes_outputs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     output_file = tmp_path / "out"
+    ca_path = tmp_path / "vault-ca.pem"
+    ca_path.write_text("ca", encoding="utf-8")
     masks: list[str] = []
 
     result = publish_bootstrap_outputs(
-        vault_address="https://vault",
-        state_file=state_file,
-        ca_certificate_path=tmp_path / "ca.pem",
-        github_output=output_file,
-        mask=masks.append,
+        vault_config=VaultEnvironmentConfig(
+            environment="dev",
+            droplet_tag=None,
+            state_path=state_file,
+            vault_address="https://vault",
+        ),
+        github_context=GitHubActionContext(
+            runner_temp=tmp_path,
+            github_env=tmp_path / "env",
+            github_output=output_file,
+            mask=masks.append,
+        ),
     )
 
     assert isinstance(result, BootstrapOutputs)
@@ -45,7 +56,7 @@ def test_masks_secrets_and_writes_outputs(tmp_path: Path) -> None:
     assert f"state-file={state_file}" in lines
     assert "approle-role-id=role-123" in lines
     assert "approle-secret-id=secret-abc" in lines
-    assert f"ca-certificate-path={tmp_path / 'ca.pem'}" in lines
+    assert f"ca-certificate-path={ca_path}" in lines
 
     assert masks == [
         "::add-mask::secret-abc",
@@ -59,9 +70,16 @@ def test_missing_state_file_errors(tmp_path: Path) -> None:
     output_file = tmp_path / "out"
     with pytest.raises(FileNotFoundError):
         publish_bootstrap_outputs(
-            vault_address="https://vault",
-            state_file=tmp_path / "missing.json",
-            ca_certificate_path=None,
-            github_output=output_file,
-            mask=lambda _secret: None,
+            vault_config=VaultEnvironmentConfig(
+                environment="dev",
+                droplet_tag=None,
+                state_path=tmp_path / "missing.json",
+                vault_address="https://vault",
+            ),
+            github_context=GitHubActionContext(
+                runner_temp=tmp_path,
+                github_env=tmp_path / "env",
+                github_output=output_file,
+                mask=lambda _secret: None,
+            ),
         )

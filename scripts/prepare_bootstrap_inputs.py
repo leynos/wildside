@@ -32,6 +32,35 @@ app = App(help="Materialise Vault bootstrap inputs and export env values.")
 
 
 @dataclass(frozen=True)
+class GitHubActionContext:
+    """Contextual paths and helpers provided by the GitHub Action runner."""
+
+    runner_temp: Path
+    github_env: Path
+    github_output: Path | None = None
+    mask: Mask = print
+
+
+@dataclass(frozen=True)
+class BootstrapPayloads:
+    """Optional payloads supplied to seed bootstrap artefacts."""
+
+    bootstrap_state: str | None = None
+    ca_certificate: str | None = None
+    ssh_key: str | None = None
+
+
+@dataclass(frozen=True)
+class VaultEnvironmentConfig:
+    """Configuration describing the Vault environment under bootstrap."""
+
+    environment: str
+    droplet_tag: str | None = None
+    state_path: Path | None = None
+    vault_address: str | None = None
+
+
+@dataclass(frozen=True)
 class PreparedPaths:
     """Resolved paths produced by the preparation step."""
 
@@ -89,36 +118,30 @@ def _append_env(env_file: Path, lines: list[str]) -> None:
 
 def prepare_bootstrap_inputs(
     *,
-    environment: str,
-    runner_temp: Path,
-    droplet_tag: str | None,
-    state_path: Path | None,
-    bootstrap_state: str | None,
-    ca_certificate: str | None,
-    ssh_key: str | None,
-    github_env: Path,
-    mask: Mask,
+    vault_config: VaultEnvironmentConfig,
+    payloads: BootstrapPayloads,
+    github_context: GitHubActionContext,
 ) -> PreparedPaths:
     """Materialise input payloads and export paths to GITHUB_ENV."""
 
-    resolved_droplet_tag = droplet_tag or f"vault-{environment}"
-    state_file = state_path or runner_temp / "vault-bootstrap" / environment / "state.json"
+    resolved_droplet_tag = vault_config.droplet_tag or f"vault-{vault_config.environment}"
+    state_file = vault_config.state_path or github_context.runner_temp / "vault-bootstrap" / vault_config.environment / "state.json"
 
-    if not state_file.exists() and bootstrap_state:
-        _write_payload_file(bootstrap_state, state_file)
+    if not state_file.exists() and payloads.bootstrap_state:
+        _write_payload_file(payloads.bootstrap_state, state_file)
 
     ca_cert_path = None
-    if ca_certificate:
+    if payloads.ca_certificate:
         ca_cert_path = state_file.parent / "vault-ca.pem"
-        _write_payload_file(ca_certificate, ca_cert_path)
+        _write_payload_file(payloads.ca_certificate, ca_cert_path)
 
     ssh_identity = None
-    if ssh_key:
+    if payloads.ssh_key:
         ssh_identity = state_file.parent / "vault-ssh-key"
         ssh_identity.parent.mkdir(parents=True, exist_ok=True)
-        ssh_identity.write_text(f"{ssh_key}\n", encoding="utf-8")
+        ssh_identity.write_text(f"{payloads.ssh_key}\n", encoding="utf-8")
         ssh_identity.chmod(0o600)
-        mask(f"::add-mask::{ssh_key}")
+        github_context.mask(f"::add-mask::{payloads.ssh_key}")
 
     env_lines = [
         f"DROPLET_TAG={resolved_droplet_tag}",
@@ -129,7 +152,7 @@ def prepare_bootstrap_inputs(
     if ssh_identity:
         env_lines.append(f"SSH_IDENTITY={ssh_identity}")
 
-    _append_env(github_env, env_lines)
+    _append_env(github_context.github_env, env_lines)
 
     return PreparedPaths(
         droplet_tag=resolved_droplet_tag,
@@ -170,16 +193,28 @@ def main(
     ca_certificate = ca_certificate or os.environ.get("INPUT_CA_CERTIFICATE")
     ssh_key = ssh_key or os.environ.get("INPUT_SSH_KEY")
 
-    prepare_bootstrap_inputs(
+    vault_config = VaultEnvironmentConfig(
         environment=environment,
-        runner_temp=runner_temp,
         droplet_tag=droplet_tag,
         state_path=state_path,
+        vault_address=None,
+    )
+    payloads = BootstrapPayloads(
         bootstrap_state=bootstrap_state,
         ca_certificate=ca_certificate,
         ssh_key=ssh_key,
+    )
+    github_context = GitHubActionContext(
+        runner_temp=runner_temp,
         github_env=github_env,
+        github_output=None,
         mask=print,
+    )
+
+    prepare_bootstrap_inputs(
+        vault_config=vault_config,
+        payloads=payloads,
+        github_context=github_context,
     )
 
 

@@ -22,6 +22,35 @@ app = App(help="Emit bootstrap outputs and mask secrets for GitHub Actions.")
 
 
 @dataclass(frozen=True)
+class GitHubActionContext:
+    """Contextual paths and helpers provided by the GitHub Action runner."""
+
+    runner_temp: Path
+    github_env: Path
+    github_output: Path | None = None
+    mask: Mask = print
+
+
+@dataclass(frozen=True)
+class BootstrapPayloads:
+    """Optional payloads supplied to seed bootstrap artefacts."""
+
+    bootstrap_state: str | None = None
+    ca_certificate: str | None = None
+    ssh_key: str | None = None
+
+
+@dataclass(frozen=True)
+class VaultEnvironmentConfig:
+    """Configuration describing the Vault environment under bootstrap."""
+
+    environment: str
+    droplet_tag: str | None = None
+    state_path: Path | None = None
+    vault_address: str | None = None
+
+
+@dataclass(frozen=True)
 class BootstrapOutputs:
     """Outputs exposed to downstream workflow steps."""
 
@@ -41,14 +70,19 @@ def _append_output(output_file: Path, lines: list[str]) -> None:
 
 def publish_bootstrap_outputs(
     *,
-    vault_address: str,
-    state_file: Path,
-    ca_certificate_path: Path | None,
-    github_output: Path,
-    mask: Mask,
+    vault_config: VaultEnvironmentConfig,
+    github_context: GitHubActionContext,
 ) -> BootstrapOutputs:
     """Read the state file, mask secrets, and export outputs."""
 
+    if not vault_config.vault_address:
+        raise SystemExit("VAULT_ADDRESS is required")
+    if not vault_config.state_path:
+        raise SystemExit("STATE_FILE is required")
+    if not github_context.github_output:
+        raise SystemExit("GITHUB_OUTPUT is required")
+
+    state_file = vault_config.state_path
     if not state_file.exists():
         msg = f"State file not found: {state_file}"
         raise FileNotFoundError(msg)
@@ -62,19 +96,24 @@ def publish_bootstrap_outputs(
 
     for secret in [approle_secret_id, root_token, *unseal_keys]:
         if secret:
-            mask(f"::add-mask::{secret}")
+            github_context.mask(f"::add-mask::{secret}")
+
+    ca_certificate_path = None
+    ca_candidate = state_file.parent / "vault-ca.pem"
+    if ca_candidate.exists():
+        ca_certificate_path = ca_candidate
 
     output_lines = [
-        f"vault-address={vault_address}",
+        f"vault-address={vault_config.vault_address}",
         f"state-file={state_file}",
         f"approle-role-id={approle_role_id}",
         f"approle-secret-id={approle_secret_id}",
         f"ca-certificate-path={ca_certificate_path or ''}",
     ]
-    _append_output(github_output, output_lines)
+    _append_output(github_context.github_output, output_lines)
 
     return BootstrapOutputs(
-        vault_address=vault_address,
+        vault_address=vault_config.vault_address,
         state_file=state_file,
         approle_role_id=approle_role_id,
         approle_secret_id=approle_secret_id,
@@ -92,20 +131,29 @@ def main(
     """CLI entrypoint used by the composite action."""
 
     vault_address = vault_address or os.environ.get("VAULT_ADDRESS")
-    if vault_address is None:
-        raise SystemExit("VAULT_ADDRESS is required")
+    state_file = state_file or (
+        Path(os.environ["STATE_FILE"]) if "STATE_FILE" in os.environ else None
+    )
+    github_output = github_output or (
+        Path(os.environ["GITHUB_OUTPUT"]) if "GITHUB_OUTPUT" in os.environ else None
+    )
 
-    state_file = state_file or Path(os.environ["STATE_FILE"])
-    github_output = github_output or Path(os.environ["GITHUB_OUTPUT"])
-    if "CA_CERT_PATH" in os.environ and ca_certificate_path is None:
-        ca_certificate_path = Path(os.environ["CA_CERT_PATH"])
-
-    publish_bootstrap_outputs(
+    vault_config = VaultEnvironmentConfig(
+        environment=os.environ.get("INPUT_ENVIRONMENT", ""),
+        droplet_tag=None,
+        state_path=state_file,
         vault_address=vault_address,
-        state_file=state_file,
-        ca_certificate_path=ca_certificate_path,
+    )
+    github_context = GitHubActionContext(
+        runner_temp=Path(os.environ.get("RUNNER_TEMP", "/tmp")),
+        github_env=Path(os.environ.get("GITHUB_ENV", "/tmp/github-env-undefined")),
         github_output=github_output,
         mask=print,
+    )
+
+    publish_bootstrap_outputs(
+        vault_config=vault_config,
+        github_context=github_context,
     )
 
 
