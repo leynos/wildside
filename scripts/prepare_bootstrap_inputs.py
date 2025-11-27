@@ -116,6 +116,50 @@ def _append_env(env_file: Path, lines: list[str]) -> None:
             handle.write(f"{line}\n")
 
 
+def _handle_state_file(
+    state_path: Path | None,
+    environment: str,
+    runner_temp: Path,
+    bootstrap_state: str | None,
+) -> Path:
+    """Resolve and materialise the bootstrap state file when provided."""
+
+    state_file = state_path or runner_temp / "vault-bootstrap" / environment / "state.json"
+    if not state_file.exists() and bootstrap_state:
+        _write_payload_file(bootstrap_state, state_file)
+    return state_file
+
+
+def _handle_ca_certificate(
+    ca_certificate: str | None,
+    state_file: Path,
+) -> Path | None:
+    """Materialise the CA certificate payload when present."""
+
+    if not ca_certificate:
+        return None
+    ca_cert_path = state_file.parent / "vault-ca.pem"
+    _write_payload_file(ca_certificate, ca_cert_path)
+    return ca_cert_path
+
+
+def _handle_ssh_identity(
+    ssh_key: str | None,
+    state_file: Path,
+    mask: Mask,
+) -> Path | None:
+    """Materialise the SSH identity file and mask its contents."""
+
+    if not ssh_key:
+        return None
+    ssh_identity = state_file.parent / "vault-ssh-key"
+    ssh_identity.parent.mkdir(parents=True, exist_ok=True)
+    ssh_identity.write_text(f"{ssh_key}\n", encoding="utf-8")
+    ssh_identity.chmod(0o600)
+    mask(f"::add-mask::{ssh_key}")
+    return ssh_identity
+
+
 def prepare_bootstrap_inputs(
     *,
     vault_config: VaultEnvironmentConfig,
@@ -125,23 +169,18 @@ def prepare_bootstrap_inputs(
     """Materialise input payloads and export paths to GITHUB_ENV."""
 
     resolved_droplet_tag = vault_config.droplet_tag or f"vault-{vault_config.environment}"
-    state_file = vault_config.state_path or github_context.runner_temp / "vault-bootstrap" / vault_config.environment / "state.json"
-
-    if not state_file.exists() and payloads.bootstrap_state:
-        _write_payload_file(payloads.bootstrap_state, state_file)
-
-    ca_cert_path = None
-    if payloads.ca_certificate:
-        ca_cert_path = state_file.parent / "vault-ca.pem"
-        _write_payload_file(payloads.ca_certificate, ca_cert_path)
-
-    ssh_identity = None
-    if payloads.ssh_key:
-        ssh_identity = state_file.parent / "vault-ssh-key"
-        ssh_identity.parent.mkdir(parents=True, exist_ok=True)
-        ssh_identity.write_text(f"{payloads.ssh_key}\n", encoding="utf-8")
-        ssh_identity.chmod(0o600)
-        github_context.mask(f"::add-mask::{payloads.ssh_key}")
+    state_file = _handle_state_file(
+        vault_config.state_path,
+        vault_config.environment,
+        github_context.runner_temp,
+        payloads.bootstrap_state,
+    )
+    ca_cert_path = _handle_ca_certificate(payloads.ca_certificate, state_file)
+    ssh_identity = _handle_ssh_identity(
+        payloads.ssh_key,
+        state_file,
+        github_context.mask,
+    )
 
     env_lines = [
         f"DROPLET_TAG={resolved_droplet_tag}",
