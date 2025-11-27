@@ -131,6 +131,7 @@ flowchart TD
 
   G4 --> Z[Downstream jobs consume masked outputs]
 ```
+
 - **Detailed drift checks.** Behavioural tests execute
   `tofu plan -detailed-exitcode` to verify that creating the appliance produces
   exit code 2, proving the safety rails that guard destructive operations. The
