@@ -23,6 +23,7 @@ def test_inputs_cover_credentials_and_env() -> None:
 
     digitalocean = inputs["digitalocean_token"]
     assert digitalocean["required"] is True
+    assert digitalocean.get("secret") is None
 
 
 def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:
@@ -37,6 +38,8 @@ def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:
         assert flag in run_script
     assert "uv run scripts/bootstrap_vault_appliance.py" in run_script
     assert "--rotate-secret-id" in run_script
+    assert '"${{ inputs.rotate_secret_id }}"' in run_script
+    assert 'args+=(--rotate-secret-id)' in run_script
 
 
 def test_publish_step_emits_expected_outputs() -> None:
@@ -56,4 +59,15 @@ def test_publish_step_emits_expected_outputs() -> None:
         step for step in action["runs"]["steps"]
         if step["id"] == "publish"
     )
-    assert "uv run scripts/publish_bootstrap_outputs.py" in publish_step["run"]
+    publish_run = publish_step["run"]
+    assert "uv run scripts/publish_bootstrap_outputs.py" in publish_run
+
+    expected_wiring = {
+        "vault-address": "${{ steps.publish.outputs.vault-address }}",
+        "ca-certificate-path": "${{ steps.publish.outputs.ca-certificate-path }}",
+        "state-file": "${{ steps.publish.outputs.state-file }}",
+        "approle-role-id": "${{ steps.publish.outputs.approle-role-id }}",
+        "approle-secret-id": "${{ steps.publish.outputs.approle-secret-id }}",
+    }
+    for key, value in expected_wiring.items():
+        assert outputs[key]["value"] == value

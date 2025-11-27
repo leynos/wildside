@@ -53,12 +53,13 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   appliance to live inside a custom VPC and project.
 - **Reusable GitHub Action.** A composite action lives at
   `.github/actions/bootstrap-vault-appliance` to drive the Python helper. It
-  installs `uv`, `doctl`, and the Vault CLI, derives the droplet tag as
-  `vault-<environment>` when one is not supplied, and writes bootstrap state to
-  `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`. Inputs accept raw or
-  base64 JSON/PEM payloads for the state file and CA bundle, while secrets
-  (unseal keys, root token, AppRole credentials) are masked before outputs are
-  published so idempotent re-runs cannot leak credentials.
+  installs `uv`, `doctl`, and the Vault command-line interface (CLI), derives
+  the droplet tag as `vault-<environment>` when one is not supplied, and writes
+  bootstrap state to `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`.
+  Inputs accept raw or base64 JSON/PEM (Privacy-Enhanced Mail) payloads for the
+  state file and certificate authority (CA) bundle, while secrets (unseal keys,
+  root token, Application Role (AppRole) credentials) are masked before outputs
+  are published so idempotent re-runs cannot leak credentials.
 
 ### GitHub Action control flow
 

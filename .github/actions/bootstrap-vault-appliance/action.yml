@@ -147,7 +147,23 @@ runs:
         if command -v vault >/dev/null 2>&1; then
           exit 0
         fi
-        ARCHIVE="vault_${VAULT_VERSION}_linux_amd64.zip"
+
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH_RAW="$(uname -m)"
+        case "${ARCH_RAW}" in
+          x86_64|amd64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+          *)
+            echo "Unsupported architecture: ${ARCH_RAW}" >&2
+            exit 1
+            ;;
+        esac
+        if [ "${OS}" != "linux" ]; then
+          echo "Unsupported OS: ${OS}. Vault install step expects Linux." >&2
+          exit 1
+        fi
+
+        ARCHIVE="vault_${VAULT_VERSION}_${OS}_${ARCH}.zip"
         BASE_URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}"
         curl -fsSLo /tmp/vault.zip "${BASE_URL}/${ARCHIVE}"
         curl -fsSLo /tmp/vault_SHA256SUMS "${BASE_URL}/vault_${VAULT_VERSION}_SHA256SUMS"

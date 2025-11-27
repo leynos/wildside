@@ -1,7 +1,8 @@
 # bootstrap-vault-appliance action
 
-Initialises or verifies the DigitalOcean Vault appliance using the
-`scripts/bootstrap_vault_appliance.py` helper. The action installs the Vault CLI
+Initializes or verifies the DigitalOcean Vault appliance using the
+`scripts/bootstrap_vault_appliance.py` helper. The action installs the Vault
+command-line interface (CLI)
 and `doctl`, seeds the helper's state file from supplied secrets when provided,
 and outputs the AppRole credentials for downstream workflows. Re-running the
 action is idempotent: the helper inspects the existing appliance and only
@@ -15,7 +16,8 @@ rotates the AppRole secret identifier when requested.
 - `digitalocean_token` (required, secret): Token with access to the Vault
   droplet tag.
 - `droplet_tag` (optional): Overrides the default `vault-<environment>` tag.
-- `ca_certificate` (optional): PEM or base64-encoded CA bundle passed to
+- `ca_certificate` (optional): PEM (Privacy-Enhanced Mail) or base64-encoded CA
+  (certificate authority) bundle passed to
   `VAULT_CACERT`.
 - `bootstrap_state` (optional): JSON or base64 JSON payload for the helper's
   state file (unseal keys, root token, AppRole credentials).
@@ -23,10 +25,10 @@ rotates the AppRole secret identifier when requested.
   `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`.
 - `ssh_private_key` / `ssh_user` (optional): Credentials for the droplet health
   probe executed before bootstrap.
-- AppRole and KV settings: `kv_mount_path`, `approle_name`,
+- AppRole (Application Role) and KV (key-value) settings: `kv_mount_path`, `approle_name`,
   `approle_policy_name`, `approle_policy`, `token_ttl`, `token_max_ttl`,
   `secret_id_ttl`, `rotate_secret_id`.
-- `key_shares` / `key_threshold` (optional): Vault initialisation parameters.
+- `key_shares` / `key_threshold` (optional): Vault initialization parameters.
 - `vault_cli_version` (optional): Vault CLI version to install. Defaults to
   `1.17.6`.
 
