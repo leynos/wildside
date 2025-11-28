@@ -237,15 +237,10 @@ def main(
     """CLI entrypoint used by the composite action."""
 
     resolved_environment = _resolve_input(
-        environment,
-        "INPUT_ENVIRONMENT",
-        required=True,
+        environment, "INPUT_ENVIRONMENT", required=True
     )
     resolved_runner_temp = _resolve_input(
-        runner_temp,
-        "RUNNER_TEMP",
-        default=Path("/tmp"),
-        as_path=True,
+        runner_temp, "RUNNER_TEMP", default=Path("/tmp"), as_path=True
     )
     resolved_github_env = _resolve_input(
         github_env,
@@ -255,22 +250,15 @@ def main(
     )
     resolved_droplet_tag = _resolve_input(droplet_tag, "INPUT_DROPLET_TAG")
     resolved_state_path = _resolve_input(
-        state_path,
-        "INPUT_STATE_PATH",
-        as_path=True,
+        state_path, "INPUT_STATE_PATH", as_path=True
     )
     resolved_bootstrap_state = _resolve_input(
-        bootstrap_state,
-        "INPUT_BOOTSTRAP_STATE",
+        bootstrap_state, "INPUT_BOOTSTRAP_STATE"
     )
     resolved_ca_certificate = _resolve_input(
-        ca_certificate,
-        "INPUT_CA_CERTIFICATE",
+        ca_certificate, "INPUT_CA_CERTIFICATE"
     )
-    resolved_ssh_key = _resolve_input(
-        ssh_key,
-        "INPUT_SSH_KEY",
-    )
+    resolved_ssh_key = _resolve_input(ssh_key, "INPUT_SSH_KEY")
 
     vault_config = VaultEnvironmentConfig(
         environment=str(resolved_environment),
