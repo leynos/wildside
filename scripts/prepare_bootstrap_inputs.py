@@ -72,6 +72,20 @@ class InputResolution:
 
 
 @dataclass(frozen=True, slots=True)
+class RawInputs:
+    """Raw CLI and environment inputs before resolution."""
+
+    environment: str | None
+    runner_temp: Path | None
+    droplet_tag: str | None
+    state_path: Path | None
+    bootstrap_state: str | None
+    ca_certificate: str | None
+    ssh_key: str | None
+    github_env: Path | None
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedInputs:
     """All CLI and environment inputs resolved to their final values."""
 
@@ -246,23 +260,16 @@ def _resolve_input(
 
 
 def _resolve_all_inputs(
-    environment: str | None,
-    runner_temp: Path | None,
-    droplet_tag: str | None,
-    state_path: Path | None,
-    bootstrap_state: str | None,
-    ca_certificate: str | None,
-    ssh_key: str | None,
-    github_env: Path | None,
+    raw: RawInputs,
 ) -> ResolvedInputs:
     """Resolve CLI and env inputs to their canonical types."""
 
     resolved_environment = _resolve_input(
-        environment,
+        raw.environment,
         InputResolution(env_key="INPUT_ENVIRONMENT", required=True),
     )
     resolved_runner_temp = _resolve_input(
-        runner_temp,
+        raw.runner_temp,
         InputResolution(
             env_key="RUNNER_TEMP",
             default=Path(tempfile.gettempdir()),
@@ -270,7 +277,7 @@ def _resolve_all_inputs(
         ),
     )
     resolved_github_env = _resolve_input(
-        github_env,
+        raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path(tempfile.gettempdir()) / "github-env-undefined",
@@ -278,22 +285,22 @@ def _resolve_all_inputs(
         ),
     )
     resolved_droplet_tag = _resolve_input(
-        droplet_tag, InputResolution(env_key="INPUT_DROPLET_TAG")
+        raw.droplet_tag, InputResolution(env_key="INPUT_DROPLET_TAG")
     )
     resolved_state_path = _resolve_input(
-        state_path,
+        raw.state_path,
         InputResolution(env_key="INPUT_STATE_PATH", as_path=True),
     )
     resolved_bootstrap_state = _resolve_input(
-        bootstrap_state,
+        raw.bootstrap_state,
         InputResolution(env_key="INPUT_BOOTSTRAP_STATE"),
     )
     resolved_ca_certificate = _resolve_input(
-        ca_certificate,
+        raw.ca_certificate,
         InputResolution(env_key="INPUT_CA_CERTIFICATE"),
     )
     resolved_ssh_key = _resolve_input(
-        ssh_key, InputResolution(env_key="INPUT_SSH_KEY")
+        raw.ssh_key, InputResolution(env_key="INPUT_SSH_KEY")
     )
 
     return ResolvedInputs(
@@ -350,7 +357,7 @@ def main(
 ) -> None:
     """CLI entrypoint used by the composite action."""
 
-    inputs = _resolve_all_inputs(
+    raw = RawInputs(
         environment,
         runner_temp,
         droplet_tag,
@@ -360,6 +367,7 @@ def main(
         ssh_key,
         github_env,
     )
+    inputs = _resolve_all_inputs(raw)
     vault_config, payloads, github_context = _build_parameter_objects(inputs)
 
     prepare_bootstrap_inputs(
