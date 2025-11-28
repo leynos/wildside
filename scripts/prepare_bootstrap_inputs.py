@@ -71,6 +71,20 @@ class InputResolution:
     as_path: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedInputs:
+    """All CLI and environment inputs resolved to their final values."""
+
+    environment: str
+    runner_temp: Path
+    github_env: Path
+    droplet_tag: str | None
+    state_path: Path | None
+    bootstrap_state: str | None
+    ca_certificate: str | None
+    ssh_key: str | None
+
+
 @dataclass(frozen=True)
 class PreparedPaths:
     """Resolved paths produced by the preparation step."""
@@ -231,18 +245,17 @@ def _resolve_input(
     return resolution.default
 
 
-@app.command()
-def main(
-    environment: str | None = Parameter(),
-    runner_temp: Path | None = Parameter(),
-    droplet_tag: str | None = Parameter(),
-    state_path: Path | None = Parameter(),
-    bootstrap_state: str | None = Parameter(),
-    ca_certificate: str | None = Parameter(),
-    ssh_key: str | None = Parameter(),
-    github_env: Path | None = Parameter(),
-) -> None:
-    """CLI entrypoint used by the composite action."""
+def _resolve_all_inputs(
+    environment: str | None,
+    runner_temp: Path | None,
+    droplet_tag: str | None,
+    state_path: Path | None,
+    bootstrap_state: str | None,
+    ca_certificate: str | None,
+    ssh_key: str | None,
+    github_env: Path | None,
+) -> ResolvedInputs:
+    """Resolve CLI and env inputs to their canonical types."""
 
     resolved_environment = _resolve_input(
         environment,
@@ -283,23 +296,71 @@ def main(
         ssh_key, InputResolution(env_key="INPUT_SSH_KEY")
     )
 
-    vault_config = VaultEnvironmentConfig(
+    return ResolvedInputs(
         environment=str(resolved_environment),
+        runner_temp=resolved_runner_temp
+        if isinstance(resolved_runner_temp, Path)
+        else Path(tempfile.gettempdir()),
+        github_env=resolved_github_env
+        if isinstance(resolved_github_env, Path)
+        else Path(tempfile.gettempdir()) / "github-env-undefined",
         droplet_tag=resolved_droplet_tag if isinstance(resolved_droplet_tag, str) else None,
         state_path=resolved_state_path if isinstance(resolved_state_path, Path) else None,
-        vault_address=None,
-    )
-    payloads = BootstrapPayloads(
         bootstrap_state=resolved_bootstrap_state if isinstance(resolved_bootstrap_state, str) else None,
         ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, str) else None,
         ssh_key=resolved_ssh_key if isinstance(resolved_ssh_key, str) else None,
     )
+
+
+def _build_parameter_objects(
+    inputs: ResolvedInputs,
+) -> tuple[VaultEnvironmentConfig, BootstrapPayloads, GitHubActionContext]:
+    """Construct parameter objects for the bootstrap helper."""
+
+    vault_config = VaultEnvironmentConfig(
+        environment=inputs.environment,
+        droplet_tag=inputs.droplet_tag,
+        state_path=inputs.state_path,
+        vault_address=None,
+    )
+    payloads = BootstrapPayloads(
+        bootstrap_state=inputs.bootstrap_state,
+        ca_certificate=inputs.ca_certificate,
+        ssh_key=inputs.ssh_key,
+    )
     github_context = GitHubActionContext(
-        runner_temp=resolved_runner_temp if isinstance(resolved_runner_temp, Path) else Path("/tmp"),
-        github_env=resolved_github_env if isinstance(resolved_github_env, Path) else Path("/tmp/github-env-undefined"),
+        runner_temp=inputs.runner_temp,
+        github_env=inputs.github_env,
         github_output=None,
         mask=print,
     )
+    return vault_config, payloads, github_context
+
+
+@app.command()
+def main(
+    environment: str | None = Parameter(),
+    runner_temp: Path | None = Parameter(),
+    droplet_tag: str | None = Parameter(),
+    state_path: Path | None = Parameter(),
+    bootstrap_state: str | None = Parameter(),
+    ca_certificate: str | None = Parameter(),
+    ssh_key: str | None = Parameter(),
+    github_env: Path | None = Parameter(),
+) -> None:
+    """CLI entrypoint used by the composite action."""
+
+    inputs = _resolve_all_inputs(
+        environment,
+        runner_temp,
+        droplet_tag,
+        state_path,
+        bootstrap_state,
+        ca_certificate,
+        ssh_key,
+        github_env,
+    )
+    vault_config, payloads, github_context = _build_parameter_objects(inputs)
 
     prepare_bootstrap_inputs(
         vault_config=vault_config,
