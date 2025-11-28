@@ -20,6 +20,7 @@ import base64
 import json
 import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -31,7 +32,7 @@ Mask = Callable[[str], None]
 app = App(help="Materialise Vault bootstrap inputs and export env values.")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GitHubActionContext:
     """Contextual paths and helpers provided by the GitHub Action runner."""
 
@@ -41,7 +42,7 @@ class GitHubActionContext:
     mask: Mask = print
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BootstrapPayloads:
     """Optional payloads supplied to seed bootstrap artefacts."""
 
@@ -50,7 +51,7 @@ class BootstrapPayloads:
     ssh_key: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class VaultEnvironmentConfig:
     """Configuration describing the Vault environment under bootstrap."""
 
@@ -58,6 +59,16 @@ class VaultEnvironmentConfig:
     droplet_tag: str | None = None
     state_path: Path | None = None
     vault_address: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InputResolution:
+    """Configuration for resolving an input from multiple sources."""
+
+    env_key: str
+    default: str | Path | None = None
+    required: bool = False
+    as_path: bool = False
 
 
 @dataclass(frozen=True)
@@ -203,24 +214,21 @@ def prepare_bootstrap_inputs(
 
 def _resolve_input(
     param_value: str | Path | None,
-    env_key: str,
-    default: str | Path | None = None,
-    required: bool = False,
-    as_path: bool = False,
+    resolution: InputResolution,
 ) -> str | Path | None:
     """Resolve input from parameter, environment variable, or default."""
 
     if param_value is not None:
         return param_value
 
-    env_value = os.environ.get(env_key)
+    env_value = os.environ.get(resolution.env_key)
     if env_value is not None:
-        return Path(env_value) if as_path else env_value
+        return Path(env_value) if resolution.as_path else env_value
 
-    if required:
-        raise SystemExit(f"{env_key} is required")
+    if resolution.required:
+        raise SystemExit(f"{resolution.env_key} is required")
 
-    return default
+    return resolution.default
 
 
 @app.command()
@@ -237,28 +245,43 @@ def main(
     """CLI entrypoint used by the composite action."""
 
     resolved_environment = _resolve_input(
-        environment, "INPUT_ENVIRONMENT", required=True
+        environment,
+        InputResolution(env_key="INPUT_ENVIRONMENT", required=True),
     )
     resolved_runner_temp = _resolve_input(
-        runner_temp, "RUNNER_TEMP", default=Path("/tmp"), as_path=True
+        runner_temp,
+        InputResolution(
+            env_key="RUNNER_TEMP",
+            default=Path(tempfile.gettempdir()),
+            as_path=True,
+        ),
     )
     resolved_github_env = _resolve_input(
         github_env,
-        "GITHUB_ENV",
-        default=Path("/tmp/github-env-undefined"),
-        as_path=True,
+        InputResolution(
+            env_key="GITHUB_ENV",
+            default=Path(tempfile.gettempdir()) / "github-env-undefined",
+            as_path=True,
+        ),
     )
-    resolved_droplet_tag = _resolve_input(droplet_tag, "INPUT_DROPLET_TAG")
+    resolved_droplet_tag = _resolve_input(
+        droplet_tag, InputResolution(env_key="INPUT_DROPLET_TAG")
+    )
     resolved_state_path = _resolve_input(
-        state_path, "INPUT_STATE_PATH", as_path=True
+        state_path,
+        InputResolution(env_key="INPUT_STATE_PATH", as_path=True),
     )
     resolved_bootstrap_state = _resolve_input(
-        bootstrap_state, "INPUT_BOOTSTRAP_STATE"
+        bootstrap_state,
+        InputResolution(env_key="INPUT_BOOTSTRAP_STATE"),
     )
     resolved_ca_certificate = _resolve_input(
-        ca_certificate, "INPUT_CA_CERTIFICATE"
+        ca_certificate,
+        InputResolution(env_key="INPUT_CA_CERTIFICATE"),
     )
-    resolved_ssh_key = _resolve_input(ssh_key, "INPUT_SSH_KEY")
+    resolved_ssh_key = _resolve_input(
+        ssh_key, InputResolution(env_key="INPUT_SSH_KEY")
+    )
 
     vault_config = VaultEnvironmentConfig(
         environment=str(resolved_environment),

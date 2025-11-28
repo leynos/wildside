@@ -23,7 +23,11 @@ def test_inputs_cover_credentials_and_env() -> None:
 
     digitalocean = inputs["digitalocean_token"]
     assert digitalocean["required"] is True
-    assert digitalocean.get("secret") is None
+    assert digitalocean.get("secret") is True
+
+    bootstrap_state = inputs["bootstrap_state"]
+    assert bootstrap_state["required"] is False
+    assert bootstrap_state.get("secret") is True
 
 
 def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:

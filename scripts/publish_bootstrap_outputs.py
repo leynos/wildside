@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -21,7 +22,7 @@ Mask = Callable[[str], None]
 app = App(help="Emit bootstrap outputs and mask secrets for GitHub Actions.")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GitHubActionContext:
     """Contextual paths and helpers provided by the GitHub Action runner."""
 
@@ -31,7 +32,7 @@ class GitHubActionContext:
     mask: Mask = print
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BootstrapPayloads:
     """Optional payloads supplied to seed bootstrap artefacts."""
 
@@ -40,7 +41,7 @@ class BootstrapPayloads:
     ssh_key: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class VaultEnvironmentConfig:
     """Configuration describing the Vault environment under bootstrap."""
 
@@ -50,7 +51,7 @@ class VaultEnvironmentConfig:
     vault_address: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BootstrapOutputs:
     """Outputs exposed to downstream workflow steps."""
 
@@ -59,6 +60,16 @@ class BootstrapOutputs:
     approle_role_id: str
     approle_secret_id: str
     ca_certificate_path: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class StateFields:
+    """Extracted fields from the bootstrap state file."""
+
+    approle_role_id: str
+    approle_secret_id: str
+    root_token: str
+    unseal_keys: list[str]
 
 
 def _append_output(output_file: Path, lines: list[str]) -> None:
@@ -90,12 +101,10 @@ def _mask_secrets(
             mask(f"::add-mask::{secret}")
 
 
-def publish_bootstrap_outputs(
-    *,
-    vault_config: VaultEnvironmentConfig,
-    github_context: GitHubActionContext,
-) -> BootstrapOutputs:
-    """Read the state file, mask secrets, and export outputs."""
+def _validate_required_inputs(
+    vault_config: VaultEnvironmentConfig, github_context: GitHubActionContext
+) -> None:
+    """Ensure required inputs are provided."""
 
     if not vault_config.vault_address:
         raise SystemExit("VAULT_ADDRESS is required")
@@ -104,35 +113,61 @@ def publish_bootstrap_outputs(
     if not github_context.github_output:
         raise SystemExit("GITHUB_OUTPUT is required")
 
-    state_file = vault_config.state_path
+
+def _extract_state_fields(state: dict) -> StateFields:
+    """Extract commonly used fields from the state mapping."""
+
+    return StateFields(
+        approle_role_id=state.get("approle_role_id") or "",
+        approle_secret_id=state.get("approle_secret_id") or "",
+        root_token=state.get("root_token") or "",
+        unseal_keys=state.get("unseal_keys") or [],
+    )
+
+
+def _resolve_ca_certificate_path(state_file: Path) -> Path | None:
+    """Return the CA certificate path when present alongside the state file."""
+
+    candidate = state_file.parent / "vault-ca.pem"
+    return candidate if candidate.exists() else None
+
+
+def publish_bootstrap_outputs(
+    *,
+    vault_config: VaultEnvironmentConfig,
+    github_context: GitHubActionContext,
+) -> BootstrapOutputs:
+    """Read the state file, mask secrets, and export outputs."""
+
+    _validate_required_inputs(vault_config, github_context)
+
+    state_file = vault_config.state_path  # type: ignore[assignment]
     state = _read_state(state_file)
+    fields = _extract_state_fields(state)
 
-    approle_role_id = state.get("approle_role_id") or ""
-    approle_secret_id = state.get("approle_secret_id") or ""
-    root_token = state.get("root_token") or ""
-    unseal_keys = state.get("unseal_keys") or []
+    _mask_secrets(
+        github_context.mask,
+        fields.approle_secret_id,
+        fields.root_token,
+        fields.unseal_keys,
+    )
 
-    _mask_secrets(github_context.mask, approle_secret_id, root_token, unseal_keys)
-
-    ca_certificate_path = None
-    ca_candidate = state_file.parent / "vault-ca.pem"
-    if ca_candidate.exists():
-        ca_certificate_path = ca_candidate
+    ca_certificate_path = _resolve_ca_certificate_path(state_file)
 
     output_lines = [
-        f"vault-address={vault_config.vault_address}",
+        f"vault-address={vault_config.vault_address}",  # type: ignore[arg-type]
         f"state-file={state_file}",
-        f"approle-role-id={approle_role_id}",
-        f"approle-secret-id={approle_secret_id}",
+        f"approle-role-id={fields.approle_role_id}",
+        f"approle-secret-id={fields.approle_secret_id}",
         f"ca-certificate-path={ca_certificate_path or ''}",
     ]
-    _append_output(github_context.github_output, output_lines)
+    _append_output(github_context.github_output, output_lines)  # type: ignore[arg-type]
 
     return BootstrapOutputs(
-        vault_address=vault_config.vault_address,
+        vault_address=vault_config.vault_address,  # type: ignore[arg-type]
         state_file=state_file,
-        approle_role_id=approle_role_id,
-        approle_secret_id=approle_secret_id,
+        approle_role_id=fields.approle_role_id,
+        approle_secret_id=fields.approle_secret_id,
         ca_certificate_path=ca_certificate_path,
     )
 
@@ -161,8 +196,13 @@ def main(
         vault_address=vault_address,
     )
     github_context = GitHubActionContext(
-        runner_temp=Path(os.environ.get("RUNNER_TEMP", "/tmp")),
-        github_env=Path(os.environ.get("GITHUB_ENV", "/tmp/github-env-undefined")),
+        runner_temp=Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())),
+        github_env=Path(
+            os.environ.get(
+                "GITHUB_ENV",
+                str(Path(tempfile.gettempdir()) / "github-env-undefined"),
+            )
+        ),
         github_output=github_output,
         mask=print,
     )

@@ -23,6 +23,7 @@ inputs:
   digitalocean_token:
     description: DigitalOcean API token with read access to the droplet tag.
     required: true
+    secret: true
   ca_certificate:
     description: >-
       PEM-encoded CA certificate used to validate the Vault endpoint. Accepts raw
@@ -35,6 +36,7 @@ inputs:
       (unseal_keys, root_token, approle_role_id, approle_secret_id). When not
       provided, the helper will initialise Vault and capture new state.
     required: false
+    secret: true
   state_path:
     description: >-
       Optional override for where the bootstrap state file is written. Defaults to
@@ -116,6 +118,10 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Install uv
+      id: install-uv
+      uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
+
     - name: Compute paths and seed bootstrap state
       id: seed
       shell: bash
@@ -126,10 +132,6 @@ runs:
         INPUT_STATE_PATH: ${{ inputs.state_path }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}
       run: uv run scripts/prepare_bootstrap_inputs.py
-
-    - name: Install uv
-      id: install-uv
-      uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
 
     - name: Install doctl
       id: install-doctl
