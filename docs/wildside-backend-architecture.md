@@ -108,11 +108,17 @@ The **Actix Web** framework powers Wildside’s HTTP API layer, exposing RESTful
 endpoints under a versioned path (e.g. `/api/v1/...`) and handling WebSocket
 upgrades for real-time
 features([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L28-L36))([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L38-L46)).
- This layer is the primary **entry point** into the system, responsible for
+This layer is the primary **entry point** into the system, responsible for
 receiving client requests, authenticating and validating them, then invoking
 domain services or enqueuing jobs as needed.
 
 **Responsibilities:** The Actix web server module handles:
+
+- **Inbound adapter location:** HTTP adapters live in
+  `backend/src/inbound/http`, keeping handlers thin (request parsing →
+  domain/service call → response mapping). Session interactions are wrapped by
+  a `SessionContext` helper so persistence or framework details stay out of the
+  handler bodies.
 
 - **Routing and HTTP endpoints:** Defining routes for all API functions (e.g.
   user login, fetching user profiles, initiating route generation,
