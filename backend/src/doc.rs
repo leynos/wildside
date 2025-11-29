@@ -41,10 +41,10 @@ impl Modify for SecurityAddon {
     ),
     security(("SessionCookie" = [])),
     paths(
-        crate::api::users::list_users,
-        crate::api::users::login,
-        crate::api::health::ready,
-        crate::api::health::live,
+        crate::inbound::http::users::list_users,
+        crate::inbound::http::users::login,
+        crate::inbound::http::health::ready,
+        crate::inbound::http::health::live,
     ),
     components(schemas(User, Error, ErrorCode)),
     tags(

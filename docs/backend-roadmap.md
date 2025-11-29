@@ -34,7 +34,7 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 ### Step: Adapter boundaries
 
-- [ ] Move the current `backend/src/api` module into `backend/src/inbound/http`,
+- [x] Move the current `backend/src/api` module into `backend/src/inbound/http`,
   keeping handlers thin (request parsing → domain service call → response
   mapping) and removing any persistence or session logic from the handler
   bodies.
