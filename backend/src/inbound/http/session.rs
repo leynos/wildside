@@ -66,9 +66,7 @@ mod tests {
     use actix_web::cookie::Key;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
-    use rstest::rstest;
 
-    #[rstest]
     #[actix_web::test]
     async fn round_trips_user_id() {
         let app = test::init_service(
@@ -120,7 +118,6 @@ mod tests {
         assert_eq!(body, "3fa85f64-5717-4562-b3fc-2c963f66afa6");
     }
 
-    #[rstest]
     #[actix_web::test]
     async fn missing_user_is_unauthorised() {
         let app = test::init_service(

@@ -159,15 +159,15 @@ mod tests {
     }
 
     #[rstest]
+    #[case("   ", "password", "username must not be empty")]
+    #[case("admin", "", "password must not be empty")]
     #[actix_web::test]
-    async fn login_rejects_invalid_payload() {
-        assert_login_validation_error("   ", "password", "username must not be empty").await;
-    }
-
-    #[rstest]
-    #[actix_web::test]
-    async fn login_rejects_empty_password() {
-        assert_login_validation_error("admin", "", "password must not be empty").await;
+    async fn login_rejects_invalid_credentials(
+        #[case] username: &str,
+        #[case] password: &str,
+        #[case] expected_message: &str,
+    ) {
+        assert_login_validation_error(username, password, expected_message).await;
     }
 
     #[actix_web::test]
