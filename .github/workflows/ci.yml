@@ -112,7 +112,10 @@ jobs:
           version: v3.15.0
 
       - name: Install yamllint
-        run: pip install yamllint==1.35.1
+        run: uv tool install yamllint==1.35.1
+
+      - name: Install action-validator
+        run: bun install -g action-validator
 
       - name: Helm lint
         run: helm lint --strict ./deploy/charts/wildside

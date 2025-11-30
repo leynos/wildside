@@ -111,7 +111,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   AppRole used by the DOKS workflow). Include pytest coverage with
   `cmd-mox`-backed mocks for `vault`, `doctl`, and `ssh` interactions.
 
-- [ ] **Publish a `bootstrap-vault-appliance` GitHub Action**: Wrap the Python
+- [x] **Publish a `bootstrap-vault-appliance` GitHub Action**: Wrap the Python
   helper in a composite action that the manual DOKS workflow and the
   `wildside-infra-k8s` pipeline can reuse. The action should accept environment
   identifiers, Vault seal key secrets, and DigitalOcean credentials, and must
