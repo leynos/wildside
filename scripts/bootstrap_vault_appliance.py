@@ -8,9 +8,13 @@
 
 from __future__ import annotations
 
-import argparse
+import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
+
+from cyclopts import App, Parameter
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -22,137 +26,251 @@ from scripts._vault_bootstrap import (
     bootstrap,
 )
 
-
-def _add_infrastructure_args(parser: argparse.ArgumentParser) -> None:
-    """Add infrastructure and connection arguments to the parser."""
-
-    parser.add_argument("--vault-addr", required=True, help="Vault HTTPS endpoint")
-    parser.add_argument("--droplet-tag", required=True, help="DigitalOcean tag")
-    parser.add_argument(
-        "--state-file",
-        required=True,
-        type=Path,
-        help="Path to the bootstrap state file",
-    )
-    parser.add_argument(
-        "--ssh-user",
-        default="root",
-        help="SSH user for droplet health checks (default: root)",
-    )
-    parser.add_argument(
-        "--ssh-identity",
-        type=Path,
-        help="Optional SSH identity file passed via -i",
-    )
-    parser.add_argument(
-        "--ca-certificate",
-        type=Path,
-        help="Path to the Vault CA certificate for TLS verification",
-    )
+app = App(help="Bootstrap the Vault appliance via environment-derived inputs.")
 
 
-def _add_vault_init_args(parser: argparse.ArgumentParser) -> None:
-    """Add Vault initialisation arguments to the parser."""
+@dataclass(frozen=True, slots=True)
+class InputResolution:
+    """Configuration for resolving an input from multiple sources."""
 
-    parser.add_argument(
-        "--key-shares",
-        type=int,
-        default=5,
-        help="Number of unseal key shares to generate",
-    )
-    parser.add_argument(
-        "--key-threshold",
-        type=int,
-        default=3,
-        help="Number of shares required to unseal Vault",
-    )
+    env_key: str
+    default: str | Path | None = None
+    required: bool = False
+    as_path: bool = False
 
 
-def _add_kv_args(parser: argparse.ArgumentParser) -> None:
-    """Add KV secrets engine arguments to the parser."""
+def _resolve_input(
+    param_value: str | Path | None,
+    resolution: InputResolution,
+    env: Mapping[str, str] | None = None,
+) -> str | Path | None:
+    """Resolve an input from CLI parameter or environment variables."""
 
-    parser.add_argument(
-        "--kv-mount-path",
-        default="secret",
-        help="Mount path for the KV v2 secrets engine",
-    )
+    if param_value is not None:
+        return param_value
 
+    env_value = (env or os.environ).get(resolution.env_key)
+    if env_value is not None:
+        return Path(env_value) if resolution.as_path else env_value
 
-def _add_approle_args(parser: argparse.ArgumentParser) -> None:
-    """Add AppRole configuration arguments to the parser."""
+    if resolution.required:
+        raise SystemExit(f"{resolution.env_key} is required")
 
-    parser.add_argument(
-        "--approle-name",
-        default="doks-deployer",
-        help="Name of the AppRole used by the DOKS workflow",
-    )
-    parser.add_argument(
-        "--approle-policy-name",
-        default="doks-deployer",
-        help="Name of the Vault policy attached to the AppRole",
-    )
-    parser.add_argument(
-        "--approle-policy-path",
-        type=Path,
-        help="Path to a policy file overriding the default capabilities",
-    )
-    parser.add_argument(
-        "--token-ttl",
-        default="1h",
-        help="TTL applied to tokens issued via the AppRole",
-    )
-    parser.add_argument(
-        "--token-max-ttl",
-        default="4h",
-        help="Maximum TTL for AppRole tokens",
-    )
-    parser.add_argument(
-        "--secret-id-ttl",
-        default="4h",
-        help="TTL for generated secret IDs",
-    )
-    parser.add_argument(
-        "--rotate-secret-id",
-        action="store_true",
-        help="Rotate the AppRole secret ID even if one is already recorded",
-    )
+    return resolution.default
 
 
-def parse_args(argv: list[str] | None = None) -> VaultBootstrapConfig:
-    """Parse command-line arguments into a configuration object."""
+def _ensure_policy_path(
+    approle_policy_path: Path | None,
+    approle_policy_content: str | None,
+    state_file: Path,
+) -> Path | None:
+    """Persist inline policy content alongside the state file when provided."""
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    _add_infrastructure_args(parser)
-    _add_vault_init_args(parser)
-    _add_kv_args(parser)
-    _add_approle_args(parser)
-    args = parser.parse_args(argv)
-    if args.key_threshold > args.key_shares:
-        parser.error("--key-threshold must be ≤ --key-shares")
+    if approle_policy_path is not None:
+        return approle_policy_path
+    if not approle_policy_content:
+        return None
+    destination = state_file.parent / "approle-policy.hcl"
+    destination.write_text(approle_policy_content, encoding="utf-8")
+    destination.chmod(0o600)
+    return destination
+
+
+def _to_bool(value: str | bool | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_config(
+    *,
+    vault_addr: str | None,
+    droplet_tag: str | None,
+    state_file: Path | None,
+    ssh_user: str | None,
+    ssh_identity: Path | None,
+    ca_certificate: Path | None,
+    kv_mount_path: str | None,
+    approle_name: str | None,
+    approle_policy_name: str | None,
+    approle_policy_path: Path | None,
+    approle_policy_content: str | None,
+    key_shares: int | None,
+    key_threshold: int | None,
+    token_ttl: str | None,
+    token_max_ttl: str | None,
+    secret_id_ttl: str | None,
+    rotate_secret_id: bool | str | None,
+    env: Mapping[str, str] | None = None,
+) -> VaultBootstrapConfig:
+    """Build a bootstrap configuration from CLI parameters and environment."""
+
+    env = env or os.environ
+    resolved_state_file = _resolve_input(
+        state_file,
+        InputResolution(env_key="STATE_FILE", required=True, as_path=True),
+        env=env,
+    )
+    resolved_vault_addr = _resolve_input(
+        vault_addr,
+        InputResolution(env_key="VAULT_ADDRESS", required=True),
+        env=env,
+    )
+    resolved_droplet_tag = _resolve_input(
+        droplet_tag,
+        InputResolution(env_key="DROPLET_TAG", required=True),
+        env=env,
+    )
+    resolved_ssh_user = _resolve_input(
+        ssh_user,
+        InputResolution(env_key="SSH_USER", default="root"),
+        env=env,
+    )
+    resolved_ssh_identity = _resolve_input(
+        ssh_identity,
+        InputResolution(env_key="SSH_IDENTITY", as_path=True),
+        env=env,
+    )
+    resolved_ca_certificate = _resolve_input(
+        ca_certificate,
+        InputResolution(env_key="CA_CERT_PATH", as_path=True),
+        env=env,
+    )
+    resolved_kv_mount_path = _resolve_input(
+        kv_mount_path,
+        InputResolution(env_key="KV_MOUNT_PATH", default="secret"),
+        env=env,
+    )
+    resolved_approle_name = _resolve_input(
+        approle_name,
+        InputResolution(env_key="APPROLE_NAME", default="doks-deployer"),
+        env=env,
+    )
+    resolved_approle_policy_name = _resolve_input(
+        approle_policy_name,
+        InputResolution(env_key="APPROLE_POLICY_NAME", default="doks-deployer"),
+        env=env,
+    )
+    resolved_policy_content = _resolve_input(
+        approle_policy_content,
+        InputResolution(env_key="APPROLE_POLICY", default=None),
+        env=env,
+    )
+    resolved_approle_policy_path = _resolve_input(
+        approle_policy_path,
+        InputResolution(env_key="APPROLE_POLICY_PATH", as_path=True),
+        env=env,
+    )
+
+    resolved_key_shares = int(
+        _resolve_input(
+            key_shares,
+            InputResolution(env_key="KEY_SHARES", default="5"),
+            env=env,
+        )
+    )
+    resolved_key_threshold = int(
+        _resolve_input(
+            key_threshold,
+            InputResolution(env_key="KEY_THRESHOLD", default="3"),
+            env=env,
+        )
+    )
+    if resolved_key_threshold > resolved_key_shares:
+        raise SystemExit("--key-threshold must be ≤ --key-shares")
+
+    resolved_token_ttl = _resolve_input(
+        token_ttl,
+        InputResolution(env_key="TOKEN_TTL", default="1h"),
+        env=env,
+    )
+    resolved_token_max_ttl = _resolve_input(
+        token_max_ttl,
+        InputResolution(env_key="TOKEN_MAX_TTL", default="4h"),
+        env=env,
+    )
+    resolved_secret_id_ttl = _resolve_input(
+        secret_id_ttl,
+        InputResolution(env_key="SECRET_ID_TTL", default="4h"),
+        env=env,
+    )
+    resolved_rotate_secret = _to_bool(
+        _resolve_input(
+            rotate_secret_id,
+            InputResolution(env_key="ROTATE_SECRET_ID", default="false"),
+            env=env,
+        )
+    )
+
+    policy_path = _ensure_policy_path(
+        resolved_approle_policy_path if isinstance(resolved_approle_policy_path, Path) else None,
+        str(resolved_policy_content) if resolved_policy_content is not None else None,
+        resolved_state_file,
+    )
+
     return VaultBootstrapConfig(
-        vault_addr=args.vault_addr,
-        droplet_tag=args.droplet_tag,
-        state_file=args.state_file,
-        ssh_user=args.ssh_user,
-        ssh_identity=args.ssh_identity,
-        kv_mount_path=args.kv_mount_path,
-        approle_name=args.approle_name,
-        approle_policy_name=args.approle_policy_name,
-        approle_policy_path=args.approle_policy_path,
-        key_shares=args.key_shares,
-        key_threshold=args.key_threshold,
-        token_ttl=args.token_ttl,
-        token_max_ttl=args.token_max_ttl,
-        secret_id_ttl=args.secret_id_ttl,
-        rotate_secret_id=args.rotate_secret_id,
-        ca_certificate=args.ca_certificate,
+        vault_addr=str(resolved_vault_addr),
+        droplet_tag=str(resolved_droplet_tag),
+        state_file=resolved_state_file,
+        ssh_user=str(resolved_ssh_user),
+        ssh_identity=resolved_ssh_identity if isinstance(resolved_ssh_identity, Path) else None,
+        kv_mount_path=str(resolved_kv_mount_path),
+        approle_name=str(resolved_approle_name),
+        approle_policy_name=str(resolved_approle_policy_name),
+        approle_policy_path=policy_path,
+        key_shares=resolved_key_shares,
+        key_threshold=resolved_key_threshold,
+        token_ttl=str(resolved_token_ttl),
+        token_max_ttl=str(resolved_token_max_ttl),
+        secret_id_ttl=str(resolved_secret_id_ttl),
+        rotate_secret_id=resolved_rotate_secret,
+        ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, Path) else None,
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+@app.command()
+def main(
+    vault_addr: str | None = Parameter(),
+    droplet_tag: str | None = Parameter(),
+    state_file: Path | None = Parameter(),
+    ssh_user: str | None = Parameter(),
+    ssh_identity: Path | None = Parameter(),
+    ca_certificate: Path | None = Parameter(),
+    kv_mount_path: str | None = Parameter(),
+    approle_name: str | None = Parameter(),
+    approle_policy_name: str | None = Parameter(),
+    approle_policy_path: Path | None = Parameter(),
+    approle_policy_content: str | None = Parameter(),
+    key_shares: int | None = Parameter(),
+    key_threshold: int | None = Parameter(),
+    token_ttl: str | None = Parameter(),
+    token_max_ttl: str | None = Parameter(),
+    secret_id_ttl: str | None = Parameter(),
+    rotate_secret_id: bool | str | None = Parameter(),
+) -> int:
     """Entry point for command-line execution."""
 
-    config = parse_args(argv)
+    config = build_config(
+        vault_addr=vault_addr,
+        droplet_tag=droplet_tag,
+        state_file=state_file,
+        ssh_user=ssh_user,
+        ssh_identity=ssh_identity,
+        ca_certificate=ca_certificate,
+        kv_mount_path=kv_mount_path,
+        approle_name=approle_name,
+        approle_policy_name=approle_policy_name,
+        approle_policy_path=approle_policy_path,
+        approle_policy_content=approle_policy_content,
+        key_shares=key_shares,
+        key_threshold=key_threshold,
+        token_ttl=token_ttl,
+        token_max_ttl=token_max_ttl,
+        secret_id_ttl=secret_id_ttl,
+        rotate_secret_id=rotate_secret_id,
+    )
     try:
         state = bootstrap(config)
     except VaultBootstrapError as exc:
@@ -165,4 +283,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
-    raise SystemExit(main())
+    raise SystemExit(app())

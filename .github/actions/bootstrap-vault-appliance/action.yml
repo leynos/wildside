@@ -181,43 +181,23 @@ runs:
       env:
         DIGITALOCEAN_ACCESS_TOKEN: ${{ inputs.digitalocean_token }}
         VAULT_ADDRESS: ${{ inputs.vault_address }}
+        DROPLET_TAG: ${{ env.DROPLET_TAG }}
+        STATE_FILE: ${{ env.STATE_FILE }}
+        SSH_IDENTITY: ${{ env.SSH_IDENTITY }}
+        CA_CERT_PATH: ${{ env.CA_CERT_PATH }}
+        SSH_USER: ${{ inputs.ssh_user }}
+        KV_MOUNT_PATH: ${{ inputs.kv_mount_path }}
+        APPROLE_NAME: ${{ inputs.approle_name }}
+        APPROLE_POLICY_NAME: ${{ inputs.approle_policy_name }}
+        APPROLE_POLICY: ${{ inputs.approle_policy }}
+        TOKEN_TTL: ${{ inputs.token_ttl }}
+        TOKEN_MAX_TTL: ${{ inputs.token_max_ttl }}
+        SECRET_ID_TTL: ${{ inputs.secret_id_ttl }}
+        KEY_SHARES: ${{ inputs.key_shares }}
+        KEY_THRESHOLD: ${{ inputs.key_threshold }}
+        ROTATE_SECRET_ID: ${{ inputs.rotate_secret_id }}
         UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
-      run: |
-        set -euo pipefail
-
-        args=(
-          --vault-addr "${VAULT_ADDRESS}"
-          --droplet-tag "${DROPLET_TAG}"
-          --state-file "${STATE_FILE}"
-          --ssh-user "${{ inputs.ssh_user }}"
-          --kv-mount-path "${{ inputs.kv_mount_path }}"
-          --approle-name "${{ inputs.approle_name }}"
-          --approle-policy-name "${{ inputs.approle_policy_name }}"
-          --token-ttl "${{ inputs.token_ttl }}"
-          --token-max-ttl "${{ inputs.token_max_ttl }}"
-          --secret-id-ttl "${{ inputs.secret_id_ttl }}"
-          --key-shares "${{ inputs.key_shares }}"
-          --key-threshold "${{ inputs.key_threshold }}"
-        )
-
-        if [ -n "${SSH_IDENTITY:-}" ]; then
-          args+=(--ssh-identity "${SSH_IDENTITY}")
-        fi
-        if [ -n "${CA_CERT_PATH:-}" ]; then
-          args+=(--ca-certificate "${CA_CERT_PATH}")
-        fi
-
-        if [ -n "${{ inputs.approle_policy }}" ]; then
-          POLICY_PATH="$(dirname "${STATE_FILE}")/approle-policy.hcl"
-          printf "%s\n" "${{ inputs.approle_policy }}" >"${POLICY_PATH}"
-          args+=(--approle-policy-path "${POLICY_PATH}")
-        fi
-
-        if [ "${{ inputs.rotate_secret_id }}" = "true" ]; then
-          args+=(--rotate-secret-id)
-        fi
-
-        uv run scripts/bootstrap_vault_appliance.py "${args[@]}"
+      run: uv run scripts/bootstrap_vault_appliance.py
 
     - name: Publish bootstrap outputs
       id: publish

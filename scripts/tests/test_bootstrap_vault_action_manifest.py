@@ -38,12 +38,8 @@ def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:
     )
     run_script = bootstrap["run"]
 
-    for flag in ("--vault-addr", "--droplet-tag", "--state-file"):
-        assert flag in run_script
     assert "uv run scripts/bootstrap_vault_appliance.py" in run_script
-    assert "--rotate-secret-id" in run_script
-    assert '"${{ inputs.rotate_secret_id }}"' in run_script
-    assert 'args+=(--rotate-secret-id)' in run_script
+    assert "args+=" not in run_script
 
 
 def test_publish_step_emits_expected_outputs() -> None:
