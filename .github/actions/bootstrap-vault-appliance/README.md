@@ -2,10 +2,11 @@
 
 Initializes or verifies the DigitalOcean Vault appliance using the
 `scripts/bootstrap_vault_appliance.py` helper. The action installs `uv`, the
-Vault command-line interface (CLI), and `doctl`, seeds the helper's state file from supplied secrets when provided,
-and outputs the AppRole credentials for downstream workflows. Re-running the
-action is idempotent: the helper inspects the existing appliance and only
-rotates the AppRole secret identifier when requested.
+Vault command-line interface (CLI), and `doctl`, seeds the helper's state file
+from supplied secrets when provided, and outputs the AppRole credentials for
+downstream workflows. Re-running the action is idempotent: the helper inspects
+the existing appliance and only rotates the AppRole secret identifier when
+requested.
 
 ## Inputs
 
