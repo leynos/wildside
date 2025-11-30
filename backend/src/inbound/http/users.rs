@@ -69,7 +69,6 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
             .with_details(json!({ "field": "password", "code": "empty_password" })),
     }
 }
-//
 
 /// List known users.
 ///
@@ -171,7 +170,6 @@ mod tests {
         assert_login_validation_error("admin", "", "password must not be empty").await;
     }
 
-    #[rstest]
     #[actix_web::test]
     async fn list_users_returns_camel_case_json() {
         let app = actix_test::init_service(test_app()).await;
@@ -207,7 +205,6 @@ mod tests {
         assert!(first.get("display_name").is_none());
     }
 
-    #[rstest]
     #[actix_web::test]
     async fn list_users_rejects_without_session() {
         let app = actix_test::init_service(test_app()).await;
