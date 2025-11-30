@@ -130,6 +130,27 @@ mod tests {
     use rstest_bdd_macros::{given, then, when};
     use serde_json::Value;
 
+    async fn assert_login_validation_error(username: &str, password: &str, expected_message: &str) {
+        let app = actix_test::init_service(test_app()).await;
+
+        let request = actix_test::TestRequest::post()
+            .uri("/api/v1/login")
+            .set_json(&LoginRequest {
+                username: username.into(),
+                password: password.into(),
+            })
+            .to_request();
+
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+        let body = actix_test::read_body(response).await;
+        let value: Value = serde_json::from_slice(&body).expect("error payload");
+        assert_eq!(
+            value.get("message").and_then(Value::as_str),
+            Some(expected_message)
+        );
+    }
+
     fn test_app() -> App<
         impl actix_web::dev::ServiceFactory<
             actix_web::dev::ServiceRequest,
@@ -152,47 +173,13 @@ mod tests {
     #[rstest]
     #[actix_web::test]
     async fn login_rejects_invalid_payload() {
-        let app = actix_test::init_service(test_app()).await;
-
-        let request = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "   ".into(),
-                password: "password".into(),
-            })
-            .to_request();
-
-        let response = actix_test::call_service(&app, request).await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
-        let body = actix_test::read_body(response).await;
-        let value: Value = serde_json::from_slice(&body).expect("error payload");
-        assert_eq!(
-            value.get("message").and_then(Value::as_str),
-            Some("username must not be empty")
-        );
+        assert_login_validation_error("   ", "password", "username must not be empty").await;
     }
 
     #[rstest]
     #[actix_web::test]
     async fn login_rejects_empty_password() {
-        let app = actix_test::init_service(test_app()).await;
-
-        let request = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "admin".into(),
-                password: String::new(),
-            })
-            .to_request();
-
-        let response = actix_test::call_service(&app, request).await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
-        let body = actix_test::read_body(response).await;
-        let value: Value = serde_json::from_slice(&body).expect("error payload");
-        assert_eq!(
-            value.get("message").and_then(Value::as_str),
-            Some("password must not be empty")
-        );
+        assert_login_validation_error("admin", "", "password must not be empty").await;
     }
 
     #[rstest]
