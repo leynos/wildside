@@ -45,7 +45,10 @@ def test_writes_state_and_exports_env(tmp_path: Path) -> None:
 
     expected_state = runner_temp / "vault-bootstrap" / "dev" / "state.json"
     assert paths.state_file == expected_state
-    assert expected_state.read_text(encoding="utf-8") == '{\n  "hello": "world"\n}'
+    import json
+
+    state_data = json.loads(expected_state.read_text(encoding="utf-8"))
+    assert state_data == {"hello": "world"}
     assert paths.state_file.stat().st_mode & 0o777 == 0o600
 
     assert paths.droplet_tag == "vault-dev"

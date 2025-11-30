@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -10,7 +11,7 @@ ACTION_PATH = Path(__file__).resolve().parents[2] / \
     ".github/actions/bootstrap-vault-appliance/action.yml"
 
 
-def _load_action() -> dict:
+def _load_action() -> dict[str, Any]:
     return yaml.safe_load(ACTION_PATH.read_text(encoding="utf-8"))
 
 

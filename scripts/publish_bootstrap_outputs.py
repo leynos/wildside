@@ -11,13 +11,13 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from cyclopts import App, Parameter
 
-Mask = Callable[[str], None]
+type Mask = Callable[[str], None]
 
 app = App(help="Emit bootstrap outputs and mask secrets for GitHub Actions.")
 
@@ -214,9 +214,4 @@ def main(
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
-    try:
-        app()
-    except Exception as exc:  # noqa: BLE001 - propagate friendly message
-        msg = f"bootstrap output publication failed: {exc}"
-        print(msg, file=sys.stderr)
-        raise
+    app()

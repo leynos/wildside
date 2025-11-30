@@ -23,11 +23,11 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from cyclopts import App, Parameter
 
-Mask = Callable[[str], None]
+type Mask = Callable[[str], None]
 
 app = App(help="Materialise Vault bootstrap inputs and export env values.")
 
@@ -355,7 +355,27 @@ def main(
     ssh_key: str | None = Parameter(),
     github_env: Path | None = Parameter(),
 ) -> None:
-    """CLI entrypoint used by the composite action."""
+    """CLI entrypoint used by the composite action.
+
+    Parameters
+    ----------
+    environment : str | None, optional
+        Vault environment name; falls back to ``INPUT_ENVIRONMENT``.
+    runner_temp : Path | None, optional
+        Runner temporary directory; falls back to ``RUNNER_TEMP``.
+    droplet_tag : str | None, optional
+        DigitalOcean droplet tag; falls back to ``INPUT_DROPLET_TAG``.
+    state_path : Path | None, optional
+        Custom state file path; falls back to ``INPUT_STATE_PATH``.
+    bootstrap_state : str | None, optional
+        Bootstrap state payload; falls back to ``INPUT_BOOTSTRAP_STATE``.
+    ca_certificate : str | None, optional
+        CA certificate payload; falls back to ``INPUT_CA_CERTIFICATE``.
+    ssh_key : str | None, optional
+        SSH private key payload; falls back to ``INPUT_SSH_KEY``.
+    github_env : Path | None, optional
+        GitHub environment file path; falls back to ``GITHUB_ENV``.
+    """
 
     raw = RawInputs(
         environment,

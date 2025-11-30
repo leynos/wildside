@@ -1,6 +1,6 @@
 name: bootstrap-vault-appliance
 description: >-
-  Initialise or verify the DigitalOcean Vault appliance using the repository's
+  Initialize or verify the DigitalOcean Vault appliance using the repository's
   Python bootstrap helper. The action is idempotent: re-runs verify the existing
   appliance instead of recreating it.
 author: Wildside platform team
@@ -34,7 +34,7 @@ inputs:
     description: >-
       JSON or base64-encoded JSON payload for the bootstrap state file
       (unseal_keys, root_token, approle_role_id, approle_secret_id). When not
-      provided, the helper will initialise Vault and capture new state.
+      provided, the helper will initialize Vault and capture new state.
     required: false
     secret: true
   state_path:
@@ -86,7 +86,7 @@ inputs:
     required: false
     default: "false"
   key_shares:
-    description: Number of unseal key shares generated during initialisation.
+    description: Number of unseal key shares generated during initialization.
     required: false
     default: "5"
   key_threshold:

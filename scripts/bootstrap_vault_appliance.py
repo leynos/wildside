@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import abc as cabc
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from cyclopts import App, Parameter
 
@@ -42,7 +42,7 @@ class InputResolution:
 def _resolve_input(
     param_value: str | Path | None,
     resolution: InputResolution,
-    env: Mapping[str, str] | None = None,
+    env: cabc.Mapping[str, str] | None = None,
 ) -> str | Path | None:
     """Resolve an input from CLI parameter or environment variables."""
 
@@ -103,7 +103,7 @@ def build_config(
     token_max_ttl: str | None,
     secret_id_ttl: str | None,
     rotate_secret_id: bool | str | None,
-    env: Mapping[str, str] | None = None,
+    env: cabc.Mapping[str, str] | None = None,
 ) -> VaultBootstrapConfig:
     """Build a bootstrap configuration from CLI parameters and environment."""
 
