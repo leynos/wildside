@@ -39,6 +39,65 @@ class InputResolution:
     as_path: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class ConnectionConfig:
+    """Vault connection and infrastructure configuration."""
+
+    vault_addr: str | None
+    droplet_tag: str | None
+    state_file: Path | None
+    ca_certificate: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class SSHConfig:
+    """SSH configuration for Vault appliance access."""
+
+    ssh_user: str | None
+    ssh_identity: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class AppRoleConfig:
+    """AppRole and KV store configuration."""
+
+    kv_mount_path: str | None
+    approle_name: str | None
+    approle_policy_name: str | None
+    approle_policy_path: Path | None
+    approle_policy_content: str | None
+    token_ttl: str | None
+    token_max_ttl: str | None
+    secret_id_ttl: str | None
+    rotate_secret_id: bool | str | None
+
+
+@dataclass(frozen=True, slots=True)
+class VaultInitConfig:
+    """Vault initialisation configuration."""
+
+    key_shares: int | None
+    key_threshold: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ShamirConfig:
+    """Resolved Shamir configuration."""
+
+    key_shares: int
+    key_threshold: int
+
+
+@dataclass(frozen=True, slots=True)
+class TTLConfig:
+    """Resolved TTL and rotation configuration."""
+
+    token_ttl: str
+    token_max_ttl: str
+    secret_id_ttl: str
+    rotate_secret_id: bool
+
+
 def _resolve_input(
     param_value: str | Path | None,
     resolution: InputResolution,
@@ -84,30 +143,14 @@ def _to_bool(value: str | bool | None) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def build_config(
+def _resolve_core_config(
     *,
     vault_addr: str | None,
     droplet_tag: str | None,
     state_file: Path | None,
-    ssh_user: str | None,
-    ssh_identity: Path | None,
     ca_certificate: Path | None,
-    kv_mount_path: str | None,
-    approle_name: str | None,
-    approle_policy_name: str | None,
-    approle_policy_path: Path | None,
-    approle_policy_content: str | None,
-    key_shares: int | None,
-    key_threshold: int | None,
-    token_ttl: str | None,
-    token_max_ttl: str | None,
-    secret_id_ttl: str | None,
-    rotate_secret_id: bool | str | None,
-    env: cabc.Mapping[str, str] | None = None,
-) -> VaultBootstrapConfig:
-    """Build a bootstrap configuration from CLI parameters and environment."""
-
-    env = env or os.environ
+    env: cabc.Mapping[str, str],
+) -> ConnectionConfig:
     resolved_state_file = _resolve_input(
         state_file,
         InputResolution(env_key="STATE_FILE", required=True, as_path=True),
@@ -123,6 +166,25 @@ def build_config(
         InputResolution(env_key="DROPLET_TAG", required=True),
         env=env,
     )
+    resolved_ca_certificate = _resolve_input(
+        ca_certificate,
+        InputResolution(env_key="CA_CERT_PATH", as_path=True),
+        env=env,
+    )
+    return ConnectionConfig(
+        vault_addr=str(resolved_vault_addr),
+        droplet_tag=str(resolved_droplet_tag),
+        state_file=resolved_state_file,
+        ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, Path) else None,
+    )
+
+
+def _resolve_ssh_config(
+    *,
+    ssh_user: str | None,
+    ssh_identity: Path | None,
+    env: cabc.Mapping[str, str],
+) -> SSHConfig:
     resolved_ssh_user = _resolve_input(
         ssh_user,
         InputResolution(env_key="SSH_USER", default="root"),
@@ -133,11 +195,26 @@ def build_config(
         InputResolution(env_key="SSH_IDENTITY", as_path=True),
         env=env,
     )
-    resolved_ca_certificate = _resolve_input(
-        ca_certificate,
-        InputResolution(env_key="CA_CERT_PATH", as_path=True),
-        env=env,
+    return SSHConfig(
+        ssh_user=str(resolved_ssh_user),
+        ssh_identity=resolved_ssh_identity if isinstance(resolved_ssh_identity, Path) else None,
     )
+
+
+def _resolve_approle_config(
+    *,
+    kv_mount_path: str | None,
+    approle_name: str | None,
+    approle_policy_name: str | None,
+    approle_policy_path: Path | None,
+    approle_policy_content: str | None,
+    state_file: Path,
+    token_ttl: str | None,
+    token_max_ttl: str | None,
+    secret_id_ttl: str | None,
+    rotate_secret_id: bool | str | None,
+    env: cabc.Mapping[str, str],
+) -> tuple[AppRoleConfig, TTLConfig]:
     resolved_kv_mount_path = _resolve_input(
         kv_mount_path,
         InputResolution(env_key="KV_MOUNT_PATH", default="secret"),
@@ -163,7 +240,39 @@ def build_config(
         InputResolution(env_key="APPROLE_POLICY_PATH", as_path=True),
         env=env,
     )
+    policy_path = _ensure_policy_path(
+        resolved_approle_policy_path if isinstance(resolved_approle_policy_path, Path) else None,
+        str(resolved_policy_content) if resolved_policy_content is not None else None,
+        state_file,
+    )
 
+    ttl_cfg = _resolve_ttl_config(
+        token_ttl=token_ttl,
+        token_max_ttl=token_max_ttl,
+        secret_id_ttl=secret_id_ttl,
+        rotate_secret_id=rotate_secret_id,
+        env=env,
+    )
+
+    return (
+        AppRoleConfig(
+            kv_mount_path=str(resolved_kv_mount_path),
+            approle_name=str(resolved_approle_name),
+            approle_policy_name=str(resolved_approle_policy_name),
+            approle_policy_path=policy_path,
+            approle_policy_content=None,
+            token_ttl=ttl_cfg.token_ttl,
+            token_max_ttl=ttl_cfg.token_max_ttl,
+            secret_id_ttl=ttl_cfg.secret_id_ttl,
+            rotate_secret_id=ttl_cfg.rotate_secret_id,
+        ),
+        ttl_cfg,
+    )
+
+
+def _resolve_shamir_config(
+    *, key_shares: int | None, key_threshold: int | None, env: cabc.Mapping[str, str]
+) -> ShamirConfig:
     resolved_key_shares = int(
         _resolve_input(
             key_shares,
@@ -180,7 +289,17 @@ def build_config(
     )
     if resolved_key_threshold > resolved_key_shares:
         raise SystemExit("--key-threshold must be ≤ --key-shares")
+    return ShamirConfig(key_shares=resolved_key_shares, key_threshold=resolved_key_threshold)
 
+
+def _resolve_ttl_config(
+    *,
+    token_ttl: str | None,
+    token_max_ttl: str | None,
+    secret_id_ttl: str | None,
+    rotate_secret_id: bool | str | None,
+    env: cabc.Mapping[str, str],
+) -> TTLConfig:
     resolved_token_ttl = _resolve_input(
         token_ttl,
         InputResolution(env_key="TOKEN_TTL", default="1h"),
@@ -203,30 +322,73 @@ def build_config(
             env=env,
         )
     )
-
-    policy_path = _ensure_policy_path(
-        resolved_approle_policy_path if isinstance(resolved_approle_policy_path, Path) else None,
-        str(resolved_policy_content) if resolved_policy_content is not None else None,
-        resolved_state_file,
-    )
-
-    return VaultBootstrapConfig(
-        vault_addr=str(resolved_vault_addr),
-        droplet_tag=str(resolved_droplet_tag),
-        state_file=resolved_state_file,
-        ssh_user=str(resolved_ssh_user),
-        ssh_identity=resolved_ssh_identity if isinstance(resolved_ssh_identity, Path) else None,
-        kv_mount_path=str(resolved_kv_mount_path),
-        approle_name=str(resolved_approle_name),
-        approle_policy_name=str(resolved_approle_policy_name),
-        approle_policy_path=policy_path,
-        key_shares=resolved_key_shares,
-        key_threshold=resolved_key_threshold,
+    return TTLConfig(
         token_ttl=str(resolved_token_ttl),
         token_max_ttl=str(resolved_token_max_ttl),
         secret_id_ttl=str(resolved_secret_id_ttl),
         rotate_secret_id=resolved_rotate_secret,
-        ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, Path) else None,
+    )
+
+
+def build_config(
+    *,
+    connection: ConnectionConfig,
+    ssh: SSHConfig,
+    approle: AppRoleConfig,
+    vault_init: VaultInitConfig,
+    env: cabc.Mapping[str, str] | None = None,
+) -> VaultBootstrapConfig:
+    """Build a bootstrap configuration from CLI parameters and environment."""
+
+    env = env or os.environ
+    core = _resolve_core_config(
+        vault_addr=connection.vault_addr,
+        droplet_tag=connection.droplet_tag,
+        state_file=connection.state_file,
+        ca_certificate=connection.ca_certificate,
+        env=env,
+    )
+    ssh_cfg = _resolve_ssh_config(
+        ssh_user=ssh.ssh_user,
+        ssh_identity=ssh.ssh_identity,
+        env=env,
+    )
+    approle_cfg, ttl_cfg = _resolve_approle_config(
+        kv_mount_path=approle.kv_mount_path,
+        approle_name=approle.approle_name,
+        approle_policy_name=approle.approle_policy_name,
+        approle_policy_path=approle.approle_policy_path,
+        approle_policy_content=approle.approle_policy_content,
+        state_file=core.state_file,
+        token_ttl=approle.token_ttl,
+        token_max_ttl=approle.token_max_ttl,
+        secret_id_ttl=approle.secret_id_ttl,
+        rotate_secret_id=approle.rotate_secret_id,
+        env=env,
+    )
+    shamir_cfg = _resolve_shamir_config(
+        key_shares=vault_init.key_shares,
+        key_threshold=vault_init.key_threshold,
+        env=env,
+    )
+
+    return VaultBootstrapConfig(
+        vault_addr=core.vault_addr,
+        droplet_tag=core.droplet_tag,
+        state_file=core.state_file,
+        ssh_user=ssh_cfg.ssh_user,
+        ssh_identity=ssh_cfg.ssh_identity,
+        kv_mount_path=approle_cfg.kv_mount_path,
+        approle_name=approle_cfg.approle_name,
+        approle_policy_name=approle_cfg.approle_policy_name,
+        approle_policy_path=approle_cfg.approle_policy_path,
+        key_shares=shamir_cfg.key_shares,
+        key_threshold=shamir_cfg.key_threshold,
+        token_ttl=ttl_cfg.token_ttl,
+        token_max_ttl=ttl_cfg.token_max_ttl,
+        secret_id_ttl=ttl_cfg.secret_id_ttl,
+        rotate_secret_id=ttl_cfg.rotate_secret_id,
+        ca_certificate=ssh_cfg.ca_certificate,
     )
 
 
@@ -252,24 +414,37 @@ def main(
 ) -> int:
     """Entry point for command-line execution."""
 
-    config = build_config(
+    connection = ConnectionConfig(
         vault_addr=vault_addr,
         droplet_tag=droplet_tag,
         state_file=state_file,
+        ca_certificate=ca_certificate,
+    )
+    ssh_cfg = SSHConfig(
         ssh_user=ssh_user,
         ssh_identity=ssh_identity,
-        ca_certificate=ca_certificate,
+    )
+    approle_cfg = AppRoleConfig(
         kv_mount_path=kv_mount_path,
         approle_name=approle_name,
         approle_policy_name=approle_policy_name,
         approle_policy_path=approle_policy_path,
         approle_policy_content=approle_policy_content,
-        key_shares=key_shares,
-        key_threshold=key_threshold,
         token_ttl=token_ttl,
         token_max_ttl=token_max_ttl,
         secret_id_ttl=secret_id_ttl,
         rotate_secret_id=rotate_secret_id,
+    )
+    vault_init_cfg = VaultInitConfig(
+        key_shares=key_shares,
+        key_threshold=key_threshold,
+    )
+
+    config = build_config(
+        connection=connection,
+        ssh=ssh_cfg,
+        approle=approle_cfg,
+        vault_init=vault_init_cfg,
     )
     try:
         state = bootstrap(config)

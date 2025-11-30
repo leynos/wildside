@@ -22,7 +22,13 @@ from scripts._vault_state import (  # imported after sys.path mutation
     VaultBootstrapError,
     VaultBootstrapState,
 )
-from scripts.bootstrap_vault_appliance import build_config  # imported after sys.path mutation
+from scripts.bootstrap_vault_appliance import (  # imported after sys.path mutation
+    AppRoleConfig,
+    ConnectionConfig,
+    SSHConfig,
+    VaultInitConfig,
+    build_config,
+)
 
 
 def _make_config(tmp_path: Path, **overrides: object) -> VaultBootstrapConfig:
@@ -394,22 +400,24 @@ def test_parse_args_validates_threshold_not_exceeding_shares(
 
     with pytest.raises(SystemExit):
         build_config(
-            vault_addr="https://vault.example",
-            droplet_tag="vault-dev",
-            state_file=state_file,
-            ssh_user=None,
-            ssh_identity=None,
-            ca_certificate=None,
-            kv_mount_path=None,
-            approle_name=None,
-            approle_policy_name=None,
-            approle_policy_path=None,
-            approle_policy_content=None,
-            key_shares=3,
-            key_threshold=4,
-            token_ttl=None,
-            token_max_ttl=None,
-            secret_id_ttl=None,
-            rotate_secret_id=None,
+            connection=ConnectionConfig(
+                vault_addr="https://vault.example",
+                droplet_tag="vault-dev",
+                state_file=state_file,
+                ca_certificate=None,
+            ),
+            ssh=SSHConfig(ssh_user=None, ssh_identity=None),
+            approle=AppRoleConfig(
+                kv_mount_path=None,
+                approle_name=None,
+                approle_policy_name=None,
+                approle_policy_path=None,
+                approle_policy_content=None,
+                token_ttl=None,
+                token_max_ttl=None,
+                secret_id_ttl=None,
+                rotate_secret_id=None,
+            ),
+            vault_init=VaultInitConfig(key_shares=3, key_threshold=4),
             env={},
         )
