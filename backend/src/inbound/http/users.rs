@@ -5,10 +5,11 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::api::ApiResult;
 use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
-use actix_session::Session;
-use actix_web::{get, post, web, HttpResponse, Result};
+use crate::inbound::http::auth::authenticate;
+use crate::inbound::http::session::SessionContext;
+use crate::inbound::http::ApiResult;
+use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -49,17 +50,15 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     security([])
 )]
 #[post("/login")]
-pub async fn login(session: Session, payload: web::Json<LoginRequest>) -> Result<HttpResponse> {
+pub async fn login(
+    session: SessionContext,
+    payload: web::Json<LoginRequest>,
+) -> ApiResult<HttpResponse> {
     let credentials =
         LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
-    if credentials.username() == "admin" && credentials.password() == "password" {
-        // In a real system, insert the authenticated user's ID.
-        session.insert("user_id", "123e4567-e89b-12d3-a456-426614174000")?;
-        Ok(HttpResponse::Ok().finish())
-    } else {
-        // Map to the shared Error type so ResponseError renders the JSON body.
-        Err(Error::unauthorized("invalid credentials").into())
-    }
+    let user_id = authenticate(&credentials)?;
+    session.persist_user(&user_id)?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 fn map_login_validation_error(err: LoginValidationError) -> Error {
@@ -70,14 +69,13 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
             .with_details(json!({ "field": "password", "code": "empty_password" })),
     }
 }
-//
 
 /// List known users.
 ///
 /// # Examples
 /// ```
 /// use actix_web::App;
-/// use backend::api::users::list_users;
+/// use backend::inbound::http::users::list_users;
 ///
 /// let app = App::new().service(list_users);
 /// ```
@@ -96,14 +94,8 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
     operation_id = "listUsers"
 )]
 #[get("/users")]
-pub async fn list_users(session: Session) -> ApiResult<web::Json<Vec<User>>> {
-    if session
-        .get::<String>("user_id")
-        .map_err(actix_web::Error::from)?
-        .is_none()
-    {
-        return Err(Error::unauthorized("login required"));
-    }
+pub async fn list_users(session: SessionContext) -> ApiResult<web::Json<Vec<User>>> {
+    session.require_user_id()?;
     const FIXTURE_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
     const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
 
@@ -122,109 +114,88 @@ mod tests {
     use super::*;
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::Key;
-    use actix_web::{test, web, App};
+    use actix_web::{test as actix_test, web, App};
+    use rstest::rstest;
     use serde_json::Value;
 
-    #[actix_web::test]
-    async fn login_rejects_invalid_payload() {
-        let app = test::init_service(
-            App::new()
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                        .cookie_name("actix-session".to_owned())
-                        .cookie_secure(false)
-                        .build(),
-                )
-                .service(web::scope("/api/v1").service(login)),
-        )
-        .await;
+    async fn assert_login_validation_error(username: &str, password: &str, expected_message: &str) {
+        let app = actix_test::init_service(test_app()).await;
 
-        let request = test::TestRequest::post()
+        let request = actix_test::TestRequest::post()
             .uri("/api/v1/login")
             .set_json(&LoginRequest {
-                username: "   ".into(),
-                password: "password".into(),
+                username: username.into(),
+                password: password.into(),
             })
             .to_request();
 
-        let response = test::call_service(&app, request).await;
+        let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
-        let body = test::read_body(response).await;
+        let body = actix_test::read_body(response).await;
         let value: Value = serde_json::from_slice(&body).expect("error payload");
         assert_eq!(
             value.get("message").and_then(Value::as_str),
-            Some("username must not be empty")
+            Some(expected_message)
         );
     }
 
+    fn test_app() -> App<
+        impl actix_web::dev::ServiceFactory<
+            actix_web::dev::ServiceRequest,
+            Config = (),
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+            InitError = (),
+        >,
+    > {
+        App::new()
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                    .cookie_name("session".to_owned())
+                    .cookie_secure(false)
+                    .build(),
+            )
+            .service(web::scope("/api/v1").service(login).service(list_users))
+    }
+
+    #[rstest]
+    #[case("   ", "password", "username must not be empty")]
+    #[case("admin", "", "password must not be empty")]
     #[actix_web::test]
-    async fn login_rejects_empty_password() {
-        let app = test::init_service(
-            App::new()
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                        .cookie_name("actix-session".to_owned())
-                        .cookie_secure(false)
-                        .build(),
-                )
-                .service(web::scope("/api/v1").service(login)),
-        )
-        .await;
-
-        let request = test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "admin".into(),
-                password: String::new(),
-            })
-            .to_request();
-
-        let response = test::call_service(&app, request).await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
-        let body = test::read_body(response).await;
-        let value: Value = serde_json::from_slice(&body).expect("error payload");
-        assert_eq!(
-            value.get("message").and_then(Value::as_str),
-            Some("password must not be empty")
-        );
+    async fn login_rejects_invalid_credentials(
+        #[case] username: &str,
+        #[case] password: &str,
+        #[case] expected_message: &str,
+    ) {
+        assert_login_validation_error(username, password, expected_message).await;
     }
 
     #[actix_web::test]
     async fn list_users_returns_camel_case_json() {
-        let app = test::init_service(
-            App::new()
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                        .cookie_name("actix-session".to_owned())
-                        .cookie_secure(false)
-                        .build(),
-                )
-                .service(web::scope("/api/v1").service(login).service(list_users)),
-        )
-        .await;
+        let app = actix_test::init_service(test_app()).await;
 
-        let login_req = test::TestRequest::post()
+        let login_req = actix_test::TestRequest::post()
             .uri("/api/v1/login")
             .set_json(&LoginRequest {
                 username: "admin".into(),
                 password: "password".into(),
             })
             .to_request();
-        let login_res = test::call_service(&app, login_req).await;
+        let login_res = actix_test::call_service(&app, login_req).await;
         assert!(login_res.status().is_success());
         let cookie = login_res
             .response()
             .cookies()
-            .find(|c| c.name() == "actix-session")
-            .expect("actix-session cookie");
+            .find(|c| c.name() == "session")
+            .expect("session cookie");
 
-        let users_req = test::TestRequest::get()
+        let users_req = actix_test::TestRequest::get()
             .uri("/api/v1/users")
             .cookie(cookie)
             .to_request();
-        let users_res = test::call_service(&app, users_req).await;
+        let users_res = actix_test::call_service(&app, users_req).await;
         assert!(users_res.status().is_success());
-        let body = test::read_body(users_res).await;
+        let body = actix_test::read_body(users_res).await;
         let value: Value = serde_json::from_slice(&body).expect("response JSON");
         let first = &value.as_array().expect("array")[0];
         assert_eq!(
@@ -232,5 +203,18 @@ mod tests {
             Some("Ada Lovelace")
         );
         assert!(first.get("display_name").is_none());
+    }
+
+    #[actix_web::test]
+    async fn list_users_rejects_without_session() {
+        let app = actix_test::init_service(test_app()).await;
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::get()
+                .uri("/api/v1/users")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
     }
 }

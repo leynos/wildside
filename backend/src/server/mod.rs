@@ -18,10 +18,10 @@ use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{Server, ServiceFactory, ServiceRequest, ServiceResponse};
 use actix_web::{web, App, HttpServer};
 
-use backend::api::health::{live, ready, HealthState};
-use backend::api::users::{list_users, login};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
+use backend::inbound::http::health::{live, ready, HealthState};
+use backend::inbound::http::users::{list_users, login};
 use backend::ws;
 use backend::Trace;
 #[cfg(debug_assertions)]
