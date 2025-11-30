@@ -25,9 +25,9 @@ requested.
   `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`.
 - `ssh_private_key` / `ssh_user` (optional): Credentials for the droplet health
   probe executed before bootstrap.
-- AppRole (Application Role) and KV (key-value) settings: `kv_mount_path`, `approle_name`,
-  `approle_policy_name`, `approle_policy`, `token_ttl`, `token_max_ttl`,
-  `secret_id_ttl`, `rotate_secret_id`.
+- AppRole (Application Role) and KV (key-value) settings: `kv_mount_path`,
+  `approle_name`, `approle_policy_name`, `approle_policy`, `token_ttl`,
+  `token_max_ttl`, `secret_id_ttl`, `rotate_secret_id`.
 - `key_shares` / `key_threshold` (optional): Vault initialization parameters.
 - `vault_cli_version` (optional): Vault CLI version to install. Defaults to
   `1.17.6`.
