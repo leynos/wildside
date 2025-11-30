@@ -9,6 +9,8 @@ use futures_util::future::LocalBoxFuture;
 
 use crate::domain::{Error, UserId};
 
+pub(crate) const USER_ID_KEY: &str = "user_id";
+
 /// Newtype wrapper that exposes higher-level session operations.
 #[derive(Clone)]
 pub struct SessionContext(Session);
@@ -22,7 +24,7 @@ impl SessionContext {
     /// Persist the authenticated user's id in the session cookie.
     pub fn persist_user(&self, user_id: &UserId) -> Result<(), Error> {
         self.0
-            .insert("user_id", user_id.as_ref())
+            .insert(USER_ID_KEY, user_id.as_ref())
             .map_err(|error| Error::internal(format!("failed to persist session: {error}")))
     }
 
@@ -30,7 +32,7 @@ impl SessionContext {
     pub fn user_id(&self) -> Result<Option<UserId>, Error> {
         let id = self
             .0
-            .get::<String>("user_id")
+            .get::<String>(USER_ID_KEY)
             .map_err(|error| Error::internal(format!("failed to read session: {error}")))?;
         match id {
             Some(raw) => UserId::new(raw)

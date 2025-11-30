@@ -6,6 +6,7 @@
 //! ```
 
 use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
+use crate::inbound::http::auth::authenticate;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::ApiResult;
 use actix_web::{get, post, web, HttpResponse};
@@ -109,25 +110,13 @@ pub async fn list_users(session: SessionContext) -> ApiResult<web::Json<Vec<User
     Ok(web::Json(data))
 }
 
-fn authenticate(credentials: &LoginCredentials) -> ApiResult<UserId> {
-    if credentials.username() == "admin" && credentials.password() == "password" {
-        UserId::new("123e4567-e89b-12d3-a456-426614174000")
-            .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))
-    } else {
-        Err(Error::unauthorized("invalid credentials"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::ErrorCode;
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
     use actix_web::cookie::Key;
     use actix_web::{test as actix_test, web, App};
-    use pg_embedded_setup_unpriv::TestCluster;
     use rstest::rstest;
-    use rstest_bdd_macros::{given, then, when};
     use serde_json::Value;
 
     async fn assert_login_validation_error(username: &str, password: &str, expected_message: &str) {
@@ -230,62 +219,5 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
-    }
-
-    #[given("valid admin credentials")]
-    fn valid_admin_credentials() -> LoginCredentials {
-        LoginCredentials::try_from_parts("admin", "password").expect("valid creds")
-    }
-
-    #[given("invalid credentials")]
-    fn invalid_credentials() -> LoginCredentials {
-        LoginCredentials::try_from_parts("admin", "wrong").expect("valid shape")
-    }
-
-    #[when("authentication runs")]
-    fn authentication_runs(credentials: LoginCredentials) -> ApiResult<UserId> {
-        authenticate(&credentials)
-    }
-
-    #[then("a user id is returned")]
-    fn a_user_id_is_returned(result: ApiResult<UserId>) {
-        assert!(result.is_ok(), "expected authentication success");
-    }
-
-    #[then("an unauthorised error is returned")]
-    fn an_unauthorised_error_is_returned(result: ApiResult<UserId>) {
-        let error = result.expect_err("should be an error");
-        assert_eq!(error.code(), ErrorCode::Unauthorized);
-    }
-
-    #[test]
-    fn authentication_happy_path() {
-        let credentials = valid_admin_credentials();
-        let result = authentication_runs(credentials);
-        a_user_id_is_returned(result);
-    }
-
-    #[test]
-    fn authentication_unhappy_path() {
-        let credentials = invalid_credentials();
-        let result = authentication_runs(credentials);
-        an_unauthorised_error_is_returned(result);
-    }
-
-    #[test]
-    fn pg_embedded_cluster_starts() {
-        match TestCluster::new() {
-            Ok(test_cluster) => {
-                // Smoke check: ensure the fixture boots and exposes a connection URL.
-                let connection = test_cluster.connection();
-                assert!(connection.port() > 0, "cluster exposes a port");
-                let url = connection.database_url("app_db");
-                assert!(url.starts_with("postgresql://"));
-            }
-            Err(error) => {
-                // Allow environments without Postgres binaries to skip gracefully.
-                eprintln!("SKIP-TEST-CLUSTER: {error}");
-            }
-        }
     }
 }
