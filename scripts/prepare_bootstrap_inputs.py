@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -26,6 +25,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from cyclopts import App, Parameter
+from scripts._input_resolution import InputResolution, resolve_input
 
 type Mask = Callable[[str], None]
 
@@ -59,16 +59,6 @@ class VaultEnvironmentConfig:
     droplet_tag: str | None = None
     state_path: Path | None = None
     vault_address: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class InputResolution:
-    """Configuration for resolving an input from multiple sources."""
-
-    env_key: str
-    default: str | Path | None = None
-    required: bool = False
-    as_path: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,37 +247,16 @@ def prepare_bootstrap_inputs(
         ssh_identity_path=ssh_identity,
     )
 
-
-def _resolve_input(
-    param_value: str | Path | None,
-    resolution: InputResolution,
-) -> str | Path | None:
-    """Resolve input from parameter, environment variable, or default."""
-
-    if param_value is not None:
-        return param_value
-
-    env_value = os.environ.get(resolution.env_key)
-    if env_value is not None:
-        return Path(env_value) if resolution.as_path else env_value
-
-    if resolution.required:
-        msg = f"{resolution.env_key} is required"
-        raise SystemExit(msg)
-
-    return resolution.default
-
-
 def _resolve_all_inputs(
     raw: RawInputs,
 ) -> ResolvedInputs:
     """Resolve CLI and env inputs to their canonical types."""
 
-    resolved_environment = _resolve_input(
+    resolved_environment = resolve_input(
         raw.environment,
         InputResolution(env_key="INPUT_ENVIRONMENT", required=True),
     )
-    resolved_runner_temp = _resolve_input(
+    resolved_runner_temp = resolve_input(
         raw.runner_temp,
         InputResolution(
             env_key="RUNNER_TEMP",
@@ -295,7 +264,7 @@ def _resolve_all_inputs(
             as_path=True,
         ),
     )
-    resolved_github_env = _resolve_input(
+    resolved_github_env = resolve_input(
         raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
@@ -303,22 +272,22 @@ def _resolve_all_inputs(
             as_path=True,
         ),
     )
-    resolved_droplet_tag = _resolve_input(
+    resolved_droplet_tag = resolve_input(
         raw.droplet_tag, InputResolution(env_key="INPUT_DROPLET_TAG")
     )
-    resolved_state_path = _resolve_input(
+    resolved_state_path = resolve_input(
         raw.state_path,
         InputResolution(env_key="INPUT_STATE_PATH", as_path=True),
     )
-    resolved_bootstrap_state = _resolve_input(
+    resolved_bootstrap_state = resolve_input(
         raw.bootstrap_state,
         InputResolution(env_key="INPUT_BOOTSTRAP_STATE"),
     )
-    resolved_ca_certificate = _resolve_input(
+    resolved_ca_certificate = resolve_input(
         raw.ca_certificate,
         InputResolution(env_key="INPUT_CA_CERTIFICATE"),
     )
-    resolved_ssh_key = _resolve_input(
+    resolved_ssh_key = resolve_input(
         raw.ssh_key, InputResolution(env_key="INPUT_SSH_KEY")
     )
 
@@ -419,7 +388,7 @@ def main(
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
     try:
         app()
-    except Exception as exc:  # noqa: BLE001 - propagate friendly message
+    except Exception as exc:
         msg = f"bootstrap input preparation failed: {exc}"
         print(msg, file=sys.stderr)
         raise

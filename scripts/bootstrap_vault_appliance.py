@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts._input_resolution import InputResolution, resolve_input
 from scripts._vault_bootstrap import (
     VaultBootstrapConfig,
     VaultBootstrapError,
@@ -27,16 +28,6 @@ from scripts._vault_bootstrap import (
 )
 
 app = App(help="Bootstrap the Vault appliance via environment-derived inputs.")
-
-
-@dataclass(frozen=True, slots=True)
-class InputResolution:
-    """Configuration for resolving an input from multiple sources."""
-
-    env_key: str
-    default: str | Path | None = None
-    required: bool = False
-    as_path: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,26 +143,6 @@ class ResolvedAppRoleConfig:
 _KEY_THRESHOLD_ERROR = "--key-threshold must be ≤ --key-shares"
 
 
-def _resolve_input(
-    param_value: str | Path | None,
-    resolution: InputResolution,
-    env: cabc.Mapping[str, str] | None = None,
-) -> str | Path | None:
-    """Resolve an input from CLI parameter or environment variables."""
-
-    if param_value is not None:
-        return param_value
-
-    env_value = (env or os.environ).get(resolution.env_key)
-    if env_value is not None:
-        return Path(env_value) if resolution.as_path else env_value
-
-    if resolution.required:
-        raise SystemExit(f"{resolution.env_key} is required")
-
-    return resolution.default
-
-
 def _ensure_policy_path(
     approle_policy_path: Path | None,
     approle_policy_content: str | None,
@@ -189,7 +160,7 @@ def _ensure_policy_path(
     return destination
 
 
-def _to_bool(value: str | bool | None) -> bool:
+def _to_bool(*, value: str | bool | None) -> bool:
     if isinstance(value, bool):
         return value
     if value is None:
@@ -202,22 +173,23 @@ def _resolve_core_config(
     connection: ConnectionConfig,
     context: EnvContext,
 ) -> ResolvedConnectionConfig:
-    resolved_state_file = _resolve_input(
+    resolved_state_file = resolve_input(
         connection.state_file,
         InputResolution(env_key="STATE_FILE", required=True, as_path=True),
         env=context.env,
     )
-    resolved_vault_addr = _resolve_input(
+    assert isinstance(resolved_state_file, Path), "STATE_FILE must resolve to a Path"
+    resolved_vault_addr = resolve_input(
         connection.vault_addr,
         InputResolution(env_key="VAULT_ADDRESS", required=True),
         env=context.env,
     )
-    resolved_droplet_tag = _resolve_input(
+    resolved_droplet_tag = resolve_input(
         connection.droplet_tag,
         InputResolution(env_key="DROPLET_TAG", required=True),
         env=context.env,
     )
-    resolved_ca_certificate = _resolve_input(
+    resolved_ca_certificate = resolve_input(
         connection.ca_certificate,
         InputResolution(env_key="CA_CERT_PATH", as_path=True),
         env=context.env,
@@ -235,12 +207,12 @@ def _resolve_ssh_config(
     ssh: SSHConfig,
     context: EnvContext,
 ) -> ResolvedSSHConfig:
-    resolved_ssh_user = _resolve_input(
+    resolved_ssh_user = resolve_input(
         ssh.ssh_user,
         InputResolution(env_key="SSH_USER", default="root"),
         env=context.env,
     )
-    resolved_ssh_identity = _resolve_input(
+    resolved_ssh_identity = resolve_input(
         ssh.ssh_identity,
         InputResolution(env_key="SSH_IDENTITY", as_path=True),
         env=context.env,
@@ -257,27 +229,27 @@ def _resolve_approle_config(
     state_file: Path,
     context: EnvContext,
 ) -> ResolvedAppRoleConfig:
-    resolved_kv_mount_path = _resolve_input(
+    resolved_kv_mount_path = resolve_input(
         approle.kv_mount_path,
         InputResolution(env_key="KV_MOUNT_PATH", default="secret"),
         env=context.env,
     )
-    resolved_approle_name = _resolve_input(
+    resolved_approle_name = resolve_input(
         approle.approle_name,
         InputResolution(env_key="APPROLE_NAME", default="doks-deployer"),
         env=context.env,
     )
-    resolved_approle_policy_name = _resolve_input(
+    resolved_approle_policy_name = resolve_input(
         approle.approle_policy_name,
         InputResolution(env_key="APPROLE_POLICY_NAME", default="doks-deployer"),
         env=context.env,
     )
-    resolved_policy_content = _resolve_input(
+    resolved_policy_content = resolve_input(
         approle.approle_policy_content,
         InputResolution(env_key="APPROLE_POLICY", default=None),
         env=context.env,
     )
-    resolved_approle_policy_path = _resolve_input(
+    resolved_approle_policy_path = resolve_input(
         approle.approle_policy_path,
         InputResolution(env_key="APPROLE_POLICY_PATH", as_path=True),
         env=context.env,
@@ -301,20 +273,28 @@ def _resolve_shamir_config(
     vault_init: VaultInitConfig,
     context: EnvContext,
 ) -> ShamirConfig:
-    resolved_key_shares = int(
-        _resolve_input(
-            vault_init.key_shares,
-            InputResolution(env_key="KEY_SHARES", default="5"),
-            env=context.env,
-        )
+    raw_key_shares = resolve_input(
+        vault_init.key_shares,
+        InputResolution(env_key="KEY_SHARES", default="5"),
+        env=context.env,
     )
-    resolved_key_threshold = int(
-        _resolve_input(
-            vault_init.key_threshold,
-            InputResolution(env_key="KEY_THRESHOLD", default="3"),
-            env=context.env,
-        )
+    try:
+        resolved_key_shares = int(raw_key_shares)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        msg = f"KEY_SHARES must be an integer, got: {raw_key_shares!r}"
+        raise SystemExit(msg) from exc
+
+    raw_key_threshold = resolve_input(
+        vault_init.key_threshold,
+        InputResolution(env_key="KEY_THRESHOLD", default="3"),
+        env=context.env,
     )
+    try:
+        resolved_key_threshold = int(raw_key_threshold)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        msg = f"KEY_THRESHOLD must be an integer, got: {raw_key_threshold!r}"
+        raise SystemExit(msg) from exc
+
     if resolved_key_threshold > resolved_key_shares:
         raise SystemExit(_KEY_THRESHOLD_ERROR)
     return ShamirConfig(key_shares=resolved_key_shares, key_threshold=resolved_key_threshold)
@@ -325,23 +305,23 @@ def _resolve_ttl_config(
     approle: AppRoleConfig,
     context: EnvContext,
 ) -> TTLConfig:
-    resolved_token_ttl = _resolve_input(
+    resolved_token_ttl = resolve_input(
         approle.token_ttl,
         InputResolution(env_key="TOKEN_TTL", default="1h"),
         env=context.env,
     )
-    resolved_token_max_ttl = _resolve_input(
+    resolved_token_max_ttl = resolve_input(
         approle.token_max_ttl,
         InputResolution(env_key="TOKEN_MAX_TTL", default="4h"),
         env=context.env,
     )
-    resolved_secret_id_ttl = _resolve_input(
+    resolved_secret_id_ttl = resolve_input(
         approle.secret_id_ttl,
         InputResolution(env_key="SECRET_ID_TTL", default="4h"),
         env=context.env,
     )
     resolved_rotate_secret = _to_bool(
-        _resolve_input(
+        value=resolve_input(
             approle.rotate_secret_id,
             InputResolution(env_key="ROTATE_SECRET_ID", default="false"),
             env=context.env,

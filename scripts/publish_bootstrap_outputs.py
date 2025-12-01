@@ -106,11 +106,14 @@ def _validate_required_inputs(
     """Ensure required inputs are provided."""
 
     if not vault_config.vault_address:
-        raise SystemExit("VAULT_ADDRESS is required")
+        msg = "VAULT_ADDRESS is required"
+        raise SystemExit(msg)
     if not vault_config.state_path:
-        raise SystemExit("STATE_FILE is required")
+        msg = "STATE_FILE is required"
+        raise SystemExit(msg)
     if not github_context.github_output:
-        raise SystemExit("GITHUB_OUTPUT is required")
+        msg = "GITHUB_OUTPUT is required"
+        raise SystemExit(msg)
 
 
 def _extract_state_fields(state: dict) -> StateFields:
