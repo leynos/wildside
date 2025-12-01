@@ -1,3 +1,6 @@
+//! Optional embedded Postgres smoke test gated by RUN_PG_EMBEDDED.
+//! Use `cargo test -- --ignored` with `RUN_PG_EMBEDDED=1` to run it.
+
 use pg_embedded_setup_unpriv::TestCluster;
 
 /// Optional smoke test; enable with `RUN_PG_EMBEDDED=1`.

@@ -35,9 +35,13 @@ impl SessionContext {
             .get::<String>(USER_ID_KEY)
             .map_err(|error| Error::internal(format!("failed to read session: {error}")))?;
         match id {
-            Some(raw) => UserId::new(raw)
-                .map(Some)
-                .map_err(|error| Error::internal(format!("invalid user id in session: {error}"))),
+            Some(raw) => match UserId::new(raw) {
+                Ok(id) => Ok(Some(id)),
+                Err(error) => {
+                    tracing::warn!("invalid user id in session cookie: {error}");
+                    Ok(None)
+                }
+            },
             None => Ok(None),
         }
     }

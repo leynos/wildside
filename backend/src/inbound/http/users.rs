@@ -118,7 +118,17 @@ mod tests {
     use rstest::rstest;
     use serde_json::Value;
 
-    async fn assert_login_validation_error(username: &str, password: &str, expected_message: &str) {
+    struct ValidationExpectation<'a> {
+        message: &'a str,
+        field: &'a str,
+        code: &'a str,
+    }
+
+    async fn assert_login_validation_error(
+        username: &str,
+        password: &str,
+        expected: ValidationExpectation<'_>,
+    ) {
         let app = actix_test::init_service(test_app()).await;
 
         let request = actix_test::TestRequest::post()
@@ -135,7 +145,23 @@ mod tests {
         let value: Value = serde_json::from_slice(&body).expect("error payload");
         assert_eq!(
             value.get("message").and_then(Value::as_str),
-            Some(expected_message)
+            Some(expected.message)
+        );
+        assert_eq!(
+            value.get("code").and_then(Value::as_str),
+            Some("InvalidRequest")
+        );
+        let details = value
+            .get("details")
+            .and_then(|v| v.as_object())
+            .expect("details present");
+        assert_eq!(
+            details.get("field").and_then(Value::as_str),
+            Some(expected.field)
+        );
+        assert_eq!(
+            details.get("code").and_then(Value::as_str),
+            Some(expected.code)
         );
     }
 
@@ -159,15 +185,31 @@ mod tests {
     }
 
     #[rstest]
-    #[case("   ", "password", "username must not be empty")]
-    #[case("admin", "", "password must not be empty")]
+    #[case(
+        "   ",
+        "password",
+        ValidationExpectation {
+            message: "username must not be empty",
+            field: "username",
+            code: "empty_username",
+        }
+    )]
+    #[case(
+        "admin",
+        "",
+        ValidationExpectation {
+            message: "password must not be empty",
+            field: "password",
+            code: "empty_password",
+        }
+    )]
     #[actix_web::test]
     async fn login_rejects_invalid_credentials(
         #[case] username: &str,
         #[case] password: &str,
-        #[case] expected_message: &str,
+        #[case] expected: ValidationExpectation<'_>,
     ) {
-        assert_login_validation_error(username, password, expected_message).await;
+        assert_login_validation_error(username, password, expected).await;
     }
 
     #[actix_web::test]
