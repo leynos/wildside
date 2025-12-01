@@ -25,6 +25,7 @@ from scripts._vault_state import (  # imported after sys.path mutation
 from scripts.bootstrap_vault_appliance import (  # imported after sys.path mutation
     AppRoleConfig,
     ConnectionConfig,
+    EnvContext,
     SSHConfig,
     VaultInitConfig,
     build_config,
@@ -419,5 +420,5 @@ def test_parse_args_validates_threshold_not_exceeding_shares(
                 rotate_secret_id=None,
             ),
             vault_init=VaultInitConfig(key_shares=3, key_threshold=4),
-            env={},
+            context=EnvContext(env={}),
         )

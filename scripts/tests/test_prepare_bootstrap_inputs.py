@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 
 import pytest
@@ -45,7 +46,6 @@ def test_writes_state_and_exports_env(tmp_path: Path) -> None:
 
     expected_state = runner_temp / "vault-bootstrap" / "dev" / "state.json"
     assert paths.state_file == expected_state
-    import json
 
     state_data = json.loads(expected_state.read_text(encoding="utf-8"))
     assert state_data == {"hello": "world"}
@@ -105,7 +105,7 @@ def test_respects_explicit_paths_and_skips_blank_payloads(tmp_path: Path) -> Non
 def test_invalid_json_raises(tmp_path: Path) -> None:
     env_file = tmp_path / "env"
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit, match=r"Invalid JSON supplied"):
         prepare_bootstrap_inputs(
             vault_config=VaultEnvironmentConfig(
                 environment="dev",

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -141,7 +140,13 @@ def publish_bootstrap_outputs(
 
     _validate_required_inputs(vault_config, github_context)
 
-    state_file = vault_config.state_path  # type: ignore[assignment]
+    vault_address = vault_config.vault_address
+    state_file = vault_config.state_path
+    github_output = github_context.github_output
+    assert vault_address is not None
+    assert state_file is not None
+    assert github_output is not None
+
     state = _read_state(state_file)
     fields = _extract_state_fields(state)
 
@@ -155,16 +160,16 @@ def publish_bootstrap_outputs(
     ca_certificate_path = _resolve_ca_certificate_path(state_file)
 
     output_lines = [
-        f"vault-address={vault_config.vault_address}",  # type: ignore[arg-type]
+        f"vault-address={vault_address}",
         f"state-file={state_file}",
         f"approle-role-id={fields.approle_role_id}",
         f"approle-secret-id={fields.approle_secret_id}",
         f"ca-certificate-path={ca_certificate_path or ''}",
     ]
-    _append_output(github_context.github_output, output_lines)  # type: ignore[arg-type]
+    _append_output(github_output, output_lines)
 
     return BootstrapOutputs(
-        vault_address=vault_config.vault_address,  # type: ignore[arg-type]
+        vault_address=vault_address,
         state_file=state_file,
         approle_role_id=fields.approle_role_id,
         approle_secret_id=fields.approle_secret_id,
@@ -176,7 +181,6 @@ def publish_bootstrap_outputs(
 def main(
     vault_address: str | None = Parameter(),
     state_file: Path | None = Parameter(),
-    ca_certificate_path: Path | None = Parameter(),
     github_output: Path | None = Parameter(),
 ) -> None:
     """CLI entrypoint used by the composite action."""

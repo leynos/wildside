@@ -117,7 +117,7 @@ flowchart TD
 
     F12 --> F14[Run uv with scripts/bootstrap_vault_appliance.py]
     F13 --> F14
-    F14 --> F15[Helper initialises or verifies Vault<br/>updates STATE_FILE]
+    F14 --> F15[Helper initializes or verifies Vault<br/>updates STATE_FILE]
   end
 
   F15 --> G[Publish outputs step]

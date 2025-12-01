@@ -115,15 +115,15 @@ lint-makefile:
 lint-actions:
 	$(call ensure_tool,yamllint)
 	$(call ensure_tool,action-validator)
-	@actions=$$(if [ -d .github/actions ]; then find .github/actions -name 'action.yml' -print; fi); \
+	@actions=$$(if [ -d .github/actions ]; then find .github/actions -name 'action.yml' -print0; fi); \
 	if [ -z "$$actions" ]; then \
 	  echo "No composite actions found; skipping lint-actions"; \
 	else \
-	  echo "$$actions" | xargs yamllint; \
+	  printf '%s' "$$actions" | xargs -0 yamllint; \
 	  while IFS= read -r action; do \
 	    echo "$$action:"; \
 	    action-validator "$$action"; \
-	  done <<< "$$actions"; \
+	  done < <(printf '%s' "$$actions" | tr '\0' '\n'); \
 	fi
 
 lint-infra:

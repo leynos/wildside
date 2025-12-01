@@ -99,7 +99,7 @@ class ResolvedInputs:
     ssh_key: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PreparedPaths:
     """Resolved paths produced by the preparation step."""
 
@@ -205,7 +205,25 @@ def prepare_bootstrap_inputs(
     payloads: BootstrapPayloads,
     github_context: GitHubActionContext,
 ) -> PreparedPaths:
-    """Materialise input payloads and export paths to GITHUB_ENV."""
+    """Materialise input payloads and export paths to GITHUB_ENV.
+
+    Parameters
+    ----------
+    vault_config : VaultEnvironmentConfig
+        Resolved identifiers and destination paths for the target environment.
+    payloads : BootstrapPayloads
+        Optional payloads provided to seed state, CA certificate, and SSH
+        identity files.
+    github_context : GitHubActionContext
+        GitHub Action runner context including temp directories and masking
+        helper.
+
+    Returns
+    -------
+    PreparedPaths
+        Resolved paths for the droplet tag, state file, CA certificate, and SSH
+        identity.
+    """
 
     resolved_droplet_tag = vault_config.droplet_tag or f"vault-{vault_config.environment}"
     state_file = _handle_state_file(
@@ -254,7 +272,8 @@ def _resolve_input(
         return Path(env_value) if resolution.as_path else env_value
 
     if resolution.required:
-        raise SystemExit(f"{resolution.env_key} is required")
+        msg = f"{resolution.env_key} is required"
+        raise SystemExit(msg)
 
     return resolution.default
 

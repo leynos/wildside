@@ -7,8 +7,10 @@ from typing import Any
 
 import yaml
 
-ACTION_PATH = Path(__file__).resolve().parents[2] / \
-    ".github/actions/bootstrap-vault-appliance/action.yml"
+ACTION_PATH = (
+    Path(__file__).resolve().parents[2]
+    / ".github/actions/bootstrap-vault-appliance/action.yml"
+)
 
 
 def _load_action() -> dict[str, Any]:
@@ -38,9 +40,17 @@ def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:
         step for step in steps if step["name"] == "Bootstrap Vault appliance"
     )
     run_script = bootstrap["run"]
+    env = bootstrap.get("env", {})
 
-    assert "uv run scripts/bootstrap_vault_appliance.py" in run_script
-    assert "args+=" not in run_script
+    assert run_script.strip() == "uv run scripts/bootstrap_vault_appliance.py"
+    expected_env = {
+        "VAULT_ADDRESS": "${{ inputs.vault_address }}",
+        "DROPLET_TAG": "${{ env.DROPLET_TAG }}",
+        "STATE_FILE": "${{ env.STATE_FILE }}",
+        "ROTATE_SECRET_ID": "${{ inputs.rotate_secret_id }}",
+    }
+    for key, value in expected_env.items():
+        assert env.get(key) == value
 
 
 def test_publish_step_emits_expected_outputs() -> None:
@@ -62,6 +72,8 @@ def test_publish_step_emits_expected_outputs() -> None:
     )
     publish_run = publish_step["run"]
     assert "uv run scripts/publish_bootstrap_outputs.py" in publish_run
+    publish_script = Path(__file__).resolve().parents[2] / "scripts/publish_bootstrap_outputs.py"
+    assert "add-mask" in publish_script.read_text(encoding="utf-8")
 
     expected_wiring = {
         "vault-address": "${{ steps.publish.outputs.vault-address }}",
