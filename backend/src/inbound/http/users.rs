@@ -213,6 +213,31 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn login_rejects_wrong_credentials_with_unauthorised_status() {
+        let app = actix_test::init_service(test_app()).await;
+        let request = actix_test::TestRequest::post()
+            .uri("/api/v1/login")
+            .set_json(&LoginRequest {
+                username: "admin".into(),
+                password: "wrong-password".into(),
+            })
+            .to_request();
+
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+        let body = actix_test::read_body(response).await;
+        let value: Value = serde_json::from_slice(&body).expect("error payload");
+        assert_eq!(
+            value.get("message").and_then(Value::as_str),
+            Some("invalid credentials")
+        );
+        assert_eq!(
+            value.get("code").and_then(Value::as_str),
+            Some("Unauthorized")
+        );
+    }
+
+    #[actix_web::test]
     async fn list_users_returns_camel_case_json() {
         let app = actix_test::init_service(test_app()).await;
 

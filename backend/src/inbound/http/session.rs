@@ -71,16 +71,27 @@ mod tests {
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
 
+    fn session_test_app() -> App<
+        impl actix_web::dev::ServiceFactory<
+            actix_web::dev::ServiceRequest,
+            Config = (),
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+            InitError = (),
+        >,
+    > {
+        App::new().wrap(
+            SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+                .cookie_name("session".to_owned())
+                .cookie_secure(false)
+                .build(),
+        )
+    }
+
     #[actix_web::test]
     async fn round_trips_user_id() {
         let app = test::init_service(
-            App::new()
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                        .cookie_name("session".to_owned())
-                        .cookie_secure(false)
-                        .build(),
-                )
+            session_test_app()
                 .route(
                     "/set",
                     web::get().to(|session: SessionContext| async move {
@@ -124,22 +135,13 @@ mod tests {
 
     #[actix_web::test]
     async fn missing_user_is_unauthorised() {
-        let app = test::init_service(
-            App::new()
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                        .cookie_name("session".to_owned())
-                        .cookie_secure(false)
-                        .build(),
-                )
-                .route(
-                    "/require",
-                    web::get().to(|session: SessionContext| async move {
-                        let _ = session.require_user_id()?;
-                        Ok::<_, Error>(HttpResponse::Ok())
-                    }),
-                ),
-        )
+        let app = test::init_service(session_test_app().route(
+            "/require",
+            web::get().to(|session: SessionContext| async move {
+                let _ = session.require_user_id()?;
+                Ok::<_, Error>(HttpResponse::Ok())
+            }),
+        ))
         .await;
 
         let res =
