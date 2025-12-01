@@ -24,6 +24,7 @@ from scripts._vault_state import (  # imported after sys.path mutation
 )
 from scripts.bootstrap_vault_appliance import (  # imported after sys.path mutation
     AppRoleConfig,
+    BootstrapInputs,
     ConnectionConfig,
     EnvContext,
     SSHConfig,
@@ -400,7 +401,7 @@ def test_parse_args_validates_threshold_not_exceeding_shares(
     state_file = tmp_path / "state.json"
 
     with pytest.raises(SystemExit):
-        build_config(
+        inputs = BootstrapInputs(
             connection=ConnectionConfig(
                 vault_addr="https://vault.example",
                 droplet_tag="vault-dev",
@@ -420,5 +421,8 @@ def test_parse_args_validates_threshold_not_exceeding_shares(
                 rotate_secret_id=None,
             ),
             vault_init=VaultInitConfig(key_shares=3, key_threshold=4),
+        )
+        build_config(
+            inputs=inputs,
             context=EnvContext(env={}),
         )

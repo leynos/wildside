@@ -94,6 +94,16 @@ class EnvContext:
 
 
 @dataclass(frozen=True, slots=True)
+class BootstrapInputs:
+    """Grouped bootstrap configuration inputs."""
+
+    connection: ConnectionConfig
+    ssh: SSHConfig
+    approle: AppRoleConfig
+    vault_init: VaultInitConfig
+
+
+@dataclass(frozen=True, slots=True)
 class ShamirConfig:
     """Resolved Shamir configuration."""
 
@@ -347,33 +357,30 @@ def _resolve_ttl_config(
 
 def build_config(
     *,
-    connection: ConnectionConfig,
-    ssh: SSHConfig,
-    approle: AppRoleConfig,
-    vault_init: VaultInitConfig,
+    inputs: BootstrapInputs,
     context: EnvContext | None = None,
 ) -> VaultBootstrapConfig:
     """Build a bootstrap configuration from CLI parameters and environment."""
 
     context = context or EnvContext.from_os_environ()
     core = _resolve_core_config(
-        connection=connection,
+        connection=inputs.connection,
         context=context,
     )
     ssh_cfg = _resolve_ssh_config(
-        ssh=ssh,
+        ssh=inputs.ssh,
         context=context,
     )
     approle_cfg = _resolve_approle_config(
-        approle=approle,
+        approle=inputs.approle,
         state_file=core.state_file,
         context=context,
     )
     shamir_cfg = _resolve_shamir_config(
-        vault_init=vault_init,
+        vault_init=inputs.vault_init,
         context=context,
     )
-    ttl_cfg = _resolve_ttl_config(approle=approle, context=context)
+    ttl_cfg = _resolve_ttl_config(approle=inputs.approle, context=context)
 
     return VaultBootstrapConfig(
         vault_addr=core.vault_addr,
@@ -417,37 +424,36 @@ def main(
 ) -> int:
     """Entry point for command-line execution."""
 
-    connection = ConnectionConfig(
-        vault_addr=vault_addr,
-        droplet_tag=droplet_tag,
-        state_file=state_file,
-        ca_certificate=ca_certificate,
-    )
-    ssh_cfg = SSHConfig(
-        ssh_user=ssh_user,
-        ssh_identity=ssh_identity,
-    )
-    approle_cfg = AppRoleConfig(
-        kv_mount_path=kv_mount_path,
-        approle_name=approle_name,
-        approle_policy_name=approle_policy_name,
-        approle_policy_path=approle_policy_path,
-        approle_policy_content=approle_policy_content,
-        token_ttl=token_ttl,
-        token_max_ttl=token_max_ttl,
-        secret_id_ttl=secret_id_ttl,
-        rotate_secret_id=rotate_secret_id,
-    )
-    vault_init_cfg = VaultInitConfig(
-        key_shares=key_shares,
-        key_threshold=key_threshold,
+    inputs = BootstrapInputs(
+        connection=ConnectionConfig(
+            vault_addr=vault_addr,
+            droplet_tag=droplet_tag,
+            state_file=state_file,
+            ca_certificate=ca_certificate,
+        ),
+        ssh=SSHConfig(
+            ssh_user=ssh_user,
+            ssh_identity=ssh_identity,
+        ),
+        approle=AppRoleConfig(
+            kv_mount_path=kv_mount_path,
+            approle_name=approle_name,
+            approle_policy_name=approle_policy_name,
+            approle_policy_path=approle_policy_path,
+            approle_policy_content=approle_policy_content,
+            token_ttl=token_ttl,
+            token_max_ttl=token_max_ttl,
+            secret_id_ttl=secret_id_ttl,
+            rotate_secret_id=rotate_secret_id,
+        ),
+        vault_init=VaultInitConfig(
+            key_shares=key_shares,
+            key_threshold=key_threshold,
+        ),
     )
 
     config = build_config(
-        connection=connection,
-        ssh=ssh_cfg,
-        approle=approle_cfg,
-        vault_init=vault_init_cfg,
+        inputs=inputs,
     )
     try:
         state = bootstrap(config)
