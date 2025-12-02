@@ -1,6 +1,6 @@
 # Wildside testing guide
 
-This guide summarises how to run the test suites locally and which toggles to
+This guide summarizes how to run the test suites locally and which toggles to
 adjust when running without elevated privileges.
 
 ## Core commands
@@ -14,8 +14,8 @@ adjust when running without elevated privileges.
 ## Embedded Postgres worker path
 
 `make test` builds and installs the `pg_worker` helper used by
-`pg_embedded_setup_unpriv`. By default it writes to `/var/tmp/pg_worker`, which
-may fail on systems where you lack write access.
+`pg_embedded_setup_unpriv`. By default, it writes to `/var/tmp/pg_worker`, which
+may fail on systems without write access.
 
 - Set `PG_WORKER_PATH` to a user-writable location when running locally, for
   example:

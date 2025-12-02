@@ -42,23 +42,23 @@ and integrate it into automated test flows.
    cache, 0700 for the runtime and data directories), and initialises the
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
-   worker helper so the privileged operations run entirely under the sandbox
-   user. Ownership fix-ups occur on every call so running the tool twice remains
-   idempotent.
+worker helper so the privileged operations run entirely under the sandbox
+user. Ownership fix-ups occur on every call, so running the tool twice remains
+idempotent.
 
 4. Pass the resulting paths and credentials to your tests. If you use
    `postgresql_embedded` directly after the setup step, it can reuse the staged
    binaries and data directory without needing `root`.
 
-   `make test` honours a `PG_WORKER_PATH` variable that mirrors the
-   `PG_EMBEDDED_WORKER` environment variable used by the helper. Override it to
-   a user-writable path when running locally without elevated permissions:
+ `make test` honours a `PG_WORKER_PATH` variable that mirrors the
+ `PG_EMBEDDED_WORKER` environment variable used by the helper. Override it to a
+ user-writable path when running locally without elevated permissions:
 
    ```bash
    PG_WORKER_PATH=/tmp/pg_worker make test
    ```
 
-   The default remains `/var/tmp/pg_worker` to preserve CI behaviour.
+ The default remains `/var/tmp/pg_worker` to preserve CI behaviour.
 
 ## Bootstrap for test suites
 

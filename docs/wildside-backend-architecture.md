@@ -67,11 +67,11 @@ on details of Actix, Diesel, or other external tools. It also simplifies
 testing – domain services can be unit-tested with mock implementations of
 ports, and the real adapters can be integration-tested
 separately([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L266)).
- The repository is structured to reflect this separation, with distinct modules
-for `api` (HTTP handlers), `ws` (WebSocket handlers), `domain` (business logic
-and domain models), `infra` (database, cache, and other external adapters), and
-`models` (shared data
-types)([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L56-L64)).
+The repository is structured to reflect this separation, with distinct modules
+for `inbound::http` (HTTP handlers), `inbound::ws` (WebSocket handlers),
+`domain` (business logic and domain models), and `outbound` (persistence,
+cache, and other external adapters that implement the domain ports)
+([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L56-L64)).
 
 **Observability by design:** From the outset, Wildside’s backend includes
 thorough instrumentation in each component. We use the `tracing` library for

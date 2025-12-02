@@ -42,6 +42,7 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login success", headers(("Set-Cookie" = String, description = "Session cookie"))),
+        (status = 400, description = "Invalid request", body = Error),
         (status = 401, description = "Invalid credentials", body = Error),
         (status = 500, description = "Internal server error")
     ),
@@ -116,6 +117,7 @@ mod tests {
     use rstest::rstest;
     use serde_json::Value;
 
+    #[derive(Debug)]
     struct ValidationExpectation<'a> {
         message: &'a str,
         field: &'a str,

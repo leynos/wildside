@@ -66,10 +66,14 @@ export function resolveValidatorPath() {
 }
 
 function normaliseVersionTuple(version) {
-  return String(version)
+  const parts = String(version)
     .split('.')
     .slice(0, 3)
     .map((part) => Number.parseInt(part, 10) || 0);
+  while (parts.length < 3) {
+    parts.push(0);
+  }
+  return parts;
 }
 
 function isAtLeastVersion(version, minimum) {

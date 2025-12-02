@@ -66,6 +66,7 @@ impl FromRequest for SessionContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_session::Session;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
 
@@ -139,6 +140,51 @@ mod tests {
 
         let res =
             test::call_service(&app, test::TestRequest::get().uri("/require").to_request()).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn tampered_user_id_is_unauthorised() {
+        let app = test::init_service(
+            session_test_app()
+                .route(
+                    "/set-invalid",
+                    web::get().to(|session: Session| async move {
+                        session
+                            .insert(USER_ID_KEY, "not-a-uuid")
+                            .expect("set invalid user id");
+                        HttpResponse::Ok()
+                    }),
+                )
+                .route(
+                    "/require",
+                    web::get().to(|session: SessionContext| async move {
+                        let _ = session.require_user_id()?;
+                        Ok::<_, Error>(HttpResponse::Ok())
+                    }),
+                ),
+        )
+        .await;
+
+        let set_res = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/set-invalid").to_request(),
+        )
+        .await;
+        let cookie = set_res
+            .response()
+            .cookies()
+            .find(|cookie| cookie.name() == "session")
+            .expect("session cookie set");
+
+        let res = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/require")
+                .cookie(cookie)
+                .to_request(),
+        )
+        .await;
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     }
 }
