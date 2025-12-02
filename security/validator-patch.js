@@ -98,7 +98,13 @@ function isAtLeastVersion(version, minimum) {
 export function isValidatorPatched() {
   const packageJsonPath = resolveValidatorPackageJsonPath();
   const validatorPath = resolveValidatorPath();
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse ${packageJsonPath}: ${message}`, { cause: error });
+  }
   const validatorVersion = packageJson.version;
 
   if (validatorVersion && isAtLeastVersion(validatorVersion, VALIDATOR_MIN_SAFE_VERSION)) {
