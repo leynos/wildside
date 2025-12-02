@@ -238,10 +238,10 @@ minimum request envelope:
 
 Domain errors live in `backend/src/domain/error.rs` and stay
 transport-agnostic. The inbound HTTP adapter applies the Actix
-`ResponseError` mapping in `backend/src/inbound/http/error.rs`, translating error codes
-to HTTP status codes, propagating the `trace-id` header when present, and
-redacting `InternalError` payloads to the generic message "Internal server
-error".
+`ResponseError` mapping in `backend/src/inbound/http/error.rs`, translating
+error codes to HTTP status codes, propagating the `trace-id` header when
+present, and redacting `InternalError` payloads to the generic message
+"Internal server error".
 
 #### WebSocket Message Contracts
 
