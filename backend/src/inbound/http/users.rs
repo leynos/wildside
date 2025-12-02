@@ -122,6 +122,7 @@ mod tests {
         message: &'a str,
         field: &'a str,
         code: &'a str,
+        top_code: &'a str,
     }
 
     async fn assert_login_validation_error(
@@ -149,7 +150,7 @@ mod tests {
         );
         assert_eq!(
             value.get("code").and_then(Value::as_str),
-            Some("InvalidRequest")
+            Some(expected.top_code)
         );
         let details = value
             .get("details")
@@ -192,6 +193,7 @@ mod tests {
             message: "username must not be empty",
             field: "username",
             code: "empty_username",
+            top_code: "invalid_request",
         }
     )]
     #[case(
@@ -201,6 +203,7 @@ mod tests {
             message: "password must not be empty",
             field: "password",
             code: "empty_password",
+            top_code: "invalid_request",
         }
     )]
     #[actix_web::test]
@@ -233,7 +236,7 @@ mod tests {
         );
         assert_eq!(
             value.get("code").and_then(Value::as_str),
-            Some("Unauthorized")
+            Some("unauthorized")
         );
     }
 
