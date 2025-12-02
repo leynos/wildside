@@ -189,6 +189,8 @@ def _resolve_core_config(
         InputResolution(env_key="DROPLET_TAG", required=True),
         env=context.env,
     )
+    assert resolved_vault_addr, "VAULT_ADDRESS must resolve"
+    assert resolved_droplet_tag, "DROPLET_TAG must resolve"
     resolved_ca_certificate = resolve_input(
         connection.ca_certificate,
         InputResolution(env_key="CA_CERT_PATH", as_path=True),

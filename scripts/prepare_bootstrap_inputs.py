@@ -99,6 +99,18 @@ class PreparedPaths:
     ssh_identity_path: Path | None
 
 
+def _narrow_path(value: str | Path | None) -> Path | None:
+    """Return value when it is already a Path; otherwise None."""
+
+    return value if isinstance(value, Path) else None
+
+
+def _narrow_str(value: str | Path | None) -> str | None:
+    """Return value when it is already a string; otherwise None."""
+
+    return value if isinstance(value, str) else None
+
+
 def _decode_payload(payload: str) -> str:
     """Return payload as text, decoding base64 if it is valid."""
 
@@ -293,17 +305,14 @@ def _resolve_all_inputs(
 
     return ResolvedInputs(
         environment=str(resolved_environment),
-        runner_temp=resolved_runner_temp
-        if isinstance(resolved_runner_temp, Path)
-        else Path(tempfile.gettempdir()),
-        github_env=resolved_github_env
-        if isinstance(resolved_github_env, Path)
-        else Path(tempfile.gettempdir()) / "github-env-undefined",
-        droplet_tag=resolved_droplet_tag if isinstance(resolved_droplet_tag, str) else None,
-        state_path=resolved_state_path if isinstance(resolved_state_path, Path) else None,
-        bootstrap_state=resolved_bootstrap_state if isinstance(resolved_bootstrap_state, str) else None,
-        ca_certificate=resolved_ca_certificate if isinstance(resolved_ca_certificate, str) else None,
-        ssh_key=resolved_ssh_key if isinstance(resolved_ssh_key, str) else None,
+        runner_temp=_narrow_path(resolved_runner_temp) or Path(tempfile.gettempdir()),
+        github_env=_narrow_path(resolved_github_env)
+        or Path(tempfile.gettempdir()) / "github-env-undefined",
+        droplet_tag=_narrow_str(resolved_droplet_tag),
+        state_path=_narrow_path(resolved_state_path),
+        bootstrap_state=_narrow_str(resolved_bootstrap_state),
+        ca_certificate=_narrow_str(resolved_ca_certificate),
+        ssh_key=_narrow_str(resolved_ssh_key),
     )
 
 
@@ -386,9 +395,4 @@ def main(
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
-    try:
-        app()
-    except Exception as exc:
-        msg = f"bootstrap input preparation failed: {exc}"
-        print(msg, file=sys.stderr)
-        raise
+    app()
