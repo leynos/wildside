@@ -153,7 +153,7 @@ mod tests {
                         session
                             .insert(USER_ID_KEY, "not-a-uuid")
                             .expect("set invalid user id");
-                        HttpResponse::Ok()
+                        Ok::<_, actix_web::Error>(HttpResponse::Ok())
                     }),
                 )
                 .route(
