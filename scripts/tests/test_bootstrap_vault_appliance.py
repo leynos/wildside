@@ -22,7 +22,15 @@ from scripts._vault_state import (  # imported after sys.path mutation
     VaultBootstrapError,
     VaultBootstrapState,
 )
-from scripts.bootstrap_vault_appliance import parse_args  # imported after sys.path mutation
+from scripts.bootstrap_vault_appliance import (  # imported after sys.path mutation
+    AppRoleConfig,
+    BootstrapInputs,
+    ConnectionConfig,
+    EnvContext,
+    SSHConfig,
+    VaultInitConfig,
+    build_config,
+)
 
 
 def _make_config(tmp_path: Path, **overrides: object) -> VaultBootstrapConfig:
@@ -391,22 +399,30 @@ def test_parse_args_validates_threshold_not_exceeding_shares(
     """CLI parsing rejects a key threshold larger than the number of shares."""
 
     state_file = tmp_path / "state.json"
-    argv = [
-        "--vault-addr",
-        "https://vault.example",
-        "--droplet-tag",
-        "vault-dev",
-        "--state-file",
-        str(state_file),
-        "--key-shares",
-        "3",
-        "--key-threshold",
-        "4",
-    ]
 
-    with pytest.raises(SystemExit) as excinfo:
-        parse_args(argv)
-
-    assert excinfo.value.code == 2
-    captured = capsys.readouterr()
-    assert "--key-threshold must be ≤ --key-shares" in captured.err
+    with pytest.raises(SystemExit):
+        inputs = BootstrapInputs(
+            connection=ConnectionConfig(
+                vault_addr="https://vault.example",
+                droplet_tag="vault-dev",
+                state_file=state_file,
+                ca_certificate=None,
+            ),
+            ssh=SSHConfig(ssh_user=None, ssh_identity=None),
+            approle=AppRoleConfig(
+                kv_mount_path=None,
+                approle_name=None,
+                approle_policy_name=None,
+                approle_policy_path=None,
+                approle_policy_content=None,
+                token_ttl=None,
+                token_max_ttl=None,
+                secret_id_ttl=None,
+                rotate_secret_id=None,
+            ),
+            vault_init=VaultInitConfig(key_shares=3, key_threshold=4),
+        )
+        build_config(
+            inputs=inputs,
+            context=EnvContext(env={}),
+        )

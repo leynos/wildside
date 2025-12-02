@@ -1,0 +1,209 @@
+name: bootstrap-vault-appliance
+description: >-
+  Initialize or verify the DigitalOcean Vault appliance using the repository's
+  Python bootstrap helper. The action is idempotent: re-runs verify the existing
+  appliance instead of recreating it.
+author: Wildside platform team
+branding:
+  icon: lock
+  color: blue
+
+inputs:
+  environment:
+    description: Logical environment identifier (e.g. dev, staging, preview).
+    required: true
+  vault_address:
+    description: Fully qualified Vault HTTPS endpoint exposed by the load balancer.
+    required: true
+  droplet_tag:
+    description: >-
+      DigitalOcean tag applied to Vault droplets. Defaults to "vault-<environment>"
+      when omitted.
+    required: false
+  digitalocean_token:
+    description: DigitalOcean API token with read access to the droplet tag.
+    required: true
+    secret: true
+  ca_certificate:
+    description: >-
+      PEM-encoded CA certificate used to validate the Vault endpoint. Accepts raw
+      PEM text or base64-encoded content. Optional when Vault serves a public
+      certificate.
+    required: false
+  bootstrap_state:
+    description: >-
+      JSON or base64-encoded JSON payload for the bootstrap state file
+      (unseal_keys, root_token, approle_role_id, approle_secret_id). When not
+      provided, the helper will initialize Vault and capture new state.
+    required: false
+    secret: true
+  state_path:
+    description: >-
+      Optional override for where the bootstrap state file is written. Defaults to
+      $RUNNER_TEMP/vault-bootstrap/<environment>/state.json.
+    required: false
+  ssh_user:
+    description: SSH user used to probe the Vault service on each droplet.
+    required: false
+    default: root
+  ssh_private_key:
+    description: >-
+      Optional SSH private key for the droplet health checks. When provided, it is
+      written to a temporary file with 0600 permissions and passed via
+      --ssh-identity.
+    required: false
+  kv_mount_path:
+    description: Mount path for the KV v2 secrets engine.
+    required: false
+    default: secret
+  approle_name:
+    description: Name of the AppRole provisioned for the DOKS workflow.
+    required: false
+    default: doks-deployer
+  approle_policy_name:
+    description: Vault policy name attached to the AppRole.
+    required: false
+    default: doks-deployer
+  approle_policy:
+    description: Optional HCL policy content overriding the default KV policy.
+    required: false
+  token_ttl:
+    description: TTL applied to tokens issued via the AppRole.
+    required: false
+    default: 1h
+  token_max_ttl:
+    description: Maximum TTL for AppRole tokens.
+    required: false
+    default: 4h
+  secret_id_ttl:
+    description: TTL for generated AppRole secret IDs.
+    required: false
+    default: 4h
+  rotate_secret_id:
+    description: >-
+      Set to true to force rotation of the AppRole secret ID even when one is
+      already recorded in the state file.
+    required: false
+    default: "false"
+  key_shares:
+    description: Number of unseal key shares generated during initialization.
+    required: false
+    default: "5"
+  key_threshold:
+    description: Number of shares required to unseal Vault.
+    required: false
+    default: "3"
+  vault_cli_version:
+    description: Version of the Vault CLI to install (e.g. 1.17.6).
+    required: false
+    default: "1.17.6"
+
+outputs:
+  vault-address:
+    description: Vault endpoint used for the bootstrap run.
+    value: ${{ steps.publish.outputs.vault-address }}
+  ca-certificate-path:
+    description: Path to the CA certificate written for this run (empty if omitted).
+    value: ${{ steps.publish.outputs.ca-certificate-path }}
+  state-file:
+    description: Path to the bootstrap state file captured on the runner.
+    value: ${{ steps.publish.outputs.state-file }}
+  approle-role-id:
+    description: AppRole role_id resolved during bootstrap.
+    value: ${{ steps.publish.outputs.approle-role-id }}
+  approle-secret-id:
+    description: AppRole secret_id resolved or rotated during bootstrap.
+    value: ${{ steps.publish.outputs.approle-secret-id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      id: install-uv
+      uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
+
+    - name: Compute paths and seed bootstrap state
+      id: seed
+      shell: bash
+      env:
+        INPUT_BOOTSTRAP_STATE: ${{ inputs.bootstrap_state }}
+        INPUT_CA_CERTIFICATE: ${{ inputs.ca_certificate }}
+        INPUT_SSH_KEY: ${{ inputs.ssh_private_key }}
+        INPUT_STATE_PATH: ${{ inputs.state_path }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+      run: uv run scripts/prepare_bootstrap_inputs.py
+
+    - name: Install doctl
+      id: install-doctl
+      uses: digitalocean/action-doctl@135ac0aa0eed4437d547c6f12c364d3006b42824
+      with:
+        token: ${{ inputs.digitalocean_token }}
+
+    - name: Install Vault CLI
+      id: install-vault-cli
+      shell: bash
+      env:
+        VAULT_VERSION: ${{ inputs.vault_cli_version }}
+      run: |
+        set -euo pipefail
+        if command -v vault >/dev/null 2>&1; then
+          exit 0
+        fi
+
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH_RAW="$(uname -m)"
+        case "${ARCH_RAW}" in
+          x86_64|amd64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+          *)
+            echo "Unsupported architecture: ${ARCH_RAW}" >&2
+            exit 1
+            ;;
+        esac
+        if [ "${OS}" != "linux" ]; then
+          echo "Unsupported OS: ${OS}. Vault install step expects Linux." >&2
+          exit 1
+        fi
+
+        ARCHIVE="vault_${VAULT_VERSION}_${OS}_${ARCH}.zip"
+        BASE_URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}"
+        curl -fsSLo /tmp/vault.zip "${BASE_URL}/${ARCHIVE}"
+        curl -fsSLo /tmp/vault_SHA256SUMS "${BASE_URL}/vault_${VAULT_VERSION}_SHA256SUMS"
+        grep "${ARCHIVE}" /tmp/vault_SHA256SUMS > /tmp/vault_SHA256SUMS_filtered
+        (cd /tmp && sha256sum -c vault_SHA256SUMS_filtered)
+        mkdir -p "${RUNNER_TEMP}/bin"
+        unzip -qo /tmp/vault.zip -d "${RUNNER_TEMP}/bin"
+        echo "${RUNNER_TEMP}/bin" >>"${GITHUB_PATH}"
+
+    - name: Bootstrap Vault appliance
+      id: bootstrap-helper
+      shell: bash
+      env:
+        DIGITALOCEAN_ACCESS_TOKEN: ${{ inputs.digitalocean_token }}
+        VAULT_ADDRESS: ${{ inputs.vault_address }}
+        DROPLET_TAG: ${{ env.DROPLET_TAG }}
+        STATE_FILE: ${{ env.STATE_FILE }}
+        SSH_IDENTITY: ${{ env.SSH_IDENTITY }}
+        CA_CERT_PATH: ${{ env.CA_CERT_PATH }}
+        SSH_USER: ${{ inputs.ssh_user }}
+        KV_MOUNT_PATH: ${{ inputs.kv_mount_path }}
+        APPROLE_NAME: ${{ inputs.approle_name }}
+        APPROLE_POLICY_NAME: ${{ inputs.approle_policy_name }}
+        APPROLE_POLICY: ${{ inputs.approle_policy }}
+        TOKEN_TTL: ${{ inputs.token_ttl }}
+        TOKEN_MAX_TTL: ${{ inputs.token_max_ttl }}
+        SECRET_ID_TTL: ${{ inputs.secret_id_ttl }}
+        KEY_SHARES: ${{ inputs.key_shares }}
+        KEY_THRESHOLD: ${{ inputs.key_threshold }}
+        ROTATE_SECRET_ID: ${{ inputs.rotate_secret_id }}
+        UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+      run: uv run scripts/bootstrap_vault_appliance.py
+
+    - name: Publish bootstrap outputs
+      id: publish
+      shell: bash
+      env:
+        STATE_FILE: ${{ env.STATE_FILE }}
+        VAULT_ADDRESS: ${{ inputs.vault_address }}
+        CA_CERT_PATH: ${{ env.CA_CERT_PATH }}
+      run: uv run scripts/publish_bootstrap_outputs.py

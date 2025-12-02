@@ -42,7 +42,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
+        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
         vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test
 
 workspace-sync:
@@ -87,7 +87,7 @@ lint: workspace-sync
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
 	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
-	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-infra
+	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
@@ -111,6 +111,20 @@ lint-makefile:
 	command -v mbake >/dev/null || { echo "mbake is not installed" >&2; exit 1; }
 	checkmake Makefile
 	mbake validate Makefile
+
+lint-actions:
+	$(call ensure_tool,yamllint)
+	$(call ensure_tool,action-validator)
+	@actions=$$(if [ -d .github/actions ]; then find .github/actions -name 'action.yml' -print0; fi); \
+	if [ -z "$$actions" ]; then \
+	  echo "No composite actions found; skipping lint-actions"; \
+	else \
+	  printf '%s' "$$actions" | xargs -0 yamllint; \
+	  while IFS= read -r action; do \
+	    echo "$$action:"; \
+	    action-validator "$$action"; \
+	  done < <(printf '%s' "$$actions" | tr '\0' '\n'); \
+	fi
 
 lint-infra:
 	$(call ensure_tool,tflint)
@@ -138,6 +152,8 @@ scripts-test:
 	uv run \
 		--with pytest \
 		--with plumbum \
+		--with cyclopts \
+		--with pyyaml \
 		--with "cmd-mox@git+https://github.com/leynos/cmd-mox@28acd288975f15e4c360d62e431950820dbcb27a" \
 		pytest scripts/tests
 

@@ -51,6 +51,87 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   Conftest policies enforce HTTPS termination, HTTP→HTTPS redirects, and forbid
   exposing SSH to the public internet by default. Additional inputs allow the
   appliance to live inside a custom VPC and project.
+- **Reusable GitHub Action.** A composite action lives at
+  `.github/actions/bootstrap-vault-appliance` to drive the Python helper. It
+  installs `uv`, `doctl`, and the Vault command-line interface (CLI), derives
+  the droplet tag as `vault-<environment>` when one is not supplied, and writes
+  bootstrap state to `$RUNNER_TEMP/vault-bootstrap/<environment>/state.json`.
+  Inputs accept raw or base64 JSON/PEM (Privacy-Enhanced Mail) payloads for the
+  state file and certificate authority (CA) bundle, while secrets (unseal keys,
+  root token, Application Role (AppRole) credentials) are masked before outputs
+  are published so idempotent re-runs cannot leak credentials.
+
+### GitHub Action control flow
+
+```mermaid
+flowchart TD
+  A[Start composite action<br/>inputs received] --> B[Seed step]
+
+  subgraph S[Seed bootstrap state]
+    B --> B1[Derive DROPLET_TAG<br/>default vault-<environment>]
+    B1 --> B2[Determine STATE_FILE path<br/>$RUNNER_TEMP/vault-bootstrap/<environment>/state.json]
+    B2 --> B3{bootstrap_state provided?}
+    B3 -- yes and STATE_FILE absent --> B4[Decode raw or base64 JSON<br/>validate and write STATE_FILE 0600]
+    B3 -- no --> B5[Skip writing state file]
+
+    B4 --> B6{ca_certificate provided?}
+    B5 --> B6
+    B6 -- yes --> B7[Decode raw or base64 PEM<br/>write CA_CERT_PATH 0600]
+    B6 -- no --> B8[No CA_CERT_PATH]
+
+    B7 --> B9{ssh_private_key provided?}
+    B8 --> B9
+    B9 -- yes --> B10[Write SSH_IDENTITY file 0600<br/>add-mask ssh_private_key]
+    B9 -- no --> B11[No SSH_IDENTITY]
+
+    B10 --> B12[Export DROPLET_TAG, STATE_FILE,<br/>CA_CERT_PATH, SSH_IDENTITY to GITHUB_ENV]
+    B11 --> B12
+  end
+
+  B12 --> C[Install uv]
+  C --> D[Install doctl with digitalocean_token]
+  D --> E[Install Vault CLI if missing<br/>download, verify checksum, unzip to RUNNER_TEMP/bin]
+
+  E --> F[Bootstrap Vault appliance step]
+
+  subgraph H[Bootstrap via Python helper]
+    F --> F1[Build argument list for helper<br/>vault addr, droplet tag, state file, KV/AppRole params]
+    F1 --> F2{CA_CERT_PATH set?}
+    F2 -- yes --> F3[Append --ca-certificate]
+    F2 -- no --> F4[Skip CA certificate flag]
+
+    F3 --> F5{SSH_IDENTITY set?}
+    F4 --> F5
+    F5 -- yes --> F6[Append --ssh-identity]
+    F5 -- no --> F7[Skip SSH identity flag]
+
+    F6 --> F8{approle_policy provided?}
+    F7 --> F8
+    F8 -- yes --> F9[Write approle-policy.hcl<br/>append --approle-policy-path]
+    F8 -- no --> F10[Use default policy]
+
+    F9 --> F11{rotate_secret_id == true?}
+    F10 --> F11
+    F11 -- yes --> F12[Append --rotate-secret-id]
+    F11 -- no --> F13[Do not append flag]
+
+    F12 --> F14[Run uv with scripts/bootstrap_vault_appliance.py]
+    F13 --> F14
+    F14 --> F15[Helper initializes or verifies Vault<br/>updates STATE_FILE]
+  end
+
+  F15 --> G[Publish outputs step]
+
+  subgraph P[Publish and mask outputs]
+    G --> G1[Read STATE_FILE JSON]
+    G1 --> G2[Extract approle_role_id, approle_secret_id,<br/>root_token, unseal_keys]
+    G2 --> G3[Add-mask all secrets for logs]
+    G3 --> G4[Write to GITHUB_OUTPUT:<br/>vault-address, state-file,<br/>approle-role-id, approle-secret-id,<br/>ca-certificate-path]
+  end
+
+  G4 --> Z[Downstream jobs consume masked outputs]
+```
+
 - **Detailed drift checks.** Behavioural tests execute
   `tofu plan -detailed-exitcode` to verify that creating the appliance produces
   exit code 2, proving the safety rails that guard destructive operations. The
