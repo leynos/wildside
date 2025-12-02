@@ -112,8 +112,6 @@ pub async fn list_users(session: SessionContext) -> ApiResult<web::Json<Vec<User
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
-    use actix_web::cookie::Key;
     use actix_web::{test as actix_test, web, App};
     use rstest::rstest;
     use serde_json::Value;

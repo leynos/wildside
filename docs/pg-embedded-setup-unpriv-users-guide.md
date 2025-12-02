@@ -5,8 +5,8 @@ data directory regardless of whether it starts with `root` privileges. When the
 process runs as `root` it stages directories for `nobody` and delegates
 PostgreSQL lifecycle commands to the worker helper, which executes as the
 sandbox user. Unprivileged invocations keep the current identity and provision
-directories with the caller’s UID. This guide explains how to configure the
-tool and integrate it into automated test flows.
+directories with the caller’s UID. This guide explains how to configure the tool
+and integrate it into automated test flows.
 
 ## Prerequisites
 
@@ -43,12 +43,22 @@ tool and integrate it into automated test flows.
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
    worker helper so the privileged operations run entirely under the sandbox
-   user. Ownership fix-ups occur on every call so running the tool twice
-   remains idempotent.
+   user. Ownership fix-ups occur on every call so running the tool twice remains
+   idempotent.
 
 4. Pass the resulting paths and credentials to your tests. If you use
    `postgresql_embedded` directly after the setup step, it can reuse the staged
    binaries and data directory without needing `root`.
+
+   `make test` honours a `PG_WORKER_PATH` variable that mirrors the
+   `PG_EMBEDDED_WORKER` environment variable used by the helper. Override it to
+   a user-writable path when running locally without elevated permissions:
+
+   ```bash
+   PG_WORKER_PATH=/tmp/pg_worker make test
+   ```
+
+   The default remains `/var/tmp/pg_worker` to preserve CI behaviour.
 
 ## Bootstrap for test suites
 
@@ -81,8 +91,8 @@ timezone database can be discovered (currently on Unix-like hosts) the helper
 also sets `TZDIR`; otherwise it leaves any caller-provided value untouched so
 platform-specific defaults remain available. If the system timezone database is
 missing, the helper returns an error advising the caller to install `tzdata` or
-set `TZDIR` explicitly, making the dependency visible during test startup
-rather than when PostgreSQL launches.
+set `TZDIR` explicitly, making the dependency visible during test startup rather
+than when PostgreSQL launches.
 
 ## Resource Acquisition Is Initialization (RAII) test clusters
 
@@ -113,9 +123,9 @@ drop, demonstrating that no orphaned processes remain.
 ### Using the `rstest` fixture
 
 `pg_embedded_setup_unpriv::test_support::test_cluster` exposes an `rstest`
-fixture that constructs the RAII guard on demand. Import the fixture so it is
-in scope and declare a `test_cluster: TestCluster` parameter inside an
-`#[rstest]` function; the macro injects the running cluster automatically.
+fixture that constructs the RAII guard on demand. Import the fixture so it is in
+scope and declare a `test_cluster: TestCluster` parameter inside an `#[rstest]`
+function; the macro injects the running cluster automatically.
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{test_support::test_cluster, TestCluster};
@@ -142,9 +152,9 @@ fn coverage(test_cluster: TestCluster) {
 ```
 
 If PostgreSQL cannot start, the fixture panics with a
-`SKIP-TEST-CLUSTER`-prefixed message that retains the original error. Unit
-tests fail immediately, while behaviour tests can convert known transient
-conditions into soft skips via the shared `skip_message` helper.
+`SKIP-TEST-CLUSTER`-prefixed message that retains the original error. Unit tests
+fail immediately, while behaviour tests can convert known transient conditions
+into soft skips via the shared `skip_message` helper.
 
 ### Connection helpers and Diesel integration
 
@@ -212,17 +222,17 @@ still running as `root`, follow these steps:
 - Invoke `pg_embedded_setup_unpriv` before handing control to less-privileged
   workers. This prepares file ownership, caches the binaries, and records the
   superuser password in a location accessible to `nobody`.
-- Export the `PG_EMBEDDED_WORKER` environment variable with the absolute path
-  to the `pg_worker` helper binary. The library invokes this helper when it
-  needs to execute PostgreSQL lifecycle commands as `nobody`.
+- Export the `PG_EMBEDDED_WORKER` environment variable with the absolute path to
+  the `pg_worker` helper binary. The library invokes this helper when it needs
+  to execute PostgreSQL lifecycle commands as `nobody`.
 - Keep the test process running as `root`; the helper binary demotes itself
   before calling into `postgresql_embedded` so the main process never changes
   UID mid-test.
 - Ensure the `PGPASSFILE` environment variable points to the file created in the
   runtime directory so subsequent Diesel or libpq connections can authenticate
   without interactive prompts. The
-  `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
-  the bootstrap ran inside the test process.
+  `bootstrap_for_tests().environment.pgpass_file` helper returns the path if the
+  bootstrap ran inside the test process.
 - Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
   distribution) if you are running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a

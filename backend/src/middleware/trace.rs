@@ -27,7 +27,7 @@ task_local! {
 ///
 /// # Examples
 /// ```
-/// use backend::middleware::trace::TraceId;
+/// use backend::TraceId;
 ///
 /// async fn handler() {
 ///     if let Some(id) = TraceId::current() {
@@ -52,7 +52,7 @@ impl TraceId {
     ///
     /// # Examples
     /// ```
-    /// use backend::middleware::trace::TraceId;
+    /// use backend::TraceId;
     ///
     /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
     /// let trace_id: TraceId = "00000000-0000-0000-0000-000000000000"

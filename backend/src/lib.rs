@@ -8,6 +8,7 @@
 pub mod doc;
 pub mod inbound;
 mod middleware;
+pub use middleware::trace::TraceId;
 pub use middleware::Trace;
 pub mod domain;
 pub mod ws;

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
+import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../security/constants.js';
 
 const validatorPatchMock = vi.fn(() => true);
 
@@ -11,7 +11,7 @@ const baselineLedgerEntries = [
     id: 'VAL-2025-0001',
     package: 'frontend-pwa',
     advisory: VALIDATOR_ADVISORY_ID,
-    reason: 'Local patch hardens isURL protocol parsing until upstream ships a fix.',
+    reason: 'Validator pinned at the minimum safe version pending upstream audit propagation.',
     addedAt: '2025-02-14',
     expiresAt: '2026-02-14',
   },
@@ -75,7 +75,7 @@ const evaluateAuditScenarios = [
     expectedValidatorCalls: 1,
     assertSpy: (spy) => {
       expect(spy).toHaveBeenCalledWith(
-        `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+        `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by validator >= ${VALIDATOR_MIN_SAFE_VERSION}; audit passes`,
       );
     },
   },
@@ -106,26 +106,23 @@ describe('evaluateAudit', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(evaluateAuditScenarios)('$name', async ({
-    advisories,
-    spyFactory,
-    expectedExitCode,
-    expectedValidatorCalls,
-    assertSpy,
-  }) => {
-    const evaluateAudit = await loadEvaluateAudit();
-    const consoleSpy = spyFactory();
+  it.each(evaluateAuditScenarios)(
+    '$name',
+    async ({ advisories, spyFactory, expectedExitCode, expectedValidatorCalls, assertSpy }) => {
+      const evaluateAudit = await loadEvaluateAudit();
+      const consoleSpy = spyFactory();
 
-    const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
+      const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
 
-    expect(exitCode).toBe(expectedExitCode);
-    if (typeof expectedValidatorCalls === 'number') {
-      expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
-    }
-    assertSpy(consoleSpy);
-  });
+      expect(exitCode).toBe(expectedExitCode);
+      if (typeof expectedValidatorCalls === 'number') {
+        expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
+      }
+      assertSpy(consoleSpy);
+    },
+  );
 
-  it('fails when validator advisory is present but local patch is missing', async () => {
+  it('fails when validator advisory is present but mitigation is missing', async () => {
     const evaluateAudit = await loadEvaluateAudit();
     validatorPatchMock.mockReturnValue(false);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -141,7 +138,7 @@ describe('evaluateAudit', () => {
     expect(exitCode).toBe(1);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
     expect(errorSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but validator < ${VALIDATOR_MIN_SAFE_VERSION} (or local patch missing).`,
     );
   });
 
@@ -174,7 +171,7 @@ describe('evaluateAudit', () => {
     expect(exitCode).toBe(0);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
     expect(infoSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes. (1 additional advisory covered by ledger)`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by validator >= ${VALIDATOR_MIN_SAFE_VERSION}; audit passes (1 additional advisory covered by ledger)`,
     );
   });
 
@@ -218,7 +215,7 @@ describe('evaluateAudit', () => {
     expect(exitCode).toBe(0);
     expect(validatorPatchMock).toHaveBeenCalledTimes(1);
     expect(infoSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes. (2 additional advisories covered by ledger)`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by validator >= ${VALIDATOR_MIN_SAFE_VERSION}; audit passes (2 additional advisories covered by ledger)`,
     );
   });
 
@@ -298,26 +295,25 @@ describe('evaluateAudit', () => {
     },
   ];
 
-  it.each(ledgerExpiryErrorScenarios)('$name', async ({
-    setupAction,
-    expectedErrorMessage,
-    referenceDate,
-  }) => {
-    setupAction();
-    const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it.each(ledgerExpiryErrorScenarios)(
+    '$name',
+    async ({ setupAction, expectedErrorMessage, referenceDate }) => {
+      setupAction();
+      const evaluateAudit = await loadEvaluateAudit();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const exitCode = evaluateAudit(
-      {
-        advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-        status: 1,
-      },
-      { now: referenceDate ?? DEFAULT_NOW },
-    );
+      const exitCode = evaluateAudit(
+        {
+          advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+          status: 1,
+        },
+        { now: referenceDate ?? DEFAULT_NOW },
+      );
 
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
-  });
+      expect(exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
+    },
+  );
 
   it('allows date-only expiry on the same day', async () => {
     setLedgerEntries((entries) => {
@@ -337,7 +333,7 @@ describe('evaluateAudit', () => {
 
     expect(exitCode).toBe(0);
     expect(infoSpy).toHaveBeenCalledWith(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by validator >= ${VALIDATOR_MIN_SAFE_VERSION}; audit passes`,
     );
   });
 

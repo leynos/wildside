@@ -66,7 +66,6 @@ impl FromRequest for SessionContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_session::{storage::CookieSessionStore, SessionMiddleware};
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
 

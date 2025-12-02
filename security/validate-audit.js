@@ -1,7 +1,7 @@
 /** @file Validate audit exception entries against schema and expiry. */
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { VALIDATOR_ADVISORY_ID } from './constants.js';
+import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from './constants.js';
 import { isValidatorPatched } from './validator-patch.js';
 import {
   collectAdvisories,
@@ -97,32 +97,32 @@ function assertNoExpired(entries) {
  *
  * Advisories are partitioned against the exception list; unexpected entries are
  * surfaced via {@link reportUnexpectedAdvisories}. The validator advisory
- * (GHSA-9965-vmph-33xx) additionally requires {@link isValidatorPatched} to
+ * (GHSA-vghf-hv5q-vc2g) additionally requires {@link isValidatorPatched} to
  * return `true`, otherwise an error reading "Validator vulnerability
- * GHSA-9965-vmph-33xx reported but local patch is missing." is thrown. When
- * `reportUnexpectedAdvisories` emits output the function throws an error with
- * the message "Unexpected vulnerabilities reported by pnpm audit; review
- * stderr for details.".
+ * GHSA-vghf-hv5q-vc2g reported but validator < 13.15.23 (or local patch
+ * missing)." is thrown. When `reportUnexpectedAdvisories` emits output the
+ * function throws an error with the message "Unexpected vulnerabilities
+ * reported by pnpm audit; review stderr for details.".
  *
  * @param {typeof data} entries Exception ledger entries keyed by advisory ID.
  * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
  *   by `pnpm audit`.
  * @returns {void} Returns undefined when all advisories are mitigated.
  * @throws {Error} When unexpected advisories are reported or the validator
- *   patch is absent.
+ *   mitigation is absent.
  * @example
  * assertMitigated(
  *   [
  *     {
  *       id: 'validator-allowlist',
  *       package: 'validator',
- *       advisory: 'GHSA-9965-vmph-33xx',
- *       reason: 'Patched locally pending upstream fix',
+ *       advisory: 'GHSA-vghf-hv5q-vc2g',
+ *       reason: 'Pinned to the minimum safe validator release',
  *       addedAt: '2024-01-01',
  *       expiresAt: '2024-12-31',
  *     },
  *   ],
- *   [{ github_advisory_id: 'GHSA-9965-vmph-33xx' }],
+ *   [{ github_advisory_id: 'GHSA-vghf-hv5q-vc2g' }],
  * );
  */
 function assertMitigated(entries, advisories) {
@@ -147,7 +147,7 @@ function assertMitigated(entries, advisories) {
   for (const advisory of expected) {
     if (advisory.github_advisory_id === VALIDATOR_ADVISORY_ID && !isValidatorPatched()) {
       throw new Error(
-        'Validator vulnerability GHSA-9965-vmph-33xx reported but local patch is missing.',
+        `Validator vulnerability ${VALIDATOR_ADVISORY_ID} reported but validator < ${VALIDATOR_MIN_SAFE_VERSION} (or local patch missing).`,
       );
     }
   }

@@ -1,9 +1,11 @@
 /** @file Ensures `pnpm audit` only fails for advisories covered by the
- * frontend workspace ledger and a locally patched validator dependency.
+ * frontend workspace ledger and a validator dependency that includes the
+ * upstream fix for the current advisory.
  *
- * The validator package currently has no upstream patch release. We vendor the
- * required fix locally and treat the advisory as mitigated when the patched
- * code is present. Any additional vulnerabilities remain fatal.
+ * The validator advisory is considered mitigated when the workspace ships a
+ * version at or above the minimum safe release, falling back to the legacy
+ * local patch marker for older builds. Any additional vulnerabilities remain
+ * fatal.
  */
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,7 +18,7 @@ import {
   reportUnexpectedAdvisories,
   runAuditJson,
 } from '../../security/audit-utils.js';
-import { VALIDATOR_ADVISORY_ID } from '../../security/constants.js';
+import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../security/constants.js';
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -127,7 +129,7 @@ function reportValidatorOutcome(expected) {
   if (!isValidatorPatched()) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
     console.error(
-      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but local patch missing.`,
+      `Validator vulnerability ${VALIDATOR_ADVISORY_ID} found but validator < ${VALIDATOR_MIN_SAFE_VERSION} (or local patch missing).`,
     );
     return 1;
   }
@@ -137,10 +139,9 @@ function reportValidatorOutcome(expected) {
     additionalCount > 0
       ? ` (${additionalCount} additional ${additionalCount === 1 ? 'advisory' : 'advisories'} covered by ledger)`
       : '';
+  const mitigationPrefix = `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by validator >= ${VALIDATOR_MIN_SAFE_VERSION}; audit passes`;
   // biome-ignore lint/suspicious/noConsole: CLI script reports status via stdout.
-  console.info(
-    `Validator vulnerability ${VALIDATOR_ADVISORY_ID} mitigated by local patch; audit passes.${suffix}`,
-  );
+  console.info(suffix ? `${mitigationPrefix}${suffix}` : mitigationPrefix);
   return 0;
 }
 
