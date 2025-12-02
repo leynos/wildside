@@ -176,12 +176,7 @@ mod tests {
         >,
     > {
         App::new()
-            .wrap(
-                SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                    .cookie_name("session".to_owned())
-                    .cookie_secure(false)
-                    .build(),
-            )
+            .wrap(crate::inbound::http::test_utils::test_session_middleware())
             .service(web::scope("/api/v1").service(login).service(list_users))
     }
 

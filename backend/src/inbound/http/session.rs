@@ -67,7 +67,6 @@ impl FromRequest for SessionContext {
 mod tests {
     use super::*;
     use actix_session::{storage::CookieSessionStore, SessionMiddleware};
-    use actix_web::cookie::Key;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
 
@@ -80,12 +79,7 @@ mod tests {
             InitError = (),
         >,
     > {
-        App::new().wrap(
-            SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-                .cookie_name("session".to_owned())
-                .cookie_secure(false)
-                .build(),
-        )
+        App::new().wrap(crate::inbound::http::test_utils::test_session_middleware())
     }
 
     #[actix_web::test]
