@@ -12,7 +12,7 @@ use tracing::warn;
 use tracing_subscriber::{fmt, EnvFilter};
 use zeroize::Zeroize;
 
-use backend::api::health::HealthState;
+use backend::inbound::http::health::HealthState;
 
 mod server;
 

@@ -1,8 +1,10 @@
-/** @file Helpers for verifying the locally patched validator dependency. */
+/** @file Helpers for verifying the hardened validator dependency. */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+
+import { VALIDATOR_MIN_SAFE_VERSION } from './constants.js';
 
 /**
  * Resolve the absolute path to a dependency's package.json without relying on
@@ -53,21 +55,62 @@ function resolveRulesetRequire() {
   }
 }
 
+export function resolveValidatorPackageJsonPath() {
+  const rulesetRequire = resolveRulesetRequire();
+  return resolvePackageJsonPath(rulesetRequire, 'validator');
+}
+
 export function resolveValidatorPath() {
   const rulesetRequire = resolveRulesetRequire();
   return rulesetRequire.resolve('validator/lib/isURL');
 }
 
+function normaliseVersionTuple(version) {
+  const parts = String(version)
+    .split('.')
+    .slice(0, 3)
+    .map((part) => Number.parseInt(part, 10) || 0);
+  while (parts.length < 3) {
+    parts.push(0);
+  }
+  return parts;
+}
+
+function isAtLeastVersion(version, minimum) {
+  const current = normaliseVersionTuple(version);
+  const target = normaliseVersionTuple(minimum);
+
+  for (let index = 0; index < target.length; index += 1) {
+    if (current[index] > target[index]) return true;
+    if (current[index] < target[index]) return false;
+  }
+  return true;
+}
+
 /**
- * Check if the validator patch marker is present in the vendored module.
+ * Check if the validator dependency includes the upstream fix for the current
+ * GitHub advisory. Preference is given to the package version to avoid brittle
+ * string matching, with a fallback to the legacy patch marker for older builds
+ * should the workspace temporarily pin a pre-patch version.
  *
- * The detection relies on an exact snippet introduced by the patch. This is
- * brittle but suffices until upstream releases a fixed build.
- *
- * @returns {boolean} True when the validator patch is detected.
+ * @returns {boolean} True when the validator mitigation is detected.
  */
 export function isValidatorPatched() {
+  const packageJsonPath = resolveValidatorPackageJsonPath();
   const validatorPath = resolveValidatorPath();
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse ${packageJsonPath}: ${message}`, { cause: error });
+  }
+  const validatorVersion = packageJson.version;
+
+  if (validatorVersion && isAtLeastVersion(validatorVersion, VALIDATOR_MIN_SAFE_VERSION)) {
+    return true;
+  }
+
   const contents = readFileSync(validatorPath, 'utf8');
   return contents.includes("var firstColon = url.indexOf(':');");
 }

@@ -67,11 +67,11 @@ on details of Actix, Diesel, or other external tools. It also simplifies
 testing – domain services can be unit-tested with mock implementations of
 ports, and the real adapters can be integration-tested
 separately([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L266)).
- The repository is structured to reflect this separation, with distinct modules
-for `api` (HTTP handlers), `ws` (WebSocket handlers), `domain` (business logic
-and domain models), `infra` (database, cache, and other external adapters), and
-`models` (shared data
-types)([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L56-L64)).
+The repository is structured to reflect this separation, with distinct modules
+for `inbound::http` (HTTP handlers), `inbound::ws` (WebSocket handlers),
+`domain` (business logic and domain models), and `outbound` (persistence,
+cache, and other external adapters that implement the domain ports)
+([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L56-L64)).
 
 **Observability by design:** From the outset, Wildside’s backend includes
 thorough instrumentation in each component. We use the `tracing` library for
@@ -108,11 +108,17 @@ The **Actix Web** framework powers Wildside’s HTTP API layer, exposing RESTful
 endpoints under a versioned path (e.g. `/api/v1/...`) and handling WebSocket
 upgrades for real-time
 features([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L28-L36))([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L38-L46)).
- This layer is the primary **entry point** into the system, responsible for
+This layer is the primary **entry point** into the system, responsible for
 receiving client requests, authenticating and validating them, then invoking
 domain services or enqueuing jobs as needed.
 
 **Responsibilities:** The Actix web server module handles:
+
+- **Inbound adapter location:** HTTP adapters live in
+  `backend/src/inbound/http`, keeping handlers thin (request parsing →
+  domain/service call → response mapping). Session interactions are wrapped by
+  a `SessionContext` helper so persistence or framework details stay out of the
+  handler bodies.
 
 - **Routing and HTTP endpoints:** Defining routes for all API functions (e.g.
   user login, fetching user profiles, initiating route generation,
@@ -232,10 +238,10 @@ minimum request envelope:
 
 Domain errors live in `backend/src/domain/error.rs` and stay
 transport-agnostic. The inbound HTTP adapter applies the Actix
-`ResponseError` mapping in `backend/src/api/error.rs`, translating error codes
-to HTTP status codes, propagating the `trace-id` header when present, and
-redacting `InternalError` payloads to the generic message "Internal server
-error".
+`ResponseError` mapping in `backend/src/inbound/http/error.rs`, translating
+error codes to HTTP status codes, propagating the `trace-id` header when
+present, and redacting `InternalError` payloads to the generic message
+"Internal server error".
 
 #### WebSocket Message Contracts
 
