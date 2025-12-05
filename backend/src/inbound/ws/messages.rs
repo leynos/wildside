@@ -108,7 +108,7 @@ impl From<DisplayNameRejectedEvent> for Envelope<InvalidDisplayNamePayload> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{DisplayName, User, UserId};
+    use crate::domain::{DisplayName, DisplayNameRejectionReason, User, UserId};
     use insta::assert_json_snapshot;
     use rstest::rstest;
     use serde::Serialize;
@@ -131,8 +131,9 @@ mod tests {
     #[rstest]
     fn serialises_user_created_event() {
         let user = User::new(
-            UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6").expect("valid UUID"),
-            DisplayName::new("Alice").expect("valid display name"),
+            UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                .expect("static test UUID must be valid"),
+            DisplayName::new("Alice").expect("static test display name must be valid"),
         );
         let event = UserCreatedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
@@ -145,12 +146,12 @@ mod tests {
 
     #[rstest]
     fn serialises_invalid_display_name_event() {
-        let reason = crate::domain::DisplayNameRejectionReason::InvalidCharacters;
+        let reason = DisplayNameRejectionReason::InvalidCharacters;
         let event = DisplayNameRejectedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
             attempted_name: "bad$char".into(),
             reason,
-            message: reason.message(),
+            message: reason.message().to_owned(),
         };
         let envelope: Envelope<InvalidDisplayNamePayload> = event.into();
         assert_trace_id_is_unique(&envelope);
