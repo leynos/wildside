@@ -31,9 +31,18 @@ impl DisplayNameRejectionReason {
     /// Human-readable policy message shared across adapters.
     #[must_use]
     pub fn message(&self) -> String {
-        format!(
-            "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between {DISPLAY_NAME_MIN} and {DISPLAY_NAME_MAX} characters."
-        )
+        match self {
+            Self::Empty => "Display name must not be empty.".to_owned(),
+            Self::TooShort => {
+                format!("Display name must be at least {DISPLAY_NAME_MIN} characters.",)
+            }
+            Self::TooLong => {
+                format!("Display name must be at most {DISPLAY_NAME_MAX} characters.")
+            }
+            Self::InvalidCharacters => {
+                "Only alphanumeric characters, spaces, and underscores are allowed.".to_owned()
+            }
+        }
     }
 
     pub(crate) fn from_validation_error(
@@ -86,4 +95,60 @@ pub enum UserEvent {
     UserCreated(UserCreatedEvent),
     /// A display name submission failed validation.
     DisplayNameRejected(DisplayNameRejectedEvent),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    fn maps_validation_errors_to_reasons_and_messages() {
+        assert_eq!(
+            DisplayNameRejectionReason::from_validation_error(
+                &UserValidationError::EmptyDisplayName
+            ),
+            Some(DisplayNameRejectionReason::Empty)
+        );
+        assert_eq!(
+            DisplayNameRejectionReason::from_validation_error(
+                &UserValidationError::DisplayNameTooShort {
+                    min: DISPLAY_NAME_MIN
+                },
+            ),
+            Some(DisplayNameRejectionReason::TooShort)
+        );
+        assert_eq!(
+            DisplayNameRejectionReason::from_validation_error(
+                &UserValidationError::DisplayNameTooLong {
+                    max: DISPLAY_NAME_MAX
+                },
+            ),
+            Some(DisplayNameRejectionReason::TooLong)
+        );
+        assert_eq!(
+            DisplayNameRejectionReason::from_validation_error(
+                &UserValidationError::DisplayNameInvalidCharacters,
+            ),
+            Some(DisplayNameRejectionReason::InvalidCharacters)
+        );
+        assert!(
+            DisplayNameRejectionReason::from_validation_error(&UserValidationError::InvalidId)
+                .is_none()
+        );
+
+        assert_eq!(DisplayNameRejectionReason::Empty.code(), "empty");
+        assert_eq!(
+            DisplayNameRejectionReason::TooShort.message(),
+            format!("Display name must be at least {DISPLAY_NAME_MIN} characters."),
+        );
+        assert_eq!(
+            DisplayNameRejectionReason::TooLong.message(),
+            format!("Display name must be at most {DISPLAY_NAME_MAX} characters."),
+        );
+        assert_eq!(
+            DisplayNameRejectionReason::InvalidCharacters.message(),
+            "Only alphanumeric characters, spaces, and underscores are allowed.".to_owned()
+        );
+    }
 }

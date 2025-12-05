@@ -117,8 +117,9 @@ static DISPLAY_NAME_RE: OnceLock<Regex> = OnceLock::new();
 
 fn display_name_regex() -> &'static Regex {
     DISPLAY_NAME_RE.get_or_init(|| {
-        let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
-        Regex::new(&pattern)
+        // Length is enforced separately; this regex constrains allowed characters.
+        let pattern = "^[A-Za-z0-9_ ]+$";
+        Regex::new(pattern)
             .unwrap_or_else(|error| panic!("display name regex failed to compile: {error}"))
     })
 }

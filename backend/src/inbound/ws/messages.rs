@@ -1,11 +1,10 @@
 //! Wire-level message definitions for the WebSocket adapter.
 //!
-//! Domain events are transformed into these payloads before being serialised
+//! Domain events are transformed into these payloads before being serialized
 //! to JSON and sent to connected clients.
 
-use crate::domain::{DisplayNameRejectedEvent, DisplayNameSubmission, UserCreatedEvent, UserEvent};
+use crate::domain::{DisplayNameRejectedEvent, DisplayNameSubmission, UserCreatedEvent};
 use crate::middleware::trace::TraceId;
-use actix::Message;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -102,10 +101,6 @@ impl From<DisplayNameRejectedEvent> for Envelope<InvalidDisplayNamePayload> {
 }
 
 /// Actix message wrapper carrying domain events for WebSocket sessions.
-#[derive(Debug, Message)]
-#[rtype(result = "()")]
-pub struct UserEventMessage(pub UserEvent);
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,8 +111,8 @@ mod tests {
     #[rstest]
     fn serialises_user_created_event() {
         let user = User::new(
-            UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6").unwrap(),
-            DisplayName::new("Alice").unwrap(),
+            UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6").expect("valid UUID"),
+            DisplayName::new("Alice").expect("valid display name"),
         );
         let event = UserCreatedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
@@ -129,11 +124,12 @@ mod tests {
 
     #[rstest]
     fn serialises_invalid_display_name_event() {
+        let reason = crate::domain::DisplayNameRejectionReason::InvalidCharacters;
         let event = DisplayNameRejectedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
             attempted_name: "bad$char".into(),
-            reason: crate::domain::DisplayNameRejectionReason::InvalidCharacters,
-            message: "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.".into(),
+            reason,
+            message: reason.message(),
         };
         let envelope: Envelope<InvalidDisplayNamePayload> = event.into();
         assert_json_snapshot!(envelope);

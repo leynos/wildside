@@ -156,7 +156,7 @@ domain services or enqueuing jobs as needed.
   auditing([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L53-L61)).
   The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
   adapter. Incoming JSON messages are deserialised into domain commands and
-  passed to `UserOnboardingService`, which emits domain events (e.g.
+  passed to `UserOnboardingService`, which emits domain events (e.g.,
   `UserCreated`, `DisplayNameRejected`). The WebSocket actor only serialises
   those events to wire payloads and maintains heartbeats, keeping transport
   concerns at the edge.

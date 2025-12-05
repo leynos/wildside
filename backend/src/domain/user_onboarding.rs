@@ -49,12 +49,12 @@ impl UserOnboardingService {
         }
     }
 
-    fn build_rejection(
+    pub(crate) fn build_rejection(
         submission: DisplayNameSubmission,
         error: UserValidationError,
     ) -> DisplayNameRejectedEvent {
         let reason = DisplayNameRejectionReason::from_validation_error(&error)
-            .unwrap_or(DisplayNameRejectionReason::InvalidCharacters);
+            .unwrap_or_else(|| panic!("unexpected validation error for display name: {error:?}"));
         DisplayNameRejectedEvent {
             trace_id: submission.trace_id,
             attempted_name: submission.display_name,
@@ -67,7 +67,7 @@ impl UserOnboardingService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::user::DISPLAY_NAME_MAX;
+    use crate::domain::user::{DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
     use rstest::rstest;
     use rstest_bdd_macros::{given, then, when};
     use uuid::Uuid;
@@ -119,6 +119,43 @@ mod tests {
         let submission = an_invalid_display_name_submission();
         let event = the_onboarding_service_registers_it(submission);
         a_display_name_rejection_event_is_emitted(event);
+    }
+
+    #[rstest]
+    fn build_rejection_maps_reason_and_message() {
+        let base = DisplayNameSubmission::new(TraceId::from_uuid(Uuid::nil()), "bad");
+
+        let too_short = UserOnboardingService::build_rejection(
+            base.clone(),
+            UserValidationError::DisplayNameTooShort {
+                min: DISPLAY_NAME_MIN,
+            },
+        );
+        assert_eq!(too_short.reason, DisplayNameRejectionReason::TooShort);
+        assert_eq!(too_short.message, too_short.reason.message());
+
+        let too_long = UserOnboardingService::build_rejection(
+            base.clone(),
+            UserValidationError::DisplayNameTooLong {
+                max: DISPLAY_NAME_MAX,
+            },
+        );
+        assert_eq!(too_long.reason, DisplayNameRejectionReason::TooLong);
+        assert_eq!(too_long.attempted_name, base.display_name);
+
+        let invalid_chars = UserOnboardingService::build_rejection(
+            base.clone(),
+            UserValidationError::DisplayNameInvalidCharacters,
+        );
+        assert_eq!(invalid_chars.reason.code(), "invalid_chars");
+        assert_eq!(invalid_chars.message, invalid_chars.reason.message());
+
+        let empty = UserOnboardingService::build_rejection(
+            base.clone(),
+            UserValidationError::EmptyDisplayName,
+        );
+        assert_eq!(empty.reason, DisplayNameRejectionReason::Empty);
+        assert_eq!(empty.attempted_name, base.display_name);
     }
 
     #[rstest]

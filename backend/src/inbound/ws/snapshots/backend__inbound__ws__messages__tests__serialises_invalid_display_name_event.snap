@@ -5,11 +5,11 @@ expression: envelope
 {
   "traceId": "00000000-0000-0000-0000-000000000000",
   "code": "invalid_chars",
-  "error": "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.",
+  "error": "Only alphanumeric characters, spaces, and underscores are allowed.",
   "details": {
     "field": "displayName",
     "value": "bad$char",
-    "message": "Invalid display name. Only alphanumeric characters, spaces, and underscores are allowed. Length must be between 3 and 32 characters.",
+    "message": "Only alphanumeric characters, spaces, and underscores are allowed.",
     "code": "invalid_chars"
   }
 }

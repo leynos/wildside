@@ -18,6 +18,22 @@ fn valid_display_name() -> String {
 }
 
 #[rstest]
+fn accepts_minimum_length(valid_id: String) {
+    let name = "a".repeat(DISPLAY_NAME_MIN);
+    let result = User::try_from_strings(valid_id, name.clone());
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().display_name().as_ref(), name);
+}
+
+#[rstest]
+fn accepts_maximum_length(valid_id: String) {
+    let name = "a".repeat(DISPLAY_NAME_MAX);
+    let result = User::try_from_strings(valid_id, name.clone());
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().display_name().as_ref(), name);
+}
+
+#[rstest]
 fn new_panics_when_invalid_id() {
     let result = std::panic::catch_unwind(|| User::from_strings("", "Ada"));
     assert!(result.is_err());
@@ -76,6 +92,22 @@ fn try_new_accepts_valid_inputs(valid_id: String, valid_display_name: String) {
         User::try_from_strings(valid_id.clone(), valid_display_name.clone()).expect("valid inputs");
     assert_eq!(user.id().as_ref(), valid_id);
     assert_eq!(user.display_name().as_ref(), valid_display_name);
+}
+
+#[rstest]
+fn display_name_allows_alphanumerics_spaces_and_underscores(valid_id: String) {
+    let name = "Alice_Bob 123";
+    let user = User::try_from_strings(valid_id, name).expect("valid name");
+    assert_eq!(user.display_name().as_ref(), name);
+}
+
+#[rstest]
+fn display_name_rejects_forbidden_characters(valid_id: String) {
+    let result = User::try_from_strings(valid_id, "bad$char");
+    assert!(matches!(
+        result,
+        Err(UserValidationError::DisplayNameInvalidCharacters)
+    ));
 }
 
 #[rstest]
