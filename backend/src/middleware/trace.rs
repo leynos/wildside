@@ -284,6 +284,13 @@ mod tests {
         assert_eq!(trace_id.as_uuid(), &uuid);
     }
 
+    #[test]
+    fn as_uuid_returns_inner_uuid() {
+        let uuid = Uuid::new_v4();
+        let trace_id = TraceId::from_uuid(uuid);
+        assert_eq!(trace_id.as_uuid(), &uuid);
+    }
+
     #[actix_web::test]
     async fn from_uuid_preserves_current_scope() {
         let uuid = Uuid::new_v4();
