@@ -26,6 +26,10 @@ impl From<DisplayNameRequest> for DisplayNameSubmission {
 }
 
 /// Generic envelope attaching a correlation identifier to an outbound payload.
+///
+/// Invariant: `T` must not declare its own `trace_id`/`traceId` field. The
+/// payload is `flatten`ed, so any duplicate keys would collide at
+/// serialisation time.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Envelope<T> {
@@ -107,6 +111,22 @@ mod tests {
     use crate::domain::{DisplayName, User, UserId};
     use insta::assert_json_snapshot;
     use rstest::rstest;
+    use serde::Serialize;
+    use serde_json::to_value;
+
+    fn assert_trace_id_is_unique<T: Serialize>(envelope: &Envelope<T>) {
+        let value = to_value(envelope).expect("serialise envelope");
+        let object = value
+            .as_object()
+            .expect("envelope serialises to JSON object");
+        assert!(object.contains_key("traceId"));
+        assert!(!object.contains_key("trace_id"));
+        let trace_id_keys = object
+            .keys()
+            .filter(|key| *key == "traceId" || *key == "trace_id")
+            .count();
+        assert_eq!(trace_id_keys, 1, "traceId must not collide when flattened");
+    }
 
     #[rstest]
     fn serialises_user_created_event() {
@@ -119,6 +139,7 @@ mod tests {
             user,
         };
         let envelope: Envelope<UserCreatedPayload> = event.into();
+        assert_trace_id_is_unique(&envelope);
         assert_json_snapshot!(envelope);
     }
 
@@ -132,6 +153,7 @@ mod tests {
             message: reason.message(),
         };
         let envelope: Envelope<InvalidDisplayNamePayload> = event.into();
+        assert_trace_id_is_unique(&envelope);
         assert_json_snapshot!(envelope);
     }
 }
