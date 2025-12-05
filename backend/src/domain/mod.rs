@@ -11,6 +11,10 @@
 //!   across adapters.
 //! - User (alias to `user::User`) — domain user identity and display name.
 //! - LoginCredentials — validated username/password inputs for authentication.
+//! - UserEvent (alias to `user_events::UserEvent`) — high-level user domain
+//!   events, including `UserCreatedEvent` and `DisplayNameRejectedEvent`.
+//! - DisplayNameSubmission and UserOnboardingService — validated onboarding
+//!   input and orchestration service for user creation workflows.
 
 pub mod auth;
 pub mod error;
