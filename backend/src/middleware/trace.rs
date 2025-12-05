@@ -43,10 +43,22 @@ impl TraceId {
     #[rustfmt::skip]
     fn generate() -> Self { Self(Uuid::new_v4()) }
 
+    /// Construct a trace identifier from an existing UUID.
+    #[must_use]
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
     /// Returns the current trace identifier if one is in scope.
     #[must_use]
     #[rustfmt::skip]
     pub fn current() -> Option<Self> { TRACE_ID.try_with(|id| *id).ok() }
+
+    /// Access the inner UUID.
+    #[must_use]
+    pub fn as_uuid(&self) -> &Uuid {
+        &self.0
+    }
 
     /// Execute the provided future with the supplied trace identifier in scope.
     ///

@@ -1,4 +1,9 @@
-//! WebSocket entry and routing.
+//! WebSocket inbound adapter bridging domain events to client payloads.
+//!
+//! Responsibilities:
+//! - validate upgrade requests (origin allow-list)
+//! - initialise the per-connection WebSocket actor
+//! - keep WebSocket-specific concerns at the edge of the system
 
 use actix_web::web::Payload;
 use actix_web::{
@@ -10,9 +15,9 @@ use actix_web_actors::ws;
 use tracing::{error, warn};
 use url::Url;
 
-pub mod display_name;
+mod session;
+
 pub mod messages;
-pub mod socket;
 
 /// Handle WebSocket upgrade for the `/ws` endpoint.
 #[get("/ws")]
@@ -29,7 +34,7 @@ pub async fn ws_entry(req: HttpRequest, stream: Payload) -> actix_web::Result<Ht
 
     validate_origin(origin_header)?;
 
-    let actor = socket::UserSocket::default();
+    let actor = session::WsSession::default();
     ws::start(actor, &req, stream).map_err(|error| {
         error!(error = %error, "WebSocket upgrade failed");
         actix_web::error::ErrorInternalServerError("WebSocket upgrade failed")
@@ -69,21 +74,8 @@ const ALLOWED_SUBDOMAIN_SUFFIX: &str = ".yourdomain.example";
 ///
 /// The allow-list currently accepts HTTPS requests from the production root
 /// domain and any of its subdomains, and HTTP requests from localhost with a
-/// non-zero explicit port. Once configuration is available this should move into a
-/// runtime-controlled allow-list.
-///
-/// # Examples
-/// ```rust,ignore
-/// # use url::Url;
-/// # use wildside::ws::is_allowed_origin;
-/// let allowed = Url::parse("https://chat.yourdomain.example").unwrap();
-/// assert!(is_allowed_origin(&allowed));
-///
-/// let blocked = Url::parse("https://example.com").unwrap();
-/// assert!(!is_allowed_origin(&blocked));
-/// ```
-///
-/// TODO: Externalise the origin allow-list via configuration once available (see https://github.com/leynos/wildside/issues/18).
+/// non-zero explicit port. Once configuration is available this should move
+/// into a runtime-controlled allow-list.
 fn is_allowed_origin(origin: &Url) -> bool {
     let host = match origin.host_str() {
         Some(value) => value,

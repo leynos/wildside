@@ -16,10 +16,16 @@ pub mod auth;
 pub mod error;
 pub mod ports;
 pub mod user;
+pub mod user_events;
+pub mod user_onboarding;
 
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
+pub use self::user_events::{
+    DisplayNameRejectedEvent, DisplayNameRejectionReason, UserCreatedEvent, UserEvent,
+};
+pub use self::user_onboarding::{DisplayNameSubmission, UserOnboardingService};
 
 /// HTTP header name used to propagate trace identifiers.
 pub const TRACE_ID_HEADER: &str = "trace-id";

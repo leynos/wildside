@@ -5,3 +5,4 @@
 //! WebSocket) expected to sit alongside it.
 
 pub mod http;
+pub mod ws;

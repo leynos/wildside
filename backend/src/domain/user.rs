@@ -2,7 +2,9 @@
 
 use std::fmt;
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -12,6 +14,9 @@ pub enum UserValidationError {
     EmptyId,
     InvalidId,
     EmptyDisplayName,
+    DisplayNameTooShort { min: usize },
+    DisplayNameTooLong { max: usize },
+    DisplayNameInvalidCharacters,
 }
 
 impl fmt::Display for UserValidationError {
@@ -20,6 +25,16 @@ impl fmt::Display for UserValidationError {
             Self::EmptyId => write!(f, "user id must not be empty"),
             Self::InvalidId => write!(f, "user id must be a valid UUID"),
             Self::EmptyDisplayName => write!(f, "display name must not be empty"),
+            Self::DisplayNameTooShort { min } => {
+                write!(f, "display name must be at least {min} characters")
+            }
+            Self::DisplayNameTooLong { max } => {
+                write!(f, "display name must be at most {max} characters")
+            }
+            Self::DisplayNameInvalidCharacters => write!(
+                f,
+                "display name may only contain letters, numbers, spaces, or underscores",
+            ),
         }
     }
 }
@@ -35,6 +50,12 @@ impl UserId {
     /// Validate and construct a [`UserId`] from borrowed input.
     pub fn new(id: impl AsRef<str>) -> Result<Self, UserValidationError> {
         Self::from_owned(id.as_ref().to_owned())
+    }
+
+    /// Generate a new random [`UserId`].
+    pub fn random() -> Self {
+        let uuid = Uuid::new_v4();
+        Self(uuid, uuid.to_string())
     }
 
     fn from_owned(id: String) -> Result<Self, UserValidationError> {
@@ -87,6 +108,21 @@ impl TryFrom<String> for UserId {
 #[serde(try_from = "String", into = "String")]
 pub struct DisplayName(String);
 
+/// Minimum allowed length for a display name.
+pub const DISPLAY_NAME_MIN: usize = 3;
+/// Maximum allowed length for a display name.
+pub const DISPLAY_NAME_MAX: usize = 32;
+
+static DISPLAY_NAME_RE: OnceLock<Regex> = OnceLock::new();
+
+fn display_name_regex() -> &'static Regex {
+    DISPLAY_NAME_RE.get_or_init(|| {
+        let pattern = format!("^[A-Za-z0-9_ ]{{{DISPLAY_NAME_MIN},{DISPLAY_NAME_MAX}}}$");
+        Regex::new(&pattern)
+            .unwrap_or_else(|error| panic!("display name regex failed to compile: {error}"))
+    })
+}
+
 impl DisplayName {
     /// Validate and construct a [`DisplayName`] from owned input.
     pub fn new(display_name: impl Into<String>) -> Result<Self, UserValidationError> {
@@ -96,6 +132,22 @@ impl DisplayName {
     fn from_owned(display_name: String) -> Result<Self, UserValidationError> {
         if display_name.trim().is_empty() {
             return Err(UserValidationError::EmptyDisplayName);
+        }
+
+        let length = display_name.chars().count();
+        if length < DISPLAY_NAME_MIN {
+            return Err(UserValidationError::DisplayNameTooShort {
+                min: DISPLAY_NAME_MIN,
+            });
+        }
+        if length > DISPLAY_NAME_MAX {
+            return Err(UserValidationError::DisplayNameTooLong {
+                max: DISPLAY_NAME_MAX,
+            });
+        }
+
+        if !display_name_regex().is_match(&display_name) {
+            return Err(UserValidationError::DisplayNameInvalidCharacters);
         }
 
         Ok(Self(display_name))
@@ -212,116 +264,4 @@ impl TryFrom<UserDto> for User {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use rstest::{fixture, rstest};
-    use rstest_bdd_macros::{given, then, when};
-    use serde_json::json;
-
-    const VALID_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-
-    #[fixture]
-    fn valid_id() -> String {
-        VALID_ID.to_owned()
-    }
-
-    #[fixture]
-    fn valid_display_name() -> String {
-        "Ada Lovelace".to_owned()
-    }
-
-    #[rstest]
-    fn new_panics_when_invalid_id() {
-        let result = std::panic::catch_unwind(|| User::from_strings("", "Ada"));
-        assert!(result.is_err());
-    }
-
-    #[rstest]
-    fn try_new_rejects_invalid_uuid(valid_display_name: String) {
-        let result = User::try_from_strings("not-a-uuid", valid_display_name);
-        assert!(matches!(result, Err(UserValidationError::InvalidId)));
-    }
-
-    #[rstest]
-    fn try_new_rejects_uuid_with_whitespace(valid_display_name: String) {
-        let id = format!(" {VALID_ID} ");
-        let result = User::try_from_strings(id, valid_display_name);
-        assert!(matches!(result, Err(UserValidationError::InvalidId)));
-    }
-
-    #[rstest]
-    fn try_new_rejects_empty_display_name(valid_id: String) {
-        let result = User::try_from_strings(valid_id, "   ");
-        assert!(matches!(result, Err(UserValidationError::EmptyDisplayName)));
-    }
-
-    #[rstest]
-    fn try_new_accepts_valid_inputs(valid_id: String, valid_display_name: String) {
-        let user = User::try_from_strings(valid_id.clone(), valid_display_name.clone())
-            .expect("valid inputs");
-        assert_eq!(user.id().as_ref(), valid_id);
-        assert_eq!(user.display_name().as_ref(), valid_display_name);
-    }
-
-    #[rstest]
-    fn serde_round_trips_alias(valid_id: String, valid_display_name: String) {
-        let camel = json!({
-            "id": valid_id.clone(),
-            "displayName": valid_display_name.clone()
-        });
-        let snake = json!({
-            "id": valid_id.clone(),
-            "display_name": valid_display_name.clone()
-        });
-        let from_camel: User = serde_json::from_value(camel).expect("camelCase");
-        let from_snake: User = serde_json::from_value(snake).expect("snake_case");
-        assert_eq!(from_camel, from_snake);
-
-        let value = serde_json::to_value(from_snake).expect("serialise to JSON");
-        assert_eq!(
-            value.get("displayName").and_then(|v| v.as_str()),
-            Some(valid_display_name.as_str())
-        );
-        assert!(value.get("display_name").is_none());
-    }
-
-    #[given("a valid user payload")]
-    fn a_valid_user_payload(valid_id: String, valid_display_name: String) -> (String, String) {
-        (valid_id, valid_display_name)
-    }
-
-    #[when("the user is constructed")]
-    fn the_user_is_constructed(payload: (String, String)) -> Result<User, UserValidationError> {
-        User::try_from_strings(payload.0, payload.1)
-    }
-
-    #[then("the user is returned")]
-    fn the_user_is_returned(result: Result<User, UserValidationError>, valid_id: String) {
-        let user = result.expect("user should be created");
-        assert_eq!(user.id().as_ref(), valid_id);
-    }
-
-    #[rstest]
-    fn constructing_a_user_happy_path(valid_display_name: String, valid_id: String) {
-        let payload = a_valid_user_payload(valid_id.clone(), valid_display_name);
-        let result = the_user_is_constructed(payload);
-        the_user_is_returned(result, valid_id);
-    }
-
-    #[given("a payload with an empty display name")]
-    fn a_payload_with_an_empty_display_name(valid_id: String) -> (String, String) {
-        (valid_id, "   ".to_owned())
-    }
-
-    #[then("user construction fails")]
-    fn user_construction_fails(result: Result<User, UserValidationError>) {
-        assert!(matches!(result, Err(UserValidationError::EmptyDisplayName)));
-    }
-
-    #[rstest]
-    fn constructing_a_user_unhappy_path(valid_id: String) {
-        let payload = a_payload_with_an_empty_display_name(valid_id);
-        let result = the_user_is_constructed(payload);
-        user_construction_fails(result);
-    }
-}
+mod tests;
