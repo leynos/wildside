@@ -43,10 +43,22 @@ impl TraceId {
     #[rustfmt::skip]
     fn generate() -> Self { Self(Uuid::new_v4()) }
 
+    /// Construct a trace identifier from an existing UUID.
+    #[must_use]
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
     /// Returns the current trace identifier if one is in scope.
     #[must_use]
     #[rustfmt::skip]
     pub fn current() -> Option<Self> { TRACE_ID.try_with(|id| *id).ok() }
+
+    /// Access the inner UUID.
+    #[must_use]
+    pub fn as_uuid(&self) -> &Uuid {
+        &self.0
+    }
 
     /// Execute the provided future with the supplied trace identifier in scope.
     ///
@@ -173,7 +185,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{test, web, App, HttpResponse};
+    use actix_web::{web, App, HttpResponse};
     #[tokio::test]
     async fn trace_id_generate_produces_uuid() {
         let trace_id = TraceId::generate();
@@ -202,14 +214,14 @@ mod tests {
 
     #[actix_web::test]
     async fn adds_trace_id_header() {
-        let app = test::init_service(
+        let app = actix_web::test::init_service(
             App::new()
                 .wrap(Trace)
                 .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
         )
         .await;
-        let req = test::TestRequest::get().uri("/").to_request();
-        let res = test::call_service(&app, req).await;
+        let req = actix_web::test::TestRequest::get().uri("/").to_request();
+        let res = actix_web::test::call_service(&app, req).await;
         assert!(res.headers().contains_key(TRACE_ID_HEADER));
     }
 
@@ -224,10 +236,12 @@ mod tests {
         Fut: std::future::Future<Output = Res> + 'static,
         Res: actix_web::Responder + 'static,
     {
-        let app =
-            test::init_service(App::new().wrap(Trace).route("/", web::get().to(handler))).await;
-        let req = test::TestRequest::get().uri("/").to_request();
-        let res = test::call_service(&app, req).await;
+        let app = actix_web::test::init_service(
+            App::new().wrap(Trace).route("/", web::get().to(handler)),
+        )
+        .await;
+        let req = actix_web::test::TestRequest::get().uri("/").to_request();
+        let res = actix_web::test::call_service(&app, req).await;
         let trace_id = res
             .headers()
             .get(TRACE_ID_HEADER)
@@ -245,7 +259,7 @@ mod tests {
             HttpResponse::Ok().body(id.to_string())
         })
         .await;
-        let body = test::read_body(res).await;
+        let body = actix_web::test::read_body(res).await;
         let body = std::str::from_utf8(&body).expect("utf8 body");
         assert_eq!(trace_id, body);
     }
@@ -259,7 +273,29 @@ mod tests {
             Result::<HttpResponse, Error>::Err(Error::internal("boom"))
         })
         .await;
-        let body: Error = test::read_body_json(res).await;
+        let body: Error = actix_web::test::read_body_json(res).await;
         assert_eq!(body.trace_id(), Some(trace_id.as_str()));
+    }
+
+    #[test]
+    fn from_uuid_round_trips() {
+        let uuid = Uuid::new_v4();
+        let trace_id = TraceId::from_uuid(uuid);
+        assert_eq!(trace_id.as_uuid(), &uuid);
+    }
+
+    #[test]
+    fn as_uuid_returns_inner_uuid() {
+        let uuid = Uuid::new_v4();
+        let trace_id = TraceId::from_uuid(uuid);
+        assert_eq!(trace_id.as_uuid(), &uuid);
+    }
+
+    #[actix_web::test]
+    async fn from_uuid_preserves_current_scope() {
+        let uuid = Uuid::new_v4();
+        let trace_id = TraceId::from_uuid(uuid);
+        let observed = TraceId::scope(trace_id, async { TraceId::current() }).await;
+        assert_eq!(observed, Some(trace_id));
     }
 }

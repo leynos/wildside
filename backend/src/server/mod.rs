@@ -22,7 +22,7 @@ use actix_web::{web, App, HttpServer};
 use backend::doc::ApiDoc;
 use backend::inbound::http::health::{live, ready, HealthState};
 use backend::inbound::http::users::{list_users, login};
-use backend::ws;
+use backend::inbound::ws;
 use backend::Trace;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;

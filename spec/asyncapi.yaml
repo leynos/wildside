@@ -192,7 +192,7 @@ components:
       type: string
       description: User display name
       examples: ["Ada Lovelace"]
-      # Keep in sync with backend/src/ws/display_name.rs
+      # Keep in sync with backend/src/domain/user.rs
       minLength: 3
       maxLength: 32
       pattern: '^[A-Za-z0-9_ ]{3,32}$'

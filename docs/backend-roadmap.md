@@ -39,7 +39,7 @@ delivery, so future work remains inside the hexagonal boundaries.
   mapping) and ensuring handler bodies only co-ordinate domain calls and
   high-level session helpers (no direct framework-specific session
   manipulation).
-- [ ] Rework the WebSocket entry point in `backend/src/ws` into an inbound
+- [x] Rework the WebSocket entry point in `backend/src/ws` into an inbound
   adapter (`backend/src/inbound/ws`) that consumes domain events instead of
   building messages inline.
 - [ ] Introduce `backend/src/outbound/persistence`,

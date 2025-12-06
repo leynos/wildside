@@ -142,7 +142,7 @@ domain services or enqueuing jobs as needed.
 - **WebSocket endpoint:** Handling upgrades to `/ws` for real-time
   client-server
   communication([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L38-L46)).
-   When a client connects over WebSocket (after authenticating with a session
+  When a client connects over WebSocket (after authenticating with a session
   token or bearer token), the server establishes a persistent connection for
   bi-directional messaging. This is used, for example, to push **route
   generation status** updates asynchronously to the client. Actix’s WebSocket
@@ -151,9 +151,15 @@ domain services or enqueuing jobs as needed.
   requests against an allowlist (e.g., localhost for dev, and the official
   domain in prod) to prevent unauthorized cross-site WebSocket
   hijacking([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L40-L48))([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L55-L63)).
-   Connections with missing or invalid origins are rejected with clear error
+  Connections with missing or invalid origins are rejected with clear error
   codes (400/403) and logged for
   auditing([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L53-L61)).
+  The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
+  adapter. Incoming JSON messages are deserialised into domain commands and
+  passed to `UserOnboardingService`, which emits domain events (e.g.,
+  `UserCreated`, `DisplayNameRejected`). The WebSocket actor only serialises
+  those events to wire payloads and maintains heartbeats, keeping transport
+  concerns at the edge.
 
 - **Delegating to domain logic:** The web handlers do minimal processing
   themselves; they parse inputs, perform light validation, then call into the

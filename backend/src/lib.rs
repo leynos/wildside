@@ -11,7 +11,6 @@ mod middleware;
 pub use middleware::trace::TraceId;
 pub use middleware::Trace;
 pub mod domain;
-pub mod ws;
 
 /// Public OpenAPI surface used by Swagger UI and tooling.
 pub use doc::ApiDoc;
