@@ -1,7 +1,11 @@
 //! Per-connection WebSocket actor.
 //!
 //! Keeps WebSocket framing and heartbeats at the edge while deferring
-//! application behaviour to the domain (`UserOnboardingService`).
+//! application behaviour to the domain (`UserOnboardingService`). The public
+//! WebSocket contract pings every 5s and considers a connection idle after
+//! 10s without client traffic. Tests shorten these intervals to speed up
+//! feedback; adjust the constants below if SLAs change so clients and
+//! intermediaries stay aligned.
 
 use std::time::{Duration, Instant};
 
@@ -13,13 +17,13 @@ use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use tracing::warn;
 
-/// Time between heartbeats to the client.
+/// Time between heartbeats to the client (5s in production, shorter in tests).
 #[cfg(not(test))]
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(50);
 
-/// Maximum allowed time between messages from the client before considering it disconnected.
+/// Max idle time before disconnecting the client (10s in production, shorter in tests).
 #[cfg(not(test))]
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
@@ -131,9 +135,15 @@ impl StreamHandler<Result<Message, ProtocolError>> for WsSession {
                 ctx.close(reason);
                 ctx.stop();
             }
-            Ok(Message::Nop) | Ok(Message::Continuation(_)) => {}
+            Ok(Message::Nop) | Ok(Message::Continuation(_)) => {
+                self.last_heartbeat = Instant::now();
+            }
             Err(err) => {
                 warn!(error = %err, "WebSocket protocol error");
+                ctx.close(Some(CloseReason {
+                    code: CloseCode::Protocol,
+                    description: Some("protocol error".into()),
+                }));
                 ctx.stop();
             }
         }
