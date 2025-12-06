@@ -73,7 +73,14 @@ impl WsSession {
     fn send_json<T: serde::Serialize>(&self, ctx: &mut ws::WebsocketContext<Self>, payload: &T) {
         match serde_json::to_string(payload) {
             Ok(body) => ctx.text(body),
-            Err(err) => warn!(error = %err, "Failed to serialize WebSocket payload"),
+            Err(err) => {
+                // In debug builds fail fast so schema drift is fixed; in release we log and keep the connection alive.
+                if cfg!(debug_assertions) {
+                    panic!("domain events must serialize: {err}");
+                } else {
+                    warn!(error = %err, "Failed to serialize WebSocket payload");
+                }
+            }
         }
     }
 
