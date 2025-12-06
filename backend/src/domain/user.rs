@@ -41,6 +41,35 @@ impl fmt::Display for UserValidationError {
 
 impl std::error::Error for UserValidationError {}
 
+impl UserValidationError {
+    /// Metadata for display name validation failures (code, message, field).
+    pub fn display_name_error_meta(&self) -> Option<(&'static str, String, &'static str)> {
+        match self {
+            Self::EmptyDisplayName => Some((
+                "empty",
+                "Display name must not be empty.".to_owned(),
+                "displayName",
+            )),
+            Self::DisplayNameTooShort { .. } => Some((
+                "too_short",
+                format!("Display name must be at least {DISPLAY_NAME_MIN} characters."),
+                "displayName",
+            )),
+            Self::DisplayNameTooLong { .. } => Some((
+                "too_long",
+                format!("Display name must be at most {DISPLAY_NAME_MAX} characters."),
+                "displayName",
+            )),
+            Self::DisplayNameInvalidCharacters => Some((
+                "invalid_chars",
+                "Only alphanumeric characters, spaces, and underscores are allowed.".to_owned(),
+                "displayName",
+            )),
+            _ => None,
+        }
+    }
+}
+
 /// Stable user identifier stored as a UUID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]

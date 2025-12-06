@@ -4,30 +4,8 @@
 //! translate domain events into transport payloads.
 
 use crate::domain::user::{DisplayName, User, UserId, UserValidationError};
-use crate::domain::user_events::{
-    DisplayNameRejectedEvent, DisplayNameRejectionReason, UserCreatedEvent, UserEvent,
-};
+use crate::domain::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
 use crate::middleware::trace::TraceId;
-
-/// Command carrying the client's desired display name and correlation id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DisplayNameSubmission {
-    /// Trace identifier supplied by the caller.
-    pub trace_id: TraceId,
-    /// Raw display name provided by the caller.
-    pub display_name: String,
-}
-
-impl DisplayNameSubmission {
-    /// Build a new submission from raw components.
-    #[must_use]
-    pub fn new(trace_id: TraceId, display_name: impl Into<String>) -> Self {
-        Self {
-            trace_id,
-            display_name: display_name.into(),
-        }
-    }
-}
 
 /// Stateless user onboarding service.
 #[derive(Debug, Default, Clone, Copy)]
@@ -36,30 +14,28 @@ pub struct UserOnboardingService;
 impl UserOnboardingService {
     /// Validate a display name and emit the appropriate domain event.
     #[must_use]
-    pub fn register(&self, submission: DisplayNameSubmission) -> UserEvent {
-        match DisplayName::new(submission.display_name.clone()) {
+    pub fn register(&self, trace_id: TraceId, display_name: impl Into<String>) -> UserEvent {
+        let display_name = display_name.into();
+        match DisplayName::new(display_name.clone()) {
             Ok(display_name) => {
                 let user = User::new(UserId::random(), display_name);
-                UserEvent::UserCreated(UserCreatedEvent {
-                    trace_id: submission.trace_id,
-                    user,
-                })
+                UserEvent::UserCreated(UserCreatedEvent { trace_id, user })
             }
-            Err(error) => UserEvent::DisplayNameRejected(Self::build_rejection(submission, error)),
+            Err(error) => {
+                UserEvent::DisplayNameRejected(Self::build_rejection(trace_id, display_name, error))
+            }
         }
     }
 
     pub(crate) fn build_rejection(
-        submission: DisplayNameSubmission,
+        trace_id: TraceId,
+        attempted_name: String,
         error: UserValidationError,
     ) -> DisplayNameRejectedEvent {
-        let reason = DisplayNameRejectionReason::from_validation_error(&error)
-            .unwrap_or_else(|| panic!("unexpected validation error for display name: {error:?}"));
         DisplayNameRejectedEvent {
-            trace_id: submission.trace_id,
-            attempted_name: submission.display_name,
-            reason,
-            message: reason.message(),
+            trace_id,
+            attempted_name,
+            error,
         }
     }
 }
@@ -73,19 +49,20 @@ mod tests {
     use uuid::Uuid;
 
     #[given("a valid display name submission")]
-    fn a_valid_display_name_submission() -> DisplayNameSubmission {
-        DisplayNameSubmission::new(TraceId::from_uuid(Uuid::nil()), "Ada Lovelace")
+    fn a_valid_display_name_submission() -> (TraceId, String) {
+        (TraceId::from_uuid(Uuid::nil()), "Ada Lovelace".into())
     }
 
     #[given("an invalid display name submission")]
-    fn an_invalid_display_name_submission() -> DisplayNameSubmission {
-        DisplayNameSubmission::new(TraceId::from_uuid(Uuid::nil()), "@da!")
+    fn an_invalid_display_name_submission() -> (TraceId, String) {
+        (TraceId::from_uuid(Uuid::nil()), "@da!".into())
     }
 
     #[when("the onboarding service registers it")]
-    fn the_onboarding_service_registers_it(submission: DisplayNameSubmission) -> UserEvent {
+    fn the_onboarding_service_registers_it(input: (TraceId, String)) -> UserEvent {
         let service = UserOnboardingService;
-        service.register(submission)
+        let (trace_id, display_name) = input;
+        service.register(trace_id, display_name)
     }
 
     #[then("a user created event is emitted")]
@@ -103,7 +80,7 @@ mod tests {
             UserEvent::DisplayNameRejected(event) => event,
             other => panic!("expected DisplayNameRejected event, got {other:?}"),
         };
-        assert_eq!(rejected.reason.code(), "invalid_chars");
+        assert_eq!(rejected.code(), "invalid_chars");
         assert_eq!(rejected.attempted_name, "@da!");
     }
 
@@ -123,39 +100,43 @@ mod tests {
 
     #[rstest]
     fn build_rejection_maps_reason_and_message() {
-        let base = DisplayNameSubmission::new(TraceId::from_uuid(Uuid::nil()), "bad");
+        let base = (TraceId::from_uuid(Uuid::nil()), "bad".to_owned());
 
         let too_short = UserOnboardingService::build_rejection(
-            base.clone(),
+            base.0,
+            base.1.clone(),
             UserValidationError::DisplayNameTooShort {
                 min: DISPLAY_NAME_MIN,
             },
         );
-        assert_eq!(too_short.reason, DisplayNameRejectionReason::TooShort);
-        assert_eq!(too_short.message, too_short.reason.message());
+        assert_eq!(too_short.code(), "too_short");
+        assert_eq!(too_short.message(), too_short.message());
 
         let too_long = UserOnboardingService::build_rejection(
-            base.clone(),
+            base.0,
+            base.1.clone(),
             UserValidationError::DisplayNameTooLong {
                 max: DISPLAY_NAME_MAX,
             },
         );
-        assert_eq!(too_long.reason, DisplayNameRejectionReason::TooLong);
-        assert_eq!(too_long.attempted_name, base.display_name);
+        assert_eq!(too_long.code(), "too_long");
+        assert_eq!(too_long.attempted_name, base.1);
 
         let invalid_chars = UserOnboardingService::build_rejection(
-            base.clone(),
+            base.0,
+            base.1.clone(),
             UserValidationError::DisplayNameInvalidCharacters,
         );
-        assert_eq!(invalid_chars.reason.code(), "invalid_chars");
-        assert_eq!(invalid_chars.message, invalid_chars.reason.message());
+        assert_eq!(invalid_chars.code(), "invalid_chars");
+        assert_eq!(invalid_chars.message(), invalid_chars.message());
 
         let empty = UserOnboardingService::build_rejection(
-            base.clone(),
+            base.0,
+            base.1.clone(),
             UserValidationError::EmptyDisplayName,
         );
-        assert_eq!(empty.reason, DisplayNameRejectionReason::Empty);
-        assert_eq!(empty.attempted_name, base.display_name);
+        assert_eq!(empty.code(), "empty");
+        assert_eq!(empty.attempted_name, base.1);
     }
 
     #[rstest]
@@ -163,13 +144,11 @@ mod tests {
     #[case(&"a".repeat(DISPLAY_NAME_MAX + 1), "too_long")]
     fn rejects_length_boundaries(#[case] display_name: &str, #[case] expected_code: &str) {
         let service = UserOnboardingService;
-        let submission =
-            DisplayNameSubmission::new(TraceId::from_uuid(Uuid::nil()), display_name.to_owned());
-        let event = service.register(submission);
+        let event = service.register(TraceId::from_uuid(Uuid::nil()), display_name.to_owned());
         let rejected = match event {
             UserEvent::DisplayNameRejected(event) => event,
             _ => panic!("expected rejection event"),
         };
-        assert_eq!(rejected.reason.code(), expected_code);
+        assert_eq!(rejected.code(), expected_code);
     }
 }

@@ -3,8 +3,7 @@
 //! Domain events are transformed into these payloads before being serialized
 //! to JSON and sent to connected clients.
 
-use crate::domain::{DisplayNameRejectedEvent, DisplayNameSubmission, UserCreatedEvent};
-use crate::middleware::trace::TraceId;
+use crate::domain::{DisplayNameRejectedEvent, UserCreatedEvent};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -19,57 +18,30 @@ pub struct DisplayNameRequest {
     pub display_name: String,
 }
 
-impl From<DisplayNameRequest> for DisplayNameSubmission {
-    fn from(value: DisplayNameRequest) -> Self {
-        Self::new(TraceId::from_uuid(value.trace_id), value.display_name)
-    }
-}
-
-/// Generic envelope attaching a correlation identifier to an outbound payload.
-///
-/// Invariant: `T` must not declare its own `trace_id`/`traceId` field. The
-/// payload is `flatten`ed, so any duplicate keys would collide at
-/// serialisation time.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Envelope<T> {
-    trace_id: Uuid,
-    #[serde(flatten)]
-    payload: T,
-}
-
-impl<T> Envelope<T> {
-    /// Construct with the provided trace identifier.
-    pub fn with_trace_id(trace_id: TraceId, payload: T) -> Self {
-        Self {
-            trace_id: *trace_id.as_uuid(),
-            payload,
-        }
-    }
-}
-
 /// Outbound payload emitted when a user is created.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserCreatedPayload {
+pub struct UserCreatedResponse {
+    pub trace_id: Uuid,
     /// Unique user identifier.
     pub id: String,
     /// User's chosen display name.
     pub display_name: String,
 }
 
-impl From<UserCreatedEvent> for Envelope<UserCreatedPayload> {
+impl From<UserCreatedEvent> for UserCreatedResponse {
     fn from(value: UserCreatedEvent) -> Self {
-        let payload = UserCreatedPayload {
+        Self {
+            trace_id: *value.trace_id.as_uuid(),
             id: value.user.id().to_string(),
             display_name: value.user.display_name().as_ref().to_owned(),
-        };
-        Envelope::with_trace_id(value.trace_id, payload)
+        }
     }
 }
 
 /// Structured details for invalid display name responses.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InvalidDisplayNameDetails {
     field: &'static str,
     value: String,
@@ -77,56 +49,63 @@ pub struct InvalidDisplayNameDetails {
     code: String,
 }
 
+impl From<&DisplayNameRejectedEvent> for InvalidDisplayNameDetails {
+    fn from(value: &DisplayNameRejectedEvent) -> Self {
+        let (code, message, field) = value.error.display_name_error_meta().unwrap_or((
+            "invalid_display_name",
+            value.error.to_string(),
+            value.field(),
+        ));
+
+        Self {
+            field,
+            value: value.attempted_name.clone(),
+            message,
+            code: code.to_owned(),
+        }
+    }
+}
+
 /// Outbound payload describing display name validation failures.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InvalidDisplayNamePayload {
-    code: String,
-    error: String,
+pub struct InvalidDisplayNameResponse {
+    pub trace_id: Uuid,
+    pub code: String,
+    pub error: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    details: Option<InvalidDisplayNameDetails>,
+    pub details: Option<InvalidDisplayNameDetails>,
 }
 
-impl From<DisplayNameRejectedEvent> for Envelope<InvalidDisplayNamePayload> {
+impl From<DisplayNameRejectedEvent> for InvalidDisplayNameResponse {
     fn from(value: DisplayNameRejectedEvent) -> Self {
-        let details = InvalidDisplayNameDetails {
-            field: value.field(),
-            value: value.attempted_name.clone(),
-            message: value.message.clone(),
-            code: value.reason.code().to_owned(),
-        };
-        let payload = InvalidDisplayNamePayload {
-            code: value.reason.code().to_owned(),
-            error: value.message,
-            details: Some(details),
-        };
-        Envelope::with_trace_id(value.trace_id, payload)
+        let (code, message, _field) = value.error.display_name_error_meta().unwrap_or((
+            "invalid_display_name",
+            value.error.to_string(),
+            value.field(),
+        ));
+
+        let details = value
+            .error
+            .display_name_error_meta()
+            .map(|_| InvalidDisplayNameDetails::from(&value));
+
+        Self {
+            trace_id: *value.trace_id.as_uuid(),
+            code: code.to_owned(),
+            error: message,
+            details,
+        }
     }
 }
 
-/// Actix message wrapper carrying domain events for WebSocket sessions.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{DisplayName, DisplayNameRejectionReason, User, UserId};
+    use crate::domain::{DisplayName, User, UserId, UserValidationError};
+    use crate::middleware::trace::TraceId;
     use insta::assert_json_snapshot;
     use rstest::rstest;
-    use serde::Serialize;
-    use serde_json::to_value;
-
-    fn assert_trace_id_is_unique<T: Serialize>(envelope: &Envelope<T>) {
-        let value = to_value(envelope).expect("serialise envelope");
-        let object = value
-            .as_object()
-            .expect("envelope serialises to JSON object");
-        assert!(object.contains_key("traceId"));
-        assert!(!object.contains_key("trace_id"));
-        let trace_id_keys = object
-            .keys()
-            .filter(|key| *key == "traceId" || *key == "trace_id")
-            .count();
-        assert_eq!(trace_id_keys, 1, "traceId must not collide when flattened");
-    }
 
     #[rstest]
     fn serialises_user_created_event() {
@@ -139,22 +118,18 @@ mod tests {
             trace_id: TraceId::from_uuid(Uuid::nil()),
             user,
         };
-        let envelope: Envelope<UserCreatedPayload> = event.into();
-        assert_trace_id_is_unique(&envelope);
-        assert_json_snapshot!(envelope);
+        let response: UserCreatedResponse = event.into();
+        assert_json_snapshot!(response);
     }
 
     #[rstest]
     fn serialises_invalid_display_name_event() {
-        let reason = DisplayNameRejectionReason::InvalidCharacters;
         let event = DisplayNameRejectedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
             attempted_name: "bad$char".into(),
-            reason,
-            message: reason.message().to_owned(),
+            error: UserValidationError::DisplayNameInvalidCharacters,
         };
-        let envelope: Envelope<InvalidDisplayNamePayload> = event.into();
-        assert_trace_id_is_unique(&envelope);
-        assert_json_snapshot!(envelope);
+        let response: InvalidDisplayNameResponse = event.into();
+        assert_json_snapshot!(response);
     }
 }

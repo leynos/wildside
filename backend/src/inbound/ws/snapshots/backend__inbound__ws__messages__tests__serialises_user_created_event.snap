@@ -1,6 +1,6 @@
 ---
 source: backend/src/inbound/ws/messages.rs
-expression: envelope
+expression: response
 ---
 {
   "traceId": "00000000-0000-0000-0000-000000000000",

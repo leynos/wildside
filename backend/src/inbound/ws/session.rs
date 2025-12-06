@@ -9,10 +9,11 @@
 
 use std::time::{Duration, Instant};
 
-use crate::domain::{DisplayNameSubmission, UserEvent, UserOnboardingService};
+use crate::domain::{UserEvent, UserOnboardingService};
 use crate::inbound::ws::messages::{
-    DisplayNameRequest, Envelope, InvalidDisplayNamePayload, UserCreatedPayload,
+    DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
 };
+use crate::middleware::trace::TraceId;
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use tracing::warn;
@@ -69,9 +70,9 @@ impl WsSession {
         request: DisplayNameRequest,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        let submission = DisplayNameSubmission::from(request);
+        let trace_id = TraceId::from_uuid(request.trace_id);
         // `register` must remain CPU-bound; any I/O work should be offloaded to other actors/tasks.
-        let event = self.onboarding.register(submission);
+        let event = self.onboarding.register(trace_id, request.display_name);
         self.handle_user_event(event, ctx);
     }
 
@@ -100,12 +101,12 @@ impl WsSession {
     fn handle_user_event(&mut self, event: UserEvent, ctx: &mut ws::WebsocketContext<Self>) {
         match event {
             UserEvent::UserCreated(event) => {
-                let envelope: Envelope<UserCreatedPayload> = event.into();
-                self.send_json(ctx, &envelope);
+                let response: UserCreatedResponse = event.into();
+                self.send_json(ctx, &response);
             }
             UserEvent::DisplayNameRejected(event) => {
-                let envelope: Envelope<InvalidDisplayNamePayload> = event.into();
-                self.send_json(ctx, &envelope);
+                let response: InvalidDisplayNameResponse = event.into();
+                self.send_json(ctx, &response);
             }
         }
     }

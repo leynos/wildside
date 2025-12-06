@@ -13,7 +13,7 @@
 //! - LoginCredentials — validated username/password inputs for authentication.
 //! - UserEvent (alias to `user_events::UserEvent`) — high-level user domain
 //!   events, including `UserCreatedEvent` and `DisplayNameRejectedEvent`.
-//! - DisplayNameSubmission and UserOnboardingService — validated onboarding
+//! - UserOnboardingService — validated onboarding
 //!   input and orchestration service for user creation workflows.
 
 pub mod auth;
@@ -26,10 +26,8 @@ pub mod user_onboarding;
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
-pub use self::user_events::{
-    DisplayNameRejectedEvent, DisplayNameRejectionReason, UserCreatedEvent, UserEvent,
-};
-pub use self::user_onboarding::{DisplayNameSubmission, UserOnboardingService};
+pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
+pub use self::user_onboarding::UserOnboardingService;
 
 /// HTTP header name used to propagate trace identifiers.
 pub const TRACE_ID_HEADER: &str = "trace-id";
