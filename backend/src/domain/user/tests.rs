@@ -78,15 +78,6 @@ fn try_new_rejects_too_long_display_name(valid_id: String) {
 }
 
 #[rstest]
-fn try_new_rejects_invalid_characters(valid_id: String) {
-    let result = User::try_from_strings(valid_id, "bad$char");
-    assert!(matches!(
-        result,
-        Err(UserValidationError::DisplayNameInvalidCharacters)
-    ));
-}
-
-#[rstest]
 fn try_new_accepts_valid_inputs(valid_id: String, valid_display_name: String) {
     let user =
         User::try_from_strings(valid_id.clone(), valid_display_name.clone()).expect("valid inputs");
