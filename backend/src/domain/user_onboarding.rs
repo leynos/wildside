@@ -110,7 +110,8 @@ mod tests {
             },
         );
         assert_eq!(too_short.code(), "too_short");
-        assert_eq!(too_short.message(), too_short.message());
+        assert_eq!(too_short.message(), "Display name must be at least 3 characters.");
+        assert_eq!(too_short.attempted_name, base.1);
 
         let too_long = UserOnboardingService::build_rejection(
             base.0,
@@ -120,6 +121,7 @@ mod tests {
             },
         );
         assert_eq!(too_long.code(), "too_long");
+        assert_eq!(too_long.message(), "Display name must be at most 32 characters.");
         assert_eq!(too_long.attempted_name, base.1);
 
         let invalid_chars = UserOnboardingService::build_rejection(
@@ -128,7 +130,11 @@ mod tests {
             UserValidationError::DisplayNameInvalidCharacters,
         );
         assert_eq!(invalid_chars.code(), "invalid_chars");
-        assert_eq!(invalid_chars.message(), invalid_chars.message());
+        assert_eq!(
+            invalid_chars.message(),
+            "Only alphanumeric characters, spaces, and underscores are allowed.",
+        );
+        assert_eq!(invalid_chars.attempted_name, base.1);
 
         let empty = UserOnboardingService::build_rejection(
             base.0,
@@ -136,6 +142,7 @@ mod tests {
             UserValidationError::EmptyDisplayName,
         );
         assert_eq!(empty.code(), "empty");
+        assert_eq!(empty.message(), "Display name must not be empty.");
         assert_eq!(empty.attempted_name, base.1);
     }
 
