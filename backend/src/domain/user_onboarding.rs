@@ -48,6 +48,12 @@ mod tests {
     use rstest_bdd_macros::{given, then, when};
     use uuid::Uuid;
 
+    /// Expected values for rejection assertions
+    struct ExpectedRejection<'a> {
+        code: &'a str,
+        message: &'a str,
+    }
+
     #[given("a valid display name submission")]
     fn a_valid_display_name_submission() -> (TraceId, String) {
         (TraceId::from_uuid(Uuid::nil()), "Ada Lovelace".into())
@@ -102,13 +108,12 @@ mod tests {
         trace_id: TraceId,
         attempted: &str,
         error: UserValidationError,
-        expected_code: &str,
-        expected_message: &str,
+        expected: ExpectedRejection<'_>,
     ) {
         let rejection =
             UserOnboardingService::build_rejection(trace_id, attempted.to_owned(), error);
-        assert_eq!(rejection.code(), expected_code);
-        assert_eq!(rejection.message(), expected_message);
+        assert_eq!(rejection.code(), expected.code);
+        assert_eq!(rejection.message(), expected.message);
         assert_eq!(rejection.attempted_name, attempted);
     }
 
@@ -122,8 +127,10 @@ mod tests {
             UserValidationError::DisplayNameTooShort {
                 min: DISPLAY_NAME_MIN,
             },
-            "too_short",
-            "Display name must be at least 3 characters.",
+            ExpectedRejection {
+                code: "too_short",
+                message: "Display name must be at least 3 characters.",
+            },
         );
 
         assert_rejection_case(
@@ -132,24 +139,30 @@ mod tests {
             UserValidationError::DisplayNameTooLong {
                 max: DISPLAY_NAME_MAX,
             },
-            "too_long",
-            "Display name must be at most 32 characters.",
+            ExpectedRejection {
+                code: "too_long",
+                message: "Display name must be at most 32 characters.",
+            },
         );
 
         assert_rejection_case(
             base.0,
             &base.1,
             UserValidationError::DisplayNameInvalidCharacters,
-            "invalid_chars",
-            "Only alphanumeric characters, spaces, and underscores are allowed.",
+            ExpectedRejection {
+                code: "invalid_chars",
+                message: "Only alphanumeric characters, spaces, and underscores are allowed.",
+            },
         );
 
         assert_rejection_case(
             base.0,
             &base.1,
             UserValidationError::EmptyDisplayName,
-            "empty",
-            "Display name must not be empty.",
+            ExpectedRejection {
+                code: "empty",
+                message: "Display name must not be empty.",
+            },
         );
     }
 
