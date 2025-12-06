@@ -48,6 +48,8 @@ metrics = ["dep:actix-web-prom"]
 
 [dev-dependencies]
 actix-rt = "2"
+# Actix codec helpers for framing WebSocket test sockets.
+actix-codec = "0.5"
 # Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3"
 rstest = "0.26"

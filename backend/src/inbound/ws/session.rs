@@ -143,12 +143,14 @@ impl StreamHandler<Result<Message, ProtocolError>> for WsSession {
 mod tests {
     use super::*;
     use crate::inbound::ws;
-    use actix_web::{dev::Server, http::header, App, HttpServer};
-    use awc::ws::{Frame, Message};
+    use actix_web::{dev::Server, dev::ServerHandle, http::header, App, HttpServer};
+    use awc::{ws::Codec, ws::Frame, ws::Message, BoxedSocket};
     use futures_util::{SinkExt, StreamExt};
+    use rstest::{fixture, rstest};
     use serde_json::Value;
     use uuid::Uuid;
 
+    #[fixture]
     async fn start_ws_server() -> (String, Server) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test listener");
         let addr = listener.local_addr().expect("listener addr");
@@ -161,6 +163,27 @@ mod tests {
         (url, server)
     }
 
+    #[fixture]
+    async fn ws_client(
+        #[future] start_ws_server: (String, Server),
+    ) -> (
+        actix_codec::Framed<BoxedSocket, Codec>,
+        ServerHandle,
+    ) {
+        let (url, server) = start_ws_server.await;
+        let handle = server.handle();
+        actix_web::rt::spawn(server);
+
+        let (_resp, socket) = awc::Client::default()
+            .ws(format!("{url}/ws"))
+            .set_header(header::ORIGIN, "http://localhost:3000")
+            .connect()
+            .await
+            .expect("websocket connect");
+
+        (socket, handle)
+    }
+
     fn handshake_request_payload(name: &str) -> String {
         serde_json::json!({
             "traceId": Uuid::nil(),
@@ -169,18 +192,12 @@ mod tests {
         .to_string()
     }
 
+    #[rstest]
     #[actix_rt::test]
-    async fn sends_user_created_event_for_valid_payload() {
-        let (url, server) = start_ws_server().await;
-        actix_web::rt::spawn(server);
-
-        let (_resp, mut socket) = awc::Client::default()
-            .ws(format!("{url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
+    async fn sends_user_created_event_for_valid_payload(
+        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
+    ) {
+        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
         socket
             .send(Message::Text(handshake_request_payload("Bob").into()))
             .await
@@ -203,17 +220,12 @@ mod tests {
         );
     }
 
+    #[rstest]
     #[actix_rt::test]
-    async fn sends_rejection_for_invalid_payload() {
-        let (url, server) = start_ws_server().await;
-        actix_web::rt::spawn(server);
-        let (_resp, mut socket) = awc::Client::default()
-            .ws(format!("{url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
+    async fn sends_rejection_for_invalid_payload(
+        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
+    ) {
+        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
         socket
             .send(Message::Text(handshake_request_payload("bad$char").into()))
             .await
@@ -238,17 +250,12 @@ mod tests {
         );
     }
 
+    #[rstest]
     #[actix_rt::test]
-    async fn closes_on_malformed_json() {
-        let (url, server) = start_ws_server().await;
-        actix_web::rt::spawn(server);
-        let (_resp, mut socket) = awc::Client::default()
-            .ws(format!("{url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
+    async fn closes_on_malformed_json(
+        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
+    ) {
+        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
         socket
             .send(awc::ws::Message::Text("not-json".into()))
             .await
@@ -263,17 +270,12 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[actix_rt::test]
-    async fn closes_after_timeout_without_client_messages() {
-        let (url, server) = start_ws_server().await;
-        actix_web::rt::spawn(server);
-        let (_resp, mut socket) = awc::Client::default()
-            .ws(format!("{url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
+    async fn closes_after_timeout_without_client_messages(
+        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
+    ) {
+        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
         tokio::time::sleep(CLIENT_TIMEOUT + HEARTBEAT_INTERVAL * 3).await;
 
         let mut observed_close = None;

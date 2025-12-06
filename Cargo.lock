@@ -527,6 +527,7 @@ name = "backend"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-codec",
  "actix-rt",
  "actix-service",
  "actix-session",
