@@ -98,58 +98,59 @@ mod tests {
         a_display_name_rejection_event_is_emitted(event);
     }
 
+    fn assert_rejection_case(
+        trace_id: TraceId,
+        attempted: &str,
+        error: UserValidationError,
+        expected_code: &str,
+        expected_message: &str,
+    ) {
+        let rejection =
+            UserOnboardingService::build_rejection(trace_id, attempted.to_owned(), error);
+        assert_eq!(rejection.code(), expected_code);
+        assert_eq!(rejection.message(), expected_message);
+        assert_eq!(rejection.attempted_name, attempted);
+    }
+
     #[rstest]
     fn build_rejection_maps_reason_and_message() {
         let base = (TraceId::from_uuid(Uuid::nil()), "bad".to_owned());
 
-        let too_short = UserOnboardingService::build_rejection(
+        assert_rejection_case(
             base.0,
-            base.1.clone(),
+            &base.1,
             UserValidationError::DisplayNameTooShort {
                 min: DISPLAY_NAME_MIN,
             },
+            "too_short",
+            "Display name must be at least 3 characters.",
         );
-        assert_eq!(too_short.code(), "too_short");
-        assert_eq!(
-            too_short.message(),
-            "Display name must be at least 3 characters."
-        );
-        assert_eq!(too_short.attempted_name, base.1);
 
-        let too_long = UserOnboardingService::build_rejection(
+        assert_rejection_case(
             base.0,
-            base.1.clone(),
+            &base.1,
             UserValidationError::DisplayNameTooLong {
                 max: DISPLAY_NAME_MAX,
             },
+            "too_long",
+            "Display name must be at most 32 characters.",
         );
-        assert_eq!(too_long.code(), "too_long");
-        assert_eq!(
-            too_long.message(),
-            "Display name must be at most 32 characters."
-        );
-        assert_eq!(too_long.attempted_name, base.1);
 
-        let invalid_chars = UserOnboardingService::build_rejection(
+        assert_rejection_case(
             base.0,
-            base.1.clone(),
+            &base.1,
             UserValidationError::DisplayNameInvalidCharacters,
-        );
-        assert_eq!(invalid_chars.code(), "invalid_chars");
-        assert_eq!(
-            invalid_chars.message(),
+            "invalid_chars",
             "Only alphanumeric characters, spaces, and underscores are allowed.",
         );
-        assert_eq!(invalid_chars.attempted_name, base.1);
 
-        let empty = UserOnboardingService::build_rejection(
+        assert_rejection_case(
             base.0,
-            base.1.clone(),
+            &base.1,
             UserValidationError::EmptyDisplayName,
+            "empty",
+            "Display name must not be empty.",
         );
-        assert_eq!(empty.code(), "empty");
-        assert_eq!(empty.message(), "Display name must not be empty.");
-        assert_eq!(empty.attempted_name, base.1);
     }
 
     #[rstest]
