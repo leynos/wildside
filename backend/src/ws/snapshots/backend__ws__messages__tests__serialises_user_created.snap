@@ -1,8 +1,0 @@
----
-source: src/ws/messages.rs
-expression: value
----
-{
-  "displayName": "Alice",
-  "id": "123"
-}

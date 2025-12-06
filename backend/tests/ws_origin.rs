@@ -6,7 +6,7 @@ use actix_web::{
     test::{self, TestRequest},
     App,
 };
-use backend::ws;
+use backend::inbound::ws;
 use rstest::rstest;
 
 // Example Sec-WebSocket-Key from RFC 6455 section 1.3 used to satisfy handshake requirements.
