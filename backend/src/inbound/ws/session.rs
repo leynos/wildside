@@ -286,20 +286,28 @@ mod tests {
         let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
         tokio::time::sleep(CLIENT_TIMEOUT + HEARTBEAT_INTERVAL * 3).await;
 
-        let mut observed_close = None;
-        while let Some(frame) = socket.next().await {
-            let frame = frame.expect("frame");
-            match frame {
-                Frame::Ping(_) | Frame::Pong(_) => continue,
-                Frame::Close(reason) => {
-                    observed_close = reason;
-                    break;
-                }
-                other => panic!("unexpected frame before close: {other:?}"),
-            }
-        }
+        use std::time::Duration;
 
-        let reason = observed_close.expect("close frame missing after timeout");
+        let observed_close = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut observed = None;
+            while let Some(frame) = socket.next().await {
+                let frame = frame.expect("frame");
+                match frame {
+                    Frame::Ping(_) | Frame::Pong(_) => continue,
+                    Frame::Close(reason) => {
+                        observed = reason;
+                        break;
+                    }
+                    other => panic!("unexpected frame before close: {other:?}"),
+                }
+            }
+            observed
+        })
+        .await
+        .expect("close frame missing within timeout")
+        .expect("close frame missing after timeout");
+
+        let reason = observed_close;
         assert_eq!(reason.code, CloseCode::Normal);
         assert_eq!(reason.description.as_deref(), Some("heartbeat timeout"));
     }
