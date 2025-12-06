@@ -66,6 +66,7 @@ impl WsSession {
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
         let submission = DisplayNameSubmission::from(request);
+        // `register` must remain CPU-bound; any I/O work should be offloaded to other actors/tasks.
         let event = self.onboarding.register(submission);
         self.handle_user_event(event, ctx);
     }
@@ -166,10 +167,7 @@ mod tests {
     #[fixture]
     async fn ws_client(
         #[future] start_ws_server: (String, Server),
-    ) -> (
-        actix_codec::Framed<BoxedSocket, Codec>,
-        ServerHandle,
-    ) {
+    ) -> (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle) {
         let (url, server) = start_ws_server.await;
         let handle = server.handle();
         actix_web::rt::spawn(server);

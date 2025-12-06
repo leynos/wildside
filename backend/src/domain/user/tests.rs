@@ -92,7 +92,13 @@ fn accepts_minimum_length(valid_id: TestUserId) {
     let name = "a".repeat(DISPLAY_NAME_MIN);
     let result = User::try_from_strings(valid_id.as_ref(), name.clone());
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().display_name().as_ref(), name);
+    assert_eq!(
+        result
+            .expect("valid display name at boundary")
+            .display_name()
+            .as_ref(),
+        name
+    );
 }
 
 #[rstest]
@@ -100,7 +106,13 @@ fn accepts_maximum_length(valid_id: TestUserId) {
     let name = "a".repeat(DISPLAY_NAME_MAX);
     let result = User::try_from_strings(valid_id.as_ref(), name.clone());
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().display_name().as_ref(), name);
+    assert_eq!(
+        result
+            .expect("valid display name at boundary")
+            .display_name()
+            .as_ref(),
+        name
+    );
 }
 
 #[rstest]
