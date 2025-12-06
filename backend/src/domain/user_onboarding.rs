@@ -110,7 +110,10 @@ mod tests {
             },
         );
         assert_eq!(too_short.code(), "too_short");
-        assert_eq!(too_short.message(), "Display name must be at least 3 characters.");
+        assert_eq!(
+            too_short.message(),
+            "Display name must be at least 3 characters."
+        );
         assert_eq!(too_short.attempted_name, base.1);
 
         let too_long = UserOnboardingService::build_rejection(
@@ -121,7 +124,10 @@ mod tests {
             },
         );
         assert_eq!(too_long.code(), "too_long");
-        assert_eq!(too_long.message(), "Display name must be at most 32 characters.");
+        assert_eq!(
+            too_long.message(),
+            "Display name must be at most 32 characters."
+        );
         assert_eq!(too_long.attempted_name, base.1);
 
         let invalid_chars = UserOnboardingService::build_rejection(
