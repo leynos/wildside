@@ -7,28 +7,98 @@ use serde_json::json;
 
 const VALID_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 
-#[fixture]
-fn valid_id() -> String {
-    VALID_ID.to_owned()
+#[derive(Debug, Clone)]
+struct TestUserId(String);
+
+impl TestUserId {
+    fn valid() -> Self {
+        Self(VALID_ID.to_owned())
+    }
+
+    fn invalid() -> Self {
+        Self("not-a-uuid".to_owned())
+    }
+}
+
+impl From<&str> for TestUserId {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl AsRef<str> for TestUserId {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<TestUserId> for String {
+    fn from(value: TestUserId) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TestDisplayName(String);
+
+impl TestDisplayName {
+    fn valid() -> Self {
+        Self("Ada Lovelace".to_owned())
+    }
+
+    fn too_short() -> Self {
+        Self("ab".to_owned())
+    }
+
+    fn too_long() -> Self {
+        Self("a".repeat(DISPLAY_NAME_MAX + 1))
+    }
+
+    fn with_invalid_chars() -> Self {
+        Self("bad$char".to_owned())
+    }
+}
+
+impl From<&str> for TestDisplayName {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl AsRef<str> for TestDisplayName {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<TestDisplayName> for String {
+    fn from(value: TestDisplayName) -> Self {
+        value.0
+    }
 }
 
 #[fixture]
-fn valid_display_name() -> String {
-    "Ada Lovelace".to_owned()
+fn valid_id() -> TestUserId {
+    TestUserId::valid()
+}
+
+#[fixture]
+fn valid_display_name() -> TestDisplayName {
+    TestDisplayName::valid()
 }
 
 #[rstest]
-fn accepts_minimum_length(valid_id: String) {
+fn accepts_minimum_length(valid_id: TestUserId) {
     let name = "a".repeat(DISPLAY_NAME_MIN);
-    let result = User::try_from_strings(valid_id, name.clone());
+    let result = User::try_from_strings(valid_id.as_ref(), name.clone());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().display_name().as_ref(), name);
 }
 
 #[rstest]
-fn accepts_maximum_length(valid_id: String) {
+fn accepts_maximum_length(valid_id: TestUserId) {
     let name = "a".repeat(DISPLAY_NAME_MAX);
-    let result = User::try_from_strings(valid_id, name.clone());
+    let result = User::try_from_strings(valid_id.as_ref(), name.clone());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().display_name().as_ref(), name);
 }
@@ -40,27 +110,29 @@ fn new_panics_when_invalid_id() {
 }
 
 #[rstest]
-fn try_new_rejects_invalid_uuid(valid_display_name: String) {
-    let result = User::try_from_strings("not-a-uuid", valid_display_name);
+fn try_new_rejects_invalid_uuid(valid_display_name: TestDisplayName) {
+    let result =
+        User::try_from_strings(TestUserId::invalid().as_ref(), valid_display_name.as_ref());
     assert!(matches!(result, Err(UserValidationError::InvalidId)));
 }
 
 #[rstest]
-fn try_new_rejects_uuid_with_whitespace(valid_display_name: String) {
+fn try_new_rejects_uuid_with_whitespace(valid_display_name: TestDisplayName) {
     let id = format!(" {VALID_ID} ");
-    let result = User::try_from_strings(id, valid_display_name);
+    let result = User::try_from_strings(id, valid_display_name.as_ref());
     assert!(matches!(result, Err(UserValidationError::InvalidId)));
 }
 
 #[rstest]
-fn try_new_rejects_empty_display_name(valid_id: String) {
-    let result = User::try_from_strings(valid_id, "   ");
+fn try_new_rejects_empty_display_name(valid_id: TestUserId) {
+    let result = User::try_from_strings(valid_id.as_ref(), "   ");
     assert!(matches!(result, Err(UserValidationError::EmptyDisplayName)));
 }
 
 #[rstest]
-fn try_new_rejects_too_short_display_name(valid_id: String) {
-    let result = User::try_from_strings(valid_id, "ab");
+fn try_new_rejects_too_short_display_name(valid_id: TestUserId) {
+    let display = TestDisplayName::too_short();
+    let result = User::try_from_strings(valid_id.as_ref(), display.as_ref());
     assert!(matches!(
         result,
         Err(UserValidationError::DisplayNameTooShort { min }) if min == DISPLAY_NAME_MIN
@@ -68,9 +140,9 @@ fn try_new_rejects_too_short_display_name(valid_id: String) {
 }
 
 #[rstest]
-fn try_new_rejects_too_long_display_name(valid_id: String) {
-    let long = "a".repeat(DISPLAY_NAME_MAX + 1);
-    let result = User::try_from_strings(valid_id, long);
+fn try_new_rejects_too_long_display_name(valid_id: TestUserId) {
+    let display = TestDisplayName::too_long();
+    let result = User::try_from_strings(valid_id.as_ref(), display.as_ref());
     assert!(matches!(
         result,
         Err(UserValidationError::DisplayNameTooLong { max }) if max == DISPLAY_NAME_MAX
@@ -78,23 +150,24 @@ fn try_new_rejects_too_long_display_name(valid_id: String) {
 }
 
 #[rstest]
-fn try_new_accepts_valid_inputs(valid_id: String, valid_display_name: String) {
-    let user =
-        User::try_from_strings(valid_id.clone(), valid_display_name.clone()).expect("valid inputs");
-    assert_eq!(user.id().as_ref(), valid_id);
-    assert_eq!(user.display_name().as_ref(), valid_display_name);
+fn try_new_accepts_valid_inputs(valid_id: TestUserId, valid_display_name: TestDisplayName) {
+    let user = User::try_from_strings(valid_id.as_ref(), valid_display_name.as_ref())
+        .expect("valid inputs");
+    assert_eq!(user.id().as_ref(), valid_id.as_ref());
+    assert_eq!(user.display_name().as_ref(), valid_display_name.as_ref());
 }
 
 #[rstest]
-fn display_name_allows_alphanumerics_spaces_and_underscores(valid_id: String) {
+fn display_name_allows_alphanumerics_spaces_and_underscores(valid_id: TestUserId) {
     let name = "Alice_Bob 123";
-    let user = User::try_from_strings(valid_id, name).expect("valid name");
+    let user = User::try_from_strings(valid_id.as_ref(), name).expect("valid name");
     assert_eq!(user.display_name().as_ref(), name);
 }
 
 #[rstest]
-fn display_name_rejects_forbidden_characters(valid_id: String) {
-    let result = User::try_from_strings(valid_id, "bad$char");
+fn display_name_rejects_forbidden_characters(valid_id: TestUserId) {
+    let display = TestDisplayName::with_invalid_chars();
+    let result = User::try_from_strings(valid_id.as_ref(), display.as_ref());
     assert!(matches!(
         result,
         Err(UserValidationError::DisplayNameInvalidCharacters)
@@ -102,14 +175,14 @@ fn display_name_rejects_forbidden_characters(valid_id: String) {
 }
 
 #[rstest]
-fn serde_round_trips_alias(valid_id: String, valid_display_name: String) {
+fn serde_round_trips_alias(valid_id: TestUserId, valid_display_name: TestDisplayName) {
     let camel = json!({
-        "id": valid_id.clone(),
-        "displayName": valid_display_name.clone()
+        "id": valid_id.as_ref(),
+        "displayName": valid_display_name.as_ref()
     });
     let snake = json!({
-        "id": valid_id.clone(),
-        "display_name": valid_display_name.clone()
+        "id": valid_id.as_ref(),
+        "display_name": valid_display_name.as_ref()
     });
     let from_camel: User = serde_json::from_value(camel).expect("camelCase");
     let from_snake: User = serde_json::from_value(snake).expect("snake_case");
@@ -118,37 +191,43 @@ fn serde_round_trips_alias(valid_id: String, valid_display_name: String) {
     let value = serde_json::to_value(from_snake).expect("serialise to JSON");
     assert_eq!(
         value.get("displayName").and_then(|v| v.as_str()),
-        Some(valid_display_name.as_str())
+        Some(valid_display_name.as_ref())
     );
     assert!(value.get("display_name").is_none());
 }
 
 #[given("a valid user payload")]
-fn a_valid_user_payload(valid_id: String, valid_display_name: String) -> (String, String) {
+fn a_valid_user_payload(
+    valid_id: TestUserId,
+    valid_display_name: TestDisplayName,
+) -> (TestUserId, TestDisplayName) {
     (valid_id, valid_display_name)
 }
 
 #[when("the user is constructed")]
-fn the_user_is_constructed(payload: (String, String)) -> Result<User, UserValidationError> {
-    User::try_from_strings(payload.0, payload.1)
+fn the_user_is_constructed(
+    payload: (TestUserId, TestDisplayName),
+) -> Result<User, UserValidationError> {
+    let (id, display_name) = payload;
+    User::try_from_strings(id.as_ref(), display_name.as_ref())
 }
 
 #[then("the user is returned")]
-fn the_user_is_returned(result: Result<User, UserValidationError>, valid_id: String) {
+fn the_user_is_returned(result: Result<User, UserValidationError>, valid_id: TestUserId) {
     let user = result.expect("user should be created");
-    assert_eq!(user.id().as_ref(), valid_id);
+    assert_eq!(user.id().as_ref(), valid_id.as_ref());
 }
 
 #[rstest]
-fn constructing_a_user_happy_path(valid_display_name: String, valid_id: String) {
+fn constructing_a_user_happy_path(valid_display_name: TestDisplayName, valid_id: TestUserId) {
     let payload = a_valid_user_payload(valid_id.clone(), valid_display_name);
     let result = the_user_is_constructed(payload);
     the_user_is_returned(result, valid_id);
 }
 
 #[given("a payload with an empty display name")]
-fn a_payload_with_an_empty_display_name(valid_id: String) -> (String, String) {
-    (valid_id, "   ".to_owned())
+fn a_payload_with_an_empty_display_name(valid_id: TestUserId) -> (TestUserId, TestDisplayName) {
+    (valid_id, TestDisplayName::from("   "))
 }
 
 #[then("user construction fails")]
@@ -157,7 +236,7 @@ fn user_construction_fails(result: Result<User, UserValidationError>) {
 }
 
 #[rstest]
-fn constructing_a_user_unhappy_path(valid_id: String) {
+fn constructing_a_user_unhappy_path(valid_id: TestUserId) {
     let payload = a_payload_with_an_empty_display_name(valid_id);
     let result = the_user_is_constructed(payload);
     user_construction_fails(result);
