@@ -48,6 +48,7 @@ metrics = ["dep:actix-web-prom"]
 
 [dev-dependencies]
 actix-rt = "2"
+# Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3"
 rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
