@@ -53,7 +53,7 @@ actix-codec = "0.5.2"
 # Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3.8.1"
 rstest = "0.26"
-rstest-bdd = "0.1.0-alpha4"
+rstest-bdd = "0.2.0"
 rstest-bdd-macros = "0.1.0-alpha4"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
