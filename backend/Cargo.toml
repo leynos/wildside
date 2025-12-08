@@ -54,7 +54,7 @@ actix-codec = "0.5.2"
 awc = "3.8.1"
 rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
-rstest-bdd-macros = "0.1.0-alpha4"
+rstest-bdd-macros = "0.2.0"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
 
