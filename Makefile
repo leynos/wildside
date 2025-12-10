@@ -43,7 +43,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test
+        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -133,6 +133,7 @@ lint-infra:
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
@@ -207,7 +208,9 @@ INFRA_TEST_TARGETS := \
         fluxcd-test \
         fluxcd-policy \
         vault-appliance-test \
-        vault-appliance-policy
+        vault-appliance-policy \
+        traefik-test \
+        traefik-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -338,3 +341,43 @@ vault-appliance-policy: conftest tofu
 	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic show -json tfplan.binary > infra/modules/vault_appliance/examples/basic/plan.json
 	conftest test infra/modules/vault_appliance/examples/basic/plan.json --policy infra/modules/vault_appliance/policy
 	rm -f infra/modules/vault_appliance/examples/basic/tfplan.binary infra/modules/vault_appliance/examples/basic/plan.json
+
+traefik-test:
+	tofu fmt -check infra/modules/traefik
+	tofu -chdir=infra/modules/traefik/examples/basic init
+	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic validate -no-color \
+			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
+			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
+			-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)"; \
+	else \
+		echo "Skipping traefik validate; set TRAEFIK_KUBECONFIG_PATH to enable"; \
+	fi
+	command -v tflint >/dev/null
+	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	cd infra/modules/traefik/tests && KUBECONFIG="$(TRAEFIK_KUBECONFIG_PATH)" go test -v
+	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan -input=false -no-color -detailed-exitcode \
+			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
+			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
+			-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+	else \
+		echo "Skipping traefik plan -detailed-exitcode; set TRAEFIK_KUBECONFIG_PATH to enable"; \
+	fi
+	$(MAKE) traefik-policy
+
+traefik-policy: conftest tofu
+	if [ -z "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		echo "Skipping traefik-policy; set TRAEFIK_KUBECONFIG_PATH to run"; \
+	else \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
+			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
+			-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" \
+			|| test $$? -eq 2; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json tfplan.binary > infra/modules/traefik/examples/basic/plan.json; \
+		conftest test infra/modules/traefik/examples/basic/plan.json --policy infra/modules/traefik/policy; \
+		rm -f infra/modules/traefik/examples/basic/tfplan.binary infra/modules/traefik/examples/basic/plan.json; \
+	fi
