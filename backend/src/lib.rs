@@ -3,14 +3,15 @@
 //! Backend library modules.
 //!
 //! Structure follows the hexagonal layout: inbound adapters (HTTP/WebSocket),
-//! domain, and outbound adapters (once introduced).
+//! domain, and outbound adapters (persistence, cache, queue).
 
 pub mod doc;
+pub mod domain;
 pub mod inbound;
 mod middleware;
+pub mod outbound;
 pub use middleware::trace::TraceId;
 pub use middleware::Trace;
-pub mod domain;
 
 /// Public OpenAPI surface used by Swagger UI and tooling.
 pub use doc::ApiDoc;

@@ -587,6 +587,18 @@ before invoking a port. Canonical examples include:
 > domain structs by hand. The change also unblocks future work that will swap
 > the hard-coded credential check for a real `UserRepository` because the
 > adapter already deals with a validated domain object.
+>
+> **Design decision (2025-12-10):** Introduce `backend::outbound` as the home
+> for driven adapter implementations. The module contains three sub-modules:
+> `persistence` (Diesel/PostgreSQL), `cache` (Redis stub), and `queue` (Apalis
+> stub). The persistence adapter provides `DieselUserRepository` implementing
+> `UserRepository` with async support via `diesel-async` and `bb8` connection
+> pooling. Internal Diesel models (`UserRow`, `NewUserRow`) remain private to
+> the adapter; only domain types cross the boundary. Stub adapters for cache
+> and queue implement their respective port traits with no-op behaviour,
+> allowing the application to compile and run without Redis or job queue
+> infrastructure. Migrations reside in `backend/migrations/` and define the
+> PostgreSQL schema including audit timestamps and auto-update triggers.
 
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents

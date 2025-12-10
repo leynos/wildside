@@ -25,6 +25,11 @@ postgresql_embedded = { version = "0.20.0", features = ["tokio"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
 
+# Diesel ORM with PostgreSQL and async support
+diesel = { version = "2.2", features = ["postgres", "uuid", "chrono"] }
+diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
+chrono = { version = "0.4", features = ["serde"] }
+
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 futures-util = "0.3"
