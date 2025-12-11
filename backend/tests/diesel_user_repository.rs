@@ -4,10 +4,16 @@
 //! implements the `UserRepository` port contract against a real PostgreSQL
 //! database. Tests use `pg-embedded-setup-unpriv` for isolated database
 //! instances.
+//!
+//! # Runtime Strategy
+//!
+//! The rstest-bdd-macros crate does not support async step definitions, so we
+//! store a Tokio runtime in the test context and reuse it for all async
+//! operations. This avoids the overhead of creating a new runtime per async
+//! block while maintaining BDD step compatibility.
 
 use std::sync::{Arc, Mutex};
 
-use actix_rt::System;
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
 use backend::outbound::persistence::{DbPool, DieselUserRepository, PoolConfig};
@@ -18,6 +24,7 @@ use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
+use tokio::runtime::Runtime;
 
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -49,6 +56,8 @@ fn sample_user(sample_user_id: String, sample_display_name: DisplayName) -> User
 // -----------------------------------------------------------------------------
 
 struct TestContext {
+    /// Tokio runtime reused for all async operations in this test.
+    runtime: Runtime,
     _cluster: TestCluster,
     repository: DieselUserRepository,
     database_url: String,
@@ -60,6 +69,7 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
+    let runtime = Runtime::new().map_err(|err| err.to_string())?;
     let cluster = TestCluster::new().map_err(|err| err.to_string())?;
 
     // Create the test database.
@@ -75,13 +85,14 @@ fn setup_test_context() -> Result<TestContext, String> {
         .with_max_size(2)
         .with_min_idle(Some(1));
 
-    let pool = System::new()
+    let pool = runtime
         .block_on(async { DbPool::new(config).await })
         .map_err(|err| err.to_string())?;
 
     let repository = DieselUserRepository::new(pool);
 
     Ok(TestContext {
+        runtime,
         _cluster: cluster,
         repository,
         database_url,
@@ -113,13 +124,12 @@ fn a_diesel_backed_user_repository(_world: SharedContext) {
 
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(world: SharedContext, user: User) {
-    let repo = {
-        let ctx = world.lock().expect("context lock");
-        ctx.repository.clone()
-    };
     let stored_user = user.clone();
-    let result = System::new().block_on(async move { repo.upsert(&user).await });
     let mut ctx = world.lock().expect("context lock");
+    let repo = ctx.repository.clone();
+    let result = ctx
+        .runtime
+        .block_on(async move { repo.upsert(&user).await });
     match result {
         Ok(()) => {
             ctx.last_upsert_error = None;
@@ -133,18 +143,17 @@ fn the_repository_upserts_the_user(world: SharedContext, user: User) {
 
 #[when("the repository fetches the user by id")]
 fn the_repository_fetches_the_user_by_id(world: SharedContext) {
-    let (repo, user_id) = {
-        let ctx = world.lock().expect("context lock");
-        let id = ctx
-            .persisted_user
-            .as_ref()
-            .expect("user should have been persisted")
-            .id()
-            .clone();
-        (ctx.repository.clone(), id)
-    };
-    let result = System::new().block_on(async move { repo.find_by_id(&user_id).await });
     let mut ctx = world.lock().expect("context lock");
+    let repo = ctx.repository.clone();
+    let user_id = ctx
+        .persisted_user
+        .as_ref()
+        .expect("user should have been persisted")
+        .id()
+        .clone();
+    let result = ctx
+        .runtime
+        .block_on(async move { repo.find_by_id(&user_id).await });
     ctx.last_fetch_result = Some(result);
 }
 
@@ -211,12 +220,10 @@ fn diesel_upsert_updates_existing_user(diesel_world: Option<SharedContext>) {
     let user_v2 = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Updated Name")
         .expect("valid user");
 
-    let repo = {
-        let ctx = world.lock().expect("context lock");
-        ctx.repository.clone()
-    };
+    let ctx = world.lock().expect("context lock");
+    let repo = ctx.repository.clone();
 
-    System::new().block_on(async {
+    ctx.runtime.block_on(async {
         repo.upsert(&user_v1).await.expect("first upsert");
         repo.upsert(&user_v2).await.expect("second upsert");
 
@@ -237,12 +244,12 @@ fn diesel_find_nonexistent_returns_none(diesel_world: Option<SharedContext>) {
 
     let nonexistent_id = UserId::new("99999999-9999-9999-9999-999999999999").expect("valid UUID");
 
-    let repo = {
-        let ctx = world.lock().expect("context lock");
-        ctx.repository.clone()
-    };
+    let ctx = world.lock().expect("context lock");
+    let repo = ctx.repository.clone();
 
-    let result = System::new().block_on(async { repo.find_by_id(&nonexistent_id).await });
+    let result = ctx
+        .runtime
+        .block_on(async { repo.find_by_id(&nonexistent_id).await });
     assert!(
         result.expect("query succeeds").is_none(),
         "nonexistent user should return None"
