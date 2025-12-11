@@ -379,79 +379,57 @@ func TestTraefikModulePolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
-func TestTraefikModulePolicyViolationInvalidACMEServer(t *testing.T) {
+func TestTraefikModulePolicyViolations(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
 
-	vars := testVars(t)
-	vars["kubeconfig_path"] = kubeconfig
-	tfDir, _ := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "policy")
+	testCases := []struct {
+		name          string
+		payload       string
+		expectedError string
+	}{
+		{
+			name:          "InvalidACMEServer",
+			payload:       `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"invalid"},"spec":{"acme":{"server":"http://invalid","email":"","solvers":[]}}}}}}]}`,
+			expectedError: "must use HTTPS ACME server URL",
+		},
+		{
+			name:          "MissingEmail",
+			payload:       `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"no-email"},"spec":{"acme":{"server":"https://acme.example.com","email":"","solvers":[{"dns01":{}}]}}}}}}]}`,
+			expectedError: "must have a valid ACME email address",
+		},
+		{
+			name:          "NoSolvers",
+			payload:       `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"no-solvers"},"spec":{"acme":{"server":"https://acme.example.com","email":"test@example.com","solvers":[]}}}}}}]}`,
+			expectedError: "must have at least one ACME solver configured",
+		},
+	}
 
-	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"invalid"},"spec":{"acme":{"server":"http://invalid","email":"","solvers":[]}}}}}}]}`
-	planPath := writePlanFixture(t, payload)
-	violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
-		PolicyPath: policyPath,
-		Kubeconfig: kubeconfig,
-		Timeout:    10 * time.Second,
-	})
-	require.Error(t, violationErr, "expected conftest to report a violation")
-	exitErr, ok := violationErr.(*exec.ExitError)
-	require.True(t, ok, "expected ExitError from conftest for policy violation")
-	require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
-	stdout := string(violationOut)
-	require.Contains(t, stdout, "must use HTTPS ACME server URL",
-		"expected HTTPS ACME server validation error")
-}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vars := testVars(t)
+			vars["kubeconfig_path"] = kubeconfig
+			tfDir, _ := renderTraefikPlan(t, vars)
+			policyPath := filepath.Join(tfDir, "..", "policy")
 
-func TestTraefikModulePolicyViolationMissingEmail(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
-
-	vars := testVars(t)
-	vars["kubeconfig_path"] = kubeconfig
-	tfDir, _ := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "policy")
-
-	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"no-email"},"spec":{"acme":{"server":"https://acme.example.com","email":"","solvers":[{"dns01":{}}]}}}}}}]}`
-	planPath := writePlanFixture(t, payload)
-	violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
-		PolicyPath: policyPath,
-		Kubeconfig: kubeconfig,
-		Timeout:    10 * time.Second,
-	})
-	require.Error(t, violationErr, "expected conftest to report a violation for missing email")
-	stdout := string(violationOut)
-	require.Contains(t, stdout, "must have a valid ACME email address",
-		"expected ACME email validation error")
-}
-
-func TestTraefikModulePolicyViolationNoSolvers(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
-
-	vars := testVars(t)
-	vars["kubeconfig_path"] = kubeconfig
-	tfDir, _ := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "policy")
-
-	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"no-solvers"},"spec":{"acme":{"server":"https://acme.example.com","email":"test@example.com","solvers":[]}}}}}}]}`
-	planPath := writePlanFixture(t, payload)
-	violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
-		PolicyPath: policyPath,
-		Kubeconfig: kubeconfig,
-		Timeout:    10 * time.Second,
-	})
-	require.Error(t, violationErr, "expected conftest to report a violation for no solvers")
-	stdout := string(violationOut)
-	require.Contains(t, stdout, "must have at least one ACME solver configured",
-		"expected ACME solver validation error")
+			planPath := writePlanFixture(t, tc.payload)
+			violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
+				PlanPath:   planPath,
+				PolicyPath: policyPath,
+				Kubeconfig: kubeconfig,
+				Timeout:    10 * time.Second,
+			})
+			require.Error(t, violationErr, "expected conftest to report a violation")
+			exitErr, ok := violationErr.(*exec.ExitError)
+			require.True(t, ok, "expected ExitError from conftest for policy violation")
+			require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
+			stdout := string(violationOut)
+			require.Contains(t, stdout, tc.expectedError, "expected policy violation error message")
+		})
+	}
 }
 
 func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
