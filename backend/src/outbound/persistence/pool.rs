@@ -148,9 +148,7 @@ impl DbPool {
     ///
     /// Returns `PoolError::Checkout` if a connection cannot be obtained within
     /// the configured timeout.
-    pub async fn get(
-        &self,
-    ) -> Result<PooledConnection<'_, AsyncPgConnection>, PoolError> {
+    pub async fn get(&self) -> Result<PooledConnection<'_, AsyncPgConnection>, PoolError> {
         self.inner
             .get()
             .await

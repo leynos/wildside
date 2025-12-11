@@ -16,6 +16,8 @@
 //!
 //! See `docs/backend-roadmap.md` for the Redis cache implementation tasks.
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
@@ -25,27 +27,40 @@ use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 /// This placeholder implements the `RouteCache` port with no-op behaviour,
 /// allowing the application to compile and run without a Redis backend.
 /// All `get` operations return `None`; all `put` operations succeed silently.
-#[derive(Debug, Clone, Default)]
-pub struct StubRouteCache;
+///
+/// The generic parameter `P` allows this stub to be used with any plan type,
+/// enabling transparent substitution when the real Redis adapter is introduced.
+#[derive(Debug)]
+pub struct StubRouteCache<P> {
+    _marker: PhantomData<P>,
+}
 
-impl StubRouteCache {
-    /// Create a new stub cache instance.
-    pub fn new() -> Self {
-        Self
+impl<P> Clone for StubRouteCache<P> {
+    fn clone(&self) -> Self {
+        Self {
+            _marker: PhantomData,
+        }
     }
 }
 
-/// Placeholder plan type for the stub implementation.
-///
-/// The concrete implementation will use the domain's actual `RoutePlan` type
-/// once that type is defined. This marker satisfies the trait's associated
-/// type requirement.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StubPlan;
+impl<P> Default for StubRouteCache<P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<P> StubRouteCache<P> {
+    /// Create a new stub cache instance.
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl RouteCache for StubRouteCache {
-    type Plan = StubPlan;
+impl<P: Send + Sync> RouteCache for StubRouteCache<P> {
+    type Plan = P;
 
     async fn get(&self, _key: &RouteCacheKey) -> Result<Option<Self::Plan>, RouteCacheError> {
         // Stub always misses; real implementation will query Redis.
@@ -63,10 +78,14 @@ mod tests {
     use super::*;
     use rstest::rstest;
 
+    /// Test plan type for unit tests.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct TestPlan;
+
     #[rstest]
     #[tokio::test]
     async fn stub_cache_always_misses() {
-        let cache = StubRouteCache::new();
+        let cache: StubRouteCache<TestPlan> = StubRouteCache::new();
         let key = RouteCacheKey::new("test:key:1").expect("valid key");
 
         let result = cache.get(&key).await.expect("get succeeds");
@@ -76,9 +95,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn stub_cache_put_succeeds() {
-        let cache = StubRouteCache::new();
+        let cache: StubRouteCache<TestPlan> = StubRouteCache::new();
         let key = RouteCacheKey::new("test:key:2").expect("valid key");
-        let plan = StubPlan;
+        let plan = TestPlan;
 
         let result = cache.put(&key, &plan).await;
         assert!(result.is_ok(), "stub cache put should succeed");

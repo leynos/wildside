@@ -69,7 +69,8 @@ fn setup_test_context() -> Result<TestContext, String> {
         .with_max_size(2)
         .with_min_idle(Some(1));
 
-    let pool = System::new().block_on(async { DbPool::new(config).await })
+    let pool = System::new()
+        .block_on(async { DbPool::new(config).await })
         .map_err(|err| err.to_string())?;
 
     let repository = DieselUserRepository::new(pool);
@@ -165,7 +166,10 @@ fn the_stored_user_is_returned(world: SharedContext, expected: User) {
 fn persistence_fails_with_a_query_error(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
     assert!(
-        matches!(ctx.last_upsert_error, Some(UserPersistenceError::Query { .. })),
+        matches!(
+            ctx.last_upsert_error,
+            Some(UserPersistenceError::Query { .. })
+        ),
         "expected Query error, got: {:?}",
         ctx.last_upsert_error
     );
@@ -195,13 +199,11 @@ fn diesel_upsert_updates_existing_user(diesel_world: Option<SharedContext>) {
         return;
     };
 
-    let user_v1 =
-        User::try_from_strings("22222222-2222-2222-2222-222222222222", "Original Name")
-            .expect("valid user");
+    let user_v1 = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Original Name")
+        .expect("valid user");
 
-    let user_v2 =
-        User::try_from_strings("22222222-2222-2222-2222-222222222222", "Updated Name")
-            .expect("valid user");
+    let user_v2 = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Updated Name")
+        .expect("valid user");
 
     let repo = {
         let ctx = world.lock().expect("context lock");
@@ -227,16 +229,14 @@ fn diesel_find_nonexistent_returns_none(diesel_world: Option<SharedContext>) {
         return;
     };
 
-    let nonexistent_id =
-        UserId::new("99999999-9999-9999-9999-999999999999").expect("valid UUID");
+    let nonexistent_id = UserId::new("99999999-9999-9999-9999-999999999999").expect("valid UUID");
 
     let repo = {
         let ctx = world.lock().expect("context lock");
         ctx.repository.clone()
     };
 
-    let result =
-        System::new().block_on(async { repo.find_by_id(&nonexistent_id).await });
+    let result = System::new().block_on(async { repo.find_by_id(&nonexistent_id).await });
     assert!(
         result.expect("query succeeds").is_none(),
         "nonexistent user should return None"
@@ -263,6 +263,12 @@ fn diesel_reports_errors_when_schema_missing(
 // Database Helpers
 // -----------------------------------------------------------------------------
 
+/// Path to the users table migration, relative to the backend crate root.
+const USERS_MIGRATION_UP: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/migrations/2025-12-10-000000_create_users/up.sql"
+);
+
 fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
@@ -275,18 +281,18 @@ fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     Ok(())
 }
 
+/// Run the actual Diesel migration to create the users table.
+///
+/// This ensures the test schema stays in sync with the real migration rather
+/// than hand-coding the DDL and risking drift.
 fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
+    let migration_sql = std::fs::read_to_string(USERS_MIGRATION_UP)
+        .map_err(|err| UserPersistenceError::query(format!("failed to read migration: {err}")))?;
+
     let mut client = Client::connect(url, NoTls)
         .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
     client
-        .batch_execute(
-            "CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY,
-                display_name VARCHAR(32) NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );",
-        )
+        .batch_execute(&migration_sql)
         .map_err(|err| UserPersistenceError::query(err.to_string()))?;
     Ok(())
 }

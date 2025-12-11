@@ -155,10 +155,10 @@ the queue, cache, and repository ports defined in Phase 0.
 - [ ] Implement `RouteCache` using Redis with `bb8-redis` for connection
   pooling, replacing the current stub adapter.
 - [ ] Add serialization with `serde_json` for cached plan payloads.
-- [ ] Implement TTL with jitter (24-hour window, ±10%) to prevent thundering
-  herd on cache expiry.
+- [ ] Implement time-to-live (TTL) with jitter (24-hour window, ±10%) to
+  prevent thundering herd on cache expiry.
 - [ ] Add contract tests for cache key canonicalization (sorted themes, rounded
-  coordinates, SHA-256 key format).
+  coordinates, Secure Hash Algorithm 256-bit (SHA-256) key format).
 
 ### Step: Queue adapter (Apalis)
 
