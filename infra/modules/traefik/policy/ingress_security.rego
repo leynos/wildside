@@ -22,7 +22,9 @@ has_dns01_solver(solvers) if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	server := acme_server(spec)
@@ -34,7 +36,9 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	email := acme_email(spec)
@@ -46,7 +50,9 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	solvers := acme_solvers(spec)
@@ -58,7 +64,9 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	solvers := acme_solvers(spec)
@@ -71,7 +79,9 @@ deny contains msg if {
 warn contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	server := acme_server(spec)
@@ -86,7 +96,9 @@ warn contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
+	rc.change.after != null
 	manifest := rc.change.after.manifest
+	manifest != null
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	acme := acme_config(spec)

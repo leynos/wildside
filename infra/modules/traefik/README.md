@@ -1,8 +1,9 @@
 # Traefik Gateway Module
 
 Deploys [Traefik](https://traefik.io/) as an ingress controller using Helm and
-creates a cert-manager ClusterIssuer for ACME certificate management with
-Cloudflare DNS01 validation.
+creates a cert-manager ClusterIssuer for Automatic Certificate Management
+Environment (ACME) certificate management with Cloudflare DNS-01 challenge
+validation.
 
 ## Prerequisites
 
@@ -70,8 +71,8 @@ module "traefik" {
 
 ## Dashboard Security
 
-The Traefik dashboard is disabled by default for security. If you enable it,
-ensure proper access controls:
+The Traefik dashboard is disabled by default for security. If enabled,
+ensure proper access controls are configured:
 
 ```hcl
 module "traefik" {
@@ -108,7 +109,7 @@ Note: Staging certificates are not trusted by browsers.
 
 ## Cloudflare API Token
 
-Create a Kubernetes secret with your Cloudflare API token:
+Create a Kubernetes secret containing a Cloudflare API token:
 
 ```bash
 kubectl create secret generic cloudflare-api-token \
@@ -118,8 +119,8 @@ kubectl create secret generic cloudflare-api-token \
 
 The token requires the following permissions:
 
-- Zone:DNS:Edit (for the zones you want to issue certificates for)
-- Zone:Zone:Read (to list zones)
+- Zone: DNS: Edit (for the zones intended for certificate issuance)
+- Zone: Zone: Read (to list zones)
 
 ## Resources Created
 

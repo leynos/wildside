@@ -95,6 +95,12 @@ func requireEnvVar(t *testing.T, key, skipMessage string) string {
 	return value
 }
 
+func terraformOutputExists(t *testing.T, opts *terraform.Options, name string) bool {
+	t.Helper()
+	_, err := terraform.OutputE(t, opts, name)
+	return err == nil
+}
+
 func renderTraefikPlan(t *testing.T, vars map[string]interface{}) (string, string) {
 	t.Helper()
 	tfDir, opts := setup(t, vars)
@@ -199,6 +205,94 @@ func TestTraefikModuleInvalidACMEServer(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`acme_server`), err.Error())
 }
 
+// TestTraefikModuleInputValidation uses table-driven tests to verify validation
+// blocks for variables not covered by individual tests above.
+func TestTraefikModuleInputValidation(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name         string
+		varName      string
+		invalidValue interface{}
+		errorPattern string
+	}{
+		{
+			name:         "BlankCloudflareSecretName",
+			varName:      "cloudflare_api_token_secret_name",
+			invalidValue: "   ",
+			errorPattern: "cloudflare_api_token_secret_name",
+		},
+		{
+			name:         "BlankCloudflareSecretKey",
+			varName:      "cloudflare_api_token_secret_key",
+			invalidValue: "",
+			errorPattern: "cloudflare_api_token_secret_key",
+		},
+		{
+			name:         "InvalidClusterIssuerName",
+			varName:      "cluster_issuer_name",
+			invalidValue: "Invalid_Issuer_Name",
+			errorPattern: "cluster_issuer_name",
+		},
+		{
+			name:         "InvalidServiceType",
+			varName:      "service_type",
+			invalidValue: "ExternalName",
+			errorPattern: "service_type",
+		},
+		{
+			name:         "InvalidExternalTrafficPolicy",
+			varName:      "external_traffic_policy",
+			invalidValue: "Invalid",
+			errorPattern: "external_traffic_policy",
+		},
+		{
+			name:         "BlankIngressClassName",
+			varName:      "ingress_class_name",
+			invalidValue: "",
+			errorPattern: "ingress_class_name",
+		},
+		{
+			name:         "InvalidChartRepository",
+			varName:      "chart_repository",
+			invalidValue: "http://insecure.example.com",
+			errorPattern: "chart_repository",
+		},
+		{
+			name:         "BlankHelmReleaseName",
+			varName:      "helm_release_name",
+			invalidValue: "  ",
+			errorPattern: "helm_release_name",
+		},
+		{
+			name:         "InvalidDashboardHostname",
+			varName:      "dashboard_hostname",
+			invalidValue: "not-a-valid-fqdn",
+			errorPattern: "dashboard_hostname",
+		},
+		{
+			name:         "InvalidCloudflareSecretNamespace",
+			varName:      "cloudflare_api_token_secret_namespace",
+			invalidValue: "Invalid_Namespace",
+			errorPattern: "cloudflare_api_token_secret_namespace",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vars := testVars(t)
+			vars[tc.varName] = tc.invalidValue
+			_, opts := setup(t, vars)
+			_, err := terraform.InitAndPlanE(t, opts)
+			require.Error(t, err, "expected validation error for %s", tc.varName)
+			require.Regexp(t, regexp.MustCompile(tc.errorPattern), err.Error(),
+				"expected error message to mention %s", tc.varName)
+		})
+	}
+}
+
 func TestTraefikExampleRequiresKubeconfigPath(t *testing.T) {
 	t.Parallel()
 	testKubeconfigPathValidation(t, "")
@@ -297,8 +391,9 @@ func TestTraefikModulePolicy(t *testing.T) {
 		exitErr, ok := violationErr.(*exec.ExitError)
 		require.True(t, ok, "expected ExitError from conftest for policy violation")
 		require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
-		require.Contains(t, strings.ToLower(string(violationOut)), "clusterissuer",
-			"expected policy violation output")
+		stdout := string(violationOut)
+		require.Contains(t, stdout, "must use HTTPS ACME server URL",
+			"expected HTTPS ACME server validation error")
 	})
 
 	t.Run("PolicyViolation_MissingEmail", func(t *testing.T) {
@@ -312,8 +407,9 @@ func TestTraefikModulePolicy(t *testing.T) {
 			Timeout:    10 * time.Second,
 		})
 		require.Error(t, violationErr, "expected conftest to report a violation for missing email")
-		require.Contains(t, strings.ToLower(string(violationOut)), "email",
-			"expected email violation output")
+		stdout := string(violationOut)
+		require.Contains(t, stdout, "must have a valid ACME email address",
+			"expected ACME email validation error")
 	})
 
 	t.Run("PolicyViolation_NoSolvers", func(t *testing.T) {
@@ -327,8 +423,9 @@ func TestTraefikModulePolicy(t *testing.T) {
 			Timeout:    10 * time.Second,
 		})
 		require.Error(t, violationErr, "expected conftest to report a violation for no solvers")
-		require.Contains(t, strings.ToLower(string(violationOut)), "solver",
-			"expected solver violation output")
+		stdout := string(violationOut)
+		require.Contains(t, stdout, "must have at least one ACME solver configured",
+			"expected ACME solver validation error")
 	})
 
 	t.Run("PolicyWarn_StagingACME", func(t *testing.T) {
@@ -342,8 +439,9 @@ func TestTraefikModulePolicy(t *testing.T) {
 			Kubeconfig: kubeconfig,
 			Timeout:    10 * time.Second,
 		})
-		require.Contains(t, strings.ToLower(string(warnOut)), "staging",
-			"expected staging warning in output")
+		stdout := string(warnOut)
+		require.Contains(t, stdout, "uses ACME staging server - certificates will not be trusted",
+			"expected staging server warning in output")
 	})
 }
 
@@ -355,24 +453,58 @@ func TestTraefikModuleApplyIfKubeconfigPresent(t *testing.T) {
 	if os.Getenv("TRAEFIK_ACCEPT_APPLY") == "" {
 		t.Skip("TRAEFIK_ACCEPT_APPLY not set; skipping apply test")
 	}
+
+	// Arrange: set up unique resource names for this test run
+	expectedNamespace := fmt.Sprintf("traefik-terratest-%s", strings.ToLower(random.UniqueId()))
+	expectedClusterIssuerName := fmt.Sprintf("issuer-%s", strings.ToLower(random.UniqueId()))
+
 	vars := testVars(t)
-	vars["namespace"] = fmt.Sprintf("traefik-terratest-%s", strings.ToLower(random.UniqueId()))
-	vars["cluster_issuer_name"] = fmt.Sprintf("issuer-%s", strings.ToLower(random.UniqueId()))
+	vars["namespace"] = expectedNamespace
+	vars["cluster_issuer_name"] = expectedClusterIssuerName
 	vars["kubeconfig_path"] = kubeconfig
+	vars["http_to_https_redirect"] = true
+	vars["dashboard_enabled"] = false
+
 	_, opts := setup(t, vars)
 	t.Cleanup(func() {
 		terraform.Destroy(t, opts)
 	})
+
+	// Act
 	terraform.InitAndApply(t, opts)
 
+	// Assert: verify outputs match expected inputs
 	namespace := terraform.Output(t, opts, "namespace")
 	helmRelease := terraform.Output(t, opts, "helm_release_name")
 	clusterIssuer := terraform.Output(t, opts, "cluster_issuer_name")
+	ingressClassName := terraform.Output(t, opts, "ingress_class_name")
 
-	require.NotEmpty(t, namespace)
-	require.NotEmpty(t, helmRelease)
-	require.NotEmpty(t, clusterIssuer)
+	require.Equal(t, expectedNamespace, namespace,
+		"namespace output should match input")
+	require.NotEmpty(t, helmRelease,
+		"helm_release_name output should not be empty")
+	require.Equal(t, expectedClusterIssuerName, clusterIssuer,
+		"cluster_issuer_name output should match input")
+	require.Equal(t, "traefik", ingressClassName,
+		"ingress_class_name output should default to traefik")
 
+	// Assert: verify cluster_issuer_ref structure if output exists
+	if terraformOutputExists(t, opts, "cluster_issuer_ref") {
+		clusterIssuerRef := terraform.OutputMap(t, opts, "cluster_issuer_ref")
+		require.Equal(t, expectedClusterIssuerName, clusterIssuerRef["name"],
+			"cluster_issuer_ref.name should match cluster_issuer_name input")
+		require.Equal(t, "ClusterIssuer", clusterIssuerRef["kind"],
+			"cluster_issuer_ref.kind should be ClusterIssuer")
+		require.Equal(t, "cert-manager.io", clusterIssuerRef["group"],
+			"cluster_issuer_ref.group should be cert-manager.io")
+	}
+
+	// Assert: verify dashboard_hostname is null when dashboard disabled
+	dashboardHostname := terraform.Output(t, opts, "dashboard_hostname")
+	require.Empty(t, dashboardHostname,
+		"dashboard_hostname should be empty when dashboard is disabled")
+
+	// Assert: verify Helm release exists in state
 	stdout, err := terraform.RunTerraformCommandAndGetStdoutE(t, opts, "state", "show", "module.traefik.helm_release.traefik")
 	require.NoError(t, err)
 	require.Contains(t, stdout, "traefik")

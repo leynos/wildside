@@ -1,6 +1,6 @@
 output "namespace" {
   description = "Namespace where Traefik is installed"
-  value       = var.create_namespace ? kubernetes_namespace.traefik[0].metadata[0].name : var.namespace
+  value       = var.create_namespace ? kubernetes_namespace.traefik[0].metadata[0].name : local.namespace
 }
 
 output "helm_release_name" {
