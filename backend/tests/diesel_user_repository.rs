@@ -37,6 +37,9 @@ use support::format_postgres_error;
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
+/// Embedded migrations from the backend/migrations directory.
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+
 const TEST_DB: &str = "diesel_user_repo_test";
 
 // -----------------------------------------------------------------------------

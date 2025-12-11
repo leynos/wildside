@@ -38,12 +38,6 @@ static STUB_WARNING_LOGGED: Once = Once::new();
 ///
 /// A warning is logged on first use to alert developers that jobs are being
 /// discarded. The warning is gated by a `Once` guard to avoid log flooding.
-///
-/// # Why Default is manually implemented
-///
-/// Deriving `Default` on a generic struct adds a `P: Default` bound, but
-/// `PhantomData<P>` implements `Default` unconditionally. The manual impl
-/// avoids requiring plan types to implement `Default`.
 #[derive(Debug, Clone)]
 pub struct StubRouteQueue<P> {
     _marker: PhantomData<P>,

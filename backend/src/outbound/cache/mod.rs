@@ -30,12 +30,6 @@ use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 ///
 /// The generic parameter `P` allows this stub to be used with any plan type,
 /// enabling transparent substitution when the real Redis adapter is introduced.
-///
-/// # Why Default is manually implemented
-///
-/// Deriving `Default` on a generic struct adds a `P: Default` bound, but
-/// `PhantomData<P>` implements `Default` unconditionally. The manual impl
-/// avoids requiring plan types to implement `Default`.
 #[derive(Debug, Clone)]
 pub struct StubRouteCache<P> {
     _marker: PhantomData<P>,
