@@ -36,7 +36,7 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 - [x] Move the current `backend/src/api` module into `backend/src/inbound/http`,
   keeping handlers thin (request parsing → domain service call → response
-  mapping) and ensuring handler bodies only co-ordinate domain calls and
+  mapping) and ensuring handler bodies only coordinate domain calls and
   high-level session helpers (no direct framework-specific session
   manipulation).
 - [x] Rework the WebSocket entry point in `backend/src/ws` into an inbound

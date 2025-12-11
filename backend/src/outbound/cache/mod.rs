@@ -30,31 +30,23 @@ use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 ///
 /// The generic parameter `P` allows this stub to be used with any plan type,
 /// enabling transparent substitution when the real Redis adapter is introduced.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StubRouteCache<P> {
     _marker: PhantomData<P>,
 }
 
-impl<P> Clone for StubRouteCache<P> {
-    fn clone(&self) -> Self {
+impl<P> Default for StubRouteCache<P> {
+    fn default() -> Self {
         Self {
             _marker: PhantomData,
         }
-    }
-}
-
-impl<P> Default for StubRouteCache<P> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
 impl<P> StubRouteCache<P> {
     /// Create a new stub cache instance.
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self::default()
     }
 }
 

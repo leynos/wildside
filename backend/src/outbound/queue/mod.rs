@@ -38,31 +38,23 @@ static STUB_WARNING_LOGGED: Once = Once::new();
 ///
 /// A warning is logged on first use to alert developers that jobs are being
 /// discarded. The warning is gated by a `Once` guard to avoid log flooding.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StubRouteQueue<P> {
     _marker: PhantomData<P>,
 }
 
-impl<P> Clone for StubRouteQueue<P> {
-    fn clone(&self) -> Self {
+impl<P> Default for StubRouteQueue<P> {
+    fn default() -> Self {
         Self {
             _marker: PhantomData,
         }
-    }
-}
-
-impl<P> Default for StubRouteQueue<P> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
 impl<P> StubRouteQueue<P> {
     /// Create a new stub queue instance.
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self::default()
     }
 }
 

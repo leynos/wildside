@@ -11,10 +11,16 @@ use actix_rt::System;
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
 use backend::outbound::persistence::{DbPool, DieselUserRepository, PoolConfig};
+use diesel::pg::PgConnection;
+use diesel::Connection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
+
+/// Embedded migrations from the backend/migrations directory.
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 const TEST_DB: &str = "diesel_user_repo_test";
 
@@ -263,12 +269,6 @@ fn diesel_reports_errors_when_schema_missing(
 // Database Helpers
 // -----------------------------------------------------------------------------
 
-/// Path to the users table migration, relative to the backend crate root.
-const USERS_MIGRATION_UP: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/migrations/2025-12-10-000000_create_users/up.sql"
-);
-
 fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
@@ -281,18 +281,14 @@ fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     Ok(())
 }
 
-/// Run the actual Diesel migration to create the users table.
+/// Run all pending Diesel migrations against the test database.
 ///
-/// This ensures the test schema stays in sync with the real migration rather
-/// than hand-coding the DDL and risking drift.
+/// This uses the embedded migrations from `backend/migrations/` to ensure the
+/// test schema stays in sync with production, including triggers and indexes.
 fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
-    let migration_sql = std::fs::read_to_string(USERS_MIGRATION_UP)
-        .map_err(|err| UserPersistenceError::query(format!("failed to read migration: {err}")))?;
-
-    let mut client = Client::connect(url, NoTls)
+    let mut conn = PgConnection::establish(url)
         .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
-    client
-        .batch_execute(&migration_sql)
+    conn.run_pending_migrations(MIGRATIONS)
         .map_err(|err| UserPersistenceError::query(err.to_string()))?;
     Ok(())
 }
