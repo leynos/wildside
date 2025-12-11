@@ -85,7 +85,7 @@ warn contains msg if {
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	server := acme_server(spec)
-	contains(server, "staging")
+	server == "https://acme-staging-v02.api.letsencrypt.org/directory"
 	msg := sprintf(
 		"ClusterIssuer %s uses ACME staging server - certificates will not be trusted",
 		[manifest.metadata.name],

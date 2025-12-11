@@ -7,7 +7,7 @@ variable "namespace" {
     condition = (
       length(trimspace(var.namespace)) > 0 &&
       length(trimspace(var.namespace)) <= 63 &&
-      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.namespace))
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.namespace)))
     )
     error_message = "namespace must be a valid Kubernetes namespace name"
   }
@@ -50,7 +50,7 @@ variable "chart_version" {
   default     = "25.0.3"
 
   validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", trimspace(var.chart_version)))
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$", trimspace(var.chart_version)))
     error_message = "chart_version must be a semantic version (e.g., 25.0.3)"
   }
 }
@@ -226,7 +226,7 @@ variable "cluster_issuer_name" {
   validation {
     condition = (
       length(trimspace(var.cluster_issuer_name)) > 0 &&
-      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.cluster_issuer_name))
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.cluster_issuer_name)))
     )
     error_message = "cluster_issuer_name must be a valid Kubernetes resource name"
   }
@@ -253,17 +253,3 @@ variable "cloudflare_api_token_secret_key" {
   }
 }
 
-variable "cloudflare_api_token_secret_namespace" {
-  description = "Namespace containing the Cloudflare API token secret"
-  type        = string
-  default     = "cert-manager"
-
-  validation {
-    condition = (
-      length(trimspace(var.cloudflare_api_token_secret_namespace)) > 0 &&
-      length(trimspace(var.cloudflare_api_token_secret_namespace)) <= 63 &&
-      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.cloudflare_api_token_secret_namespace))
-    )
-    error_message = "cloudflare_api_token_secret_namespace must be a valid Kubernetes namespace name"
-  }
-}

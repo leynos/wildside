@@ -142,7 +142,7 @@ func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
 		"KUBECONFIG": cfg.Kubeconfig,
 	})
 	out, err := cmd.CombinedOutput()
-	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out")
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out: %s", string(out))
 	return out, err
 }
 
@@ -266,12 +266,6 @@ var inputValidationTestCases = []struct {
 		invalidValue: "not-a-valid-fqdn",
 		errorPattern: "dashboard_hostname",
 	},
-	{
-		name:         "InvalidCloudflareSecretNamespace",
-		varName:      "cloudflare_api_token_secret_namespace",
-		invalidValue: "Invalid_Namespace",
-		errorPattern: "cloudflare_api_token_secret_namespace",
-	},
 }
 
 // TestTraefikModuleInputValidation uses table-driven tests to verify validation
@@ -351,6 +345,9 @@ func TestTraefikModuleSupportsHelmValues(t *testing.T) {
 	vars["helm_values"] = []string{"resources:\n  requests:\n    cpu: 100m"}
 	vars["helm_values_files"] = []string{valuesFile}
 	_, opts := setup(t, vars)
+	// InitAndPlanE returns an error because the stub kubeconfig cannot connect to a real
+	// cluster. However, the plan output is captured before the failure, allowing verification
+	// that helm_values and helm_values_files are correctly merged into the Helm release.
 	stdout, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
 	require.Contains(t, stdout, "resources")

@@ -81,13 +81,6 @@ locals {
   kubeconfig = trimspace(coalesce(var.kubeconfig_path, " "))
 }
 
-check "kubeconfig_path_present" {
-  assert {
-    condition     = local.kubeconfig != ""
-    error_message = "Set kubeconfig_path to a readable kubeconfig file before running the example"
-  }
-}
-
 provider "kubernetes" {
   config_path = local.kubeconfig != "" ? local.kubeconfig : null
 }

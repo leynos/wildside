@@ -56,7 +56,6 @@ module "traefik" {
 | `cluster_issuer_name` | Name of the ClusterIssuer resource | `string` | `"letsencrypt-prod"` | no |
 | `cloudflare_api_token_secret_name` | Kubernetes secret with Cloudflare token | `string` | - | **yes** |
 | `cloudflare_api_token_secret_key` | Key in the Cloudflare token secret | `string` | `"token"` | no |
-| `cloudflare_api_token_secret_namespace` | Namespace of the Cloudflare token secret | `string` | `"cert-manager"` | no |
 
 ## Outputs
 
