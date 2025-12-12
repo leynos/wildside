@@ -4,9 +4,11 @@ variable "kubeconfig_path" {
   default     = null
   validation {
     condition = (
-      var.kubeconfig_path != null &&
-      trimspace(var.kubeconfig_path) != "" &&
-      fileexists(trimspace(var.kubeconfig_path))
+      var.kubeconfig_path == null ||
+      (
+        trimspace(var.kubeconfig_path) != "" &&
+        fileexists(trimspace(var.kubeconfig_path))
+      )
     )
     error_message = "Set kubeconfig_path to a readable kubeconfig file before running the example"
   }
@@ -76,18 +78,13 @@ variable "helm_values_files" {
   default     = []
 }
 
-locals {
-  # coalesce rejects empty strings; use a single space so trimspace still normalises to blank.
-  kubeconfig = trimspace(coalesce(var.kubeconfig_path, " "))
-}
-
 provider "kubernetes" {
-  config_path = local.kubeconfig != "" ? local.kubeconfig : null
+  config_path = var.kubeconfig_path != null ? trimspace(var.kubeconfig_path) : null
 }
 
 provider "helm" {
   kubernetes {
-    config_path = local.kubeconfig != "" ? local.kubeconfig : null
+    config_path = var.kubeconfig_path != null ? trimspace(var.kubeconfig_path) : null
   }
 }
 

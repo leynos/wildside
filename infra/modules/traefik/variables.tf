@@ -27,7 +27,7 @@ variable "chart_repository" {
   validation {
     condition = (
       length(trimspace(var.chart_repository)) > 0 &&
-      can(regex("^https://", var.chart_repository))
+      can(regex("^https://", trimspace(var.chart_repository)))
     )
     error_message = "chart_repository must be an HTTPS URL"
   }
@@ -252,4 +252,3 @@ variable "cloudflare_api_token_secret_key" {
     error_message = "cloudflare_api_token_secret_key must not be blank"
   }
 }
-

@@ -10,7 +10,7 @@ locals {
   cluster_issuer_name = trimspace(var.cluster_issuer_name)
   helm_timeout        = var.helm_timeout
   helm_inline_values  = var.helm_values
-  helm_value_files    = [for path in var.helm_values_files : trimspace(path)]
+  helm_value_files    = [for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""]
   helm_values         = concat(local.helm_inline_values, [for path in local.helm_value_files : file(path)])
 
   # Construct default Helm values based on input variables.
@@ -115,6 +115,4 @@ resource "kubernetes_manifest" "cluster_issuer" {
       }
     }
   }
-
-  depends_on = [helm_release.traefik]
 }

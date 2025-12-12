@@ -288,7 +288,7 @@ func TestTraefikModuleInputValidation(t *testing.T) {
 	}
 }
 
-func TestTraefikExampleRequiresKubeconfigPath(t *testing.T) {
+func TestTraefikExampleRejectsBlankKubeconfigPath(t *testing.T) {
 	t.Parallel()
 	testKubeconfigPathValidation(t, "")
 }
@@ -300,14 +300,7 @@ func TestTraefikExampleRejectsWhitespaceKubeconfig(t *testing.T) {
 
 func TestTraefikModulePlanFailsWithoutKubeconfig(t *testing.T) {
 	t.Parallel()
-	vars := testVars(t)
-	vars["kubeconfig_path"] = "/nonexistent/kubeconfig"
-	_, opts := setup(t, vars)
-	_, err := terraform.InitAndPlanE(t, opts)
-	require.Error(t, err)
-	lowered := strings.ToLower(err.Error())
-	require.Truef(t, strings.Contains(lowered, "no such file") || strings.Contains(lowered, "stat"),
-		"expected missing kubeconfig error, got %q", err.Error())
+	testKubeconfigPathValidation(t, "/nonexistent/kubeconfig")
 }
 
 func TestTraefikModulePlanDetailedExitCode(t *testing.T) {
@@ -368,7 +361,7 @@ func TestTraefikModulePolicy(t *testing.T) {
 	vars["kubeconfig_path"] = kubeconfig
 
 	tfDir, planJSON := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "policy")
+	policyPath := filepath.Join(tfDir, "..", "..", "policy")
 
 	out, err := runConftestAgainstPlan(t, conftestRun{
 		PlanPath:   planJSON,
@@ -382,7 +375,8 @@ func TestTraefikModulePolicy(t *testing.T) {
 func TestTraefikModulePolicyViolations(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
+	tfDir, _ := setup(t, testVars(t))
+	policyPath := filepath.Join(tfDir, "..", "..", "policy")
 
 	testCases := []struct {
 		name          string
@@ -410,16 +404,11 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			vars := testVars(t)
-			vars["kubeconfig_path"] = kubeconfig
-			tfDir, _ := renderTraefikPlan(t, vars)
-			policyPath := filepath.Join(tfDir, "..", "policy")
-
 			planPath := writePlanFixture(t, tc.payload)
 			violationOut, violationErr := runConftestAgainstPlan(t, conftestRun{
 				PlanPath:   planPath,
 				PolicyPath: policyPath,
-				Kubeconfig: kubeconfig,
+				Kubeconfig: "",
 				Timeout:    10 * time.Second,
 			})
 			require.Error(t, violationErr, "expected conftest to report a violation")
@@ -435,12 +424,8 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-	kubeconfig := requireEnvVar(t, "KUBECONFIG", "KUBECONFIG not set; skipping policy test")
-
-	vars := testVars(t)
-	vars["kubeconfig_path"] = kubeconfig
-	tfDir, _ := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "policy")
+	tfDir, _ := setup(t, testVars(t))
+	policyPath := filepath.Join(tfDir, "..", "..", "policy")
 
 	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"staging"},"spec":{"acme":{"server":"https://acme-staging-v02.api.letsencrypt.org/directory","email":"test@example.com","privateKeySecretRef":{"name":"staging"},"solvers":[{"dns01":{"cloudflare":{}}}]}}}}}}]}`
 	planPath := writePlanFixture(t, payload)
@@ -448,7 +433,7 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 	warnOut, _ := runConftestAgainstPlan(t, conftestRun{
 		PlanPath:   planPath,
 		PolicyPath: policyPath,
-		Kubeconfig: kubeconfig,
+		Kubeconfig: "",
 		Timeout:    10 * time.Second,
 	})
 	stdout := string(warnOut)

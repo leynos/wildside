@@ -22,11 +22,12 @@ has_dns01_solver(solvers) if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	server := acme_server(spec)
 	not startswith(server, "https://")
 	msg := sprintf("ClusterIssuer %s must use HTTPS ACME server URL", [manifest.metadata.name])
@@ -36,11 +37,12 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	email := acme_email(spec)
 	email == ""
 	msg := sprintf("ClusterIssuer %s must have a valid ACME email address", [manifest.metadata.name])
@@ -50,11 +52,12 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	solvers := acme_solvers(spec)
 	count(solvers) == 0
 	msg := sprintf("ClusterIssuer %s must have at least one ACME solver configured", [manifest.metadata.name])
@@ -64,11 +67,12 @@ deny contains msg if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	solvers := acme_solvers(spec)
 	count(solvers) > 0
 	not has_dns01_solver(solvers)
@@ -85,11 +89,12 @@ acme_staging_servers := {
 warn contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	server := acme_server(spec)
 	server in acme_staging_servers
 	msg := sprintf(
@@ -98,15 +103,16 @@ warn contains msg if {
 	)
 }
 
-# Ensure Traefik Helm release has privateKeySecretRef set in ClusterIssuer.
+# Ensure ClusterIssuer has privateKeySecretRef.name set.
 deny contains msg if {
 	rc := input.resource_changes[_]
 	rc.type == "kubernetes_manifest"
-	rc.change.after != null
-	manifest := rc.change.after.manifest
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
 	manifest != null
 	manifest.kind == "ClusterIssuer"
-	spec := manifest.spec
+	spec := object.get(manifest, "spec", {})
 	acme := acme_config(spec)
 	private_key_ref := object.get(acme, "privateKeySecretRef", {})
 	object.get(private_key_ref, "name", "") == ""

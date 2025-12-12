@@ -113,7 +113,7 @@ Create a Kubernetes secret containing a Cloudflare API token:
 ```bash
 kubectl create secret generic cloudflare-api-token \
   --namespace cert-manager \
-  --from-literal=token=<your-cloudflare-api-token>
+  --from-literal=token=<cloudflare-api-token>
 ```
 
 The token requires the following permissions:
