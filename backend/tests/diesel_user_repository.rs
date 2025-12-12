@@ -31,8 +31,8 @@ mod pg_embed;
 
 mod support;
 
-use support::format_postgres_error;
 use pg_embed::test_cluster;
+use support::format_postgres_error;
 
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -44,8 +44,8 @@ const TEST_DB: &str = "diesel_user_repo_test";
 // -----------------------------------------------------------------------------
 
 #[fixture]
-fn sample_user_id() -> String {
-    "11111111-1111-1111-1111-111111111111".to_owned()
+fn sample_user_id() -> UserId {
+    UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id is valid")
 }
 
 #[fixture]
@@ -54,9 +54,8 @@ fn sample_display_name() -> DisplayName {
 }
 
 #[fixture]
-fn sample_user(sample_user_id: String, sample_display_name: DisplayName) -> User {
-    User::try_from_strings(sample_user_id, sample_display_name.as_ref())
-        .expect("fixture user is valid")
+fn sample_user(sample_user_id: UserId, sample_display_name: DisplayName) -> User {
+    User::new(sample_user_id, sample_display_name)
 }
 
 // -----------------------------------------------------------------------------
@@ -75,6 +74,30 @@ struct TestContext {
 }
 
 type SharedContext = Arc<Mutex<TestContext>>;
+
+/// Extracts values from the locked context, executes an async operation,
+/// and optionally updates the context with results.
+fn with_context_async<F, R, U>(
+    world: &SharedContext,
+    extract: impl FnOnce(&TestContext) -> F,
+    operation: impl FnOnce(DieselUserRepository, F) -> R,
+    update: U,
+) where
+    R: std::future::Future,
+    U: FnOnce(&mut TestContext, R::Output),
+{
+    let (repo, handle, extracted) = {
+        let ctx = world.lock().expect("context lock");
+        (
+            ctx.repository.clone(),
+            ctx.runtime.handle().clone(),
+            extract(&ctx),
+        )
+    };
+    let result = handle.block_on(operation(repo, extracted));
+    let mut ctx = world.lock().expect("context lock");
+    update(&mut ctx, result);
+}
 
 fn setup_test_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
@@ -156,42 +179,38 @@ fn a_diesel_backed_user_repository(_world: SharedContext) {
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(world: SharedContext, user: User) {
     let stored_user = user.clone();
-    // Extract what we need and drop the lock before blocking on async work.
-    let (repo, handle) = {
-        let ctx = world.lock().expect("context lock");
-        (ctx.repository.clone(), ctx.runtime.handle().clone())
-    };
-    let result = handle.block_on(async move { repo.upsert(&user).await });
-    // Re-acquire lock to store results.
-    let mut ctx = world.lock().expect("context lock");
-    match result {
-        Ok(()) => {
-            ctx.last_upsert_error = None;
-            ctx.persisted_user = Some(stored_user);
-        }
-        Err(err) => {
-            ctx.last_upsert_error = Some(err);
-        }
-    }
+    with_context_async(
+        &world,
+        |_| user,
+        |repo, user| async move { repo.upsert(&user).await },
+        |ctx, result| match result {
+            Ok(()) => {
+                ctx.last_upsert_error = None;
+                ctx.persisted_user = Some(stored_user);
+            }
+            Err(err) => {
+                ctx.last_upsert_error = Some(err);
+            }
+        },
+    );
 }
 
 #[when("the repository fetches the user by id")]
 fn the_repository_fetches_the_user_by_id(world: SharedContext) {
-    // Extract what we need and drop the lock before blocking on async work.
-    let (repo, user_id, handle) = {
-        let ctx = world.lock().expect("context lock");
-        let id = ctx
-            .persisted_user
-            .as_ref()
-            .expect("user should have been persisted")
-            .id()
-            .clone();
-        (ctx.repository.clone(), id, ctx.runtime.handle().clone())
-    };
-    let result = handle.block_on(async move { repo.find_by_id(&user_id).await });
-    // Re-acquire lock to store results.
-    let mut ctx = world.lock().expect("context lock");
-    ctx.last_fetch_result = Some(result);
+    with_context_async(
+        &world,
+        |ctx| {
+            ctx.persisted_user
+                .as_ref()
+                .expect("user should have been persisted")
+                .id()
+                .clone()
+        },
+        |repo, user_id| async move { repo.find_by_id(&user_id).await },
+        |ctx, result| {
+            ctx.last_fetch_result = Some(result);
+        },
+    );
 }
 
 #[when("the users table is dropped")]
@@ -263,22 +282,21 @@ fn diesel_upsert_updates_existing_user(diesel_world: Option<SharedContext>) {
     let user_v2 = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Updated Name")
         .expect("valid user");
 
-    // Extract what we need and drop the lock before blocking on async work.
-    let (repo, handle) = {
-        let ctx = world.lock().expect("context lock");
-        (ctx.repository.clone(), ctx.runtime.handle().clone())
-    };
+    with_context_async(
+        &world,
+        |_| (user_v1, user_v2),
+        |repo, (user_v1, user_v2)| async move {
+            repo.upsert(&user_v1).await.expect("first upsert");
+            repo.upsert(&user_v2).await.expect("second upsert");
 
-    handle.block_on(async {
-        repo.upsert(&user_v1).await.expect("first upsert");
-        repo.upsert(&user_v2).await.expect("second upsert");
-
-        let fetched = repo.find_by_id(user_v2.id()).await.expect("fetch succeeds");
-        assert_eq!(
-            fetched.expect("user exists").display_name().as_ref(),
-            "Updated Name"
-        );
-    });
+            let fetched = repo.find_by_id(user_v2.id()).await.expect("fetch succeeds");
+            assert_eq!(
+                fetched.expect("user exists").display_name().as_ref(),
+                "Updated Name"
+            );
+        },
+        |_, _| {},
+    );
 }
 
 #[rstest]
@@ -290,13 +308,17 @@ fn diesel_find_nonexistent_returns_none(diesel_world: Option<SharedContext>) {
 
     let nonexistent_id = UserId::new("99999999-9999-9999-9999-999999999999").expect("valid UUID");
 
-    // Extract what we need and drop the lock before blocking on async work.
-    let (repo, handle) = {
-        let ctx = world.lock().expect("context lock");
-        (ctx.repository.clone(), ctx.runtime.handle().clone())
-    };
+    let mut result = None;
+    with_context_async(
+        &world,
+        |_| nonexistent_id,
+        |repo, user_id| async move { repo.find_by_id(&user_id).await },
+        |_, fetched| {
+            result = Some(fetched);
+        },
+    );
 
-    let result = handle.block_on(async { repo.find_by_id(&nonexistent_id).await });
+    let result = result.expect("find_by_id should execute");
     assert!(
         result.expect("query succeeds").is_none(),
         "nonexistent user should return None"
