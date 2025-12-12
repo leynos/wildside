@@ -12,6 +12,12 @@
 //! When either `PG_RUNTIME_DIR` or `PG_DATA_DIR` is missing, this module sets
 //! both for the duration of the bootstrap, ensuring the embedded cluster uses
 //! a consistent workspace-backed configuration.
+//! bootstrap call and serialises environment mutation to avoid global
+//! environment races across parallel tests.
+//!
+//! When either `PG_RUNTIME_DIR` or `PG_DATA_DIR` is missing, this module sets
+//! both for the duration of the bootstrap, ensuring the embedded cluster uses
+//! a consistent workspace-backed configuration.
 
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
