@@ -26,9 +26,13 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
 
+#[path = "support/pg_embed.rs"]
+mod pg_embed;
+
 mod support;
 
 use support::format_postgres_error;
+use pg_embed::test_cluster;
 
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -74,7 +78,7 @@ type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
+    let cluster = test_cluster()?;
 
     // Create the test database.
     reset_database(&cluster).map_err(|err| err.to_string())?;
@@ -128,7 +132,8 @@ fn diesel_world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
         Err(reason) => {
-            if should_skip_on_cluster_failure() || should_skip_for_transient_cluster_failure(&reason)
+            if should_skip_on_cluster_failure()
+                || should_skip_for_transient_cluster_failure(&reason)
             {
                 eprintln!("SKIP-TEST-CLUSTER: {reason}");
                 None
