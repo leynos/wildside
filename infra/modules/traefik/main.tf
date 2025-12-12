@@ -8,6 +8,7 @@ locals {
   namespace           = trimspace(var.namespace)
   helm_release_name   = trimspace(var.helm_release_name)
   cluster_issuer_name = trimspace(var.cluster_issuer_name)
+  dashboard_hostname  = var.dashboard_hostname == null ? null : trimspace(var.dashboard_hostname)
   helm_timeout        = var.helm_timeout
   helm_inline_values  = var.helm_values
   helm_value_files    = [for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""]
@@ -32,6 +33,14 @@ locals {
     dashboard = {
       enabled = var.dashboard_enabled
     }
+    ingressRoute = {
+      dashboard = var.dashboard_enabled && local.dashboard_hostname != null ? {
+        enabled   = true
+        matchRule = format("Host(`%s`)", local.dashboard_hostname)
+      } : {
+        enabled = false
+      }
+    }
     ports = var.http_to_https_redirect ? {
       web = {
         redirectTo = {
@@ -46,7 +55,7 @@ locals {
           enabled = var.prometheus_metrics_enabled
         }
         serviceMonitor = {
-          enabled = var.service_monitor_enabled
+          enabled = var.prometheus_metrics_enabled && var.service_monitor_enabled
         }
       }
     }

@@ -27,7 +27,11 @@ Regenerate the table below with:
 | Tool | Minimum version | Purpose |
 | ---- | ---------------- | ------- |
 | `tofu` | 1.7.0 | OpenTofu CLI for Terraform plan execution |
-| `conftest` | 0.45.0 | Policy testing via Open Policy Agent |
+| `conftest` | 0.45.0 (OPA >= 0.59.0) | Policy testing via Open Policy Agent |
+
+The policy suites use Rego v1 syntax (via `import rego.v1`). Ensure that the
+installed `conftest` binary embeds an Open Policy Agent (OPA) release that
+supports it (OPA >= 0.59.0).
 
 If the script reports a missing dependency, install the binary via the system
 package manager or follow the instructions in the tool's official

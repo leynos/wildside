@@ -11,6 +11,7 @@ validation.
 - [cert-manager](https://cert-manager.io/) installed in the cluster
 - A Kubernetes Secret containing a Cloudflare API token with DNS edit permissions
 - OpenTofu >= 1.6.0
+- `conftest` (policy tests): requires embedded OPA >= 0.59.0 (Rego v1 syntax)
 
 ## Usage
 
@@ -50,9 +51,9 @@ module "traefik" {
 | `http_to_https_redirect` | Redirect HTTP to HTTPS | `bool` | `true` | no |
 | `prometheus_metrics_enabled` | Enable Prometheus metrics | `bool` | `true` | no |
 | `service_monitor_enabled` | Create ServiceMonitor for Prometheus Operator | `bool` | `true` | no |
-| `tolerations` | Tolerations for pod scheduling | `list(object)` | CriticalAddonsOnly | no |
+| `tolerations` | Tolerations for pod scheduling | `list(object)` | `[{"key":"CriticalAddonsOnly","operator":"Exists","effect":"NoSchedule"}]` | no |
 | `acme_email` | Email for ACME registration | `string` | - | **yes** |
-| `acme_server` | ACME server URL | `string` | Let's Encrypt production | no |
+| `acme_server` | ACME server URL | `string` | `"https://acme-v02.api.letsencrypt.org/directory"` | no |
 | `cluster_issuer_name` | Name of the ClusterIssuer resource | `string` | `"letsencrypt-prod"` | no |
 | `cloudflare_api_token_secret_name` | Kubernetes secret with Cloudflare token | `string` | - | **yes** |
 | `cloudflare_api_token_secret_key` | Key in the Cloudflare token secret | `string` | `"token"` | no |
@@ -89,6 +90,9 @@ module "traefik" {
   ]
 }
 ```
+
+When `dashboard_enabled` is true, the module configures the Traefik Helm chart's
+`ingressRoute.dashboard.matchRule` using `dashboard_hostname`.
 
 ## ACME Staging
 
@@ -132,7 +136,7 @@ The token requires the following permissions:
 Use the outputs to configure other resources:
 
 ```hcl
-# Certificate for your application
+# Certificate for an application
 resource "kubernetes_manifest" "certificate" {
   manifest = {
     apiVersion = "cert-manager.io/v1"
@@ -149,7 +153,7 @@ resource "kubernetes_manifest" "certificate" {
   }
 }
 
-# Ingress using Traefik's IngressClass
+# Ingress using the Traefik IngressClass
 resource "kubernetes_ingress_v1" "my_app" {
   metadata {
     name      = "my-app"

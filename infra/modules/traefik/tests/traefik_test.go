@@ -52,6 +52,8 @@ users:
 		"acme_server":                        "https://acme-v02.api.letsencrypt.org/directory",
 		"dashboard_enabled":                  false,
 		"http_to_https_redirect":             true,
+		"prometheus_metrics_enabled":         true,
+		"service_monitor_enabled":            true,
 		"kubeconfig_path":                    kubeconfigPath,
 		"helm_values":                        []string{},
 		"helm_values_files":                  []string{},
@@ -195,6 +197,27 @@ func TestTraefikModuleInvalidNamespace(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`namespace`), err.Error())
 }
 
+func TestTraefikModuleDashboardHostnameRequired(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["dashboard_enabled"] = true
+	_, opts := setup(t, vars)
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Regexp(t, regexp.MustCompile(`dashboard_hostname`), err.Error())
+}
+
+func TestTraefikModuleServiceMonitorRequiresMetrics(t *testing.T) {
+	t.Parallel()
+	vars := testVars(t)
+	vars["prometheus_metrics_enabled"] = false
+	vars["service_monitor_enabled"] = true
+	_, opts := setup(t, vars)
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Regexp(t, regexp.MustCompile(`service_monitor_enabled`), err.Error())
+}
+
 func TestTraefikModuleInvalidACMEServer(t *testing.T) {
 	t.Parallel()
 	vars := testVars(t)
@@ -274,7 +297,6 @@ func TestTraefikModuleInputValidation(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range inputValidationTestCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			vars := testVars(t)
@@ -326,8 +348,8 @@ func TestTraefikModulePlanDetailedExitCode(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected exit code 2 indicating changes, got 0")
 	}
-	exitErr, ok := err.(*exec.ExitError)
-	require.True(t, ok, "expected ExitError")
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr, "expected ExitError")
 	require.Equal(t, 2, exitErr.ExitCode())
 }
 
@@ -401,7 +423,6 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			planPath := writePlanFixture(t, tc.payload)
@@ -412,8 +433,8 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 				Timeout:    10 * time.Second,
 			})
 			require.Error(t, violationErr, "expected conftest to report a violation")
-			exitErr, ok := violationErr.(*exec.ExitError)
-			require.True(t, ok, "expected ExitError from conftest for policy violation")
+			var exitErr *exec.ExitError
+			require.ErrorAs(t, violationErr, &exitErr, "expected ExitError from conftest for policy violation")
 			require.NotZero(t, exitErr.ExitCode(), "expected non-zero exit code for policy violation")
 			stdout := string(violationOut)
 			require.Contains(t, stdout, tc.expectedError, "expected policy violation error message")

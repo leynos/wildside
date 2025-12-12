@@ -154,10 +154,19 @@ variable "dashboard_hostname" {
 
   validation {
     condition = (
-      var.dashboard_hostname == null ||
-      can(regex("^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(var.dashboard_hostname))))
+      (
+        var.dashboard_enabled == false &&
+        var.dashboard_hostname == null
+      ) ||
+      (
+        var.dashboard_hostname != null &&
+        can(regex(
+          "^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$",
+          lower(trimspace(var.dashboard_hostname))
+        ))
+      )
     )
-    error_message = "dashboard_hostname must be a valid FQDN when provided"
+    error_message = "dashboard_hostname must be a valid FQDN, and must be set when dashboard_enabled is true"
   }
 }
 
@@ -177,6 +186,11 @@ variable "service_monitor_enabled" {
   description = "Whether to create a ServiceMonitor for Prometheus Operator"
   type        = bool
   default     = true
+
+  validation {
+    condition     = var.service_monitor_enabled == false || var.prometheus_metrics_enabled == true
+    error_message = "service_monitor_enabled requires prometheus_metrics_enabled to be true"
+  }
 }
 
 variable "tolerations" {
@@ -199,7 +213,7 @@ variable "acme_email" {
   type        = string
 
   validation {
-    condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", var.acme_email))
+    condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", trimspace(var.acme_email)))
     error_message = "acme_email must be a valid email address"
   }
 }

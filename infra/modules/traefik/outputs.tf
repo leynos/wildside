@@ -24,7 +24,9 @@ output "cluster_issuer_ref" {
 
 output "dashboard_hostname" {
   description = "Hostname for the Traefik dashboard (null if dashboard is disabled)"
-  value       = var.dashboard_enabled ? var.dashboard_hostname : null
+  value = var.dashboard_enabled && var.dashboard_hostname != null ? (
+    trimspace(var.dashboard_hostname)
+  ) : null
 }
 
 output "ingress_class_name" {

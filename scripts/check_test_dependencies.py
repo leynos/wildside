@@ -25,7 +25,20 @@ class Dependency:
     name: str
     description: str
     minimum_version: str | None = None
+    minimum_opa_version: str | None = None
     version_args: tuple[str, ...] = ("--version",)
+
+    def minimum_version_label(self) -> str:
+        """Return a human-readable minimum version requirement for documentation."""
+
+        if self.minimum_version is None and self.minimum_opa_version is None:
+            return "n/a"
+
+        version_label = self.minimum_version or "unspecified"
+        if self.minimum_opa_version is None:
+            return version_label
+
+        return f"{version_label} (OPA >= {self.minimum_opa_version})"
 
 
 @dataclass(frozen=True)
@@ -47,6 +60,7 @@ REQUIRED_DEPENDENCIES: tuple[Dependency, ...] = (
         "conftest",
         "Policy testing via Open Policy Agent",
         minimum_version="0.45.0",
+        minimum_opa_version="0.59.0",
     ),
 )
 
@@ -55,6 +69,9 @@ ALLOWED_DEPENDENCIES = {
 }
 
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
+OPA_VERSION_PATTERN = re.compile(
+    r"^OPA(?: Version)?:\s*(\d+(?:\.\d+)+)\s*$", re.MULTILINE
+)
 
 
 def collect_missing(dependencies: Iterable[Dependency]) -> list[Dependency]:
@@ -155,6 +172,31 @@ def parse_version_from_output(output: str) -> str | None:
     """
 
     match = VERSION_PATTERN.search(output)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def parse_opa_version_from_conftest_output(output: str) -> str | None:
+    """Extract the embedded OPA version from conftest output.
+
+    Parameters
+    ----------
+    output : str
+        The raw output from ``conftest --version``.
+
+    Returns
+    -------
+    str | None
+        The embedded OPA version string, or None when it cannot be detected.
+
+    Examples
+    --------
+    >>> parse_opa_version_from_conftest_output("Conftest: 0.63.0\\nOPA: 1.9.0")
+    '1.9.0'
+    """
+
+    match = OPA_VERSION_PATTERN.search(output)
     if match is None:
         return None
     return match.group(1)
@@ -300,16 +342,36 @@ def validate_dependencies(
     for dependency in dependencies:
         if dependency in missing:
             continue
-        if dependency.minimum_version is None:
+        if dependency.minimum_version is None and dependency.minimum_opa_version is None:
             continue
 
         probe = probe_version(dependency)
-        if probe.parsed_version is None:
+        if dependency.minimum_version is not None and probe.parsed_version is None:
             incompatible.append((dependency, probe.raw_output))
             continue
 
-        if not is_version_sufficient(probe.parsed_version, dependency.minimum_version):
+        if (
+            dependency.minimum_version is not None
+            and probe.parsed_version is not None
+            and not is_version_sufficient(probe.parsed_version, dependency.minimum_version)
+        ):
             incompatible.append((dependency, probe.raw_output or probe.parsed_version))
+            continue
+
+        if dependency.minimum_opa_version is None:
+            continue
+
+        if probe.raw_output is None:
+            incompatible.append((dependency, None))
+            continue
+
+        opa_version = parse_opa_version_from_conftest_output(probe.raw_output)
+        if opa_version is None:
+            incompatible.append((dependency, probe.raw_output))
+            continue
+
+        if not is_version_sufficient(opa_version, dependency.minimum_opa_version):
+            incompatible.append((dependency, f"OPA {opa_version}"))
 
     return missing, incompatible
 
@@ -361,7 +423,7 @@ def format_failure_message(
             lines.append("")
         lines.append("Update the following tools to satisfy minimum supported versions:")
         for dependency, detected in incompatible_list:
-            required = dependency.minimum_version or "unspecified"
+            required = dependency.minimum_version_label() or "unspecified"
             observed = (detected or "unknown").splitlines()[0]
             lines.append(
                 f"  - {dependency.name}: found {observed}, require >= {required}"
@@ -401,7 +463,7 @@ def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
         "| ---- | ---------------- | ------- |",
     ]
     lines.extend(
-        f"| `{dependency.name}` | {dependency.minimum_version or 'n/a'} | {dependency.description} |"
+        f"| `{dependency.name}` | {dependency.minimum_version_label()} | {dependency.description} |"
         for dependency in dependencies
     )
     return "\n".join(lines)

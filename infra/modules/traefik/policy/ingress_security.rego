@@ -1,7 +1,6 @@
 package traefik.policy
 
-import future.keywords.contains
-import future.keywords.if
+import rego.v1
 
 # Helper to extract ACME config from ClusterIssuer
 acme_config(spec) = object.get(spec, "acme", {})
@@ -12,6 +11,20 @@ acme_email(spec) = object.get(acme_config(spec), "email", "")
 
 acme_solvers(spec) = object.get(acme_config(spec), "solvers", [])
 
+# Helper to extract a ClusterIssuer resource change from an OpenTofu plan.
+#
+# Resource deletions may have `rc.change.after == null`, so this helper includes
+# the guard to avoid runtime errors when policies evaluate deletes.
+clusterissuer(rc) = {"manifest": manifest, "spec": spec} if {
+	rc.type == "kubernetes_manifest"
+	after := rc.change.after
+	after != null
+	manifest := object.get(after, "manifest", null)
+	manifest != null
+	manifest.kind == "ClusterIssuer"
+	spec := object.get(manifest, "spec", {})
+}
+
 # Check if a solver has DNS01 configured
 has_dns01_solver(solvers) if {
 	some solver in solvers
@@ -21,13 +34,9 @@ has_dns01_solver(solvers) if {
 # Ensure ClusterIssuer uses HTTPS ACME server.
 deny contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
 	server := acme_server(spec)
 	not startswith(server, "https://")
 	msg := sprintf("ClusterIssuer %s must use HTTPS ACME server URL", [manifest.metadata.name])
@@ -36,13 +45,9 @@ deny contains msg if {
 # Ensure ClusterIssuer has a valid email address.
 deny contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
 	email := acme_email(spec)
 	email == ""
 	msg := sprintf("ClusterIssuer %s must have a valid ACME email address", [manifest.metadata.name])
@@ -51,13 +56,9 @@ deny contains msg if {
 # Ensure ClusterIssuer has at least one ACME solver.
 deny contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
 	solvers := acme_solvers(spec)
 	count(solvers) == 0
 	msg := sprintf("ClusterIssuer %s must have at least one ACME solver configured", [manifest.metadata.name])
@@ -66,13 +67,9 @@ deny contains msg if {
 # Ensure ClusterIssuer uses DNS01 solver (required for wildcard certificates).
 deny contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
 	solvers := acme_solvers(spec)
 	count(solvers) > 0
 	not has_dns01_solver(solvers)
@@ -88,13 +85,9 @@ acme_staging_servers := {
 # Warn when using ACME staging server (certificates will not be trusted).
 warn contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
 	server := acme_server(spec)
 	server in acme_staging_servers
 	msg := sprintf(
@@ -106,15 +99,10 @@ warn contains msg if {
 # Ensure ClusterIssuer has privateKeySecretRef.name set.
 deny contains msg if {
 	rc := input.resource_changes[_]
-	rc.type == "kubernetes_manifest"
-	after := rc.change.after
-	after != null
-	manifest := object.get(after, "manifest", null)
-	manifest != null
-	manifest.kind == "ClusterIssuer"
-	spec := object.get(manifest, "spec", {})
-	acme := acme_config(spec)
-	private_key_ref := object.get(acme, "privateKeySecretRef", {})
+	ci := clusterissuer(rc)
+	manifest := ci.manifest
+	spec := ci.spec
+	private_key_ref := object.get(acme_config(spec), "privateKeySecretRef", {})
 	object.get(private_key_ref, "name", "") == ""
 	msg := sprintf("ClusterIssuer %s must have privateKeySecretRef.name set", [manifest.metadata.name])
 }

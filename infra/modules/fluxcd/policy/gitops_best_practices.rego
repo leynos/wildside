@@ -1,7 +1,6 @@
 package fluxcd.policy
 
-import future.keywords.contains
-import future.keywords.if
+import rego.v1
 
 branch(spec) = object.get(object.get(spec, "ref", {}), "branch", "")
 

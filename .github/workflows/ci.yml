@@ -117,6 +117,37 @@ jobs:
       - name: Install action-validator
         run: bun install -g action-validator
 
+      - name: Install OpenTofu
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          tofu_version="1.7.0"
+          archive="tofu_${tofu_version}_linux_amd64.tar.gz"
+          url="https://github.com/opentofu/opentofu/releases/download/v${tofu_version}/${archive}"
+
+          curl -fsSL "$url" -o "$archive"
+          tar -xzf "$archive"
+          sudo install -m 0755 tofu /usr/local/bin/tofu
+          tofu version
+
+      - name: Install conftest
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          conftest_version="0.63.0"
+          archive="conftest_${conftest_version}_Linux_x86_64.tar.gz"
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${conftest_version}/${archive}"
+
+          curl -fsSL "$url" -o "$archive"
+          tar -xzf "$archive"
+          sudo install -m 0755 conftest /usr/local/bin/conftest
+          conftest --version
+
+      - name: Check infrastructure test dependencies
+        run: make check-test-deps
+
       - name: Helm lint
         run: helm lint --strict ./deploy/charts/wildside
 
