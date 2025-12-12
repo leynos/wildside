@@ -129,7 +129,7 @@ jobs:
 
           curl -fsSL "$url" -o "$archive"
           curl -fsSL "$sums_url" -o SHA256SUMS
-          grep " ${archive}$" SHA256SUMS | sha256sum -c -
+          awk -v archive="$archive" '$2 == archive { print $1 "  " $2 }' SHA256SUMS | sha256sum -c -
           tar -xzf "$archive"
           sudo install -m 0755 tofu /usr/local/bin/tofu
           tofu version
@@ -146,7 +146,7 @@ jobs:
 
           curl -fsSL "$url" -o "$archive"
           curl -fsSL "$sums_url" -o checksums.txt
-          grep " ${archive}$" checksums.txt | sha256sum -c -
+          awk -v archive="$archive" '$2 == archive { print $1 "  " $2 }' checksums.txt | sha256sum -c -
           tar -xzf "$archive"
           sudo install -m 0755 conftest /usr/local/bin/conftest
           conftest --version

@@ -34,11 +34,13 @@ class Dependency:
         if self.minimum_version is None and self.minimum_opa_version is None:
             return "n/a"
 
-        version_label = self.minimum_version or "unspecified"
-        if self.minimum_opa_version is None:
-            return version_label
+        if self.minimum_version is None:
+            return f"OPA >= {self.minimum_opa_version}"
 
-        return f"{version_label} (OPA >= {self.minimum_opa_version})"
+        if self.minimum_opa_version is None:
+            return self.minimum_version
+
+        return f"{self.minimum_version} (OPA >= {self.minimum_opa_version})"
 
 
 @dataclass(frozen=True)

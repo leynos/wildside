@@ -251,8 +251,16 @@ variable "cloudflare_api_token_secret_name" {
   type        = string
 
   validation {
-    condition     = length(trimspace(var.cloudflare_api_token_secret_name)) > 0
-    error_message = "cloudflare_api_token_secret_name must not be blank"
+    condition = (
+      var.cloudflare_api_token_secret_name != null &&
+      length(trimspace(var.cloudflare_api_token_secret_name)) > 0 &&
+      length(trimspace(var.cloudflare_api_token_secret_name)) <= 253 &&
+      can(regex(
+        "^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$",
+        trimspace(var.cloudflare_api_token_secret_name)
+      ))
+    )
+    error_message = "cloudflare_api_token_secret_name must be a valid Kubernetes Secret name"
   }
 }
 
@@ -262,7 +270,10 @@ variable "cloudflare_api_token_secret_key" {
   default     = "token"
 
   validation {
-    condition     = length(trimspace(var.cloudflare_api_token_secret_key)) > 0
+    condition = (
+      var.cloudflare_api_token_secret_key != null &&
+      length(trimspace(var.cloudflare_api_token_secret_key)) > 0
+    )
     error_message = "cloudflare_api_token_secret_key must not be blank"
   }
 }
