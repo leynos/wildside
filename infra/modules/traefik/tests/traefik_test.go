@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -69,6 +70,15 @@ func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Option
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
 	})
+}
+
+func writeAutoTfvarsJSON(t *testing.T, dir string, vars map[string]interface{}) {
+	t.Helper()
+	path := filepath.Join(dir, "terratest.auto.tfvars.json")
+	payload, err := json.Marshal(vars)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, payload, 0600))
+	t.Cleanup(func() { _ = os.Remove(path) })
 }
 
 func testKubeconfigPathValidation(t *testing.T, kubeconfigPath string) {
@@ -229,6 +239,101 @@ func TestTraefikModuleInvalidACMEServer(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`acme_server`), err.Error())
 }
 
+func TestTraefikModuleNullVariableValidationReturnsErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name            string
+		varName         string
+		value           interface{}
+		expectedMessage string
+	}{
+		{
+			name:            "NullNamespace",
+			varName:         "namespace",
+			value:           nil,
+			expectedMessage: "namespace must be a valid Kubernetes namespace name",
+		},
+		{
+			name:            "NullChartRepository",
+			varName:         "chart_repository",
+			value:           nil,
+			expectedMessage: "chart_repository must be an HTTPS URL",
+		},
+		{
+			name:            "NullChartName",
+			varName:         "chart_name",
+			value:           nil,
+			expectedMessage: "chart_name must not be blank",
+		},
+		{
+			name:            "NullChartVersion",
+			varName:         "chart_version",
+			value:           nil,
+			expectedMessage: "chart_version must be a semantic version",
+		},
+		{
+			name:            "NullHelmReleaseName",
+			varName:         "helm_release_name",
+			value:           nil,
+			expectedMessage: "helm_release_name must not be blank",
+		},
+		{
+			name:            "NullHelmValuesFilesList",
+			varName:         "helm_values_files",
+			value:           nil,
+			expectedMessage: "helm_values_files must not contain blank file paths",
+		},
+		{
+			name:            "NullHelmValuesFilesElement",
+			varName:         "helm_values_files",
+			value:           []interface{}{nil},
+			expectedMessage: "helm_values_files must not contain blank file paths",
+		},
+		{
+			name:            "NullIngressClassName",
+			varName:         "ingress_class_name",
+			value:           nil,
+			expectedMessage: "ingress_class_name must not be blank",
+		},
+		{
+			name:            "NullAcmeEmail",
+			varName:         "acme_email",
+			value:           nil,
+			expectedMessage: "acme_email must be a valid email address",
+		},
+		{
+			name:            "NullAcmeServer",
+			varName:         "acme_server",
+			value:           nil,
+			expectedMessage: "acme_server must be a valid Let's Encrypt production or staging URL",
+		},
+		{
+			name:            "NullClusterIssuerName",
+			varName:         "cluster_issuer_name",
+			value:           nil,
+			expectedMessage: "cluster_issuer_name must be a valid Kubernetes resource name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			vars := testVars(t)
+			vars[tc.varName] = tc.value
+			tfDir, opts := setup(t, vars)
+			writeAutoTfvarsJSON(t, tfDir, vars)
+			opts.Vars = map[string]interface{}{}
+
+			stdout, err := terraform.InitAndPlanE(t, opts)
+			require.Error(t, err)
+
+			combined := strings.Join([]string{stdout, err.Error()}, "\n")
+			require.Contains(t, combined, tc.expectedMessage)
+			require.NotContains(t, combined, "Invalid function argument")
+		})
+	}
+}
+
 // inputValidationTestCases defines test cases for Terraform variable validation
 var inputValidationTestCases = []struct {
 	name         string
@@ -338,6 +443,7 @@ func TestTraefikModulePlanDetailedExitCode(t *testing.T) {
 	vars["cluster_issuer_name"] = fmt.Sprintf("issuer-%s", strings.ToLower(random.UniqueId()))
 	vars["kubeconfig_path"] = kubeconfig
 	tfDir, opts := setup(t, vars)
+	writeAutoTfvarsJSON(t, tfDir, vars)
 	terraform.Init(t, opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -452,12 +558,13 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"staging"},"spec":{"acme":{"server":"https://acme-staging-v02.api.letsencrypt.org/directory","email":"test@example.com","privateKeySecretRef":{"name":"staging"},"solvers":[{"dns01":{"cloudflare":{}}}]}}}}}}]}`
 	planPath := writePlanFixture(t, payload)
 	// Warnings don't cause conftest to fail, so we just check the output contains the warning
-	warnOut, _ := runConftestAgainstPlan(t, conftestRun{
+	warnOut, err := runConftestAgainstPlan(t, conftestRun{
 		PlanPath:   planPath,
 		PolicyPath: policyPath,
 		Kubeconfig: "",
 		Timeout:    10 * time.Second,
 	})
+	require.NoErrorf(t, err, "conftest failed: %s", string(warnOut))
 	stdout := string(warnOut)
 	require.Contains(t, stdout, "uses ACME staging server - certificates will not be trusted",
 		"expected staging server warning in output")
@@ -482,6 +589,7 @@ func TestTraefikModuleApplyIfKubeconfigPresent(t *testing.T) {
 	vars["kubeconfig_path"] = kubeconfig
 	vars["http_to_https_redirect"] = true
 	vars["dashboard_enabled"] = false
+	vars["service_monitor_enabled"] = false
 
 	_, opts := setup(t, vars)
 	t.Cleanup(func() {

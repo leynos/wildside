@@ -5,6 +5,7 @@ variable "namespace" {
 
   validation {
     condition = (
+      var.namespace != null &&
       length(trimspace(var.namespace)) > 0 &&
       length(trimspace(var.namespace)) <= 63 &&
       can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.namespace)))
@@ -26,6 +27,7 @@ variable "chart_repository" {
 
   validation {
     condition = (
+      var.chart_repository != null &&
       length(trimspace(var.chart_repository)) > 0 &&
       can(regex("^https://", trimspace(var.chart_repository)))
     )
@@ -39,7 +41,7 @@ variable "chart_name" {
   default     = "traefik"
 
   validation {
-    condition     = length(trimspace(var.chart_name)) > 0
+    condition     = var.chart_name != null && length(trimspace(var.chart_name)) > 0
     error_message = "chart_name must not be blank"
   }
 }
@@ -50,8 +52,14 @@ variable "chart_version" {
   default     = "25.0.3"
 
   validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$", trimspace(var.chart_version)))
-    error_message = "chart_version must be a semantic version (e.g., 25.0.3)"
+    condition = (
+      var.chart_version != null &&
+      can(regex(
+        "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+        trimspace(var.chart_version)
+      ))
+    )
+    error_message = "chart_version must be a semantic version (e.g., 25.0.3, 26.0.0-rc1, 25.0.3+build.1)"
   }
 }
 
@@ -61,7 +69,7 @@ variable "helm_release_name" {
   default     = "traefik"
 
   validation {
-    condition     = length(trimspace(var.helm_release_name)) > 0
+    condition     = var.helm_release_name != null && length(trimspace(var.helm_release_name)) > 0
     error_message = "helm_release_name must not be blank"
   }
 }
@@ -95,9 +103,12 @@ variable "helm_values_files" {
   default     = []
 
   validation {
-    condition = alltrue([
-      for path in var.helm_values_files : length(trimspace(path)) > 0
-    ])
+    condition = (
+      var.helm_values_files != null &&
+      alltrue([
+        for path in var.helm_values_files : path != null && length(trimspace(path)) > 0
+      ])
+    )
     error_message = "helm_values_files must not contain blank file paths"
   }
 }
@@ -130,7 +141,7 @@ variable "ingress_class_name" {
   default     = "traefik"
 
   validation {
-    condition     = length(trimspace(var.ingress_class_name)) > 0
+    condition     = var.ingress_class_name != null && length(trimspace(var.ingress_class_name)) > 0
     error_message = "ingress_class_name must not be blank"
   }
 }
@@ -213,7 +224,7 @@ variable "acme_email" {
   type        = string
 
   validation {
-    condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", trimspace(var.acme_email)))
+    condition     = var.acme_email != null && can(regex("^[^@]+@[^@]+\\.[^@]+$", trimspace(var.acme_email)))
     error_message = "acme_email must be a valid email address"
   }
 }
@@ -224,10 +235,13 @@ variable "acme_server" {
   default     = "https://acme-v02.api.letsencrypt.org/directory"
 
   validation {
-    condition = contains([
-      "https://acme-v02.api.letsencrypt.org/directory",
-      "https://acme-staging-v02.api.letsencrypt.org/directory"
-    ], trimspace(var.acme_server))
+    condition = (
+      var.acme_server != null &&
+      contains([
+        "https://acme-v02.api.letsencrypt.org/directory",
+        "https://acme-staging-v02.api.letsencrypt.org/directory"
+      ], trimspace(var.acme_server))
+    )
     error_message = "acme_server must be a valid Let's Encrypt production or staging URL"
   }
 }
@@ -239,6 +253,7 @@ variable "cluster_issuer_name" {
 
   validation {
     condition = (
+      var.cluster_issuer_name != null &&
       length(trimspace(var.cluster_issuer_name)) > 0 &&
       can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.cluster_issuer_name)))
     )
