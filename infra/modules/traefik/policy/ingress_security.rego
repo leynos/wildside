@@ -75,6 +75,12 @@ deny contains msg if {
 	msg := sprintf("ClusterIssuer %s must use DNS01 solver for wildcard certificate support", [manifest.metadata.name])
 }
 
+# Known Let's Encrypt staging server URLs
+acme_staging_servers := {
+	"https://acme-staging-v02.api.letsencrypt.org/directory",
+	"https://acme-staging.api.letsencrypt.org/directory",
+}
+
 # Warn when using ACME staging server (certificates will not be trusted).
 warn contains msg if {
 	rc := input.resource_changes[_]
@@ -85,7 +91,7 @@ warn contains msg if {
 	manifest.kind == "ClusterIssuer"
 	spec := manifest.spec
 	server := acme_server(spec)
-	server == "https://acme-staging-v02.api.letsencrypt.org/directory"
+	server in acme_staging_servers
 	msg := sprintf(
 		"ClusterIssuer %s uses ACME staging server - certificates will not be trusted",
 		[manifest.metadata.name],

@@ -323,10 +323,13 @@ func TestTraefikModulePlanDetailedExitCode(t *testing.T) {
 	vars["kubeconfig_path"] = kubeconfig
 	tfDir, opts := setup(t, vars)
 	terraform.Init(t, opts)
-	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
 	cmd.Dir = tfDir
 	cmd.Env = testutil.TerraformEnv(t, nil)
 	err := cmd.Run()
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "tofu plan -detailed-exitcode timed out")
 	if err == nil {
 		t.Fatalf("expected exit code 2 indicating changes, got 0")
 	}
