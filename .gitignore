@@ -80,5 +80,7 @@ coverage/
 .history/
 .crush/
 .serena/
+.tmp/
+logs_llm/
 
 deploy/k8s/backend/secret.env
