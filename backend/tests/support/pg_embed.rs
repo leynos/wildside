@@ -6,46 +6,17 @@
 //! override these paths.
 //!
 //! This module scopes `PG_RUNTIME_DIR` and `PG_DATA_DIR` overrides to the
-//! bootstrap call and serialises the bootstrap to avoid global environment
-//! races across parallel tests.
+//! bootstrap call and serialises environment mutation to avoid global
+//! environment races across parallel tests.
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+use env_lock::EnvGuard;
 use pg_embedded_setup_unpriv::TestCluster;
 use uuid::Uuid;
 
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-struct ScopedEnvVars {
-    previous_values: Vec<(String, Option<OsString>)>,
-}
-
-impl ScopedEnvVars {
-    fn set(vars: impl IntoIterator<Item = (&'static str, OsString)>) -> Self {
-        let mut previous_values = Vec::new();
-        for (key, value) in vars {
-            let key_owned = key.to_owned();
-            let previous = std::env::var_os(key);
-            std::env::set_var(key, value);
-            previous_values.push((key_owned, previous));
-        }
-
-        Self { previous_values }
-    }
-}
-
-impl Drop for ScopedEnvVars {
-    fn drop(&mut self) {
-        for (key, previous) in self.previous_values.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(&key, value),
-                None => std::env::remove_var(&key),
-            }
-        }
-    }
-}
 
 fn pg_embed_target_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -75,17 +46,21 @@ pub fn test_cluster() -> Result<TestCluster, String> {
     let lock = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
-        .expect("pg-embed bootstrap lock");
+        .unwrap_or_else(|err| err.into_inner());
 
     let needs_override =
         std::env::var_os("PG_RUNTIME_DIR").is_none() || std::env::var_os("PG_DATA_DIR").is_none();
 
-    let _scoped_env = if needs_override {
+    let _env_guard: Option<EnvGuard<'static>> = if needs_override {
         let (runtime_dir, data_dir) =
             create_unique_pg_embed_dirs().map_err(|err| err.to_string())?;
-        Some(ScopedEnvVars::set([
-            ("PG_RUNTIME_DIR", runtime_dir.into_os_string()),
-            ("PG_DATA_DIR", data_dir.into_os_string()),
+
+        let runtime_dir_value = runtime_dir.to_string_lossy().into_owned();
+        let data_dir_value = data_dir.to_string_lossy().into_owned();
+
+        Some(env_lock::lock_env([
+            ("PG_RUNTIME_DIR", Some(runtime_dir_value)),
+            ("PG_DATA_DIR", Some(data_dir_value)),
         ]))
     } else {
         None
