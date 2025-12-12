@@ -70,7 +70,7 @@ ALLOWED_DEPENDENCIES = {
 
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
 OPA_VERSION_PATTERN = re.compile(
-    r"^OPA(?: Version)?:\s*(\d+(?:\.\d+)+)\s*$", re.MULTILINE
+    r"^OPA(?: Version)?:\s*v?(\d+(?:\.\d+)+)\s*$", re.MULTILINE
 )
 
 
@@ -152,13 +152,19 @@ def is_version_sufficient(installed: str, minimum: str) -> bool:
     return installed_normalised >= minimum_normalised
 
 
-def parse_version_from_output(output: str) -> str | None:
+def parse_version_from_output(
+    output: str,
+    pattern: re.Pattern[str] = VERSION_PATTERN,
+) -> str | None:
     """Extract a dotted version string from command output.
 
     Parameters
     ----------
     output : str
         The raw output from a version command.
+    pattern : re.Pattern[str], optional
+        Regex to extract the dotted version string. The first capture group must
+        contain the version.
 
     Returns
     -------
@@ -169,37 +175,64 @@ def parse_version_from_output(output: str) -> str | None:
     --------
     >>> parse_version_from_output("tofu version 1.7.1")
     '1.7.1'
-    """
-
-    match = VERSION_PATTERN.search(output)
-    if match is None:
-        return None
-    return match.group(1)
-
-
-def parse_opa_version_from_conftest_output(output: str) -> str | None:
-    """Extract the embedded OPA version from conftest output.
-
-    Parameters
-    ----------
-    output : str
-        The raw output from ``conftest --version``.
-
-    Returns
-    -------
-    str | None
-        The embedded OPA version string, or None when it cannot be detected.
-
-    Examples
-    --------
-    >>> parse_opa_version_from_conftest_output("Conftest: 0.63.0\\nOPA: 1.9.0")
+    >>> parse_version_from_output("Conftest: 0.63.0\\nOPA: 1.9.0", pattern=OPA_VERSION_PATTERN)
     '1.9.0'
     """
 
-    match = OPA_VERSION_PATTERN.search(output)
+    return _parse_version_from_pattern(output, pattern)
+
+
+def _parse_version_from_pattern(output: str, pattern: re.Pattern[str]) -> str | None:
+    """Extract a dotted version string from the first regex match group."""
+
+    match = pattern.search(output)
     if match is None:
         return None
     return match.group(1)
+
+
+def _validate_minimum_version(
+    dependency: Dependency,
+    probe: VersionProbeResult,
+) -> str | None:
+    if dependency.minimum_version is None:
+        return None
+    if probe.parsed_version is None:
+        return probe.raw_output or ""
+    if not is_version_sufficient(probe.parsed_version, dependency.minimum_version):
+        return probe.raw_output or probe.parsed_version
+    return None
+
+
+def _validate_minimum_opa_version(
+    dependency: Dependency,
+    probe: VersionProbeResult,
+) -> str | None:
+    if dependency.minimum_opa_version is None:
+        return None
+    if probe.raw_output is None:
+        return ""
+
+    opa_version = parse_version_from_output(probe.raw_output, pattern=OPA_VERSION_PATTERN)
+    if opa_version is None:
+        return probe.raw_output
+    if not is_version_sufficient(opa_version, dependency.minimum_opa_version):
+        return f"OPA {opa_version}"
+    return None
+
+
+def _validate_dependency_requirements(
+    dependency: Dependency,
+) -> str | None:
+    if dependency.minimum_version is None and dependency.minimum_opa_version is None:
+        return None
+
+    probe = probe_version(dependency)
+    version_failure = _validate_minimum_version(dependency, probe)
+    if version_failure is not None:
+        return version_failure
+
+    return _validate_minimum_opa_version(dependency, probe)
 
 
 def _validate_dependency_safety(dependency: Dependency) -> Dependency:
@@ -337,41 +370,16 @@ def validate_dependencies(
     """
 
     missing = collect_missing(dependencies)
+    missing_names = {dependency.name for dependency in missing}
     incompatible: list[tuple[Dependency, str | None]] = []
 
     for dependency in dependencies:
-        if dependency in missing:
-            continue
-        if dependency.minimum_version is None and dependency.minimum_opa_version is None:
+        if dependency.name in missing_names:
             continue
 
-        probe = probe_version(dependency)
-        if dependency.minimum_version is not None and probe.parsed_version is None:
-            incompatible.append((dependency, probe.raw_output))
-            continue
-
-        if (
-            dependency.minimum_version is not None
-            and probe.parsed_version is not None
-            and not is_version_sufficient(probe.parsed_version, dependency.minimum_version)
-        ):
-            incompatible.append((dependency, probe.raw_output or probe.parsed_version))
-            continue
-
-        if dependency.minimum_opa_version is None:
-            continue
-
-        if probe.raw_output is None:
-            incompatible.append((dependency, None))
-            continue
-
-        opa_version = parse_opa_version_from_conftest_output(probe.raw_output)
-        if opa_version is None:
-            incompatible.append((dependency, probe.raw_output))
-            continue
-
-        if not is_version_sufficient(opa_version, dependency.minimum_opa_version):
-            incompatible.append((dependency, f"OPA {opa_version}"))
+        failure = _validate_dependency_requirements(dependency)
+        if failure is not None:
+            incompatible.append((dependency, failure))
 
     return missing, incompatible
 
@@ -423,7 +431,7 @@ def format_failure_message(
             lines.append("")
         lines.append("Update the following tools to satisfy minimum supported versions:")
         for dependency, detected in incompatible_list:
-            required = dependency.minimum_version_label() or "unspecified"
+            required = dependency.minimum_version_label()
             observed = (detected or "unknown").splitlines()[0]
             lines.append(
                 f"  - {dependency.name}: found {observed}, require >= {required}"

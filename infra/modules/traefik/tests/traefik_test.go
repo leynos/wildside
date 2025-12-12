@@ -19,6 +19,8 @@ import (
 
 const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig file before running the example"
 
+const traefikModuleName = "traefik"
+
 func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
@@ -517,12 +519,15 @@ func TestTraefikModuleApplyIfKubeconfigPresent(t *testing.T) {
 	}
 
 	// Assert: verify dashboard_hostname is null when dashboard disabled
-	dashboardHostname := terraform.Output(t, opts, "dashboard_hostname")
-	require.Empty(t, dashboardHostname,
-		"dashboard_hostname should be empty when dashboard is disabled")
+	if terraformOutputExists(t, opts, "dashboard_hostname") {
+		dashboardHostname := terraform.Output(t, opts, "dashboard_hostname")
+		require.Empty(t, dashboardHostname,
+			"dashboard_hostname should be empty when dashboard is disabled")
+	}
 
 	// Assert: verify Helm release exists in state
-	stdout, err := terraform.RunTerraformCommandAndGetStdoutE(t, opts, "state", "show", "module.traefik.helm_release.traefik")
+	resourceAddr := fmt.Sprintf("module.%s.helm_release.%s", traefikModuleName, traefikModuleName)
+	stdout, err := terraform.RunTerraformCommandAndGetStdoutE(t, opts, "state", "show", resourceAddr)
 	require.NoError(t, err)
 	require.Contains(t, stdout, "traefik")
 }

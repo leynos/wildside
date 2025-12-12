@@ -227,7 +227,7 @@ variable "acme_server" {
     condition = contains([
       "https://acme-v02.api.letsencrypt.org/directory",
       "https://acme-staging-v02.api.letsencrypt.org/directory"
-    ], var.acme_server)
+    ], trimspace(var.acme_server))
     error_message = "acme_server must be a valid Let's Encrypt production or staging URL"
   }
 }

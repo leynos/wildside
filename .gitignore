@@ -64,9 +64,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Local databases
-vectors.db
-vectors.db-shm
-vectors.db-wal
+/vectors.db
+/vectors.db-shm
+/vectors.db-wal
 
 # Coverage
 coverage/
@@ -79,8 +79,8 @@ coverage/
 *.sublime-project
 .history/
 .crush/
-.serena/
-.tmp/
-logs_llm/
+/.serena/
+/.tmp/
+/logs_llm/
 
 deploy/k8s/backend/secret.env

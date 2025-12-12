@@ -64,7 +64,7 @@ deny contains msg if {
 	msg := sprintf("ClusterIssuer %s must have at least one ACME solver configured", [manifest.metadata.name])
 }
 
-# Ensure ClusterIssuer uses DNS01 solver (required for wildcard certificates).
+# Ensure ClusterIssuer uses DNS01 solver.
 deny contains msg if {
 	rc := input.resource_changes[_]
 	ci := clusterissuer(rc)
@@ -73,7 +73,7 @@ deny contains msg if {
 	solvers := acme_solvers(spec)
 	count(solvers) > 0
 	not has_dns01_solver(solvers)
-	msg := sprintf("ClusterIssuer %s must use DNS01 solver for wildcard certificate support", [manifest.metadata.name])
+	msg := sprintf("ClusterIssuer %s must use DNS01 solver", [manifest.metadata.name])
 }
 
 # Known Let's Encrypt staging server URLs

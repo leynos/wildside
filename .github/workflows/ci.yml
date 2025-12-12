@@ -125,8 +125,11 @@ jobs:
           tofu_version="1.7.0"
           archive="tofu_${tofu_version}_linux_amd64.tar.gz"
           url="https://github.com/opentofu/opentofu/releases/download/v${tofu_version}/${archive}"
+          sums_url="https://github.com/opentofu/opentofu/releases/download/v${tofu_version}/tofu_${tofu_version}_SHA256SUMS"
 
           curl -fsSL "$url" -o "$archive"
+          curl -fsSL "$sums_url" -o SHA256SUMS
+          grep " ${archive}$" SHA256SUMS | sha256sum -c -
           tar -xzf "$archive"
           sudo install -m 0755 tofu /usr/local/bin/tofu
           tofu version
@@ -139,8 +142,11 @@ jobs:
           conftest_version="0.63.0"
           archive="conftest_${conftest_version}_Linux_x86_64.tar.gz"
           url="https://github.com/open-policy-agent/conftest/releases/download/v${conftest_version}/${archive}"
+          sums_url="https://github.com/open-policy-agent/conftest/releases/download/v${conftest_version}/checksums.txt"
 
           curl -fsSL "$url" -o "$archive"
+          curl -fsSL "$sums_url" -o checksums.txt
+          grep " ${archive}$" checksums.txt | sha256sum -c -
           tar -xzf "$archive"
           sudo install -m 0755 conftest /usr/local/bin/conftest
           conftest --version
