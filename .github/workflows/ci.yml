@@ -133,6 +133,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.theseus/postgresql
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
@@ -143,6 +144,9 @@ jobs:
       - name: Rust clippy
         run: cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
       - name: Rust tests
+        env:
+          # Increase GitHub API rate limits for postgresql_embedded downloads.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
 
       # OpenAPI dump (at runtime or via a small bin)

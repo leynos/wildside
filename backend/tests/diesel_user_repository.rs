@@ -26,6 +26,10 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
 
+mod support;
+
+use support::format_postgres_error;
+
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -70,7 +74,7 @@ type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = TestCluster::new().map_err(|err| err.to_string())?;
+    let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
 
     // Create the test database.
     reset_database(&cluster).map_err(|err| err.to_string())?;
@@ -111,12 +115,21 @@ fn should_skip_on_cluster_failure() -> bool {
         .unwrap_or(false)
 }
 
+fn should_skip_for_transient_cluster_failure(reason: &str) -> bool {
+    // Some embedded Postgres bootstrap failures are environmental and transient,
+    // e.g. GitHub API rate limiting while downloading metadata for theseus
+    // postgresql binaries. Keep the skip logic narrow: only skip when we can
+    // confidently identify a transient external failure.
+    reason.contains("rate limit exceeded") || reason.contains("HTTP status client error (403")
+}
+
 #[fixture]
 fn diesel_world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
         Err(reason) => {
-            if should_skip_on_cluster_failure() {
+            if should_skip_on_cluster_failure() || should_skip_for_transient_cluster_failure(&reason)
+            {
                 eprintln!("SKIP-TEST-CLUSTER: {reason}");
                 None
             } else {
@@ -308,25 +321,17 @@ fn diesel_reports_errors_when_schema_missing(
 fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
 
-    // Terminate any existing connections to the test database to avoid
-    // "database is being accessed by other users" errors on DROP.
+    // `DROP DATABASE` cannot run inside a transaction block. When we send
+    // multiple statements in one `batch_execute`, Postgres treats it as a single
+    // transaction block and rejects the command.
     client
-        .execute(
-            &format!(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
-                 WHERE datname = '{TEST_DB}' AND pid <> pg_backend_pid();"
-            ),
-            &[],
-        )
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
-
+        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{TEST_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     client
-        .batch_execute(&format!(
-            "DROP DATABASE IF EXISTS \"{TEST_DB}\"; CREATE DATABASE \"{TEST_DB}\";"
-        ))
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .batch_execute(&format!("CREATE DATABASE \"{TEST_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
 
@@ -344,9 +349,9 @@ fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
 
 fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
     let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
     client
         .batch_execute("DROP TABLE IF EXISTS users;")
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }

@@ -2,14 +2,18 @@
 
 use std::sync::{Arc, Mutex};
 
-use actix_rt::System;
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
+use futures::executor::block_on;
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use uuid::Uuid;
+
+mod support;
+
+use support::format_postgres_error;
 
 const CONTRACT_DB: &str = "ports_contract";
 
@@ -93,7 +97,7 @@ struct RepoContext {
 type SharedContext = Arc<Mutex<RepoContext>>;
 
 fn init_repo_context() -> Result<RepoContext, String> {
-    let cluster = TestCluster::new().map_err(|err| err.to_string())?;
+    let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
     reset_database(&cluster).map_err(|err| err.to_string())?;
     let database_url = cluster.connection().database_url(CONTRACT_DB);
     migrate_schema(&database_url).map_err(|err| err.to_string())?;
@@ -130,7 +134,7 @@ fn the_repository_upserts_the_user(repo_world: SharedContext, user: User) {
         ctx.repository.clone()
     };
     let stored_user = user.clone();
-    let result = System::new().block_on(async move { repo.upsert(&user).await });
+    let result = block_on(async move { repo.upsert(&user).await });
     let mut ctx = repo_world.lock().expect("context lock");
     match result {
         Ok(()) => {
@@ -154,7 +158,7 @@ fn the_repository_fetches_the_user(repo_world: SharedContext) {
             .expect("user should have been persisted");
         (ctx.repository.clone(), id)
     };
-    let result = System::new().block_on(async move { repo.find_by_id(&user_id).await });
+    let result = block_on(async move { repo.find_by_id(&user_id).await });
     let mut ctx = repo_world.lock().expect("context lock");
     match result {
         Ok(value) => {
@@ -234,18 +238,22 @@ fn user_repository_reports_errors_when_schema_missing(
 fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
+    // `DROP DATABASE` cannot run inside a transaction block. When multiple SQL
+    // statements are sent in a single `batch_execute`, Postgres treats it as a
+    // transaction block and rejects `DROP DATABASE`.
     client
-        .batch_execute(&format!(
-            "DROP DATABASE IF EXISTS \"{CONTRACT_DB}\"; CREATE DATABASE \"{CONTRACT_DB}\";"
-        ))
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{CONTRACT_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
+    client
+        .batch_execute(&format!("CREATE DATABASE \"{CONTRACT_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
 
 fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
     let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
     client
         .batch_execute(
             "CREATE TABLE IF NOT EXISTS users (
@@ -253,15 +261,15 @@ fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
                 display_name TEXT NOT NULL
             );",
         )
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
 
 fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
     let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
     client
         .batch_execute("DROP TABLE IF EXISTS users;")
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
