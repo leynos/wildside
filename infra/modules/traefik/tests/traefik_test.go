@@ -149,7 +149,7 @@ func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	args := append([]string{"test", cfg.PlanPath, "--policy", cfg.PolicyPath}, cfg.ExtraArgs...)
+	args := append([]string{"test", "--policy", cfg.PolicyPath, cfg.PlanPath}, cfg.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, "conftest", args...)
 	cmd.Env = testutil.TerraformEnv(t, map[string]string{
 		"KUBECONFIG": cfg.Kubeconfig,
