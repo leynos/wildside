@@ -63,6 +63,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local databases
+vectors.db
+vectors.db-shm
+vectors.db-wal
+
 # Coverage
 coverage/
 .nyc_output/
