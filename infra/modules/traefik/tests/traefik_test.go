@@ -239,84 +239,85 @@ func TestTraefikModuleInvalidACMEServer(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`acme_server`), err.Error())
 }
 
+// nullVariableValidationTestCases defines test cases for null/invalid variable validation error messages
+var nullVariableValidationTestCases = []struct {
+	name            string
+	varName         string
+	value           interface{}
+	expectedMessage string
+}{
+	{
+		name:            "NullNamespace",
+		varName:         "namespace",
+		value:           nil,
+		expectedMessage: "namespace must be a valid Kubernetes namespace name",
+	},
+	{
+		name:            "NullChartRepository",
+		varName:         "chart_repository",
+		value:           nil,
+		expectedMessage: "chart_repository must be an HTTPS URL",
+	},
+	{
+		name:            "NullChartName",
+		varName:         "chart_name",
+		value:           nil,
+		expectedMessage: "chart_name must not be blank",
+	},
+	{
+		name:            "NullChartVersion",
+		varName:         "chart_version",
+		value:           nil,
+		expectedMessage: "chart_version must be a semantic version",
+	},
+	{
+		name:            "NullHelmReleaseName",
+		varName:         "helm_release_name",
+		value:           nil,
+		expectedMessage: "helm_release_name must not be blank",
+	},
+	{
+		name:            "NullHelmValuesFilesList",
+		varName:         "helm_values_files",
+		value:           nil,
+		expectedMessage: "helm_values_files must not contain blank file paths",
+	},
+	{
+		name:            "NullHelmValuesFilesElement",
+		varName:         "helm_values_files",
+		value:           []interface{}{nil},
+		expectedMessage: "helm_values_files must not contain blank file paths",
+	},
+	{
+		name:            "NullIngressClassName",
+		varName:         "ingress_class_name",
+		value:           nil,
+		expectedMessage: "ingress_class_name must not be blank",
+	},
+	{
+		name:            "NullAcmeEmail",
+		varName:         "acme_email",
+		value:           nil,
+		expectedMessage: "acme_email must be a valid email address",
+	},
+	{
+		name:            "NullAcmeServer",
+		varName:         "acme_server",
+		value:           nil,
+		expectedMessage: "acme_server must be a valid Let's Encrypt production or staging URL",
+	},
+	{
+		name:            "NullClusterIssuerName",
+		varName:         "cluster_issuer_name",
+		value:           nil,
+		expectedMessage: "cluster_issuer_name must be a valid Kubernetes resource name",
+	},
+}
+
 func TestTraefikModuleNullVariableValidationReturnsErrorMessage(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name            string
-		varName         string
-		value           interface{}
-		expectedMessage string
-	}{
-		{
-			name:            "NullNamespace",
-			varName:         "namespace",
-			value:           nil,
-			expectedMessage: "namespace must be a valid Kubernetes namespace name",
-		},
-		{
-			name:            "NullChartRepository",
-			varName:         "chart_repository",
-			value:           nil,
-			expectedMessage: "chart_repository must be an HTTPS URL",
-		},
-		{
-			name:            "NullChartName",
-			varName:         "chart_name",
-			value:           nil,
-			expectedMessage: "chart_name must not be blank",
-		},
-		{
-			name:            "NullChartVersion",
-			varName:         "chart_version",
-			value:           nil,
-			expectedMessage: "chart_version must be a semantic version",
-		},
-		{
-			name:            "NullHelmReleaseName",
-			varName:         "helm_release_name",
-			value:           nil,
-			expectedMessage: "helm_release_name must not be blank",
-		},
-		{
-			name:            "NullHelmValuesFilesList",
-			varName:         "helm_values_files",
-			value:           nil,
-			expectedMessage: "helm_values_files must not contain blank file paths",
-		},
-		{
-			name:            "NullHelmValuesFilesElement",
-			varName:         "helm_values_files",
-			value:           []interface{}{nil},
-			expectedMessage: "helm_values_files must not contain blank file paths",
-		},
-		{
-			name:            "NullIngressClassName",
-			varName:         "ingress_class_name",
-			value:           nil,
-			expectedMessage: "ingress_class_name must not be blank",
-		},
-		{
-			name:            "NullAcmeEmail",
-			varName:         "acme_email",
-			value:           nil,
-			expectedMessage: "acme_email must be a valid email address",
-		},
-		{
-			name:            "NullAcmeServer",
-			varName:         "acme_server",
-			value:           nil,
-			expectedMessage: "acme_server must be a valid Let's Encrypt production or staging URL",
-		},
-		{
-			name:            "NullClusterIssuerName",
-			varName:         "cluster_issuer_name",
-			value:           nil,
-			expectedMessage: "cluster_issuer_name must be a valid Kubernetes resource name",
-		},
-	}
-
-	for _, tc := range testCases {
+	for _, tc := range nullVariableValidationTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			vars := testVars(t)
 			vars[tc.varName] = tc.value
