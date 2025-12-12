@@ -102,13 +102,26 @@ fn setup_test_context() -> Result<TestContext, String> {
     })
 }
 
+/// Returns true if the `SKIP_TEST_CLUSTER` env var is set to a truthy value.
+///
+/// Truthy values: "1", "true", "yes" (case-insensitive).
+fn should_skip_on_cluster_failure() -> bool {
+    std::env::var("SKIP_TEST_CLUSTER")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
 #[fixture]
 fn diesel_world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
         Err(reason) => {
-            eprintln!("SKIP-TEST-CLUSTER: {reason}");
-            None
+            if should_skip_on_cluster_failure() {
+                eprintln!("SKIP-TEST-CLUSTER: {reason}");
+                None
+            } else {
+                panic!("Test cluster setup failed: {reason}");
+            }
         }
     }
 }
@@ -125,11 +138,14 @@ fn a_diesel_backed_user_repository(_world: SharedContext) {
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(world: SharedContext, user: User) {
     let stored_user = user.clone();
+    // Extract what we need and drop the lock before blocking on async work.
+    let (repo, handle) = {
+        let ctx = world.lock().expect("context lock");
+        (ctx.repository.clone(), ctx.runtime.handle().clone())
+    };
+    let result = handle.block_on(async move { repo.upsert(&user).await });
+    // Re-acquire lock to store results.
     let mut ctx = world.lock().expect("context lock");
-    let repo = ctx.repository.clone();
-    let result = ctx
-        .runtime
-        .block_on(async move { repo.upsert(&user).await });
     match result {
         Ok(()) => {
             ctx.last_upsert_error = None;
@@ -143,17 +159,20 @@ fn the_repository_upserts_the_user(world: SharedContext, user: User) {
 
 #[when("the repository fetches the user by id")]
 fn the_repository_fetches_the_user_by_id(world: SharedContext) {
+    // Extract what we need and drop the lock before blocking on async work.
+    let (repo, user_id, handle) = {
+        let ctx = world.lock().expect("context lock");
+        let id = ctx
+            .persisted_user
+            .as_ref()
+            .expect("user should have been persisted")
+            .id()
+            .clone();
+        (ctx.repository.clone(), id, ctx.runtime.handle().clone())
+    };
+    let result = handle.block_on(async move { repo.find_by_id(&user_id).await });
+    // Re-acquire lock to store results.
     let mut ctx = world.lock().expect("context lock");
-    let repo = ctx.repository.clone();
-    let user_id = ctx
-        .persisted_user
-        .as_ref()
-        .expect("user should have been persisted")
-        .id()
-        .clone();
-    let result = ctx
-        .runtime
-        .block_on(async move { repo.find_by_id(&user_id).await });
     ctx.last_fetch_result = Some(result);
 }
 
@@ -172,8 +191,14 @@ fn the_stored_user_is_returned(world: SharedContext, expected: User) {
     let result = ctx.last_fetch_result.as_ref().expect("fetch was executed");
     match result {
         Ok(Some(user)) => assert_eq!(user, &expected),
-        Ok(None) => panic!("expected user but got None"),
-        Err(err) => panic!("expected user but got error: {err}"),
+        Ok(None) => panic!(
+            "expected user but got None; last_upsert_error: {:?}",
+            ctx.last_upsert_error
+        ),
+        Err(err) => panic!(
+            "expected user but got error: {err}; last_upsert_error: {:?}",
+            ctx.last_upsert_error
+        ),
     }
 }
 
@@ -220,10 +245,13 @@ fn diesel_upsert_updates_existing_user(diesel_world: Option<SharedContext>) {
     let user_v2 = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Updated Name")
         .expect("valid user");
 
-    let ctx = world.lock().expect("context lock");
-    let repo = ctx.repository.clone();
+    // Extract what we need and drop the lock before blocking on async work.
+    let (repo, handle) = {
+        let ctx = world.lock().expect("context lock");
+        (ctx.repository.clone(), ctx.runtime.handle().clone())
+    };
 
-    ctx.runtime.block_on(async {
+    handle.block_on(async {
         repo.upsert(&user_v1).await.expect("first upsert");
         repo.upsert(&user_v2).await.expect("second upsert");
 
@@ -244,12 +272,13 @@ fn diesel_find_nonexistent_returns_none(diesel_world: Option<SharedContext>) {
 
     let nonexistent_id = UserId::new("99999999-9999-9999-9999-999999999999").expect("valid UUID");
 
-    let ctx = world.lock().expect("context lock");
-    let repo = ctx.repository.clone();
+    // Extract what we need and drop the lock before blocking on async work.
+    let (repo, handle) = {
+        let ctx = world.lock().expect("context lock");
+        (ctx.repository.clone(), ctx.runtime.handle().clone())
+    };
 
-    let result = ctx
-        .runtime
-        .block_on(async { repo.find_by_id(&nonexistent_id).await });
+    let result = handle.block_on(async { repo.find_by_id(&nonexistent_id).await });
     assert!(
         result.expect("query succeeds").is_none(),
         "nonexistent user should return None"
@@ -280,6 +309,19 @@ fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
         .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+
+    // Terminate any existing connections to the test database to avoid
+    // "database is being accessed by other users" errors on DROP.
+    client
+        .execute(
+            &format!(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
+                 WHERE datname = '{TEST_DB}' AND pid <> pg_backend_pid();"
+            ),
+            &[],
+        )
+        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+
     client
         .batch_execute(&format!(
             "DROP DATABASE IF EXISTS \"{TEST_DB}\"; CREATE DATABASE \"{TEST_DB}\";"
