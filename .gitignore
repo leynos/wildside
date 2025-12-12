@@ -74,5 +74,6 @@ coverage/
 *.sublime-project
 .history/
 .crush/
+.serena/
 
 deploy/k8s/backend/secret.env
