@@ -142,26 +142,16 @@ fn should_skip_on_cluster_failure() -> bool {
         .unwrap_or(false)
 }
 
-fn should_skip_for_transient_cluster_failure(reason: &str) -> bool {
-    // Some embedded Postgres bootstrap failures are environmental and transient,
-    // e.g. GitHub API rate limiting while downloading metadata for theseus
-    // postgresql binaries. Keep the skip logic narrow: only skip when we can
-    // confidently identify a transient external failure.
-    reason.contains("rate limit exceeded") || reason.contains("HTTP status client error (403")
-}
-
 #[fixture]
 fn diesel_world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
         Err(reason) => {
-            if should_skip_on_cluster_failure()
-                || should_skip_for_transient_cluster_failure(&reason)
-            {
+            if should_skip_on_cluster_failure() {
                 eprintln!("SKIP-TEST-CLUSTER: {reason}");
                 None
             } else {
-                panic!("Test cluster setup failed: {reason}");
+                panic!("Test cluster setup failed: {reason}. Set SKIP_TEST_CLUSTER=1 to skip.");
             }
         }
     }

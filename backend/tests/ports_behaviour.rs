@@ -4,6 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
+use diesel::pg::PgConnection;
+use diesel::Connection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use futures::executor::block_on;
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
@@ -14,6 +17,9 @@ use uuid::Uuid;
 mod support;
 
 use support::format_postgres_error;
+
+/// Embedded migrations from the backend/migrations directory.
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 const CONTRACT_DB: &str = "ports_contract";
 
@@ -252,16 +258,10 @@ fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
 }
 
 fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
-    let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
-    client
-        .batch_execute(
-            "CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY,
-                display_name TEXT NOT NULL
-            );",
-        )
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
+    let mut conn = PgConnection::establish(url)
+        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+    conn.run_pending_migrations(MIGRATIONS)
+        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
     Ok(())
 }
 

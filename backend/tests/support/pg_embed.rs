@@ -8,6 +8,10 @@
 //! This module scopes `PG_RUNTIME_DIR` and `PG_DATA_DIR` overrides to the
 //! bootstrap call and serialises environment mutation to avoid global
 //! environment races across parallel tests.
+//!
+//! When either `PG_RUNTIME_DIR` or `PG_DATA_DIR` is missing, this module sets
+//! both for the duration of the bootstrap, ensuring the embedded cluster uses
+//! a consistent workspace-backed configuration.
 
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -19,6 +23,9 @@ use uuid::Uuid;
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn pg_embed_target_dir() -> PathBuf {
+    if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
+        return PathBuf::from(target_dir).join("pg-embed");
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("target")
@@ -40,8 +47,9 @@ fn create_unique_pg_embed_dirs() -> Result<(PathBuf, PathBuf), std::io::Error> {
 /// Bootstraps a [`TestCluster`] using workspace-backed data directories when needed.
 ///
 /// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set, this function leaves
-/// them untouched. Otherwise, it points them at unique directories under
-/// `target/pg-embed/` so the bootstrap works in sandboxed environments.
+/// them untouched. If either value is missing, this function sets both to
+/// unique directories under the target directory so the bootstrap works in
+/// sandboxed environments.
 pub fn test_cluster() -> Result<TestCluster, String> {
     let lock = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
