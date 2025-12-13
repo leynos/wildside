@@ -136,7 +136,7 @@ lint-infra:
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
-PG_WORKER_PATH ?= /var/tmp/pg_worker
+PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 
 test: workspace-sync deps typecheck prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
