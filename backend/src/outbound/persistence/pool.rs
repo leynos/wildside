@@ -144,6 +144,19 @@ impl DbPool {
     /// Returns `PoolError::Build` if the pool cannot be constructed (e.g.,
     /// invalid database URL or connection failure).
     pub async fn new(config: PoolConfig) -> Result<Self, PoolError> {
+        if config.max_size == 0 {
+            return Err(PoolError::build("max_size must be greater than 0"));
+        }
+
+        if let Some(min_idle) = config.min_idle {
+            if min_idle > config.max_size {
+                return Err(PoolError::build(format!(
+                    "min_idle ({min_idle}) must not exceed max_size ({})",
+                    config.max_size
+                )));
+            }
+        }
+
         let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.database_url);
 
         let pool = Pool::builder()
@@ -225,5 +238,53 @@ mod tests {
 
         assert!(checkout_err.to_string().contains("connection refused"));
         assert!(build_err.to_string().contains("invalid URL"));
+    }
+
+    #[tokio::test]
+    async fn db_pool_new_rejects_zero_max_size() {
+        let config = PoolConfig {
+            database_url: "postgres://localhost/test".to_owned(),
+            max_size: 0,
+            min_idle: Some(0),
+            connection_timeout: Duration::from_secs(30),
+        };
+
+        let result = DbPool::new(config).await;
+        match result {
+            Ok(_) => panic!("expected build error for invalid config"),
+            Err(error) => {
+                assert!(
+                    matches!(error, PoolError::Build { .. }),
+                    "expected build error, got {error:?}"
+                );
+                assert!(error
+                    .to_string()
+                    .contains("max_size must be greater than 0"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn db_pool_new_rejects_min_idle_exceeding_max_size() {
+        let config = PoolConfig {
+            database_url: "postgres://localhost/test".to_owned(),
+            max_size: 1,
+            min_idle: Some(2),
+            connection_timeout: Duration::from_secs(30),
+        };
+
+        let result = DbPool::new(config).await;
+        match result {
+            Ok(_) => panic!("expected build error for invalid config"),
+            Err(error) => {
+                assert!(
+                    matches!(error, PoolError::Build { .. }),
+                    "expected build error, got {error:?}"
+                );
+                assert!(error
+                    .to_string()
+                    .contains("min_idle (2) must not exceed max_size (1)"));
+            }
+        }
     }
 }
