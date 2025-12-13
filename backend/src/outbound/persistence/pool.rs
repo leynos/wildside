@@ -138,6 +138,12 @@ pub struct DbPool {
     inner: Pool<AsyncPgConnection>,
 }
 
+impl std::fmt::Debug for DbPool {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("DbPool").finish_non_exhaustive()
+    }
+}
+
 impl DbPool {
     /// Create a new connection pool with the given configuration.
     ///
@@ -180,6 +186,26 @@ mod tests {
     use super::*;
     use rstest::rstest;
 
+    fn assert_pool_config_validation_rejected(
+        max_size: Option<u32>,
+        min_idle: Option<Option<u32>>,
+        expected_error_substring: &str,
+    ) {
+        let mut config = PoolConfig::new("postgres://localhost/test");
+        if let Some(max_size) = max_size {
+            config = config.with_max_size(max_size);
+        }
+        if let Some(min_idle) = min_idle {
+            config = config.with_min_idle(min_idle);
+        }
+
+        let error = config.validate().expect_err("expected invalid config");
+        assert!(
+            error.to_string().contains(expected_error_substring),
+            "expected error message to contain {expected_error_substring:?}, got: {error}"
+        );
+    }
+
     #[rstest]
     fn pool_config_default_values() {
         let config = PoolConfig::new("postgres://localhost/test");
@@ -204,39 +230,17 @@ mod tests {
 
     #[rstest]
     fn pool_config_rejects_zero_max_size() {
-        let config = PoolConfig::new("postgres://localhost/test").with_max_size(0);
-
-        let error = config.validate().expect_err("expected invalid config");
-        assert!(
-            error
-                .to_string()
-                .contains("max_size must be greater than 0"),
-            "expected error message to contain max_size validation, got: {error}"
-        );
+        assert_pool_config_validation_rejected(Some(0), None, "max_size must be greater than 0");
     }
 
     #[rstest]
     fn pool_config_rejects_min_idle_exceeding_max_size() {
-        let config = PoolConfig::new("postgres://localhost/test").with_min_idle(Some(11));
-
-        let error = config.validate().expect_err("expected invalid config");
-        assert!(
-            error.to_string().contains("must not exceed max_size"),
-            "expected error message to contain min_idle validation, got: {error}"
-        );
+        assert_pool_config_validation_rejected(None, Some(Some(11)), "must not exceed max_size");
     }
 
     #[rstest]
     fn pool_config_rejects_lowering_max_size_below_min_idle() {
-        let config = PoolConfig::new("postgres://localhost/test")
-            .with_min_idle(Some(5))
-            .with_max_size(4);
-
-        let error = config.validate().expect_err("expected invalid config");
-        assert!(
-            error.to_string().contains("must not exceed max_size"),
-            "expected error message to contain min_idle validation, got: {error}"
-        );
+        assert_pool_config_validation_rejected(Some(4), Some(Some(5)), "must not exceed max_size");
     }
 
     #[rstest]
@@ -262,8 +266,7 @@ mod tests {
 
         let error = DbPool::new(config)
             .await
-            .err()
-            .expect("expected build error for invalid config");
+            .expect_err("expected build error for invalid config");
         assert!(
             matches!(error, PoolError::Build { .. }),
             "expected build error, got {error:?}"
