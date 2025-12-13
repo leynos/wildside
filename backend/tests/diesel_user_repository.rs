@@ -79,6 +79,11 @@ fn with_context_async<F, R, U>(
     R: std::future::Future,
     U: FnOnce(&mut TestContext, R::Output),
 {
+    assert!(
+        tokio::runtime::Handle::try_current().is_err(),
+        "do not call with_context_async from inside a Tokio runtime"
+    );
+
     let (repo, handle, extracted) = {
         let ctx = world.lock().expect("context lock");
         (
