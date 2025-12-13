@@ -316,7 +316,6 @@ var nullVariableValidationTestCases = []struct {
 
 func TestTraefikModuleNullVariableValidationReturnsErrorMessage(t *testing.T) {
 	t.Parallel()
-
 	for _, tc := range nullVariableValidationTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			vars := testVars(t)
@@ -470,7 +469,9 @@ func TestTraefikModuleSupportsHelmValues(t *testing.T) {
 	require.NoError(t, os.WriteFile(valuesFile, []byte(fileContent), 0600))
 	vars["helm_values"] = []string{"resources:\n  requests:\n    cpu: 100m"}
 	vars["helm_values_files"] = []string{valuesFile}
-	_, opts := setup(t, vars)
+	tfDir, opts := setup(t, vars)
+	writeAutoTfvarsJSON(t, tfDir, vars)
+	opts.Vars = map[string]interface{}{}
 	// InitAndPlanE returns an error because the stub kubeconfig cannot connect to a real
 	// cluster. However, the plan output is captured before the failure, allowing verification
 	// that helm_values and helm_values_files are correctly merged into the Helm release.

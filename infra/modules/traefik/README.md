@@ -11,8 +11,8 @@ validation.
 - [cert-manager](https://cert-manager.io/) installed in the cluster
 - A Kubernetes Secret containing a Cloudflare API token with DNS edit permissions
 - OpenTofu >= 1.6.0
-- `conftest` (policy tests): requires conftest built with
-  OPA >= 0.59.0 (Rego v1 syntax)
+- `conftest` (policy tests): requires conftest built
+  with OPA >= 0.59.0 (Rego v1 syntax)
 
 ## Usage
 

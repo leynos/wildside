@@ -37,7 +37,7 @@ locals {
       dashboard = var.dashboard_enabled && local.dashboard_hostname != null ? {
         enabled   = true
         matchRule = format("Host(`%s`)", local.dashboard_hostname)
-      } : {
+        } : {
         enabled = false
       }
     }

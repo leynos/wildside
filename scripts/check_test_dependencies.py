@@ -190,7 +190,10 @@ def _parse_version_from_pattern(output: str, pattern: re.Pattern[str]) -> str | 
     match = pattern.search(output)
     if match is None:
         return None
-    return match.group(1)
+    try:
+        return match.group(1)
+    except IndexError:
+        return None
 
 
 def _validate_minimum_version(
@@ -305,8 +308,9 @@ def _execute_version_command(dependency: Dependency) -> str | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
     output = process.stdout.strip() or process.stderr.strip()
@@ -435,8 +439,12 @@ def format_failure_message(
         for dependency, detected in incompatible_list:
             required = dependency.minimum_version_label()
             observed = (detected or "unknown").splitlines()[0]
+            if required.startswith("OPA >="):
+                requirement = required
+            else:
+                requirement = f">= {required}"
             lines.append(
-                f"  - {dependency.name}: found {observed}, require >= {required}"
+                f"  - {dependency.name}: found {observed}, require {requirement}"
             )
 
     lines.extend(

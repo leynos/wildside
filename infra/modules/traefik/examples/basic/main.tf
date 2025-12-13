@@ -20,6 +20,18 @@ variable "namespace" {
   default     = "traefik"
 }
 
+variable "chart_repository" {
+  description = "Helm repository hosting the Traefik chart"
+  type        = string
+  default     = "https://traefik.github.io/charts"
+}
+
+variable "chart_name" {
+  description = "Name of the Helm chart used to install Traefik"
+  type        = string
+  default     = "traefik"
+}
+
 variable "acme_email" {
   description = "Email address registered with ACME certificate authority"
   type        = string
@@ -54,6 +66,12 @@ variable "chart_version" {
   default     = "25.0.3"
 }
 
+variable "helm_release_name" {
+  description = "Name assigned to the Traefik Helm release"
+  type        = string
+  default     = "traefik"
+}
+
 variable "dashboard_enabled" {
   description = "Whether to enable the Traefik dashboard"
   type        = bool
@@ -78,6 +96,42 @@ variable "helm_values_files" {
   default     = []
 }
 
+variable "service_type" {
+  description = "Kubernetes service type for Traefik (LoadBalancer, ClusterIP, or NodePort)"
+  type        = string
+  default     = "LoadBalancer"
+}
+
+variable "external_traffic_policy" {
+  description = "External traffic policy for LoadBalancer service (Local preserves client IPs)"
+  type        = string
+  default     = "Local"
+}
+
+variable "ingress_class_name" {
+  description = "Name of the IngressClass created by Traefik"
+  type        = string
+  default     = "traefik"
+}
+
+variable "http_to_https_redirect" {
+  description = "Whether to redirect HTTP traffic to HTTPS"
+  type        = bool
+  default     = true
+}
+
+variable "prometheus_metrics_enabled" {
+  description = "Whether to enable Prometheus metrics endpoint"
+  type        = bool
+  default     = true
+}
+
+variable "service_monitor_enabled" {
+  description = "Whether to create a ServiceMonitor for Prometheus Operator"
+  type        = bool
+  default     = true
+}
+
 provider "kubernetes" {
   config_path = var.kubeconfig_path != null ? trimspace(var.kubeconfig_path) : null
 }
@@ -92,16 +146,25 @@ module "traefik" {
   source = "../.."
 
   namespace                        = var.namespace
+  chart_repository                 = var.chart_repository
+  chart_name                       = var.chart_name
   acme_email                       = var.acme_email
   cloudflare_api_token_secret_name = var.cloudflare_api_token_secret_name
   cloudflare_api_token_secret_key  = var.cloudflare_api_token_secret_key
   cluster_issuer_name              = var.cluster_issuer_name
   acme_server                      = var.acme_server
   chart_version                    = var.chart_version
+  helm_release_name                = var.helm_release_name
   dashboard_enabled                = var.dashboard_enabled
   dashboard_hostname               = var.dashboard_hostname
   helm_values                      = var.helm_values
   helm_values_files                = var.helm_values_files
+  service_type                     = var.service_type
+  external_traffic_policy          = var.external_traffic_policy
+  ingress_class_name               = var.ingress_class_name
+  http_to_https_redirect           = var.http_to_https_redirect
+  prometheus_metrics_enabled       = var.prometheus_metrics_enabled
+  service_monitor_enabled          = var.service_monitor_enabled
 }
 
 output "namespace" {
