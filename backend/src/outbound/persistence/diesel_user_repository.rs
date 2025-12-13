@@ -68,32 +68,30 @@ fn map_diesel_error(error: diesel::result::Error) -> UserPersistenceError {
         DieselError::QueryBuilderError(_) => {
             UserPersistenceError::query("database query error".to_owned())
         }
-        DieselError::DatabaseError(kind, _) => {
-            match kind {
-                DatabaseErrorKind::UniqueViolation => {
-                    UserPersistenceError::query("unique constraint violation".to_owned())
-                }
-                DatabaseErrorKind::ForeignKeyViolation => {
-                    UserPersistenceError::query("foreign key violation".to_owned())
-                }
-                DatabaseErrorKind::NotNullViolation => {
-                    UserPersistenceError::query("not null violation".to_owned())
-                }
-                DatabaseErrorKind::CheckViolation => {
-                    UserPersistenceError::query("check constraint violation".to_owned())
-                }
-                DatabaseErrorKind::SerializationFailure => {
-                    UserPersistenceError::query("serialization failure".to_owned())
-                }
-                DatabaseErrorKind::ReadOnlyTransaction => {
-                    UserPersistenceError::query("read-only transaction".to_owned())
-                }
-                DatabaseErrorKind::ClosedConnection => {
-                    UserPersistenceError::connection("database connection error".to_owned())
-                }
-                _ => UserPersistenceError::query("database error".to_owned()),
+        DieselError::DatabaseError(kind, _) => match kind {
+            DatabaseErrorKind::UniqueViolation => {
+                UserPersistenceError::query("unique constraint violation".to_owned())
             }
-        }
+            DatabaseErrorKind::ForeignKeyViolation => {
+                UserPersistenceError::query("foreign key violation".to_owned())
+            }
+            DatabaseErrorKind::NotNullViolation => {
+                UserPersistenceError::query("not null violation".to_owned())
+            }
+            DatabaseErrorKind::CheckViolation => {
+                UserPersistenceError::query("check constraint violation".to_owned())
+            }
+            DatabaseErrorKind::SerializationFailure => {
+                UserPersistenceError::query("serialization failure".to_owned())
+            }
+            DatabaseErrorKind::ReadOnlyTransaction => {
+                UserPersistenceError::query("read-only transaction".to_owned())
+            }
+            DatabaseErrorKind::ClosedConnection => {
+                UserPersistenceError::connection("database connection error".to_owned())
+            }
+            _ => UserPersistenceError::query("database error".to_owned()),
+        },
         _ => UserPersistenceError::query("database error".to_owned()),
     }
 }
