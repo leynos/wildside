@@ -35,5 +35,5 @@ supports it (OPA >= 0.59.0).
 
 If the script reports a missing dependency, install the binary via the system
 package manager or follow the instructions in the tool's official
-documentation. After installation rerun `make check-test-deps` to confirm that
+documentation. After installation, rerun `make check-test-deps` to confirm that
 the environment satisfies the version constraints.

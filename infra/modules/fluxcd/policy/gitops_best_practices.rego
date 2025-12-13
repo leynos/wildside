@@ -2,6 +2,13 @@ package fluxcd.policy
 
 import rego.v1
 
+manifest_after(rc) = manifest if {
+  after := rc.change.after
+  after != null
+  manifest := object.get(after, "manifest", null)
+  manifest != null
+}
+
 branch(spec) = object.get(object.get(spec, "ref", {}), "branch", "")
 
 url(spec) = object.get(spec, "url", "")
@@ -45,7 +52,7 @@ suspend(spec) = object.get(spec, "suspend", false)
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "GitRepository"
   spec := manifest.spec
   repo_url := url(spec)
@@ -57,7 +64,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "GitRepository"
   spec := manifest.spec
   branch(spec) == ""
@@ -68,7 +75,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "GitRepository"
   spec := manifest.spec
   reconcile := interval(spec)
@@ -80,7 +87,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "Kustomization"
   spec := manifest.spec
   prune(spec) == false
@@ -91,7 +98,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "Kustomization"
   spec := manifest.spec
   p := path(spec)
@@ -103,7 +110,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "Kustomization"
   spec := manifest.spec
   source_kind(spec) != "GitRepository"
@@ -114,7 +121,7 @@ deny contains msg if {
 deny contains msg if {
   rc := input.resource_changes[_]
   rc.type == "kubernetes_manifest"
-  manifest := rc.change.after.manifest
+  manifest := manifest_after(rc)
   manifest.kind == "Kustomization"
   spec := manifest.spec
   suspend(spec)

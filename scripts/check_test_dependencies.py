@@ -432,7 +432,12 @@ def format_failure_message(
             for dependency in missing_list
         )
 
-    lines.extend(_format_incompatible_dependencies(incompatible_list, bool(missing_list)))
+    lines.extend(
+        _format_incompatible_dependencies(
+            incompatible_list,
+            include_separator=bool(missing_list),
+        )
+    )
 
     lines.extend(
         [
@@ -451,6 +456,7 @@ def _format_requirement_label(required: str) -> str:
 
 def _format_incompatible_dependencies(
     incompatible: list[tuple[Dependency, str | None]],
+    *,
     include_separator: bool,
 ) -> list[str]:
     if not incompatible:
