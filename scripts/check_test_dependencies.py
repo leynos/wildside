@@ -25,7 +25,22 @@ class Dependency:
     name: str
     description: str
     minimum_version: str | None = None
+    minimum_opa_version: str | None = None
     version_args: tuple[str, ...] = ("--version",)
+
+    def minimum_version_label(self) -> str:
+        """Return a human-readable minimum version requirement for documentation."""
+
+        if self.minimum_version is None and self.minimum_opa_version is None:
+            return "n/a"
+
+        if self.minimum_version is None:
+            return f"OPA >= {self.minimum_opa_version}"
+
+        if self.minimum_opa_version is None:
+            return self.minimum_version
+
+        return f"{self.minimum_version} (OPA >= {self.minimum_opa_version})"
 
 
 @dataclass(frozen=True)
@@ -47,6 +62,7 @@ REQUIRED_DEPENDENCIES: tuple[Dependency, ...] = (
         "conftest",
         "Policy testing via Open Policy Agent",
         minimum_version="0.45.0",
+        minimum_opa_version="0.59.0",
     ),
 )
 
@@ -55,6 +71,9 @@ ALLOWED_DEPENDENCIES = {
 }
 
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)+)")
+OPA_VERSION_PATTERN = re.compile(
+    r"^OPA(?: Version)?:\s*v?(\d+(?:\.\d+)+)\s*$", re.MULTILINE
+)
 
 
 def collect_missing(dependencies: Iterable[Dependency]) -> list[Dependency]:
@@ -135,13 +154,19 @@ def is_version_sufficient(installed: str, minimum: str) -> bool:
     return installed_normalised >= minimum_normalised
 
 
-def parse_version_from_output(output: str) -> str | None:
+def parse_version_from_output(
+    output: str,
+    pattern: re.Pattern[str] = VERSION_PATTERN,
+) -> str | None:
     """Extract a dotted version string from command output.
 
     Parameters
     ----------
     output : str
         The raw output from a version command.
+    pattern : re.Pattern[str], optional
+        Regex to extract the dotted version string. The first capture group must
+        contain the version.
 
     Returns
     -------
@@ -152,12 +177,67 @@ def parse_version_from_output(output: str) -> str | None:
     --------
     >>> parse_version_from_output("tofu version 1.7.1")
     '1.7.1'
+    >>> parse_version_from_output("Conftest: 0.63.0\\nOPA: 1.9.0", pattern=OPA_VERSION_PATTERN)
+    '1.9.0'
     """
 
-    match = VERSION_PATTERN.search(output)
+    return _parse_version_from_pattern(output, pattern)
+
+
+def _parse_version_from_pattern(output: str, pattern: re.Pattern[str]) -> str | None:
+    """Extract a dotted version string from the first regex match group."""
+
+    match = pattern.search(output)
     if match is None:
         return None
-    return match.group(1)
+    try:
+        return match.group(1)
+    except IndexError:
+        return None
+
+
+def _validate_minimum_version(
+    dependency: Dependency,
+    probe: VersionProbeResult,
+) -> str | None:
+    if dependency.minimum_version is None:
+        return None
+    if probe.parsed_version is None:
+        return probe.raw_output or ""
+    if not is_version_sufficient(probe.parsed_version, dependency.minimum_version):
+        return probe.raw_output or probe.parsed_version
+    return None
+
+
+def _validate_minimum_opa_version(
+    dependency: Dependency,
+    probe: VersionProbeResult,
+) -> str | None:
+    if dependency.minimum_opa_version is None:
+        return None
+    if probe.raw_output is None:
+        return ""
+
+    opa_version = parse_version_from_output(probe.raw_output, pattern=OPA_VERSION_PATTERN)
+    if opa_version is None:
+        return probe.raw_output
+    if not is_version_sufficient(opa_version, dependency.minimum_opa_version):
+        return f"OPA {opa_version}"
+    return None
+
+
+def _validate_dependency_requirements(
+    dependency: Dependency,
+) -> str | None:
+    if dependency.minimum_version is None and dependency.minimum_opa_version is None:
+        return None
+
+    probe = probe_version(dependency)
+    version_failure = _validate_minimum_version(dependency, probe)
+    if version_failure is not None:
+        return version_failure
+
+    return _validate_minimum_opa_version(dependency, probe)
 
 
 def _validate_dependency_safety(dependency: Dependency) -> Dependency:
@@ -228,8 +308,9 @@ def _execute_version_command(dependency: Dependency) -> str | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
     output = process.stdout.strip() or process.stderr.strip()
@@ -295,21 +376,16 @@ def validate_dependencies(
     """
 
     missing = collect_missing(dependencies)
+    missing_names = {dependency.name for dependency in missing}
     incompatible: list[tuple[Dependency, str | None]] = []
 
     for dependency in dependencies:
-        if dependency in missing:
-            continue
-        if dependency.minimum_version is None:
+        if dependency.name in missing_names:
             continue
 
-        probe = probe_version(dependency)
-        if probe.parsed_version is None:
-            incompatible.append((dependency, probe.raw_output))
-            continue
-
-        if not is_version_sufficient(probe.parsed_version, dependency.minimum_version):
-            incompatible.append((dependency, probe.raw_output or probe.parsed_version))
+        failure = _validate_dependency_requirements(dependency)
+        if failure is not None:
+            incompatible.append((dependency, failure))
 
     return missing, incompatible
 
@@ -356,16 +432,12 @@ def format_failure_message(
             for dependency in missing_list
         )
 
-    if incompatible_list:
-        if missing_list:
-            lines.append("")
-        lines.append("Update the following tools to satisfy minimum supported versions:")
-        for dependency, detected in incompatible_list:
-            required = dependency.minimum_version or "unspecified"
-            observed = (detected or "unknown").splitlines()[0]
-            lines.append(
-                f"  - {dependency.name}: found {observed}, require >= {required}"
-            )
+    lines.extend(
+        _format_incompatible_dependencies(
+            incompatible_list,
+            include_separator=bool(missing_list),
+        )
+    )
 
     lines.extend(
         [
@@ -374,6 +446,34 @@ def format_failure_message(
         ]
     )
     return "\n".join(lines)
+
+
+def _format_requirement_label(required: str) -> str:
+    if required.startswith("OPA >="):
+        return required
+    return f">= {required}"
+
+
+def _format_incompatible_dependencies(
+    incompatible: list[tuple[Dependency, str | None]],
+    *,
+    include_separator: bool,
+) -> list[str]:
+    if not incompatible:
+        return []
+
+    lines: list[str] = []
+    if include_separator:
+        lines.append("")
+
+    lines.append("Update the following tools to satisfy minimum supported versions:")
+    for dependency, detected in incompatible:
+        required = dependency.minimum_version_label()
+        observed = (detected or "unknown").splitlines()[0]
+        requirement = _format_requirement_label(required)
+        lines.append(f"  - {dependency.name}: found {observed}, require {requirement}")
+
+    return lines
 
 
 def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
@@ -401,7 +501,7 @@ def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
         "| ---- | ---------------- | ------- |",
     ]
     lines.extend(
-        f"| `{dependency.name}` | {dependency.minimum_version or 'n/a'} | {dependency.description} |"
+        f"| `{dependency.name}` | {dependency.minimum_version_label()} | {dependency.description} |"
         for dependency in dependencies
     )
     return "\n".join(lines)
