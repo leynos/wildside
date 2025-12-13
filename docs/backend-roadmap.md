@@ -36,13 +36,13 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 - [x] Move the current `backend/src/api` module into `backend/src/inbound/http`,
   keeping handlers thin (request parsing → domain service call → response
-  mapping) and ensuring handler bodies only co-ordinate domain calls and
+  mapping) and ensuring handler bodies only coordinate domain calls and
   high-level session helpers (no direct framework-specific session
   manipulation).
 - [x] Rework the WebSocket entry point in `backend/src/ws` into an inbound
   adapter (`backend/src/inbound/ws`) that consumes domain events instead of
   building messages inline.
-- [ ] Introduce `backend/src/outbound/persistence`,
+- [x] Introduce `backend/src/outbound/persistence`,
   `backend/src/outbound/cache`, and `backend/src/outbound/queue` modules to
   encapsulate Diesel, Redis, and Apalis integrations once those backends are
   introduced, wiring them to the new port traits.
@@ -149,6 +149,25 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 
 Background workers and caches must interact with the domain exclusively via
 the queue, cache, and repository ports defined in Phase 0.
+
+### Step: Cache adapter (Redis)
+
+- [ ] Implement `RouteCache` using Redis with `bb8-redis` for connection
+  pooling, replacing the current stub adapter.
+- [ ] Add serialization with `serde_json` for cached plan payloads.
+- [ ] Implement time-to-live (TTL) with jitter (24-hour window, ±10%) to
+  prevent thundering herd on cache expiry.
+- [ ] Add contract tests for cache key canonicalization (sorted themes, rounded
+  coordinates, Secure Hash Algorithm 256-bit (SHA-256) key format).
+
+### Step: Queue adapter (Apalis)
+
+- [ ] Implement `RouteQueue` using Apalis with PostgreSQL backend, replacing
+  the current stub adapter.
+- [ ] Define job structs for `GenerateRouteJob` and `EnrichmentJob`.
+- [ ] Implement retry policies with exponential backoff and dead-letter
+  handling.
+- [ ] Propagate trace IDs through job metadata for observability.
 
 ### Step: Worker deployment
 

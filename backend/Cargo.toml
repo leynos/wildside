@@ -25,6 +25,11 @@ postgresql_embedded = { version = "0.20.0", features = ["tokio"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
 
+# Diesel ORM with PostgreSQL and async support
+diesel = { version = "2.2", features = ["postgres", "uuid", "chrono"] }
+diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
+chrono = { version = "0.4", features = ["serde"] }
+
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 futures-util = "0.3"
@@ -52,11 +57,15 @@ actix-rt = "2"
 actix-codec = "0.5.2"
 # Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3.8.1"
+env-lock = "1.0.1"
+futures = "0.3"
 rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
 rstest-bdd-macros = "0.1.0-alpha4"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
+# Diesel migration runner for integration tests
+diesel_migrations = "2.2"
 
 [[bin]]
 name = "openapi-dump"

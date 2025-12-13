@@ -42,6 +42,7 @@ terraform.rc
 
 # Misc
 .DS_Store
+.tmp
 bun.lockb
 **/__pycache__/
 *.py[cod]
@@ -73,5 +74,6 @@ coverage/
 *.sublime-project
 .history/
 .crush/
+.serena/
 
 deploy/k8s/backend/secret.env

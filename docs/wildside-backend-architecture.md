@@ -587,6 +587,18 @@ before invoking a port. Canonical examples include:
 > domain structs by hand. The change also unblocks future work that will swap
 > the hard-coded credential check for a real `UserRepository` because the
 > adapter already deals with a validated domain object.
+>
+> **Design decision (2025-12-10):** Introduce `backend::outbound` as the home
+> for driven adapter implementations. The module contains three sub-modules:
+> `persistence` (Diesel/PostgreSQL), `cache` (Redis stub), and `queue` (Apalis
+> stub). The persistence adapter provides `DieselUserRepository` implementing
+> `UserRepository` with async support via `diesel-async` and `bb8` connection
+> pooling. Internal Diesel models (`UserRow`, `NewUserRow`) remain private to
+> the adapter; only domain types cross the boundary. Stub adapters for cache
+> and queue implement their respective port traits with no-op behaviour,
+> allowing the application to compile and run without Redis or job queue
+> infrastructure. Migrations reside in `backend/migrations/` and define the
+> PostgreSQL schema including audit timestamps and auto-update triggers.
 
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents
@@ -1540,3 +1552,167 @@ handlers call only `RouteService`; the service then coordinates every outbound
 port, ensuring cache, persistence, job dispatch, metrics, and error conversion
 stay inside the hexagon. Follow the same pattern for user management, tile
 preparation, and analytics ports to complete the migration.
+
+### Outbound Adapter Class Diagram
+
+The following diagram shows the relationship between domain ports (interfaces),
+domain types, and their concrete outbound adapter implementations:
+
+```mermaid
+classDiagram
+    %% Domain ports (interfaces)
+    class UserRepository {
+        <<interface>>
+        +async upsert(user User) Result~(), UserPersistenceError~
+        +async find_by_id(id UserId) Result~Option~User~~, UserPersistenceError~
+    }
+
+    class RouteCache {
+        <<interface>>
+        +Plan
+        +async get(key RouteCacheKey) Result~Option~Plan~~, RouteCacheError~
+        +async put(key RouteCacheKey, plan Plan) Result~(), RouteCacheError~
+    }
+
+    class RouteQueue {
+        <<interface>>
+        +Plan
+        +async enqueue(plan Plan) Result~(), JobDispatchError~
+    }
+
+    %% Domain types used at the boundary
+    class User {
+        +UserId id
+        +DisplayName display_name
+        +new(id UserId, display_name DisplayName) User
+        +id() UserId
+        +display_name() DisplayName
+    }
+
+    class UserId {
+        +new(raw String) Result~UserId, DomainError~
+        +as_uuid() Uuid
+    }
+
+    class DisplayName {
+        +new(raw String) Result~DisplayName, DomainError~
+        +as_ref() String
+    }
+
+    class RouteCacheKey {
+        +new(raw String) Result~RouteCacheKey, DomainError~
+    }
+
+    %% Outbound persistence adapter
+    class DieselUserRepository {
+        +DbPool pool
+        +new(pool DbPool) DieselUserRepository
+        +async upsert(user User) Result~(), UserPersistenceError~
+        +async find_by_id(id UserId) Result~Option~User~~, UserPersistenceError~
+    }
+
+    class DbPool {
+        -Pool_AsyncPgConnection_ inner
+        +async new(config PoolConfig) Result~DbPool, PoolError~
+        +async get() Result~PooledConnection_AsyncPgConnection_, PoolError~
+    }
+
+    class PoolConfig {
+        -String database_url
+        -u32 max_size
+        -Option~u32~ min_idle
+        -Duration connection_timeout
+        +new(database_url String) PoolConfig
+        +with_max_size(max_size u32) PoolConfig
+        +with_min_idle(min_idle Option~u32~) PoolConfig
+        +with_connection_timeout(timeout Duration) PoolConfig
+        +database_url() String
+    }
+
+    class PoolError {
+        <<enum>>
+        Checkout
+        Build
+        +checkout(message String) PoolError
+        +build(message String) PoolError
+    }
+
+    class UserRow {
+        +Uuid id
+        +String display_name
+        +DateTime created_at
+        +DateTime updated_at
+    }
+
+    class NewUserRow {
+        +Uuid id
+        +String display_name
+    }
+
+    %% Outbound cache stub
+    class StubRouteCache {
+        +new() StubRouteCache
+        +async get(key RouteCacheKey) Result~Option~StubPlan~~, RouteCacheError~
+        +async put(key RouteCacheKey, plan StubPlan) Result~(), RouteCacheError~
+    }
+
+    class StubPlan {
+    }
+
+    %% Outbound queue stub
+    class StubRouteQueue {
+        +new() StubRouteQueue
+        +async enqueue(plan StubPlan) Result~(), JobDispatchError~
+    }
+
+    %% Relationships
+    UserRepository <|.. DieselUserRepository
+    RouteCache <|.. StubRouteCache
+    RouteQueue <|.. StubRouteQueue
+
+    DieselUserRepository o-- DbPool
+    DbPool --> PoolConfig
+    DbPool --> PoolError
+
+    DieselUserRepository --> UserRow
+    DieselUserRepository --> NewUserRow
+    DieselUserRepository --> User
+    DieselUserRepository --> UserId
+    DieselUserRepository --> DisplayName
+
+    StubRouteCache --> RouteCacheKey
+    StubRouteCache --> StubPlan
+    StubRouteQueue --> StubPlan
+```
+
+### User Repository Sequence Diagram
+
+The following sequence diagram illustrates the flow when a service queries the
+`DieselUserRepository` for a user by ID, showing connection pool checkout,
+database interaction, and error handling paths:
+
+```mermaid
+sequenceDiagram
+    actor Service
+    participant Repo as DieselUserRepository
+    participant Pool as DbPool
+    participant DB as PostgreSQL
+
+    Service->>Repo: find_by_id(user_id)
+    Repo->>Pool: get()
+    Pool-->>Repo: PooledConnection or PoolError
+    alt pool error
+        Repo-->>Service: Err(UserPersistenceError::connection)
+    else pool ok
+        Repo->>DB: SELECT FROM users WHERE id = user_id
+        DB-->>Repo: UserRow or NotFound or Error
+        alt query error
+            Repo-->>Service: Err(UserPersistenceError::query)
+        else not found
+            Repo-->>Service: Ok(None)
+        else row found
+            Repo->>Repo: row_to_user(UserRow)
+            Repo-->>Service: Ok(Some(User))
+        end
+    end
+```

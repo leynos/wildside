@@ -2,14 +2,28 @@
 
 use std::sync::{Arc, Mutex};
 
-use actix_rt::System;
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
+use diesel::pg::PgConnection;
+use diesel::Connection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use futures::executor::block_on;
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use uuid::Uuid;
+
+#[path = "support/pg_embed.rs"]
+mod pg_embed;
+
+mod support;
+
+use pg_embed::test_cluster;
+use support::format_postgres_error;
+
+/// Embedded migrations from the backend/migrations directory.
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 const CONTRACT_DB: &str = "ports_contract";
 
@@ -36,7 +50,7 @@ struct PgUserRepository {
 impl PgUserRepository {
     fn connect(url: &str) -> Result<Self, UserPersistenceError> {
         let client = Client::connect(url, NoTls)
-            .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+            .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
         })
@@ -56,7 +70,7 @@ impl UserRepository for PgUserRepository {
                 &[id, &display],
             )
             .map(|_| ())
-            .map_err(|err| UserPersistenceError::query(err.to_string()))
+            .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))
     }
 
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError> {
@@ -66,7 +80,7 @@ impl UserRepository for PgUserRepository {
                 "SELECT id, display_name FROM users WHERE id = $1",
                 &[id.as_uuid()],
             )
-            .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+            .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
 
         if let Some(row) = result {
             let id: Uuid = row.get(0);
@@ -93,7 +107,7 @@ struct RepoContext {
 type SharedContext = Arc<Mutex<RepoContext>>;
 
 fn init_repo_context() -> Result<RepoContext, String> {
-    let cluster = TestCluster::new().map_err(|err| err.to_string())?;
+    let cluster = test_cluster()?;
     reset_database(&cluster).map_err(|err| err.to_string())?;
     let database_url = cluster.connection().database_url(CONTRACT_DB);
     migrate_schema(&database_url).map_err(|err| err.to_string())?;
@@ -109,13 +123,26 @@ fn init_repo_context() -> Result<RepoContext, String> {
     })
 }
 
+/// Returns true if the `SKIP_TEST_CLUSTER` env var is set to a truthy value.
+///
+/// Truthy values: "1", "true", "yes" (case-insensitive).
+fn should_skip_on_cluster_failure() -> bool {
+    std::env::var("SKIP_TEST_CLUSTER")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
 #[fixture]
 fn repo_world() -> Option<SharedContext> {
     match init_repo_context() {
         Ok(context) => Some(Arc::new(Mutex::new(context))),
         Err(reason) => {
-            eprintln!("SKIP-TEST-CLUSTER: {reason}");
-            None
+            if should_skip_on_cluster_failure() {
+                eprintln!("SKIP-TEST-CLUSTER: {reason}");
+                None
+            } else {
+                panic!("Test cluster setup failed: {reason}. Set SKIP_TEST_CLUSTER=1 to skip.");
+            }
         }
     }
 }
@@ -130,7 +157,7 @@ fn the_repository_upserts_the_user(repo_world: SharedContext, user: User) {
         ctx.repository.clone()
     };
     let stored_user = user.clone();
-    let result = System::new().block_on(async move { repo.upsert(&user).await });
+    let result = block_on(async move { repo.upsert(&user).await });
     let mut ctx = repo_world.lock().expect("context lock");
     match result {
         Ok(()) => {
@@ -154,7 +181,7 @@ fn the_repository_fetches_the_user(repo_world: SharedContext) {
             .expect("user should have been persisted");
         (ctx.repository.clone(), id)
     };
-    let result = System::new().block_on(async move { repo.find_by_id(&user_id).await });
+    let result = block_on(async move { repo.find_by_id(&user_id).await });
     let mut ctx = repo_world.lock().expect("context lock");
     match result {
         Ok(value) => {
@@ -234,34 +261,32 @@ fn user_repository_reports_errors_when_schema_missing(
 fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
     let admin_url = cluster.connection().database_url("postgres");
     let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
+    // `DROP DATABASE` cannot run inside a transaction block. When multiple SQL
+    // statements are sent in a single `batch_execute`, Postgres treats it as a
+    // transaction block and rejects `DROP DATABASE`.
     client
-        .batch_execute(&format!(
-            "DROP DATABASE IF EXISTS \"{CONTRACT_DB}\"; CREATE DATABASE \"{CONTRACT_DB}\";"
-        ))
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{CONTRACT_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
+    client
+        .batch_execute(&format!("CREATE DATABASE \"{CONTRACT_DB}\";"))
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
 
 fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
-    let mut client = Client::connect(url, NoTls)
+    let mut conn = PgConnection::establish(url)
         .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
-    client
-        .batch_execute(
-            "CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY,
-                display_name TEXT NOT NULL
-            );",
-        )
+    conn.run_pending_migrations(MIGRATIONS)
         .map_err(|err| UserPersistenceError::query(err.to_string()))?;
     Ok(())
 }
 
 fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
     let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
     client
         .batch_execute("DROP TABLE IF EXISTS users;")
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
 }
