@@ -432,20 +432,7 @@ def format_failure_message(
             for dependency in missing_list
         )
 
-    if incompatible_list:
-        if missing_list:
-            lines.append("")
-        lines.append("Update the following tools to satisfy minimum supported versions:")
-        for dependency, detected in incompatible_list:
-            required = dependency.minimum_version_label()
-            observed = (detected or "unknown").splitlines()[0]
-            if required.startswith("OPA >="):
-                requirement = required
-            else:
-                requirement = f">= {required}"
-            lines.append(
-                f"  - {dependency.name}: found {observed}, require {requirement}"
-            )
+    lines.extend(_format_incompatible_dependencies(incompatible_list, bool(missing_list)))
 
     lines.extend(
         [
@@ -454,6 +441,33 @@ def format_failure_message(
         ]
     )
     return "\n".join(lines)
+
+
+def _format_requirement_label(required: str) -> str:
+    if required.startswith("OPA >="):
+        return required
+    return f">= {required}"
+
+
+def _format_incompatible_dependencies(
+    incompatible: list[tuple[Dependency, str | None]],
+    include_separator: bool,
+) -> list[str]:
+    if not incompatible:
+        return []
+
+    lines: list[str] = []
+    if include_separator:
+        lines.append("")
+
+    lines.append("Update the following tools to satisfy minimum supported versions:")
+    for dependency, detected in incompatible:
+        required = dependency.minimum_version_label()
+        observed = (detected or "unknown").splitlines()[0]
+        requirement = _format_requirement_label(required)
+        lines.append(f"  - {dependency.name}: found {observed}, require {requirement}")
+
+    return lines
 
 
 def format_markdown_table(dependencies: Sequence[Dependency]) -> str:
