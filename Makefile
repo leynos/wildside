@@ -372,12 +372,18 @@ traefik-policy: conftest tofu
 	if [ -z "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
 		echo "Skipping traefik-policy; set TRAEFIK_KUBECONFIG_PATH to run"; \
 	else \
-		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan -out=tfplan.binary -detailed-exitcode \
+		set -euo pipefail; \
+		tmpdir=$$(mktemp -d); \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		status=0; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan \
+			-out="$$tmpdir/tfplan.binary" \
+			-detailed-exitcode \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
 			-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" \
-			|| test $$? -eq 2; \
-		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json tfplan.binary > infra/modules/traefik/examples/basic/plan.json; \
-		conftest test infra/modules/traefik/examples/basic/plan.json --policy infra/modules/traefik/policy; \
-		rm -f infra/modules/traefik/examples/basic/tfplan.binary infra/modules/traefik/examples/basic/plan.json; \
+			|| status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/traefik/policy --fail-on-warn "$$tmpdir/plan.json"; \
 	fi

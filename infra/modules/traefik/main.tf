@@ -9,10 +9,22 @@ locals {
   helm_release_name   = trimspace(var.helm_release_name)
   cluster_issuer_name = trimspace(var.cluster_issuer_name)
   dashboard_hostname  = var.dashboard_hostname == null ? null : trimspace(var.dashboard_hostname)
-  helm_timeout        = var.helm_timeout
-  helm_inline_values  = var.helm_values
-  helm_value_files    = [for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""]
-  helm_values         = concat(local.helm_inline_values, [for path in local.helm_value_files : file(path)])
+  chart_repository    = trimspace(var.chart_repository)
+  chart_name          = trimspace(var.chart_name)
+  chart_version       = trimspace(var.chart_version)
+  service_type        = trimspace(var.service_type)
+  external_traffic_policy = (
+    var.external_traffic_policy == null ? null : trimspace(var.external_traffic_policy)
+  )
+  ingress_class_name               = trimspace(var.ingress_class_name)
+  acme_email                       = trimspace(var.acme_email)
+  acme_server                      = trimspace(var.acme_server)
+  cloudflare_api_token_secret_name = trimspace(var.cloudflare_api_token_secret_name)
+  cloudflare_api_token_secret_key  = trimspace(var.cloudflare_api_token_secret_key)
+  helm_timeout                     = var.helm_timeout
+  helm_inline_values               = var.helm_values
+  helm_value_files                 = [for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""]
+  helm_values                      = concat(local.helm_inline_values, [for path in local.helm_value_files : file(path)])
 
   # Construct default Helm values based on input variables.
   # These are merged with any user-provided values, with user values taking precedence.
@@ -20,13 +32,13 @@ locals {
     ingressClass = {
       enabled        = true
       isDefaultClass = var.ingress_class_default
-      name           = var.ingress_class_name
+      name           = local.ingress_class_name
     }
     service = merge(
-      { type = var.service_type },
-      var.service_type == "LoadBalancer" ? {
+      { type = local.service_type },
+      local.service_type == "LoadBalancer" ? {
         spec = {
-          externalTrafficPolicy = var.external_traffic_policy
+          externalTrafficPolicy = local.external_traffic_policy
         }
       } : {}
     )
@@ -79,9 +91,9 @@ resource "kubernetes_namespace" "traefik" {
 
 resource "helm_release" "traefik" {
   name       = local.helm_release_name
-  repository = var.chart_repository
-  chart      = var.chart_name
-  version    = var.chart_version
+  repository = local.chart_repository
+  chart      = local.chart_name
+  version    = local.chart_version
   namespace  = var.create_namespace ? kubernetes_namespace.traefik[0].metadata[0].name : local.namespace
   timeout    = local.helm_timeout
   wait       = var.helm_wait
@@ -106,8 +118,8 @@ resource "kubernetes_manifest" "cluster_issuer" {
     }
     spec = {
       acme = {
-        server = var.acme_server
-        email  = var.acme_email
+        server = local.acme_server
+        email  = local.acme_email
         privateKeySecretRef = {
           name = local.cluster_issuer_name
         }
@@ -115,8 +127,8 @@ resource "kubernetes_manifest" "cluster_issuer" {
           dns01 = {
             cloudflare = {
               apiTokenSecretRef = {
-                name = var.cloudflare_api_token_secret_name
-                key  = var.cloudflare_api_token_secret_key
+                name = local.cloudflare_api_token_secret_name
+                key  = local.cloudflare_api_token_secret_key
               }
             }
           }

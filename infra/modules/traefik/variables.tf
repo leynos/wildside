@@ -18,6 +18,7 @@ variable "create_namespace" {
   description = "Whether the module should create the Traefik namespace"
   type        = bool
   default     = true
+  nullable    = false
 }
 
 variable "chart_repository" {
@@ -78,12 +79,14 @@ variable "helm_wait" {
   description = "Whether to wait for the Helm release to report success"
   type        = bool
   default     = true
+  nullable    = false
 }
 
 variable "helm_timeout" {
   description = "Timeout (in seconds) for the Helm release operation"
   type        = number
   default     = 600
+  nullable    = false
 
   validation {
     condition     = var.helm_timeout > 0
@@ -95,6 +98,7 @@ variable "helm_values" {
   description = "Inline YAML values passed to the Traefik Helm release"
   type        = list(string)
   default     = []
+  nullable    = false
 }
 
 variable "helm_values_files" {
@@ -117,6 +121,7 @@ variable "service_type" {
   description = "Kubernetes service type for Traefik (LoadBalancer, ClusterIP, or NodePort)"
   type        = string
   default     = "LoadBalancer"
+  nullable    = false
 
   validation {
     condition     = contains(["LoadBalancer", "ClusterIP", "NodePort"], var.service_type)
@@ -128,6 +133,7 @@ variable "external_traffic_policy" {
   description = "External traffic policy for LoadBalancer service (Local preserves client IPs)"
   type        = string
   default     = "Local"
+  nullable    = false
 
   validation {
     condition     = contains(["Local", "Cluster"], var.external_traffic_policy)
@@ -150,12 +156,14 @@ variable "ingress_class_default" {
   description = "Whether the Traefik IngressClass should be the cluster default"
   type        = bool
   default     = false
+  nullable    = false
 }
 
 variable "dashboard_enabled" {
   description = "Whether to enable the Traefik dashboard"
   type        = bool
   default     = false
+  nullable    = false
 }
 
 variable "dashboard_hostname" {
@@ -185,18 +193,21 @@ variable "http_to_https_redirect" {
   description = "Whether to redirect HTTP traffic to HTTPS"
   type        = bool
   default     = true
+  nullable    = false
 }
 
 variable "prometheus_metrics_enabled" {
   description = "Whether to enable Prometheus metrics endpoint"
   type        = bool
   default     = true
+  nullable    = false
 }
 
 variable "service_monitor_enabled" {
   description = "Whether to create a ServiceMonitor for Prometheus Operator"
   type        = bool
   default     = true
+  nullable    = false
 
   validation {
     condition     = var.service_monitor_enabled == false || var.prometheus_metrics_enabled == true
@@ -217,6 +228,7 @@ variable "tolerations" {
     operator = "Exists"
     effect   = "NoSchedule"
   }]
+  nullable = false
 }
 
 variable "acme_email" {

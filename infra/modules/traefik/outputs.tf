@@ -5,18 +5,18 @@ output "namespace" {
 
 output "helm_release_name" {
   description = "Name of the Traefik Helm release"
-  value       = helm_release.traefik.name
+  value       = local.helm_release_name
 }
 
 output "cluster_issuer_name" {
   description = "Name of the ClusterIssuer for certificate management"
-  value       = kubernetes_manifest.cluster_issuer.manifest.metadata.name
+  value       = local.cluster_issuer_name
 }
 
 output "cluster_issuer_ref" {
   description = "Reference object for the ClusterIssuer suitable for use in Certificate resources"
   value = {
-    name  = kubernetes_manifest.cluster_issuer.manifest.metadata.name
+    name  = local.cluster_issuer_name
     kind  = "ClusterIssuer"
     group = "cert-manager.io"
   }
@@ -24,12 +24,10 @@ output "cluster_issuer_ref" {
 
 output "dashboard_hostname" {
   description = "Hostname for the Traefik dashboard (null if dashboard is disabled)"
-  value = var.dashboard_enabled && var.dashboard_hostname != null ? (
-    trimspace(var.dashboard_hostname)
-  ) : null
+  value       = var.dashboard_enabled ? local.dashboard_hostname : null
 }
 
 output "ingress_class_name" {
   description = "Name of the IngressClass created by Traefik"
-  value       = var.ingress_class_name
+  value       = local.ingress_class_name
 }
