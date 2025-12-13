@@ -81,6 +81,27 @@ impl UserId {
         Self::from_owned(id.as_ref().to_owned())
     }
 
+    /// Construct a [`UserId`] directly from a UUID.
+    ///
+    /// This is useful when the UUID has already been validated (for example,
+    /// when loading a row from the database) and avoids reparsing a string
+    /// representation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::UserId;
+    /// # use uuid::Uuid;
+    /// let uuid = Uuid::parse_str("11111111-1111-1111-1111-111111111111").expect("valid UUID");
+    /// let id = UserId::from_uuid(uuid);
+    /// assert_eq!(id.as_uuid(), &uuid);
+    /// assert_eq!(id.as_ref(), "11111111-1111-1111-1111-111111111111");
+    /// ```
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        let raw = uuid.to_string();
+        Self(uuid, raw)
+    }
+
     /// Generate a new random [`UserId`].
     pub fn random() -> Self {
         let uuid = Uuid::new_v4();

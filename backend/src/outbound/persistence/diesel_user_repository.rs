@@ -103,10 +103,7 @@ fn map_diesel_error(error: diesel::result::Error) -> UserPersistenceError {
 /// Returns `UserPersistenceError::Query` if the row data fails domain validation
 /// (e.g., invalid UUID format or display name constraints).
 fn row_to_user(row: UserRow) -> Result<User, UserPersistenceError> {
-    let user_id = UserId::new(row.id.to_string()).map_err(|err| {
-        debug!(?err, "invalid user id loaded from database");
-        UserPersistenceError::query("invalid user record".to_owned())
-    })?;
+    let user_id = UserId::from_uuid(row.id);
     let display_name = DisplayName::new(row.display_name).map_err(|err| {
         debug!(?err, "invalid display name loaded from database");
         UserPersistenceError::query("invalid user record".to_owned())

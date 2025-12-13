@@ -170,6 +170,15 @@ fn try_new_accepts_valid_inputs(valid_id: TestUserId, valid_display_name: TestDi
 }
 
 #[rstest]
+fn user_id_from_uuid_avoids_round_trip_parse() {
+    let uuid = uuid::Uuid::parse_str(VALID_ID).expect("valid UUID");
+    let user_id = UserId::from_uuid(uuid);
+
+    assert_eq!(user_id.as_uuid(), &uuid);
+    assert_eq!(user_id.as_ref(), VALID_ID);
+}
+
+#[rstest]
 fn display_name_allows_alphanumerics_spaces_and_underscores(valid_id: TestUserId) {
     let name = "Alice_Bob 123";
     let user = User::try_from_strings(valid_id.as_ref(), name).expect("valid name");
