@@ -30,9 +30,6 @@ mod support;
 use pg_embed::test_cluster;
 use support::{drop_users_table, handle_cluster_setup_failure, migrate_schema, reset_database};
 
-/// Embedded migrations from the backend/migrations directory.
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-
 const TEST_DB: &str = "diesel_user_repo_test";
 
 // -----------------------------------------------------------------------------

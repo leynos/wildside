@@ -11,7 +11,10 @@
 /// Truthy values: "1", "true", "yes" (case-insensitive).
 pub fn should_skip_test_cluster() -> bool {
     std::env::var("SKIP_TEST_CLUSTER")
-        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .map(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            matches!(value.as_str(), "1" | "true" | "yes")
+        })
         .unwrap_or(false)
 }
 
