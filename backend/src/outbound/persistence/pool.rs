@@ -81,12 +81,27 @@ impl PoolConfig {
 
     /// Set the maximum number of connections in the pool.
     pub fn with_max_size(mut self, max_size: u32) -> Self {
+        assert!(max_size > 0, "max_size must be greater than 0");
+        if let Some(min_idle) = self.min_idle {
+            assert!(
+                min_idle <= max_size,
+                "min_idle ({min_idle}) must not exceed max_size ({max_size}); \
+                 set min_idle first if lowering max_size"
+            );
+        }
         self.max_size = max_size;
         self
     }
 
     /// Set the minimum number of idle connections to maintain.
     pub fn with_min_idle(mut self, min_idle: Option<u32>) -> Self {
+        if let Some(min_idle) = min_idle {
+            assert!(
+                min_idle <= self.max_size,
+                "min_idle ({min_idle}) must not exceed max_size ({})",
+                self.max_size
+            );
+        }
         self.min_idle = min_idle;
         self
     }
@@ -181,6 +196,26 @@ mod tests {
         assert_eq!(config.max_size, 20);
         assert_eq!(config.min_idle, Some(5));
         assert_eq!(config.connection_timeout, Duration::from_secs(60));
+    }
+
+    #[rstest]
+    #[should_panic(expected = "max_size must be greater than 0")]
+    fn pool_config_rejects_zero_max_size() {
+        let _ = PoolConfig::new("postgres://localhost/test").with_max_size(0);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "must not exceed max_size")]
+    fn pool_config_rejects_min_idle_exceeding_max_size() {
+        let _ = PoolConfig::new("postgres://localhost/test").with_min_idle(Some(11));
+    }
+
+    #[rstest]
+    #[should_panic(expected = "must not exceed max_size")]
+    fn pool_config_rejects_lowering_max_size_below_min_idle() {
+        let _ = PoolConfig::new("postgres://localhost/test")
+            .with_min_idle(Some(5))
+            .with_max_size(4);
     }
 
     #[rstest]
