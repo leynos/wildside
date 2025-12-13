@@ -14,8 +14,12 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use uuid::Uuid;
 
+#[path = "support/pg_embed.rs"]
+mod pg_embed;
+
 mod support;
 
+use pg_embed::test_cluster;
 use support::format_postgres_error;
 
 /// Embedded migrations from the backend/migrations directory.
@@ -46,7 +50,7 @@ struct PgUserRepository {
 impl PgUserRepository {
     fn connect(url: &str) -> Result<Self, UserPersistenceError> {
         let client = Client::connect(url, NoTls)
-            .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
+            .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
         })
@@ -66,7 +70,7 @@ impl UserRepository for PgUserRepository {
                 &[id, &display],
             )
             .map(|_| ())
-            .map_err(|err| UserPersistenceError::query(err.to_string()))
+            .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))
     }
 
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError> {
@@ -76,7 +80,7 @@ impl UserRepository for PgUserRepository {
                 "SELECT id, display_name FROM users WHERE id = $1",
                 &[id.as_uuid()],
             )
-            .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+            .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
 
         if let Some(row) = result {
             let id: Uuid = row.get(0);
@@ -103,7 +107,7 @@ struct RepoContext {
 type SharedContext = Arc<Mutex<RepoContext>>;
 
 fn init_repo_context() -> Result<RepoContext, String> {
-    let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
+    let cluster = test_cluster()?;
     reset_database(&cluster).map_err(|err| err.to_string())?;
     let database_url = cluster.connection().database_url(CONTRACT_DB);
     migrate_schema(&database_url).map_err(|err| err.to_string())?;
@@ -119,13 +123,26 @@ fn init_repo_context() -> Result<RepoContext, String> {
     })
 }
 
+/// Returns true if the `SKIP_TEST_CLUSTER` env var is set to a truthy value.
+///
+/// Truthy values: "1", "true", "yes" (case-insensitive).
+fn should_skip_on_cluster_failure() -> bool {
+    std::env::var("SKIP_TEST_CLUSTER")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
 #[fixture]
 fn repo_world() -> Option<SharedContext> {
     match init_repo_context() {
         Ok(context) => Some(Arc::new(Mutex::new(context))),
         Err(reason) => {
-            eprintln!("SKIP-TEST-CLUSTER: {reason}");
-            None
+            if should_skip_on_cluster_failure() {
+                eprintln!("SKIP-TEST-CLUSTER: {reason}");
+                None
+            } else {
+                panic!("Test cluster setup failed: {reason}. Set SKIP_TEST_CLUSTER=1 to skip.");
+            }
         }
     }
 }

@@ -51,7 +51,7 @@ fn create_unique_pg_embed_dirs() -> Result<(PathBuf, PathBuf), std::io::Error> {
 /// unique directories under the target directory so the bootstrap works in
 /// sandboxed environments.
 pub fn test_cluster() -> Result<TestCluster, String> {
-    let lock = PG_EMBED_BOOTSTRAP_LOCK
+    let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|err| err.into_inner());
@@ -75,6 +75,5 @@ pub fn test_cluster() -> Result<TestCluster, String> {
     };
 
     let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
-    drop(lock);
     Ok(cluster)
 }
