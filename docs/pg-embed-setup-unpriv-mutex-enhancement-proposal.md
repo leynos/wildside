@@ -140,8 +140,8 @@ There are two reasonable implementation shapes.
 
 This matches the intuitive contract:
 
-- If you have a live cluster guard, the process environment required for that
-  cluster is stable.
+- If a test holds a live cluster guard, the process environment required for
+  that cluster is stable.
 
 #### Option B: expose explicit lock helpers (future extension)
 
