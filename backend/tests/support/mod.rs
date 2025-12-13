@@ -5,6 +5,9 @@
 //! provides a small, dependency-free (relative to the test crate) home for
 //! common test-only utilities.
 
+mod cluster_skip;
+mod embedded_postgres;
+
 /// Render a `postgres` error with enough detail to be useful in CI logs.
 ///
 /// The `postgres::Error` `Display` implementation often collapses database
@@ -38,3 +41,6 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
 
     summary
 }
+
+pub use cluster_skip::handle_cluster_setup_failure;
+pub use embedded_postgres::{drop_users_table, migrate_schema, reset_database};

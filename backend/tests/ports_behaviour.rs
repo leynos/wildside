@@ -4,9 +4,6 @@ use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
-use diesel::pg::PgConnection;
-use diesel::Connection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use futures::executor::block_on;
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
@@ -21,9 +18,7 @@ mod support;
 
 use pg_embed::test_cluster;
 use support::format_postgres_error;
-
-/// Embedded migrations from the backend/migrations directory.
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+use support::{drop_users_table, handle_cluster_setup_failure, migrate_schema, reset_database};
 
 const CONTRACT_DB: &str = "ports_contract";
 
@@ -108,7 +103,7 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 
 fn init_repo_context() -> Result<RepoContext, String> {
     let cluster = test_cluster()?;
-    reset_database(&cluster).map_err(|err| err.to_string())?;
+    reset_database(&cluster, CONTRACT_DB).map_err(|err| err.to_string())?;
     let database_url = cluster.connection().database_url(CONTRACT_DB);
     migrate_schema(&database_url).map_err(|err| err.to_string())?;
     let repository = PgUserRepository::connect(&database_url).map_err(|err| err.to_string())?;
@@ -123,27 +118,11 @@ fn init_repo_context() -> Result<RepoContext, String> {
     })
 }
 
-/// Returns true if the `SKIP_TEST_CLUSTER` env var is set to a truthy value.
-///
-/// Truthy values: "1", "true", "yes" (case-insensitive).
-fn should_skip_on_cluster_failure() -> bool {
-    std::env::var("SKIP_TEST_CLUSTER")
-        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
-}
-
 #[fixture]
 fn repo_world() -> Option<SharedContext> {
     match init_repo_context() {
         Ok(context) => Some(Arc::new(Mutex::new(context))),
-        Err(reason) => {
-            if should_skip_on_cluster_failure() {
-                eprintln!("SKIP-TEST-CLUSTER: {reason}");
-                None
-            } else {
-                panic!("Test cluster setup failed: {reason}. Set SKIP_TEST_CLUSTER=1 to skip.");
-            }
-        }
+        Err(reason) => handle_cluster_setup_failure(reason),
     }
 }
 
@@ -256,37 +235,4 @@ fn user_repository_reports_errors_when_schema_missing(
     the_users_table_is_dropped(repo_world.clone());
     the_repository_upserts_the_user(repo_world.clone(), sample_user);
     persistence_fails_with_a_query_error(repo_world);
-}
-
-fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
-    let admin_url = cluster.connection().database_url("postgres");
-    let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
-    // `DROP DATABASE` cannot run inside a transaction block. When multiple SQL
-    // statements are sent in a single `batch_execute`, Postgres treats it as a
-    // transaction block and rejects `DROP DATABASE`.
-    client
-        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{CONTRACT_DB}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    client
-        .batch_execute(&format!("CREATE DATABASE \"{CONTRACT_DB}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    Ok(())
-}
-
-fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
-    let mut conn = PgConnection::establish(url)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
-    conn.run_pending_migrations(MIGRATIONS)
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
-    Ok(())
-}
-
-fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
-    let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
-    client
-        .batch_execute("DROP TABLE IF EXISTS users;")
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    Ok(())
 }
