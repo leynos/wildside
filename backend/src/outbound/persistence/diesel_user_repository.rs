@@ -52,8 +52,9 @@ impl DieselUserRepository {
 /// Map pool errors to domain persistence errors.
 fn map_pool_error(error: PoolError) -> UserPersistenceError {
     match error {
-        PoolError::Checkout { message } => UserPersistenceError::connection(message),
-        PoolError::Build { message } => UserPersistenceError::connection(message),
+        PoolError::Checkout { message } | PoolError::Build { message } => {
+            UserPersistenceError::connection(message)
+        }
     }
 }
 
