@@ -240,12 +240,15 @@ mod tests {
         assert!(build_err.to_string().contains("invalid URL"));
     }
 
-    #[tokio::test]
-    async fn db_pool_new_rejects_zero_max_size() {
+    async fn assert_pool_config_rejected(
+        max_size: u32,
+        min_idle: Option<u32>,
+        expected_error_substring: &str,
+    ) {
         let config = PoolConfig {
             database_url: "postgres://localhost/test".to_owned(),
-            max_size: 0,
-            min_idle: Some(0),
+            max_size,
+            min_idle,
             connection_timeout: Duration::from_secs(30),
         };
 
@@ -257,34 +260,21 @@ mod tests {
                     matches!(error, PoolError::Build { .. }),
                     "expected build error, got {error:?}"
                 );
-                assert!(error
-                    .to_string()
-                    .contains("max_size must be greater than 0"));
+                assert!(
+                    error.to_string().contains(expected_error_substring),
+                    "expected error message to contain {expected_error_substring:?}, got: {error}"
+                );
             }
         }
     }
 
     #[tokio::test]
-    async fn db_pool_new_rejects_min_idle_exceeding_max_size() {
-        let config = PoolConfig {
-            database_url: "postgres://localhost/test".to_owned(),
-            max_size: 1,
-            min_idle: Some(2),
-            connection_timeout: Duration::from_secs(30),
-        };
+    async fn db_pool_new_rejects_zero_max_size() {
+        assert_pool_config_rejected(0, Some(0), "max_size must be greater than 0").await;
+    }
 
-        let result = DbPool::new(config).await;
-        match result {
-            Ok(_) => panic!("expected build error for invalid config"),
-            Err(error) => {
-                assert!(
-                    matches!(error, PoolError::Build { .. }),
-                    "expected build error, got {error:?}"
-                );
-                assert!(error
-                    .to_string()
-                    .contains("min_idle (2) must not exceed max_size (1)"));
-            }
-        }
+    #[tokio::test]
+    async fn db_pool_new_rejects_min_idle_exceeding_max_size() {
+        assert_pool_config_rejected(1, Some(2), "min_idle (2) must not exceed max_size (1)").await;
     }
 }
