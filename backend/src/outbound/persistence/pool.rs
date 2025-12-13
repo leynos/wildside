@@ -81,27 +81,12 @@ impl PoolConfig {
 
     /// Set the maximum number of connections in the pool.
     pub fn with_max_size(mut self, max_size: u32) -> Self {
-        assert!(max_size > 0, "max_size must be greater than 0");
-        if let Some(min_idle) = self.min_idle {
-            assert!(
-                min_idle <= max_size,
-                "min_idle ({min_idle}) must not exceed max_size ({max_size}); \
-                 set min_idle first if lowering max_size"
-            );
-        }
         self.max_size = max_size;
         self
     }
 
     /// Set the minimum number of idle connections to maintain.
     pub fn with_min_idle(mut self, min_idle: Option<u32>) -> Self {
-        if let Some(min_idle) = min_idle {
-            assert!(
-                min_idle <= self.max_size,
-                "min_idle ({min_idle}) must not exceed max_size ({})",
-                self.max_size
-            );
-        }
         self.min_idle = min_idle;
         self
     }
@@ -110,6 +95,23 @@ impl PoolConfig {
     pub fn with_connection_timeout(mut self, timeout: Duration) -> Self {
         self.connection_timeout = timeout;
         self
+    }
+
+    fn validate(&self) -> Result<(), PoolError> {
+        if self.max_size == 0 {
+            return Err(PoolError::build("max_size must be greater than 0"));
+        }
+
+        if let Some(min_idle) = self.min_idle {
+            if min_idle > self.max_size {
+                return Err(PoolError::build(format!(
+                    "min_idle ({min_idle}) must not exceed max_size ({})",
+                    self.max_size
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     /// Get the database URL.
@@ -144,18 +146,7 @@ impl DbPool {
     /// Returns `PoolError::Build` if the pool cannot be constructed (e.g.,
     /// invalid database URL or connection failure).
     pub async fn new(config: PoolConfig) -> Result<Self, PoolError> {
-        if config.max_size == 0 {
-            return Err(PoolError::build("max_size must be greater than 0"));
-        }
-
-        if let Some(min_idle) = config.min_idle {
-            if min_idle > config.max_size {
-                return Err(PoolError::build(format!(
-                    "min_idle ({min_idle}) must not exceed max_size ({})",
-                    config.max_size
-                )));
-            }
-        }
+        config.validate()?;
 
         let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.database_url);
 
@@ -212,23 +203,40 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "max_size must be greater than 0")]
     fn pool_config_rejects_zero_max_size() {
-        let _ = PoolConfig::new("postgres://localhost/test").with_max_size(0);
+        let config = PoolConfig::new("postgres://localhost/test").with_max_size(0);
+
+        let error = config.validate().expect_err("expected invalid config");
+        assert!(
+            error
+                .to_string()
+                .contains("max_size must be greater than 0"),
+            "expected error message to contain max_size validation, got: {error}"
+        );
     }
 
     #[rstest]
-    #[should_panic(expected = "must not exceed max_size")]
     fn pool_config_rejects_min_idle_exceeding_max_size() {
-        let _ = PoolConfig::new("postgres://localhost/test").with_min_idle(Some(11));
+        let config = PoolConfig::new("postgres://localhost/test").with_min_idle(Some(11));
+
+        let error = config.validate().expect_err("expected invalid config");
+        assert!(
+            error.to_string().contains("must not exceed max_size"),
+            "expected error message to contain min_idle validation, got: {error}"
+        );
     }
 
     #[rstest]
-    #[should_panic(expected = "must not exceed max_size")]
     fn pool_config_rejects_lowering_max_size_below_min_idle() {
-        let _ = PoolConfig::new("postgres://localhost/test")
+        let config = PoolConfig::new("postgres://localhost/test")
             .with_min_idle(Some(5))
             .with_max_size(4);
+
+        let error = config.validate().expect_err("expected invalid config");
+        assert!(
+            error.to_string().contains("must not exceed max_size"),
+            "expected error message to contain min_idle validation, got: {error}"
+        );
     }
 
     #[rstest]
@@ -252,29 +260,29 @@ mod tests {
             connection_timeout: Duration::from_secs(30),
         };
 
-        let result = DbPool::new(config).await;
-        match result {
-            Ok(_) => panic!("expected build error for invalid config"),
-            Err(error) => {
-                assert!(
-                    matches!(error, PoolError::Build { .. }),
-                    "expected build error, got {error:?}"
-                );
-                assert!(
-                    error.to_string().contains(expected_error_substring),
-                    "expected error message to contain {expected_error_substring:?}, got: {error}"
-                );
-            }
-        }
+        let error = DbPool::new(config)
+            .await
+            .err()
+            .expect("expected build error for invalid config");
+        assert!(
+            matches!(error, PoolError::Build { .. }),
+            "expected build error, got {error:?}"
+        );
+        assert!(
+            error.to_string().contains(expected_error_substring),
+            "expected error message to contain {expected_error_substring:?}, got: {error}"
+        );
     }
 
+    #[rstest]
+    #[case(0, Some(0), "max_size must be greater than 0")]
+    #[case(1, Some(2), "min_idle (2) must not exceed max_size (1)")]
     #[tokio::test]
-    async fn db_pool_new_rejects_zero_max_size() {
-        assert_pool_config_rejected(0, Some(0), "max_size must be greater than 0").await;
-    }
-
-    #[tokio::test]
-    async fn db_pool_new_rejects_min_idle_exceeding_max_size() {
-        assert_pool_config_rejected(1, Some(2), "min_idle (2) must not exceed max_size (1)").await;
+    async fn db_pool_new_rejects_invalid_config(
+        #[case] max_size: u32,
+        #[case] min_idle: Option<u32>,
+        #[case] expected_error_substring: &str,
+    ) {
+        assert_pool_config_rejected(max_size, min_idle, expected_error_substring).await;
     }
 }
