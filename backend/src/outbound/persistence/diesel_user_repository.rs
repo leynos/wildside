@@ -143,6 +143,10 @@ mod tests {
             persistence_err,
             UserPersistenceError::Connection { .. }
         ));
+        assert!(
+            persistence_err.to_string().contains("connection refused"),
+            "preserve useful diagnostics"
+        );
     }
 
     #[rstest]
