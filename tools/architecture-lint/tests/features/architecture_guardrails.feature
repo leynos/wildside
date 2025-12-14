@@ -23,3 +23,8 @@ Feature: Architecture guardrails
     When the architecture lint runs
     Then the lint succeeds
 
+  Scenario: Mixed valid and invalid modules produce multiple violations
+    Given valid modules mixed with multiple boundary violations
+    When the architecture lint runs
+    Then the lint fails
+    And all boundary violations are reported

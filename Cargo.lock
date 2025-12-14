@@ -465,6 +465,7 @@ dependencies = [
  "rstest-bdd",
  "rstest-bdd-macros",
  "syn 2.0.104",
+ "tempfile",
 ]
 
 [[package]]

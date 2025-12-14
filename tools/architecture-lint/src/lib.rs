@@ -197,24 +197,28 @@ fn lint_parsed_source(file: &Path, layer: ModuleLayer, parsed: &syn::File) -> Ve
     let mut collector = PathCollector::default();
     collector.visit_file(parsed);
 
-    let mut violations = Vec::new();
+    let mut messages = BTreeSet::new();
     for segments in &collector.paths {
         if let Some(root) = forbidden_internal_module_root(segments, &forbidden_modules) {
-            violations.push(Violation {
-                file: file.to_path_buf(),
-                message: format!("{layer_name} module must not depend on crate::{root}"),
-            });
+            messages.insert(format!(
+                "{layer_name} module must not depend on crate::{root}"
+            ));
         }
 
         if let Some(root) = forbidden_external_crate_root(segments, &forbidden_crates) {
-            violations.push(Violation {
-                file: file.to_path_buf(),
-                message: format!("{layer_name} module must not depend on external crate `{root}`"),
-            });
+            messages.insert(format!(
+                "{layer_name} module must not depend on external crate `{root}`"
+            ));
         }
     }
 
-    violations
+    messages
+        .into_iter()
+        .map(|message| Violation {
+            file: file.to_path_buf(),
+            message,
+        })
+        .collect()
 }
 
 const fn layer_name(layer: ModuleLayer) -> &'static str {
@@ -225,46 +229,49 @@ const fn layer_name(layer: ModuleLayer) -> &'static str {
     }
 }
 
-fn forbidden_internal_module_root<'a>(
-    segments: &'a [String],
+fn forbidden_internal_module_root(
+    segments: &[String],
     forbidden_roots: &BTreeSet<&'static str>,
-) -> Option<&'a str> {
-    let first = segments.first()?.as_str();
-    if !is_relative_module_segment(first) {
-        return None;
-    }
-
-    let root = segments
-        .iter()
-        .find(|segment| !is_relative_module_segment(segment.as_str()))
-        .map(String::as_str)?;
-
-    if forbidden_roots.contains(root) {
-        Some(root)
-    } else {
-        None
-    }
+) -> Option<&'static str> {
+    let root = internal_module_root(segments)?;
+    forbidden_roots.get(root).copied()
 }
 
-fn forbidden_external_crate_root<'a>(
-    segments: &'a [String],
+fn forbidden_external_crate_root(
+    segments: &[String],
     forbidden_roots: &BTreeSet<&'static str>,
-) -> Option<&'a str> {
-    let root = segments.first()?.as_str();
-    if forbidden_roots.contains(root) {
-        Some(root)
-    } else {
-        None
-    }
+) -> Option<&'static str> {
+    let root = external_crate_root(segments)?;
+    forbidden_roots.get(root).copied()
 }
 
 fn is_relative_module_segment(segment: &str) -> bool {
     matches!(segment, "crate" | "self" | "super")
 }
 
+fn internal_module_root(segments: &[String]) -> Option<&str> {
+    let first = segments.first()?.as_str();
+    let start_index = match first {
+        "crate" | "self" | "super" => segments
+            .iter()
+            .position(|segment| !is_relative_module_segment(segment.as_str()))?,
+        "backend" => 1,
+        _ => return None,
+    };
+    segments.get(start_index).map(|segment| segment.as_str())
+}
+
+fn external_crate_root(segments: &[String]) -> Option<&str> {
+    let root = segments.first()?.as_str();
+    if is_relative_module_segment(root) || root == "backend" {
+        return None;
+    }
+    Some(root)
+}
+
 #[derive(Default)]
 struct PathCollector {
-    paths: Vec<Vec<String>>,
+    paths: BTreeSet<Vec<String>>,
 }
 
 impl PathCollector {
@@ -277,7 +284,7 @@ impl PathCollector {
         if segments.is_empty() {
             return;
         }
-        self.paths.push(segments);
+        self.paths.insert(segments);
     }
 
     fn record_use_tree(&mut self, tree: &syn::UseTree, prefix: Vec<String>) {
@@ -290,17 +297,17 @@ impl PathCollector {
             syn::UseTree::Name(name) => {
                 let mut segments = prefix;
                 segments.push(name.ident.to_string());
-                self.paths.push(segments);
+                self.paths.insert(segments);
             }
             syn::UseTree::Rename(rename) => {
                 let mut segments = prefix;
                 segments.push(rename.ident.to_string());
-                self.paths.push(segments);
+                self.paths.insert(segments);
             }
             syn::UseTree::Glob(_) => {
                 let mut segments = prefix;
                 segments.push("*".to_owned());
-                self.paths.push(segments);
+                self.paths.insert(segments);
             }
             syn::UseTree::Group(group) => {
                 for item in &group.items {
@@ -319,7 +326,6 @@ impl<'ast> Visit<'ast> for PathCollector {
 
     fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
         self.record_use_tree(&node.tree, Vec::new());
-        syn::visit::visit_item_use(self, node);
     }
 }
 
@@ -371,13 +377,24 @@ fn collect_sources_under(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::fixture;
     use rstest::rstest;
 
-    fn lint_single(file: &str, contents: &str) -> Result<(), ArchitectureLintError> {
-        lint_sources(&[LintSource {
-            file: PathBuf::from(file),
-            contents: contents.to_owned(),
-        }])
+    #[derive(Clone, Copy)]
+    struct LintSingle;
+
+    impl LintSingle {
+        fn lint(self, file: &str, contents: &str) -> Result<(), ArchitectureLintError> {
+            lint_sources(&[LintSource {
+                file: PathBuf::from(file),
+                contents: contents.to_owned(),
+            }])
+        }
+    }
+
+    #[fixture]
+    fn lint_single() -> LintSingle {
+        LintSingle
     }
 
     #[rstest]
@@ -389,6 +406,11 @@ mod tests {
     #[case(
         "inbound/http/users.rs",
         "use crate::outbound::persistence::DieselUserRepository; fn handler() { let _ = DieselUserRepository; }",
+        false
+    )]
+    #[case(
+        "inbound/http/users.rs",
+        "use backend::outbound::persistence::DieselUserRepository; fn handler() { let _ = DieselUserRepository; }",
         false
     )]
     #[case(
@@ -406,8 +428,13 @@ mod tests {
         "use crate::inbound::http; fn thing() { let _ = 1; }",
         false
     )]
-    fn detects_boundary_violations(#[case] file: &str, #[case] contents: &str, #[case] ok: bool) {
-        let result = lint_single(file, contents);
+    fn detects_boundary_violations(
+        lint_single: LintSingle,
+        #[case] file: &str,
+        #[case] contents: &str,
+        #[case] ok: bool,
+    ) {
+        let result = lint_single.lint(file, contents);
         assert_eq!(result.is_ok(), ok, "result: {result:?}");
     }
 }
