@@ -640,6 +640,153 @@ db.version(1).stores({
 
 ```mermaid
 erDiagram
+  USER {
+    string id
+  }
+
+  USER_PREFERENCES {
+    string userId
+    string[] interestThemeIds
+    string[] safetyToggleIds
+    string unitSystem
+    int revision
+    string updatedAt
+  }
+
+  ROUTE_SUMMARY {
+    string id
+    string slug
+    string localizations
+    string heroImage
+    int distanceMetres
+    int durationSeconds
+    float rating
+    string[] badgeIds
+    string difficulty
+    string[] interestThemeIds
+  }
+
+  ROUTE_PLAN {
+    string id
+    string summaryId
+    string geometry
+    string pois
+    string createdAt
+  }
+
+  ROUTE_STOP {
+    string id
+    int position
+    string routePlanId
+    string poiId
+    string note
+  }
+
+  POI {
+    string id
+    string localizations
+    string categoryTagId
+    string[] tagIds
+    float rating
+    string image
+    string openHours
+    string location
+  }
+
+  ROUTE_COLLECTION {
+    string id
+    string slug
+    string localizations
+    string leadImage
+    string mapPreview
+    int minDistanceMetres
+    int maxDistanceMetres
+    int minDurationSeconds
+    int maxDurationSeconds
+    string difficulty
+    string[] routeIds
+  }
+
+  THEME {
+    string id
+    string slug
+    string localizations
+    string image
+    int walkCount
+    int minDistanceMetres
+    int maxDistanceMetres
+    float rating
+  }
+
+  INTEREST_THEME {
+    string id
+    string slug
+    string localizations
+    string iconKey
+  }
+
+  BADGE {
+    string id
+    string slug
+    string localizations
+  }
+
+  OFFLINE_BUNDLE {
+    string id
+    string ownerUserId
+    string kind
+    string routeId
+    string regionId
+    float minLng
+    float minLat
+    float maxLng
+    float maxLat
+    int minZoom
+    int maxZoom
+    int estimatedSizeBytes
+    string createdAt
+    string updatedAt
+    string status
+    float progress
+  }
+
+  ROUTE_NOTE {
+    string id
+    string routeId
+    string poiId
+    string body
+    string createdAt
+    string updatedAt
+    int revision
+  }
+
+  ROUTE_PROGRESS {
+    string routeId
+    string[] visitedStopIds
+    string updatedAt
+    int revision
+  }
+
+  WALK_SESSION {
+    string id
+    string routeId
+    string startedAt
+    string endedAt
+    string primaryStats
+    string secondaryStats
+    string[] highlightedPoiIds
+  }
+
+  OUTBOX_ITEM {
+    string id
+    string type
+    string aggregateId
+    string payload
+    string createdAt
+    string lastAttemptAt
+    string status
+  }
+
   USER ||--|| USER_PREFERENCES : owns
   USER ||--o{ OFFLINE_BUNDLE : manages
 
@@ -655,6 +802,9 @@ erDiagram
 
   USER ||--o{ ROUTE_NOTE : writes
   USER ||--o{ WALK_SESSION : records
+  USER ||--o{ OUTBOX_ITEM : enqueues
+
+  ROUTE_PLAN ||--o{ ROUTE_PROGRESS : tracks
 ```
 
 ## Cross-document links
