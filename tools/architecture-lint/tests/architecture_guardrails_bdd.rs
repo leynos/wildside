@@ -90,43 +90,31 @@ fn lint_succeeds(world: &Mutex<LintWorld>) {
     assert!(outcome.is_ok(), "expected success, got: {outcome:?}");
 }
 
-#[then("the lint fails due to outbound access from inbound")]
-fn lint_fails_due_to_outbound_access(world: &Mutex<LintWorld>) {
+fn assert_violation_contains(world: &Mutex<LintWorld>, expected_substring: &str) {
     let world = world.lock().expect("world lock");
     let outcome = world.result.as_ref().expect("lint must have run");
     let violations = extract_violations(outcome).expect("expected violations");
     assert!(
         violations
             .iter()
-            .any(|violation| violation.message.contains("crate::outbound")),
-        "expected crate::outbound violation, got: {violations:?}"
+            .any(|violation| violation.message.contains(expected_substring)),
+        "expected violation containing '{expected_substring}', got: {violations:?}"
     );
+}
+
+#[then("the lint fails due to outbound access from inbound")]
+fn lint_fails_due_to_outbound_access(world: &Mutex<LintWorld>) {
+    assert_violation_contains(world, "crate::outbound");
 }
 
 #[then("the lint fails due to infrastructure crate usage")]
 fn lint_fails_due_to_infrastructure_crate(world: &Mutex<LintWorld>) {
-    let world = world.lock().expect("world lock");
-    let outcome = world.result.as_ref().expect("lint must have run");
-    let violations = extract_violations(outcome).expect("expected violations");
-    assert!(
-        violations
-            .iter()
-            .any(|violation| violation.message.contains("external crate `diesel`")),
-        "expected diesel violation, got: {violations:?}"
-    );
+    assert_violation_contains(world, "external crate `diesel`");
 }
 
 #[then("the lint fails due to framework crate usage in the domain")]
 fn lint_fails_due_to_framework_crate(world: &Mutex<LintWorld>) {
-    let world = world.lock().expect("world lock");
-    let outcome = world.result.as_ref().expect("lint must have run");
-    let violations = extract_violations(outcome).expect("expected violations");
-    assert!(
-        violations
-            .iter()
-            .any(|violation| violation.message.contains("external crate `actix_web`")),
-        "expected actix_web violation, got: {violations:?}"
-    );
+    assert_violation_contains(world, "external crate `actix_web`");
 }
 
 fn extract_violations(outcome: &Result<(), ArchitectureLintError>) -> Option<Vec<Violation>> {
