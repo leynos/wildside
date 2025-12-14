@@ -97,7 +97,7 @@ These workarounds are effective, but they are:
 - duplicated across consumers,
 - easy to get subtly wrong, and
 - incompatible with the crate's promise that `TestCluster` is Resource
-  Acquisition Is Initialization (RAII) friendly, because the crate is still
+  Acquisition Is Initialization (RAII) friendly because the crate is still
   relying on global mutable state.
 
 ## Proposed solution
@@ -140,8 +140,8 @@ There are two reasonable implementation shapes.
 
 This matches the intuitive contract:
 
-- If you have a live cluster guard, the process environment required for that
-  cluster is stable.
+- If a test holds a live cluster guard, the process environment required for
+  that cluster is stable.
 
 #### Option B: expose explicit lock helpers (future extension)
 
@@ -152,7 +152,7 @@ Expose additional helpers such as:
 This provides flexibility, but it expands the public API surface and requires
 callers to be more deliberate.
 
-Option B is still useful if we want to support consumers who:
+Option B is still useful when supporting consumers who:
 
 - do not want to use `TestCluster`, but still want safe environment mutation.
 

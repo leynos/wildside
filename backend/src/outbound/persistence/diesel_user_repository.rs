@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
+use tracing::debug;
 
 use crate::domain::ports::{UserPersistenceError, UserRepository};
 use crate::domain::{DisplayName, User, UserId};
@@ -51,14 +52,55 @@ impl DieselUserRepository {
 /// Map pool errors to domain persistence errors.
 fn map_pool_error(error: PoolError) -> UserPersistenceError {
     match error {
-        PoolError::Checkout { message } => UserPersistenceError::connection(message),
-        PoolError::Build { message } => UserPersistenceError::connection(message),
+        PoolError::Checkout { message } | PoolError::Build { message } => {
+            UserPersistenceError::connection(message)
+        }
     }
 }
 
 /// Map Diesel errors to domain persistence errors.
 fn map_diesel_error(error: diesel::result::Error) -> UserPersistenceError {
-    UserPersistenceError::query(error.to_string())
+    use diesel::result::{DatabaseErrorKind, Error as DieselError};
+
+    match &error {
+        DieselError::DatabaseError(kind, info) => {
+            debug!(?kind, message = info.message(), "diesel operation failed");
+        }
+        _ => debug!(
+            error_type = %std::any::type_name_of_val(&error),
+            "diesel operation failed"
+        ),
+    }
+
+    match error {
+        DieselError::NotFound => UserPersistenceError::query("record not found"),
+        DieselError::QueryBuilderError(_) => UserPersistenceError::query("database query error"),
+        DieselError::DatabaseError(kind, _) => match kind {
+            DatabaseErrorKind::UniqueViolation => {
+                UserPersistenceError::query("unique constraint violation")
+            }
+            DatabaseErrorKind::ForeignKeyViolation => {
+                UserPersistenceError::query("foreign key violation")
+            }
+            DatabaseErrorKind::NotNullViolation => {
+                UserPersistenceError::query("not null violation")
+            }
+            DatabaseErrorKind::CheckViolation => {
+                UserPersistenceError::query("check constraint violation")
+            }
+            DatabaseErrorKind::SerializationFailure => {
+                UserPersistenceError::query("serialization failure")
+            }
+            DatabaseErrorKind::ReadOnlyTransaction => {
+                UserPersistenceError::query("read-only transaction")
+            }
+            DatabaseErrorKind::ClosedConnection => {
+                UserPersistenceError::connection("database connection error")
+            }
+            _ => UserPersistenceError::query("database error"),
+        },
+        _ => UserPersistenceError::query("database error"),
+    }
 }
 
 /// Convert a database row to a domain User.
@@ -66,12 +108,13 @@ fn map_diesel_error(error: diesel::result::Error) -> UserPersistenceError {
 /// # Errors
 ///
 /// Returns `UserPersistenceError::Query` if the row data fails domain validation
-/// (e.g., invalid UUID format or display name constraints).
+/// (e.g., display name constraints).
 fn row_to_user(row: UserRow) -> Result<User, UserPersistenceError> {
-    let user_id = UserId::new(row.id.to_string())
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
-    let display_name = DisplayName::new(row.display_name)
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
+    let user_id = UserId::from_uuid(row.id);
+    let display_name = DisplayName::new(row.display_name).map_err(|err| {
+        debug!(?err, "invalid display name loaded from database");
+        UserPersistenceError::query("invalid user record")
+    })?;
     Ok(User::new(user_id, display_name))
 }
 
@@ -143,6 +186,10 @@ mod tests {
             persistence_err,
             UserPersistenceError::Connection { .. }
         ));
+        assert!(
+            persistence_err.to_string().contains("connection refused"),
+            "preserve useful diagnostics"
+        );
     }
 
     #[rstest]
@@ -154,5 +201,9 @@ mod tests {
             persistence_err,
             UserPersistenceError::Query { .. }
         ));
+        assert!(
+            persistence_err.to_string().contains("record not found"),
+            "preserve stable, user-facing diagnostics"
+        );
     }
 }

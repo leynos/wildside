@@ -74,13 +74,11 @@ impl<P: Send + Sync> RouteCache for StubRouteCache<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
 
     /// Test plan type for unit tests.
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestPlan;
 
-    #[rstest]
     #[tokio::test]
     async fn stub_cache_always_misses() {
         let cache: StubRouteCache<TestPlan> = StubRouteCache::new();
@@ -90,7 +88,6 @@ mod tests {
         assert!(result.is_none(), "stub cache should always miss");
     }
 
-    #[rstest]
     #[tokio::test]
     async fn stub_cache_put_succeeds() {
         let cache: StubRouteCache<TestPlan> = StubRouteCache::new();

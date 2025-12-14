@@ -17,11 +17,7 @@ use std::sync::{Arc, Mutex};
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
 use backend::outbound::persistence::{DbPool, DieselUserRepository, PoolConfig};
-use diesel::pg::PgConnection;
-use diesel::Connection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
-use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
@@ -32,10 +28,7 @@ mod pg_embed;
 mod support;
 
 use pg_embed::test_cluster;
-use support::format_postgres_error;
-
-/// Embedded migrations from the backend/migrations directory.
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+use support::{drop_users_table, handle_cluster_setup_failure, migrate_schema, reset_database};
 
 const TEST_DB: &str = "diesel_user_repo_test";
 
@@ -86,6 +79,11 @@ fn with_context_async<F, R, U>(
     R: std::future::Future,
     U: FnOnce(&mut TestContext, R::Output),
 {
+    assert!(
+        tokio::runtime::Handle::try_current().is_err(),
+        "do not call with_context_async from inside a Tokio runtime"
+    );
+
     let (repo, handle, extracted) = {
         let ctx = world.lock().expect("context lock");
         (
@@ -104,7 +102,7 @@ fn setup_test_context() -> Result<TestContext, String> {
     let cluster = test_cluster()?;
 
     // Create the test database.
-    reset_database(&cluster).map_err(|err| err.to_string())?;
+    reset_database(&cluster, TEST_DB).map_err(|err| err.to_string())?;
 
     let database_url = cluster.connection().database_url(TEST_DB);
 
@@ -133,27 +131,11 @@ fn setup_test_context() -> Result<TestContext, String> {
     })
 }
 
-/// Returns true if the `SKIP_TEST_CLUSTER` env var is set to a truthy value.
-///
-/// Truthy values: "1", "true", "yes" (case-insensitive).
-fn should_skip_on_cluster_failure() -> bool {
-    std::env::var("SKIP_TEST_CLUSTER")
-        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
-}
-
 #[fixture]
 fn diesel_world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
-        Err(reason) => {
-            if should_skip_on_cluster_failure() {
-                eprintln!("SKIP-TEST-CLUSTER: {reason}");
-                None
-            } else {
-                panic!("Test cluster setup failed: {reason}. Set SKIP_TEST_CLUSTER=1 to skip.");
-            }
-        }
+        Err(reason) => handle_cluster_setup_failure(reason),
     }
 }
 
@@ -329,46 +311,4 @@ fn diesel_reports_errors_when_schema_missing(
     the_users_table_is_dropped(world.clone());
     the_repository_upserts_the_user(world.clone(), sample_user);
     persistence_fails_with_a_query_error(world);
-}
-
-// -----------------------------------------------------------------------------
-// Database Helpers
-// -----------------------------------------------------------------------------
-
-fn reset_database(cluster: &TestCluster) -> Result<(), UserPersistenceError> {
-    let admin_url = cluster.connection().database_url("postgres");
-    let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
-
-    // `DROP DATABASE` cannot run inside a transaction block. When we send
-    // multiple statements in one `batch_execute`, Postgres treats it as a single
-    // transaction block and rejects the command.
-    client
-        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{TEST_DB}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    client
-        .batch_execute(&format!("CREATE DATABASE \"{TEST_DB}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    Ok(())
-}
-
-/// Run all pending Diesel migrations against the test database.
-///
-/// This uses the embedded migrations from `backend/migrations/` to ensure the
-/// test schema stays in sync with production, including triggers and indexes.
-fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
-    let mut conn = PgConnection::establish(url)
-        .map_err(|err| UserPersistenceError::connection(err.to_string()))?;
-    conn.run_pending_migrations(MIGRATIONS)
-        .map_err(|err| UserPersistenceError::query(err.to_string()))?;
-    Ok(())
-}
-
-fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
-    let mut client = Client::connect(url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
-    client
-        .batch_execute("DROP TABLE IF EXISTS users;")
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    Ok(())
 }

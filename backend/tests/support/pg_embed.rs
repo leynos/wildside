@@ -16,7 +16,6 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
-use env_lock::EnvGuard;
 use pg_embedded_setup_unpriv::TestCluster;
 use uuid::Uuid;
 
@@ -59,7 +58,7 @@ pub fn test_cluster() -> Result<TestCluster, String> {
     let needs_override =
         std::env::var_os("PG_RUNTIME_DIR").is_none() || std::env::var_os("PG_DATA_DIR").is_none();
 
-    let _env_guard: Option<EnvGuard<'static>> = if needs_override {
+    let _env_guard = if needs_override {
         let (runtime_dir, data_dir) =
             create_unique_pg_embed_dirs().map_err(|err| err.to_string())?;
 
