@@ -209,5 +209,5 @@ fn extract_violations(outcome: &Result<(), ArchitectureLintError>) -> Option<Vec
 
 #[scenario(path = "tests/features/architecture_guardrails.feature")]
 fn architecture_guardrails(world: Mutex<LintWorld>) {
-    let _ = world;
+    drop(world);
 }
