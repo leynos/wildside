@@ -638,23 +638,209 @@ db.version(1).stores({
 
 ## Relationship sketch
 
+Note: Several fields below are “foreign-key style” IDs (or arrays of IDs) that
+are persisted as denormalized references rather than as intermediary/join
+tables. The associations in the diagram are therefore conceptual: they show
+what a given `*Id` / `*Ids` points at, even when the storage shape is an array.
+In addition, the diagram uses `POINT_OF_INTEREST` for the TypeScript
+`PointOfInterest` entity.
+
 ```mermaid
 erDiagram
+  USER {
+    string id
+  }
+
+  USER_PREFERENCES {
+    string userId "FK -> USER.id"
+    string[] interestThemeIds "denormalized FK[] -> INTEREST_THEME.id"
+    string[] safetyToggleIds "denormalized FK[] -> SAFETY_TOGGLE.id"
+    string unitSystem
+    int revision
+    string updatedAt
+  }
+
+  ROUTE_SUMMARY {
+    string id
+    string slug
+    string localizations
+    string heroImage
+    int distanceMetres
+    int durationSeconds
+    float rating
+    string[] badgeIds "denormalized FK[] -> BADGE.id"
+    string difficulty
+    string[] interestThemeIds "denormalized FK[] -> INTEREST_THEME.id"
+  }
+
+  ROUTE_PLAN {
+    string id
+    string summaryId "FK -> ROUTE_SUMMARY.id"
+    string geometry
+    string pois
+    string createdAt
+  }
+
+  ROUTE_STOP {
+    string id
+    int position
+    string routePlanId "FK -> ROUTE_PLAN.id"
+    string poiId "FK -> POINT_OF_INTEREST.id"
+    string note
+  }
+
+  POINT_OF_INTEREST {
+    string id
+    string localizations
+    string categoryTagId
+    string[] tagIds "denormalized FK[] -> TAG.id"
+    float rating
+    string image
+    string openHours
+    string location
+  }
+
+  ROUTE_COLLECTION {
+    string id
+    string slug
+    string localizations
+    string leadImage
+    string mapPreview
+    int[] distanceRangeMetres "tuple [minMetres, maxMetres]"
+    int[] durationRangeSeconds "tuple [minSeconds, maxSeconds]"
+    string difficulty
+    string[] routeIds "denormalized FK[] -> ROUTE_SUMMARY.id"
+  }
+
+  THEME {
+    string id
+    string slug
+    string localizations
+    string image
+    int walkCount
+    int[] distanceRangeMetres "tuple [minMetres, maxMetres]"
+    float rating
+  }
+
+  INTEREST_THEME {
+    string id
+    string slug
+    string localizations
+    string iconKey
+  }
+
+  SAFETY_TOGGLE {
+    string id
+    string slug
+    string localizations
+    string iconKey
+    boolean defaultEnabled
+  }
+
+  TAG {
+    string id
+    string slug
+    string localizations
+  }
+
+  BADGE {
+    string id
+    string slug
+    string localizations
+  }
+
+  OFFLINE_BUNDLE {
+    string id
+    string ownerUserId
+    string kind
+    string routeId "FK -> ROUTE_PLAN.id (kind=route)"
+    string regionId
+    float minLng
+    float minLat
+    float maxLng
+    float maxLat
+    int minZoom
+    int maxZoom
+    int estimatedSizeBytes
+    string createdAt
+    string updatedAt
+    string status
+    float progress
+  }
+
+  ROUTE_NOTE {
+    string id
+    string routeId "FK -> ROUTE_PLAN.id"
+    string poiId "FK? -> POINT_OF_INTEREST.id"
+    string body
+    string createdAt
+    string updatedAt
+    int revision
+  }
+
+  ROUTE_PROGRESS {
+    string routeId "FK -> ROUTE_PLAN.id"
+    string[] visitedStopIds "denormalized FK[] -> ROUTE_STOP.id"
+    string updatedAt
+    int revision
+  }
+
+  WALK_SESSION {
+    string id
+    string routeId "FK -> ROUTE_PLAN.id"
+    string startedAt
+    string endedAt
+    string primaryStats
+    string secondaryStats
+    string[] highlightedPoiIds "denormalized FK[] -> POINT_OF_INTEREST.id"
+  }
+
+  OUTBOX_ITEM {
+    string id
+    string type
+    string aggregateId "polymorphic FK -> USER.id | ROUTE_PLAN.id | OFFLINE_BUNDLE.id"
+    string payload
+    string createdAt
+    string lastAttemptAt
+    string nextAttemptAt
+    string status
+    int attemptCount
+    int payloadVersion
+  }
+
   USER ||--|| USER_PREFERENCES : owns
   USER ||--o{ OFFLINE_BUNDLE : manages
 
   ROUTE_SUMMARY ||--|| ROUTE_PLAN : expands_to
   ROUTE_PLAN ||--o{ ROUTE_STOP : includes
-  ROUTE_STOP }o--|| POI : refers_to
+  ROUTE_STOP }o--|| POINT_OF_INTEREST : refers_to
 
-  ROUTE_SUMMARY }o--o{ INTEREST_THEME : tagged_with
-  ROUTE_SUMMARY }o--o{ BADGE : displays
+  ROUTE_SUMMARY }o--o{ INTEREST_THEME : interestThemeIds
+  ROUTE_SUMMARY }o--o{ BADGE : badgeIds
+  POINT_OF_INTEREST }o--o{ TAG : tagIds
 
-  ROUTE_COLLECTION }o--o{ ROUTE_SUMMARY : contains
+  ROUTE_COLLECTION }o--o{ ROUTE_SUMMARY : routeIds
   THEME }o--o{ ROUTE_SUMMARY : recommends
 
   USER ||--o{ ROUTE_NOTE : writes
   USER ||--o{ WALK_SESSION : records
+  USER ||--o{ OUTBOX_ITEM : enqueues
+
+  ROUTE_PLAN ||--o{ OFFLINE_BUNDLE : routeId
+  ROUTE_PLAN ||--o{ ROUTE_NOTE : routeId
+  ROUTE_PLAN ||--o{ ROUTE_PROGRESS : routeId
+  ROUTE_PLAN ||--o{ WALK_SESSION : routeId
+
+  ROUTE_NOTE }o--|| POINT_OF_INTEREST : poiId
+  WALK_SESSION }o--o{ POINT_OF_INTEREST : highlightedPoiIds
+
+  USER_PREFERENCES }o--o{ INTEREST_THEME : interestThemeIds
+  USER_PREFERENCES }o--o{ SAFETY_TOGGLE : safetyToggleIds
+
+  OUTBOX_ITEM }o--|| ROUTE_PLAN : aggregateId_routeId
+  OUTBOX_ITEM }o--|| OFFLINE_BUNDLE : aggregateId_bundleId
+  OUTBOX_ITEM }o--|| USER : aggregateId_userId
+
 ```
 
 ## Cross-document links
