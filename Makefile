@@ -43,7 +43,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy
+        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy lint-architecture
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -86,8 +86,12 @@ fmt: workspace-sync
 lint: workspace-sync
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
 	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
+	$(MAKE) lint-architecture
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra
+
+lint-architecture:
+	$(RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:

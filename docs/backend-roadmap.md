@@ -52,10 +52,10 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 ### Step: Architecture guardrails
 
-- [ ] Extend `docs/wildside-backend-architecture.md` with inbound/outbound
+- [x] Extend `docs/wildside-backend-architecture.md` with inbound/outbound
   module diagrams, port usage examples, and a checklist for introducing new
   adapters, so the boundaries stay visible.
-- [ ] Add an architectural lint (e.g. dependency allowlists enforced via
+- [x] Add an architectural lint (e.g. dependency allowlists enforced via
   `cargo deny` or a custom build script) that fails when inbound adapters
   import outbound modules or infrastructure crates directly, and wire it into
   `make lint`.

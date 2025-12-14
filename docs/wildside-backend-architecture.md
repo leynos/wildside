@@ -102,6 +102,174 @@ workers), and thorough observability for both technical and product metrics.
 
 ## Core Components and Layers
 
+### Hexagonal module boundaries (guardrails)
+
+Wildside treats hexagonal architecture as a *module boundary*, not just an
+aspiration. The repo is a single Rust crate (`backend`), so the most common
+boundary regressions are **module-level imports** (for example an HTTP handler
+reaching into `outbound::persistence`).
+
+The diagrams below are intended to make the boundaries visible during day-to-
+day work, and to give reviewers a quick "smell test" for new modules.
+
+#### Top-level module dependency direction
+
+```mermaid
+flowchart LR
+    subgraph Inbound["backend::inbound (driving adapters)"]
+        InHttp["http (Actix handlers)"]
+        InWs["ws (WebSocket actor + payload mapping)"]
+    end
+
+    subgraph Domain["backend::domain (entities + services + ports)"]
+        Ports["ports (traits + error enums)"]
+        Model["models (User, Route, etc.)"]
+        Services["services (pure orchestration)"]
+    end
+
+    subgraph Outbound["backend::outbound (driven adapters)"]
+        OutDb["persistence (Diesel/Postgres)"]
+        OutCache["cache (Redis)"]
+        OutQueue["queue (jobs)"]
+    end
+
+    Inbound --> Domain
+    Outbound --> Domain
+```
+
+#### Inbound adapter module map
+
+Inbound adapters translate transport concerns into domain concerns. They may
+depend on `domain` (and shared middleware), but must not depend on `outbound`.
+
+```mermaid
+flowchart TB
+    subgraph Inbound["backend/src/inbound"]
+        Http["http"]
+        HttpAuth["http/auth.rs"]
+        HttpUsers["http/users.rs"]
+        HttpSession["http/session.rs"]
+        HttpError["http/error.rs"]
+        HttpHealth["http/health.rs"]
+
+        Ws["ws"]
+        WsSession["ws/session.rs"]
+        WsMessages["ws/messages.rs"]
+    end
+
+    Http --> HttpAuth
+    Http --> HttpUsers
+    Http --> HttpSession
+    Http --> HttpError
+    Http --> HttpHealth
+
+    Ws --> WsSession
+    Ws --> WsMessages
+```
+
+#### Outbound adapter module map
+
+Outbound adapters implement domain ports for specific infrastructure. They may
+depend on `domain` + infrastructure crates, but must not depend on `inbound`.
+
+```mermaid
+flowchart TB
+    subgraph Outbound["backend/src/outbound"]
+        Persistence["persistence"]
+        PersistenceRepo["persistence/diesel_user_repository.rs"]
+        PersistencePool["persistence/pool.rs"]
+
+        Cache["cache"]
+        Queue["queue"]
+    end
+
+    Persistence --> PersistenceRepo
+    Persistence --> PersistencePool
+```
+
+#### Port usage examples
+
+Ports are defined in the domain and implemented by outbound adapters. Inbound
+adapters consume ports via injected state rather than importing outbound
+modules directly.
+
+- **Port (domain):** `backend/src/domain/ports/user_repository.rs` defines the
+  `UserRepository` trait and `UserPersistenceError`.
+- **Adapter (outbound):** `backend/src/outbound/persistence/diesel_user_repository.rs`
+  implements `UserRepository` using Diesel and maps Diesel errors to domain
+  errors.
+- **Contract (tests):** `backend/tests/ports_behaviour.rs` exercises the port
+  semantics against a Postgres-backed implementation using
+  `pg-embed-setup-unpriv`.
+
+The intended runtime wiring pattern is:
+
+```rust
+use std::sync::Arc;
+
+use actix_web::{web, App};
+
+use backend::domain::ports::UserRepository;
+use backend::inbound::http::users;
+
+pub struct AppState {
+    pub users: Arc<dyn UserRepository>,
+}
+
+pub fn http_app(state: AppState) -> App<impl actix_web::dev::ServiceFactory> {
+    App::new()
+        .app_data(web::Data::new(state))
+        .service(web::scope("/api/v1").service(users::login))
+}
+```
+
+This keeps handlers inside the hexagon: they only ever see domain ports, never
+concrete outbound implementations.
+
+#### Checklist for introducing a new adapter
+
+When adding a new adapter (inbound or outbound), use this checklist to keep
+the boundary explicit:
+
+- **Choose the right side:** driving adapters go in `backend/src/inbound/*`;
+  driven adapters go in `backend/src/outbound/*`.
+- **Define/extend the port first:** if the capability is new, add a port trait
+  under `backend/src/domain/ports/*` and model errors as domain enums (via
+  `define_port_error!`).
+- **Keep the dependency direction:** inbound must not import `outbound`;
+  outbound must not import `inbound`; domain must not import either.
+- **Map errors at the edge:** translate infrastructure errors to domain port
+  errors inside the adapter, not in the domain and not in the handlers.
+- **Provide test doubles:** add at least one deterministic test implementation
+  (in-memory or fixture-driven) for the port so domain services can be unit
+  tested without I/O.
+- **Add contract tests for driven adapters:** for adapters that talk to
+  infrastructure (Postgres/Redis/etc.), add contract tests that validate the
+  port semantics (happy + unhappy paths) using `rstest` fixtures.
+- **Add behaviour coverage where it matters:** for user-visible behaviour,
+  prefer `rstest-bdd` scenarios backed by `rstest` fixtures.
+- **Run the gates:** `make check-fmt`, `make lint`, and `make test` must all
+  pass before considering the work complete.
+
+#### Guardrail tooling
+
+Module boundaries are enforced by a repo-local lint that runs during `make
+lint`:
+
+- Runner: `tools/architecture-lint` (invoked as
+  `cargo run -p architecture-lint`).
+- Rules: `tools/architecture-lint/src/lib.rs` parses Rust syntax (via `syn`)
+  and rejects forbidden imports per layer.
+- Coverage: unit tests (`rstest`) and behaviour tests (`rstest-bdd`) validate
+  happy and unhappy paths.
+
+##### Design decisions
+
+- **2025-12-14:** Use a repo-local, syntax-aware lint (`architecture-lint`) to
+  enforce module boundaries. Cargo-level dependency tools are insufficient
+  because the backend is a single crate, and the most common regressions are
+  `use`-level imports across `domain`/`inbound`/`outbound`.
+
 ### Web API and WebSocket Layer (Actix Web)
 
 The **Actix Web** framework powers Wildside’s HTTP API layer, exposing RESTful

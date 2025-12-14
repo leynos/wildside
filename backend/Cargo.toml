@@ -60,8 +60,8 @@ awc = "3.8.1"
 env-lock = "1.0.1"
 futures = "0.3"
 rstest = "0.26"
-rstest-bdd = "0.1.0-alpha4"
-rstest-bdd-macros = "0.1.0-alpha4"
+rstest-bdd = "0.1.0"
+rstest-bdd-macros = "0.1.0"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
 # Diesel migration runner for integration tests
