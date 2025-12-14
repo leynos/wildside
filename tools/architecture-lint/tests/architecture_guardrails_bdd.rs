@@ -132,16 +132,6 @@ fn lint_succeeds(world: &Mutex<LintWorld>) {
     assert!(outcome.is_ok(), "expected success, got: {outcome:?}");
 }
 
-fn assert_violation_contains(world: &Mutex<LintWorld>, expected_substring: &str) {
-    let violations = violations(world);
-    assert!(
-        violations
-            .iter()
-            .any(|violation| violation.message.contains(expected_substring)),
-        "expected violation containing '{expected_substring}', got: {violations:?}"
-    );
-}
-
 fn assert_violation_in_file_contains(
     world: &Mutex<LintWorld>,
     expected_file: &str,
@@ -165,22 +155,26 @@ fn violations(world: &Mutex<LintWorld>) -> Vec<Violation> {
 
 #[then("the lint fails due to outbound access from inbound")]
 fn lint_fails_due_to_outbound_access(world: &Mutex<LintWorld>) {
-    assert_violation_contains(world, "crate::outbound");
+    assert_violation_in_file_contains(world, "inbound/http/users.rs", "crate::outbound");
 }
 
 #[then("the lint fails due to inbound access from outbound")]
 fn lint_fails_due_to_inbound_access(world: &Mutex<LintWorld>) {
-    assert_violation_contains(world, "crate::inbound");
+    assert_violation_in_file_contains(
+        world,
+        "outbound/persistence/bad_cross_boundary.rs",
+        "crate::inbound",
+    );
 }
 
 #[then("the lint fails due to infrastructure crate usage")]
 fn lint_fails_due_to_infrastructure_crate(world: &Mutex<LintWorld>) {
-    assert_violation_contains(world, "external crate `diesel`");
+    assert_violation_in_file_contains(world, "inbound/http/users.rs", "external crate `diesel`");
 }
 
 #[then("the lint fails due to framework crate usage in the domain")]
 fn lint_fails_due_to_framework_crate(world: &Mutex<LintWorld>) {
-    assert_violation_contains(world, "external crate `actix_web`");
+    assert_violation_in_file_contains(world, "domain/user.rs", "external crate `actix_web`");
 }
 
 #[then("the lint fails")]
