@@ -638,6 +638,13 @@ db.version(1).stores({
 
 ## Relationship sketch
 
+Note: Several fields below are “foreign-key style” IDs (or arrays of IDs) that
+are persisted as denormalised references rather than as intermediary/join
+tables. The associations in the diagram are therefore conceptual: they show
+what a given `*Id` / `*Ids` points at, even when the storage shape is an array.
+In addition, the diagram uses `POINT_OF_INTEREST` for the TypeScript
+`PointOfInterest` entity.
+
 ```mermaid
 erDiagram
   USER {
@@ -645,9 +652,9 @@ erDiagram
   }
 
   USER_PREFERENCES {
-    string userId
-    string[] interestThemeIds
-    string[] safetyToggleIds
+    string userId "FK -> USER.id"
+    string[] interestThemeIds "denormalised FK[] -> INTEREST_THEME.id"
+    string[] safetyToggleIds "denormalised FK[] -> SAFETY_TOGGLE.id"
     string unitSystem
     int revision
     string updatedAt
@@ -661,14 +668,14 @@ erDiagram
     int distanceMetres
     int durationSeconds
     float rating
-    string[] badgeIds
+    string[] badgeIds "denormalised FK[] -> BADGE.id"
     string difficulty
-    string[] interestThemeIds
+    string[] interestThemeIds "denormalised FK[] -> INTEREST_THEME.id"
   }
 
   ROUTE_PLAN {
     string id
-    string summaryId
+    string summaryId "FK -> ROUTE_SUMMARY.id"
     string geometry
     string pois
     string createdAt
@@ -677,16 +684,16 @@ erDiagram
   ROUTE_STOP {
     string id
     int position
-    string routePlanId
-    string poiId
+    string routePlanId "FK -> ROUTE_PLAN.id"
+    string poiId "FK -> POINT_OF_INTEREST.id"
     string note
   }
 
-  POI {
+  POINT_OF_INTEREST {
     string id
     string localizations
     string categoryTagId
-    string[] tagIds
+    string[] tagIds "denormalised FK[] -> TAG.id"
     float rating
     string image
     string openHours
@@ -704,7 +711,7 @@ erDiagram
     int minDurationSeconds
     int maxDurationSeconds
     string difficulty
-    string[] routeIds
+    string[] routeIds "denormalised FK[] -> ROUTE_SUMMARY.id"
   }
 
   THEME {
@@ -725,6 +732,20 @@ erDiagram
     string iconKey
   }
 
+  SAFETY_TOGGLE {
+    string id
+    string slug
+    string localizations
+    string iconKey
+    boolean defaultEnabled
+  }
+
+  TAG {
+    string id
+    string slug
+    string localizations
+  }
+
   BADGE {
     string id
     string slug
@@ -735,7 +756,7 @@ erDiagram
     string id
     string ownerUserId
     string kind
-    string routeId
+    string routeId "FK -> ROUTE_PLAN.id (kind=route)"
     string regionId
     float minLng
     float minLat
@@ -752,8 +773,8 @@ erDiagram
 
   ROUTE_NOTE {
     string id
-    string routeId
-    string poiId
+    string routeId "FK -> ROUTE_PLAN.id"
+    string poiId "FK? -> POINT_OF_INTEREST.id"
     string body
     string createdAt
     string updatedAt
@@ -761,30 +782,33 @@ erDiagram
   }
 
   ROUTE_PROGRESS {
-    string routeId
-    string[] visitedStopIds
+    string routeId "FK -> ROUTE_PLAN.id"
+    string[] visitedStopIds "denormalised FK[] -> ROUTE_STOP.id"
     string updatedAt
     int revision
   }
 
   WALK_SESSION {
     string id
-    string routeId
+    string routeId "FK -> ROUTE_PLAN.id"
     string startedAt
     string endedAt
     string primaryStats
     string secondaryStats
-    string[] highlightedPoiIds
+    string[] highlightedPoiIds "denormalised FK[] -> POINT_OF_INTEREST.id"
   }
 
   OUTBOX_ITEM {
     string id
     string type
-    string aggregateId
+    string aggregateId "polymorphic FK -> USER.id | ROUTE_PLAN.id | OFFLINE_BUNDLE.id"
     string payload
     string createdAt
     string lastAttemptAt
+    string nextAttemptAt
     string status
+    int attemptCount
+    int payloadVersion
   }
 
   USER ||--|| USER_PREFERENCES : owns
@@ -792,19 +816,34 @@ erDiagram
 
   ROUTE_SUMMARY ||--|| ROUTE_PLAN : expands_to
   ROUTE_PLAN ||--o{ ROUTE_STOP : includes
-  ROUTE_STOP }o--|| POI : refers_to
+  ROUTE_STOP }o--|| POINT_OF_INTEREST : refers_to
 
-  ROUTE_SUMMARY }o--o{ INTEREST_THEME : tagged_with
-  ROUTE_SUMMARY }o--o{ BADGE : displays
+  ROUTE_SUMMARY }o--o{ INTEREST_THEME : interestThemeIds
+  ROUTE_SUMMARY }o--o{ BADGE : badgeIds
+  POINT_OF_INTEREST }o--o{ TAG : tagIds
 
-  ROUTE_COLLECTION }o--o{ ROUTE_SUMMARY : contains
+  ROUTE_COLLECTION }o--o{ ROUTE_SUMMARY : routeIds
   THEME }o--o{ ROUTE_SUMMARY : recommends
 
   USER ||--o{ ROUTE_NOTE : writes
   USER ||--o{ WALK_SESSION : records
   USER ||--o{ OUTBOX_ITEM : enqueues
 
-  ROUTE_PLAN ||--o{ ROUTE_PROGRESS : tracks
+  ROUTE_PLAN ||--o{ OFFLINE_BUNDLE : routeId
+  ROUTE_PLAN ||--o{ ROUTE_NOTE : routeId
+  ROUTE_PLAN ||--o{ ROUTE_PROGRESS : routeId
+  ROUTE_PLAN ||--o{ WALK_SESSION : routeId
+
+  ROUTE_NOTE }o--|| POINT_OF_INTEREST : poiId
+  WALK_SESSION }o--o{ POINT_OF_INTEREST : highlightedPoiIds
+
+  USER_PREFERENCES }o--o{ INTEREST_THEME : interestThemeIds
+  USER_PREFERENCES }o--o{ SAFETY_TOGGLE : safetyToggleIds
+
+  OUTBOX_ITEM }o--|| ROUTE_PLAN : aggregateId_routeId
+  OUTBOX_ITEM }o--|| OFFLINE_BUNDLE : aggregateId_bundleId
+  OUTBOX_ITEM }o--|| USER : aggregateId_userId
+
 ```
 
 ## Cross-document links
