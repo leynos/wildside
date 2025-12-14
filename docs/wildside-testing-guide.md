@@ -14,8 +14,9 @@ adjust when running without elevated privileges.
 ## Embedded Postgres worker path
 
 `make test` builds and installs the `pg_worker` helper used by
-`pg_embedded_setup_unpriv`. By default, it writes to `/var/tmp/pg_worker`, which
-may fail on systems without write access.
+`pg-embed-setup-unpriv` (imported as `pg_embedded_setup_unpriv` in Rust). By
+default, it writes to `/var/tmp/pg_worker`, which may fail on systems without
+write access.
 
 - Set `PG_WORKER_PATH` to a user-writable location when running locally, for
   example:

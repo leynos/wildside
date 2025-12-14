@@ -1,5 +1,8 @@
 [workspace]
-members = ["backend"]
+members = [
+    "backend",
+    "tools/architecture-lint",
+]
 resolver = "2"
 
 [workspace.lints.clippy]

@@ -1,12 +1,13 @@
-# pg_embedded_setup_unpriv user guide
+# pg-embed-setup-unpriv user's guide
 
-The `pg_embedded_setup_unpriv` binary prepares a PostgreSQL installation and
-data directory regardless of whether it starts with `root` privileges. When the
-process runs as `root` it stages directories for `nobody` and delegates
-PostgreSQL lifecycle commands to the worker helper, which executes as the
-sandbox user. Unprivileged invocations keep the current identity and provision
-directories with the caller’s UID. This guide explains how to configure the tool
-and integrate it into automated test flows.
+The `pg-embed-setup-unpriv` crate prepares a PostgreSQL installation and data
+directory regardless of whether it starts with `root` privileges. The crate
+ships a small CLI binary named `pg_embedded_setup_unpriv` for this setup work.
+When the process runs as `root` it stages directories for `nobody` and
+delegates PostgreSQL lifecycle commands to the worker helper, which executes as
+the sandbox user. Unprivileged invocations keep the current identity and
+provision directories with the caller’s UID. This guide explains how to
+configure the crate and integrate it into automated test flows.
 
 ## Prerequisites
 
@@ -138,7 +139,7 @@ fn runs_migrations(test_cluster: TestCluster) {
 }
 ```
 
-The fixture integrates with `rstest-bdd` v0.1.0-alpha4 so behaviour tests can
+The fixture integrates with `rstest-bdd` v0.1.0 so behaviour tests can
 remain declarative as well:
 
 ```rust,no_run
@@ -198,7 +199,7 @@ assert!(url.starts_with("postgresql://"));
 
 ## Privilege detection and idempotence
 
-- `pg_embedded_setup_unpriv` detects its effective user ID at runtime. Root
+- `pg-embed-setup-unpriv` detects its effective user ID at runtime. Root
   processes follow the privileged branch and complete all filesystem work as
   `nobody`; non-root invocations leave permissions untouched and keep the
   caller’s UID on the runtime directories.
@@ -219,7 +220,8 @@ assert!(url.starts_with("postgresql://"));
 When authoring end-to-end tests that exercise PostgreSQL while the harness is
 still running as `root`, follow these steps:
 
-- Invoke `pg_embedded_setup_unpriv` before handing control to less-privileged
+- Invoke `pg_embedded_setup_unpriv` (from the `pg-embed-setup-unpriv` crate)
+  before handing control to less-privileged
   workers. This prepares file ownership, caches the binaries, and records the
   superuser password in a location accessible to `nobody`.
 - Export the `PG_EMBEDDED_WORKER` environment variable with the absolute path to
