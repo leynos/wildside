@@ -639,7 +639,7 @@ db.version(1).stores({
 ## Relationship sketch
 
 Note: Several fields below are “foreign-key style” IDs (or arrays of IDs) that
-are persisted as denormalised references rather than as intermediary/join
+are persisted as denormalized references rather than as intermediary/join
 tables. The associations in the diagram are therefore conceptual: they show
 what a given `*Id` / `*Ids` points at, even when the storage shape is an array.
 In addition, the diagram uses `POINT_OF_INTEREST` for the TypeScript
@@ -653,8 +653,8 @@ erDiagram
 
   USER_PREFERENCES {
     string userId "FK -> USER.id"
-    string[] interestThemeIds "denormalised FK[] -> INTEREST_THEME.id"
-    string[] safetyToggleIds "denormalised FK[] -> SAFETY_TOGGLE.id"
+    string[] interestThemeIds "denormalized FK[] -> INTEREST_THEME.id"
+    string[] safetyToggleIds "denormalized FK[] -> SAFETY_TOGGLE.id"
     string unitSystem
     int revision
     string updatedAt
@@ -668,9 +668,9 @@ erDiagram
     int distanceMetres
     int durationSeconds
     float rating
-    string[] badgeIds "denormalised FK[] -> BADGE.id"
+    string[] badgeIds "denormalized FK[] -> BADGE.id"
     string difficulty
-    string[] interestThemeIds "denormalised FK[] -> INTEREST_THEME.id"
+    string[] interestThemeIds "denormalized FK[] -> INTEREST_THEME.id"
   }
 
   ROUTE_PLAN {
@@ -693,7 +693,7 @@ erDiagram
     string id
     string localizations
     string categoryTagId
-    string[] tagIds "denormalised FK[] -> TAG.id"
+    string[] tagIds "denormalized FK[] -> TAG.id"
     float rating
     string image
     string openHours
@@ -706,12 +706,10 @@ erDiagram
     string localizations
     string leadImage
     string mapPreview
-    int minDistanceMetres
-    int maxDistanceMetres
-    int minDurationSeconds
-    int maxDurationSeconds
+    int[] distanceRangeMetres "tuple [minMetres, maxMetres]"
+    int[] durationRangeSeconds "tuple [minSeconds, maxSeconds]"
     string difficulty
-    string[] routeIds "denormalised FK[] -> ROUTE_SUMMARY.id"
+    string[] routeIds "denormalized FK[] -> ROUTE_SUMMARY.id"
   }
 
   THEME {
@@ -720,8 +718,7 @@ erDiagram
     string localizations
     string image
     int walkCount
-    int minDistanceMetres
-    int maxDistanceMetres
+    int[] distanceRangeMetres "tuple [minMetres, maxMetres]"
     float rating
   }
 
@@ -783,7 +780,7 @@ erDiagram
 
   ROUTE_PROGRESS {
     string routeId "FK -> ROUTE_PLAN.id"
-    string[] visitedStopIds "denormalised FK[] -> ROUTE_STOP.id"
+    string[] visitedStopIds "denormalized FK[] -> ROUTE_STOP.id"
     string updatedAt
     int revision
   }
@@ -795,7 +792,7 @@ erDiagram
     string endedAt
     string primaryStats
     string secondaryStats
-    string[] highlightedPoiIds "denormalised FK[] -> POINT_OF_INTEREST.id"
+    string[] highlightedPoiIds "denormalized FK[] -> POINT_OF_INTEREST.id"
   }
 
   OUTBOX_ITEM {
