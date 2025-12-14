@@ -51,7 +51,8 @@ review checklist.
 2. **Data contracts**
    - Adopt the mockup-derived, backend-compatible data model (see
      `wildside-pwa-data-model.md`).
-   - Introduce schema validation for network boundaries (Zod) at the fetch boundary.
+   - Introduce schema validation for network boundaries (Zod) at the fetch
+     boundary.
 3. **Local-first data layer**
    - TanStack Query is the primary server-state cache and synchronisation
      engine.
@@ -71,11 +72,11 @@ review checklist.
    - Define explicit caching policies (static assets, API reads, tiles,
      offline bundles).
    - Add offline UX states, retry patterns, and “queued action” affordances.
-6. **Accessibility and localisation gates**
+6. **Accessibility and localization gates**
    - Accessibility-first unit/component tests (Testing Library + axe-core).
    - End-to-end checks (Playwright) for keyboard flows and accessibility tree
      stability.
-   - Localisation regression tests for at least one non-default locale.
+   - Localization regression tests for at least one non-default locale.
 
 ## Architectural overview
 
@@ -89,13 +90,13 @@ At a high level:
 
 ```mermaid
 flowchart TD
-  UI[React UI<br/>Semantic HTML + Radix] -->|events| Logic[Feature hooks<br/>and orchestration]
-  Logic -->|read/write| QS[TanStack Query<br/>server state cache]
-  QS -->|persist| IDB[(IndexedDB<br/>Query cache)]
-  Logic -->|enqueue| Outbox[Dexie outbox<br/>offline mutations]
-  Outbox -->|drain| API[REST API<br/>/api/v1/*]
-  API -->|events| WS[WebSocket<br/>progress/events]
-  Logic -->|tiles & bundles| Tiles[Dexie tiles<br/>or Cache Storage]
+  UI[React UI\nSemantic HTML + Radix] -->|events| Logic[Feature hooks\nand orchestration]
+  Logic -->|read/write| QS[TanStack Query\nserver state cache]
+  QS -->|persist| IDB[(IndexedDB\nQuery cache)]
+  Logic -->|enqueue| Outbox[Dexie outbox\noffline mutations]
+  Outbox -->|drain| API[REST API\n/api/v1/*]
+  API -->|events| WS[WebSocket\nprogress/events]
+  Logic -->|tiles & bundles| Tiles[Dexie tiles\nor Cache Storage]
   UI -->|render| Map[MapLibre canvas]
   Tiles --> Map
 ```
@@ -138,7 +139,7 @@ Proposed `frontend-pwa/src` shape:
     `safety/`, `auth/`.
   - Each feature owns its view components, hooks, fixtures, and tests.
 - `src/app/lib/`
-  - Cross-cutting utilities: localisation runtime, unit formatting, URL
+  - Cross-cutting utilities: localization runtime, unit formatting, URL
     helpers, feature flags.
 - `src/app/data/`
   - Local fixtures and registries that are designed to be replaced with API
@@ -197,17 +198,21 @@ This design has two explicit constraints:
 
 ### Version alignment (Tailwind and DaisyUI)
 
-The mockup architecture is written for Tailwind v4 and DaisyUI v5, but parts of
-the current PWA workspace still use earlier versions.
+The mockup architecture is written for Tailwind v4 and DaisyUI v5. The current
+`frontend-pwa/` workspace uses Tailwind v3 and DaisyUI v4 (see
+`frontend-pwa/package.json`).
 
-This design document assumes the target state is:
+This design document describes the **target architecture** (Tailwind v4 +
+DaisyUI v5). Until the workspace upgrade is complete:
 
-- Tailwind v4 (token-first, modern variants, `@theme` support).
-- DaisyUI v5 (theme variables, consistent role utilities).
+- Treat v4/v5-only conventions as migration work, not one-off hacks.
+- Avoid relying on Tailwind v4 `@theme` directives; keep tokens exposed as CSS
+  custom properties and consumed via the existing Tailwind configuration.
+- Prefer semantic stability (HTML structure and Radix state attributes) and
+  allow only the styling plumbing to change during the upgrade.
 
-If implementation proceeds while earlier versions remain in place, the
-architecture remains the same, but token integration and state styling
-conventions should be treated as “migration work”, not one-off hacks.
+The upgrade is tracked as a repository work item in
+`tailwind-and-daisyui-upgrade.md`.
 
 ### Token pipeline
 
@@ -223,28 +228,28 @@ The mockup-derived practice is:
 - Keep generated token artefacts out of version control.
 - Build tokens as part of `dev`, `build`, and CI pipelines.
 
-## Internationalisation (i18n), localisation, and units
+## Internationalization (i18n), localization, and units
 
-Wildside uses i18next as the runtime localisation framework, with Fluent
+Wildside uses i18next as the runtime localization framework, with Fluent
 translation resources.
 
-Two important rules keep localisation stable and scalable:
+Two important rules keep localization stable and scalable:
 
 1. **UI chrome lives in translation files** (page titles, button labels,
    headings, “copy”).
-2. **Domain options live in the data model** and carry localisation metadata
+2. **Domain options live in the data model** and carry localization metadata
    (for example `EntityLocalizations`, or Fluent key references), so UI
    components remain data-driven.
 
-### Localisable data model
+### Localizable data model
 
-The PWA adopts a backend-compatible localisation shape for entities, defined in
+The PWA adopts a backend-compatible localization shape for entities, defined in
 `wildside-pwa-data-model.md`.
 
 In practice:
 
 - Catalogue entities (themes, collections, interest themes, tags, badges)
-  include localisation maps per locale.
+  include localization maps per locale.
 - UI registries (where appropriate) store stable IDs and Fluent keys rather
   than hard-coded strings.
 
@@ -341,7 +346,7 @@ Minimum requirements:
 
 - A Web App Manifest with:
   - Name, short name, icons, `start_url`, and theme colours.
-  - `display: standalone` (or `minimal-ui`) for an app-like install.
+  - `display: standalone` (or `minimal-ui`) for an app-like installation.
 - A service worker that:
   - Precaches the app shell (built assets).
   - Provides a navigation fallback to the app shell for client-side routes.
@@ -429,7 +434,7 @@ The mockup implementation notes translate cleanly into a staged delivery plan:
 Each stage should ship with:
 
 - Accessibility tests covering the interactive surface.
-- At least one localisation regression test (non-default locale).
+- At least one localization regression test (non-default locale).
 - Offline state validation (either automated or scripted manual checklist).
 
 ## Cross-document links

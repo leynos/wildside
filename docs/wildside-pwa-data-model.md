@@ -35,7 +35,8 @@ In scope:
   modules, ports, and inbound/outbound adapters).
 - A persistence-oriented view:
   PostgreSQL/PostGIS on the backend; IndexedDB persistence on the frontend,
-  with Dexie and/or Cache Storage for heavy assets and the outbox.
+  using TanStack Query cache persistence for domain data, Dexie for the
+  explicit outbox, and Cache Storage for tile bytes.
 
 Out of scope:
 
@@ -52,7 +53,7 @@ Out of scope:
 - **Local-first React:** render from the local copy first and treat the network
   as optional.
 - **Offline-first assets:** offline bundles are first-class entities, but tile
-  bytes are stored outside React state (Cache Storage or Dexie keyed by bundle
+  bytes are stored outside React state (Cache Storage keyed by bundle
   metadata).
 - **Dexie’s role:** Dexie is a durable storage engine for heavy/binary assets
   and an outbox, not a synchronisation worldview.
@@ -109,7 +110,7 @@ Store numeric quantities in SI base units in all persisted models:
 
 ### Localization
 
-Use an entity-localisation map keyed by locale code:
+Use an entity-localization map keyed by locale code:
 
 ```ts
 type LocaleCode = string;
@@ -153,7 +154,7 @@ type DifficultyCode = "easy" | "moderate" | "challenging";
 ### Badge, tag, and interest theme
 
 Interests, tags, and badges are better modelled as catalogue entities because
-they grow and must be localized.
+they grow and must support localization.
 
 ```ts
 type InterestTheme = {
@@ -432,7 +433,7 @@ Offline bundles bridge “catalogue JSON” and “tile bytes”.
 ### Offline bundle manifest
 
 The app persists a bundle manifest as normal data, while storing bytes
-elsewhere (Cache Storage or Dexie blobs).
+elsewhere (Cache Storage).
 
 ```ts
 type BoundingBox = readonly [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
@@ -455,31 +456,126 @@ type OfflineBundle = {
 
 ### Tile storage
 
-Two storage strategies remain compatible with this model:
+The MVP storage strategy uses Cache Storage via a service worker.
+
+An optional future enhancement stores tile bytes in a Dexie tile table for
+explicit eviction and accounting.
+
+MVP:
 
 - **Service Worker + Cache Storage:** cache tile URLs under their request URLs;
   `OfflineBundle` stores bounds/zoom needed to reconstruct URL sets.
+
+Optional enhancement:
+
 - **Dexie tile table:** store tile blobs by compound key `{bundleId, z, x, y}`,
   allowing explicit eviction and accounting.
 
 ### Outbox (offline mutations)
 
-To synchronise offline writes, store an explicit outbox table in Dexie:
+The outbox is a client-side queue of offline mutations persisted in Dexie. The
+outbox is not sent over the wire; each outbox item is converted into an HTTP
+request whose payload must match the backend endpoint contract.
 
 ```ts
-type OutboxItem = {
-  readonly id: string; // UUID (client-generated)
-  readonly type: string;
-  readonly aggregateId: string;
-  readonly payload: unknown;
-  readonly createdAt: string;
-  readonly lastAttemptAt?: string;
-  readonly status: "pending" | "inFlight" | "failed";
-};
+type OutboxMutationType =
+  | "userPreferences.update"
+  | "routeNote.upsert"
+  | "routeProgress.put"
+  | "offlineBundle.create"
+  | "offlineBundle.delete";
+
+type OutboxItem = Readonly<
+  | {
+      readonly id: string; // UUID (client-generated)
+      readonly type: "userPreferences.update";
+      readonly payloadVersion: 1;
+      readonly aggregateId: string; // userId
+      readonly payload: {
+        readonly interestThemeIds: readonly string[];
+        readonly safetyToggleIds: readonly string[];
+        readonly unitSystem: "metric" | "imperial";
+        readonly expectedRevision?: number;
+      };
+      readonly createdAt: string;
+      readonly lastAttemptAt?: string;
+      readonly nextAttemptAt?: string;
+      readonly attemptCount: number;
+      readonly status: "pending" | "inFlight" | "failed";
+    }
+  | {
+      readonly id: string; // UUID (client-generated)
+      readonly type: "routeNote.upsert";
+      readonly payloadVersion: 1;
+      readonly aggregateId: string; // routeId
+      readonly payload: {
+        readonly noteId: string;
+        readonly poiId?: string;
+        readonly body: string;
+        readonly expectedRevision?: number;
+      };
+      readonly createdAt: string;
+      readonly lastAttemptAt?: string;
+      readonly nextAttemptAt?: string;
+      readonly attemptCount: number;
+      readonly status: "pending" | "inFlight" | "failed";
+    }
+  | {
+      readonly id: string; // UUID (client-generated)
+      readonly type: "routeProgress.put";
+      readonly payloadVersion: 1;
+      readonly aggregateId: string; // routeId
+      readonly payload: {
+        readonly visitedStopIds: readonly string[];
+        readonly expectedRevision?: number;
+      };
+      readonly createdAt: string;
+      readonly lastAttemptAt?: string;
+      readonly nextAttemptAt?: string;
+      readonly attemptCount: number;
+      readonly status: "pending" | "inFlight" | "failed";
+    }
+  | {
+      readonly id: string; // UUID (client-generated)
+      readonly type: "offlineBundle.create";
+      readonly payloadVersion: 1;
+      readonly aggregateId: string; // bundleId
+      readonly payload: Omit<OfflineBundle, "status" | "progress">;
+      readonly createdAt: string;
+      readonly lastAttemptAt?: string;
+      readonly nextAttemptAt?: string;
+      readonly attemptCount: number;
+      readonly status: "pending" | "inFlight" | "failed";
+    }
+  | {
+      readonly id: string; // UUID (client-generated)
+      readonly type: "offlineBundle.delete";
+      readonly payloadVersion: 1;
+      readonly aggregateId: string; // bundleId
+      readonly payload: { readonly bundleId: string };
+      readonly createdAt: string;
+      readonly lastAttemptAt?: string;
+      readonly nextAttemptAt?: string;
+      readonly attemptCount: number;
+      readonly status: "pending" | "inFlight" | "failed";
+    }
+>;
 ```
+
+#### Idempotency contract (backend alignment)
 
 Outbound HTTP writes include `Idempotency-Key = OutboxItem.id` so the backend
 can deduplicate retries safely.
+
+The backend already documents an idempotency contract for `POST /api/v1/routes`
+in `wildside-backend-architecture.md`:
+
+- Keys are scoped per endpoint.
+- Keys persist for 24 hours (configurable via `ROUTES_IDEMPOTENCY_TTL_HOURS`).
+- Supplying the same key with a different payload yields `409 Conflict`.
+
+For outbox-backed mutations, the backend endpoints that accept queued writes
+should follow the same contract shape.
 
 ## Backend hexagon mapping (domain modules and ports)
 
@@ -526,13 +622,15 @@ The client-side storage strategy implied by this model is:
 
 - Persist the TanStack Query cache (catalogue snapshots, routes, POIs, notes)
   into IndexedDB.
-- Use Dexie (or Cache Storage) for heavy tile bytes and the explicit outbox.
+- Use Dexie for the explicit outbox.
+- Use Cache Storage for tile bytes (with an optional Dexie tile table as a
+  future enhancement).
 
 A minimal Dexie schema needs:
 
 ```ts
 db.version(1).stores({
-  outbox: "id,type,aggregateId,status,createdAt",
+  outbox: "id,type,aggregateId,status,createdAt,nextAttemptAt,attemptCount",
   offlineBundles: "id,kind,status,updatedAt,routeId,regionId",
   tiles: "[bundleId+z+x+y],bundleId,z,x,y",
 });
