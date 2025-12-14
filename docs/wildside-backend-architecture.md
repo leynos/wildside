@@ -727,7 +727,8 @@ spec)([6](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11
 > failures into these enums, eliminating the previous `anyhow::Result` usage
 > that obscured root causes and complicated retries. Contract tests exercise
 > the new ports against ephemeral PostgreSQL instances provided by
-> `pg_embedded_setup_unpriv`. A lightweight `pg_worker` binary now ships with
+> `pg-embed-setup-unpriv` (imported as `pg_embedded_setup_unpriv` in Rust). A
+> lightweight `pg_worker` binary now ships with
 > the backend crate so root test environments can drop privileges safely when
 > spinning up embedded clusters.
 
