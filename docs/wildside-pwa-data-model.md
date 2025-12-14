@@ -1,4 +1,4 @@
-# Wildside PWA data model (mockup-derived, backend-compatible)
+# Wildside Progressive Web App (PWA) data model (mockup-derived, backend-compatible)
 
 Last updated: 14 December 2025
 
@@ -19,6 +19,11 @@ that supports:
 
 This is a design document, not an implementation plan.
 
+This document is the single source of truth for entity shapes and on-wire
+schemas. Behavioural semantics (offline-first UX, persistence choices, caching,
+and testing gates) are defined in `wildside-pwa-design.md` to avoid the same
+behaviour being specified in multiple places.
+
 ## Scope and non-goals
 
 In scope:
@@ -36,8 +41,9 @@ Out of scope:
 
 - Full route-generation engine design (scoring, optimisation, enrichment).
 - Exact PostGIS table layouts for tiles beyond what the PWA needs.
-- CRDTs. The model remains compatible with later upgrades, but does not require
-  them for MVP.
+- Conflict-free Replicated Data Types (CRDTs). The model remains compatible
+  with later upgrades, but does not require them for the Minimum Viable Product
+  (MVP).
 
 ## Constraints (carried over from existing docs)
 
@@ -556,8 +562,8 @@ erDiagram
 ## Cross-document links
 
 - PWA architecture overview and implementation plan:
-  `docs/wildside-pwa-design.md`.
+  `wildside-pwa-design.md`.
 - Backend contract philosophy (ports-and-adapters):
-  `docs/wildside-backend-architecture.md`.
+  `wildside-backend-architecture.md`.
 - Local-first client-state guidance:
-  `docs/local-first-react.md`.
+  `local-first-react.md`.

@@ -1,4 +1,4 @@
-# Wildside PWA design (mockup-derived)
+# Wildside Progressive Web App (PWA) design (mockup-derived)
 
 Last updated: 14 December 2025
 
@@ -10,7 +10,12 @@ This document defines the intended design for the Wildside Progressive Web App
 
 It exists to make the Wildside repository self-contained: the mockup directory
 is not expected to be committed into the main project repository, so any
-decisions and contracts that we rely upon must be recorded here.
+decisions and contracts that the codebase relies upon must be recorded here.
+
+This document is the single source of truth for Wildside PWA runtime behaviour
+(offline-first UX, persistence semantics, caching strategy, and testing gates).
+The data shapes that support those behaviours are defined in
+`wildside-pwa-data-model.md`.
 
 ## Scope
 
@@ -26,11 +31,13 @@ In scope:
 
 Out of scope:
 
-- Backend route-generation algorithm details (scoring, optimisation, ETL).
+- Backend route-generation algorithm details (scoring, optimisation).
 - Backend infrastructure and deployment specifics beyond client-facing
   contracts.
-- CRDT-style multi-writer conflict resolution (we remain compatible with later
-  upgrades, but we do not require them for MVP).
+- Extract–Transform–Load (ETL) details for ingestion pipelines.
+- Conflict-free Replicated Data Types (CRDTs) style multi-writer conflict
+  resolution. The design remains compatible with later upgrades, but does not
+  require CRDTs for the Minimum Viable Product (MVP).
 
 ## Plan
 
@@ -43,8 +50,8 @@ review checklist.
    - Add baseline i18n runtime and a minimal translation bundle.
 2. **Data contracts**
    - Adopt the mockup-derived, backend-compatible data model (see
-     `docs/wildside-pwa-data-model.md`).
-   - Introduce schema validation for network I/O (Zod) at the fetch boundary.
+     `wildside-pwa-data-model.md`).
+   - Introduce schema validation for network boundaries (Zod) at the fetch boundary.
 3. **Local-first data layer**
    - TanStack Query is the primary server-state cache and synchronisation
      engine.
@@ -106,7 +113,8 @@ Wildside intentionally avoids a single global state manager.
     for complex flows.
   - Not duplicated from server state.
 
-This follows the guidance in `docs/local-first-react.md`.
+This follows the guidance in
+[Architecting resilient local-first applications in React](local-first-react.md).
 
 ## Frontend module layout
 
@@ -231,7 +239,7 @@ Two important rules keep localisation stable and scalable:
 ### Localisable data model
 
 The PWA adopts a backend-compatible localisation shape for entities, defined in
-`docs/wildside-pwa-data-model.md`.
+`wildside-pwa-data-model.md`.
 
 In practice:
 
@@ -356,7 +364,7 @@ Update strategy should prefer correctness over “instant updates”:
 
 - Default to waiting for the next navigation before activating a new service
   worker.
-- Only use `skipWaiting()`/`clients.claim()` when we have a tested, user-visible
+- Only use `skipWaiting()`/`clients.claim()` when there is a tested, user-visible
   update UX.
 
 Background sync is an optional enhancement (not a hard dependency):
@@ -404,8 +412,8 @@ In practice, this means:
 
 For concrete patterns and harness guidance, use:
 
-- `docs/high-velocity-accessibility-first-component-testing.md`
-- `docs/pure-accessible-and-localizable-react-components.md`
+- [High-velocity, accessibility-first component testing](high-velocity-accessibility-first-component-testing.md)
+- [Pure, accessible, and localizable React components](pure-accessible-and-localizable-react-components.md)
 
 ## Migration notes (from the mockup)
 
@@ -427,12 +435,12 @@ Each stage should ship with:
 ## Cross-document links
 
 - Mockup-derived, backend-compatible data model:
-  `docs/wildside-pwa-data-model.md`.
+  `wildside-pwa-data-model.md`.
 - Product vision and frontend stack rationale:
-  `docs/wildside-high-level-design.md`.
+  `wildside-high-level-design.md`.
 - Backend API and WebSocket contract shape:
-  `docs/wildside-backend-architecture.md`.
+  `wildside-backend-architecture.md`.
 - Local-first React state boundaries:
-  `docs/local-first-react.md`.
+  `local-first-react.md`.
 - Accessibility-first testing practices:
-  `docs/high-velocity-accessibility-first-component-testing.md`.
+  `high-velocity-accessibility-first-component-testing.md`.
