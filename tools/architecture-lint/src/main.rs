@@ -1,5 +1,6 @@
 //! CLI entry point for the repo-local architecture lint.
 
+use std::fmt;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -7,28 +8,48 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let backend_dir = repo_root().join("backend");
+    let backend_dir = match repo_root() {
+        Ok(root) => root.join("backend"),
+        Err(err) => {
+            let _ = writeln!(io::stderr().lock(), "{err}");
+            return ExitCode::FAILURE;
+        }
+    };
     match architecture_lint::lint_backend_sources(&backend_dir) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             let mut stderr = io::stderr().lock();
-            if let Err(write_err) = writeln!(stderr, "{err}") {
-                drop(write_err);
-            }
+            let _ = writeln!(stderr, "{err}");
             ExitCode::FAILURE
         }
     }
 }
 
-fn repo_root() -> PathBuf {
+#[derive(Debug, Clone, Copy)]
+struct RepoRootError;
+
+impl fmt::Display for RepoRootError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "unable to locate workspace root (directory containing a workspace Cargo.toml)"
+        )
+    }
+}
+
+impl std::error::Error for RepoRootError {}
+
+fn repo_root() -> Result<PathBuf, RepoRootError> {
+    let from_env = std::env::var("CARGO_WORKSPACE_DIR").ok().map(PathBuf::from);
     let from_cwd = std::env::current_dir().ok();
     let from_manifest = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
-    from_cwd
+    from_env
         .as_deref()
         .and_then(find_workspace_root)
+        .or_else(|| from_cwd.as_deref().and_then(find_workspace_root))
         .or_else(|| from_manifest.as_deref().and_then(find_workspace_root))
-        .expect("unable to locate workspace root (directory containing a workspace Cargo.toml)")
+        .ok_or(RepoRootError)
 }
 
 fn find_workspace_root(start: &Path) -> Option<PathBuf> {

@@ -55,6 +55,15 @@ fn domain_imports_actix(world: &Mutex<LintWorld>) {
     );
 }
 
+#[given("an outbound module that imports the inbound layer")]
+fn outbound_imports_inbound(world: &Mutex<LintWorld>) {
+    add_source(
+        world,
+        "outbound/persistence/bad_cross_boundary.rs",
+        "use crate::inbound::http; fn handler() { let _ = 1; }",
+    );
+}
+
 #[given("valid domain, inbound, and outbound modules")]
 fn valid_modules(world: &Mutex<LintWorld>) {
     add_valid_modules(world);
@@ -157,6 +166,11 @@ fn violations(world: &Mutex<LintWorld>) -> Vec<Violation> {
 #[then("the lint fails due to outbound access from inbound")]
 fn lint_fails_due_to_outbound_access(world: &Mutex<LintWorld>) {
     assert_violation_contains(world, "crate::outbound");
+}
+
+#[then("the lint fails due to inbound access from outbound")]
+fn lint_fails_due_to_inbound_access(world: &Mutex<LintWorld>) {
+    assert_violation_contains(world, "crate::inbound");
 }
 
 #[then("the lint fails due to infrastructure crate usage")]

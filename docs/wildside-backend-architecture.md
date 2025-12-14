@@ -207,19 +207,25 @@ The intended runtime wiring pattern is:
 ```rust
 use std::sync::Arc;
 
-use actix_web::{web, App};
+use actix_web::{web, App, HttpServer};
 
 use backend::domain::ports::UserRepository;
 use backend::inbound::http::users;
 
+#[derive(Clone)]
 pub struct AppState {
     pub users: Arc<dyn UserRepository>,
 }
 
-pub fn http_app(state: AppState) -> App<impl actix_web::dev::ServiceFactory> {
-    App::new()
-        .app_data(web::Data::new(state))
-        .service(web::scope("/api/v1").service(users::login))
+pub async fn run_http_server(state: AppState) -> std::io::Result<()> {
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(state.clone()))
+            .service(web::scope("/api/v1").service(users::login))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
 ```
 

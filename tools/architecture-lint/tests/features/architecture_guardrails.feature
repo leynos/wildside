@@ -18,6 +18,11 @@ Feature: Architecture guardrails
     When the architecture lint runs
     Then the lint fails due to framework crate usage in the domain
 
+  Scenario: Outbound adapters cannot depend on inbound adapters
+    Given an outbound module that imports the inbound layer
+    When the architecture lint runs
+    Then the lint fails due to inbound access from outbound
+
   Scenario: Well-formed module dependencies pass
     Given valid domain, inbound, and outbound modules
     When the architecture lint runs
