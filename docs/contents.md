@@ -19,6 +19,12 @@
 - [Pure, accessible, and localizable React components][pure-react-components]
   – building accessible, localized components with Radix, TanStack, and
   DaisyUI. *Audience: frontend developers.*
+- [Wildside PWA design](wildside-pwa-design.md) – frontend architecture,
+  offline-first behaviour, and localisation strategy. *Audience: frontend
+  developers and contributors.*
+- [Wildside PWA data model](wildside-pwa-data-model.md) – mockup-derived,
+  backend-compatible entity shapes for the PWA. *Audience: frontend and backend
+  developers.*
 - [Architecting resilient local-first applications in React][local-first]
   – strategies for offline-first apps using Zustand and TanStack Query.
   *Audience: frontend developers.*
