@@ -21,17 +21,23 @@ pub(crate) use crate::doubles::UsersResponse;
 use crate::harness::{with_world_async, SharedWorld};
 use backend::TraceId;
 
-#[given("a running server wired with mocked HTTP and WS ports")]
-pub(crate) fn a_running_server_wired_with_mocked_http_and_ws_ports(_world: SharedWorld) {}
+fn perform_login_request(
+    world: &SharedWorld,
+    username: &str,
+    password: &str,
+    mock_response: Option<LoginResponse>,
+) {
+    if let Some(response) = mock_response {
+        let login = { world.borrow().login.clone() };
+        login.set_response(response);
+    }
 
-#[when("the client logs in with valid credentials")]
-pub(crate) fn the_client_logs_in_with_valid_credentials(world: SharedWorld) {
     let payload = LoginRequest {
-        username: "admin".into(),
-        password: "password".into(),
+        username: username.to_owned(),
+        password: password.to_owned(),
     };
 
-    let (status, cookie_header) = with_world_async(&world, |base_url| async move {
+    let (status, cookie_header) = with_world_async(world, |base_url| async move {
         let response = awc::Client::default()
             .post(format!("{base_url}/api/v1/login"))
             .send_json(&payload)
@@ -52,35 +58,18 @@ pub(crate) fn the_client_logs_in_with_valid_credentials(world: SharedWorld) {
     ctx.session_cookie = cookie_header;
 }
 
+#[given("a running server wired with mocked HTTP and WS ports")]
+pub(crate) fn a_running_server_wired_with_mocked_http_and_ws_ports(_world: SharedWorld) {}
+
+#[when("the client logs in with valid credentials")]
+pub(crate) fn the_client_logs_in_with_valid_credentials(world: SharedWorld) {
+    perform_login_request(&world, "admin", "password", None);
+}
+
 #[when("the client logs in with invalid credentials")]
 pub(crate) fn the_client_logs_in_with_invalid_credentials(world: SharedWorld) {
-    let login = { world.borrow().login.clone() };
-    login.set_response(LoginResponse::Err(Error::unauthorized("invalid credentials")));
-
-    let payload = LoginRequest {
-        username: "admin".into(),
-        password: "wrong".into(),
-    };
-
-    let (status, cookie_header) = with_world_async(&world, |base_url| async move {
-        let response = awc::Client::default()
-            .post(format!("{base_url}/api/v1/login"))
-            .send_json(&payload)
-            .await
-            .expect("login request");
-
-        let status = response.status().as_u16();
-        let cookie_header = response
-            .headers()
-            .get(header::SET_COOKIE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.to_owned());
-        (status, cookie_header)
-    });
-
-    let mut ctx = world.borrow_mut();
-    ctx.last_status = Some(status);
-    ctx.session_cookie = cookie_header;
+    let error_response = LoginResponse::Err(Error::unauthorized("invalid credentials"));
+    perform_login_request(&world, "admin", "wrong", Some(error_response));
 }
 
 #[when("the client requests the users list")]
