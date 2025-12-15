@@ -46,7 +46,7 @@ This work must also:
 - [x] (2025-12-15) Extend Conftest policies for rendered manifests.
 - [x] (2025-12-15) Add `actionlint` validation to `make lint-actions`.
 - [x] (2025-12-15) Run all quality gates and update the roadmap checkbox.
-- [ ] (2025-12-15) Commit and push to a new branch.
+- [x] (2025-12-15) Commit and push to a new branch.
 
 ## Surprises & Discoveries
 
@@ -310,3 +310,8 @@ Revision (2025-12-15): Updated `Progress`, `Surprises & Discoveries`, and
 `Outcomes & Retrospective` to reflect the completed implementation, including
 lint/test gate fixes (action schema validation, Conftest policy package
 selection, and Terratest temp directory cleanup).
+
+Revision (2025-12-15): Added explicit Makefile pre-checks for
+`TRAEFIK_ACME_EMAIL` and `TRAEFIK_CLOUDFLARE_SECRET_NAME` when
+`TRAEFIK_KUBECONFIG_PATH` is set, so apply-mode validation fails fast with a
+clear message.

@@ -356,6 +356,10 @@ vault-appliance-policy: conftest tofu
 	rm -f infra/modules/vault_appliance/examples/basic/tfplan.binary infra/modules/vault_appliance/examples/basic/plan.json
 
 traefik-test:
+	# `TRAEFIK_KUBECONFIG_PATH` enables apply-mode validation/plan checks for the
+	# basic example. When it is set, the ACME email and Cloudflare secret name
+	# must also be set so failures are explicit (rather than surfacing later as
+	# OpenTofu variable validation errors).
 	tofu fmt -check infra/modules/traefik
 	tofu -chdir=infra/modules/traefik/examples/render init
 	tofu -chdir=infra/modules/traefik/examples/render validate
@@ -363,6 +367,10 @@ traefik-test:
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/traefik/examples/basic init
 	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic validate -no-color \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
@@ -374,6 +382,10 @@ traefik-test:
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	cd infra/modules/traefik/tests && $(GO_TEST_ENV) KUBECONFIG="$(TRAEFIK_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan -input=false -no-color -detailed-exitcode \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
@@ -382,7 +394,7 @@ traefik-test:
 		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 	else \
 		echo "Skipping traefik plan -detailed-exitcode; set TRAEFIK_KUBECONFIG_PATH to enable"; \
-		fi
+	fi
 	$(MAKE) traefik-policy
 
 traefik-policy: conftest tofu
@@ -391,6 +403,10 @@ traefik-policy: conftest tofu
 		echo "Skipping traefik-policy; set TRAEFIK_KUBECONFIG_PATH to run"; \
 	else \
 		set -euo pipefail; \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		tmpdir=$$(mktemp -d); \
 		trap 'rm -rf "$$tmpdir"' EXIT; \
 		status=0; \
@@ -399,12 +415,16 @@ traefik-policy: conftest tofu
 			-detailed-exitcode \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
-				-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" \
-				|| status=$$?; \
-			if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
-			TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
-			conftest test --policy infra/modules/traefik/policy/plan --fail-on-warn "$$tmpdir/plan.json"; \
-		fi
+			-var "cloudflare_api_token_secret_name=$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" \
+			|| status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/traefik/policy/plan --fail-on-warn "$$tmpdir/plan.json"; \
+	fi
 
 traefik-e2e: tofu
+	@if [ -z "$(TRAEFIK_KUBECONFIG_PATH)" ] || [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+		echo "Missing Traefik env vars for e2e. Set TRAEFIK_KUBECONFIG_PATH, TRAEFIK_ACME_EMAIL, and TRAEFIK_CLOUDFLARE_SECRET_NAME." >&2; \
+		exit 1; \
+	fi
 	./scripts/traefik-e2e.sh
