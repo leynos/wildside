@@ -4,10 +4,13 @@ use actix_web::http::header::HeaderValue;
 use actix_web::{
     http::{header, StatusCode},
     test::{self, TestRequest},
-    App,
+    web, App,
 };
+use backend::domain::UserOnboardingService;
 use backend::inbound::ws;
+use backend::inbound::ws::state::WsState;
 use rstest::rstest;
+use std::sync::Arc;
 
 // Example Sec-WebSocket-Key from RFC 6455 section 1.3 used to satisfy handshake requirements.
 const RFC6455_SAMPLE_KEY: &str = "dGhlIHNhbXBsZSBub25jZQ==";
@@ -27,7 +30,13 @@ fn handshake_request() -> TestRequest {
 #[case("http://localhost:3000")]
 fn upgrades_when_origin_allowed(#[case] origin: &str) {
     actix_rt::System::new().block_on(async move {
-        let app = test::init_service(App::new().service(ws::ws_entry)).await;
+        let state = WsState::new(Arc::new(UserOnboardingService));
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(state))
+                .service(ws::ws_entry),
+        )
+        .await;
 
         let req = handshake_request()
             .insert_header((header::ORIGIN, origin))
@@ -43,7 +52,13 @@ fn upgrades_when_origin_allowed(#[case] origin: &str) {
 
 #[actix_rt::test]
 async fn rejects_missing_origin_header() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+    let state = WsState::new(Arc::new(UserOnboardingService));
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .service(ws::ws_entry),
+    )
+    .await;
 
     let req = handshake_request().to_request();
     let response = test::call_service(&app, req).await;
@@ -52,7 +67,13 @@ async fn rejects_missing_origin_header() {
 
 #[actix_rt::test]
 async fn rejects_unlisted_origin() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+    let state = WsState::new(Arc::new(UserOnboardingService));
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .service(ws::ws_entry),
+    )
+    .await;
 
     let req = handshake_request()
         .append_header((header::ORIGIN, "https://example.com"))
@@ -63,7 +84,13 @@ async fn rejects_unlisted_origin() {
 
 #[actix_rt::test]
 async fn rejects_multiple_origin_headers() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+    let state = WsState::new(Arc::new(UserOnboardingService));
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .service(ws::ws_entry),
+    )
+    .await;
 
     let req = handshake_request()
         .append_header((header::ORIGIN, "https://yourdomain.example"))
@@ -75,7 +102,13 @@ async fn rejects_multiple_origin_headers() {
 
 #[actix_rt::test]
 async fn rejects_malformed_origin_header() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+    let state = WsState::new(Arc::new(UserOnboardingService));
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .service(ws::ws_entry),
+    )
+    .await;
 
     let invalid = HeaderValue::from_bytes(&[0x80]).expect("opaque Origin header value");
     let req = handshake_request()
@@ -87,7 +120,13 @@ async fn rejects_malformed_origin_header() {
 
 #[actix_rt::test]
 async fn rejects_localhost_zero_port_origin() {
-    let app = test::init_service(App::new().service(ws::ws_entry)).await;
+    let state = WsState::new(Arc::new(UserOnboardingService));
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .service(ws::ws_entry),
+    )
+    .await;
 
     let req = handshake_request()
         .insert_header((header::ORIGIN, "http://localhost:0"))

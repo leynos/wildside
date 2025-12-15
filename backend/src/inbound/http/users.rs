@@ -5,9 +5,9 @@
 //! GET /api/v1/users
 //! ```
 
-use crate::domain::{DisplayName, Error, LoginCredentials, LoginValidationError, User, UserId};
-use crate::inbound::http::auth::authenticate;
+use crate::domain::{Error, LoginCredentials, LoginValidationError, User};
 use crate::inbound::http::session::SessionContext;
+use crate::inbound::http::state::HttpState;
 use crate::inbound::http::ApiResult;
 use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -52,12 +52,13 @@ impl TryFrom<LoginRequest> for LoginCredentials {
 )]
 #[post("/login")]
 pub async fn login(
+    state: web::Data<HttpState>,
     session: SessionContext,
     payload: web::Json<LoginRequest>,
 ) -> ApiResult<HttpResponse> {
     let credentials =
         LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
-    let user_id = authenticate(&credentials)?;
+    let user_id = state.login.authenticate(&credentials).await?;
     session.persist_user(&user_id)?;
     Ok(HttpResponse::Ok().finish())
 }
@@ -95,27 +96,23 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
     operation_id = "listUsers"
 )]
 #[get("/users")]
-pub async fn list_users(session: SessionContext) -> ApiResult<web::Json<Vec<User>>> {
-    session.require_user_id()?;
-    const FIXTURE_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-    const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
-
-    // These values are compile-time constants; surface invalid data as an
-    // internal error so automated checks catch accidental regressions.
-    let id = UserId::new(FIXTURE_ID)
-        .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))?;
-    let display_name = DisplayName::new(FIXTURE_DISPLAY_NAME)
-        .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
-    let data = vec![User::new(id, display_name)];
+pub async fn list_users(
+    state: web::Data<HttpState>,
+    session: SessionContext,
+) -> ApiResult<web::Json<Vec<User>>> {
+    let user_id = session.require_user_id()?;
+    let data = state.users.list_users(&user_id).await?;
     Ok(web::Json(data))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::ports::{FixtureLoginService, FixtureUsersQuery};
     use actix_web::{test as actix_test, web, App};
     use rstest::rstest;
     use serde_json::Value;
+    use std::sync::Arc;
 
     #[derive(Debug)]
     struct ValidationExpectation<'a> {
@@ -175,7 +172,9 @@ mod tests {
             InitError = (),
         >,
     > {
+        let state = HttpState::new(Arc::new(FixtureLoginService), Arc::new(FixtureUsersQuery));
         App::new()
+            .app_data(web::Data::new(state))
             .wrap(crate::inbound::http::test_utils::test_session_middleware())
             .service(web::scope("/api/v1").service(login).service(list_users))
     }

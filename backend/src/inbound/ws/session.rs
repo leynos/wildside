@@ -7,8 +7,10 @@
 //! feedback; adjust the constants below if SLAs change so clients and
 //! intermediaries stay aligned.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::domain::ports::UserOnboarding;
 use crate::domain::{UserEvent, UserOnboardingService};
 use crate::inbound::ws::messages::{
     DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
@@ -32,15 +34,12 @@ const CLIENT_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub struct WsSession {
     last_heartbeat: Instant,
-    onboarding: UserOnboardingService,
+    onboarding: Arc<dyn UserOnboarding>,
 }
 
 impl Default for WsSession {
     fn default() -> Self {
-        Self {
-            last_heartbeat: Instant::now(),
-            onboarding: UserOnboardingService,
-        }
+        Self::new(Arc::new(UserOnboardingService))
     }
 }
 
@@ -65,6 +64,13 @@ impl Actor for WsSession {
 }
 
 impl WsSession {
+    pub fn new(onboarding: Arc<dyn UserOnboarding>) -> Self {
+        Self {
+            last_heartbeat: Instant::now(),
+            onboarding,
+        }
+    }
+
     fn handle_display_name_request(
         &mut self,
         request: DisplayNameRequest,
@@ -155,22 +161,29 @@ impl StreamHandler<Result<Message, ProtocolError>> for WsSession {
 mod tests {
     use super::*;
     use crate::inbound::ws;
+    use crate::inbound::ws::state::WsState;
     use actix_web::{dev::Server, dev::ServerHandle, http::header, App, HttpServer};
     use awc::{ws::Codec, ws::Frame, ws::Message, BoxedSocket};
     use futures_util::{SinkExt, StreamExt};
     use rstest::{fixture, rstest};
     use serde_json::Value;
+    use std::sync::Arc;
     use uuid::Uuid;
 
     #[fixture]
     async fn start_ws_server() -> (String, Server) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test listener");
         let addr = listener.local_addr().expect("listener addr");
-        let server = HttpServer::new(|| App::new().service(ws::ws_entry))
-            .listen(listener)
-            .expect("bind test server")
-            .disable_signals()
-            .run();
+        let ws_state = WsState::new(Arc::new(UserOnboardingService));
+        let server = HttpServer::new(move || {
+            App::new()
+                .app_data(actix_web::web::Data::new(ws_state.clone()))
+                .service(ws::ws_entry)
+        })
+        .listen(listener)
+        .expect("bind test server")
+        .disable_signals()
+        .run();
         let url = format!("http://{addr}");
         (url, server)
     }

@@ -5,7 +5,7 @@
 //! - initialise the per-connection WebSocket actor
 //! - keep WebSocket-specific concerns at the edge of the system
 
-use actix_web::web::Payload;
+use actix_web::web::{self, Payload};
 use actix_web::{
     get,
     http::header::{HeaderValue, ORIGIN},
@@ -18,10 +18,15 @@ use url::Url;
 mod session;
 
 pub mod messages;
+pub mod state;
 
 /// Handle WebSocket upgrade for the `/ws` endpoint.
 #[get("/ws")]
-pub async fn ws_entry(req: HttpRequest, stream: Payload) -> actix_web::Result<HttpResponse> {
+pub async fn ws_entry(
+    state: web::Data<state::WsState>,
+    req: HttpRequest,
+    stream: Payload,
+) -> actix_web::Result<HttpResponse> {
     let mut origin_iter = req.headers().get_all(ORIGIN);
     let origin_header = origin_iter.next().ok_or_else(|| {
         error!("Missing Origin header on WebSocket upgrade");
@@ -34,7 +39,7 @@ pub async fn ws_entry(req: HttpRequest, stream: Payload) -> actix_web::Result<Ht
 
     validate_origin(origin_header)?;
 
-    let actor = session::WsSession::default();
+    let actor = session::WsSession::new(state.onboarding.clone());
     ws::start(actor, &req, stream).map_err(|error| {
         error!(error = %error, "WebSocket upgrade failed");
         actix_web::error::ErrorInternalServerError("WebSocket upgrade failed")

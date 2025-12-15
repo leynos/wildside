@@ -3,6 +3,7 @@
 //! The service owns validation and event production so inbound adapters only
 //! translate domain events into transport payloads.
 
+use crate::domain::ports::UserOnboarding;
 use crate::domain::user::{DisplayName, User, UserId, UserValidationError};
 use crate::domain::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
 use crate::middleware::trace::TraceId;
@@ -37,6 +38,12 @@ impl UserOnboardingService {
             attempted_name,
             error,
         }
+    }
+}
+
+impl UserOnboarding for UserOnboardingService {
+    fn register(&self, trace_id: TraceId, display_name: String) -> UserEvent {
+        UserOnboardingService::register(self, trace_id, display_name)
     }
 }
 

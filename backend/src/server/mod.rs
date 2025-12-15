@@ -20,20 +20,33 @@ use actix_web::{web, App, HttpServer};
 
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
+use backend::domain::ports::{FixtureLoginService, FixtureUsersQuery};
+use backend::domain::UserOnboardingService;
 use backend::inbound::http::health::{live, ready, HealthState};
+use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{list_users, login};
 use backend::inbound::ws;
+use backend::inbound::ws::state::WsState;
 use backend::Trace;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
-fn build_app(
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct AppDependencies {
     health_state: web::Data<HealthState>,
+    http_state: web::Data<HttpState>,
+    ws_state: web::Data<WsState>,
     key: Key,
     cookie_secure: bool,
     same_site: SameSite,
+}
+
+fn build_app(
+    deps: AppDependencies,
 ) -> App<
     impl ServiceFactory<
         ServiceRequest,
@@ -43,6 +56,15 @@ fn build_app(
         InitError = (),
     >,
 > {
+    let AppDependencies {
+        health_state,
+        http_state,
+        ws_state,
+        key,
+        cookie_secure,
+        same_site,
+    } = deps;
+
     let session = SessionMiddleware::builder(CookieSessionStore::default(), key)
         .cookie_name("session".into())
         .cookie_path("/".into())
@@ -62,6 +84,8 @@ fn build_app(
 
     let app = App::new()
         .app_data(health_state)
+        .app_data(http_state)
+        .app_data(ws_state)
         .wrap(Trace)
         .service(api)
         .service(ws::ws_entry)
@@ -92,6 +116,11 @@ pub fn create_server(
     config: ServerConfig,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
+    let http_state = web::Data::new(HttpState::new(
+        Arc::new(FixtureLoginService),
+        Arc::new(FixtureUsersQuery),
+    ));
+    let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,
         cookie_secure,
@@ -105,12 +134,14 @@ pub fn create_server(
     let metrics_layer = MetricsLayer::from_option(prometheus);
 
     let server = HttpServer::new(move || {
-        let app = build_app(
-            server_health_state.clone(),
-            key.clone(),
+        let app = build_app(AppDependencies {
+            health_state: server_health_state.clone(),
+            http_state: http_state.clone(),
+            ws_state: ws_state.clone(),
+            key: key.clone(),
             cookie_secure,
             same_site,
-        );
+        });
 
         #[cfg(feature = "metrics")]
         let app = app.wrap(metrics_layer.clone());

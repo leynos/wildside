@@ -275,6 +275,11 @@ lint`:
   enforce module boundaries. Cargo-level dependency tools are insufficient
   because the backend is a single crate, and the most common regressions are
   `use`-level imports across `domain`/`inbound`/`outbound`.
+- **2025-12-15:** Introduce driving-port traits (`LoginService`, `UsersQuery`,
+  `UserOnboarding`) and inject them into inbound adapters via Actix
+  `web::Data`. This keeps handlers/actors I/O-free and allows integration
+  guardrail tests (`backend/tests/adapter_guardrails.rs`) to exercise HTTP and
+  WebSocket paths against deterministic test doubles.
 
 ### Web API and WebSocket Layer (Actix Web)
 
