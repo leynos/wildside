@@ -13,7 +13,7 @@ Add integration tests that drive the real Actix HTTP and WebSocket handlers
 over real network sockets while substituting domain-facing ports with
 deterministic test doubles. This provides a guardrail that:
 
-- inbound adapters remain side-effect free (no database/network I/O inside the
+- inbound adapters remain side effect free (no database/network I/O inside the
   handler/actor),
 - domain logic stays framework-agnostic (handlers coordinate; domain types and
   ports do the work),
@@ -71,7 +71,7 @@ Observable success:
   `actix_web::web::Data`.
   Rationale: Allows adapter integration tests to supply deterministic test
   doubles and assert call boundaries without requiring outbound I/O.
-  Date/Author: 2025-12-14 / Codex CLI
+  Date/Author: 2025-12-14 / Codex CLI.
 
 ## Outcomes & Retrospective
 

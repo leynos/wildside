@@ -1,7 +1,7 @@
 //! Per-connection WebSocket actor.
 //!
 //! Keeps WebSocket framing and heartbeats at the edge while deferring
-//! application behaviour to the domain (`UserOnboardingService`). The public
+//! application behaviour to the injected domain port (`UserOnboarding`). The public
 //! WebSocket contract pings every 5s and considers a connection idle after
 //! 10s without client traffic. Tests shorten these intervals to speed up
 //! feedback; adjust the constants below if SLAs change so clients and
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::domain::ports::UserOnboarding;
-use crate::domain::{UserEvent, UserOnboardingService};
+use crate::domain::UserEvent;
 use crate::inbound::ws::messages::{
     DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
 };
@@ -35,12 +35,6 @@ const CLIENT_TIMEOUT: Duration = Duration::from_millis(100);
 pub struct WsSession {
     last_heartbeat: Instant,
     onboarding: Arc<dyn UserOnboarding>,
-}
-
-impl Default for WsSession {
-    fn default() -> Self {
-        Self::new(Arc::new(UserOnboardingService))
-    }
 }
 
 impl Actor for WsSession {
@@ -160,6 +154,7 @@ impl StreamHandler<Result<Message, ProtocolError>> for WsSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::UserOnboardingService;
     use crate::inbound::ws;
     use crate::inbound::ws::state::WsState;
     use actix_web::{dev::Server, dev::ServerHandle, http::header, App, HttpServer};

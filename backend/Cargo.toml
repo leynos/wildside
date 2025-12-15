@@ -53,6 +53,8 @@ metrics = ["dep:actix-web-prom"]
 
 [dev-dependencies]
 actix-rt = "2"
+# Actix uses actix-http types for request/response plumbing in test utilities.
+actix-http = "3"
 # Actix codec helpers for framing WebSocket test sockets.
 actix-codec = "0.5.2"
 # Actix Web Client for WebSocket and HTTP integration testing.

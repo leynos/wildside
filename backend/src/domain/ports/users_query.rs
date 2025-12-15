@@ -39,9 +39,7 @@ impl UsersQuery for FixtureUsersQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
 
-    #[rstest]
     #[tokio::test]
     async fn fixture_users_query_returns_expected_user() {
         let query = FixtureUsersQuery;
