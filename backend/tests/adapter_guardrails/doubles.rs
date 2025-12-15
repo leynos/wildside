@@ -75,6 +75,10 @@ impl RecordingUsersQuery {
     pub(crate) fn calls(&self) -> Vec<String> {
         self.calls.lock().expect("users calls lock").clone()
     }
+
+    pub(crate) fn set_response(&self, response: UsersResponse) {
+        *self.response.lock().expect("users response lock") = response;
+    }
 }
 
 #[async_trait]
@@ -130,4 +134,3 @@ impl UserOnboarding for QueueUserOnboarding {
             .expect("ws response queue should contain an event")
     }
 }
-
