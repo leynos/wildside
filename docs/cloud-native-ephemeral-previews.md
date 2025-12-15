@@ -553,7 +553,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: flux-system
-      version: "25.0.3"
+      version: "37.4.0"
   values:
     ingressClass:
       enabled: true
@@ -591,6 +591,14 @@ configuration exposes Traefik via a `LoadBalancer` service and enables a
 dedicated `IngressClass`. The dashboard remains off by default. To expose it,
 create an `IngressRoute` that targets `api@internal` and attach authentication
 middleware or IP allowlisting.
+
+**Design decision:** The Traefik CRDs must exist before any `IngressRoute`
+resources (including the chart-managed dashboard route) can be applied. This
+repository vendors the CRDs alongside the `infra/modules/traefik` OpenTofu
+module so the `wildside-infra-k8s` action can render and commit a
+`platform/traefik/crds/traefik-crds.yaml` manifest together with a
+`platform/traefik/kustomization.yaml` that applies CRDs ahead of the
+`HelmRelease`.
 
 YAML
 

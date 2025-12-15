@@ -40,6 +40,7 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 		t.Skip("tofu not found; skipping Terraform-based tests")
 	}
 	tempRoot := test_structure.CopyTerraformFolderToTemp(t, config.SourceRootRel, ".")
+	t.Cleanup(func() { _ = os.RemoveAll(tempRoot) })
 	tfDir := filepath.Join(tempRoot, config.TfSubDir)
 	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir:    tfDir,
@@ -116,6 +117,15 @@ func TerraformEnvVars(extras map[string]string) map[string]string {
 	env := map[string]string{"TF_IN_AUTOMATION": "1"}
 	for key, value := range extras {
 		env[key] = value
+	}
+	if _, exists := env["TF_PLUGIN_CACHE_DIR"]; !exists {
+		cacheDir, err := os.UserCacheDir()
+		if err == nil && cacheDir != "" {
+			pluginCacheDir := filepath.Join(cacheDir, "wildside", "opentofu", "plugin-cache")
+			if err := os.MkdirAll(pluginCacheDir, 0o755); err == nil {
+				env["TF_PLUGIN_CACHE_DIR"] = pluginCacheDir
+			}
+		}
 	}
 	return env
 }

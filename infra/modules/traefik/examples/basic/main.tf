@@ -63,7 +63,7 @@ variable "acme_server" {
 variable "chart_version" {
   description = "Traefik Helm chart version"
   type        = string
-  default     = "25.0.3"
+  default     = "37.4.0"
 }
 
 variable "helm_release_name" {
@@ -144,6 +144,8 @@ provider "helm" {
 
 module "traefik" {
   source = "../.."
+
+  mode = "apply"
 
   namespace                        = var.namespace
   chart_repository                 = var.chart_repository

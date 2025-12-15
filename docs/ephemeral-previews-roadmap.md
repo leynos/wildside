@@ -59,7 +59,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
 - [ ] **Publish reusable OpenTofu modules**: Deliver composable modules under
   `infra/modules` that the action can wire together.
 
-  - [ ] **Traefik gateway module**: Template CRDs, HelmRelease values, and
+  - [x] **Traefik gateway module**: Template CRDs, HelmRelease values, and
     service annotations; publish outputs for dashboard hostnames and the
     default certificate issuer.
 
