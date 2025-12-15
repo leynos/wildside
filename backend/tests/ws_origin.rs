@@ -1,5 +1,6 @@
 //! Behavioural tests for WebSocket origin validation.
 
+use actix_http::Request;
 use actix_web::http::header::HeaderValue;
 use actix_web::{
     body::BoxBody,
@@ -8,7 +9,6 @@ use actix_web::{
     test::{self, TestRequest},
     web, App,
 };
-use actix_http::Request;
 use backend::domain::UserOnboardingService;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
@@ -25,11 +25,7 @@ fn ws_state() -> WsState {
 
 async fn init_app(
     state: WsState,
-) -> impl Service<
-    Request,
-    Response = ServiceResponse<BoxBody>,
-    Error = actix_web::Error,
-> {
+) -> impl Service<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error> {
     test::init_service(
         App::new()
             .app_data(web::Data::new(state))
