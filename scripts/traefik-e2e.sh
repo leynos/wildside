@@ -15,6 +15,11 @@ if ! command -v tofu >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 must be installed to run traefik end-to-end checks" >&2
+  exit 1
+fi
+
 if [[ -z "${TRAEFIK_KUBECONFIG_PATH:-}" ]]; then
   echo "TRAEFIK_KUBECONFIG_PATH must be set to a valid kubeconfig file" >&2
   exit 1
@@ -40,12 +45,14 @@ workspace="traefik-e2e-${run_id}"
 namespace="traefik-e2e-${run_id}"
 issuer="issuer-e2e-${run_id}"
 
+# shellcheck disable=SC2329
 cleanup_workspace() {
   set +e
   tofu -chdir="$EXAMPLE_DIR" workspace select default >/dev/null 2>&1
   tofu -chdir="$EXAMPLE_DIR" workspace delete "$workspace" >/dev/null 2>&1
 }
 
+# shellcheck disable=SC2329
 cleanup_resources() {
   set +e
   TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" destroy -auto-approve -input=false -no-color \
@@ -89,4 +96,3 @@ fi
 
 echo "Traefik e2e: plan failed (exit code $plan_status)." >&2
 exit "$plan_status"
-

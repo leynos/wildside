@@ -28,11 +28,15 @@ def test_inputs_cover_credentials_and_env() -> None:
     assert digitalocean["required"] is True
     # GitHub Actions does not support marking inputs as "secret" in the action
     # metadata. Secrets are still passed via workflow `secrets.*` bindings.
-    assert "secret" not in digitalocean
+    assert "secret" not in digitalocean, (
+        "digitalocean_token must not have a 'secret' key in action metadata"
+    )
 
     bootstrap_state = inputs["bootstrap_state"]
     assert bootstrap_state["required"] is False
-    assert "secret" not in bootstrap_state
+    assert "secret" not in bootstrap_state, (
+        "bootstrap_state must not have a 'secret' key in action metadata"
+    )
 
 
 def test_bootstrap_step_invokes_helper_with_idempotent_flags() -> None:

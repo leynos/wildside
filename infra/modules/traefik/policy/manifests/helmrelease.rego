@@ -1,4 +1,4 @@
-package main
+package traefik.policy.manifests
 
 import rego.v1
 
@@ -56,7 +56,8 @@ deny contains msg if {
 	service := object.get(values, "service", {})
 	object.get(service, "type", "") == "LoadBalancer"
 	spec := object.get(service, "spec", {})
-	object.get(spec, "externalTrafficPolicy", "") == ""
+	external_traffic_policy := object.get(spec, "externalTrafficPolicy", "")
+	not is_string(external_traffic_policy) or trim_space(external_traffic_policy) == ""
 	msg := "Traefik HelmRelease LoadBalancer service must set service.spec.externalTrafficPolicy"
 }
 
@@ -75,7 +76,7 @@ warn contains msg if {
 	doc := helmrepositories[_]
 	url := object.get(object.get(doc, "spec", {}), "url", "")
 	url != ""
-	not startswith(url, "https://")
+	startswith(url, "http://")
 	metadata := object.get(doc, "metadata", {})
 	msg := sprintf("HelmRepository %s should use an https:// URL", [object.get(metadata, "name", "<unknown>")])
 }

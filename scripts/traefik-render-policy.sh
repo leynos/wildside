@@ -64,4 +64,4 @@ if not paths:
     raise SystemExit(f"no rendered manifests written under {out_dir}")
 PY
 
-conftest test "$out_dir" --policy "$POLICY_DIR" --fail-on-warn
+conftest test "$out_dir" --policy "$POLICY_DIR" --fail-on-warn --namespace traefik.policy.manifests

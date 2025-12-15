@@ -9,9 +9,9 @@ No `PLANS.md` exists in the repository root at the time this plan was written.
 ## Purpose / Big Picture
 
 The Phase 2.3 roadmap item requires the Traefik gateway module to support a
-GitOps workflow: render Flux-ready manifests (including Traefik CRDs and a
-`HelmRelease` values block) rather than only applying directly via OpenTofu’s
-Helm/Kubernetes providers.
+GitOps (Git-based operations) workflow: render Flux-ready manifests (including
+Traefik custom resource definitions (CRDs) and a `HelmRelease` values block)
+rather than only applying directly via OpenTofu’s Helm/Kubernetes providers.
 
 After completion, a newcomer can:
 
@@ -88,15 +88,16 @@ This work must also:
 - Decision: Add an explicit module `mode` with two values:
   - `render` (default): generate YAML outputs only; no provider access required.
   - `apply`: perform cluster changes via Helm/Kubernetes providers.
-  Rationale: The roadmap item is GitOps-oriented, but we still want the option
-  to do a real apply in an explicitly gated, end-to-end validation step.
-  Date/Author: 2025-12-15 / Codex
+  Rationale: The roadmap item is GitOps-oriented, but retaining the option to
+  do a real apply in an explicitly gated, end-to-end validation step remains
+  valuable.
+  Date/Author: 2025-12-15 / Codex.
 
 - Decision: Vendor Traefik CRDs into `infra/modules/traefik/crds/` pinned to
   the module’s chart version.
   Rationale: Deterministic, reviewable inputs; avoids network lookups at runtime
   and keeps “render” mode offline-friendly.
-  Date/Author: 2025-12-15 / Codex
+  Date/Author: 2025-12-15 / Codex.
 
 - Decision: Keep existing outputs for backwards compatibility, but add new
   explicit output names for GitOps consumers:
@@ -104,18 +105,19 @@ This work must also:
   - `default_certificate_issuer_name` (string)
   Rationale: The roadmap item asks for hostnames (plural) and explicitly names
   the “default certificate issuer”.
-  Date/Author: 2025-12-15 / Codex
+  Date/Author: 2025-12-15 / Codex.
 
 - Decision: Extend action linting to include `actionlint` (in addition to
   `action-validator`).
   Rationale: Requirement from the task statement; `actionlint` validates
   workflow YAML semantics beyond schema validation.
-  Date/Author: 2025-12-15 / Codex
+  Date/Author: 2025-12-15 / Codex.
 
-- Decision: Keep Conftest policies for rendered manifests in `package main`.
-  Rationale: Conftest discovers `deny` and `warn` rules under `package main` by
-  default; using a different package would silently skip policies.
-  Date/Author: 2025-12-15 / Codex
+- Decision: Use explicit Rego package names and run Conftest with an explicit
+  namespace.
+  Rationale: Aligns with the existing FluxCD policy conventions and ensures
+  scripts/tests always evaluate the intended policy rules.
+  Date/Author: 2025-12-15 / Codex.
 
 ## Outcomes & Retrospective
 

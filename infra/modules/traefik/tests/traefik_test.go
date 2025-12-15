@@ -22,6 +22,9 @@ const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig fil
 
 const traefikModuleName = "traefik"
 
+const traefikPolicyManifestsNamespace = "traefik.policy.manifests"
+const traefikPolicyPlanNamespace = "traefik.policy.plan"
+
 func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
@@ -135,6 +138,18 @@ func terraformOutputExists(t *testing.T, opts *terraform.Options, name string) b
 	return err == nil
 }
 
+func traefikPolicyRoot(tfDir string) string {
+	return filepath.Join(tfDir, "..", "..", "policy")
+}
+
+func traefikManifestsPolicyPath(tfDir string) string {
+	return filepath.Join(traefikPolicyRoot(tfDir), "manifests")
+}
+
+func traefikPlanPolicyPath(tfDir string) string {
+	return filepath.Join(traefikPolicyRoot(tfDir), "plan")
+}
+
 func renderTraefikPlan(t *testing.T, vars map[string]interface{}) (string, string) {
 	t.Helper()
 	tfDir, opts := setup(t, vars)
@@ -202,7 +217,12 @@ func TestTraefikModuleValidate(t *testing.T) {
 func TestTraefikModuleRenderOutputs(t *testing.T) {
 	t.Parallel()
 
-	_, opts := setupRender(t, renderVars(t))
+	vars := renderVars(t)
+	vars["cluster_issuer_name"] = "issuer-render"
+	vars["dashboard_enabled"] = true
+	vars["dashboard_hostname"] = "traefik-dashboard.example.test"
+
+	_, opts := setupRender(t, vars)
 	terraform.InitAndApply(t, opts)
 
 	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
@@ -236,6 +256,13 @@ func TestTraefikModuleRenderOutputs(t *testing.T) {
 
 	_, ok = rendered["platform/sources/traefik-repo.yaml"]
 	require.True(t, ok, "expected platform/sources/traefik-repo.yaml output key")
+
+	dashboardHostnames := terraform.OutputList(t, opts, "dashboard_hostnames")
+	require.Equal(t, []string{"traefik-dashboard.example.test"}, dashboardHostnames)
+
+	defaultIssuer := terraform.Output(t, opts, "default_certificate_issuer_name")
+	require.Equal(t, "issuer-render", defaultIssuer)
+	require.Equal(t, terraform.Output(t, opts, "cluster_issuer_name"), defaultIssuer)
 }
 
 func TestTraefikModuleRenderPolicy(t *testing.T) {
@@ -256,8 +283,18 @@ func TestTraefikModuleRenderPolicy(t *testing.T) {
 		require.NoError(t, os.WriteFile(dest, []byte(content), 0o600))
 	}
 
-	policyPath := filepath.Join(tfDir, "..", "..", "policy", "manifests")
-	out, err := exec.Command("conftest", "test", outDir, "--policy", policyPath, "--fail-on-warn").CombinedOutput()
+	policyPath := traefikManifestsPolicyPath(tfDir)
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   outDir,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyManifestsNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
@@ -266,7 +303,7 @@ func TestTraefikModuleRenderPolicyRejectsMissingChartVersion(t *testing.T) {
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 
 	tfDir, _ := setupRender(t, renderVars(t))
-	policyPath := filepath.Join(tfDir, "..", "..", "policy", "manifests")
+	policyPath := traefikManifestsPolicyPath(tfDir)
 
 	tmpDir := t.TempDir()
 	manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
@@ -291,7 +328,17 @@ spec:
 `
 	require.NoError(t, os.WriteFile(manifestPath, []byte(payload), 0o600))
 
-	out, err := exec.Command("conftest", "test", manifestPath, "--policy", policyPath, "--fail-on-warn").CombinedOutput()
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   manifestPath,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyManifestsNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
 	require.Error(t, err, "expected conftest to report a violation")
 	require.Contains(t, string(out), "must pin chart.spec.version")
 }
@@ -624,12 +671,17 @@ func TestTraefikModulePolicy(t *testing.T) {
 	vars["kubeconfig_path"] = kubeconfig
 
 	tfDir, planJSON := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "..", "policy", "plan")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	out, err := runConftestAgainstPlan(t, conftestRun{
 		PlanPath:   planJSON,
 		PolicyPath: policyPath,
 		Kubeconfig: kubeconfig,
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyPlanNamespace,
+		},
 		Timeout:    60 * time.Second,
 	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
@@ -639,7 +691,7 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 	tfDir, _ := setup(t, testVars(t))
-	policyPath := filepath.Join(tfDir, "..", "..", "policy", "plan")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	testCases := []struct {
 		name          string
@@ -671,6 +723,10 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 				PlanPath:   planPath,
 				PolicyPath: policyPath,
 				Kubeconfig: "",
+				ExtraArgs: []string{
+					"--namespace",
+					traefikPolicyPlanNamespace,
+				},
 				Timeout:    10 * time.Second,
 			})
 			require.Error(t, violationErr, "expected conftest to report a violation")
@@ -687,7 +743,7 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 	tfDir, _ := setup(t, testVars(t))
-	policyPath := filepath.Join(tfDir, "..", "..", "policy", "plan")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"staging"},"spec":{"acme":{"server":"https://acme-staging-v02.api.letsencrypt.org/directory","email":"test@example.com","privateKeySecretRef":{"name":"staging"},"solvers":[{"dns01":{"cloudflare":{}}}]}}}}}}]}`
 	planPath := writePlanFixture(t, payload)
@@ -696,6 +752,10 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 		PlanPath:   planPath,
 		PolicyPath: policyPath,
 		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--namespace",
+			traefikPolicyPlanNamespace,
+		},
 		Timeout:    10 * time.Second,
 	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(warnOut))

@@ -3,6 +3,7 @@ package testutil
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func parseEnvOutput(output string) map[string]string {
 
 func TestTerraformEnvVarsIncludesAutomation(t *testing.T) {
 	t.Parallel()
-	env := TerraformEnvVars(nil)
+	env := TerraformEnvVars(t, nil)
 	if got := env["TF_IN_AUTOMATION"]; got != "1" {
 		t.Fatalf("TF_IN_AUTOMATION mismatch: want 1, got %q", got)
 	}
@@ -49,7 +50,7 @@ func TestTerraformEnvVarsIncludesAutomation(t *testing.T) {
 func TestTerraformEnvVarsMergesExtras(t *testing.T) {
 	t.Parallel()
 	extras := map[string]string{"FOO": "bar"}
-	env := TerraformEnvVars(extras)
+	env := TerraformEnvVars(t, extras)
 	if got := env["FOO"]; got != "bar" {
 		t.Fatalf("expected FOO=bar, got %q", got)
 	}
@@ -60,7 +61,7 @@ func TestTerraformEnvVarsMergesExtras(t *testing.T) {
 
 func TestTerraformEnvVarsAllowsOverrides(t *testing.T) {
 	t.Parallel()
-	env := TerraformEnvVars(map[string]string{"TF_IN_AUTOMATION": "0"})
+	env := TerraformEnvVars(t, map[string]string{"TF_IN_AUTOMATION": "0"})
 	if got := env["TF_IN_AUTOMATION"]; got != "0" {
 		t.Fatalf("expected override to win, got %q", got)
 	}
@@ -143,5 +144,38 @@ func TestTerraformEnvHandlesNilExtras(t *testing.T) {
 	env := envEntriesToMap(envSlice)
 	if got := env["TF_IN_AUTOMATION"]; got != "1" {
 		t.Fatalf("expected automation flag for nil extras, got %q", got)
+	}
+}
+
+func TestSetupTerraformRemovesTemporaryDirectory(t *testing.T) {
+	if _, err := exec.LookPath("tofu"); err != nil {
+		t.Skip("tofu not found; skipping SetupTerraform cleanup test")
+	}
+
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, "main.tf"), []byte(`terraform {}`), 0o600); err != nil {
+		t.Fatalf("failed to write test terraform config: %v", err)
+	}
+
+	var tempDir string
+	t.Run("setup", func(t *testing.T) {
+		tfDir, _ := SetupTerraform(t, TerraformConfig{
+			SourceRootRel: sourceDir,
+			TfSubDir:      ".",
+		})
+		tempDir = tfDir
+		if tempDir == "" {
+			t.Fatal("expected SetupTerraform to return a non-empty temp directory path")
+		}
+		if _, err := os.Stat(tempDir); err != nil {
+			t.Fatalf("expected temp directory %s to exist during subtest: %v", tempDir, err)
+		}
+	})
+
+	if tempDir == "" {
+		t.Fatal("expected SetupTerraform subtest to capture a temp directory path")
+	}
+	if _, err := os.Stat(tempDir); err == nil || !os.IsNotExist(err) {
+		t.Fatalf("expected temp directory %s to be removed after cleanup, got err=%v", tempDir, err)
 	}
 }

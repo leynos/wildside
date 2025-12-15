@@ -916,12 +916,14 @@ deploys a simple web server demonstrates Terratest's power.
 Wildside's Terratest suites share a small `infra/testutil` package to avoid
 repeating boilerplate such as environment variable setup. The
 `TerraformEnvVars` helper injects `TF_IN_AUTOMATION=1` and merges any test
-specific overrides before handing the map to Terratest:
+specific overrides before handing the map to Terratest. It also accepts the
+current test handle so it can log when optional features (such as the plugin
+cache) cannot be configured:
 
 ```go
 opts := &terraform.Options{
     TerraformDir: "../modules/example",
-    EnvVars:      testutil.TerraformEnvVars(map[string]string{"FOO": "bar"}),
+    EnvVars:      testutil.TerraformEnvVars(t, map[string]string{"FOO": "bar"}),
 }
 ```
 

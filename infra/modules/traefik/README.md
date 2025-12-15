@@ -35,8 +35,8 @@ module "traefik" {
 ### Render mode (Flux manifests)
 
 When `mode = "render"`, the module does not talk to a Kubernetes cluster. It
-instead returns a `rendered_manifests` map, keyed by the intended GitOps path
-within the `wildside-infra` repository.
+instead returns a `rendered_manifests` map, keyed by the intended GitOps
+(Git-based operations) path within the `wildside-infra` repository.
 
 ## Inputs
 
@@ -95,6 +95,8 @@ ensure proper access controls are configured:
 module "traefik" {
   source = "path/to/modules/traefik"
 
+  mode = "apply"
+
   dashboard_enabled  = true
   dashboard_hostname = "traefik.internal.example.com"
 
@@ -118,6 +120,8 @@ For testing, use the Let's Encrypt staging server to avoid rate limits:
 ```hcl
 module "traefik" {
   source = "path/to/modules/traefik"
+
+  mode = "apply"
 
   acme_server         = "https://acme-staging-v02.api.letsencrypt.org/directory"
   cluster_issuer_name = "letsencrypt-staging"

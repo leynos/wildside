@@ -419,7 +419,7 @@ traefik-policy: conftest tofu
 			|| status=$$?; \
 		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
-		conftest test --policy infra/modules/traefik/policy/plan --fail-on-warn "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/traefik/policy/plan --fail-on-warn --namespace traefik.policy.plan "$$tmpdir/plan.json"; \
 	fi
 
 traefik-e2e: tofu

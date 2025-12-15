@@ -27,14 +27,14 @@ locals {
   cloudflare_api_token_secret_name = trimspace(var.cloudflare_api_token_secret_name)
   cloudflare_api_token_secret_key  = trimspace(var.cloudflare_api_token_secret_key)
   helm_timeout                     = var.helm_timeout
-  helm_inline_values               = local.is_apply_mode ? var.helm_values : []
-  helm_value_files = local.is_apply_mode ? [
+  helm_inline_values               = [for value in var.helm_values : value if trimspace(value) != ""]
+  helm_value_files = [
     for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""
-  ] : []
-  helm_values = local.is_apply_mode ? concat(
+  ]
+  helm_values = concat(
     local.helm_inline_values,
     [for path in local.helm_value_files : file(path)],
-  ) : []
+  )
 
   flux_namespace            = trimspace(var.flux_namespace)
   flux_helm_repository_name = trimspace(var.flux_helm_repository_name)
@@ -92,6 +92,12 @@ locals {
 
   default_values_yaml = yamlencode(local.default_values_map)
 
+  decoded_helm_values = [for value in local.helm_values : yamldecode(value)]
+
+  merged_helm_values_map = merge({}, local.decoded_helm_values...)
+
+  flux_values_map = merge(local.default_values_map, local.merged_helm_values_map)
+
   common_labels = {
     "app.kubernetes.io/managed-by" = "opentofu"
     "app.kubernetes.io/part-of"    = "traefik-gateway"
@@ -131,11 +137,13 @@ locals {
     spec = {
       interval = "30m"
       install = {
+        crds = "CreateReplace"
         remediation = {
           retries = 3
         }
       }
       upgrade = {
+        crds = "CreateReplace"
         remediation = {
           retries              = 3
           remediateLastFailure = true
@@ -152,7 +160,7 @@ locals {
           version = local.chart_version
         }
       }
-      values = local.default_values_map
+      values = local.flux_values_map
     }
   }
 
