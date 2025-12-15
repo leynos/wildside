@@ -102,7 +102,7 @@ func TestDevClusterValidate(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       testutil.TerraformEnvVars(nil),
+		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	terraform.InitAndValidate(t, opts)
 }
@@ -118,7 +118,7 @@ func TestDevClusterPlanUnauthenticated(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       testutil.TerraformEnvVars(nil),
+		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	_, err := terraform.InitAndValidateE(t, opts)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestDevClusterPlanDetailedExitCode(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": token}),
+		EnvVars:       testutil.TerraformEnvVars(t, map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 	terraform.Init(t, opts)
 	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
@@ -161,7 +161,7 @@ func TestDevClusterPolicy(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          testVars(t),
-		EnvVars:       testutil.TerraformEnvVars(map[string]string{"DIGITALOCEAN_TOKEN": token}),
+		EnvVars:       testutil.TerraformEnvVars(t, map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 	if _, err := exec.LookPath("conftest"); err != nil {
 		t.Skip("conftest not found; skipping policy test")
@@ -233,7 +233,7 @@ func testInvalidConfig(t *testing.T, varModifications map[string]interface{}, wa
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       testutil.TerraformEnvVars(nil),
+		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	opts.Logger = logger.Discard
 	terraform.Init(t, opts)
@@ -262,7 +262,7 @@ func testValidFluxConfig(t *testing.T, varModifications map[string]interface{}) 
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/dev",
 		Vars:          vars,
-		EnvVars:       testutil.TerraformEnvVars(nil),
+		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	opts.Logger = logger.Discard
 	terraform.InitAndValidate(t, opts)

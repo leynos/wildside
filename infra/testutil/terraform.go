@@ -40,12 +40,17 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 		t.Skip("tofu not found; skipping Terraform-based tests")
 	}
 	tempRoot := test_structure.CopyTerraformFolderToTemp(t, config.SourceRootRel, ".")
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tempRoot); err != nil {
+			t.Logf("failed to clean up temporary directory %s: %v", tempRoot, err)
+		}
+	})
 	tfDir := filepath.Join(tempRoot, config.TfSubDir)
 	opts := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir:    tfDir,
 		TerraformBinary: "tofu",
 		Vars:            config.Vars,
-		EnvVars:         TerraformEnvVars(config.EnvVars),
+		EnvVars:         TerraformEnvVars(t, config.EnvVars),
 		NoColor:         true,
 	})
 	return tfDir, opts
@@ -72,9 +77,9 @@ func SetupTerraform(t *testing.T, config TerraformConfig) (string, *terraform.Op
 // variables (currently PATH, HOME, and TMPDIR when present) so child processes
 // can locate binaries and temporary directories without inheriting unrelated
 // secrets from the parent shell.
-func TerraformEnv(t *testing.T, extras map[string]string) []string {
+func TerraformEnv(t testing.TB, extras map[string]string) []string {
 	t.Helper()
-	merged := TerraformEnvVars(extras)
+	merged := TerraformEnvVars(t, extras)
 	for _, key := range []string{"PATH", "HOME", "TMPDIR"} {
 		if _, exists := merged[key]; exists {
 			continue
@@ -105,17 +110,40 @@ func TerraformEnv(t *testing.T, extras map[string]string) []string {
 // Example:
 //
 //	opts := &terraform.Options{
-//	        EnvVars: TerraformEnvVars(map[string]string{
+//	        EnvVars: TerraformEnvVars(t, map[string]string{
 //	                "DIGITALOCEAN_TOKEN": "dummy",
 //	        }),
 //	}
 //
 // The returned map may be passed directly to terratest helpers or other
 // Terraform invocations.
-func TerraformEnvVars(extras map[string]string) map[string]string {
+func TerraformEnvVars(t testing.TB, extras map[string]string) map[string]string {
+	t.Helper()
 	env := map[string]string{"TF_IN_AUTOMATION": "1"}
 	for key, value := range extras {
 		env[key] = value
+	}
+	if _, exists := env["TF_PLUGIN_CACHE_DIR"]; !exists {
+		cacheDir, err := os.UserCacheDir()
+		if err != nil {
+			t.Logf("unable to configure TF_PLUGIN_CACHE_DIR (os.UserCacheDir failed): %v", err)
+			return env
+		}
+		if cacheDir == "" {
+			t.Logf("unable to configure TF_PLUGIN_CACHE_DIR (os.UserCacheDir returned empty path)")
+			return env
+		}
+
+		pluginCacheDir := filepath.Join(cacheDir, "wildside", "opentofu", "plugin-cache")
+		if err := os.MkdirAll(pluginCacheDir, 0o755); err != nil {
+			t.Logf(
+				"unable to configure TF_PLUGIN_CACHE_DIR (os.MkdirAll(%s) failed): %v",
+				pluginCacheDir,
+				err,
+			)
+			return env
+		}
+		env["TF_PLUGIN_CACHE_DIR"] = pluginCacheDir
 	}
 	return env
 }

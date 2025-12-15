@@ -22,6 +22,9 @@ const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig fil
 
 const traefikModuleName = "traefik"
 
+const traefikPolicyManifestsNamespace = "traefik.policy.manifests"
+const traefikPolicyPlanNamespace = "traefik.policy.plan"
+
 func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
@@ -63,11 +66,32 @@ users:
 	}
 }
 
+func renderVars(t *testing.T) map[string]interface{} {
+	t.Helper()
+	return map[string]interface{}{
+		"namespace":                        "traefik",
+		"acme_email":                       "admin@example.test",
+		"cloudflare_api_token_secret_name": "cloudflare-api-token",
+		"service_annotations": map[string]string{
+			"example.com/unit-test": "true",
+		},
+	}
+}
+
 func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
 	t.Helper()
 	return testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
+		Vars:          vars,
+	})
+}
+
+func setupRender(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
+	t.Helper()
+	return testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/render",
 		Vars:          vars,
 	})
 }
@@ -112,6 +136,18 @@ func terraformOutputExists(t *testing.T, opts *terraform.Options, name string) b
 	t.Helper()
 	_, err := terraform.OutputE(t, opts, name)
 	return err == nil
+}
+
+func traefikPolicyRoot(tfDir string) string {
+	return filepath.Join(tfDir, "..", "..", "policy")
+}
+
+func traefikManifestsPolicyPath(tfDir string) string {
+	return filepath.Join(traefikPolicyRoot(tfDir), "manifests")
+}
+
+func traefikPlanPolicyPath(tfDir string) string {
+	return filepath.Join(traefikPolicyRoot(tfDir), "plan")
 }
 
 func renderTraefikPlan(t *testing.T, vars map[string]interface{}) (string, string) {
@@ -176,6 +212,154 @@ func TestTraefikModuleValidate(t *testing.T) {
 	t.Parallel()
 	_, opts := setup(t, testVars(t))
 	terraform.InitAndValidate(t, opts)
+}
+
+func TestTraefikModuleRenderOutputs(t *testing.T) {
+	t.Parallel()
+
+	vars := renderVars(t)
+	vars["cluster_issuer_name"] = "issuer-render"
+	vars["dashboard_enabled"] = true
+	vars["dashboard_hostname"] = "traefik-dashboard.example.test"
+
+	_, opts := setupRender(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	require.NotEmpty(t, rendered, "expected rendered_manifests output to be non-empty")
+
+	helmRelease, ok := rendered["platform/traefik/helmrelease.yaml"]
+	require.True(t, ok, "expected platform/traefik/helmrelease.yaml output key")
+	require.True(
+		t,
+		strings.Contains(helmRelease, "kind: HelmRelease") ||
+			strings.Contains(helmRelease, "\"kind\": \"HelmRelease\""),
+		"expected HelmRelease manifest to contain kind HelmRelease",
+	)
+	require.True(
+		t,
+		strings.Contains(helmRelease, "name: traefik") ||
+			strings.Contains(helmRelease, "\"name\": \"traefik\""),
+		"expected HelmRelease manifest to contain metadata.name traefik",
+	)
+	require.True(
+		t,
+		strings.Contains(helmRelease, "example.com/unit-test: \"true\"") ||
+			strings.Contains(helmRelease, "example.com/unit-test: true") ||
+			strings.Contains(helmRelease, "\"example.com/unit-test\": \"true\"") ||
+			strings.Contains(helmRelease, "\"example.com/unit-test\": true"),
+		"expected service annotation example.com/unit-test to be present in rendered helmrelease",
+	)
+
+	_, ok = rendered["platform/traefik/crds/traefik-crds.yaml"]
+	require.True(t, ok, "expected platform/traefik/crds/traefik-crds.yaml output key")
+
+	_, ok = rendered["platform/sources/traefik-repo.yaml"]
+	require.True(t, ok, "expected platform/sources/traefik-repo.yaml output key")
+
+	dashboardHostnames := terraform.OutputList(t, opts, "dashboard_hostnames")
+	require.NotEmpty(t, dashboardHostnames, "expected dashboard_hostnames output to be non-empty when dashboard is enabled")
+	require.Equal(t, []string{"traefik-dashboard.example.test"}, dashboardHostnames)
+
+	dashboardHostname := terraform.Output(t, opts, "dashboard_hostname")
+	require.Equal(t, "traefik-dashboard.example.test", dashboardHostname)
+
+	defaultIssuer := terraform.Output(t, opts, "default_certificate_issuer_name")
+	require.NotEmpty(t, defaultIssuer, "expected default_certificate_issuer_name output to be non-empty")
+	require.Equal(t, "issuer-render", defaultIssuer)
+	require.Equal(t, terraform.Output(t, opts, "cluster_issuer_name"), defaultIssuer)
+}
+
+func TestTraefikModuleRenderPolicy(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, opts := setupRender(t, renderVars(t))
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	outDir := filepath.Join(tfDir, "rendered")
+	require.NoError(t, os.MkdirAll(outDir, 0o755))
+	t.Cleanup(func() { _ = os.RemoveAll(outDir) })
+
+	for relPath, content := range rendered {
+		dest := filepath.Join(outDir, relPath)
+		require.NoError(t, os.MkdirAll(filepath.Dir(dest), 0o755))
+		require.NoError(t, os.WriteFile(dest, []byte(content), 0o600))
+	}
+
+	policyPath := traefikManifestsPolicyPath(tfDir)
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   outDir,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyManifestsNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.NoErrorf(t, err, "conftest failed: %s", string(out))
+}
+
+func TestTraefikModuleRenderPolicyRejectsMissingChartVersion(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, _ := setupRender(t, renderVars(t))
+	policyPath := traefikManifestsPolicyPath(tfDir)
+
+	tmpDir := t.TempDir()
+	manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
+	payload := `apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: traefik
+  namespace: traefik
+spec:
+  chart:
+    spec:
+      chart: traefik
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+        namespace: flux-system
+  values:
+    service:
+      type: LoadBalancer
+      spec:
+        externalTrafficPolicy: Local
+`
+	require.NoError(t, os.WriteFile(manifestPath, []byte(payload), 0o600))
+
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   manifestPath,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyManifestsNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.Error(t, err, "expected conftest to report a violation")
+	require.Contains(t, string(out), "must pin chart.spec.version")
+}
+
+func TestTraefikModuleRenderRejectsBlankServiceAnnotationKey(t *testing.T) {
+	t.Parallel()
+
+	vars := renderVars(t)
+	vars["service_annotations"] = map[string]string{
+		"  ": "value",
+	}
+
+	_, opts := setupRender(t, vars)
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "service_annotations")
 }
 
 func TestTraefikModuleInvalidEmail(t *testing.T) {
@@ -492,12 +676,17 @@ func TestTraefikModulePolicy(t *testing.T) {
 	vars["kubeconfig_path"] = kubeconfig
 
 	tfDir, planJSON := renderTraefikPlan(t, vars)
-	policyPath := filepath.Join(tfDir, "..", "..", "policy")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	out, err := runConftestAgainstPlan(t, conftestRun{
 		PlanPath:   planJSON,
 		PolicyPath: policyPath,
 		Kubeconfig: kubeconfig,
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			traefikPolicyPlanNamespace,
+		},
 		Timeout:    60 * time.Second,
 	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
@@ -507,7 +696,7 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 	tfDir, _ := setup(t, testVars(t))
-	policyPath := filepath.Join(tfDir, "..", "..", "policy")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	testCases := []struct {
 		name          string
@@ -539,6 +728,10 @@ func TestTraefikModulePolicyViolations(t *testing.T) {
 				PlanPath:   planPath,
 				PolicyPath: policyPath,
 				Kubeconfig: "",
+				ExtraArgs: []string{
+					"--namespace",
+					traefikPolicyPlanNamespace,
+				},
 				Timeout:    10 * time.Second,
 			})
 			require.Error(t, violationErr, "expected conftest to report a violation")
@@ -555,7 +748,7 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 	tfDir, _ := setup(t, testVars(t))
-	policyPath := filepath.Join(tfDir, "..", "..", "policy")
+	policyPath := traefikPlanPolicyPath(tfDir)
 
 	payload := `{"resource_changes":[{"type":"kubernetes_manifest","change":{"after":{"manifest":{"kind":"ClusterIssuer","metadata":{"name":"staging"},"spec":{"acme":{"server":"https://acme-staging-v02.api.letsencrypt.org/directory","email":"test@example.com","privateKeySecretRef":{"name":"staging"},"solvers":[{"dns01":{"cloudflare":{}}}]}}}}}}]}`
 	planPath := writePlanFixture(t, payload)
@@ -564,6 +757,10 @@ func TestTraefikModulePolicyWarnStagingACME(t *testing.T) {
 		PlanPath:   planPath,
 		PolicyPath: policyPath,
 		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--namespace",
+			traefikPolicyPlanNamespace,
+		},
 		Timeout:    10 * time.Second,
 	})
 	require.NoErrorf(t, err, "conftest failed: %s", string(warnOut))
@@ -635,7 +832,7 @@ func TestTraefikModuleApplyIfKubeconfigPresent(t *testing.T) {
 	}
 
 	// Assert: verify Helm release exists in state
-	resourceAddr := fmt.Sprintf("module.%s.helm_release.%s", traefikModuleName, traefikModuleName)
+	resourceAddr := fmt.Sprintf("module.%s.helm_release.%s[0]", traefikModuleName, traefikModuleName)
 	stdout, err := terraform.RunTerraformCommandAndGetStdoutE(t, opts, "state", "show", resourceAddr)
 	require.NoError(t, err)
 	require.Contains(t, stdout, "traefik")

@@ -14,6 +14,18 @@ variable "namespace" {
   }
 }
 
+variable "mode" {
+  description = "Whether the module should render Flux manifests (render) or apply resources directly (apply)"
+  type        = string
+  default     = "render"
+  nullable    = false
+
+  validation {
+    condition     = contains(["render", "apply"], trimspace(var.mode))
+    error_message = "mode must be one of: render, apply"
+  }
+}
+
 variable "create_namespace" {
   description = "Whether the module should create the Traefik namespace"
   type        = bool
@@ -50,7 +62,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Exact Helm chart version for Traefik"
   type        = string
-  default     = "25.0.3"
+  default     = "37.4.0"
 
   validation {
     condition = (
@@ -60,7 +72,7 @@ variable "chart_version" {
         trimspace(var.chart_version)
       ))
     )
-    error_message = "chart_version must be a semantic version (e.g., 25.0.3, 26.0.0-rc1, 25.0.3+build.1)"
+    error_message = "chart_version must be a semantic version (e.g., 37.4.0, 37.4.0-rc1, 37.4.0+build.1)"
   }
 }
 
@@ -129,6 +141,25 @@ variable "service_type" {
   }
 }
 
+variable "service_annotations" {
+  description = "Service annotations to apply to Traefik's Service (cloud-provider load balancer configuration)"
+  type        = map(string)
+  default     = {}
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for key, value in var.service_annotations : (
+        key != null &&
+        trimspace(key) != "" &&
+        value != null &&
+        trimspace(value) != ""
+      )
+    ])
+    error_message = "service_annotations keys and values must not be blank"
+  }
+}
+
 variable "external_traffic_policy" {
   description = "External traffic policy for LoadBalancer service (Local preserves client IPs)"
   type        = string
@@ -186,6 +217,37 @@ variable "dashboard_hostname" {
       )
     )
     error_message = "dashboard_hostname must be a valid FQDN, and must be set when dashboard_enabled is true"
+  }
+}
+
+variable "flux_namespace" {
+  description = "Namespace where Flux controllers and sources are installed (used when rendering Flux manifests)"
+  type        = string
+  default     = "flux-system"
+  nullable    = false
+
+  validation {
+    condition = (
+      length(trimspace(var.flux_namespace)) > 0 &&
+      length(trimspace(var.flux_namespace)) <= 63 &&
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.flux_namespace)))
+    )
+    error_message = "flux_namespace must be a valid Kubernetes namespace name"
+  }
+}
+
+variable "flux_helm_repository_name" {
+  description = "Name of the Flux HelmRepository resource providing the Traefik chart (used when rendering Flux manifests)"
+  type        = string
+  default     = "traefik"
+  nullable    = false
+
+  validation {
+    condition = (
+      length(trimspace(var.flux_helm_repository_name)) > 0 &&
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.flux_helm_repository_name)))
+    )
+    error_message = "flux_helm_repository_name must be a valid Kubernetes resource name"
   }
 }
 

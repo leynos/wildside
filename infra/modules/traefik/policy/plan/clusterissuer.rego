@@ -1,4 +1,4 @@
-package main
+package traefik.policy.plan
 
 import rego.v1
 

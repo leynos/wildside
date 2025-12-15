@@ -3,12 +3,18 @@ kind: HelmRelease
 metadata:
   name: traefik
   namespace: traefik
+# Traefik chart v37.x deploys Traefik Proxy v3.
+# Upgrades from Traefik Proxy v2 require migrating any Traefik custom resources
+# (IngressRoute, Middleware, etc.) and validating behaviour in a staging
+# cluster before production.
 spec:
   interval: 30m
   install:
+    crds: CreateReplace
     remediation:
       retries: 3
   upgrade:
+    crds: CreateReplace
     remediation:
       retries: 3
       remediateLastFailure: true
@@ -19,7 +25,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: flux-system
-      version: "25.0.3"
+      version: "37.4.0"
   values:
     ingressClass:
       enabled: true

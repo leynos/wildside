@@ -46,7 +46,7 @@ func setupTerraform(t *testing.T, vars map[string]interface{}, env map[string]st
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       testutil.TerraformEnvVars(env),
+		EnvVars:       testutil.TerraformEnvVars(t, env),
 	})
 }
 

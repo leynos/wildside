@@ -66,7 +66,7 @@ func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Option
 		SourceRootRel: "..",
 		TfSubDir:      "examples/basic",
 		Vars:          vars,
-		EnvVars:       testutil.TerraformEnvVars(nil),
+		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 }
 

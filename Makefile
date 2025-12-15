@@ -39,11 +39,14 @@ TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 OPENAPI_SPEC ?= spec/openapi.json
 
+GO_CACHE_ROOT ?= $(HOME)/.cache/go
+GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCACHE=$(GO_CACHE_ROOT)/build
+
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy lint-architecture
+	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
+	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -119,15 +122,21 @@ lint-makefile:
 lint-actions:
 	$(call ensure_tool,yamllint)
 	$(call ensure_tool,action-validator)
-	@actions=$$(if [ -d .github/actions ]; then find .github/actions -name 'action.yml' -print0; fi); \
-	if [ -z "$$actions" ]; then \
+	$(call ensure_tool,actionlint)
+	@if [ ! -d .github/actions ]; then \
 	  echo "No composite actions found; skipping lint-actions"; \
 	else \
-	  printf '%s' "$$actions" | xargs -0 yamllint; \
-	  while IFS= read -r action; do \
+	  find .github/actions -name 'action.yml' -print0 | xargs -0 -r yamllint; \
+	  while IFS= read -r -d '' action; do \
 	    echo "$$action:"; \
 	    action-validator "$$action"; \
-	  done < <(printf '%s' "$$actions" | tr '\0' '\n'); \
+	  done < <(find .github/actions -name 'action.yml' -print0); \
+	fi
+	@if [ ! -d .github/workflows ]; then \
+	  echo "No workflows found; skipping workflow lint"; \
+	else \
+	  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r yamllint; \
+	  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint; \
 	fi
 
 lint-infra:
@@ -249,7 +258,7 @@ doks-test:
 	command -v tflint >/dev/null
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	conftest test infra/modules/doks --policy infra/modules/doks/policy --ignore ".terraform"
-	cd infra/modules/doks/tests && DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v
+	cd infra/modules/doks/tests && $(GO_TEST_ENV) DOKS_KUBERNETES_VERSION=$(DOKS_KUBERNETES_VERSION) go test -v
 	# Optional: surface "changes pending" in logs without failing CI
 	tofu -chdir=infra/modules/doks/examples/basic plan -detailed-exitcode \
 	-var cluster_name=test \
@@ -283,7 +292,7 @@ fluxcd-test:
 	fi
 	command -v tflint >/dev/null
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
-	cd infra/modules/fluxcd/tests && KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
+	cd infra/modules/fluxcd/tests && $(GO_TEST_ENV) KUBECONFIG="$(FLUX_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(FLUX_KUBECONFIG_PATH)" ]; then \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/fluxcd/examples/basic plan -input=false -no-color -detailed-exitcode \
 			-var "git_repository_url=${FLUX_GIT_REPOSITORY_URL:-https://github.com/fluxcd/flux2-kustomize-helm-example.git}" \
@@ -320,7 +329,7 @@ vault-appliance-test:
 	command -v tflint >/dev/null
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
 	conftest test infra/modules/vault_appliance --policy infra/modules/vault_appliance/policy --ignore ".terraform"
-	cd infra/modules/vault_appliance/tests && go test -v
+	cd infra/modules/vault_appliance/tests && $(GO_TEST_ENV) go test -v
 	DIGITALOCEAN_TOKEN=dummy tofu -chdir=infra/modules/vault_appliance/examples/basic plan -detailed-exitcode \
 	-var name=vault-ci \
 	-var region=nyc1 \
@@ -347,9 +356,21 @@ vault-appliance-policy: conftest tofu
 	rm -f infra/modules/vault_appliance/examples/basic/tfplan.binary infra/modules/vault_appliance/examples/basic/plan.json
 
 traefik-test:
+	# `TRAEFIK_KUBECONFIG_PATH` enables apply-mode validation/plan checks for the
+	# basic example. When it is set, the ACME email and Cloudflare secret name
+	# must also be set so failures are explicit (rather than surfacing later as
+	# OpenTofu variable validation errors).
 	tofu fmt -check infra/modules/traefik
+	tofu -chdir=infra/modules/traefik/examples/render init
+	tofu -chdir=infra/modules/traefik/examples/render validate
+	TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/render plan -input=false -no-color -detailed-exitcode \
+	|| test $$? -eq 2
 	tofu -chdir=infra/modules/traefik/examples/basic init
 	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic validate -no-color \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
@@ -359,8 +380,12 @@ traefik-test:
 	fi
 	command -v tflint >/dev/null
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
-	cd infra/modules/traefik/tests && KUBECONFIG="$(TRAEFIK_KUBECONFIG_PATH)" go test -v
+	cd infra/modules/traefik/tests && $(GO_TEST_ENV) KUBECONFIG="$(TRAEFIK_KUBECONFIG_PATH)" go test -v
 	if [ -n "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic plan -input=false -no-color -detailed-exitcode \
 			-var "kubeconfig_path=$(TRAEFIK_KUBECONFIG_PATH)" \
 			-var "acme_email=$(TRAEFIK_ACME_EMAIL)" \
@@ -373,10 +398,15 @@ traefik-test:
 	$(MAKE) traefik-policy
 
 traefik-policy: conftest tofu
+	./scripts/traefik-render-policy.sh
 	if [ -z "$(TRAEFIK_KUBECONFIG_PATH)" ]; then \
 		echo "Skipping traefik-policy; set TRAEFIK_KUBECONFIG_PATH to run"; \
 	else \
 		set -euo pipefail; \
+		if [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "TRAEFIK_ACME_EMAIL and TRAEFIK_CLOUDFLARE_SECRET_NAME must be set when TRAEFIK_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		tmpdir=$$(mktemp -d); \
 		trap 'rm -rf "$$tmpdir"' EXIT; \
 		status=0; \
@@ -389,5 +419,12 @@ traefik-policy: conftest tofu
 			|| status=$$?; \
 		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/traefik/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
-		conftest test --policy infra/modules/traefik/policy --fail-on-warn "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/traefik/policy/plan --fail-on-warn --namespace traefik.policy.plan "$$tmpdir/plan.json"; \
 	fi
+
+traefik-e2e: tofu
+	@if [ -z "$(TRAEFIK_KUBECONFIG_PATH)" ] || [ -z "$(TRAEFIK_ACME_EMAIL)" ] || [ -z "$(TRAEFIK_CLOUDFLARE_SECRET_NAME)" ]; then \
+		echo "Missing Traefik env vars for e2e. Set TRAEFIK_KUBECONFIG_PATH, TRAEFIK_ACME_EMAIL, and TRAEFIK_CLOUDFLARE_SECRET_NAME." >&2; \
+		exit 1; \
+	fi
+	./scripts/traefik-e2e.sh
