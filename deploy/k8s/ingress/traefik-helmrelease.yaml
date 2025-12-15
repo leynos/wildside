@@ -3,6 +3,10 @@ kind: HelmRelease
 metadata:
   name: traefik
   namespace: traefik
+# Traefik chart v37.x deploys Traefik Proxy v3.
+# Upgrades from Traefik Proxy v2 require migrating any Traefik custom resources
+# (IngressRoute, Middleware, etc.) and validating behaviour in a staging
+# cluster before production.
 spec:
   interval: 30m
   install:
