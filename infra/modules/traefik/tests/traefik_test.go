@@ -258,9 +258,14 @@ func TestTraefikModuleRenderOutputs(t *testing.T) {
 	require.True(t, ok, "expected platform/sources/traefik-repo.yaml output key")
 
 	dashboardHostnames := terraform.OutputList(t, opts, "dashboard_hostnames")
+	require.NotEmpty(t, dashboardHostnames, "expected dashboard_hostnames output to be non-empty when dashboard is enabled")
 	require.Equal(t, []string{"traefik-dashboard.example.test"}, dashboardHostnames)
 
+	dashboardHostname := terraform.Output(t, opts, "dashboard_hostname")
+	require.Equal(t, "traefik-dashboard.example.test", dashboardHostname)
+
 	defaultIssuer := terraform.Output(t, opts, "default_certificate_issuer_name")
+	require.NotEmpty(t, defaultIssuer, "expected default_certificate_issuer_name output to be non-empty")
 	require.Equal(t, "issuer-render", defaultIssuer)
 	require.Equal(t, terraform.Output(t, opts, "cluster_issuer_name"), defaultIssuer)
 }

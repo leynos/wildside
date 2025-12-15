@@ -67,6 +67,47 @@ func TestTerraformEnvVarsAllowsOverrides(t *testing.T) {
 	}
 }
 
+func TestTerraformEnvVarsConfiguresPluginCacheDir(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+
+	env := TerraformEnvVars(t, nil)
+
+	pluginCacheDir, ok := env["TF_PLUGIN_CACHE_DIR"]
+	if !ok {
+		t.Fatalf("expected TF_PLUGIN_CACHE_DIR to be set when XDG_CACHE_HOME is writable")
+	}
+
+	expected := filepath.Join(cacheHome, "wildside", "opentofu", "plugin-cache")
+	if pluginCacheDir != expected {
+		t.Fatalf("TF_PLUGIN_CACHE_DIR mismatch: want %q, got %q", expected, pluginCacheDir)
+	}
+
+	if _, err := os.Stat(expected); err != nil {
+		t.Fatalf("expected TF_PLUGIN_CACHE_DIR to exist on disk: %v", err)
+	}
+}
+
+func TestTerraformEnvVarsRespectsExistingPluginCacheDir(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+
+	extras := map[string]string{"TF_PLUGIN_CACHE_DIR": "/tmp/wildside-plugin-cache"}
+	env := TerraformEnvVars(t, extras)
+
+	if got := env["TF_PLUGIN_CACHE_DIR"]; got != extras["TF_PLUGIN_CACHE_DIR"] {
+		t.Fatalf("expected TF_PLUGIN_CACHE_DIR override to win, got %q", got)
+	}
+	if _, ok := extras["TF_IN_AUTOMATION"]; ok {
+		t.Fatalf("extras map was mutated: %v", extras)
+	}
+
+	expectedDefault := filepath.Join(cacheHome, "wildside", "opentofu", "plugin-cache")
+	if _, err := os.Stat(expectedDefault); err == nil {
+		t.Fatalf("did not expect default plugin cache directory %s to be created when override is set", expectedDefault)
+	}
+}
+
 func TestTerraformEnvDoesNotMutateProcessEnvironment(t *testing.T) {
 	const fooKey = "WILDSIDE_TERRAFORM_ENV_FOO"
 
@@ -136,6 +177,24 @@ func TestTerraformEnvAppliesToCommands(t *testing.T) {
 	}
 	if _, ok := env["SHOULD_NOT_LEAK"]; ok {
 		t.Fatalf("child env leaked parent variable: %v", env)
+	}
+}
+
+func TestTerraformEnvIncludesPluginCacheDir(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+
+	envSlice := TerraformEnv(t, nil)
+	env := envEntriesToMap(envSlice)
+
+	pluginCacheDir, ok := env["TF_PLUGIN_CACHE_DIR"]
+	if !ok {
+		t.Fatalf("expected TerraformEnv to include TF_PLUGIN_CACHE_DIR when XDG_CACHE_HOME is writable")
+	}
+
+	expected := filepath.Join(cacheHome, "wildside", "opentofu", "plugin-cache")
+	if pluginCacheDir != expected {
+		t.Fatalf("TF_PLUGIN_CACHE_DIR mismatch: want %q, got %q", expected, pluginCacheDir)
 	}
 }
 

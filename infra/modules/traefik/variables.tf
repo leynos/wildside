@@ -21,7 +21,7 @@ variable "mode" {
   nullable    = false
 
   validation {
-    condition     = contains(["render", "apply"], var.mode)
+    condition     = contains(["render", "apply"], trimspace(var.mode))
     error_message = "mode must be one of: render, apply"
   }
 }
