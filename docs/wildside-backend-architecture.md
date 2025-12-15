@@ -146,7 +146,6 @@ depend on `domain` (and shared middleware), but must not depend on `outbound`.
 flowchart TB
     subgraph Inbound["backend/src/inbound"]
         Http["http"]
-        HttpAuth["http/auth.rs"]
         HttpUsers["http/users.rs"]
         HttpSession["http/session.rs"]
         HttpError["http/error.rs"]
@@ -157,7 +156,6 @@ flowchart TB
         WsMessages["ws/messages.rs"]
     end
 
-    Http --> HttpAuth
     Http --> HttpUsers
     Http --> HttpSession
     Http --> HttpError

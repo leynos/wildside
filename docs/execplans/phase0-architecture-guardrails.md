@@ -36,22 +36,24 @@ Observable success:
 
 ## Progress
 
-- [x] (2025-12-15 18:10Z) Create inbound “use-case port” traits for HTTP + WS.
-- [x] (2025-12-15 18:30Z) Refactor HTTP handlers to use injected ports via `web::Data`.
-- [x] (2025-12-15 18:45Z) Refactor WebSocket actor/handler to use injected port.
-- [x] (2025-12-15 19:05Z) Add unit tests (`rstest`) for new port implementations.
-- [x] (2025-12-15 19:40Z) Add behavioural tests (`rstest-bdd` v0.1.0) covering:
+- [x] (2025-12-15) Create inbound “use-case port” traits for HTTP + WS.
+- [x] (2025-12-15) Refactor HTTP handlers to use injected ports via `web::Data`.
+- [x] (2025-12-15) Refactor WebSocket actor/handler to use injected port.
+- [x] (2025-12-15) Add unit tests (`rstest`) for new port implementations.
+- [x] (2025-12-15) Add behavioural tests (`rstest-bdd` v0.1.0) covering:
   - HTTP happy path (login + list users) and unhappy path (invalid credentials),
   - WS happy path (valid payload) and unhappy path (malformed JSON, invalid
     payload). (Display-name rejection mapping remains covered by existing
     WebSocket session tests.)
-- [x] (2025-12-15 19:45Z) Ensure embedded Postgres remains usable locally via
+- [x] (2025-12-15) Ensure embedded Postgres remains usable locally via
   `pg-embedded-setup-unpriv` (guardrails rely on existing Postgres fixtures).
-- [x] (2025-12-15 19:50Z) Update `docs/wildside-backend-architecture.md` decision log.
-- [x] (2025-12-15 19:55Z) Mark roadmap item done in `docs/backend-roadmap.md`.
-- [x] (2025-12-15 20:15Z) Run `make check-fmt`, `make lint`, `make test` and
+- [x] (2025-12-15) Update `docs/wildside-backend-architecture.md` decision log.
+- [x] (2025-12-15) Mark roadmap item done in `docs/backend-roadmap.md`.
+- [x] (2025-12-15) Run `make check-fmt`, `make lint`, `make test` and
   fix failures. Note: `make test` required a longer timeout (≈3 minutes of
   embedded Postgres contract tests) than the default 300 seconds.
+- [x] (2025-12-15) Remove stale `http/auth.rs` reference from the inbound
+  adapter Mermaid diagram in `docs/wildside-backend-architecture.md`.
 
 ## Surprises & Discoveries
 
@@ -241,3 +243,7 @@ Revision note (required when editing an ExecPlan):
   - the LocalSet requirement for Actix integration tests,
   - completed progress items,
   - the remaining work (running full repo quality gates).
+
+- Updated on 2025-12-15 to remove a stale `http/auth.rs` reference from the
+  inbound adapter module diagram, keeping documentation aligned with the
+  current codebase structure.
