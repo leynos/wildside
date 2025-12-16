@@ -1,5 +1,8 @@
 //! Behavioural tests for WebSocket origin validation.
 
+#[path = "support/ws.rs"]
+mod ws_support;
+
 use actix_http::Request;
 use actix_web::http::header::HeaderValue;
 use actix_web::{
@@ -13,14 +16,13 @@ use backend::domain::UserOnboardingService;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 use rstest::{fixture, rstest};
-use std::sync::Arc;
 
 // Example Sec-WebSocket-Key from RFC 6455 section 1.3 used to satisfy handshake requirements.
 const RFC6455_SAMPLE_KEY: &str = "dGhlIHNhbXBsZSBub25jZQ==";
 
 #[fixture]
 fn ws_state() -> WsState {
-    WsState::new(Arc::new(UserOnboardingService))
+    ws_support::ws_state(UserOnboardingService)
 }
 
 async fn init_app(
@@ -44,11 +46,19 @@ fn handshake_request() -> TestRequest {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Test cases for Origin header validation.
+///
+/// Covers both missing/invalid headers and disallowed origin values.
 enum OriginHeaderCase {
+    /// No Origin header present.
     Missing,
+    /// Origin not in the allowlist.
     Unlisted,
+    /// Multiple Origin headers (forbidden by RFC 6455).
     Multiple,
+    /// Malformed Origin header (invalid UTF-8).
     Malformed,
+    /// Localhost with port 0 (not a valid listening port).
     LocalhostZeroPort,
 }
 
@@ -63,6 +73,7 @@ fn handshake_request_for_origin_case(origin_case: OriginHeaderCase) -> Request {
             .append_header((header::ORIGIN, "https://example.com"))
             .to_request(),
         OriginHeaderCase::Malformed => {
+            // Byte 0x80 is invalid UTF-8, tests parser robustness.
             let invalid = HeaderValue::from_bytes(&[0x80]).expect("opaque Origin header value");
             handshake_request()
                 .insert_header((header::ORIGIN, invalid))

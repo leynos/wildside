@@ -21,6 +21,36 @@ pub(crate) use crate::doubles::UsersResponse;
 use crate::harness::{with_world_async, SharedWorld};
 use backend::TraceId;
 
+async fn perform_ws_submission(
+    base_url: String,
+    payload: Value,
+) -> (Option<Value>, Option<CloseCode>) {
+    let (_resp, mut socket) = awc::Client::default()
+        .ws(format!("{base_url}/ws"))
+        .set_header(header::ORIGIN, "http://localhost:3000")
+        .connect()
+        .await
+        .expect("websocket connect");
+
+    socket
+        .send(Message::Text(payload.to_string().into()))
+        .await
+        .expect("send message");
+
+    let frame = socket.next().await.expect("ws frame").expect("ws frame ok");
+    match frame {
+        Frame::Text(bytes) => {
+            let json: Value = serde_json::from_slice(&bytes).expect("ws json");
+            (Some(json), None)
+        }
+        Frame::Close(reason) => {
+            let code = reason.map(|r| r.code).unwrap_or(CloseCode::Normal);
+            (None, Some(code))
+        }
+        other => panic!("unexpected ws frame: {other:?}"),
+    }
+}
+
 fn perform_login_request(
     world: &SharedWorld,
     username: &str,
@@ -199,36 +229,11 @@ pub(crate) fn the_client_connects_to_the_websocket_and_submits_a_display_name(wo
     onboarding.push_response(event);
 
     let (json, close) = with_world_async(&world, |base_url| async move {
-        let (_resp, mut socket) = awc::Client::default()
-            .ws(format!("{base_url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
         let payload = serde_json::json!({
             "traceId": Uuid::nil(),
             "displayName": "Bob"
-        })
-        .to_string();
-
-        socket
-            .send(Message::Text(payload.into()))
-            .await
-            .expect("send message");
-
-        let frame = socket.next().await.expect("ws frame").expect("ws frame ok");
-        match frame {
-            Frame::Text(bytes) => {
-                let json: Value = serde_json::from_slice(&bytes).expect("ws json");
-                (Some(json), None)
-            }
-            Frame::Close(reason) => {
-                let code = reason.map(|r| r.code).unwrap_or(CloseCode::Normal);
-                (None, Some(code))
-            }
-            other => panic!("unexpected ws frame: {other:?}"),
-        }
+        });
+        perform_ws_submission(base_url, payload).await
     });
 
     let mut ctx = world.borrow_mut();

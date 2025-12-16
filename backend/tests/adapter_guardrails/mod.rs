@@ -8,6 +8,9 @@ mod doubles;
 mod harness;
 mod steps;
 
+#[path = "../support/ws.rs"]
+mod ws_support;
+
 use harness::{world, WorldFixture};
 use rstest::rstest;
 

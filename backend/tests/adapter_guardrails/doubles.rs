@@ -9,12 +9,14 @@ use backend::domain::{Error, LoginCredentials, User, UserEvent, UserId};
 use backend::TraceId;
 use uuid::Uuid;
 
+/// Configurable success or failure outcome for RecordingLoginService.
 #[derive(Clone)]
 pub(crate) enum LoginResponse {
     Ok(UserId),
     Err(Error),
 }
 
+/// Configurable success or failure outcome for RecordingUsersQuery.
 #[derive(Clone)]
 pub(crate) enum UsersResponse {
     Ok(Vec<User>),

@@ -147,7 +147,7 @@ pub(crate) fn world() -> WorldFixture {
     let onboarding = QueueUserOnboarding::new(Vec::new());
 
     let http_state = HttpState::new(Arc::new(login.clone()), Arc::new(users.clone()));
-    let ws_state = WsState::new(Arc::new(onboarding.clone()));
+    let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
         .block_on(&runtime, async { spawn_adapter_server(http_state, ws_state).await })
@@ -171,4 +171,3 @@ pub(crate) fn world() -> WorldFixture {
 
     WorldFixture { world }
 }
-
