@@ -59,7 +59,7 @@ delivery, so future work remains inside the hexagonal boundaries.
   `cargo deny` or a custom build script) that fails when inbound adapters
   import outbound modules or infrastructure crates directly, and wire it into
   `make lint`.
-- [ ] Provide integration tests that exercise HTTP and WebSocket handlers
+- [x] Provide integration tests that exercise HTTP and WebSocket handlers
   against mocked ports to ensure adapters remain side effect free and domain
   logic stays framework-agnostic.
 
