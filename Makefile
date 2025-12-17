@@ -46,7 +46,8 @@ GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCAC
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
 	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
-	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture
+	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture \
+	        external-dns-test external-dns-policy
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -147,6 +148,7 @@ lint-infra:
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/external_dns && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
@@ -223,7 +225,9 @@ INFRA_TEST_TARGETS := \
         vault-appliance-test \
         vault-appliance-policy \
         traefik-test \
-        traefik-policy
+        traefik-policy \
+        external-dns-test \
+        external-dns-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -428,3 +432,31 @@ traefik-e2e: tofu
 		exit 1; \
 	fi
 	./scripts/traefik-e2e.sh
+
+external-dns-test:
+	tofu fmt -check infra/modules/external_dns
+	tofu -chdir=infra/modules/external_dns/examples/render init
+	tofu -chdir=infra/modules/external_dns/examples/render validate
+	TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/render plan -input=false -no-color -detailed-exitcode \
+	|| test $$? -eq 2
+	tofu -chdir=infra/modules/external_dns/examples/basic init
+	if [ -n "$(EXTERNAL_DNS_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(EXTERNAL_DNS_DOMAIN_FILTERS)" ] || [ -z "$(EXTERNAL_DNS_TXT_OWNER_ID)" ] || [ -z "$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "EXTERNAL_DNS_DOMAIN_FILTERS, EXTERNAL_DNS_TXT_OWNER_ID, and EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME must be set when EXTERNAL_DNS_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/basic validate -no-color \
+			-var "kubeconfig_path=$(EXTERNAL_DNS_KUBECONFIG_PATH)" \
+			-var "domain_filters=$(EXTERNAL_DNS_DOMAIN_FILTERS)" \
+			-var "txt_owner_id=$(EXTERNAL_DNS_TXT_OWNER_ID)" \
+			-var "cloudflare_api_token_secret_name=$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)"; \
+	else \
+		echo "Skipping external-dns validate; set EXTERNAL_DNS_KUBECONFIG_PATH to enable"; \
+	fi
+	command -v tflint >/dev/null
+	cd infra/modules/external_dns && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	cd infra/modules/external_dns/tests && $(GO_TEST_ENV) KUBECONFIG="$(EXTERNAL_DNS_KUBECONFIG_PATH)" go test -v
+	$(MAKE) external-dns-policy
+
+external-dns-policy: conftest tofu
+	./scripts/external-dns-render-policy.sh
