@@ -1,7 +1,7 @@
 //! Tests for constructing and validating domain error payloads.
 
 use super::*;
-use crate::middleware::trace::TraceId;
+use crate::domain::TraceId;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;

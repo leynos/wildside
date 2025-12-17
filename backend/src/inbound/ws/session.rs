@@ -11,11 +11,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::domain::ports::UserOnboarding;
+use crate::domain::TraceId;
 use crate::domain::UserEvent;
 use crate::inbound::ws::messages::{
     DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
 };
-use crate::middleware::trace::TraceId;
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
 use tracing::warn;

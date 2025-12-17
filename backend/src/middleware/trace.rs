@@ -3,98 +3,19 @@
 //! Each incoming request receives a UUID `trace_id` stored in task-local
 //! storage for correlation across logs and error responses.
 //!
-//! Tokio task-local variables are not inherited across spawned tasks. Use
-//! [`TraceId::scope`] when spawning new tasks or moving work onto blocking
-//! threads to ensure the active trace identifier propagates correctly.
+//! The [`TraceId`] type itself lives in [`crate::domain::trace_id`]. This
+//! module provides the Actix Web middleware that generates and propagates
+//! trace identifiers for HTTP requests.
 
 use std::task::{Context, Poll};
 
-use crate::domain::TRACE_ID_HEADER;
+use crate::domain::trace_id::TRACE_ID;
+use crate::domain::{TraceId, TRACE_ID_HEADER};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::Error;
 use futures_util::future::{ready, LocalBoxFuture, Ready};
-use std::future::Future;
-use tokio::task_local;
 use tracing::error;
-use uuid::Uuid;
-
-task_local! {
-    static TRACE_ID: TraceId;
-}
-
-/// Per-request trace identifier exposed via task-local storage.
-///
-/// # Examples
-/// ```
-/// use backend::TraceId;
-///
-/// async fn handler() {
-///     if let Some(id) = TraceId::current() {
-///         println!("trace id: {}", id);
-///     }
-/// }
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TraceId(pub(crate) Uuid);
-
-impl TraceId {
-    #[must_use]
-    #[rustfmt::skip]
-    fn generate() -> Self { Self(Uuid::new_v4()) }
-
-    /// Construct a trace identifier from an existing UUID.
-    #[must_use]
-    pub fn from_uuid(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    /// Returns the current trace identifier if one is in scope.
-    #[must_use]
-    #[rustfmt::skip]
-    pub fn current() -> Option<Self> { TRACE_ID.try_with(|id| *id).ok() }
-
-    /// Access the inner UUID.
-    #[must_use]
-    pub fn as_uuid(&self) -> &Uuid {
-        &self.0
-    }
-
-    /// Execute the provided future with the supplied trace identifier in scope.
-    ///
-    /// # Examples
-    /// ```
-    /// use backend::TraceId;
-    ///
-    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-    /// let trace_id: TraceId = "00000000-0000-0000-0000-000000000000"
-    ///     .parse()
-    ///     .expect("valid UUID");
-    /// let observed = TraceId::scope(trace_id, async move { TraceId::current() }).await;
-    /// assert_eq!(observed, Some(trace_id));
-    /// # });
-    /// ```
-    pub async fn scope<Fut>(trace_id: TraceId, fut: Fut) -> Fut::Output
-    where
-        Fut: Future,
-    {
-        TRACE_ID.scope(trace_id, fut).await
-    }
-}
-
-impl std::fmt::Display for TraceId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for TraceId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Uuid::parse_str(s)?))
-    }
-}
 
 /// Tracing middleware attaching a request-scoped UUID and
 /// adding a `Trace-Id` header to every response.
@@ -161,7 +82,7 @@ where
         let trace_id = TraceId::generate();
         let header_value = trace_id.to_string();
         let fut = self.service.call(req);
-        Box::pin(TraceId::scope(trace_id, async move {
+        Box::pin(TRACE_ID.scope(trace_id, async move {
             let mut res = fut.await?;
             match HeaderValue::from_str(&header_value) {
                 Ok(value) => {
@@ -186,31 +107,6 @@ where
 mod tests {
     use super::*;
     use actix_web::{web, App, HttpResponse};
-    #[tokio::test]
-    async fn trace_id_generate_produces_uuid() {
-        let trace_id = TraceId::generate();
-        let parsed = Uuid::parse_str(&trace_id.to_string()).expect("valid UUID");
-        assert_eq!(parsed.to_string(), trace_id.to_string());
-    }
-
-    #[tokio::test]
-    async fn trace_id_current_reflects_scope() {
-        let expected = TraceId::generate();
-        let observed = TraceId::scope(expected, async move { TraceId::current() }).await;
-        assert_eq!(observed, Some(expected));
-    }
-
-    #[tokio::test]
-    async fn trace_id_current_is_none_out_of_scope() {
-        assert!(TraceId::current().is_none());
-    }
-
-    #[tokio::test]
-    async fn trace_id_from_str_round_trips() {
-        let uuid = Uuid::nil();
-        let trace_id: TraceId = uuid.to_string().parse().expect("parse uuid");
-        assert_eq!(trace_id.to_string(), uuid.to_string());
-    }
 
     #[actix_web::test]
     async fn adds_trace_id_header() {
@@ -275,27 +171,5 @@ mod tests {
         .await;
         let body: Error = actix_web::test::read_body_json(res).await;
         assert_eq!(body.trace_id(), Some(trace_id.as_str()));
-    }
-
-    #[test]
-    fn from_uuid_round_trips() {
-        let uuid = Uuid::new_v4();
-        let trace_id = TraceId::from_uuid(uuid);
-        assert_eq!(trace_id.as_uuid(), &uuid);
-    }
-
-    #[test]
-    fn as_uuid_returns_inner_uuid() {
-        let uuid = Uuid::new_v4();
-        let trace_id = TraceId::from_uuid(uuid);
-        assert_eq!(trace_id.as_uuid(), &uuid);
-    }
-
-    #[actix_web::test]
-    async fn from_uuid_preserves_current_scope() {
-        let uuid = Uuid::new_v4();
-        let trace_id = TraceId::from_uuid(uuid);
-        let observed = TraceId::scope(trace_id, async { TraceId::current() }).await;
-        assert_eq!(observed, Some(trace_id));
     }
 }

@@ -1,12 +1,11 @@
 //! Domain error types shared across adapters.
 
-use crate::middleware::trace::TraceId;
+use super::TraceId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::ToSchema;
 
 /// Stable machine-readable error code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
@@ -35,17 +34,14 @@ pub enum ErrorCode {
 /// let err = Error::new(ErrorCode::NotFound, "missing");
 /// assert_eq!(err.code(), ErrorCode::NotFound);
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 #[serde(try_from = "ErrorDto", into = "ErrorDto")]
 pub struct Error {
-    #[schema(example = "invalid_request")]
     code: ErrorCode,
-    #[schema(example = "Something went wrong")]
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
     #[serde(alias = "trace_id")]
     trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -237,13 +233,12 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ErrorDto {
     code: ErrorCode,
     message: String,
     #[serde(alias = "trace_id")]
-    #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
     #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

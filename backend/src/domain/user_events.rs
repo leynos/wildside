@@ -4,9 +4,9 @@
 //! protocol-specific payloads (e.g., WebSocket JSON envelopes) without
 //! re-encoding domain logic.
 
+use super::TraceId;
 use crate::domain::user::User;
 use crate::domain::user::UserValidationError;
-use crate::middleware::trace::TraceId;
 
 /// Event emitted when a user record is created.
 #[derive(Debug, Clone, PartialEq, Eq)]

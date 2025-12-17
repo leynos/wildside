@@ -169,6 +169,7 @@ impl ModuleLayer {
                 "pg_embedded_setup_unpriv",
                 "postgres",
                 "postgresql_embedded",
+                "utoipa",
             ]),
             Self::Inbound => BTreeSet::from([
                 "diesel",
