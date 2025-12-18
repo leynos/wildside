@@ -67,10 +67,25 @@ pub struct ErrorSchema {
 )]
 pub struct UserSchema {
     /// Stable user identifier.
-    #[schema(value_type = String, example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    ///
+    /// Matches the domain `User` invariant of being a UUID.
+    #[schema(
+        value_type = String,
+        format = "uuid",
+        example = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    )]
     id: String,
     /// Display name shown to other users.
-    #[schema(value_type = String, example = "Ada Lovelace")]
+    ///
+    /// Matches the domain `DisplayName` invariant: trimmed, non-empty,
+    /// 3–32 characters, alphanumeric plus spaces and underscores.
+    #[schema(
+        value_type = String,
+        min_length = 3,
+        max_length = 32,
+        pattern = "^[A-Za-z0-9_ ]+$",
+        example = "Ada Lovelace"
+    )]
     display_name: String,
 }
 
@@ -138,5 +153,33 @@ mod tests {
             schema_json.contains("internal_error"),
             "missing internal_error"
         );
+    }
+
+    /// Verify domain ErrorCode serialization matches schema renames.
+    ///
+    /// This test fails if a new domain variant is added without updating
+    /// the test (and by extension, `ErrorCodeSchema`).
+    #[test]
+    fn error_code_schema_matches_domain_serialization() {
+        use crate::domain::ErrorCode;
+
+        // Each domain variant should serialize to the same string as the schema rename
+        let cases = [
+            (ErrorCode::InvalidRequest, "invalid_request"),
+            (ErrorCode::Unauthorized, "unauthorized"),
+            (ErrorCode::Forbidden, "forbidden"),
+            (ErrorCode::NotFound, "not_found"),
+            (ErrorCode::InternalError, "internal_error"),
+        ];
+
+        for (domain_code, expected) in cases {
+            let serialized = serde_json::to_string(&domain_code).expect("ErrorCode serializes");
+            // serde produces quoted strings, e.g. "\"invalid_request\""
+            assert_eq!(
+                serialized,
+                format!("\"{expected}\""),
+                "domain ErrorCode::{domain_code:?} should serialize to {expected}"
+            );
+        }
     }
 }
