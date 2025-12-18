@@ -57,6 +57,9 @@ deny contains msg if {
 }
 
 # Ensure ExternalDNS Helm release has a valid policy.
+#
+# When policy is omitted or empty, the Helm chart defaults to "sync", which is
+# a valid value. This rule only rejects explicitly-configured invalid policies.
 deny contains msg if {
 	rc := input.resource_changes[_]
 	release := external_dns_release(rc)

@@ -598,13 +598,13 @@ var nullVariableValidationTestCases = []struct {
 		name:            "NullTxtOwnerId",
 		varName:         "txt_owner_id",
 		value:           nil,
-		expectedMessage: "txt_owner_id must be a non-empty alphanumeric string",
+		expectedMessage: "txt_owner_id must be a non-empty string",
 	},
 	{
 		name:            "NullCloudflareSecretName",
 		varName:         "cloudflare_api_token_secret_name",
 		value:           nil,
-		expectedMessage: "cloudflare_api_token_secret_name must be a valid Kubernetes Secret name",
+		expectedMessage: "cloudflare_api_token_secret_name must be a non-empty string",
 	},
 	{
 		name:            "NullCloudflareSecretKey",

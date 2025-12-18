@@ -48,13 +48,18 @@ variable "txt_owner_id" {
 
   validation {
     condition     = var.txt_owner_id != null && length(trimspace(var.txt_owner_id)) > 0
-    error_message = "txt_owner_id must be a non-empty alphanumeric string"
+    error_message = "txt_owner_id must be a non-empty string"
   }
 }
 
 variable "cloudflare_api_token_secret_name" {
   description = "Name of the Kubernetes secret containing the Cloudflare API token"
   type        = string
+
+  validation {
+    condition     = var.cloudflare_api_token_secret_name != null && length(trimspace(var.cloudflare_api_token_secret_name)) > 0
+    error_message = "cloudflare_api_token_secret_name must be a non-empty string"
+  }
 }
 
 # Optional variables with defaults matching the module.
@@ -134,6 +139,18 @@ variable "interval" {
   default     = "1m"
 }
 
+variable "cloudflare_proxied" {
+  description = "Whether DNS records should use Cloudflare proxy by default"
+  type        = bool
+  default     = false
+}
+
+variable "service_monitor_enabled" {
+  description = "Create ServiceMonitor for Prometheus Operator"
+  type        = bool
+  default     = false
+}
+
 provider "kubernetes" {
   config_path = var.kubeconfig_path != null ? trimspace(var.kubeconfig_path) : null
 }
@@ -145,11 +162,9 @@ provider "helm" {
 }
 
 # Additional module inputs using defaults (see ../../variables.tf for details):
-#   - cloudflare_proxied: false (disable Cloudflare proxy by default)
 #   - dns_records_per_page: 5000 (Cloudflare API pagination limit)
 #   - sources: ["ingress", "service"] (Kubernetes resources to watch)
 #   - crd_enabled: true (install DNSEndpoint CRD)
-#   - service_monitor_enabled: false (Prometheus ServiceMonitor)
 #   - registry_type: "txt" (DNS record ownership tracking)
 #   - txt_prefix, txt_suffix: "" (TXT record naming)
 #   - helm_wait: true, helm_timeout: 300 (Helm deployment settings)
@@ -175,6 +190,8 @@ module "external_dns" {
   policy                           = var.policy
   log_level                        = var.log_level
   interval                         = var.interval
+  cloudflare_proxied               = var.cloudflare_proxied
+  service_monitor_enabled          = var.service_monitor_enabled
 }
 
 output "namespace" {
