@@ -37,7 +37,17 @@ variable "cloudflare_api_token_secret_name" {
   type        = string
 }
 
-# Optional test overrides - use specific defaults, tests can override via -var
+# Optional variables with defaults matching the module.
+#
+# These defaults intentionally duplicate the module's defaults to enable test
+# flexibility: Terratest validation tests need to override specific variables
+# (e.g., setting namespace=null to verify error messages), which requires
+# variable declarations in the root module. Without these declarations,
+# OpenTofu rejects -var flags for undeclared variables.
+#
+# If module defaults change, update these to match. Tests will catch mismatches
+# through validation failures.
+
 variable "namespace" {
   description = "Namespace where ExternalDNS will be installed"
   type        = string
