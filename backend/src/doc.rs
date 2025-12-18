@@ -1,4 +1,16 @@
-//! OpenAPI documentation setup.
+//! OpenAPI documentation configuration.
+//!
+//! This module defines the [`ApiDoc`] struct which generates the OpenAPI
+//! specification for the REST API. It registers:
+//!
+//! - **Paths**: All HTTP endpoints from the inbound layer (users, health)
+//! - **Schemas**: Domain type wrappers ([`ErrorSchema`], [`ErrorCodeSchema`],
+//!   [`UserSchema`]) that provide OpenAPI definitions without coupling domain
+//!   types to the utoipa framework
+//! - **Security**: Session cookie authentication scheme
+//!
+//! The generated specification is used by Swagger UI (debug builds) and
+//! exported via `cargo run --bin openapi-dump` for external tooling.
 
 use crate::inbound::http::schemas::{ErrorCodeSchema, ErrorSchema, UserSchema};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
