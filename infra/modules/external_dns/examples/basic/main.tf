@@ -144,6 +144,18 @@ provider "helm" {
   }
 }
 
+# Additional module inputs using defaults (see ../../variables.tf for details):
+#   - cloudflare_proxied: false (disable Cloudflare proxy by default)
+#   - dns_records_per_page: 5000 (Cloudflare API pagination limit)
+#   - sources: ["ingress", "service"] (Kubernetes resources to watch)
+#   - crd_enabled: true (install DNSEndpoint CRD)
+#   - service_monitor_enabled: false (Prometheus ServiceMonitor)
+#   - registry_type: "txt" (DNS record ownership tracking)
+#   - txt_prefix, txt_suffix: "" (TXT record naming)
+#   - helm_wait: true, helm_timeout: 300 (Helm deployment settings)
+#   - create_namespace: true (create namespace if missing)
+#   - flux_namespace, flux_helm_repository_name (render mode only)
+
 module "external_dns" {
   source = "../.."
 
