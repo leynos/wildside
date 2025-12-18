@@ -56,6 +56,8 @@ pub struct ApiDoc;
 
 #[cfg(test)]
 mod tests {
+    //! Tests verifying OpenAPI schema wrappers are correctly registered and referenced.
+
     use super::*;
     use utoipa::OpenApi;
 

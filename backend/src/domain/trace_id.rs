@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 task_local! {
     /// Task-local storage for the current trace identifier.
-    pub static TRACE_ID: TraceId;
+    pub(crate) static TRACE_ID: TraceId;
 }
 
 /// Per-request trace identifier exposed via task-local storage.
@@ -124,13 +124,6 @@ mod tests {
 
     #[test]
     fn from_uuid_round_trips() {
-        let uuid = Uuid::new_v4();
-        let trace_id = TraceId::from_uuid(uuid);
-        assert_eq!(trace_id.as_uuid(), &uuid);
-    }
-
-    #[test]
-    fn as_uuid_returns_inner_uuid() {
         let uuid = Uuid::new_v4();
         let trace_id = TraceId::from_uuid(uuid);
         assert_eq!(trace_id.as_uuid(), &uuid);

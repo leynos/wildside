@@ -268,7 +268,6 @@ Mark the task complete in `docs/backend-roadmap.md`:
    - `trace_id_current_is_none_out_of_scope`
    - `trace_id_from_str_round_trips`
    - `from_uuid_round_trips`
-   - `as_uuid_returns_inner_uuid`
 
 2. **Architecture lint tests** for utoipa violation detection
 
@@ -280,7 +279,7 @@ continue passing without modification.
 ### Integration Tests
 
 1. Verify `cargo run --bin openapi-dump` produces valid OpenAPI spec
-2. Verify all domain types still serialise/deserialise correctly
+2. Verify all domain types still serialize/deserialize correctly
 
 ---
 
