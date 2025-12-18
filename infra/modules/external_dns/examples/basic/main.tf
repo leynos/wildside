@@ -2,6 +2,9 @@
 //!
 //! This example deploys ExternalDNS directly to a Kubernetes cluster. It
 //! requires a kubeconfig with cluster-admin access.
+//!
+//! Most variables use module defaults. Override them as needed for specific
+//! deployments.
 
 variable "kubeconfig_path" {
   description = "Path to a kubeconfig file with cluster-admin access"
@@ -19,12 +22,6 @@ variable "kubeconfig_path" {
   }
 }
 
-variable "namespace" {
-  description = "Namespace where ExternalDNS will be installed"
-  type        = string
-  default     = "external-dns"
-}
-
 variable "domain_filters" {
   description = "List of DNS domains that ExternalDNS should manage"
   type        = list(string)
@@ -40,6 +37,13 @@ variable "cloudflare_api_token_secret_name" {
   type        = string
 }
 
+# Optional test overrides - use specific defaults, tests can override via -var
+variable "namespace" {
+  description = "Namespace where ExternalDNS will be installed"
+  type        = string
+  default     = "external-dns"
+}
+
 variable "cloudflare_api_token_secret_key" {
   description = "Key within the Cloudflare API token secret"
   type        = string
@@ -53,7 +57,7 @@ variable "chart_repository" {
 }
 
 variable "chart_name" {
-  description = "Name of the Helm chart used to install ExternalDNS"
+  description = "Name of the Helm chart"
   type        = string
   default     = "external-dns"
 }
@@ -65,9 +69,21 @@ variable "chart_version" {
 }
 
 variable "helm_release_name" {
-  description = "Name assigned to the ExternalDNS Helm release"
+  description = "Name assigned to the Helm release"
   type        = string
   default     = "external-dns"
+}
+
+variable "helm_values_files" {
+  description = "Additional YAML files providing values"
+  type        = list(string)
+  default     = []
+}
+
+variable "helm_values" {
+  description = "Inline YAML values"
+  type        = list(string)
+  default     = []
 }
 
 variable "policy" {
@@ -76,52 +92,16 @@ variable "policy" {
   default     = "sync"
 }
 
-variable "sources" {
-  description = "Kubernetes resource types to watch"
-  type        = list(string)
-  default     = ["ingress", "service"]
-}
-
-variable "cloudflare_proxied" {
-  description = "Whether to enable Cloudflare proxy by default"
-  type        = bool
-  default     = false
-}
-
-variable "dns_records_per_page" {
-  description = "API pagination size (reduces API calls)"
-  type        = number
-  default     = 5000
-}
-
 variable "log_level" {
   description = "Log verbosity level"
   type        = string
   default     = "info"
 }
 
-variable "crd_enabled" {
-  description = "Enable the DNSEndpoint CRD"
-  type        = bool
-  default     = true
-}
-
-variable "service_monitor_enabled" {
-  description = "Create ServiceMonitor for Prometheus Operator"
-  type        = bool
-  default     = false
-}
-
-variable "helm_values" {
-  description = "Inline YAML values passed to the ExternalDNS Helm release"
-  type        = list(string)
-  default     = []
-}
-
-variable "helm_values_files" {
-  description = "Additional YAML files providing values for the ExternalDNS Helm release"
-  type        = list(string)
-  default     = []
+variable "interval" {
+  description = "Sync interval"
+  type        = string
+  default     = "1m"
 }
 
 provider "kubernetes" {
@@ -139,24 +119,20 @@ module "external_dns" {
 
   mode = "apply"
 
-  namespace                        = var.namespace
   domain_filters                   = var.domain_filters
   txt_owner_id                     = var.txt_owner_id
   cloudflare_api_token_secret_name = var.cloudflare_api_token_secret_name
+  namespace                        = var.namespace
   cloudflare_api_token_secret_key  = var.cloudflare_api_token_secret_key
   chart_repository                 = var.chart_repository
   chart_name                       = var.chart_name
   chart_version                    = var.chart_version
   helm_release_name                = var.helm_release_name
-  policy                           = var.policy
-  sources                          = var.sources
-  cloudflare_proxied               = var.cloudflare_proxied
-  dns_records_per_page             = var.dns_records_per_page
-  log_level                        = var.log_level
-  crd_enabled                      = var.crd_enabled
-  service_monitor_enabled          = var.service_monitor_enabled
-  helm_values                      = var.helm_values
   helm_values_files                = var.helm_values_files
+  helm_values                      = var.helm_values
+  policy                           = var.policy
+  log_level                        = var.log_level
+  interval                         = var.interval
 }
 
 output "namespace" {

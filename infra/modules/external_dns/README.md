@@ -163,7 +163,7 @@ When `mode = "apply"`, the module creates:
 
 ## Integration with Ingress Resources
 
-Once ExternalDNS is deployed, annotate your Ingress resources to trigger
+Once ExternalDNS is deployed, annotate Ingress resources to trigger
 automatic DNS record creation:
 
 ```yaml
@@ -192,7 +192,7 @@ spec:
 
 ## DNSEndpoint Custom Resource
 
-When `crd_enabled = true`, you can create DNS records declaratively using the
+When `crd_enabled = true`, DNS records can be created declaratively using the
 DNSEndpoint CRD:
 
 ```yaml
@@ -221,7 +221,7 @@ spec:
    ```
 
 2. Verify the Cloudflare API token has correct permissions
-3. Ensure `domain_filters` includes the domain you're trying to manage
+3. Ensure `domain_filters` includes the domain being managed
 4. Check that the Ingress/Service has the correct annotations
 
 ### Stale DNS records not deleted
@@ -231,7 +231,7 @@ spec:
 
 ### API rate limiting
 
-If you see rate limit errors:
+If rate limit errors occur:
 
 1. Increase `dns_records_per_page` to reduce API calls
 2. Increase `interval` to reduce synchronisation frequency

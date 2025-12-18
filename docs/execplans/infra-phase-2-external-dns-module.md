@@ -25,7 +25,7 @@ infra/modules/external_dns/
 ├── .tflint.hcl                  # TFLint configuration
 ├── policy/
 │   ├── manifests/
-│   │   └── helmrelease.rego     # OPA policy for rendered HelmRelease validation
+│   │   └── helmrelease.rego     # Open Policy Agent (OPA) policy for rendered HelmRelease validation
 │   └── plan/
 │       └── externaldns.rego     # OPA policy for plan-time validation
 ├── examples/
@@ -62,7 +62,7 @@ Required inputs:
 | `mode` | `string` | `"render"` or `"apply"` |
 | `namespace` | `string` | Namespace for ExternalDNS (default: `"external-dns"`) |
 | `domain_filters` | `list(string)` | DNS domains to manage (e.g., `["example.com"]`) |
-| `cloudflare_api_token_secret_name` | `string` | K8s secret with Cloudflare API token |
+| `cloudflare_api_token_secret_name` | `string` | Kubernetes secret with Cloudflare API token |
 | `txt_owner_id` | `string` | Unique identifier for ownership TXT records |
 
 Optional inputs:
@@ -83,8 +83,8 @@ Optional inputs:
 | `cloudflare_api_token_secret_key` | `string` | `"token"` | Key in the secret |
 | `dns_records_per_page` | `number` | `5000` | API pagination size |
 | `log_level` | `string` | `"info"` | Log level |
-| `sources` | `list(string)` | `["ingress", "service"]` | K8s resource sources |
-| `crd_enabled` | `bool` | `true` | Enable DNSEndpoint CRD |
+| `sources` | `list(string)` | `["ingress", "service"]` | Kubernetes resource sources |
+| `crd_enabled` | `bool` | `true` | Enable DNSEndpoint CustomResourceDefinition (CRD) |
 | `flux_namespace` | `string` | `"flux-system"` | Flux namespace (render mode) |
 | `flux_helm_repository_name` | `string` | `"external-dns"` | Flux HelmRepository name |
 | `service_monitor_enabled` | `bool` | `false` | Create ServiceMonitor |

@@ -49,24 +49,19 @@ users:
 `)
 	require.NoError(t, os.WriteFile(kubeconfigPath, stubConfig, 0600))
 
+	// Only pass required variables; module defaults handle the rest
 	return map[string]interface{}{
-		"namespace":                        "external-dns",
 		"domain_filters":                   []string{"example.test"},
 		"txt_owner_id":                     "test-owner-id",
 		"cloudflare_api_token_secret_name": "cloudflare-api-token",
-		"cloudflare_api_token_secret_key":  "token",
-		"policy":                           "sync",
-		"cloudflare_proxied":               false,
 		"kubeconfig_path":                  kubeconfigPath,
-		"helm_values":                      []string{},
-		"helm_values_files":                []string{},
 	}
 }
 
 func renderVars(t *testing.T) map[string]interface{} {
 	t.Helper()
+	// Only pass required variables; module defaults handle the rest
 	return map[string]interface{}{
-		"namespace":                        "external-dns",
 		"domain_filters":                   []string{"example.test"},
 		"txt_owner_id":                     "render-owner-id",
 		"cloudflare_api_token_secret_name": "cloudflare-api-token",
@@ -428,10 +423,114 @@ spec:
 	require.Contains(t, string(out), "must set values.txtOwnerId")
 }
 
+func TestExternalDNSModulePlanPolicy(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	vars := testVars(t)
+	tfDir, planPath := renderExternalDNSPlan(t, vars)
+	policyPath := externalDNSPlanPolicyPath(tfDir)
+
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   planPath,
+		PolicyPath: policyPath,
+		Kubeconfig: vars["kubeconfig_path"].(string),
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			externalDNSPolicyPlanNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.NoErrorf(t, err, "conftest failed: %s", string(out))
+}
+
+func TestExternalDNSModulePlanPolicyRejectsMissingDomainFilters(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, _ := setup(t, testVars(t))
+	policyPath := externalDNSPlanPolicyPath(tfDir)
+
+	// Create a plan fixture with missing domainFilters
+	planPayload := `{
+		"resource_changes": [{
+			"type": "helm_release",
+			"change": {
+				"after": {
+					"name": "external-dns",
+					"values": ["domainFilters: []\ntxtOwnerId: test-owner\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
+				}
+			}
+		}]
+	}`
+	planPath := writePlanFixture(t, planPayload)
+
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   planPath,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			externalDNSPolicyPlanNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.Error(t, err, "expected conftest to report a violation")
+	require.Contains(t, string(out), "domainFilters")
+}
+
+func TestExternalDNSModulePlanPolicyRejectsMissingTxtOwnerId(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, _ := setup(t, testVars(t))
+	policyPath := externalDNSPlanPolicyPath(tfDir)
+
+	// Create a plan fixture with missing txtOwnerId
+	planPayload := `{
+		"resource_changes": [{
+			"type": "helm_release",
+			"change": {
+				"after": {
+					"name": "external-dns",
+					"values": ["domainFilters:\n  - example.test\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
+				}
+			}
+		}]
+	}`
+	planPath := writePlanFixture(t, planPayload)
+
+	out, err := runConftestAgainstPlan(t, conftestRun{
+		PlanPath:   planPath,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			externalDNSPolicyPlanNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.Error(t, err, "expected conftest to report a violation")
+	require.Contains(t, string(out), "txtOwnerId")
+}
+
 func TestExternalDNSModuleInvalidDomainFilters(t *testing.T) {
 	t.Parallel()
 	vars := renderVars(t)
 	vars["domain_filters"] = []string{}
+	_, opts := setupRender(t, vars)
+	_, err := terraform.InitAndPlanE(t, opts)
+	require.Error(t, err)
+	require.Regexp(t, regexp.MustCompile(`domain_filters`), err.Error())
+}
+
+func TestExternalDNSModuleInvalidDomainFiltersSyntax(t *testing.T) {
+	t.Parallel()
+	vars := renderVars(t)
+	vars["domain_filters"] = []string{"not a valid domain"}
 	_, opts := setupRender(t, vars)
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)
@@ -538,6 +637,12 @@ var nullVariableValidationTestCases = []struct {
 		varName:         "cloudflare_api_token_secret_name",
 		value:           nil,
 		expectedMessage: "cloudflare_api_token_secret_name must be a valid Kubernetes Secret name",
+	},
+	{
+		name:            "NullCloudflareSecretKey",
+		varName:         "cloudflare_api_token_secret_key",
+		value:           nil,
+		expectedMessage: "cloudflare_api_token_secret_key must not be blank",
 	},
 }
 

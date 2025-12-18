@@ -3,12 +3,8 @@
 //! This example does not require cluster access. It exercises the module's
 //! "render" mode, which emits Flux-ready YAML manifests for the GitOps
 //! repository.
-
-variable "namespace" {
-  description = "Namespace where ExternalDNS will be deployed by Flux"
-  type        = string
-  default     = "external-dns"
-}
+//!
+//! Most variables use module defaults. Override them as needed.
 
 variable "domain_filters" {
   description = "List of DNS domains that ExternalDNS should manage"
@@ -28,18 +24,7 @@ variable "cloudflare_api_token_secret_name" {
   default     = "cloudflare-api-token"
 }
 
-variable "cloudflare_api_token_secret_key" {
-  description = "Key within the Cloudflare API token secret"
-  type        = string
-  default     = "token"
-}
-
-variable "policy" {
-  description = "DNS record management policy"
-  type        = string
-  default     = "sync"
-}
-
+# Optional overrides - tests set these via -var flags
 variable "cloudflare_proxied" {
   description = "Whether to enable Cloudflare proxy by default"
   type        = bool
@@ -51,12 +36,9 @@ module "external_dns" {
 
   mode = "render"
 
-  namespace                        = var.namespace
   domain_filters                   = var.domain_filters
   txt_owner_id                     = var.txt_owner_id
   cloudflare_api_token_secret_name = var.cloudflare_api_token_secret_name
-  cloudflare_api_token_secret_key  = var.cloudflare_api_token_secret_key
-  policy                           = var.policy
   cloudflare_proxied               = var.cloudflare_proxied
 }
 

@@ -6,15 +6,39 @@ import rego.v1
 #
 # Resource deletions may have `rc.change.after == null`, so this helper includes
 # the guard to avoid runtime errors when policies evaluate deletes.
+#
+# Helm values are stored as a list of YAML strings where later entries override
+# earlier ones (matching Helm's merge semantics). This helper merges all entries
+# to reflect the effective configuration.
 helm_release(rc) = {"name": name, "values": values} if {
 	rc.type == "helm_release"
 	after := rc.change.after
 	after != null
 	name := object.get(after, "name", "")
 	values_list := object.get(after, "values", [])
-	# Helm values are stored as a list of YAML strings; decode the first one
 	count(values_list) > 0
-	values := yaml.unmarshal(values_list[0])
+	values := merge_helm_values(values_list)
+}
+
+# Merge a list of YAML strings into a single object, with later entries
+# overriding earlier ones (Helm's merge semantics).
+merge_helm_values(values_list) = merged if {
+	parsed := [yaml.unmarshal(v) | some v in values_list]
+	merged := foldl_object_union(parsed, {})
+}
+
+# Left fold over a list of objects, merging each into the accumulator.
+foldl_object_union(objs, acc) = result if {
+	count(objs) == 0
+	result := acc
+}
+
+foldl_object_union(objs, acc) = result if {
+	count(objs) > 0
+	first := objs[0]
+	rest := array.slice(objs, 1, count(objs))
+	new_acc := object.union(acc, first)
+	result := foldl_object_union(rest, new_acc)
 }
 
 # Helper to identify ExternalDNS Helm releases

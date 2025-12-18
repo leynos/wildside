@@ -23,28 +23,32 @@ external_dns_helmreleases := [doc |
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	version := object.get(object.get(object.get(doc.spec, "chart", {}), "spec", {}), "version", "")
+	spec := object.get(doc, "spec", {})
+	version := object.get(object.get(object.get(spec, "chart", {}), "spec", {}), "version", "")
 	trim_space(version) == ""
 	msg := "ExternalDNS HelmRelease must pin chart.spec.version"
 }
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	source_ref := object.get(object.get(object.get(doc.spec, "chart", {}), "spec", {}), "sourceRef", {})
+	spec := object.get(doc, "spec", {})
+	source_ref := object.get(object.get(object.get(spec, "chart", {}), "spec", {}), "sourceRef", {})
 	trim_space(object.get(source_ref, "name", "")) == ""
 	msg := "ExternalDNS HelmRelease must set chart.spec.sourceRef.name"
 }
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	source_ref := object.get(object.get(object.get(doc.spec, "chart", {}), "spec", {}), "sourceRef", {})
+	spec := object.get(doc, "spec", {})
+	source_ref := object.get(object.get(object.get(spec, "chart", {}), "spec", {}), "sourceRef", {})
 	trim_space(object.get(source_ref, "namespace", "")) == ""
 	msg := "ExternalDNS HelmRelease must set chart.spec.sourceRef.namespace"
 }
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	values := object.get(doc.spec, "values", {})
+	spec := object.get(doc, "spec", {})
+	values := object.get(spec, "values", {})
 	domain_filters := object.get(values, "domainFilters", [])
 	count(domain_filters) == 0
 	msg := "ExternalDNS HelmRelease must set values.domainFilters with at least one domain"
@@ -52,7 +56,8 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	values := object.get(doc.spec, "values", {})
+	spec := object.get(doc, "spec", {})
+	values := object.get(spec, "values", {})
 	txt_owner_id := object.get(values, "txtOwnerId", "")
 	trim_space(txt_owner_id) == ""
 	msg := "ExternalDNS HelmRelease must set values.txtOwnerId for ownership tracking"
@@ -60,7 +65,8 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	values := object.get(doc.spec, "values", {})
+	spec := object.get(doc, "spec", {})
+	values := object.get(spec, "values", {})
 	policy := object.get(values, "policy", "")
 	policy != ""
 	not policy in ["sync", "upsert-only"]
@@ -69,7 +75,8 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := external_dns_helmreleases[_]
-	values := object.get(doc.spec, "values", {})
+	spec := object.get(doc, "spec", {})
+	values := object.get(spec, "values", {})
 	provider := object.get(values, "provider", {})
 	provider_name := object.get(provider, "name", "")
 	provider_name != ""
@@ -88,7 +95,8 @@ warn contains msg if {
 
 warn contains msg if {
 	doc := external_dns_helmreleases[_]
-	values := object.get(doc.spec, "values", {})
+	spec := object.get(doc, "spec", {})
+	values := object.get(spec, "values", {})
 	policy := object.get(values, "policy", "")
 	policy == "upsert-only"
 	msg := "ExternalDNS policy 'upsert-only' will not remove stale DNS records when Kubernetes resources are deleted"
