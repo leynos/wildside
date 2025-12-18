@@ -755,11 +755,10 @@ func TestExternalDNSModuleSupportsHelmValues(t *testing.T) {
 	tfDir, opts := setup(t, vars)
 	writeAutoTfvarsJSON(t, tfDir, vars)
 	opts.Vars = map[string]interface{}{}
-	// InitAndPlanE returns an error because the stub kubeconfig cannot connect to a real
-	// cluster. However, the plan output is captured before the failure, allowing verification
-	// that helm_values and helm_values_files are correctly merged into the Helm release.
-	stdout, err := terraform.InitAndPlanE(t, opts)
-	require.Error(t, err)
+	// Plan may succeed or fail depending on provider version and kubeconfig validation.
+	// The plan output is captured either way, allowing verification that helm_values
+	// and helm_values_files are correctly merged into the Helm release.
+	stdout, _ := terraform.InitAndPlanE(t, opts)
 	require.Contains(t, stdout, "resources")
 	require.Contains(t, stdout, "extraArgs")
 }
