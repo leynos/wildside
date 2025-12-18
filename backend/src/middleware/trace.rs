@@ -9,7 +9,6 @@
 
 use std::task::{Context, Poll};
 
-use crate::domain::trace_id::TRACE_ID;
 use crate::domain::{TraceId, TRACE_ID_HEADER};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
@@ -82,7 +81,7 @@ where
         let trace_id = TraceId::generate();
         let header_value = trace_id.to_string();
         let fut = self.service.call(req);
-        Box::pin(TRACE_ID.scope(trace_id, async move {
+        Box::pin(TraceId::scope(trace_id, async move {
             let mut res = fut.await?;
             match HeaderValue::from_str(&header_value) {
                 Ok(value) => {
