@@ -27,8 +27,18 @@ variable "domain_filters" {
   type        = list(string)
 
   validation {
-    condition     = var.domain_filters != null && length(var.domain_filters) > 0
-    error_message = "domain_filters must contain at least one valid domain name"
+    condition = (
+      var.domain_filters != null &&
+      length(var.domain_filters) > 0 &&
+      alltrue([
+        for domain in var.domain_filters : (
+          domain != null &&
+          length(trimspace(domain)) > 0 &&
+          can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(domain))))
+        )
+      ])
+    )
+    error_message = "domain_filters must contain at least one valid domain name (e.g., example.com)"
   }
 }
 
