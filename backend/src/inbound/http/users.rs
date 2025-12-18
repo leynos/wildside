@@ -6,6 +6,7 @@
 //! ```
 
 use crate::domain::{Error, LoginCredentials, LoginValidationError, User};
+use crate::inbound::http::schemas::{ErrorSchema, UserSchema};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 use crate::inbound::http::ApiResult;
@@ -42,8 +43,8 @@ impl TryFrom<LoginRequest> for LoginCredentials {
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login success", headers(("Set-Cookie" = String, description = "Session cookie"))),
-        (status = 400, description = "Invalid request", body = Error),
-        (status = 401, description = "Invalid credentials", body = Error),
+        (status = 400, description = "Invalid request", body = ErrorSchema),
+        (status = 401, description = "Invalid credentials", body = ErrorSchema),
         (status = 500, description = "Internal server error")
     ),
     tags = ["users"],
@@ -85,12 +86,12 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
     get,
     path = "/api/v1/users",
     responses(
-        (status = 200, description = "Users", body = [User]),
-        (status = 400, description = "Invalid request", body = Error),
-        (status = 401, description = "Unauthorised", body = Error),
-        (status = 403, description = "Forbidden", body = Error),
-        (status = 404, description = "Not found", body = Error),
-        (status = 500, description = "Internal server error", body = Error)
+        (status = 200, description = "Users", body = [UserSchema]),
+        (status = 400, description = "Invalid request", body = ErrorSchema),
+        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 403, description = "Forbidden", body = ErrorSchema),
+        (status = 404, description = "Not found", body = ErrorSchema),
+        (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
     operation_id = "listUsers"

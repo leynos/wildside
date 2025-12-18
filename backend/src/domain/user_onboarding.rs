@@ -3,10 +3,10 @@
 //! The service owns validation and event production so inbound adapters only
 //! translate domain events into transport payloads.
 
+use super::TraceId;
 use crate::domain::ports::UserOnboarding;
 use crate::domain::user::{DisplayName, User, UserId, UserValidationError};
 use crate::domain::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
-use crate::middleware::trace::TraceId;
 
 /// Stateless user onboarding service.
 #[derive(Debug, Default, Clone, Copy)]

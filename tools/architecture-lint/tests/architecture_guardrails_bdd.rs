@@ -64,6 +64,15 @@ fn outbound_imports_inbound(world: &Mutex<LintWorld>) {
     );
 }
 
+#[given("a domain module that imports utoipa")]
+fn domain_imports_utoipa(world: &Mutex<LintWorld>) {
+    add_source(
+        world,
+        "domain/user.rs",
+        "use utoipa::ToSchema; #[derive(ToSchema)] struct Foo;",
+    );
+}
+
 #[given("valid domain, inbound, and outbound modules")]
 fn valid_modules(world: &Mutex<LintWorld>) {
     add_valid_modules(world);
@@ -175,6 +184,11 @@ fn lint_fails_due_to_infrastructure_crate(world: &Mutex<LintWorld>) {
 #[then("the lint fails due to framework crate usage in the domain")]
 fn lint_fails_due_to_framework_crate(world: &Mutex<LintWorld>) {
     assert_violation_in_file_contains(world, "domain/user.rs", "external crate `actix_web`");
+}
+
+#[then("the lint fails due to utoipa usage in the domain")]
+fn lint_fails_due_to_utoipa_usage(world: &Mutex<LintWorld>) {
+    assert_violation_in_file_contains(world, "domain/user.rs", "external crate `utoipa`");
 }
 
 #[then("the lint fails")]

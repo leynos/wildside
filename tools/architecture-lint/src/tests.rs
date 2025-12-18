@@ -65,6 +65,11 @@ fn lint_single() -> LintSingle {
     "use inbound::http; fn thing() { let _ = 1; }",
     false
 )]
+#[case(
+    "domain/user.rs",
+    "use utoipa::ToSchema; #[derive(ToSchema)] struct Foo;",
+    false
+)]
 fn detects_boundary_violations(
     lint_single: LintSingle,
     #[case] file: &str,

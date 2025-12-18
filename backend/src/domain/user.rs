@@ -5,7 +5,6 @@ use std::fmt;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
-use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Validation errors returned by [`User::try_from_strings`].
@@ -236,14 +235,12 @@ impl TryFrom<String> for DisplayName {
 /// ## Invariants
 /// - `id` must be a valid UUID string.
 /// - `display_name` must be non-empty once trimmed of whitespace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 #[serde(try_from = "UserDto", into = "UserDto")]
 pub struct User {
-    #[schema(value_type = String, example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     id: UserId,
-    #[schema(value_type = String, example = "Ada Lovelace")]
     #[serde(alias = "display_name")]
     display_name: DisplayName,
 }
@@ -288,7 +285,7 @@ impl User {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserDto {
     id: String,

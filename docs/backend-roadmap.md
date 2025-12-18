@@ -46,7 +46,7 @@ delivery, so future work remains inside the hexagonal boundaries.
   `backend/src/outbound/cache`, and `backend/src/outbound/queue` modules to
   encapsulate Diesel, Redis, and Apalis integrations once those backends are
   introduced, wiring them to the new port traits.
-- [ ] Update all modules to depend on the domain ports rather than reaching
+- [x] Update all modules to depend on the domain ports rather than reaching
   into `backend/src/models` or framework-specific types, ensuring the
   dependency flow points inward.
 

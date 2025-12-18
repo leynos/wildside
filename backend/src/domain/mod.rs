@@ -11,6 +11,7 @@
 //!   across adapters.
 //! - User (alias to `user::User`) — domain user identity and display name.
 //! - LoginCredentials — validated username/password inputs for authentication.
+//! - TraceId — per-request correlation identifier for tracing across systems.
 //! - UserEvent (alias to `user_events::UserEvent`) — high-level user domain
 //!   events, including `UserCreatedEvent` and `DisplayNameRejectedEvent`.
 //! - UserOnboardingService — validated onboarding
@@ -19,12 +20,14 @@
 pub mod auth;
 pub mod error;
 pub mod ports;
+pub mod trace_id;
 pub mod user;
 pub mod user_events;
 pub mod user_onboarding;
 
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
+pub use self::trace_id::TraceId;
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
 pub use self::user_onboarding::UserOnboardingService;

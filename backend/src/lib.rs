@@ -10,7 +10,7 @@ pub mod domain;
 pub mod inbound;
 mod middleware;
 pub mod outbound;
-pub use middleware::trace::TraceId;
+pub use domain::TraceId;
 pub use middleware::Trace;
 
 /// Public OpenAPI surface used by Swagger UI and tooling.

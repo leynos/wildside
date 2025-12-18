@@ -102,8 +102,8 @@ impl From<DisplayNameRejectedEvent> for InvalidDisplayNameResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::TraceId;
     use crate::domain::{DisplayName, User, UserId, UserValidationError};
-    use crate::middleware::trace::TraceId;
     use insta::assert_json_snapshot;
     use rstest::rstest;
 

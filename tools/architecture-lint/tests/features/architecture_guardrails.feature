@@ -33,3 +33,8 @@ Feature: Architecture guardrails
     When the architecture lint runs
     Then the lint fails
     And all boundary violations are reported
+
+  Scenario: Domain code cannot depend on utoipa
+    Given a domain module that imports utoipa
+    When the architecture lint runs
+    Then the lint fails due to utoipa usage in the domain
