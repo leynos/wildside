@@ -291,16 +291,15 @@ func TestExternalDNSModuleRenderPolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
-func TestExternalDNSModuleRenderPolicyRejectsMissingChartVersion(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-
-	tfDir, _ := setupRender(t, renderVars(t))
-	policyPath := externalDNSManifestsPolicyPath(tfDir)
-
-	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
-	payload := `apiVersion: helm.toolkit.fluxcd.io/v2
+// renderPolicyRejectionTestCases defines test cases for render policy rejection tests
+var renderPolicyRejectionTestCases = []struct {
+	name            string
+	manifest        string
+	expectedMessage string
+}{
+	{
+		name: "MissingChartVersion",
+		manifest: `apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: external-dns
@@ -317,34 +316,12 @@ spec:
     domainFilters:
       - example.test
     txtOwnerId: test-owner
-`
-	require.NoError(t, os.WriteFile(manifestPath, []byte(payload), 0o600))
-
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   manifestPath,
-		PolicyPath: policyPath,
-		Kubeconfig: "",
-		ExtraArgs: []string{
-			"--fail-on-warn",
-			"--namespace",
-			externalDNSPolicyManifestsNamespace,
-		},
-		Timeout: 60 * time.Second,
-	})
-	require.Error(t, err, "expected conftest to report a violation")
-	require.Contains(t, string(out), "must pin chart.spec.version")
-}
-
-func TestExternalDNSModuleRenderPolicyRejectsMissingDomainFilters(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-
-	tfDir, _ := setupRender(t, renderVars(t))
-	policyPath := externalDNSManifestsPolicyPath(tfDir)
-
-	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
-	payload := `apiVersion: helm.toolkit.fluxcd.io/v2
+`,
+		expectedMessage: "must pin chart.spec.version",
+	},
+	{
+		name: "MissingDomainFilters",
+		manifest: `apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: external-dns
@@ -361,34 +338,12 @@ spec:
   values:
     txtOwnerId: test-owner
     domainFilters: []
-`
-	require.NoError(t, os.WriteFile(manifestPath, []byte(payload), 0o600))
-
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   manifestPath,
-		PolicyPath: policyPath,
-		Kubeconfig: "",
-		ExtraArgs: []string{
-			"--fail-on-warn",
-			"--namespace",
-			externalDNSPolicyManifestsNamespace,
-		},
-		Timeout: 60 * time.Second,
-	})
-	require.Error(t, err, "expected conftest to report a violation")
-	require.Contains(t, string(out), "must set values.domainFilters")
-}
-
-func TestExternalDNSModuleRenderPolicyRejectsMissingTxtOwnerId(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-
-	tfDir, _ := setupRender(t, renderVars(t))
-	policyPath := externalDNSManifestsPolicyPath(tfDir)
-
-	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
-	payload := `apiVersion: helm.toolkit.fluxcd.io/v2
+`,
+		expectedMessage: "must set values.domainFilters",
+	},
+	{
+		name: "MissingTxtOwnerId",
+		manifest: `apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: external-dns
@@ -405,22 +360,39 @@ spec:
   values:
     domainFilters:
       - example.test
-`
-	require.NoError(t, os.WriteFile(manifestPath, []byte(payload), 0o600))
+`,
+		expectedMessage: "must set values.txtOwnerId",
+	},
+}
 
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   manifestPath,
-		PolicyPath: policyPath,
-		Kubeconfig: "",
-		ExtraArgs: []string{
-			"--fail-on-warn",
-			"--namespace",
-			externalDNSPolicyManifestsNamespace,
-		},
-		Timeout: 60 * time.Second,
-	})
-	require.Error(t, err, "expected conftest to report a violation")
-	require.Contains(t, string(out), "must set values.txtOwnerId")
+func TestExternalDNSModuleRenderPolicyRejections(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, _ := setupRender(t, renderVars(t))
+	policyPath := externalDNSManifestsPolicyPath(tfDir)
+
+	for _, tc := range renderPolicyRejectionTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
+			require.NoError(t, os.WriteFile(manifestPath, []byte(tc.manifest), 0o600))
+
+			out, err := runConftestAgainstPlan(t, conftestRun{
+				PlanPath:   manifestPath,
+				PolicyPath: policyPath,
+				Kubeconfig: "",
+				ExtraArgs: []string{
+					"--fail-on-warn",
+					"--namespace",
+					externalDNSPolicyManifestsNamespace,
+				},
+				Timeout: 60 * time.Second,
+			})
+			require.Error(t, err, "expected conftest to report a violation")
+			require.Contains(t, string(out), tc.expectedMessage)
+		})
+	}
 }
 
 func TestExternalDNSModulePlanPolicy(t *testing.T) {
@@ -445,76 +417,70 @@ func TestExternalDNSModulePlanPolicy(t *testing.T) {
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
 
-func TestExternalDNSModulePlanPolicyRejectsMissingDomainFilters(t *testing.T) {
-	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
-
-	tfDir, _ := setup(t, testVars(t))
-	policyPath := externalDNSPlanPolicyPath(tfDir)
-
-	// Create a plan fixture with missing domainFilters
-	planPayload := `{
-		"resource_changes": [{
-			"type": "helm_release",
-			"change": {
-				"after": {
-					"name": "external-dns",
-					"values": ["domainFilters: []\ntxtOwnerId: test-owner\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
-				}
+// planPolicyRejectionTestCases defines test cases for plan policy rejection tests
+var planPolicyRejectionTestCases = []struct {
+	name            string
+	planPayload     string
+	expectedMessage string
+}{
+	{
+		name: "MissingDomainFilters",
+		planPayload: `{
+	"resource_changes": [{
+		"type": "helm_release",
+		"change": {
+			"after": {
+				"name": "external-dns",
+				"values": ["domainFilters: []\ntxtOwnerId: test-owner\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
 			}
-		}]
-	}`
-	planPath := writePlanFixture(t, planPayload)
-
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
-		PolicyPath: policyPath,
-		Kubeconfig: "",
-		ExtraArgs: []string{
-			"--fail-on-warn",
-			"--namespace",
-			externalDNSPolicyPlanNamespace,
-		},
-		Timeout: 60 * time.Second,
-	})
-	require.Error(t, err, "expected conftest to report a violation")
-	require.Contains(t, string(out), "domainFilters")
+		}
+	}]
+}`,
+		expectedMessage: "domainFilters",
+	},
+	{
+		name: "MissingTxtOwnerId",
+		planPayload: `{
+	"resource_changes": [{
+		"type": "helm_release",
+		"change": {
+			"after": {
+				"name": "external-dns",
+				"values": ["domainFilters:\n  - example.test\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
+			}
+		}
+	}]
+}`,
+		expectedMessage: "txtOwnerId",
+	},
 }
 
-func TestExternalDNSModulePlanPolicyRejectsMissingTxtOwnerId(t *testing.T) {
+func TestExternalDNSModulePlanPolicyRejections(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 
 	tfDir, _ := setup(t, testVars(t))
 	policyPath := externalDNSPlanPolicyPath(tfDir)
 
-	// Create a plan fixture with missing txtOwnerId
-	planPayload := `{
-		"resource_changes": [{
-			"type": "helm_release",
-			"change": {
-				"after": {
-					"name": "external-dns",
-					"values": ["domainFilters:\n  - example.test\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\n"]
-				}
-			}
-		}]
-	}`
-	planPath := writePlanFixture(t, planPayload)
+	for _, tc := range planPolicyRejectionTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			planPath := writePlanFixture(t, tc.planPayload)
 
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
-		PolicyPath: policyPath,
-		Kubeconfig: "",
-		ExtraArgs: []string{
-			"--fail-on-warn",
-			"--namespace",
-			externalDNSPolicyPlanNamespace,
-		},
-		Timeout: 60 * time.Second,
-	})
-	require.Error(t, err, "expected conftest to report a violation")
-	require.Contains(t, string(out), "txtOwnerId")
+			out, err := runConftestAgainstPlan(t, conftestRun{
+				PlanPath:   planPath,
+				PolicyPath: policyPath,
+				Kubeconfig: "",
+				ExtraArgs: []string{
+					"--fail-on-warn",
+					"--namespace",
+					externalDNSPolicyPlanNamespace,
+				},
+				Timeout: 60 * time.Second,
+			})
+			require.Error(t, err, "expected conftest to report a violation")
+			require.Contains(t, string(out), tc.expectedMessage)
+		})
+	}
 }
 
 func TestExternalDNSModuleInvalidDomainFilters(t *testing.T) {

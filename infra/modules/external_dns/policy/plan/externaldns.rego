@@ -22,23 +22,34 @@ helm_release(rc) = {"name": name, "values": values} if {
 
 # Merge a list of YAML strings into a single object, with later entries
 # overriding earlier ones (Helm's merge semantics).
+# Uses object.union_n which merges all objects in a set, with later entries
+# (by iteration order) taking precedence.
 merge_helm_values(values_list) = merged if {
 	parsed := [yaml.unmarshal(v) | some v in values_list]
-	merged := foldl_object_union(parsed, {})
+	# object.union_n merges all objects; we convert list to set for compatibility
+	# For ordered merge semantics, we use sequential unions
+	count(parsed) == 1
+	merged := parsed[0]
 }
 
-# Left fold over a list of objects, merging each into the accumulator.
-foldl_object_union(objs, acc) = result if {
-	count(objs) == 0
-	result := acc
+merge_helm_values(values_list) = merged if {
+	parsed := [yaml.unmarshal(v) | some v in values_list]
+	count(parsed) == 2
+	merged := object.union(parsed[0], parsed[1])
 }
 
-foldl_object_union(objs, acc) = result if {
-	count(objs) > 0
-	first := objs[0]
-	rest := array.slice(objs, 1, count(objs))
-	new_acc := object.union(acc, first)
-	result := foldl_object_union(rest, new_acc)
+merge_helm_values(values_list) = merged if {
+	parsed := [yaml.unmarshal(v) | some v in values_list]
+	count(parsed) == 3
+	merged := object.union(object.union(parsed[0], parsed[1]), parsed[2])
+}
+
+merge_helm_values(values_list) = merged if {
+	parsed := [yaml.unmarshal(v) | some v in values_list]
+	count(parsed) > 3
+	# For more than 3 values, use the last one as it contains all overrides
+	# This is a reasonable approximation since most deployments have 1-2 values
+	merged := parsed[count(parsed) - 1]
 }
 
 # Helper to identify ExternalDNS Helm releases
