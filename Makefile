@@ -450,6 +450,13 @@ external-dns-test:
 			-var "domain_filters=$(EXTERNAL_DNS_DOMAIN_FILTERS)" \
 			-var "txt_owner_id=$(EXTERNAL_DNS_TXT_OWNER_ID)" \
 			-var "cloudflare_api_token_secret_name=$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)"; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/basic plan -input=false -no-color -detailed-exitcode \
+			-var "kubeconfig_path=$(EXTERNAL_DNS_KUBECONFIG_PATH)" \
+			-var "domain_filters=$(EXTERNAL_DNS_DOMAIN_FILTERS)" \
+			-var "txt_owner_id=$(EXTERNAL_DNS_TXT_OWNER_ID)" \
+			-var "cloudflare_api_token_secret_name=$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 	else \
 		echo "Skipping external-dns validate; set EXTERNAL_DNS_KUBECONFIG_PATH to enable"; \
 	fi
@@ -460,3 +467,26 @@ external-dns-test:
 
 external-dns-policy: conftest tofu
 	./scripts/external-dns-render-policy.sh
+	if [ -z "$(EXTERNAL_DNS_KUBECONFIG_PATH)" ]; then \
+		echo "Skipping external-dns plan policy; set EXTERNAL_DNS_KUBECONFIG_PATH to run"; \
+	else \
+		set -euo pipefail; \
+		if [ -z "$(EXTERNAL_DNS_DOMAIN_FILTERS)" ] || [ -z "$(EXTERNAL_DNS_TXT_OWNER_ID)" ] || [ -z "$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)" ]; then \
+			echo "EXTERNAL_DNS_DOMAIN_FILTERS, EXTERNAL_DNS_TXT_OWNER_ID, and EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME must be set when EXTERNAL_DNS_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
+		tmpdir=$$(mktemp -d); \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		status=0; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/basic plan \
+			-out="$$tmpdir/tfplan.binary" \
+			-detailed-exitcode \
+			-var "kubeconfig_path=$(EXTERNAL_DNS_KUBECONFIG_PATH)" \
+			-var "domain_filters=$(EXTERNAL_DNS_DOMAIN_FILTERS)" \
+			-var "txt_owner_id=$(EXTERNAL_DNS_TXT_OWNER_ID)" \
+			-var "cloudflare_api_token_secret_name=$(EXTERNAL_DNS_CLOUDFLARE_SECRET_NAME)" \
+			|| status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/external_dns/policy/plan --fail-on-warn --namespace external_dns.policy.plan "$$tmpdir/plan.json"; \
+	fi

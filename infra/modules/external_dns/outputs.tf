@@ -1,8 +1,6 @@
 output "namespace" {
   description = "Namespace where ExternalDNS is installed"
-  value = (
-    local.is_apply_mode && var.create_namespace ? kubernetes_namespace.external_dns[0].metadata[0].name : local.namespace
-  )
+  value       = local.effective_namespace
 }
 
 output "helm_release_name" {

@@ -159,14 +159,14 @@ func renderExternalDNSPlan(t *testing.T, vars map[string]interface{}) (string, s
 }
 
 type conftestRun struct {
-	PlanPath   string
+	InputPath  string
 	PolicyPath string
 	Kubeconfig string
 	ExtraArgs  []string
 	Timeout    time.Duration
 }
 
-func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
+func runConftest(t *testing.T, cfg conftestRun) ([]byte, error) {
 	t.Helper()
 	timeout := cfg.Timeout
 	if timeout == 0 {
@@ -175,7 +175,7 @@ func runConftestAgainstPlan(t *testing.T, cfg conftestRun) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	args := append([]string{"test", "--policy", cfg.PolicyPath, cfg.PlanPath}, cfg.ExtraArgs...)
+	args := append([]string{"test", "--policy", cfg.PolicyPath, cfg.InputPath}, cfg.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, "conftest", args...)
 	cmd.Env = testutil.TerraformEnv(t, map[string]string{
 		"KUBECONFIG": cfg.Kubeconfig,
@@ -277,8 +277,8 @@ func TestExternalDNSModuleRenderPolicy(t *testing.T) {
 	}
 
 	policyPath := externalDNSManifestsPolicyPath(tfDir)
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   outDir,
+	out, err := runConftest(t, conftestRun{
+		InputPath:  outDir,
 		PolicyPath: policyPath,
 		Kubeconfig: "",
 		ExtraArgs: []string{
@@ -374,12 +374,13 @@ func TestExternalDNSModuleRenderPolicyRejections(t *testing.T) {
 
 	for _, tc := range renderPolicyRejectionTestCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			tmpDir := t.TempDir()
 			manifestPath := filepath.Join(tmpDir, "helmrelease.yaml")
 			require.NoError(t, os.WriteFile(manifestPath, []byte(tc.manifest), 0o600))
 
-			out, err := runConftestAgainstPlan(t, conftestRun{
-				PlanPath:   manifestPath,
+			out, err := runConftest(t, conftestRun{
+				InputPath:  manifestPath,
 				PolicyPath: policyPath,
 				Kubeconfig: "",
 				ExtraArgs: []string{
@@ -403,8 +404,8 @@ func TestExternalDNSModulePlanPolicy(t *testing.T) {
 	tfDir, planPath := renderExternalDNSPlan(t, vars)
 	policyPath := externalDNSPlanPolicyPath(tfDir)
 
-	out, err := runConftestAgainstPlan(t, conftestRun{
-		PlanPath:   planPath,
+	out, err := runConftest(t, conftestRun{
+		InputPath:  planPath,
 		PolicyPath: policyPath,
 		Kubeconfig: vars["kubeconfig_path"].(string),
 		ExtraArgs: []string{
@@ -464,10 +465,11 @@ func TestExternalDNSModulePlanPolicyRejections(t *testing.T) {
 
 	for _, tc := range planPolicyRejectionTestCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			planPath := writePlanFixture(t, tc.planPayload)
 
-			out, err := runConftestAgainstPlan(t, conftestRun{
-				PlanPath:   planPath,
+			out, err := runConftest(t, conftestRun{
+				InputPath:  planPath,
 				PolicyPath: policyPath,
 				Kubeconfig: "",
 				ExtraArgs: []string{
@@ -616,6 +618,7 @@ func TestExternalDNSModuleNullVariableValidationReturnsErrorMessage(t *testing.T
 	t.Parallel()
 	for _, tc := range nullVariableValidationTestCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			vars := testVars(t)
 			vars[tc.varName] = tc.value
 			tfDir, opts := setup(t, vars)

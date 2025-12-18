@@ -1,15 +1,19 @@
-//! ExternalDNS Module
-//!
-//! Deploys ExternalDNS as a DNS automation controller using Helm. ExternalDNS
-//! watches Kubernetes resources (Ingress, Service) and automatically manages
-//! DNS records in Cloudflare based on annotations.
+# ExternalDNS Module
+#
+# Deploys ExternalDNS as a DNS automation controller using Helm. ExternalDNS
+# watches Kubernetes resources (Ingress, Service) and automatically manages
+# DNS records in Cloudflare based on annotations.
 
 locals {
   mode           = trimspace(var.mode)
   is_apply_mode  = local.mode == "apply"
   is_render_mode = local.mode == "render"
 
-  namespace                        = trimspace(var.namespace)
+  namespace = trimspace(var.namespace)
+  # Effective namespace resolves to the created namespace resource (if applicable) or falls back to the input
+  effective_namespace = (
+    local.is_apply_mode && var.create_namespace ? kubernetes_namespace.external_dns[0].metadata[0].name : local.namespace
+  )
   helm_release_name                = trimspace(var.helm_release_name)
   chart_repository                 = trimspace(var.chart_repository)
   chart_name                       = trimspace(var.chart_name)
@@ -185,12 +189,10 @@ resource "helm_release" "external_dns" {
   repository = local.chart_repository
   chart      = local.chart_name
   version    = local.chart_version
-  namespace = (
-    local.is_apply_mode && var.create_namespace ? kubernetes_namespace.external_dns[0].metadata[0].name : local.namespace
-  )
-  timeout = local.helm_timeout
-  wait    = var.helm_wait
-  atomic  = true
+  namespace  = local.effective_namespace
+  timeout    = local.helm_timeout
+  wait       = var.helm_wait
+  atomic     = true
 
   create_namespace = false
   cleanup_on_fail  = true

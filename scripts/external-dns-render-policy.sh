@@ -30,8 +30,19 @@ trap cleanup EXIT
 out_dir="$tmpdir/out"
 mkdir -p "$out_dir"
 
-TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" init -input=false -no-color >/dev/null
-TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply -auto-approve -input=false -no-color >/dev/null
+log_file="$tmpdir/tofu.log"
+
+if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" init -input=false -no-color > "$log_file" 2>&1; then
+  echo "tofu init failed:" >&2
+  cat "$log_file" >&2
+  exit 1
+fi
+
+if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply -auto-approve -input=false -no-color > "$log_file" 2>&1; then
+  echo "tofu apply failed:" >&2
+  cat "$log_file" >&2
+  exit 1
+fi
 
 TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output -json rendered_manifests > "$tmpdir/manifests.json"
 

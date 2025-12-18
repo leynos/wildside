@@ -62,7 +62,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Exact Helm chart version for ExternalDNS"
   type        = string
-  default     = "1.16.1"
+  default     = "1.19.0"
 
   validation {
     condition = (
@@ -242,8 +242,8 @@ variable "dns_records_per_page" {
   nullable    = false
 
   validation {
-    condition     = var.dns_records_per_page >= 100 && var.dns_records_per_page <= 50000
-    error_message = "dns_records_per_page must be between 100 and 50000"
+    condition     = var.dns_records_per_page >= 100 && var.dns_records_per_page <= 5000
+    error_message = "dns_records_per_page must be between 100 and 5000"
   }
 }
 
@@ -312,9 +312,9 @@ variable "interval" {
 
   validation {
     condition = (
-      can(regex("^[0-9]+[smh]$", trimspace(var.interval)))
+      can(regex("^([0-9]+[smh])+$", trimspace(var.interval)))
     )
-    error_message = "interval must be a valid duration (e.g., 1m, 5m, 1h)"
+    error_message = "interval must be a valid duration (e.g., 1m, 5m, 1h, 1h30m)"
   }
 }
 

@@ -1,10 +1,10 @@
-//! Render-only example for the ExternalDNS module.
-//!
-//! This example does not require cluster access. It exercises the module's
-//! "render" mode, which emits Flux-ready YAML manifests for the GitOps
-//! repository.
-//!
-//! Most variables use module defaults. Override them as needed.
+# Render-only example for the ExternalDNS module.
+#
+# This example does not require cluster access. It exercises the module's
+# "render" mode, which emits Flux-ready YAML manifests for the GitOps
+# repository.
+#
+# Most variables use module defaults. Override them as needed.
 
 variable "domain_filters" {
   description = "List of DNS domains that ExternalDNS should manage"

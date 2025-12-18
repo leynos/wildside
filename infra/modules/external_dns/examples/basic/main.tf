@@ -1,10 +1,10 @@
-//! Apply-mode example for the ExternalDNS module.
-//!
-//! This example deploys ExternalDNS directly to a Kubernetes cluster. It
-//! requires a kubeconfig with cluster-admin access.
-//!
-//! Most variables use module defaults. Override them as needed for specific
-//! deployments.
+# Apply-mode example for the ExternalDNS module.
+#
+# This example deploys ExternalDNS directly to a Kubernetes cluster. It
+# requires a kubeconfig with cluster-admin access.
+#
+# Most variables use module defaults. Override them as needed for specific
+# deployments.
 
 variable "kubeconfig_path" {
   description = "Path to a kubeconfig file with cluster-admin access"
@@ -25,11 +25,21 @@ variable "kubeconfig_path" {
 variable "domain_filters" {
   description = "List of DNS domains that ExternalDNS should manage"
   type        = list(string)
+
+  validation {
+    condition     = var.domain_filters != null && length(var.domain_filters) > 0
+    error_message = "domain_filters must contain at least one valid domain name"
+  }
 }
 
 variable "txt_owner_id" {
   description = "Unique identifier for ExternalDNS ownership TXT records"
   type        = string
+
+  validation {
+    condition     = var.txt_owner_id != null && length(trimspace(var.txt_owner_id)) > 0
+    error_message = "txt_owner_id must be a non-empty alphanumeric string"
+  }
 }
 
 variable "cloudflare_api_token_secret_name" {
@@ -75,7 +85,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "ExternalDNS Helm chart version"
   type        = string
-  default     = "1.16.1"
+  default     = "1.19.0"
 }
 
 variable "helm_release_name" {

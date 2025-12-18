@@ -21,35 +21,15 @@ helm_release(rc) = {"name": name, "values": values} if {
 }
 
 # Merge a list of YAML strings into a single object, with later entries
-# overriding earlier ones (Helm's merge semantics).
-# Uses object.union_n which merges all objects in a set, with later entries
-# (by iteration order) taking precedence.
+# overriding earlier ones (matching Helm's merge order).
+#
+# Note: This performs shallow merge at the top level using object.union_n.
+# Helm performs deep merge for nested objects, but our policies only check
+# top-level keys (domainFilters, txtOwnerId, policy, env) and one level of
+# nesting (provider.name), so shallow merge is sufficient for validation.
 merge_helm_values(values_list) = merged if {
 	parsed := [yaml.unmarshal(v) | some v in values_list]
-	# object.union_n merges all objects; we convert list to set for compatibility
-	# For ordered merge semantics, we use sequential unions
-	count(parsed) == 1
-	merged := parsed[0]
-}
-
-merge_helm_values(values_list) = merged if {
-	parsed := [yaml.unmarshal(v) | some v in values_list]
-	count(parsed) == 2
-	merged := object.union(parsed[0], parsed[1])
-}
-
-merge_helm_values(values_list) = merged if {
-	parsed := [yaml.unmarshal(v) | some v in values_list]
-	count(parsed) == 3
-	merged := object.union(object.union(parsed[0], parsed[1]), parsed[2])
-}
-
-merge_helm_values(values_list) = merged if {
-	parsed := [yaml.unmarshal(v) | some v in values_list]
-	count(parsed) > 3
-	# For more than 3 values, use the last one as it contains all overrides
-	# This is a reasonable approximation since most deployments have 1-2 values
-	merged := parsed[count(parsed) - 1]
+	merged := object.union_n(parsed)
 }
 
 # Helper to identify ExternalDNS Helm releases
@@ -84,6 +64,16 @@ deny contains msg if {
 	policy != ""
 	not policy in ["sync", "upsert-only"]
 	msg := sprintf("ExternalDNS Helm release policy must be 'sync' or 'upsert-only', got '%s'", [policy])
+}
+
+# Ensure ExternalDNS Helm release has provider configured.
+deny contains msg if {
+	rc := input.resource_changes[_]
+	release := external_dns_release(rc)
+	provider := object.get(release.values, "provider", {})
+	provider_name := object.get(provider, "name", "")
+	provider_name == ""
+	msg := "ExternalDNS Helm release must have provider.name configured"
 }
 
 # Ensure ExternalDNS Helm release uses Cloudflare provider.
