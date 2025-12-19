@@ -63,7 +63,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
     service annotations; publish outputs for dashboard hostnames and the
     default certificate issuer.
 
-  - [ ] **ExternalDNS module**: Support multi-zone providers, accept DNS zone
+  - [x] **ExternalDNS module**: Support multi-zone providers, accept DNS zone
     mappings, and emit managed zone IDs for downstream consumers.
 
   - [ ] **cert-manager module**: Configure ClusterIssuers for ACME and Vault;
