@@ -54,7 +54,8 @@ locals {
     var.txt_prefix != "" ? ["--txt-prefix=${var.txt_prefix}"] : [],
     var.txt_suffix != "" ? ["--txt-suffix=${var.txt_suffix}"] : [],
     # Zone ID filter arguments restrict API access to specific Cloudflare zones
-    [for domain in sort(keys(local.zone_id_filter)) : "--zone-id-filter=${local.zone_id_filter[domain]}"],
+    # Use distinct() to deduplicate zone IDs when multiple domains share the same zone
+    [for zone_id in sort(distinct(values(local.zone_id_filter))) : "--zone-id-filter=${zone_id}"],
   ))
 
   # Construct default Helm values based on input variables.
