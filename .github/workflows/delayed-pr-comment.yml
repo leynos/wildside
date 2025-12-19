@@ -1,5 +1,5 @@
 name: delayed-pr-comment
-on:
+"on":
   workflow_dispatch:
     inputs:
       pr_number:
@@ -16,7 +16,7 @@ jobs:
   delay_and_comment:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write   # needed to post comments
+      pull-requests: write  # needed to post comments
     steps:
       - name: Convert minutes to seconds
         id: calc

@@ -66,7 +66,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   - [x] **ExternalDNS module**: Support multi-zone providers, accept DNS zone
     mappings, and emit managed zone IDs for downstream consumers.
 
-  - [ ] **cert-manager module**: Configure ClusterIssuers for ACME and Vault;
+  - [x] **cert-manager module**: Configure ClusterIssuers for ACME and Vault;
     expose issuer resource names, secret refs, and CA bundle material.
 
   - [ ] **Vault + External Secrets Operator module**: Provision the Vault helm

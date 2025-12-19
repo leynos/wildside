@@ -73,6 +73,9 @@
 - [FluxCD OpenTofu module design](fluxcd-module-design.md)
   – design decisions for the GitOps control plane module. *Audience:
   infrastructure developers.*
+- [Cert-manager OpenTofu module design](cert-manager-module-design.md) – design
+  decisions for the cert-manager module. *Audience: infrastructure
+  developers.*
 - [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
   design decisions for the Vault infrastructure module. *Audience:
   infrastructure developers.*
