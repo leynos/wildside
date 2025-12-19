@@ -31,6 +31,22 @@ variable "cloudflare_proxied" {
   default     = false
 }
 
+variable "zone_id_filter" {
+  description = "Optional map of domain names to Cloudflare zone IDs"
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for domain, zone_id in var.zone_id_filter : (
+        can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(domain)))) &&
+        can(regex("^[a-f0-9]{32}$", lower(trimspace(zone_id))))
+      )
+    ])
+    error_message = "zone_id_filter keys must be valid domains; values must be 32-char hex Cloudflare zone IDs"
+  }
+}
+
 module "external_dns" {
   source = "../.."
 
@@ -40,6 +56,7 @@ module "external_dns" {
   txt_owner_id                     = var.txt_owner_id
   cloudflare_api_token_secret_name = var.cloudflare_api_token_secret_name
   cloudflare_proxied               = var.cloudflare_proxied
+  zone_id_filter                   = var.zone_id_filter
 }
 
 output "rendered_manifests" {
@@ -60,4 +77,14 @@ output "txt_owner_id" {
 output "domain_filters" {
   description = "List of DNS domains managed by ExternalDNS"
   value       = module.external_dns.domain_filters
+}
+
+output "zone_id_filter" {
+  description = "Map of domain names to Cloudflare zone IDs"
+  value       = module.external_dns.zone_id_filter
+}
+
+output "managed_zones" {
+  description = "Unified zone configuration: domain -> zone_id"
+  value       = module.external_dns.managed_zones
 }

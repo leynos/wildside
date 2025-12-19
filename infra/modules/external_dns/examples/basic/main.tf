@@ -151,6 +151,22 @@ variable "service_monitor_enabled" {
   default     = false
 }
 
+variable "zone_id_filter" {
+  description = "Optional map of domain names to Cloudflare zone IDs"
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for domain, zone_id in var.zone_id_filter : (
+        can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(domain)))) &&
+        can(regex("^[a-f0-9]{32}$", lower(trimspace(zone_id))))
+      )
+    ])
+    error_message = "zone_id_filter keys must be valid domains; values must be 32-char hex Cloudflare zone IDs"
+  }
+}
+
 provider "kubernetes" {
   config_path = var.kubeconfig_path != null ? trimspace(var.kubeconfig_path) : null
 }
@@ -192,6 +208,7 @@ module "external_dns" {
   interval                         = var.interval
   cloudflare_proxied               = var.cloudflare_proxied
   service_monitor_enabled          = var.service_monitor_enabled
+  zone_id_filter                   = var.zone_id_filter
 }
 
 output "namespace" {
@@ -227,4 +244,14 @@ output "sources" {
 output "cloudflare_proxied" {
   description = "Whether Cloudflare proxy is enabled by default"
   value       = module.external_dns.cloudflare_proxied
+}
+
+output "zone_id_filter" {
+  description = "Map of domain names to Cloudflare zone IDs"
+  value       = module.external_dns.zone_id_filter
+}
+
+output "managed_zones" {
+  description = "Unified zone configuration: domain -> zone_id"
+  value       = module.external_dns.managed_zones
 }

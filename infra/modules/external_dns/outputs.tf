@@ -18,6 +18,19 @@ output "domain_filters" {
   value       = local.domain_filters
 }
 
+output "zone_id_filter" {
+  description = "Map of domain names to Cloudflare zone IDs configured for ExternalDNS"
+  value       = local.zone_id_filter
+}
+
+output "managed_zones" {
+  description = "Unified zone configuration: domain -> zone_id (null if not specified)"
+  value = {
+    for domain in distinct(concat(local.domain_filters, keys(local.zone_id_filter))) :
+    domain => lookup(local.zone_id_filter, domain, null)
+  }
+}
+
 output "policy" {
   description = "DNS record management policy (sync or upsert-only)"
   value       = local.policy

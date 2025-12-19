@@ -149,6 +149,23 @@ variable "domain_filters" {
   }
 }
 
+variable "zone_id_filter" {
+  description = "Optional map of domain names to Cloudflare zone IDs. Restricts ExternalDNS API access to specific zones."
+  type        = map(string)
+  default     = {}
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for domain, zone_id in var.zone_id_filter : (
+        can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$", lower(trimspace(domain)))) &&
+        can(regex("^[a-f0-9]{32}$", lower(trimspace(zone_id))))
+      )
+    ])
+    error_message = "zone_id_filter keys must be valid domains; values must be 32-char hex Cloudflare zone IDs"
+  }
+}
+
 variable "txt_owner_id" {
   description = "Unique identifier for ExternalDNS ownership TXT records (prevents conflicts between instances)"
   type        = string
