@@ -74,6 +74,7 @@ mod tests {
     //! BDD tests in `backend/tests/openapi_schemas_bdd.rs`.
 
     use super::*;
+    use crate::test_support::openapi::unwrap_object_schema;
     use utoipa::openapi::schema::Schema;
     use utoipa::openapi::RefOr;
     use utoipa::OpenApi;
@@ -146,37 +147,6 @@ mod tests {
 
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "display_name");
-    }
-
-    /// Extract the Object from a schema, panicking with a diagnostic if not an Object.
-    ///
-    /// Provides detailed error messages for refs, combinators, and other schema types.
-    fn unwrap_object_schema<'a>(
-        schema: &'a RefOr<Schema>,
-        name: &str,
-    ) -> &'a utoipa::openapi::schema::Object {
-        match schema {
-            RefOr::T(Schema::Object(obj)) => obj,
-            RefOr::Ref(reference) => {
-                panic!(
-                    "schema '{name}' is a $ref to '{}'; resolve the reference first",
-                    reference.ref_location
-                );
-            }
-            RefOr::T(Schema::AllOf(_)) => {
-                panic!("schema '{name}' is an AllOf combinator; inspect composed schemas");
-            }
-            RefOr::T(Schema::OneOf(_)) => {
-                panic!("schema '{name}' is a OneOf combinator; inspect variant schemas");
-            }
-            RefOr::T(Schema::AnyOf(_)) => {
-                panic!("schema '{name}' is an AnyOf combinator; inspect variant schemas");
-            }
-            RefOr::T(Schema::Array(_)) => {
-                panic!("schema '{name}' is an Array, not an Object");
-            }
-            _ => panic!("schema '{name}' has unexpected type"),
-        }
     }
 
     #[test]

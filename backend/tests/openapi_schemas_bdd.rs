@@ -6,6 +6,7 @@
 use std::sync::Mutex;
 
 use backend::doc::ApiDoc;
+use backend::test_support::openapi::unwrap_object_schema;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use utoipa::OpenApi;
@@ -55,9 +56,6 @@ fn with_user_property_object_schema<F>(world: &Mutex<OpenApiWorld>, property_nam
 where
     F: FnOnce(&utoipa::openapi::schema::Object),
 {
-    use utoipa::openapi::schema::Schema;
-    use utoipa::openapi::RefOr;
-
     let world = world.lock().expect("world lock");
     let doc = world.document.as_ref().expect("document generated");
     let components = doc.components.as_ref().expect("components present");
@@ -66,20 +64,14 @@ where
         .get(USER_SCHEMA_NAME)
         .expect("User schema");
 
-    let obj = match user_schema {
-        RefOr::T(Schema::Object(obj)) => obj,
-        _ => panic!("User schema is not an Object"),
-    };
+    let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
 
     let property = obj
         .properties
         .get(property_name)
         .unwrap_or_else(|| panic!("{} property", property_name));
 
-    let property_obj = match property {
-        RefOr::T(Schema::Object(obj)) => obj,
-        _ => panic!("{} property is not an Object", property_name),
-    };
+    let property_obj = unwrap_object_schema(property, property_name);
 
     f(property_obj);
 }
