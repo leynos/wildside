@@ -88,6 +88,7 @@ resource "local_file" "manifests" {
 | `registry_type` | Registry type for tracking DNS record ownership | `string` | `"txt"` | no |
 | `txt_prefix` | Prefix for TXT ownership records | `string` | `""` | no |
 | `txt_suffix` | Suffix for TXT ownership records | `string` | `""` | no |
+| `zone_id_filter` | Map of domain names to Cloudflare zone IDs | `map(string)` | `{}` | no |
 
 ## Outputs
 
@@ -97,6 +98,8 @@ resource "local_file" "manifests" {
 | `helm_release_name` | Name of the ExternalDNS Helm release |
 | `txt_owner_id` | Unique identifier for ExternalDNS ownership TXT records |
 | `domain_filters` | List of DNS domains managed by ExternalDNS |
+| `zone_id_filter` | Map of domain names to Cloudflare zone IDs |
+| `managed_zones` | Unified zone configuration: domain -> zone_id (null if not specified) |
 | `policy` | DNS record management policy |
 | `sources` | Kubernetes resource types watched by ExternalDNS |
 | `cloudflare_proxied` | Whether Cloudflare proxy is enabled by default |
@@ -141,6 +144,38 @@ module "external_dns" {
   cloudflare_api_token_secret_name = "cloudflare-api-token"
 }
 ```
+
+## Zone ID Filter (Optional)
+
+The `zone_id_filter` variable allows restricting ExternalDNS API access to
+specific Cloudflare zones. This provides defense-in-depth beyond `domain_filters`
+and enables zone ID output for downstream consumers.
+
+```hcl
+module "external_dns" {
+  source = "path/to/modules/external_dns"
+
+  mode = "apply"
+
+  domain_filters = ["example.com", "example.org"]
+  zone_id_filter = {
+    "example.com" = "abc123def456789012345678901234ab"
+    "example.org" = "def456abc789012345678901234567cd"
+  }
+
+  txt_owner_id                     = "production-cluster"
+  cloudflare_api_token_secret_name = "cloudflare-api-token"
+}
+
+# Access zone IDs for downstream consumers
+output "zone_mapping" {
+  value = module.external_dns.managed_zones
+  # Returns: { "example.com" = "abc123...", "example.org" = "def456..." }
+}
+```
+
+Zone IDs are 32-character hexadecimal strings. Find your zone ID in the
+Cloudflare dashboard under the zone's Overview page (right sidebar).
 
 ## DNS Record Ownership
 

@@ -13,6 +13,17 @@ Deliver a reusable OpenTofu module under `infra/modules/external_dns/` that:
 - Provides dual modes: `apply` (direct cluster) and `render` (GitOps manifests)
 - Follows established patterns from the Traefik gateway module
 
+## Implementation Status
+
+| Requirement              | Status      | Details                                           |
+|--------------------------|-------------|---------------------------------------------------|
+| Multi-zone providers     | ✅ Complete | Cloudflare with multiple zones via `domain_filters` |
+| Accept DNS zone mappings | ✅ Complete | `zone_id_filter` variable maps domains to zone IDs |
+| Emit managed zone IDs    | ✅ Complete | `zone_id_filter` and `managed_zones` outputs      |
+| Dual modes               | ✅ Complete | `apply` and `render` modes implemented            |
+| Terratest coverage       | ✅ Complete | Zone ID validation, output, and Helm values tests |
+| OPA/Conftest policies    | ✅ Complete | Plan policy warns on zone-id-filter without domainFilters |
+
 ## File Structure
 
 ```text

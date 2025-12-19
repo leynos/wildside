@@ -123,3 +123,24 @@ warn contains msg if {
 	crd_create == false
 	msg := "ExternalDNS CRD creation is disabled; DNSEndpoint resources will not be available"
 }
+
+# Warn when zone-id-filter is used without domain filters.
+#
+# Zone ID filters restrict API access to specific Cloudflare zones, but
+# without domainFilters ExternalDNS may attempt to manage all records in
+# those zones. Adding domainFilters provides defense-in-depth.
+warn contains msg if {
+	rc := input.resource_changes[_]
+	release := external_dns_release(rc)
+	extra_args := object.get(release.values, "extraArgs", [])
+	has_zone_id_filter(extra_args)
+	domain_filters := object.get(release.values, "domainFilters", [])
+	count(domain_filters) == 0
+	msg := "ExternalDNS has zone-id-filter but no domainFilters; consider adding domainFilters for defense-in-depth"
+}
+
+# Helper to check if zone-id-filter is configured in extraArgs
+has_zone_id_filter(args) if {
+	some arg in args
+	startswith(arg, "--zone-id-filter=")
+}

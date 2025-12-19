@@ -699,6 +699,120 @@ func TestExternalDNSModuleInputValidation(t *testing.T) {
 	}
 }
 
+// zoneIdFilterValidationTestCases defines test cases for zone_id_filter variable validation
+var zoneIdFilterValidationTestCases = []struct {
+	name            string
+	value           interface{}
+	expectError     bool
+	expectedMessage string
+}{
+	{
+		name:        "ValidZoneId",
+		value:       map[string]interface{}{"example.test": "0123456789abcdef0123456789abcdef"},
+		expectError: false,
+	},
+	{
+		name:            "InvalidZoneIdTooShort",
+		value:           map[string]interface{}{"example.test": "abc123"},
+		expectError:     true,
+		expectedMessage: "zone_id_filter",
+	},
+	{
+		name:            "InvalidZoneIdNonHex",
+		value:           map[string]interface{}{"example.test": "0123456789abcdef0123456789abcdeg"},
+		expectError:     true,
+		expectedMessage: "zone_id_filter",
+	},
+	{
+		name:            "InvalidDomainKey",
+		value:           map[string]interface{}{"not a domain": "0123456789abcdef0123456789abcdef"},
+		expectError:     true,
+		expectedMessage: "zone_id_filter",
+	},
+	{
+		name:        "EmptyMap",
+		value:       map[string]interface{}{},
+		expectError: false,
+	},
+	{
+		name: "MultipleValidZones",
+		value: map[string]interface{}{
+			"example.test": "0123456789abcdef0123456789abcdef",
+			"other.test":   "fedcba9876543210fedcba9876543210",
+		},
+		expectError: false,
+	},
+}
+
+func TestExternalDNSModuleZoneIdFilterValidation(t *testing.T) {
+	t.Parallel()
+	for _, tc := range zoneIdFilterValidationTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vars := renderVars(t)
+			vars["zone_id_filter"] = tc.value
+			_, opts := setupRender(t, vars)
+			_, err := terraform.InitAndPlanE(t, opts)
+			if tc.expectError {
+				require.Error(t, err, "expected validation error for zone_id_filter")
+				require.Contains(t, err.Error(), tc.expectedMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExternalDNSModuleZoneIdFilterInHelmValues(t *testing.T) {
+	t.Parallel()
+	vars := renderVars(t)
+	vars["zone_id_filter"] = map[string]interface{}{
+		"example.test": "0123456789abcdef0123456789abcdef",
+	}
+	_, opts := setupRender(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	helmRelease := rendered["platform/external-dns/helmrelease.yaml"]
+
+	require.Contains(t, helmRelease, "--zone-id-filter=0123456789abcdef0123456789abcdef",
+		"HelmRelease should contain zone-id-filter argument")
+}
+
+func TestExternalDNSModuleManagedZonesOutput(t *testing.T) {
+	t.Parallel()
+	vars := renderVars(t)
+	vars["domain_filters"] = []string{"example.test", "other.test"}
+	vars["zone_id_filter"] = map[string]interface{}{
+		"example.test": "0123456789abcdef0123456789abcdef",
+	}
+	_, opts := setupRender(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	managedZones := terraform.OutputMap(t, opts, "managed_zones")
+	require.Equal(t, "0123456789abcdef0123456789abcdef", managedZones["example.test"],
+		"example.test should have zone ID from zone_id_filter")
+	// other.test should have null value since no zone ID was specified
+	// terraform.OutputMap returns null values as empty strings in the map
+	_, hasOtherTest := managedZones["other.test"]
+	require.True(t, hasOtherTest, "other.test should be present in managed_zones output")
+}
+
+func TestExternalDNSModuleZoneIdFilterOutput(t *testing.T) {
+	t.Parallel()
+	vars := renderVars(t)
+	vars["zone_id_filter"] = map[string]interface{}{
+		"example.test": "0123456789ABCDEF0123456789ABCDEF",
+	}
+	_, opts := setupRender(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	zoneIdFilter := terraform.OutputMap(t, opts, "zone_id_filter")
+	// Zone IDs are normalised to lowercase
+	require.Equal(t, "0123456789abcdef0123456789abcdef", zoneIdFilter["example.test"],
+		"zone_id_filter output should contain normalised zone ID")
+}
+
 func TestExternalDNSExampleRejectsBlankKubeconfigPath(t *testing.T) {
 	t.Parallel()
 	testKubeconfigPathValidation(t, "")

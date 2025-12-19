@@ -30,6 +30,11 @@ locals {
   domain_filters = [for domain in var.domain_filters : lower(trimspace(domain))]
   sources        = [for source in var.sources : trimspace(source)]
 
+  zone_id_filter = {
+    for domain, zone_id in var.zone_id_filter :
+    lower(trimspace(domain)) => lower(trimspace(zone_id))
+  }
+
   helm_inline_values = [for value in var.helm_values : value if trimspace(value) != ""]
   helm_value_files = [
     for path in var.helm_values_files : trimspace(path) if trimspace(path) != ""
@@ -48,6 +53,8 @@ locals {
     ["--cloudflare-dns-records-per-page=${var.dns_records_per_page}"],
     var.txt_prefix != "" ? ["--txt-prefix=${var.txt_prefix}"] : [],
     var.txt_suffix != "" ? ["--txt-suffix=${var.txt_suffix}"] : [],
+    # Zone ID filter arguments restrict API access to specific Cloudflare zones
+    [for zone_id in values(local.zone_id_filter) : "--zone-id-filter=${zone_id}"],
   ))
 
   # Construct default Helm values based on input variables.
