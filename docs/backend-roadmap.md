@@ -72,7 +72,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 
 - [x] Implement `POST /api/v1/login` with signed-cookie sessions, two-hour TTL,
   and production-grade key management.
-- [ ] Wire `/api/v1/users/me` and `/api/v1/users/me/interests` to require the
+- [x] Wire `/api/v1/users/me` and `/api/v1/users/me/interests` to require the
   session middleware, returning `401` with trace identifiers when
   unauthenticated.
 - [ ] Enforce configuration toggles for `SESSION_SAMESITE`,

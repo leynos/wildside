@@ -8,6 +8,8 @@ Feature: OpenAPI schema wrappers
     Then the components section contains the Error schema wrapper
     And the components section contains the ErrorCode schema wrapper
     And the components section contains the User schema wrapper
+    And the components section contains the InterestThemeId schema wrapper
+    And the components section contains the UserInterests schema wrapper
 
   Scenario: Login endpoint uses schema wrapper types
     Given the OpenAPI document is generated
@@ -19,6 +21,17 @@ Feature: OpenAPI schema wrappers
     When the document is inspected
     Then the list users endpoint references UserSchema for success response
     And the list users endpoint references ErrorSchema for error responses
+
+  Scenario: Current user endpoint uses schema wrapper types
+    Given the OpenAPI document is generated
+    When the document is inspected
+    Then the current user endpoint references UserSchema for success response
+
+  Scenario: Update interests endpoint uses schema wrapper types
+    Given the OpenAPI document is generated
+    When the document is inspected
+    Then the update interests endpoint references UserInterestsSchema
+    And the update interests endpoint references ErrorSchema for error responses
 
   Scenario: User schema has validation constraints
     Given the OpenAPI document is generated

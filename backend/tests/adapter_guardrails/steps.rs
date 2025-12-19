@@ -3,6 +3,10 @@
 //! The `rstest-bdd` step macros register these functions for feature-based
 //! tests, but we also call the functions directly from Rust tests to keep the
 //! suite easy to read and refactor.
+//
+// rstest-bdd generates guard variables with double underscores, which trips
+// the non_snake_case lint under -D warnings.
+#![allow(non_snake_case)]
 
 use actix_web::http::header;
 use actix_web_actors::ws::CloseCode;

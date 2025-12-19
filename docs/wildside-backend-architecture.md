@@ -778,6 +778,15 @@ before invoking a port. Canonical examples include:
 > infrastructure. Migrations reside in `backend/migrations/` and define the
 > PostgreSQL schema including audit timestamps and auto-update triggers.
 
+> **Design decision (2025-12-19):** Introduce driving ports
+> `UserProfileQuery` and `UserInterestsCommand` plus domain types
+> `InterestThemeId` and `UserInterests` to support session-authenticated
+> profile and interest updates. HTTP handlers for
+> `/api/v1/users/me` and `/api/v1/users/me/interests` now require the session
+> helper and delegate to these ports, keeping stateful behaviour behind the
+> domain boundary while still emitting trace identifiers through the Trace
+> middleware.
+
 Adapters may not call domain services until a `Result<DomainType, DomainError>`
 has been handled. This keeps invariants inside the hexagon and prevents
 transport-specific representations (JSON strings, query params) from leaking

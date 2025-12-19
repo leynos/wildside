@@ -90,6 +90,40 @@ pub struct UserSchema {
     display_name: String,
 }
 
+/// OpenAPI schema for [`crate::domain::InterestThemeId`].
+///
+/// Interest theme identifiers are UUIDs serialized as strings.
+#[derive(ToSchema)]
+#[schema(
+    as = crate::domain::InterestThemeId,
+    value_type = String,
+    format = "uuid",
+    example = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+)]
+pub struct InterestThemeIdSchema(pub String);
+
+/// OpenAPI schema for [`crate::domain::UserInterests`].
+///
+/// User interest selections with theme identifiers.
+#[derive(ToSchema)]
+#[schema(as = crate::domain::UserInterests)]
+#[expect(
+    dead_code,
+    reason = "Used only for OpenAPI schema generation via utoipa"
+)]
+pub struct UserInterestsSchema {
+    /// Stable user identifier.
+    #[schema(
+        value_type = String,
+        format = "uuid",
+        example = "11111111-1111-1111-1111-111111111111"
+    )]
+    user_id: String,
+    /// Selected interest theme identifiers.
+    #[schema(value_type = Vec<InterestThemeIdSchema>)]
+    interest_theme_ids: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +170,27 @@ mod tests {
         assert!(
             schema_json.contains("display_name"),
             "schema should contain display_name field"
+        );
+    }
+
+    #[test]
+    fn interest_theme_id_schema_has_expected_name() {
+        let schema_json = schema_to_json::<InterestThemeIdSchema>();
+        let name = InterestThemeIdSchema::name();
+        // utoipa replaces :: with . in schema names
+        assert_eq!(name, "crate.domain.InterestThemeId");
+        assert!(schema_json.contains("uuid"), "schema should mention uuid");
+    }
+
+    #[test]
+    fn user_interests_schema_has_expected_name() {
+        let schema_json = schema_to_json::<UserInterestsSchema>();
+        let name = UserInterestsSchema::name();
+        // utoipa replaces :: with . in schema names
+        assert_eq!(name, "crate.domain.UserInterests");
+        assert!(
+            schema_json.contains("interest_theme_ids"),
+            "schema should contain interest_theme_ids field"
         );
     }
 

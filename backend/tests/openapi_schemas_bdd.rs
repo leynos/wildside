@@ -2,6 +2,10 @@
 //!
 //! These tests verify that the OpenAPI document correctly references the
 //! schema wrapper types from `inbound::http::schemas` instead of domain types.
+//
+// rstest-bdd generates guard variables with double underscores, which trips
+// the non_snake_case lint under -D warnings.
+#![allow(non_snake_case)]
 
 use std::sync::Mutex;
 
@@ -49,7 +53,9 @@ fn inspect_document(world: &Mutex<OpenApiWorld>) {
 // Note: utoipa replaces :: with . in schema names
 const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
 const ERROR_CODE_SCHEMA_NAME: &str = "crate.domain.ErrorCode";
+const INTEREST_THEME_ID_SCHEMA_NAME: &str = "crate.domain.InterestThemeId";
 const USER_SCHEMA_NAME: &str = "crate.domain.User";
+const USER_INTERESTS_SCHEMA_NAME: &str = "crate.domain.UserInterests";
 
 /// Navigate into a User property's object schema and invoke a closure.
 ///
@@ -133,6 +139,32 @@ fn contains_user_schema(world: &Mutex<OpenApiWorld>) {
     );
 }
 
+#[then("the components section contains the InterestThemeId schema wrapper")]
+fn contains_interest_theme_id_schema(world: &Mutex<OpenApiWorld>) {
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+
+    assert!(
+        components
+            .schemas
+            .contains_key(INTEREST_THEME_ID_SCHEMA_NAME),
+        "InterestThemeId schema wrapper should be registered"
+    );
+}
+
+#[then("the components section contains the UserInterests schema wrapper")]
+fn contains_user_interests_schema(world: &Mutex<OpenApiWorld>) {
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+
+    assert!(
+        components.schemas.contains_key(USER_INTERESTS_SCHEMA_NAME),
+        "UserInterests schema wrapper should be registered"
+    );
+}
+
 #[then("the login endpoint references ErrorSchema for error responses")]
 fn login_references_error_schema(world: &Mutex<OpenApiWorld>) {
     let world = world.lock().expect("world lock");
@@ -166,6 +198,41 @@ fn list_users_references_error_schema(world: &Mutex<OpenApiWorld>) {
     assert!(
         json.contains(&format!("#/components/schemas/{ERROR_SCHEMA_NAME}")),
         "List users endpoint should reference Error schema for errors"
+    );
+}
+
+#[then("the current user endpoint references UserSchema for success response")]
+fn current_user_references_user_schema(world: &Mutex<OpenApiWorld>) {
+    let world = world.lock().expect("world lock");
+    let json = world.json.as_ref().expect("JSON generated");
+
+    assert!(
+        json.contains(&format!("#/components/schemas/{USER_SCHEMA_NAME}")),
+        "Current user endpoint should reference User schema"
+    );
+}
+
+#[then("the update interests endpoint references UserInterestsSchema")]
+fn update_interests_references_user_interests_schema(world: &Mutex<OpenApiWorld>) {
+    let world = world.lock().expect("world lock");
+    let json = world.json.as_ref().expect("JSON generated");
+
+    assert!(
+        json.contains(&format!(
+            "#/components/schemas/{USER_INTERESTS_SCHEMA_NAME}"
+        )),
+        "Update interests endpoint should reference UserInterests schema"
+    );
+}
+
+#[then("the update interests endpoint references ErrorSchema for error responses")]
+fn update_interests_references_error_schema(world: &Mutex<OpenApiWorld>) {
+    let world = world.lock().expect("world lock");
+    let json = world.json.as_ref().expect("JSON generated");
+
+    assert!(
+        json.contains(&format!("#/components/schemas/{ERROR_SCHEMA_NAME}")),
+        "Update interests endpoint should reference Error schema for errors"
     );
 }
 

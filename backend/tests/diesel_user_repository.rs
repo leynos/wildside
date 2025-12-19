@@ -11,6 +11,10 @@
 //! store a Tokio runtime in the test context and reuse it for all async
 //! operations. This avoids the overhead of creating a new runtime per async
 //! block while maintaining BDD step compatibility.
+//
+// rstest-bdd generates guard variables with double underscores, which trips
+// the non_snake_case lint under -D warnings.
+#![allow(non_snake_case)]
 
 use std::sync::{Arc, Mutex};
 

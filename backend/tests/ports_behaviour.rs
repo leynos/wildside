@@ -1,4 +1,8 @@
 //! Behavioural tests for the new domain ports backed by PostgreSQL.
+//
+// rstest-bdd generates guard variables with double underscores, which trips
+// the non_snake_case lint under -D warnings.
+#![allow(non_snake_case)]
 
 use std::sync::{Arc, Mutex};
 

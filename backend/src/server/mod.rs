@@ -20,11 +20,13 @@ use actix_web::{web, App, HttpServer};
 
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
-use backend::domain::ports::{FixtureLoginService, FixtureUsersQuery};
+use backend::domain::ports::{
+    FixtureLoginService, FixtureUserInterestsCommand, FixtureUserProfileQuery, FixtureUsersQuery,
+};
 use backend::domain::UserOnboardingService;
 use backend::inbound::http::health::{live, ready, HealthState};
 use backend::inbound::http::state::HttpState;
-use backend::inbound::http::users::{list_users, login};
+use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 use backend::Trace;
@@ -80,7 +82,9 @@ fn build_app(
     let api = web::scope("/api/v1")
         .wrap(session)
         .service(login)
-        .service(list_users);
+        .service(list_users)
+        .service(current_user)
+        .service(update_interests);
 
     let app = App::new()
         .app_data(health_state)
@@ -119,6 +123,8 @@ pub fn create_server(
     let http_state = web::Data::new(HttpState::new(
         Arc::new(FixtureLoginService),
         Arc::new(FixtureUsersQuery),
+        Arc::new(FixtureUserProfileQuery),
+        Arc::new(FixtureUserInterestsCommand),
     ));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {

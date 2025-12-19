@@ -14,7 +14,6 @@ use actix_session::storage::CookieSessionStore;
 use actix_session::SessionMiddleware;
 use actix_web::cookie::{time::Duration as CookieDuration, Key, SameSite};
 use actix_web::dev::ServerHandle;
-use actix_web::http::header;
 use actix_web::{web, App, HttpServer};
 use actix_web_actors::ws::CloseCode;
 use rstest::fixture;
@@ -22,12 +21,20 @@ use serde_json::Value;
 use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 
-use crate::doubles::{LoginResponse, QueueUserOnboarding, RecordingLoginService, RecordingUsersQuery, UsersResponse};
-use backend::domain::{DisplayName, User, UserId};
+use crate::doubles::{
+    LoginResponse, QueueUserOnboarding, RecordingLoginService, RecordingUserInterestsCommand,
+    RecordingUserProfileQuery, RecordingUsersQuery, UserInterestsResponse, UserProfileResponse,
+    UsersResponse,
+};
+use backend::domain::{DisplayName, InterestThemeId, User, UserId, UserInterests};
 use backend::inbound::http::state::HttpState;
-use backend::inbound::http::users::{list_users as list_users_handler, login as login_handler};
+use backend::inbound::http::users::{
+    current_user as current_user_handler, list_users as list_users_handler, login as login_handler,
+    update_interests as update_interests_handler,
+};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
+use backend::Trace;
 
 pub(crate) struct AdapterWorld {
     pub(crate) runtime: Runtime,
@@ -36,9 +43,12 @@ pub(crate) struct AdapterWorld {
     pub(crate) server: ServerHandle,
     pub(crate) login: RecordingLoginService,
     pub(crate) users: RecordingUsersQuery,
+    pub(crate) profile: RecordingUserProfileQuery,
+    pub(crate) interests: RecordingUserInterestsCommand,
     pub(crate) onboarding: QueueUserOnboarding,
     pub(crate) last_status: Option<u16>,
     pub(crate) last_body: Option<Value>,
+    pub(crate) last_trace_id: Option<String>,
     pub(crate) session_cookie: Option<String>,
     pub(crate) last_ws_value: Option<Value>,
     pub(crate) last_ws_close: Option<CloseCode>,
@@ -109,11 +119,14 @@ async fn spawn_adapter_server(
         let api = web::scope("/api/v1")
             .wrap(test_session_middleware(key.clone()))
             .service(login_handler)
-            .service(list_users_handler);
+            .service(list_users_handler)
+            .service(current_user_handler)
+            .service(update_interests_handler);
 
         App::new()
             .app_data(http_data.clone())
             .app_data(ws_data.clone())
+            .wrap(Trace)
             .service(api)
             .service(ws::ws_entry)
     })
@@ -144,13 +157,30 @@ pub(crate) fn world() -> WorldFixture {
         UserId::new("22222222-2222-2222-2222-222222222222").expect("fixture user id"),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
     )]));
+    let profile = RecordingUserProfileQuery::new(UserProfileResponse::Ok(User::new(
+        UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
+        DisplayName::new("Ada Lovelace").expect("fixture display name"),
+    )));
+    let interests =
+        RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
+            UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
+            vec![InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                .expect("fixture interest theme id")],
+        )));
     let onboarding = QueueUserOnboarding::new(Vec::new());
 
-    let http_state = HttpState::new(Arc::new(login.clone()), Arc::new(users.clone()));
+    let http_state = HttpState::new(
+        Arc::new(login.clone()),
+        Arc::new(users.clone()),
+        Arc::new(profile.clone()),
+        Arc::new(interests.clone()),
+    );
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
-        .block_on(&runtime, async { spawn_adapter_server(http_state, ws_state).await })
+        .block_on(&runtime, async {
+            spawn_adapter_server(http_state, ws_state).await
+        })
         .expect("server should start");
 
     let world = Rc::new(RefCell::new(AdapterWorld {
@@ -160,9 +190,12 @@ pub(crate) fn world() -> WorldFixture {
         server,
         login,
         users,
+        profile,
+        interests,
         onboarding,
         last_status: None,
         last_body: None,
+        last_trace_id: None,
         session_cookie: None,
         last_ws_value: None,
         last_ws_close: None,
