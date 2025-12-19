@@ -50,8 +50,12 @@ zeroize = "1.7"
 default = []
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom"]
+# Expose test utilities for integration tests
+test-support = []
 
 [dev-dependencies]
+# Enable test-support feature for integration tests
+backend = { path = ".", features = ["test-support"] }
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"

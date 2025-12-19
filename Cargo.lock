@@ -563,6 +563,7 @@ dependencies = [
  "actix-web-prom",
  "async-trait",
  "awc",
+ "backend",
  "chrono",
  "color-eyre",
  "diesel",

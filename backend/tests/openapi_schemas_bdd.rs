@@ -6,7 +6,7 @@
 use std::sync::Mutex;
 
 use backend::doc::ApiDoc;
-use backend::test_support::openapi::unwrap_object_schema;
+use backend::test_support::openapi::{get_property, unwrap_object_schema};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use utoipa::OpenApi;
@@ -65,12 +65,7 @@ where
         .expect("User schema");
 
     let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
-
-    let property = obj
-        .properties
-        .get(property_name)
-        .unwrap_or_else(|| panic!("{} property", property_name));
-
+    let property = get_property(obj, property_name);
     let property_obj = unwrap_object_schema(property, property_name);
 
     f(property_obj);
