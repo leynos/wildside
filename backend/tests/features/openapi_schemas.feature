@@ -19,3 +19,10 @@ Feature: OpenAPI schema wrappers
     When the document is inspected
     Then the list users endpoint references UserSchema for success response
     And the list users endpoint references ErrorSchema for error responses
+
+  Scenario: User schema has validation constraints
+    Given the OpenAPI document is generated
+    When the document is inspected
+    Then the User id field has uuid format
+    And the User display_name field has length constraints
+    And the User display_name field has pattern constraint

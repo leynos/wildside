@@ -122,6 +122,110 @@ fn list_users_references_error_schema(world: &Mutex<OpenApiWorld>) {
     );
 }
 
+#[then("the User id field has uuid format")]
+fn user_id_has_uuid_format(world: &Mutex<OpenApiWorld>) {
+    use utoipa::openapi::schema::{Schema, SchemaFormat};
+    use utoipa::openapi::RefOr;
+
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+    let user_schema = components
+        .schemas
+        .get(USER_SCHEMA_NAME)
+        .expect("User schema");
+
+    let obj = match user_schema {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("User schema is not an Object"),
+    };
+
+    let id_prop = obj.properties.get("id").expect("id property exists");
+    let id_obj = match id_prop {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("id property is not an Object"),
+    };
+
+    // Schema format is set via #[schema(format = "uuid")] which produces Custom variant
+    assert!(
+        matches!(&id_obj.format, Some(SchemaFormat::Custom(s)) if s == "uuid"),
+        "User.id should have format=uuid"
+    );
+}
+
+#[then("the User display_name field has length constraints")]
+fn user_display_name_has_length_constraints(world: &Mutex<OpenApiWorld>) {
+    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::RefOr;
+
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+    let user_schema = components
+        .schemas
+        .get(USER_SCHEMA_NAME)
+        .expect("User schema");
+
+    let obj = match user_schema {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("User schema is not an Object"),
+    };
+
+    let display_name_prop = obj
+        .properties
+        .get("display_name")
+        .expect("display_name property");
+    let display_name_obj = match display_name_prop {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("display_name property is not an Object"),
+    };
+
+    assert_eq!(
+        display_name_obj.min_length,
+        Some(3),
+        "User.display_name should have min_length=3"
+    );
+    assert_eq!(
+        display_name_obj.max_length,
+        Some(32),
+        "User.display_name should have max_length=32"
+    );
+}
+
+#[then("the User display_name field has pattern constraint")]
+fn user_display_name_has_pattern_constraint(world: &Mutex<OpenApiWorld>) {
+    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::RefOr;
+
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+    let user_schema = components
+        .schemas
+        .get(USER_SCHEMA_NAME)
+        .expect("User schema");
+
+    let obj = match user_schema {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("User schema is not an Object"),
+    };
+
+    let display_name_prop = obj
+        .properties
+        .get("display_name")
+        .expect("display_name property");
+    let display_name_obj = match display_name_prop {
+        RefOr::T(Schema::Object(obj)) => obj,
+        _ => panic!("display_name property is not an Object"),
+    };
+
+    assert_eq!(
+        display_name_obj.pattern.as_deref(),
+        Some("^[A-Za-z0-9_ ]+$"),
+        "User.display_name should have pattern constraint"
+    );
+}
+
 #[scenario(path = "tests/features/openapi_schemas.feature")]
 fn openapi_schemas(world: Mutex<OpenApiWorld>) {
     drop(world);

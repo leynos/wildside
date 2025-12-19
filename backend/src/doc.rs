@@ -83,15 +83,48 @@ mod tests {
     const USER_SCHEMA_NAME: &str = "crate.domain.User";
 
     /// Assert that an Object schema contains a field with the given name.
-    fn assert_object_schema_has_field(schema: &RefOr<Schema>, field: &str) {
+    ///
+    /// Handles inline Object schemas. Fails with a diagnostic message if the
+    /// schema is a `$ref`, a combinator (`AllOf`, `OneOf`, `AnyOf`), or another
+    /// non-Object type, since those require different inspection strategies.
+    fn assert_object_schema_has_field(schema: &RefOr<Schema>, schema_name: &str, field: &str) {
         match schema {
             RefOr::T(Schema::Object(obj)) => {
                 assert!(
                     obj.properties.contains_key(field),
-                    "schema should have field '{field}'"
+                    "schema '{schema_name}' should have field '{field}'"
                 );
             }
-            _ => panic!("expected Object schema"),
+            RefOr::Ref(reference) => {
+                panic!(
+                    "schema '{schema_name}' is a $ref to '{}'; \
+                     resolve the reference before inspecting properties",
+                    reference.ref_location
+                );
+            }
+            RefOr::T(Schema::AllOf(_)) => {
+                panic!(
+                    "schema '{schema_name}' is an AllOf combinator; \
+                     inspect composed schemas individually"
+                );
+            }
+            RefOr::T(Schema::OneOf(_)) => {
+                panic!(
+                    "schema '{schema_name}' is a OneOf combinator; \
+                     inspect variant schemas individually"
+                );
+            }
+            RefOr::T(Schema::AnyOf(_)) => {
+                panic!(
+                    "schema '{schema_name}' is an AnyOf combinator; \
+                     inspect variant schemas individually"
+                );
+            }
+            RefOr::T(Schema::Array(_)) => {
+                panic!("schema '{schema_name}' is an Array, not an Object");
+            }
+            // Schema is non-exhaustive; catch future variants
+            _ => panic!("schema '{schema_name}' has unexpected type"),
         }
     }
 
@@ -101,8 +134,8 @@ mod tests {
         let schemas = &doc.components.as_ref().expect("components").schemas;
         let error_schema = schemas.get(ERROR_SCHEMA_NAME).expect("Error schema");
 
-        assert_object_schema_has_field(error_schema, "code");
-        assert_object_schema_has_field(error_schema, "message");
+        assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "code");
+        assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "message");
     }
 
     #[test]
@@ -111,7 +144,67 @@ mod tests {
         let schemas = &doc.components.as_ref().expect("components").schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
 
-        assert_object_schema_has_field(user_schema, "id");
-        assert_object_schema_has_field(user_schema, "display_name");
+        assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
+        assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "display_name");
+    }
+
+    /// Extract the Object from a schema, panicking with a diagnostic if not an Object.
+    fn unwrap_object_schema<'a>(
+        schema: &'a RefOr<Schema>,
+        name: &str,
+    ) -> &'a utoipa::openapi::schema::Object {
+        match schema {
+            RefOr::T(Schema::Object(obj)) => obj,
+            _ => panic!("schema '{name}' is not an Object"),
+        }
+    }
+
+    #[test]
+    fn openapi_user_id_has_uuid_format() {
+        use utoipa::openapi::schema::SchemaFormat;
+
+        let doc = ApiDoc::openapi();
+        let schemas = &doc.components.as_ref().expect("components").schemas;
+        let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
+        let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
+
+        let id_prop = obj.properties.get("id").expect("id property exists");
+        let id_obj = unwrap_object_schema(id_prop, "id");
+
+        // Schema format is set via #[schema(format = "uuid")] which produces Custom variant
+        assert!(
+            matches!(&id_obj.format, Some(SchemaFormat::Custom(s)) if s == "uuid"),
+            "id should have format=uuid"
+        );
+    }
+
+    #[test]
+    fn openapi_user_display_name_has_constraints() {
+        let doc = ApiDoc::openapi();
+        let schemas = &doc.components.as_ref().expect("components").schemas;
+        let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
+        let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
+
+        let display_name_prop = obj
+            .properties
+            .get("display_name")
+            .expect("display_name property exists");
+        let display_name_obj = unwrap_object_schema(display_name_prop, "display_name");
+
+        assert_eq!(
+            display_name_obj.min_length,
+            Some(3),
+            "display_name should have min_length=3"
+        );
+        assert_eq!(
+            display_name_obj.max_length,
+            Some(32),
+            "display_name should have max_length=32"
+        );
+        assert_eq!(
+            display_name_obj.pattern.as_deref(),
+            Some("^[A-Za-z0-9_ ]+$"),
+            "display_name should have pattern constraint"
+        );
     }
 }
