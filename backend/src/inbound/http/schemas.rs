@@ -77,8 +77,9 @@ pub struct UserSchema {
     id: String,
     /// Display name shown to other users.
     ///
-    /// Matches the domain `DisplayName` invariant: trimmed, non-empty,
-    /// 3–32 characters, alphanumeric plus spaces and underscores.
+    /// Schema constraints: 3–32 characters, alphanumeric plus spaces and
+    /// underscores. The domain layer additionally validates that the value
+    /// is non-empty when trimmed.
     #[schema(
         value_type = String,
         min_length = 3,
@@ -95,7 +96,7 @@ mod tests {
     use utoipa::PartialSchema;
 
     fn schema_to_json<T: PartialSchema>() -> String {
-        serde_json::to_string(&T::schema()).expect("schema serialises to JSON")
+        serde_json::to_string(&T::schema()).expect("schema serializes to JSON")
     }
 
     #[test]
@@ -157,28 +158,41 @@ mod tests {
 
     /// Verify domain ErrorCode serialization matches schema renames.
     ///
-    /// This test fails if a new domain variant is added without updating
-    /// the test (and by extension, `ErrorCodeSchema`).
+    /// Uses pattern matching for compile-time exhaustiveness: if a new domain
+    /// variant is added, this test will fail to compile until updated.
     #[test]
     fn error_code_schema_matches_domain_serialization() {
         use crate::domain::ErrorCode;
 
-        // Each domain variant should serialize to the same string as the schema rename
-        let cases = [
-            (ErrorCode::InvalidRequest, "invalid_request"),
-            (ErrorCode::Unauthorized, "unauthorized"),
-            (ErrorCode::Forbidden, "forbidden"),
-            (ErrorCode::NotFound, "not_found"),
-            (ErrorCode::InternalError, "internal_error"),
+        /// Map domain variant to expected serialized string.
+        ///
+        /// Pattern matching ensures compile-time exhaustiveness: adding a new
+        /// `ErrorCode` variant without updating this function causes a build error.
+        fn expected_serialization(code: ErrorCode) -> &'static str {
+            match code {
+                ErrorCode::InvalidRequest => "invalid_request",
+                ErrorCode::Unauthorized => "unauthorized",
+                ErrorCode::Forbidden => "forbidden",
+                ErrorCode::NotFound => "not_found",
+                ErrorCode::InternalError => "internal_error",
+            }
+        }
+
+        let variants = [
+            ErrorCode::InvalidRequest,
+            ErrorCode::Unauthorized,
+            ErrorCode::Forbidden,
+            ErrorCode::NotFound,
+            ErrorCode::InternalError,
         ];
 
-        for (domain_code, expected) in cases {
-            let serialized = serde_json::to_string(&domain_code).expect("ErrorCode serializes");
-            // serde produces quoted strings, e.g. "\"invalid_request\""
+        for code in variants {
+            let serialized = serde_json::to_string(&code).expect("ErrorCode serializes");
+            let expected = expected_serialization(code);
             assert_eq!(
                 serialized,
                 format!("\"{expected}\""),
-                "domain ErrorCode::{domain_code:?} should serialize to {expected}"
+                "domain ErrorCode::{code:?} should serialize to {expected}"
             );
         }
     }

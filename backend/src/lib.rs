@@ -10,6 +10,8 @@ pub mod domain;
 pub mod inbound;
 mod middleware;
 pub mod outbound;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 pub use domain::TraceId;
 pub use middleware::Trace;
 

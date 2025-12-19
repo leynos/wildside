@@ -6,6 +6,7 @@
 use std::sync::Mutex;
 
 use backend::doc::ApiDoc;
+use backend::test_support::openapi::{get_property, unwrap_object_schema};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use utoipa::OpenApi;
@@ -49,6 +50,52 @@ fn inspect_document(world: &Mutex<OpenApiWorld>) {
 const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
 const ERROR_CODE_SCHEMA_NAME: &str = "crate.domain.ErrorCode";
 const USER_SCHEMA_NAME: &str = "crate.domain.User";
+
+/// Navigate into a User property's object schema and invoke a closure.
+///
+/// This helper reduces boilerplate when asserting constraints on User schema
+/// properties (e.g., `id`, `display_name`). It handles the traversal from the
+/// OpenAPI document root down to a specific property's object schema.
+///
+/// # Parameters
+///
+/// - `world`: Mutex guarding the test world containing the OpenAPI document.
+/// - `property_name`: Name of the User property to inspect (e.g., `"id"`).
+/// - `f`: Closure receiving the property's `Object` schema for assertions.
+///
+/// # Usage Pattern
+///
+/// 1. Locks the world mutex to access the OpenAPI document
+/// 2. Extracts components and locates the User schema by name
+/// 3. Unwraps the User schema to an `Object` (panics with diagnostics if not)
+/// 4. Retrieves the named property and unwraps it to an `Object`
+/// 5. Invokes the closure with the property's object schema
+///
+/// # Example
+///
+/// ```ignore
+/// with_user_property_object_schema(world, "display_name", |obj| {
+///     assert_eq!(obj.min_length, Some(3));
+/// });
+/// ```
+fn with_user_property_object_schema<F>(world: &Mutex<OpenApiWorld>, property_name: &str, f: F)
+where
+    F: FnOnce(&utoipa::openapi::schema::Object),
+{
+    let world = world.lock().expect("world lock");
+    let doc = world.document.as_ref().expect("document generated");
+    let components = doc.components.as_ref().expect("components present");
+    let user_schema = components
+        .schemas
+        .get(USER_SCHEMA_NAME)
+        .expect("User schema");
+
+    let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
+    let property = get_property(obj, property_name);
+    let property_obj = unwrap_object_schema(property, property_name);
+
+    f(property_obj);
+}
 
 #[then("the components section contains the Error schema wrapper")]
 fn contains_error_schema(world: &Mutex<OpenApiWorld>) {
@@ -120,6 +167,45 @@ fn list_users_references_error_schema(world: &Mutex<OpenApiWorld>) {
         json.contains(&format!("#/components/schemas/{ERROR_SCHEMA_NAME}")),
         "List users endpoint should reference Error schema for errors"
     );
+}
+
+#[then("the User id field has uuid format")]
+fn user_id_has_uuid_format(world: &Mutex<OpenApiWorld>) {
+    use utoipa::openapi::schema::SchemaFormat;
+
+    with_user_property_object_schema(world, "id", |id_obj| {
+        assert!(
+            matches!(&id_obj.format, Some(SchemaFormat::Custom(s)) if s == "uuid"),
+            "User.id should have format=uuid"
+        );
+    });
+}
+
+#[then("the User display_name field has length constraints")]
+fn user_display_name_has_length_constraints(world: &Mutex<OpenApiWorld>) {
+    with_user_property_object_schema(world, "display_name", |display_name_obj| {
+        assert_eq!(
+            display_name_obj.min_length,
+            Some(3),
+            "User.display_name should have min_length=3"
+        );
+        assert_eq!(
+            display_name_obj.max_length,
+            Some(32),
+            "User.display_name should have max_length=32"
+        );
+    });
+}
+
+#[then("the User display_name field has pattern constraint")]
+fn user_display_name_has_pattern_constraint(world: &Mutex<OpenApiWorld>) {
+    with_user_property_object_schema(world, "display_name", |display_name_obj| {
+        assert_eq!(
+            display_name_obj.pattern.as_deref(),
+            Some("^[A-Za-z0-9_ ]+$"),
+            "User.display_name should have pattern constraint"
+        );
+    });
 }
 
 #[scenario(path = "tests/features/openapi_schemas.feature")]
