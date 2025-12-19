@@ -54,7 +54,7 @@ locals {
     var.txt_prefix != "" ? ["--txt-prefix=${var.txt_prefix}"] : [],
     var.txt_suffix != "" ? ["--txt-suffix=${var.txt_suffix}"] : [],
     # Zone ID filter arguments restrict API access to specific Cloudflare zones
-    [for zone_id in values(local.zone_id_filter) : "--zone-id-filter=${zone_id}"],
+    [for domain in sort(keys(local.zone_id_filter)) : "--zone-id-filter=${local.zone_id_filter[domain]}"],
   ))
 
   # Construct default Helm values based on input variables.

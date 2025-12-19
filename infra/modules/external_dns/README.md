@@ -148,7 +148,7 @@ module "external_dns" {
 ## Zone ID Filter (Optional)
 
 The `zone_id_filter` variable allows restricting ExternalDNS API access to
-specific Cloudflare zones. This provides defense-in-depth beyond `domain_filters`
+specific Cloudflare zones. This provides defence-in-depth beyond `domain_filters`
 and enables zone ID output for downstream consumers.
 
 ```hcl
@@ -174,8 +174,8 @@ output "zone_mapping" {
 }
 ```
 
-Zone IDs are 32-character hexadecimal strings. Find your zone ID in the
-Cloudflare dashboard under the zone's Overview page (right sidebar).
+Zone IDs are 32-character hexadecimal strings, available in the Cloudflare
+dashboard under the zone's Overview page (right sidebar).
 
 ## DNS Record Ownership
 

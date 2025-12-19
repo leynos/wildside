@@ -26,7 +26,7 @@ output "zone_id_filter" {
 output "managed_zones" {
   description = "Unified zone configuration: domain -> zone_id (null if not specified)"
   value = {
-    for domain in local.domain_filters :
+    for domain in distinct(concat(local.domain_filters, keys(local.zone_id_filter))) :
     domain => lookup(local.zone_id_filter, domain, null)
   }
 }

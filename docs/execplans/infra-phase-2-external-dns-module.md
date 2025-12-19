@@ -22,7 +22,7 @@ Deliver a reusable OpenTofu module under `infra/modules/external_dns/` that:
 | Emit managed zone IDs    | ✅ Complete | `zone_id_filter` and `managed_zones` outputs      |
 | Dual modes               | ✅ Complete | `apply` and `render` modes implemented            |
 | Terratest coverage       | ✅ Complete | Zone ID validation, output, and Helm values tests |
-| OPA/Conftest policies    | ✅ Complete | Plan policy warns on zone-id-filter without domainFilters |
+| Open Policy Agent (OPA)/Conftest policies | ✅ Complete | Plan policy warns on zone-id-filter without domainFilters |
 
 ## File Structure
 

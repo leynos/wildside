@@ -454,6 +454,21 @@ var planPolicyRejectionTestCases = []struct {
 }`,
 		expectedMessage: "txtOwnerId",
 	},
+	{
+		name: "ZoneIdFilterWithoutDomainFilters",
+		planPayload: `{
+	"resource_changes": [{
+		"type": "helm_release",
+		"change": {
+			"after": {
+				"name": "external-dns",
+				"values": ["domainFilters: []\ntxtOwnerId: test-owner\nextraArgs:\n  - --zone-id-filter=0123456789abcdef0123456789abcdef\nenv:\n  - name: CF_API_TOKEN\n    valueFrom:\n      secretKeyRef:\n        name: cloudflare-api-token\n        key: token\nprovider:\n  name: cloudflare\n"]
+			}
+		}
+	}]
+}`,
+		expectedMessage: "zone-id-filter but no domainFilters",
+	},
 }
 
 func TestExternalDNSModulePlanPolicyRejections(t *testing.T) {
@@ -747,6 +762,7 @@ var zoneIdFilterValidationTestCases = []struct {
 func TestExternalDNSModuleZoneIdFilterValidation(t *testing.T) {
 	t.Parallel()
 	for _, tc := range zoneIdFilterValidationTestCases {
+		tc := tc // Capture loop variable for parallel subtests
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			vars := renderVars(t)
@@ -779,6 +795,21 @@ func TestExternalDNSModuleZoneIdFilterInHelmValues(t *testing.T) {
 		"HelmRelease should contain zone-id-filter argument")
 }
 
+func TestExternalDNSModuleZoneIdFilterNotRenderedWhenEmpty(t *testing.T) {
+	t.Parallel()
+	vars := renderVars(t)
+	// Intentionally do not set vars["zone_id_filter"] to verify default behaviour
+
+	_, opts := setupRender(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	helmRelease := rendered["platform/external-dns/helmrelease.yaml"]
+
+	require.NotContains(t, helmRelease, "--zone-id-filter",
+		"HelmRelease should not contain zone-id-filter argument when zone_id_filter is empty or omitted")
+}
+
 func TestExternalDNSModuleManagedZonesOutput(t *testing.T) {
 	t.Parallel()
 	vars := renderVars(t)
@@ -793,9 +824,10 @@ func TestExternalDNSModuleManagedZonesOutput(t *testing.T) {
 	require.Equal(t, "0123456789abcdef0123456789abcdef", managedZones["example.test"],
 		"example.test should have zone ID from zone_id_filter")
 	// other.test should have null value since no zone ID was specified
-	// terraform.OutputMap returns null values as empty strings in the map
-	_, hasOtherTest := managedZones["other.test"]
+	// terraform.OutputMap returns null values as "<nil>" string representation
+	value, hasOtherTest := managedZones["other.test"]
 	require.True(t, hasOtherTest, "other.test should be present in managed_zones output")
+	require.Equal(t, "<nil>", value, "other.test should have null value when no zone ID is specified")
 }
 
 func TestExternalDNSModuleZoneIdFilterOutput(t *testing.T) {
@@ -811,6 +843,10 @@ func TestExternalDNSModuleZoneIdFilterOutput(t *testing.T) {
 	// Zone IDs are normalised to lowercase
 	require.Equal(t, "0123456789abcdef0123456789abcdef", zoneIdFilter["example.test"],
 		"zone_id_filter output should contain normalised zone ID")
+
+	managedZones := terraform.OutputMap(t, opts, "managed_zones")
+	require.Equal(t, "0123456789abcdef0123456789abcdef", managedZones["example.test"],
+		"managed_zones output should contain normalised zone ID for example.test")
 }
 
 func TestExternalDNSExampleRejectsBlankKubeconfigPath(t *testing.T) {
