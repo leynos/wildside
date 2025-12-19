@@ -14,6 +14,12 @@
 - [Values class diagram](values-class-diagram.mmd) – Mermaid diagram of Helm
   chart values. *Audience: platform engineers.*
 
+## Architecture decision records
+
+- [ADR 001: WebSockets on actix-ws](adr-001-websockets-on-actix-ws.md) –
+  rationale for migrating the WebSocket adapter to `actix-ws`. *Audience:
+  backend developers.*
+
 ## Frontend development
 
 - [Pure, accessible, and localizable React components][pure-react-components]

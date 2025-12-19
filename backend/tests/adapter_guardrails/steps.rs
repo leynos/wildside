@@ -5,7 +5,7 @@
 //! suite easy to read and refactor.
 
 use actix_web::http::header;
-use actix_web_actors::ws::CloseCode;
+use actix_ws::CloseCode;
 use awc::{ws::Frame, ws::Message};
 use backend::domain::{
     DisplayName, Error, User, UserCreatedEvent, UserEvent, UserId,

@@ -6,8 +6,7 @@ edition = "2021"
 [dependencies]
 url = "2"
 actix-web = "4"
-actix = "0.13"
-actix-web-actors = "4"
+actix-ws = "0.3"
 # Type-erased middleware requires actix-service utilities.
 actix-service = "2"
 # Use cookie-session to keep sessions stateless and avoid external stores like Redis.

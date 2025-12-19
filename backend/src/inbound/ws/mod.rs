@@ -2,16 +2,17 @@
 //!
 //! Responsibilities:
 //! - validate upgrade requests (origin allow-list)
-//! - initialise the per-connection WebSocket actor
+//! - initialise the per-connection WebSocket handler
 //! - keep WebSocket-specific concerns at the edge of the system
 
+use actix_web::rt;
 use actix_web::web::{self, Payload};
 use actix_web::{
     get,
     http::header::{HeaderValue, ORIGIN},
     HttpRequest, HttpResponse,
 };
-use actix_web_actors::ws;
+use actix_ws;
 use tracing::{error, warn};
 use url::Url;
 
@@ -39,11 +40,18 @@ pub async fn ws_entry(
 
     validate_origin(origin_header)?;
 
-    let actor = session::WsSession::new(state.onboarding.clone());
-    ws::start(actor, &req, stream).map_err(|error| {
+    let (response, session, stream) = actix_ws::handle(&req, stream).map_err(|error| {
         error!(error = %error, "WebSocket upgrade failed");
         actix_web::error::ErrorInternalServerError("WebSocket upgrade failed")
-    })
+    })?;
+
+    rt::spawn(session::handle_ws_session(
+        state.onboarding.clone(),
+        session,
+        stream,
+    ));
+
+    Ok(response)
 }
 
 fn validate_origin(origin_header: &HeaderValue) -> actix_web::Result<()> {
