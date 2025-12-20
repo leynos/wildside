@@ -1,4 +1,4 @@
-# ADR 001: WebSockets on actix-ws
+# Architecture Decision Record (ADR) 001: WebSockets on actix-ws
 
 ## Status
 
@@ -12,10 +12,9 @@ Accepted.
 
 The backend WebSocket adapter relied on `actix-web-actors`, which is now
 deprecated.[^deprecation] Continuing to depend on the actor-based API increases
-maintenance risk and conflicts with upstream guidance. We also want to keep the
-WebSocket adapter aligned with the hexagonal architecture by focusing on
-request validation, wire-level framing, and heartbeat management at the
-boundary.
+maintenance risk and conflicts with upstream guidance. The WebSocket adapter
+should remain aligned with the hexagonal architecture by focusing on request
+validation, wire-level framing, and heartbeat management at the boundary.
 
 ## Decision
 

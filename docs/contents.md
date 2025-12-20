@@ -16,9 +16,9 @@
 
 ## Architecture decision records
 
-- [ADR 001: WebSockets on actix-ws](adr-001-websockets-on-actix-ws.md) –
-  rationale for migrating the WebSocket adapter to `actix-ws`. *Audience:
-  backend developers.*
+- [Architecture Decision Record (ADR) 001: WebSockets on
+  actix-ws](adr-001-websockets-on-actix-ws.md) – rationale for migrating the
+  WebSocket adapter to `actix-ws`. *Audience: backend developers.*
 
 ## Frontend development
 
