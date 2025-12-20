@@ -140,7 +140,7 @@ deny contains msg if {
 	is_webhook_release(release)
 	group_name := object.get(release.values, "groupName", "")
 	trim_space(group_name) == ""
-	msg := sprintf("Namecheap webhook Helm release %s must set values.groupName", [release.name])
+	msg := sprintf("Webhook Helm release %s must set values.groupName", [release.name])
 }
 
 deny contains msg if {
@@ -149,7 +149,7 @@ deny contains msg if {
 	is_webhook_release(release)
 	replicas := object.get(release.values, "replicaCount", 0)
 	replicas <= 0
-	msg := sprintf("Namecheap webhook Helm release %s must set values.replicaCount", [release.name])
+	msg := sprintf("Webhook Helm release %s must set values.replicaCount", [release.name])
 }
 
 warn contains msg if {
