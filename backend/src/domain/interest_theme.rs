@@ -47,9 +47,8 @@ impl InterestThemeId {
     }
 
     /// Access the underlying UUID.
-    pub fn as_uuid(&self) -> &Uuid {
-        &self.0
-    }
+    #[rustfmt::skip]
+    pub fn as_uuid(&self) -> &Uuid { &self.0 }
 
     fn validate_and_parse(id: &str) -> Result<Uuid, InterestThemeIdValidationError> {
         if id.is_empty() {
