@@ -99,6 +99,7 @@ mod tests {
     #[case("", false)]
     #[case("not-a-uuid", false)]
     #[case(" 3fa85f64-5717-4562-b3fc-2c963f66afa6", false)]
+    #[case("3fa85f64-5717-4562-b3fc-2c963f66afa6 ", false)]
     fn interest_theme_id_parsing(#[case] input: &str, #[case] should_succeed: bool) {
         let result = InterestThemeId::new(input);
         assert_eq!(result.is_ok(), should_succeed);
