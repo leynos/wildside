@@ -34,6 +34,10 @@ use serde_json::Value;
 
 use crate::harness::SharedWorld;
 
+const TEST_DISPLAY_NAME: &str = "Ada Lovelace";
+const TEST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+const TEST_USER_ID: &str = "11111111-1111-1111-1111-111111111111";
+
 #[fixture]
 fn world() -> WorldFixture {
     harness::world()
@@ -156,7 +160,7 @@ fn perform_update_interests_payload(
 
 fn perform_update_interests(world: &SharedWorld, include_cookie: bool) {
     let payload = serde_json::json!({
-        "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
+        "interestThemeIds": [TEST_THEME_ID]
     });
     perform_update_interests_payload(world, include_cookie, payload, "update interests request");
 }
@@ -227,7 +231,7 @@ fn the_profile_response_includes_the_expected_display_name(world: &WorldFixture)
     let body = ctx.last_body.as_ref().expect("profile body");
     assert_eq!(
         body.get("displayName").and_then(Value::as_str),
-        Some("Ada Lovelace")
+        Some(TEST_DISPLAY_NAME)
     );
 }
 
@@ -235,10 +239,7 @@ fn the_profile_response_includes_the_expected_display_name(world: &WorldFixture)
 fn the_profile_port_was_called_with_the_authenticated_user_id(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
-    assert_eq!(
-        ctx.profile.calls(),
-        vec!["11111111-1111-1111-1111-111111111111".to_owned()]
-    );
+    assert_eq!(ctx.profile.calls(), vec![TEST_USER_ID.to_owned()]);
 }
 
 #[then("the interests response includes the selected theme")]
@@ -251,10 +252,7 @@ fn the_interests_response_includes_the_selected_theme(world: &WorldFixture) {
         .get("interestThemeIds")
         .and_then(Value::as_array)
         .expect("interestThemeIds array");
-    assert_eq!(
-        ids.first().and_then(Value::as_str),
-        Some("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    );
+    assert_eq!(ids.first().and_then(Value::as_str), Some(TEST_THEME_ID));
 }
 
 #[then("the interests port was called with the authenticated user id and theme")]
@@ -263,10 +261,7 @@ fn the_interests_port_was_called_with_the_authenticated_user_id_and_theme(world:
     let ctx = ctx.borrow();
     assert_eq!(
         ctx.interests.calls(),
-        vec![(
-            "11111111-1111-1111-1111-111111111111".to_owned(),
-            vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],
-        )]
+        vec![(TEST_USER_ID.to_owned(), vec![TEST_THEME_ID.to_owned()],)]
     );
 }
 
