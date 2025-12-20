@@ -19,7 +19,7 @@ mod harness;
 #[path = "support/ws.rs"]
 mod ws_support;
 
-use actix_web::http::header;
+use actix_web::http::{header, Method};
 use awc::Client;
 use backend::domain::TRACE_ID_HEADER;
 use harness::{with_world_async, WorldFixture};
@@ -80,55 +80,92 @@ fn login_and_store_cookie(world: &SharedWorld) {
     ctx.last_body = None;
 }
 
-fn perform_get_current_user(world: &SharedWorld, include_cookie: bool) {
+struct RequestSpec<'a> {
+    method: Method,
+    path: &'a str,
+    payload: Option<Value>,
+    label: &'a str,
+}
+
+fn perform_json_request(world: &SharedWorld, include_cookie: bool, spec: RequestSpec<'_>) {
+    let RequestSpec {
+        method,
+        path,
+        payload,
+        label,
+    } = spec;
     let cookie = include_cookie.then(|| session_cookie(world));
     let (status, trace_id, body) = with_world_async(world, |base_url| async move {
-        let mut request = Client::default().get(format!("{base_url}/api/v1/users/me"));
+        let mut request = Client::default().request(method, format!("{base_url}{path}"));
         if let Some(cookie) = cookie {
             request = request.insert_header((header::COOKIE, cookie));
         }
-        let mut response = request.send().await.expect("current user request");
+        let mut response = match payload {
+            Some(payload) => request.send_json(&payload).await.expect(label),
+            None => request.send().await.expect(label),
+        };
         let status = response.status().as_u16();
         let trace_id = response
             .headers()
             .get(TRACE_ID_HEADER)
             .and_then(|value| value.to_str().ok())
             .map(|value| value.to_owned());
-        let body = response.body().await.expect("current user body");
-        let json: Value = serde_json::from_slice(&body).expect("current user json");
+        let body = response.body().await.expect(label);
+        let json: Value = serde_json::from_slice(&body).expect(label);
         (status, trace_id, json)
     });
 
     record_response(world, status, trace_id, body);
 }
 
+fn perform_get_current_user(world: &SharedWorld, include_cookie: bool) {
+    perform_json_request(
+        world,
+        include_cookie,
+        RequestSpec {
+            method: Method::GET,
+            path: "/api/v1/users/me",
+            payload: None,
+            label: "current user request",
+        },
+    );
+}
+
+fn perform_update_interests_payload(
+    world: &SharedWorld,
+    include_cookie: bool,
+    payload: Value,
+    label: &str,
+) {
+    perform_json_request(
+        world,
+        include_cookie,
+        RequestSpec {
+            method: Method::PUT,
+            path: "/api/v1/users/me/interests",
+            payload: Some(payload),
+            label,
+        },
+    );
+}
+
 fn perform_update_interests(world: &SharedWorld, include_cookie: bool) {
-    let cookie = include_cookie.then(|| session_cookie(world));
     let payload = serde_json::json!({
         "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
     });
+    perform_update_interests_payload(world, include_cookie, payload, "update interests request");
+}
 
-    let (status, trace_id, body) = with_world_async(world, |base_url| async move {
-        let mut request = Client::default().put(format!("{base_url}/api/v1/users/me/interests"));
-        if let Some(cookie) = cookie {
-            request = request.insert_header((header::COOKIE, cookie));
-        }
-        let mut response = request
-            .send_json(&payload)
-            .await
-            .expect("update interests request");
-        let status = response.status().as_u16();
-        let trace_id = response
-            .headers()
-            .get(TRACE_ID_HEADER)
-            .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_owned());
-        let body = response.body().await.expect("interests body");
-        let json: Value = serde_json::from_slice(&body).expect("interests json");
-        (status, trace_id, json)
+fn perform_update_interests_with_invalid_id(world: &SharedWorld, include_cookie: bool) {
+    let payload = serde_json::json!({
+        "interestThemeIds": [""]
     });
-
-    record_response(world, status, trace_id, body);
+    perform_update_interests_payload(
+        world,
+        include_cookie,
+        payload,
+        "update interests invalid request",
+    );
 }
 
 #[given("a running server with session middleware")]
@@ -159,6 +196,11 @@ fn the_client_requests_the_current_user_profile(world: &WorldFixture) {
 #[when("the client updates interest selections")]
 fn the_client_updates_interest_selections(world: &WorldFixture) {
     perform_update_interests(&world.world(), true);
+}
+
+#[when("the client updates interests with an invalid interest theme id")]
+fn the_client_updates_interests_with_an_invalid_interest_theme_id(world: &WorldFixture) {
+    perform_update_interests_with_invalid_id(&world.world(), true);
 }
 
 #[then("the response is unauthorised with a trace id")]
@@ -223,6 +265,37 @@ fn the_interests_port_was_called_with_the_authenticated_user_id_and_theme(world:
     );
 }
 
+#[then("the response is a bad request with interest theme validation details")]
+fn the_response_is_a_bad_request_with_interest_theme_validation_details(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(400));
+
+    let body = ctx.last_body.as_ref().expect("error body");
+    assert_eq!(
+        body.get("message").and_then(Value::as_str),
+        Some("interest theme id must not be empty")
+    );
+    assert_eq!(
+        body.get("code").and_then(Value::as_str),
+        Some("invalid_request")
+    );
+
+    let details = body
+        .get("details")
+        .and_then(Value::as_object)
+        .expect("details object");
+    assert_eq!(
+        details.get("field").and_then(Value::as_str),
+        Some("interestThemeIds")
+    );
+    assert_eq!(details.get("index").and_then(Value::as_i64), Some(0));
+    assert_eq!(details.get("value").and_then(Value::as_str), Some(""));
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("empty_interest_theme_id")
+    );
+}
 #[scenario(path = "tests/features/user_session.feature")]
 fn user_session_scenarios(world: WorldFixture) {
     drop(world);

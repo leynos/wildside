@@ -34,25 +34,22 @@ pub struct InterestThemeId(Uuid, String);
 impl InterestThemeId {
     /// Validate and construct an [`InterestThemeId`] from borrowed input.
     pub fn new(id: impl AsRef<str>) -> Result<Self, InterestThemeIdValidationError> {
-        Self::from_owned(id.as_ref().to_owned())
+        let raw = id.as_ref();
+        if raw.is_empty() {
+            return Err(InterestThemeIdValidationError::EmptyId);
+        }
+        if raw.trim() != raw {
+            return Err(InterestThemeIdValidationError::InvalidId);
+        }
+
+        let parsed = Uuid::parse_str(raw).map_err(|_| InterestThemeIdValidationError::InvalidId)?;
+        Ok(Self(parsed, raw.to_owned()))
     }
 
     /// Construct an [`InterestThemeId`] directly from a UUID.
     pub fn from_uuid(uuid: Uuid) -> Self {
         let raw = uuid.to_string();
         Self(uuid, raw)
-    }
-
-    fn from_owned(id: String) -> Result<Self, InterestThemeIdValidationError> {
-        if id.is_empty() {
-            return Err(InterestThemeIdValidationError::EmptyId);
-        }
-        if id.trim() != id {
-            return Err(InterestThemeIdValidationError::InvalidId);
-        }
-
-        let parsed = Uuid::parse_str(&id).map_err(|_| InterestThemeIdValidationError::InvalidId)?;
-        Ok(Self(parsed, id))
     }
 
     /// Access the underlying UUID.
@@ -84,7 +81,16 @@ impl TryFrom<String> for InterestThemeId {
     type Error = InterestThemeIdValidationError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::from_owned(value)
+        if value.is_empty() {
+            return Err(InterestThemeIdValidationError::EmptyId);
+        }
+        if value.trim() != value {
+            return Err(InterestThemeIdValidationError::InvalidId);
+        }
+
+        let parsed =
+            Uuid::parse_str(&value).map_err(|_| InterestThemeIdValidationError::InvalidId)?;
+        Ok(Self(parsed, value))
     }
 }
 

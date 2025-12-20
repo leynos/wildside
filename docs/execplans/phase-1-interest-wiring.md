@@ -1,6 +1,6 @@
 # Phase 1 session-guarded user profile and interests
 
-This ExecPlan is a living document. The sections `Progress`,
+This execution plan (ExecPlan) is a living document. The sections `Progress`,
 `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must
 be kept up to date as work proceeds.
 
@@ -66,8 +66,9 @@ Observable success:
   hexagonal boundary by routing stateful behaviour through domain ports.
   Date/Author: 2025-12-19 / Codex CLI.
 
-- Decision: Model interest theme identifiers as a domain newtype around UUID
-  and validate them before reaching port implementations.
+- Decision: Model interest theme identifiers as a domain newtype around a
+  universally unique identifier (UUID) and validate them before reaching port
+  implementations.
   Rationale: Validation belongs in the domain to ensure consistent behaviour
   across adapters and future persistence layers.
   Date/Author: 2025-12-19 / Codex CLI.
@@ -116,8 +117,9 @@ Terminology (plain language):
 
 - *Port*: a trait defining a boundary between adapters and domain logic.
 - *Adapter*: HTTP handler code that parses requests and delegates to ports.
-- *Trace identifier*: a request-scoped UUID exposed in the `trace-id` response
-  header and the error payload `traceId` field.
+- *Trace identifier*: a request-scoped universally unique identifier (UUID)
+  exposed in the `trace-id` response header and the error payload `traceId`
+  field.
 
 ## Plan of Work
 
@@ -128,9 +130,10 @@ Terminology (plain language):
 
 2. Define domain primitives and ports for these endpoints:
 
-   - Add an `InterestThemeId` newtype (UUID wrapper) in the domain, with
-     validation similar to `UserId`. Add a small aggregate such as
-     `UserInterests` (user id + interest theme ids) if that improves clarity.
+   - Add an `InterestThemeId` newtype (universally unique identifier (UUID)
+     wrapper) in the domain, with validation similar to `UserId`. Add a small
+     aggregate such as `UserInterests` (user id + interest theme ids) if that
+     improves clarity.
    - Add a driving port for loading the current user profile, e.g.
      `UserProfileQuery::fetch_profile(&UserId) -> Result<User, Error>`.
    - Add a driving port for updating interest selections, e.g.
@@ -316,7 +319,8 @@ Add or update the following interfaces (final state target):
         payload: web::Json<InterestsRequest>,
     ) -> ApiResult<web::Json<UserInterests>> { ... }
 
-  with request DTOs that convert into domain types via `TryFrom` so validation
+  with request data transfer objects (DTOs) that convert into domain types via
+  `TryFrom` so validation
   errors map to `Error::invalid_request`.
 
 - In `backend/src/inbound/http/state.rs`, extend `HttpState` with the new
@@ -333,3 +337,5 @@ API surface.
 - Updated on 2025-12-19 to mark work complete, capture new decisions and
   surprises, and record the final validation results (including the extended
   test timeout).
+- Updated on 2025-12-20 to expand acronyms (ExecPlan, UUID, DTOs) per review
+  guidance.

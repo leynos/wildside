@@ -25,3 +25,9 @@ Feature: Session lifecycle hardening for user profile and interests
     When the client updates interest selections
     Then the interests response includes the selected theme
     And the interests port was called with the authenticated user id and theme
+
+  Scenario: Authenticated interests update validates interest theme ids
+    Given a running server with session middleware
+    And the client has an authenticated session
+    When the client updates interests with an invalid interest theme id
+    Then the response is a bad request with interest theme validation details

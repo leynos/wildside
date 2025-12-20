@@ -120,7 +120,10 @@ pub struct UserInterestsSchema {
     )]
     user_id: String,
     /// Selected interest theme identifiers.
-    #[schema(value_type = Vec<InterestThemeIdSchema>)]
+    #[schema(
+        rename = "interestThemeIds",
+        value_type = Vec<InterestThemeIdSchema>
+    )]
     interest_theme_ids: Vec<String>,
 }
 
@@ -189,8 +192,8 @@ mod tests {
         // utoipa replaces :: with . in schema names
         assert_eq!(name, "crate.domain.UserInterests");
         assert!(
-            schema_json.contains("interest_theme_ids"),
-            "schema should contain interest_theme_ids field"
+            schema_json.contains("interestThemeIds"),
+            "schema should contain interestThemeIds field"
         );
     }
 
