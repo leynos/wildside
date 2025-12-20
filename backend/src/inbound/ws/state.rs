@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::domain::ports::UserOnboarding;
 
-/// Dependency bundle for WebSocket handlers and actors.
+/// Dependency bundle for WebSocket handlers.
 #[derive(Clone)]
 pub struct WsState {
     pub onboarding: Arc<dyn UserOnboarding>,
