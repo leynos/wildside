@@ -4,9 +4,10 @@
 //! configuration and reject insecure or missing settings.
 
 use backend::inbound::http::session_config::{
-    session_settings_from_env, BuildMode, SessionConfigError, SessionSettings,
+    session_settings_from_env, BuildMode, SessionConfigError, SessionEnv, SessionSettings,
+    ALLOW_EPHEMERAL_ENV, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
 };
-use mockable::MockEnv;
+use mockable::{Env as MockableEnv, MockEnv};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use std::cell::RefCell;
@@ -14,10 +15,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-const COOKIE_SECURE_ENV: &str = "SESSION_COOKIE_SECURE";
-const SAMESITE_ENV: &str = "SESSION_SAMESITE";
-const ALLOW_EPHEMERAL_ENV: &str = "SESSION_ALLOW_EPHEMERAL";
-const KEY_FILE_ENV: &str = "SESSION_KEY_FILE";
+struct TestEnv {
+    inner: MockEnv,
+}
+
+impl SessionEnv for TestEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        MockableEnv::string(&self.inner, name)
+    }
+}
 
 struct SessionConfigWorld {
     vars: RefCell<HashMap<String, String>>,
@@ -110,12 +116,12 @@ impl Drop for TempKeyFile {
     }
 }
 
-fn mock_env(vars: HashMap<String, String>) -> MockEnv {
+fn mock_env(vars: HashMap<String, String>) -> TestEnv {
     let mut env = MockEnv::new();
     env.expect_string()
         .times(0..)
         .returning(move |key| vars.get(key).cloned());
-    env
+    TestEnv { inner: env }
 }
 
 #[fixture]

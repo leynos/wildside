@@ -5,8 +5,7 @@
 use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
-use backend::inbound::http::session_config::{session_settings_from_env, BuildMode};
-use mockable::DefaultEnv;
+use backend::inbound::http::session_config::{session_settings_from_env, BuildMode, DefaultEnv};
 use std::env;
 use std::net::SocketAddr;
 use tracing::warn;

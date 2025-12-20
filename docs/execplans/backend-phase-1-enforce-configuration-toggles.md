@@ -52,10 +52,10 @@ predictable. Success is observable when:
 
 ## Decision Log
 
-- Decision: Use `mockable::Env` with `DefaultEnv` for production reads so tests
-  can rely on `MockEnv` without touching process state.
-  Rationale: Aligns with the `mockable` interface and keeps configuration
-  parsing deterministic in tests.
+- Decision: Define a local `SessionEnv` trait with a `DefaultEnv` implementation
+  for production reads, while tests supply a `MockEnv`.
+  Rationale: Keeps tests deterministic and avoids a runtime dependency on the
+  `mockable` crate by limiting it to dev-only usage.
   Date/Author: 2025-12-20 / Codex CLI.
 - Decision: Move unit tests into
   `backend/src/inbound/http/session_config/tests.rs`.
@@ -113,8 +113,8 @@ Terminology (plain-language):
    `backend/src/inbound/http/session_config.rs` (add it to
    `backend/src/inbound/http/mod.rs`). This module will:
 
-   - Use `mockable::Env` to read environment variables so tests can avoid
-     touching process-wide state.
+   - Use a local `SessionEnv` trait to read environment variables so tests can
+     avoid touching process-wide state.
    - Parse `SESSION_COOKIE_SECURE` and `SESSION_SAMESITE` with strict validation
      in release mode; missing or invalid values must return a structured error.
    - Parse `SESSION_ALLOW_EPHEMERAL` as an explicit boolean toggle; in release
@@ -129,9 +129,9 @@ Terminology (plain-language):
      `same_site` fields for use by the server bootstrap.
 
 3. Update `backend/src/main.rs` to replace the inline helper functions with the
-   new shared module. Use `mockable::DefaultEnv` and a `BuildMode` derived from
-   `cfg!(debug_assertions)` to select strict or relaxed behaviour. Keep warnings
-   in debug builds when defaults are used.
+   new shared module. Use `DefaultEnv` (backed by the process environment) and
+   a `BuildMode` derived from `cfg!(debug_assertions)` to select strict or
+   relaxed behaviour. Keep warnings in debug builds when defaults are used.
 
 4. Add unit tests (`rstest`) in the new session configuration module. Include
    fixtures for `MockEnv`, a temporary key file path, and helper builders for
@@ -223,7 +223,8 @@ use the helper described in `docs/pg-embed-setup-unpriv-users-guide.md`, for
 example:
 
     set -o pipefail
-    PG_WORKER_PATH=/tmp/pg_worker timeout 300 make test 2>&1 | tee /tmp/wildside-test.log
+    PG_WORKER_PATH=/tmp/pg_worker timeout 300 make test 2>&1 \
+        | tee /tmp/wildside-test.log
 
 Always check the exit status of each command and inspect the log if a command
 fails.
@@ -289,27 +290,37 @@ expose the module via `backend::inbound::http`:
         pub same_site: actix_web::cookie::SameSite,
     }
 
-    pub fn session_settings_from_env<E: mockable::Env>(
+    pub fn session_settings_from_env<E: SessionEnv>(
         env: &E,
         mode: BuildMode,
     ) -> Result<SessionSettings, SessionConfigError>
 
+    pub trait SessionEnv {
+        fn string(&self, name: &str) -> Option<String>;
+    }
+
+    pub struct DefaultEnv;
+
     #[derive(thiserror::Error, Debug)]
     pub enum SessionConfigError {
         MissingEnv { name: &'static str },
-        InvalidEnv { name: &'static str, value: String, expected: &'static str },
+        InvalidEnv {
+            name: &'static str,
+            value: String,
+            expected: &'static str,
+        },
         KeyRead { path: std::path::PathBuf, source: std::io::Error },
         KeyTooShort { path: std::path::PathBuf, length: usize, min_len: usize },
         InsecureSameSiteNone,
         EphemeralNotAllowed,
     }
 
-If `mockable` is not yet a dependency, add it to `backend/Cargo.toml` with a
-caret requirement (for example `mockable = "0.3"`) so `mockable::Env` and
-`mockable::DefaultEnv` are available.
+If `mockable` is not yet a dev-dependency, add it to `backend/Cargo.toml` with a
+caret requirement (for example `mockable = { version = "0.3", features =
+["mock"] }`) so tests can use `MockEnv`.
 
 In `backend/src/main.rs`, replace the inline parsing helpers with a call to the
-new module using `mockable::DefaultEnv` and a `BuildMode` derived from
+new module using `DefaultEnv` and a `BuildMode` derived from
 `cfg!(debug_assertions)`.
 
 ## Revision note (2025-12-20)
@@ -318,3 +329,9 @@ This ExecPlan was updated to reflect completed implementation work, test runs,
 and the switch to `DefaultEnv` for production reads. Progress, decisions,
 artifacts, and interfaces now match the shipped code and the remaining work is
 fully complete.
+
+## Revision note (2025-12-20)
+
+Updated the decision log and interface guidance to describe the local
+`SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable` to a
+dev-only dependency.

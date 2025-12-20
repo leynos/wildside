@@ -1,10 +1,20 @@
 //! Unit tests for session configuration parsing.
 
 use super::*;
-use mockable::MockEnv;
+use mockable::{Env as MockableEnv, MockEnv};
 use rstest::rstest;
 use std::collections::HashMap;
 use uuid::Uuid;
+
+struct TestEnv {
+    inner: MockEnv,
+}
+
+impl SessionEnv for TestEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        MockableEnv::string(&self.inner, name)
+    }
+}
 
 #[derive(Debug)]
 struct TempKeyFile {
@@ -31,12 +41,12 @@ impl Drop for TempKeyFile {
     }
 }
 
-fn mock_env(vars: HashMap<String, String>) -> MockEnv {
+fn mock_env(vars: HashMap<String, String>) -> TestEnv {
     let mut env = MockEnv::new();
     env.expect_string()
         .times(0..)
         .returning(move |key| vars.get(key).cloned());
-    env
+    TestEnv { inner: env }
 }
 
 fn release_defaults(key_path: &str) -> HashMap<String, String> {
@@ -226,4 +236,20 @@ fn debug_invalid_same_site_falls_back_to_default() {
     let settings = session_settings_from_env(&env, BuildMode::Debug)
         .expect("debug should fall back to defaults");
     assert_eq!(settings.same_site, SameSite::Lax);
+}
+
+#[rstest]
+fn debug_explicit_overrides_are_applied() {
+    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
+    let mut vars = HashMap::new();
+    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
+    vars.insert(COOKIE_SECURE_ENV.to_string(), "0".to_string());
+    vars.insert(SAMESITE_ENV.to_string(), "Strict".to_string());
+    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
+    let env = mock_env(vars);
+
+    let settings = session_settings_from_env(&env, BuildMode::Debug)
+        .expect("debug should accept explicit overrides");
+    assert!(!settings.cookie_secure);
+    assert_eq!(settings.same_site, SameSite::Strict);
 }

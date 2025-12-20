@@ -4,19 +4,42 @@
 //! validated consistently and can be tested in isolation.
 
 use actix_web::cookie::{Key, SameSite};
-use mockable::Env;
 use std::path::PathBuf;
 use tracing::warn;
 use zeroize::Zeroize;
 
 const SESSION_KEY_DEFAULT_PATH: &str = "/var/run/secrets/session_key";
-const SESSION_KEY_MIN_LEN: usize = 64;
-const COOKIE_SECURE_ENV: &str = "SESSION_COOKIE_SECURE";
-const SAMESITE_ENV: &str = "SESSION_SAMESITE";
-const ALLOW_EPHEMERAL_ENV: &str = "SESSION_ALLOW_EPHEMERAL";
-const KEY_FILE_ENV: &str = "SESSION_KEY_FILE";
+pub const SESSION_KEY_MIN_LEN: usize = 64;
+pub const COOKIE_SECURE_ENV: &str = "SESSION_COOKIE_SECURE";
+pub const SAMESITE_ENV: &str = "SESSION_SAMESITE";
+pub const ALLOW_EPHEMERAL_ENV: &str = "SESSION_ALLOW_EPHEMERAL";
+pub const KEY_FILE_ENV: &str = "SESSION_KEY_FILE";
 const BOOL_EXPECTED: &str = "1|0|true|false|yes|no|y|n";
 const SAMESITE_EXPECTED: &str = "Strict|Lax|None";
+
+/// Environment abstraction for session configuration lookups.
+pub trait SessionEnv {
+    /// Fetch a string value by name.
+    fn string(&self, name: &str) -> Option<String>;
+}
+
+/// Environment access backed by the real process environment.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DefaultEnv;
+
+impl DefaultEnv {
+    /// Create a new environment reader.
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl SessionEnv for DefaultEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
+    }
+}
 
 /// Build mode for session configuration validation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -107,24 +130,33 @@ pub enum SessionConfigError {
 ///
 /// ```rust
 /// use backend::inbound::http::session_config::{
-///     session_settings_from_env, BuildMode,
+///     session_settings_from_env, BuildMode, SessionEnv,
 /// };
-/// use mockable::MockEnv;
+/// use mockable::{Env as MockableEnv, MockEnv};
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let key_path = std::env::temp_dir().join("session_key_example");
 /// std::fs::write(&key_path, vec![b'a'; 64])?;
 ///
-/// let key_path = key_path.to_str().expect("valid path").to_string();
-/// let mut env = MockEnv::new();
-/// env.expect_string()
+/// let key_path_string = key_path.to_str().expect("valid path").to_string();
+/// struct TestEnv {
+///     inner: MockEnv,
+/// }
+/// impl SessionEnv for TestEnv {
+///     fn string(&self, name: &str) -> Option<String> {
+///         MockableEnv::string(&self.inner, name)
+///     }
+/// }
+/// let mut inner = MockEnv::new();
+/// inner.expect_string()
 ///     .returning(move |name| match name {
-///         "SESSION_KEY_FILE" => Some(key_path.clone()),
+///         "SESSION_KEY_FILE" => Some(key_path_string.clone()),
 ///         "SESSION_COOKIE_SECURE" => Some("1".to_string()),
 ///         "SESSION_SAMESITE" => Some("Strict".to_string()),
 ///         "SESSION_ALLOW_EPHEMERAL" => Some("0".to_string()),
 ///         _ => None,
 ///     });
+/// let env = TestEnv { inner };
 ///
 /// let settings = session_settings_from_env(&env, BuildMode::Release)?;
 /// assert!(settings.cookie_secure);
@@ -133,7 +165,7 @@ pub enum SessionConfigError {
 /// # Ok(())
 /// # }
 /// ```
-pub fn session_settings_from_env<E: Env>(
+pub fn session_settings_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
 ) -> Result<SessionSettings, SessionConfigError> {
@@ -149,7 +181,10 @@ pub fn session_settings_from_env<E: Env>(
     })
 }
 
-fn cookie_secure_from_env<E: Env>(env: &E, mode: BuildMode) -> Result<bool, SessionConfigError> {
+fn cookie_secure_from_env<E: SessionEnv>(
+    env: &E,
+    mode: BuildMode,
+) -> Result<bool, SessionConfigError> {
     match env.string(COOKIE_SECURE_ENV) {
         Some(value) => match parse_bool(&value) {
             Some(flag) => Ok(flag),
@@ -182,7 +217,7 @@ fn cookie_secure_from_env<E: Env>(env: &E, mode: BuildMode) -> Result<bool, Sess
     }
 }
 
-fn same_site_from_env<E: Env>(
+fn same_site_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
     cookie_secure: bool,
@@ -239,7 +274,10 @@ fn same_site_from_env<E: Env>(
     Ok(same_site)
 }
 
-fn allow_ephemeral_from_env<E: Env>(env: &E, mode: BuildMode) -> Result<bool, SessionConfigError> {
+fn allow_ephemeral_from_env<E: SessionEnv>(
+    env: &E,
+    mode: BuildMode,
+) -> Result<bool, SessionConfigError> {
     match env.string(ALLOW_EPHEMERAL_ENV) {
         Some(value) => match parse_bool(&value) {
             Some(true) => {
@@ -279,7 +317,7 @@ fn allow_ephemeral_from_env<E: Env>(env: &E, mode: BuildMode) -> Result<bool, Se
     }
 }
 
-fn session_key_from_env<E: Env>(
+fn session_key_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
     allow_ephemeral: bool,
