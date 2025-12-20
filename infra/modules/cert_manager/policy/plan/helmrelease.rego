@@ -44,7 +44,8 @@ is_main_release(release) if {
 }
 
 is_jetstack_repository(release) if {
-	contains(lower(release.repository), "jetstack")
+	repository := object.get(release, "repository", "")
+	contains(lower(repository), "jetstack")
 }
 
 is_webhook_release(release) if {
