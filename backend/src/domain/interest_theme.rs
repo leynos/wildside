@@ -11,7 +11,9 @@ use uuid::Uuid;
 /// Validation errors returned by [`InterestThemeId::new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterestThemeIdValidationError {
+    /// Returned when the provided ID is empty.
     EmptyId,
+    /// Returned when the ID is not a valid UUID or contains whitespace padding.
     InvalidId,
 }
 
@@ -41,8 +43,7 @@ impl InterestThemeId {
 
     /// Construct an [`InterestThemeId`] directly from a UUID.
     pub fn from_uuid(uuid: Uuid) -> Self {
-        let raw = uuid.to_string();
-        Self(uuid, raw)
+        Self(uuid, uuid.to_string())
     }
 
     /// Access the underlying UUID.
