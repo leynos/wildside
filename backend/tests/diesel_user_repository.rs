@@ -11,7 +11,6 @@
 //! store a Tokio runtime in the test context and reuse it for all async
 //! operations. This avoids the overhead of creating a new runtime per async
 //! block while maintaining BDD step compatibility.
-
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
@@ -144,8 +143,9 @@ fn diesel_world() -> Option<SharedContext> {
 // -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed user repository")]
-fn a_diesel_backed_user_repository(_world: SharedContext) {
+fn a_diesel_backed_user_repository(world: SharedContext) {
     // Context already initialised with repository.
+    let _ = world;
 }
 
 #[when("the repository upserts the user")]

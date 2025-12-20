@@ -139,7 +139,7 @@ fn runs_migrations(test_cluster: TestCluster) {
 }
 ```
 
-The fixture integrates with `rstest-bdd` v0.1.0 so behaviour tests can
+The fixture integrates with `rstest-bdd` v0.2.0 so behaviour tests can
 remain declarative as well:
 
 ```rust,no_run

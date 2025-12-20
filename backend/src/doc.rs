@@ -12,7 +12,9 @@
 //! The generated specification is used by Swagger UI (debug builds) and
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
-use crate::inbound::http::schemas::{ErrorCodeSchema, ErrorSchema, UserSchema};
+use crate::inbound::http::schemas::{
+    ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
+};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
@@ -55,10 +57,18 @@ impl Modify for SecurityAddon {
     paths(
         crate::inbound::http::users::list_users,
         crate::inbound::http::users::login,
+        crate::inbound::http::users::current_user,
+        crate::inbound::http::users::update_interests,
         crate::inbound::http::health::ready,
         crate::inbound::http::health::live,
     ),
-    components(schemas(UserSchema, ErrorSchema, ErrorCodeSchema)),
+    components(schemas(
+        UserSchema,
+        UserInterestsSchema,
+        InterestThemeIdSchema,
+        ErrorSchema,
+        ErrorCodeSchema
+    )),
     tags(
         (name = "users", description = "Operations related to users"),
         (name = "health", description = "Endpoints for health checks")

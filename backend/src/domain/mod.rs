@@ -10,6 +10,8 @@
 //! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier shared
 //!   across adapters.
 //! - User (alias to `user::User`) — domain user identity and display name.
+//! - InterestThemeId — validated identifier for interest themes.
+//! - UserInterests — selected interest themes for a user profile.
 //! - LoginCredentials — validated username/password inputs for authentication.
 //! - TraceId — per-request correlation identifier for tracing across systems.
 //! - UserEvent (alias to `user_events::UserEvent`) — high-level user domain
@@ -19,17 +21,21 @@
 
 pub mod auth;
 pub mod error;
+pub mod interest_theme;
 pub mod ports;
 pub mod trace_id;
 pub mod user;
 pub mod user_events;
+pub mod user_interests;
 pub mod user_onboarding;
 
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
+pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::trace_id::TraceId;
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
+pub use self::user_interests::UserInterests;
 pub use self::user_onboarding::UserOnboardingService;
 
 /// HTTP header name used to propagate trace identifiers.

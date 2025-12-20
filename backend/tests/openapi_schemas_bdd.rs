@@ -2,7 +2,6 @@
 //!
 //! These tests verify that the OpenAPI document correctly references the
 //! schema wrapper types from `inbound::http::schemas` instead of domain types.
-
 use std::sync::Mutex;
 
 use backend::doc::ApiDoc;
@@ -49,7 +48,9 @@ fn inspect_document(world: &Mutex<OpenApiWorld>) {
 // Note: utoipa replaces :: with . in schema names
 const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
 const ERROR_CODE_SCHEMA_NAME: &str = "crate.domain.ErrorCode";
+const INTEREST_THEME_ID_SCHEMA_NAME: &str = "crate.domain.InterestThemeId";
 const USER_SCHEMA_NAME: &str = "crate.domain.User";
+const USER_INTERESTS_SCHEMA_NAME: &str = "crate.domain.UserInterests";
 
 /// Navigate into a User property's object schema and invoke a closure.
 ///
@@ -97,76 +98,84 @@ where
     f(property_obj);
 }
 
-#[then("the components section contains the Error schema wrapper")]
-fn contains_error_schema(world: &Mutex<OpenApiWorld>) {
+fn assert_schema_registered(world: &Mutex<OpenApiWorld>, schema_name: &str, label: &str) {
     let world = world.lock().expect("world lock");
     let doc = world.document.as_ref().expect("document generated");
     let components = doc.components.as_ref().expect("components present");
 
     assert!(
-        components.schemas.contains_key(ERROR_SCHEMA_NAME),
-        "Error schema wrapper should be registered"
+        components.schemas.contains_key(schema_name),
+        "{label} schema wrapper should be registered"
     );
+}
+
+fn assert_json_references_schema(world: &Mutex<OpenApiWorld>, schema_name: &str, label: &str) {
+    let world = world.lock().expect("world lock");
+    let json = world.json.as_ref().expect("JSON generated");
+
+    assert!(
+        json.contains(&format!("#/components/schemas/{schema_name}")),
+        "{label} should reference {schema_name}"
+    );
+}
+
+#[then("the components section contains the Error schema wrapper")]
+fn contains_error_schema(world: &Mutex<OpenApiWorld>) {
+    assert_schema_registered(world, ERROR_SCHEMA_NAME, "Error");
 }
 
 #[then("the components section contains the ErrorCode schema wrapper")]
 fn contains_error_code_schema(world: &Mutex<OpenApiWorld>) {
-    let world = world.lock().expect("world lock");
-    let doc = world.document.as_ref().expect("document generated");
-    let components = doc.components.as_ref().expect("components present");
-
-    assert!(
-        components.schemas.contains_key(ERROR_CODE_SCHEMA_NAME),
-        "ErrorCode schema wrapper should be registered"
-    );
+    assert_schema_registered(world, ERROR_CODE_SCHEMA_NAME, "ErrorCode");
 }
 
 #[then("the components section contains the User schema wrapper")]
 fn contains_user_schema(world: &Mutex<OpenApiWorld>) {
-    let world = world.lock().expect("world lock");
-    let doc = world.document.as_ref().expect("document generated");
-    let components = doc.components.as_ref().expect("components present");
+    assert_schema_registered(world, USER_SCHEMA_NAME, "User");
+}
 
-    assert!(
-        components.schemas.contains_key(USER_SCHEMA_NAME),
-        "User schema wrapper should be registered"
-    );
+#[then("the components section contains the InterestThemeId schema wrapper")]
+fn contains_interest_theme_id_schema(world: &Mutex<OpenApiWorld>) {
+    assert_schema_registered(world, INTEREST_THEME_ID_SCHEMA_NAME, "InterestThemeId");
+}
+
+#[then("the components section contains the UserInterests schema wrapper")]
+fn contains_user_interests_schema(world: &Mutex<OpenApiWorld>) {
+    assert_schema_registered(world, USER_INTERESTS_SCHEMA_NAME, "UserInterests");
 }
 
 #[then("the login endpoint references ErrorSchema for error responses")]
 fn login_references_error_schema(world: &Mutex<OpenApiWorld>) {
-    let world = world.lock().expect("world lock");
-    let json = world.json.as_ref().expect("JSON generated");
-
-    // The login endpoint should reference the Error schema in its 400/401 responses
-    assert!(
-        json.contains(&format!("#/components/schemas/{ERROR_SCHEMA_NAME}")),
-        "Login endpoint should reference Error schema"
-    );
+    assert_json_references_schema(world, ERROR_SCHEMA_NAME, "Login endpoint");
 }
 
 #[then("the list users endpoint references UserSchema for success response")]
 fn list_users_references_user_schema(world: &Mutex<OpenApiWorld>) {
-    let world = world.lock().expect("world lock");
-    let json = world.json.as_ref().expect("JSON generated");
-
-    // The list users endpoint should reference the User schema in its 200 response
-    assert!(
-        json.contains(&format!("#/components/schemas/{USER_SCHEMA_NAME}")),
-        "List users endpoint should reference User schema"
-    );
+    assert_json_references_schema(world, USER_SCHEMA_NAME, "List users endpoint");
 }
 
 #[then("the list users endpoint references ErrorSchema for error responses")]
 fn list_users_references_error_schema(world: &Mutex<OpenApiWorld>) {
-    let world = world.lock().expect("world lock");
-    let json = world.json.as_ref().expect("JSON generated");
+    assert_json_references_schema(world, ERROR_SCHEMA_NAME, "List users endpoint");
+}
 
-    // The list users endpoint should reference the Error schema in error responses
-    assert!(
-        json.contains(&format!("#/components/schemas/{ERROR_SCHEMA_NAME}")),
-        "List users endpoint should reference Error schema for errors"
+#[then("the current user endpoint references UserSchema for success response")]
+fn current_user_references_user_schema(world: &Mutex<OpenApiWorld>) {
+    assert_json_references_schema(world, USER_SCHEMA_NAME, "Current user endpoint");
+}
+
+#[then("the update interests endpoint references UserInterestsSchema")]
+fn update_interests_references_user_interests_schema(world: &Mutex<OpenApiWorld>) {
+    assert_json_references_schema(
+        world,
+        USER_INTERESTS_SCHEMA_NAME,
+        "Update interests endpoint",
     );
+}
+
+#[then("the update interests endpoint references ErrorSchema for error responses")]
+fn update_interests_references_error_schema(world: &Mutex<OpenApiWorld>) {
+    assert_json_references_schema(world, ERROR_SCHEMA_NAME, "Update interests endpoint");
 }
 
 #[then("the User id field has uuid format")]

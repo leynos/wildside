@@ -3,14 +3,19 @@
 //! ```text
 //! POST /api/v1/login {"username":"admin","password":"password"}
 //! GET /api/v1/users
+//! GET /api/v1/users/me
+//! PUT /api/v1/users/me/interests
 //! ```
 
-use crate::domain::{Error, LoginCredentials, LoginValidationError, User};
-use crate::inbound::http::schemas::{ErrorSchema, UserSchema};
+use crate::domain::{
+    Error, InterestThemeId, InterestThemeIdValidationError, LoginCredentials, LoginValidationError,
+    User, UserInterests,
+};
+use crate::inbound::http::schemas::{ErrorSchema, UserInterestsSchema, UserSchema};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 use crate::inbound::http::ApiResult;
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, put, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -23,6 +28,41 @@ use serde_json::json;
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+}
+
+/// Interest theme update payload for `PUT /api/v1/users/me/interests`.
+#[derive(Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InterestsRequest {
+    pub interest_theme_ids: Vec<String>,
+}
+
+#[derive(Debug)]
+enum InterestsRequestError {
+    InvalidInterestThemeId {
+        index: usize,
+        value: String,
+        error: InterestThemeIdValidationError,
+    },
+}
+
+fn parse_interest_theme_ids(
+    payload: InterestsRequest,
+) -> Result<Vec<InterestThemeId>, InterestsRequestError> {
+    payload
+        .interest_theme_ids
+        .into_iter()
+        .enumerate()
+        .map(|(index, value)| {
+            InterestThemeId::new(&value).map_err(|error| {
+                InterestsRequestError::InvalidInterestThemeId {
+                    index,
+                    value,
+                    error,
+                }
+            })
+        })
+        .collect()
 }
 
 impl TryFrom<LoginRequest> for LoginCredentials {
@@ -73,6 +113,33 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
     }
 }
 
+fn map_interests_request_error(err: InterestsRequestError) -> Error {
+    match err {
+        InterestsRequestError::InvalidInterestThemeId {
+            index,
+            value,
+            error,
+        } => {
+            let (message, code) = match error {
+                InterestThemeIdValidationError::EmptyId => (
+                    "interest theme id must not be empty",
+                    "empty_interest_theme_id",
+                ),
+                InterestThemeIdValidationError::InvalidId => (
+                    "interest theme id must be a valid UUID",
+                    "invalid_interest_theme_id",
+                ),
+            };
+            Error::invalid_request(message).with_details(json!({
+                "field": "interestThemeIds",
+                "index": index,
+                "value": value,
+                "code": code,
+            }))
+        }
+    }
+}
+
 /// List known users.
 ///
 /// # Examples
@@ -106,10 +173,66 @@ pub async fn list_users(
     Ok(web::Json(data))
 }
 
+/// Fetch the authenticated user's profile.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me",
+    responses(
+        (status = 200, description = "User profile", body = UserSchema),
+        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 500, description = "Internal server error", body = ErrorSchema)
+    ),
+    tags = ["users"],
+    operation_id = "currentUser"
+)]
+#[get("/users/me")]
+pub async fn current_user(
+    state: web::Data<HttpState>,
+    session: SessionContext,
+) -> ApiResult<web::Json<User>> {
+    let user_id = session.require_user_id()?;
+    let user = state.profile.fetch_profile(&user_id).await?;
+    Ok(web::Json(user))
+}
+
+/// Update the authenticated user's interest theme selections.
+#[utoipa::path(
+    put,
+    path = "/api/v1/users/me/interests",
+    request_body = InterestsRequest,
+    responses(
+        (status = 200, description = "Updated interests", body = UserInterestsSchema),
+        (status = 400, description = "Invalid request", body = ErrorSchema),
+        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 500, description = "Internal server error", body = ErrorSchema)
+    ),
+    tags = ["users"],
+    operation_id = "updateUserInterests"
+)]
+#[put("/users/me/interests")]
+pub async fn update_interests(
+    state: web::Data<HttpState>,
+    session: SessionContext,
+    payload: web::Json<InterestsRequest>,
+) -> ApiResult<web::Json<UserInterests>> {
+    let user_id = session.require_user_id()?;
+    let interest_theme_ids =
+        parse_interest_theme_ids(payload.into_inner()).map_err(map_interests_request_error)?;
+    let interests = state
+        .interests
+        .set_interests(&user_id, interest_theme_ids)
+        .await?;
+    Ok(web::Json(interests))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::ports::{FixtureLoginService, FixtureUsersQuery};
+    use crate::domain::ports::{
+        FixtureLoginService, FixtureUserInterestsCommand, FixtureUserProfileQuery,
+        FixtureUsersQuery,
+    };
+    use crate::domain::ErrorCode;
     use actix_web::{test as actix_test, web, App};
     use rstest::rstest;
     use serde_json::Value;
@@ -173,11 +296,22 @@ mod tests {
             InitError = (),
         >,
     > {
-        let state = HttpState::new(Arc::new(FixtureLoginService), Arc::new(FixtureUsersQuery));
+        let state = HttpState::new(
+            Arc::new(FixtureLoginService),
+            Arc::new(FixtureUsersQuery),
+            Arc::new(FixtureUserProfileQuery),
+            Arc::new(FixtureUserInterestsCommand),
+        );
         App::new()
             .app_data(web::Data::new(state))
             .wrap(crate::inbound::http::test_utils::test_session_middleware())
-            .service(web::scope("/api/v1").service(login).service(list_users))
+            .service(
+                web::scope("/api/v1")
+                    .service(login)
+                    .service(list_users)
+                    .service(current_user)
+                    .service(update_interests),
+            )
     }
 
     #[rstest]
@@ -281,5 +415,52 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[rstest]
+    #[case("", "empty_interest_theme_id", "interest theme id must not be empty")]
+    #[case(
+        "not-a-uuid",
+        "invalid_interest_theme_id",
+        "interest theme id must be a valid UUID"
+    )]
+    fn interests_request_validation_rejects_invalid_ids(
+        #[case] value: &str,
+        #[case] expected_code: &str,
+        #[case] expected_message: &str,
+    ) {
+        let payload = InterestsRequest {
+            interest_theme_ids: vec![value.to_owned()],
+        };
+
+        let err = parse_interest_theme_ids(payload).expect_err("invalid interest theme id");
+        let api_error = map_interests_request_error(err);
+
+        assert_eq!(api_error.code(), ErrorCode::InvalidRequest);
+        assert_eq!(api_error.message(), expected_message);
+        let details = api_error
+            .details()
+            .and_then(|value| value.as_object())
+            .expect("details present");
+        assert_eq!(
+            details.get("code").and_then(Value::as_str),
+            Some(expected_code)
+        );
+        assert_eq!(
+            details.get("field").and_then(Value::as_str),
+            Some("interestThemeIds")
+        );
+        assert_eq!(details.get("index").and_then(Value::as_u64), Some(0));
+    }
+
+    #[test]
+    fn interests_request_validation_accepts_valid_ids() {
+        let payload = InterestsRequest {
+            interest_theme_ids: vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],
+        };
+
+        let parsed = parse_interest_theme_ids(payload).expect("valid interest theme ids");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].as_ref(), "3fa85f64-5717-4562-b3fc-2c963f66afa6");
     }
 }

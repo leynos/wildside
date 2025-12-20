@@ -3,7 +3,6 @@
 //! The `rstest-bdd` step macros register these functions for feature-based
 //! tests, but we also call the functions directly from Rust tests to keep the
 //! suite easy to read and refactor.
-
 use actix_web::http::header;
 use actix_ws::CloseCode;
 use awc::{ws::Frame, ws::Message};
