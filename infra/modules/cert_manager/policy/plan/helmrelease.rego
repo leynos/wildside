@@ -96,8 +96,9 @@ deny contains msg if {
 	rc := input.resource_changes[_]
 	release := helm_release(rc)
 	is_main_release(release)
-	object.get(release.values, "replicaCount", null) == null
-	msg := sprintf("Cert-manager Helm release %s must set values.replicaCount", [release.name])
+	replicas := object.get(release.values, "replicaCount", 0)
+	replicas <= 0
+	msg := sprintf("Cert-manager Helm release %s must set values.replicaCount to a positive value", [release.name])
 }
 
 deny contains msg if {
