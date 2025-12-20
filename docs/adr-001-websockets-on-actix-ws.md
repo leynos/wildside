@@ -25,8 +25,8 @@ Adopt `actix-ws` for all WebSocket upgrade handling and message processing in
   `MessageStream`.
 - Run an async loop that combines heartbeat ticks with inbound message handling
   via `tokio::select!`.
-- Keep domain behaviour unchanged by passing deserialised requests to
-  `UserOnboarding` and serialising domain events back to clients.
+- Keep domain behaviour unchanged by passing deserialized requests to
+  `UserOnboarding` and serializing domain events back to clients.
 
 ## Consequences
 

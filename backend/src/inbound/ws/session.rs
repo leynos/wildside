@@ -39,10 +39,22 @@ pub(super) async fn handle_ws_session(
     WsSession::new(onboarding).run(session, stream).await;
 }
 
-enum SessionShutdown {
+#[derive(Debug)]
+enum SessionError {
     Close(Option<CloseReason>),
     Stop,
 }
+
+impl std::fmt::Display for SessionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Close(_) => write!(formatter, "close WebSocket session"),
+            Self::Stop => write!(formatter, "stop WebSocket session"),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {}
 
 struct WsSession {
     onboarding: Arc<dyn UserOnboarding>,
@@ -60,20 +72,20 @@ impl WsSession {
         loop {
             tokio::select! {
                 _ = heartbeat.tick() => {
-                    if let Err(shutdown) = self
+                    if let Err(error) = self
                         .handle_heartbeat_tick(&mut session, &last_heartbeat)
                         .await
                     {
-                        self.apply_shutdown(session, shutdown).await;
+                        self.apply_error(session, error).await;
                         return;
                     }
                 }
                 message = stream.recv() => {
-                    if let Err(shutdown) = self
+                    if let Err(error) = self
                         .handle_stream_message(&mut session, &mut last_heartbeat, message)
                         .await
                     {
-                        self.apply_shutdown(session, shutdown).await;
+                        self.apply_error(session, error).await;
                         return;
                     }
                 }
@@ -85,10 +97,10 @@ impl WsSession {
         &self,
         session: &mut Session,
         last_heartbeat: &Instant,
-    ) -> Result<(), SessionShutdown> {
+    ) -> Result<(), SessionError> {
         if Instant::now().duration_since(*last_heartbeat) > CLIENT_TIMEOUT {
             warn!("WebSocket heartbeat timeout; closing connection");
-            return Err(SessionShutdown::Close(Some(Self::close_reason(
+            return Err(SessionError::Close(Some(Self::close_reason(
                 CloseCode::Normal,
                 "heartbeat timeout",
             ))));
@@ -96,7 +108,7 @@ impl WsSession {
 
         if let Err(error) = session.ping(b"").await {
             warn!(error = %error, "Failed to send WebSocket ping");
-            return Err(SessionShutdown::Stop);
+            return Err(SessionError::Stop);
         }
 
         Ok(())
@@ -107,16 +119,16 @@ impl WsSession {
         session: &mut Session,
         last_heartbeat: &mut Instant,
         message: Option<Result<Message, ProtocolError>>,
-    ) -> Result<(), SessionShutdown> {
+    ) -> Result<(), SessionError> {
         let Some(message) = message else {
-            return Err(SessionShutdown::Stop);
+            return Err(SessionError::Stop);
         };
 
         match message {
             Ok(message) => self.handle_message(session, last_heartbeat, message).await,
             Err(error) => {
                 warn!(error = %error, "WebSocket protocol error");
-                Err(SessionShutdown::Close(Some(Self::close_reason(
+                Err(SessionError::Close(Some(Self::close_reason(
                     CloseCode::Protocol,
                     "protocol error",
                 ))))
@@ -129,13 +141,13 @@ impl WsSession {
         session: &mut Session,
         last_heartbeat: &mut Instant,
         message: Message,
-    ) -> Result<(), SessionShutdown> {
+    ) -> Result<(), SessionError> {
         match message {
             Message::Ping(payload) => {
                 *last_heartbeat = Instant::now();
                 session.pong(&payload).await.map_err(|error| {
                     warn!(error = %error, "Failed to pong WebSocket client");
-                    SessionShutdown::Stop
+                    SessionError::Stop
                 })?;
             }
             Message::Text(text) => {
@@ -145,7 +157,7 @@ impl WsSession {
             Message::Pong(_) | Message::Binary(_) | Message::Continuation(_) | Message::Nop => {
                 *last_heartbeat = Instant::now();
             }
-            Message::Close(reason) => return Err(SessionShutdown::Close(reason)),
+            Message::Close(reason) => return Err(SessionError::Close(reason)),
         }
 
         Ok(())
@@ -155,12 +167,12 @@ impl WsSession {
         &self,
         session: &mut Session,
         text: &str,
-    ) -> Result<(), SessionShutdown> {
+    ) -> Result<(), SessionError> {
         let request = match serde_json::from_str::<DisplayNameRequest>(text) {
             Ok(request) => request,
             Err(error) => {
                 warn!(error = %error, "Rejected malformed WebSocket payload");
-                return Err(SessionShutdown::Close(Some(Self::close_reason(
+                return Err(SessionError::Close(Some(Self::close_reason(
                     CloseCode::Policy,
                     "invalid payload",
                 ))));
@@ -170,7 +182,7 @@ impl WsSession {
         let event = self.handle_display_name_request(request);
         if let Err(error) = self.handle_user_event(session, event).await {
             warn!(error = %error, "WebSocket session closed while sending message");
-            return Err(SessionShutdown::Stop);
+            return Err(SessionError::Stop);
         }
 
         Ok(())
@@ -218,8 +230,8 @@ impl WsSession {
         }
     }
 
-    async fn apply_shutdown(&self, session: Session, shutdown: SessionShutdown) {
-        if let SessionShutdown::Close(reason) = shutdown {
+    async fn apply_error(&self, session: Session, error: SessionError) {
+        if let SessionError::Close(reason) = error {
             self.close_session(session, reason).await;
         }
     }

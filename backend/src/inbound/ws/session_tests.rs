@@ -56,6 +56,17 @@ fn handshake_request_payload(name: &str) -> String {
     .to_string()
 }
 
+async fn next_text_frame(socket: &mut actix_codec::Framed<BoxedSocket, Codec>) -> Vec<u8> {
+    loop {
+        let frame = socket.next().await.expect("response frame").expect("frame");
+        match frame {
+            Frame::Text(bytes) => return bytes.to_vec(),
+            Frame::Ping(_) | Frame::Pong(_) => continue,
+            other => panic!("expected text frame, got {other:?}"),
+        }
+    }
+}
+
 #[rstest]
 #[actix_rt::test]
 async fn sends_user_created_event_for_valid_payload(
@@ -67,11 +78,7 @@ async fn sends_user_created_event_for_valid_payload(
         .await
         .expect("send text");
 
-    let frame = socket.next().await.expect("response frame").expect("frame");
-    let text = match frame {
-        Frame::Text(bytes) => bytes,
-        other => panic!("expected text frame, got {other:?}"),
-    };
+    let text = next_text_frame(&mut socket).await;
     let value: Value = serde_json::from_slice(&text).expect("json");
     assert_eq!(
         value.get("displayName").and_then(Value::as_str),
@@ -95,11 +102,7 @@ async fn sends_rejection_for_invalid_payload(
         .await
         .expect("send text");
 
-    let frame = socket.next().await.expect("response frame").expect("frame");
-    let text = match frame {
-        Frame::Text(bytes) => bytes,
-        other => panic!("expected text frame, got {other:?}"),
-    };
+    let text = next_text_frame(&mut socket).await;
     let value: Value = serde_json::from_slice(&text).expect("json");
     assert_eq!(
         value.get("code").and_then(Value::as_str),
