@@ -15,7 +15,7 @@ use crate::domain::{TraceId, UserEvent};
 use crate::inbound::ws::messages::{
     DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
 };
-use actix_ws::{CloseCode, CloseReason, Closed, Message, MessageStream, Session};
+use actix_ws::{CloseCode, CloseReason, Closed, Message, MessageStream, ProtocolError, Session};
 use tokio::time;
 use tracing::warn;
 
@@ -61,40 +61,71 @@ impl WsSession {
         loop {
             tokio::select! {
                 _ = heartbeat.tick() => {
-                    if Instant::now().duration_since(last_heartbeat) > CLIENT_TIMEOUT {
-                        warn!("WebSocket heartbeat timeout; closing connection");
-                        self.close_with_reason(session, CloseCode::Normal, "heartbeat timeout").await;
-                        return;
-                    }
-
-                    if let Err(error) = session.ping(b"").await {
-                        warn!(error = %error, "Failed to send WebSocket ping");
+                    if self
+                        .handle_heartbeat_tick(&mut session, &last_heartbeat)
+                        .await
+                        .is_err()
+                    {
                         return;
                     }
                 }
                 message = stream.recv() => {
-                    let Some(message) = message else {
+                    if self
+                        .handle_stream_message(&mut session, &mut last_heartbeat, message)
+                        .await
+                        .is_err()
+                    {
                         return;
-                    };
-
-                    match message {
-                        Ok(message) => {
-                            match self.handle_message(&mut session, &mut last_heartbeat, message).await {
-                                SessionAction::Continue => {}
-                                SessionAction::Stop => return,
-                                SessionAction::Close(reason) => {
-                                    self.close_session(session, reason).await;
-                                    return;
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            warn!(error = %error, "WebSocket protocol error");
-                            self.close_with_reason(session, CloseCode::Protocol, "protocol error").await;
-                            return;
-                        }
                     }
                 }
+            }
+        }
+    }
+
+    async fn handle_heartbeat_tick(
+        &self,
+        session: &mut Session,
+        last_heartbeat: &Instant,
+    ) -> Result<(), ()> {
+        if Instant::now().duration_since(*last_heartbeat) > CLIENT_TIMEOUT {
+            warn!("WebSocket heartbeat timeout; closing connection");
+            self.close_with_reason(session, CloseCode::Normal, "heartbeat timeout")
+                .await;
+            return Err(());
+        }
+
+        if let Err(error) = session.ping(b"").await {
+            warn!(error = %error, "Failed to send WebSocket ping");
+            return Err(());
+        }
+
+        Ok(())
+    }
+
+    async fn handle_stream_message(
+        &self,
+        session: &mut Session,
+        last_heartbeat: &mut Instant,
+        message: Option<Result<Message, ProtocolError>>,
+    ) -> Result<(), ()> {
+        let Some(message) = message else {
+            return Err(());
+        };
+
+        match message {
+            Ok(message) => match self.handle_message(session, last_heartbeat, message).await {
+                SessionAction::Continue => Ok(()),
+                SessionAction::Stop => Err(()),
+                SessionAction::Close(reason) => {
+                    self.close_session(session, reason).await;
+                    Err(())
+                }
+            },
+            Err(error) => {
+                warn!(error = %error, "WebSocket protocol error");
+                self.close_with_reason(session, CloseCode::Protocol, "protocol error")
+                    .await;
+                Err(())
             }
         }
     }
@@ -191,7 +222,7 @@ impl WsSession {
 
     async fn close_with_reason(
         &self,
-        session: Session,
+        session: &mut Session,
         code: CloseCode,
         description: &'static str,
     ) {
@@ -202,7 +233,8 @@ impl WsSession {
         self.close_session(session, Some(reason)).await;
     }
 
-    async fn close_session(&self, session: Session, reason: Option<CloseReason>) {
+    async fn close_session(&self, session: &mut Session, reason: Option<CloseReason>) {
+        let session = session.clone();
         if let Err(error) = session.close(reason).await {
             warn!(error = %error, "Failed to close WebSocket session");
         }
