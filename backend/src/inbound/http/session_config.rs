@@ -181,40 +181,57 @@ pub fn session_settings_from_env<E: SessionEnv>(
     })
 }
 
+// clippy: too_many_arguments is acceptable here to keep the helper signature explicit.
+#[allow(clippy::too_many_arguments)]
+fn parse_bool_env<E: SessionEnv, F>(
+    env: &E,
+    mode: BuildMode,
+    env_name: &'static str,
+    default_value: bool,
+    value_validator: F,
+) -> Result<bool, SessionConfigError>
+where
+    F: FnOnce(bool, BuildMode) -> Result<bool, SessionConfigError>,
+{
+    let default_label = if default_value { "enabled" } else { "disabled" };
+    match env.string(env_name) {
+        Some(value) => match parse_bool(&value) {
+            Some(flag) => value_validator(flag, mode),
+            None => {
+                let value_clone = value.clone();
+                debug_warn_or_error(
+                    mode,
+                    default_value,
+                    SessionConfigError::InvalidEnv {
+                        name: env_name,
+                        value: value_clone,
+                        expected: BOOL_EXPECTED,
+                    },
+                    || {
+                        warn!(
+                            value = %value,
+                            "invalid {}; defaulting to {}",
+                            env_name,
+                            default_label
+                        );
+                    },
+                )
+            }
+        },
+        None => debug_warn_or_error(
+            mode,
+            default_value,
+            SessionConfigError::MissingEnv { name: env_name },
+            || warn!("{} not set; defaulting to {}", env_name, default_label),
+        ),
+    }
+}
+
 fn cookie_secure_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
 ) -> Result<bool, SessionConfigError> {
-    match env.string(COOKIE_SECURE_ENV) {
-        Some(value) => match parse_bool(&value) {
-            Some(flag) => Ok(flag),
-            None => {
-                if mode.is_debug() {
-                    warn!(
-                        value = %value,
-                        "invalid SESSION_COOKIE_SECURE; defaulting to secure"
-                    );
-                    Ok(true)
-                } else {
-                    Err(SessionConfigError::InvalidEnv {
-                        name: COOKIE_SECURE_ENV,
-                        value,
-                        expected: BOOL_EXPECTED,
-                    })
-                }
-            }
-        },
-        None => {
-            if mode.is_debug() {
-                warn!("SESSION_COOKIE_SECURE not set; defaulting to secure");
-                Ok(true)
-            } else {
-                Err(SessionConfigError::MissingEnv {
-                    name: COOKIE_SECURE_ENV,
-                })
-            }
-        }
-    }
+    parse_bool_env(env, mode, COOKIE_SECURE_ENV, true, |flag, _| Ok(flag))
 }
 
 fn debug_warn_or_error<T, F>(
@@ -307,43 +324,13 @@ fn allow_ephemeral_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
 ) -> Result<bool, SessionConfigError> {
-    match env.string(ALLOW_EPHEMERAL_ENV) {
-        Some(value) => match parse_bool(&value) {
-            Some(true) => {
-                if mode.is_debug() {
-                    Ok(true)
-                } else {
-                    Err(SessionConfigError::EphemeralNotAllowed)
-                }
-            }
-            Some(false) => Ok(false),
-            None => {
-                if mode.is_debug() {
-                    warn!(
-                        value = %value,
-                        "invalid SESSION_ALLOW_EPHEMERAL; defaulting to disabled"
-                    );
-                    Ok(false)
-                } else {
-                    Err(SessionConfigError::InvalidEnv {
-                        name: ALLOW_EPHEMERAL_ENV,
-                        value,
-                        expected: BOOL_EXPECTED,
-                    })
-                }
-            }
-        },
-        None => {
-            if mode.is_debug() {
-                warn!("SESSION_ALLOW_EPHEMERAL not set; defaulting to disabled");
-                Ok(false)
-            } else {
-                Err(SessionConfigError::MissingEnv {
-                    name: ALLOW_EPHEMERAL_ENV,
-                })
-            }
+    parse_bool_env(env, mode, ALLOW_EPHEMERAL_ENV, false, |flag, mode| {
+        if flag && mode == BuildMode::Release {
+            Err(SessionConfigError::EphemeralNotAllowed)
+        } else {
+            Ok(flag)
         }
-    }
+    })
 }
 
 fn session_key_from_env<E: SessionEnv>(
