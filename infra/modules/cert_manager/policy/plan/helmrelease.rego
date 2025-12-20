@@ -48,11 +48,17 @@ is_jetstack_repository(release) if {
 	contains(lower(repository), "jetstack")
 }
 
+# Only treat webhook releases as cert-manager ecosystem charts to avoid
+# flagging unrelated webhook charts.
 is_webhook_release(release) if {
-	contains(lower(release.chart), "webhook")
+	chart := lower(release.chart)
+	(is_jetstack_repository(release) or contains(chart, "cert-manager"))
+	contains(chart, "webhook")
 }
 
 is_webhook_release(release) if {
+	chart := lower(release.chart)
+	(is_jetstack_repository(release) or contains(chart, "cert-manager"))
 	group_name := object.get(release.values, "groupName", "")
 	group_name != ""
 }

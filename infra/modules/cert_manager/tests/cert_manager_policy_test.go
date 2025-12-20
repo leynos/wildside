@@ -186,3 +186,39 @@ func TestCertManagerModulePlanPolicyRejections(t *testing.T) {
 		})
 	}
 }
+
+func TestCertManagerModulePlanPolicyIgnoresNonCertManagerWebhook(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	tfDir, _ := setup(t, testVars(t))
+	policyPath := certManagerPlanPolicyPath(tfDir)
+	planPayload := `{
+  "resource_changes": [{
+    "type": "helm_release",
+    "change": {
+      "after": {
+        "name": "webhook-operator",
+        "chart": "webhook-operator",
+        "repository": "https://example.com/charts",
+        "version": "1.2.3",
+        "values": ["replicaCount: 1\n"]
+      }
+    }
+  }]
+}`
+	planPath := writePlanFixture(t, planPayload)
+
+	out, err := runConftest(t, conftestRun{
+		InputPath:  planPath,
+		PolicyPath: policyPath,
+		Kubeconfig: "",
+		ExtraArgs: []string{
+			"--fail-on-warn",
+			"--namespace",
+			certManagerPolicyPlanNamespace,
+		},
+		Timeout: 60 * time.Second,
+	})
+	require.NoErrorf(t, err, "expected non-cert-manager webhook to pass: %s", string(out))
+}
