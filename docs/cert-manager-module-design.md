@@ -13,8 +13,8 @@ run.
 
 - Deploy cert-manager via Helm using the Jetstack Open Container Initiative
   (OCI) chart repository.
-- Create ACME (Automated Certificate Management Environment) staging and
-  production ClusterIssuers with DNS-01 webhook configuration for Namecheap.
+- Create ACME staging and production ClusterIssuers with DNS-01 webhook
+  configuration for Namecheap.
 - Optionally create a Vault ClusterIssuer using token-based authentication and
   a supplied CA bundle.
 - Emit issuer names, secret references, and CA bundle material for downstream
@@ -31,7 +31,7 @@ run.
 
 ## Decisions
 
-- **Chart source**: Use the Jetstack Open Container Initiative (OCI) registry
+- **Chart source**: Use the Jetstack OCI registry
   (`oci://quay.io/jetstack/charts`) to align with the declarative TLS guide.
 - **Chart version**: Pin `v1.19.2` to match the TLS guide and avoid untracked
   updates.

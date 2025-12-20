@@ -22,6 +22,7 @@ for var in "${required_vars[@]}"; do
 done
 
 if [[ ${#missing[@]} -ne 0 ]]; then
-  echo "CERT_MANAGER_ACME_EMAIL, CERT_MANAGER_NAMECHEAP_SECRET_NAME, CERT_MANAGER_VAULT_SERVER, CERT_MANAGER_VAULT_PKI_PATH, CERT_MANAGER_VAULT_TOKEN_SECRET_NAME, and CERT_MANAGER_VAULT_CA_BUNDLE_PEM must be set when CERT_MANAGER_KUBECONFIG_PATH is set" >&2
+  printf 'Missing required variables when CERT_MANAGER_KUBECONFIG_PATH is set: %s\n' \
+    "$(IFS=,; echo "${missing[*]}")" >&2
   exit 1
 fi

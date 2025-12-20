@@ -1,9 +1,9 @@
 # Cert-manager module
 
 Deploys [cert-manager](https://github.com/cert-manager/cert-manager) using Helm
-and configures ClusterIssuers for ACME (Let's Encrypt) and Vault-based
-certificate issuance. Supports render mode for Flux-ready manifests and apply
-mode for direct cluster provisioning.
+and configures ClusterIssuers for Automated Certificate Management Environment
+(ACME, Let's Encrypt) and Vault-based certificate issuance. Supports render
+mode for Flux-ready manifests and apply mode for direct cluster provisioning.
 
 ## Prerequisites
 
