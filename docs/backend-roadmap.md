@@ -75,7 +75,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 - [x] Wire `/api/v1/users/me` and `/api/v1/users/me/interests` to require the
   session middleware, returning `401` with trace identifiers when
   unauthenticated.
-- [ ] Enforce configuration toggles for `SESSION_SAMESITE`,
+- [x] Enforce configuration toggles for `SESSION_SAMESITE`,
   `SESSION_COOKIE_SECURE`, and `SESSION_ALLOW_EPHEMERAL`, failing fast in
   release builds when secrets are missing or keys are too short.
 - [ ] Document and script the rotation procedure for session signing keys,
