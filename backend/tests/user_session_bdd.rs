@@ -4,11 +4,21 @@
 //! `/api/v1/users/me/interests` require authenticated sessions and return trace
 //! identifiers on unauthorised responses.
 // Shared test doubles include helpers unused in this specific crate.
-#[allow(dead_code, clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "Shared test doubles include helpers unused in this specific crate."
+)]
+#[expect(
+    dead_code,
+    reason = "Shared test doubles include helpers unused in this specific crate."
+)]
 #[path = "adapter_guardrails/doubles.rs"]
 mod doubles;
 // Shared harness has extra fields used by other integration suites.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Shared harness has extra fields used by other integration suites."
+)]
 #[path = "adapter_guardrails/harness.rs"]
 mod harness;
 #[path = "support/ws.rs"]
