@@ -3,11 +3,6 @@
 //! These scenarios confirm that `/api/v1/users/me` and
 //! `/api/v1/users/me/interests` require authenticated sessions and return trace
 //! identifiers on unauthorised responses.
-//
-// rstest-bdd generates guard variables with double underscores, which trips
-// the non_snake_case lint under -D warnings.
-#![allow(non_snake_case)]
-
 // Shared test doubles include helpers unused in this specific crate.
 #[allow(dead_code, clippy::type_complexity)]
 #[path = "adapter_guardrails/doubles.rs"]

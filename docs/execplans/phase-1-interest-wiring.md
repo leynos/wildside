@@ -62,7 +62,7 @@ Observable success:
 - Decision: Introduce explicit driving ports for the authenticated user
   profile and interest selection rather than letting handlers touch persistence
   or shared state.
-  Rationale: Keeps inbound adapters side-effect free and preserves the
+  Rationale: Keeps inbound adapters side effect free and preserves the
   hexagonal boundary by routing stateful behaviour through domain ports.
   Date/Author: 2025-12-19 / Codex CLI.
 
@@ -297,8 +297,8 @@ Add or update the following interfaces (final state target):
           async fn set_interests(
               &self,
               user_id: &UserId,
-              interest_theme_ids: Vec<InterestThemeId>,
-          ) -> Result<UserInterests, Error>;
+              interest_theme_ids: Vec&lt;InterestThemeId&gt;,
+          ) -> Result&lt;UserInterests, Error&gt;;
       }
 
   Include a fixture implementation returning a deterministic
@@ -308,16 +308,16 @@ Add or update the following interfaces (final state target):
 
       #[get("/users/me")]
       async fn current_user(
-          state: web::Data<HttpState>,
+          state: web::Data&lt;HttpState&gt;,
           session: SessionContext,
-      ) -> ApiResult<web::Json<User>> { ... }
+      ) -> ApiResult&lt;web::Json&lt;User&gt;&gt; { ... }
 
       #[put("/users/me/interests")]
       async fn update_interests(
-          state: web::Data<HttpState>,
+          state: web::Data&lt;HttpState&gt;,
           session: SessionContext,
-          payload: web::Json<InterestsRequest>,
-      ) -> ApiResult<web::Json<UserInterests>> { ... }
+          payload: web::Json&lt;InterestsRequest&gt;,
+      ) -> ApiResult&lt;web::Json&lt;UserInterests&gt;&gt; { ... }
 
   with request data transfer objects (DTOs) that convert into domain types via
   `TryFrom` so validation
@@ -339,3 +339,5 @@ API surface.
   test timeout).
 - Updated on 2025-12-20 to expand acronyms (ExecPlan, UUID, DTOs) per review
   guidance.
+- Updated on 2025-12-20 to escape generic angle brackets for markdownlint and
+  align wording with review feedback.

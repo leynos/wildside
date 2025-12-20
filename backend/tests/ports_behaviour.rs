@@ -1,9 +1,4 @@
 //! Behavioural tests for the new domain ports backed by PostgreSQL.
-//
-// rstest-bdd generates guard variables with double underscores, which trips
-// the non_snake_case lint under -D warnings.
-#![allow(non_snake_case)]
-
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
@@ -131,7 +126,9 @@ fn repo_world() -> Option<SharedContext> {
 }
 
 #[given("a postgres-backed user repository")]
-fn a_postgres_backed_user_repository(_repo_world: SharedContext) {}
+fn a_postgres_backed_user_repository(repo_world: SharedContext) {
+    let _ = repo_world;
+}
 
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(repo_world: SharedContext, user: User) {

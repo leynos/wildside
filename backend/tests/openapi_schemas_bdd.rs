@@ -2,11 +2,6 @@
 //!
 //! These tests verify that the OpenAPI document correctly references the
 //! schema wrapper types from `inbound::http::schemas` instead of domain types.
-//
-// rstest-bdd generates guard variables with double underscores, which trips
-// the non_snake_case lint under -D warnings.
-#![allow(non_snake_case)]
-
 use std::sync::Mutex;
 
 use backend::doc::ApiDoc;
