@@ -109,25 +109,26 @@ pub enum SessionConfigError {
 /// use backend::inbound::http::session_config::{
 ///     session_settings_from_env, BuildMode,
 /// };
-/// use mockable::DefaultEnv;
+/// use mockable::MockEnv;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let key_path = std::env::temp_dir().join("session_key_example");
 /// std::fs::write(&key_path, vec![b'a'; 64])?;
 ///
-/// std::env::set_var("SESSION_KEY_FILE", key_path.to_str().expect("valid path"));
-/// std::env::set_var("SESSION_COOKIE_SECURE", "1");
-/// std::env::set_var("SESSION_SAMESITE", "Strict");
-/// std::env::set_var("SESSION_ALLOW_EPHEMERAL", "0");
-/// let env = DefaultEnv::new();
+/// let key_path = key_path.to_str().expect("valid path").to_string();
+/// let mut env = MockEnv::new();
+/// env.expect_string()
+///     .returning(move |name| match name {
+///         "SESSION_KEY_FILE" => Some(key_path.clone()),
+///         "SESSION_COOKIE_SECURE" => Some("1".to_string()),
+///         "SESSION_SAMESITE" => Some("Strict".to_string()),
+///         "SESSION_ALLOW_EPHEMERAL" => Some("0".to_string()),
+///         _ => None,
+///     });
 ///
 /// let settings = session_settings_from_env(&env, BuildMode::Release)?;
 /// assert!(settings.cookie_secure);
 ///
-/// std::env::remove_var("SESSION_KEY_FILE");
-/// std::env::remove_var("SESSION_COOKIE_SECURE");
-/// std::env::remove_var("SESSION_SAMESITE");
-/// std::env::remove_var("SESSION_ALLOW_EPHEMERAL");
 /// std::fs::remove_file(&key_path)?;
 /// # Ok(())
 /// # }
