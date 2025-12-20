@@ -23,6 +23,6 @@ done
 
 if [[ ${#missing[@]} -ne 0 ]]; then
   printf 'Missing required variables when CERT_MANAGER_KUBECONFIG_PATH is set: %s\n' \
-    "$(IFS=,; echo "${missing[*]}")" >&2
+    "$(IFS=', '; echo "${missing[*]}")" >&2
   exit 1
 fi
