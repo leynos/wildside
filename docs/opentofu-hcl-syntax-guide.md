@@ -148,7 +148,7 @@ HCL supports three syntaxes for comments 6:
 - `/*` and `*/` are delimiters for multi-line comments.
 
 This repository requires each OpenTofu module file to begin with a module-level
-`//!` comment describing the file's purpose and how it is used. Place it at the
+`#` comment describing the file's purpose and how it is used. Place it at the
 very top of the file so it is visible without scrolling.
 
 OpenTofu configuration files are expected to be encoded in UTF-8. While both
