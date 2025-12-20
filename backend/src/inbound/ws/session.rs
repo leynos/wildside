@@ -1,4 +1,4 @@
-//! Per-connection WebSocket actor.
+//! Per-connection WebSocket handler.
 //!
 //! Keeps WebSocket framing and heartbeats at the edge while deferring
 //! application behaviour to the injected domain port (`UserOnboarding`). The public
@@ -11,13 +11,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::domain::ports::UserOnboarding;
-use crate::domain::TraceId;
-use crate::domain::UserEvent;
+use crate::domain::{TraceId, UserEvent};
 use crate::inbound::ws::messages::{
     DisplayNameRequest, InvalidDisplayNameResponse, UserCreatedResponse,
 };
-use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
-use actix_web_actors::ws::{self, CloseCode, CloseReason, Message, ProtocolError};
+use actix_ws::{CloseCode, CloseReason, Closed, Message, MessageStream, ProtocolError, Session};
+use tokio::time;
 use tracing::warn;
 
 /// Time between heartbeats to the client (5s in production, shorter in tests).
@@ -32,292 +31,225 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
 const CLIENT_TIMEOUT: Duration = Duration::from_millis(100);
 
-pub struct WsSession {
-    last_heartbeat: Instant,
+pub(super) async fn handle_ws_session(
+    onboarding: Arc<dyn UserOnboarding>,
+    session: Session,
+    stream: MessageStream,
+) {
+    WsSession::new(onboarding).run(session, stream).await;
+}
+
+#[derive(Debug)]
+enum SessionError {
+    Close(Option<CloseReason>),
+    Stop,
+}
+
+impl std::fmt::Display for SessionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Close(_) => write!(formatter, "close WebSocket session"),
+            Self::Stop => write!(formatter, "stop WebSocket session"),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {}
+
+struct WsSession {
     onboarding: Arc<dyn UserOnboarding>,
 }
 
-impl Actor for WsSession {
-    type Context = ws::WebsocketContext<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.last_heartbeat = Instant::now();
-        ctx.run_interval(HEARTBEAT_INTERVAL, |actor, ctx| {
-            if Instant::now().duration_since(actor.last_heartbeat) > CLIENT_TIMEOUT {
-                warn!("WebSocket heartbeat timeout; closing connection");
-                ctx.close(Some(CloseReason {
-                    code: CloseCode::Normal,
-                    description: Some("heartbeat timeout".into()),
-                }));
-                ctx.stop();
-                return;
-            }
-            ctx.ping(b"");
-        });
-    }
-}
-
 impl WsSession {
-    pub fn new(onboarding: Arc<dyn UserOnboarding>) -> Self {
-        Self {
-            last_heartbeat: Instant::now(),
-            onboarding,
-        }
+    fn new(onboarding: Arc<dyn UserOnboarding>) -> Self {
+        Self { onboarding }
     }
 
-    fn handle_display_name_request(
-        &mut self,
-        request: DisplayNameRequest,
-        ctx: &mut ws::WebsocketContext<Self>,
-    ) {
-        let trace_id = TraceId::from_uuid(request.trace_id);
-        // `register` must remain CPU-bound; any I/O work should be offloaded to other actors/tasks.
-        let event = self.onboarding.register(trace_id, request.display_name);
-        self.handle_user_event(event, ctx);
-    }
+    async fn run(&self, mut session: Session, mut stream: MessageStream) {
+        let mut last_heartbeat = Instant::now();
+        let mut heartbeat = time::interval(HEARTBEAT_INTERVAL);
 
-    fn send_json<T: serde::Serialize>(&self, ctx: &mut ws::WebsocketContext<Self>, payload: &T) {
-        match serde_json::to_string(payload) {
-            Ok(body) => ctx.text(body),
-            Err(err) => {
-                // In debug builds fail fast so schema drift is fixed; in release we log and keep the connection alive.
-                if cfg!(debug_assertions) {
-                    panic!("domain events must serialize: {err}");
-                } else {
-                    warn!(error = %err, "Failed to serialize WebSocket payload");
+        loop {
+            tokio::select! {
+                _ = heartbeat.tick() => {
+                    if let Err(error) = self
+                        .handle_heartbeat_tick(&mut session, &last_heartbeat)
+                        .await
+                    {
+                        self.apply_error(session, error).await;
+                        return;
+                    }
                 }
-            }
-        }
-    }
-
-    fn close_with_policy_error(&self, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.close(Some(CloseReason {
-            code: CloseCode::Policy,
-            description: Some("invalid payload".into()),
-        }));
-        ctx.stop();
-    }
-
-    fn handle_user_event(&mut self, event: UserEvent, ctx: &mut ws::WebsocketContext<Self>) {
-        match event {
-            UserEvent::UserCreated(event) => {
-                let response: UserCreatedResponse = event.into();
-                self.send_json(ctx, &response);
-            }
-            UserEvent::DisplayNameRejected(event) => {
-                let response: InvalidDisplayNameResponse = event.into();
-                self.send_json(ctx, &response);
-            }
-        }
-    }
-}
-
-impl StreamHandler<Result<Message, ProtocolError>> for WsSession {
-    fn handle(&mut self, msg: Result<Message, ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
-            Ok(Message::Ping(payload)) => {
-                self.last_heartbeat = Instant::now();
-                ctx.pong(&payload);
-            }
-            Ok(Message::Text(text)) => {
-                self.last_heartbeat = Instant::now();
-                match serde_json::from_str::<DisplayNameRequest>(&text) {
-                    Ok(request) => self.handle_display_name_request(request, ctx),
-                    Err(error) => {
-                        warn!(error = %error, "Rejected malformed WebSocket payload");
-                        self.close_with_policy_error(ctx);
+                message = stream.recv() => {
+                    if let Err(error) = self
+                        .handle_stream_message(&mut session, &mut last_heartbeat, message)
+                        .await
+                    {
+                        self.apply_error(session, error).await;
+                        return;
                     }
                 }
             }
-            Ok(Message::Pong(_)) | Ok(Message::Binary(_)) => {
-                self.last_heartbeat = Instant::now();
+        }
+    }
+
+    async fn handle_heartbeat_tick(
+        &self,
+        session: &mut Session,
+        last_heartbeat: &Instant,
+    ) -> Result<(), SessionError> {
+        if Instant::now().duration_since(*last_heartbeat) > CLIENT_TIMEOUT {
+            warn!("WebSocket heartbeat timeout; closing connection");
+            return Err(SessionError::Close(Some(Self::close_reason(
+                CloseCode::Normal,
+                "heartbeat timeout",
+            ))));
+        }
+
+        if let Err(error) = session.ping(b"").await {
+            warn!(error = %error, "Failed to send WebSocket ping");
+            return Err(SessionError::Stop);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_stream_message(
+        &self,
+        session: &mut Session,
+        last_heartbeat: &mut Instant,
+        message: Option<Result<Message, ProtocolError>>,
+    ) -> Result<(), SessionError> {
+        let Some(message) = message else {
+            return Err(SessionError::Stop);
+        };
+
+        match message {
+            Ok(message) => self.handle_message(session, last_heartbeat, message).await,
+            Err(error) => {
+                warn!(error = %error, "WebSocket protocol error");
+                Err(SessionError::Close(Some(Self::close_reason(
+                    CloseCode::Protocol,
+                    "protocol error",
+                ))))
             }
-            Ok(Message::Close(reason)) => {
-                ctx.close(reason);
-                ctx.stop();
+        }
+    }
+
+    async fn handle_message(
+        &self,
+        session: &mut Session,
+        last_heartbeat: &mut Instant,
+        message: Message,
+    ) -> Result<(), SessionError> {
+        match message {
+            Message::Ping(payload) => {
+                *last_heartbeat = Instant::now();
+                session.pong(&payload).await.map_err(|error| {
+                    warn!(error = %error, "Failed to pong WebSocket client");
+                    SessionError::Stop
+                })?;
             }
-            Ok(Message::Nop) | Ok(Message::Continuation(_)) => {
-                self.last_heartbeat = Instant::now();
+            Message::Text(text) => {
+                *last_heartbeat = Instant::now();
+                self.handle_text_message(session, text.as_ref()).await?;
             }
-            Err(err) => {
-                warn!(error = %err, "WebSocket protocol error");
-                ctx.close(Some(CloseReason {
-                    code: CloseCode::Protocol,
-                    description: Some("protocol error".into()),
-                }));
-                ctx.stop();
+            Message::Pong(_) | Message::Binary(_) | Message::Continuation(_) | Message::Nop => {
+                *last_heartbeat = Instant::now();
             }
+            Message::Close(reason) => return Err(SessionError::Close(reason)),
+        }
+
+        Ok(())
+    }
+
+    async fn handle_text_message(
+        &self,
+        session: &mut Session,
+        text: &str,
+    ) -> Result<(), SessionError> {
+        let request = match serde_json::from_str::<DisplayNameRequest>(text) {
+            Ok(request) => request,
+            Err(error) => {
+                warn!(error = %error, "Rejected malformed WebSocket payload");
+                return Err(SessionError::Close(Some(Self::close_reason(
+                    CloseCode::Policy,
+                    "invalid payload",
+                ))));
+            }
+        };
+
+        let event = self.handle_display_name_request(request);
+        if let Err(error) = self.handle_user_event(session, event).await {
+            warn!(error = %error, "WebSocket session closed while sending message");
+            return Err(SessionError::Stop);
+        }
+
+        Ok(())
+    }
+
+    fn handle_display_name_request(&self, request: DisplayNameRequest) -> UserEvent {
+        let trace_id = TraceId::from_uuid(request.trace_id);
+        // `register` must remain CPU-bound; any I/O work should be offloaded to other tasks.
+        self.onboarding.register(trace_id, request.display_name)
+    }
+
+    async fn handle_user_event(
+        &self,
+        session: &mut Session,
+        event: UserEvent,
+    ) -> Result<(), Closed> {
+        match event {
+            UserEvent::UserCreated(event) => {
+                let response: UserCreatedResponse = event.into();
+                self.send_json(session, &response).await
+            }
+            UserEvent::DisplayNameRejected(event) => {
+                let response: InvalidDisplayNameResponse = event.into();
+                self.send_json(session, &response).await
+            }
+        }
+    }
+
+    async fn send_json<T: serde::Serialize>(
+        &self,
+        session: &mut Session,
+        payload: &T,
+    ) -> Result<(), Closed> {
+        match serde_json::to_string(payload) {
+            Ok(body) => session.text(body).await,
+            Err(error) => {
+                // In debug builds fail fast so schema drift is fixed; in release we log and keep the connection alive.
+                if cfg!(debug_assertions) {
+                    panic!("domain events must serialize: {error}");
+                } else {
+                    warn!(error = %error, "Failed to serialize WebSocket payload");
+                }
+                Ok(())
+            }
+        }
+    }
+
+    async fn apply_error(&self, session: Session, error: SessionError) {
+        if let SessionError::Close(reason) = error {
+            self.close_session(session, reason).await;
+        }
+    }
+
+    fn close_reason(code: CloseCode, description: &'static str) -> CloseReason {
+        CloseReason {
+            code,
+            description: Some(description.to_owned()),
+        }
+    }
+
+    async fn close_session(&self, session: Session, reason: Option<CloseReason>) {
+        if let Err(error) = session.close(reason).await {
+            warn!(error = %error, "Failed to close WebSocket session");
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::UserOnboardingService;
-    use crate::inbound::ws;
-    use crate::inbound::ws::state::WsState;
-    use actix_web::{dev::Server, dev::ServerHandle, http::header, App, HttpServer};
-    use awc::{ws::Codec, ws::Frame, ws::Message, BoxedSocket};
-    use futures_util::{SinkExt, StreamExt};
-    use rstest::{fixture, rstest};
-    use serde_json::Value;
-    use std::sync::Arc;
-    use uuid::Uuid;
-
-    #[fixture]
-    async fn start_ws_server() -> (String, Server) {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test listener");
-        let addr = listener.local_addr().expect("listener addr");
-        let ws_state = WsState::new(Arc::new(UserOnboardingService));
-        let server = HttpServer::new(move || {
-            App::new()
-                .app_data(actix_web::web::Data::new(ws_state.clone()))
-                .service(ws::ws_entry)
-        })
-        .listen(listener)
-        .expect("bind test server")
-        .disable_signals()
-        .run();
-        let url = format!("http://{addr}");
-        (url, server)
-    }
-
-    #[fixture]
-    async fn ws_client(
-        #[future] start_ws_server: (String, Server),
-    ) -> (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle) {
-        let (url, server) = start_ws_server.await;
-        let handle = server.handle();
-        actix_web::rt::spawn(server);
-
-        let (_resp, socket) = awc::Client::default()
-            .ws(format!("{url}/ws"))
-            .set_header(header::ORIGIN, "http://localhost:3000")
-            .connect()
-            .await
-            .expect("websocket connect");
-
-        (socket, handle)
-    }
-
-    fn handshake_request_payload(name: &str) -> String {
-        serde_json::json!({
-            "traceId": Uuid::nil(),
-            "displayName": name
-        })
-        .to_string()
-    }
-
-    #[rstest]
-    #[actix_rt::test]
-    async fn sends_user_created_event_for_valid_payload(
-        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
-    ) {
-        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
-        socket
-            .send(Message::Text(handshake_request_payload("Bob").into()))
-            .await
-            .expect("send text");
-
-        let frame = socket.next().await.expect("response frame").expect("frame");
-        let text = match frame {
-            Frame::Text(bytes) => bytes,
-            other => panic!("expected text frame, got {other:?}"),
-        };
-        let value: Value = serde_json::from_slice(&text).expect("json");
-        assert_eq!(
-            value.get("displayName").and_then(Value::as_str),
-            Some("Bob")
-        );
-        assert!(value.get("id").is_some(), "user id present");
-        assert_eq!(
-            value.get("traceId").and_then(Value::as_str),
-            Some(Uuid::nil().to_string().as_str())
-        );
-    }
-
-    #[rstest]
-    #[actix_rt::test]
-    async fn sends_rejection_for_invalid_payload(
-        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
-    ) {
-        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
-        socket
-            .send(Message::Text(handshake_request_payload("bad$char").into()))
-            .await
-            .expect("send text");
-
-        let frame = socket.next().await.expect("response frame").expect("frame");
-        let text = match frame {
-            Frame::Text(bytes) => bytes,
-            other => panic!("expected text frame, got {other:?}"),
-        };
-        let value: Value = serde_json::from_slice(&text).expect("json");
-        assert_eq!(
-            value.get("code").and_then(Value::as_str),
-            Some("invalid_chars")
-        );
-        assert_eq!(
-            value
-                .get("details")
-                .and_then(|v| v.get("field"))
-                .and_then(Value::as_str),
-            Some("displayName")
-        );
-    }
-
-    #[rstest]
-    #[actix_rt::test]
-    async fn closes_on_malformed_json(
-        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
-    ) {
-        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
-        socket
-            .send(awc::ws::Message::Text("not-json".into()))
-            .await
-            .expect("send text");
-
-        let frame = socket.next().await.expect("response frame").expect("frame");
-        match frame {
-            Frame::Close(reason) => {
-                assert_eq!(reason.expect("reason").code, CloseCode::Policy);
-            }
-            other => panic!("expected close frame, got {other:?}"),
-        }
-    }
-
-    #[rstest]
-    #[actix_rt::test]
-    async fn closes_after_timeout_without_client_messages(
-        #[future] ws_client: (actix_codec::Framed<BoxedSocket, Codec>, ServerHandle),
-    ) {
-        let (mut socket, _server): (actix_codec::Framed<_, _>, _) = ws_client.await;
-        tokio::time::sleep(CLIENT_TIMEOUT + HEARTBEAT_INTERVAL * 3).await;
-
-        use std::time::Duration;
-
-        let observed_close = tokio::time::timeout(Duration::from_secs(2), async {
-            let mut observed = None;
-            while let Some(frame) = socket.next().await {
-                let frame = frame.expect("frame");
-                match frame {
-                    Frame::Ping(_) | Frame::Pong(_) => continue,
-                    Frame::Close(reason) => {
-                        observed = reason;
-                        break;
-                    }
-                    other => panic!("unexpected frame before close: {other:?}"),
-                }
-            }
-            observed
-        })
-        .await
-        .expect("close frame missing within timeout")
-        .expect("close frame missing after timeout");
-
-        let reason = observed_close;
-        assert_eq!(reason.code, CloseCode::Normal);
-        assert_eq!(reason.description.as_deref(), Some("heartbeat timeout"));
-    }
-}
+#[path = "session_tests.rs"]
+mod tests;

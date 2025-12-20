@@ -16,7 +16,7 @@ use actix_web::cookie::{time::Duration as CookieDuration, Key, SameSite};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header;
 use actix_web::{web, App, HttpServer};
-use actix_web_actors::ws::CloseCode;
+use actix_ws::CloseCode;
 use rstest::fixture;
 use serde_json::Value;
 use tokio::runtime::Runtime;

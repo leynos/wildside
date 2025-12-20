@@ -118,7 +118,7 @@ day work, and to give reviewers a quick "smell test" for new modules.
 flowchart LR
     subgraph Inbound["backend::inbound (driving adapters)"]
         InHttp["http (Actix handlers)"]
-        InWs["ws (WebSocket actor + payload mapping)"]
+        InWs["ws (WebSocket handler + payload mapping)"]
     end
 
     subgraph Domain["backend::domain (entities + services + ports)"]
@@ -275,7 +275,8 @@ lint`:
   `use`-level imports across `domain`/`inbound`/`outbound`.
 - **2025-12-15:** Introduce driving-port traits (`LoginService`, `UsersQuery`,
   `UserOnboarding`) and inject them into inbound adapters via Actix
-  `web::Data`. This keeps handlers/actors I/O-free and allows integration
+  `web::Data`. This keeps handlers and WebSocket handlers I/O-free and allows
+  integration
   guardrail tests (`backend/tests/adapter_guardrails.rs`) to exercise HTTP and
   WebSocket paths against deterministic test doubles.
 
@@ -322,8 +323,8 @@ domain services or enqueuing jobs as needed.
   When a client connects over WebSocket (after authenticating with a session
   token or bearer token), the server establishes a persistent connection for
   bi-directional messaging. This is used, for example, to push **route
-  generation status** updates asynchronously to the client. Actix’s WebSocket
-  support (built on its actor model) efficiently manages these connections. The
+  generation status** updates asynchronously to the client. Actix Web’s
+  WebSocket support (via `actix-ws`) efficiently manages these connections. The
   server ensures security by validating the `Origin` of WebSocket upgrade
   requests against an allowlist (e.g., localhost for dev, and the official
   domain in prod) to prevent unauthorized cross-site WebSocket
@@ -334,7 +335,7 @@ domain services or enqueuing jobs as needed.
   The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
   adapter. Incoming JSON messages are deserialised into domain commands and
   passed to `UserOnboardingService`, which emits domain events (e.g.,
-  `UserCreated`, `DisplayNameRejected`). The WebSocket actor only serialises
+  `UserCreated`, `DisplayNameRejected`). The WebSocket handler only serialises
   those events to wire payloads and maintains heartbeats, keeping transport
   concerns at the edge.
 
