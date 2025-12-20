@@ -58,7 +58,6 @@ is_webhook_release(release) if {
 
 is_webhook_release(release) if {
 	is_jetstack_repository(release)
-	chart := lower(release.chart)
 	group_name := object.get(release.values, "groupName", "")
 	trim_space(group_name) != ""
 }
