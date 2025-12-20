@@ -1,8 +1,8 @@
-//! Traefik Gateway Module
-//!
-//! Deploys Traefik as an ingress controller using Helm and creates a
-//! cert-manager ClusterIssuer for ACME certificate management with
-//! Cloudflare DNS01 validation.
+# Traefik Gateway Module
+#
+# Deploys Traefik as an ingress controller using Helm and creates a
+# cert-manager ClusterIssuer for ACME certificate management with
+# Cloudflare DNS01 validation.
 
 locals {
   mode           = trimspace(var.mode)

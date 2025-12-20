@@ -111,7 +111,7 @@ lint-openapi:
 		exit 1; \
 	fi
 	@python3 scripts/check_redoc_ignore.py
-	$(call exec_or_bunx,redocly,lint $(OPENAPI_SPEC),@redocly/cli@$(REDOCLY_CLI_VERSION))
+	bun x --package=@redocly/cli@$(REDOCLY_CLI_VERSION) redocly lint $(OPENAPI_SPEC)
 
 # Validate Makefile style and structure
 lint-makefile:
@@ -149,6 +149,7 @@ lint-infra:
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/external_dns && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/cert_manager && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
@@ -227,7 +228,9 @@ INFRA_TEST_TARGETS := \
         traefik-test \
         traefik-policy \
         external-dns-test \
-        external-dns-policy
+        external-dns-policy \
+        cert-manager-test \
+        cert-manager-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -489,4 +492,65 @@ external-dns-policy: conftest tofu
 		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/external_dns/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
 		conftest test --policy infra/modules/external_dns/policy/plan --fail-on-warn --namespace external_dns.policy.plan "$$tmpdir/plan.json"; \
+	fi
+
+cert-manager-test:
+	tofu fmt -check infra/modules/cert_manager
+	tofu -chdir=infra/modules/cert_manager/examples/render init
+	tofu -chdir=infra/modules/cert_manager/examples/render validate
+	TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/render plan -input=false -no-color -detailed-exitcode \
+	|| test $$? -eq 2
+	tofu -chdir=infra/modules/cert_manager/examples/basic init
+	if [ -n "$(CERT_MANAGER_KUBECONFIG_PATH)" ]; then \
+		./scripts/require-cert-manager-env.sh; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic validate -no-color \
+			-var "kubeconfig_path=$(CERT_MANAGER_KUBECONFIG_PATH)" \
+			-var "acme_email=$(CERT_MANAGER_ACME_EMAIL)" \
+			-var "namecheap_api_secret_name=$(CERT_MANAGER_NAMECHEAP_SECRET_NAME)" \
+			-var "vault_server=$(CERT_MANAGER_VAULT_SERVER)" \
+			-var "vault_pki_path=$(CERT_MANAGER_VAULT_PKI_PATH)" \
+			-var "vault_token_secret_name=$(CERT_MANAGER_VAULT_TOKEN_SECRET_NAME)" \
+			-var "vault_ca_bundle_pem=$(CERT_MANAGER_VAULT_CA_BUNDLE_PEM)"; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic plan -input=false -no-color -detailed-exitcode \
+			-var "kubeconfig_path=$(CERT_MANAGER_KUBECONFIG_PATH)" \
+			-var "acme_email=$(CERT_MANAGER_ACME_EMAIL)" \
+			-var "namecheap_api_secret_name=$(CERT_MANAGER_NAMECHEAP_SECRET_NAME)" \
+			-var "vault_server=$(CERT_MANAGER_VAULT_SERVER)" \
+			-var "vault_pki_path=$(CERT_MANAGER_VAULT_PKI_PATH)" \
+			-var "vault_token_secret_name=$(CERT_MANAGER_VAULT_TOKEN_SECRET_NAME)" \
+			-var "vault_ca_bundle_pem=$(CERT_MANAGER_VAULT_CA_BUNDLE_PEM)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+	else \
+		echo "Skipping cert-manager validate; set CERT_MANAGER_KUBECONFIG_PATH to enable"; \
+	fi
+	command -v tflint >/dev/null
+	cd infra/modules/cert_manager && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	cd infra/modules/cert_manager/tests && $(GO_TEST_ENV) KUBECONFIG="$(CERT_MANAGER_KUBECONFIG_PATH)" go test -v
+	$(MAKE) cert-manager-policy
+
+cert-manager-policy: conftest tofu
+	./scripts/cert-manager-render-policy.sh
+	if [ -z "$(CERT_MANAGER_KUBECONFIG_PATH)" ]; then \
+		echo "Skipping cert-manager plan policy; set CERT_MANAGER_KUBECONFIG_PATH to run"; \
+	else \
+		set -euo pipefail; \
+		./scripts/require-cert-manager-env.sh; \
+		tmpdir=$$(mktemp -d); \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		status=0; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic plan \
+			-out="$$tmpdir/tfplan.binary" \
+			-detailed-exitcode \
+			-var "kubeconfig_path=$(CERT_MANAGER_KUBECONFIG_PATH)" \
+			-var "acme_email=$(CERT_MANAGER_ACME_EMAIL)" \
+			-var "namecheap_api_secret_name=$(CERT_MANAGER_NAMECHEAP_SECRET_NAME)" \
+			-var "vault_server=$(CERT_MANAGER_VAULT_SERVER)" \
+			-var "vault_pki_path=$(CERT_MANAGER_VAULT_PKI_PATH)" \
+			-var "vault_token_secret_name=$(CERT_MANAGER_VAULT_TOKEN_SECRET_NAME)" \
+			-var "vault_ca_bundle_pem=$(CERT_MANAGER_VAULT_CA_BUNDLE_PEM)" \
+			|| status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/cert_manager/policy/plan --fail-on-warn --namespace cert_manager.policy.plan "$$tmpdir/plan.json"; \
 	fi

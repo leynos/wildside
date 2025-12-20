@@ -1,8 +1,8 @@
-//! Render-only example for the Traefik gateway module.
-//!
-//! This example does not require cluster access. It exercises the module's
-//! "render" mode, which emits Flux-ready YAML manifests for the GitOps
-//! repository.
+# Render-only example for the Traefik gateway module.
+#
+# This example does not require cluster access. It exercises the module's
+# "render" mode, which emits Flux-ready YAML manifests for the GitOps
+# repository.
 
 variable "namespace" {
   description = "Namespace where Traefik will be deployed by Flux"
