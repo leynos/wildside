@@ -77,11 +77,11 @@ variable "webhook_chart_version" {
     condition = (
       var.webhook_chart_version != null &&
       can(regex(
-        "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+        "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
         trimspace(var.webhook_chart_version)
       ))
     )
-    error_message = "webhook_chart_version must be a semantic version (e.g., 0.2.0)"
+    error_message = "webhook_chart_version must be a semantic version (e.g., v0.2.0)"
   }
 }
 

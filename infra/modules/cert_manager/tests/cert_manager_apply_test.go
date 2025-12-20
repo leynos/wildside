@@ -45,6 +45,7 @@ func TestCertManagerModulePlanDetailedExitCode(t *testing.T) {
 }
 
 func TestCertManagerModuleApplyIfKubeconfigPresent(t *testing.T) {
+	t.Parallel()
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		t.Skip("KUBECONFIG not set; skipping apply test")

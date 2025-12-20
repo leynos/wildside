@@ -394,7 +394,7 @@ spec:
   chart:
     spec:
       chart: cert-manager
-      version: "v1.18.2" # Pin to a stable version (align with [^15]) ([cert-manager.io](https://cert-manager.io/docs/installation/helm/?utm_source=openai))
+      version: "v1.19.2" # Pin to a stable version (align with [^15]) ([cert-manager.io](https://cert-manager.io/docs/installation/helm/?utm_source=openai))
       sourceRef:
         kind: HelmRepository
         name: jetstack

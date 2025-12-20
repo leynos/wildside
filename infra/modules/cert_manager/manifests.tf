@@ -7,11 +7,12 @@ locals {
       namespace = local.flux_namespace
       labels    = local.common_labels
     }
-    spec = {
+    spec = merge({
       interval = local.flux_helm_repository_interval
-      type     = "oci"
       url      = local.chart_repository
-    }
+      }, startswith(local.chart_repository, "oci://") ? {
+      type = "oci"
+    } : {})
   }
 
   webhook_helm_repository_manifest = local.webhook_release_enabled ? {
@@ -87,6 +88,17 @@ locals {
     }
     spec = {
       interval = local.webhook_release_interval
+      install = {
+        remediation = {
+          retries = 3
+        }
+      }
+      upgrade = {
+        remediation = {
+          retries              = 3
+          remediateLastFailure = true
+        }
+      }
       chart = {
         spec = {
           chart = local.webhook_chart_name

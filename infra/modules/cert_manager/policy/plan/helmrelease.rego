@@ -32,13 +32,19 @@ helm_release(rc) = {
 }
 
 is_main_release(release) if {
+	is_jetstack_repository(release)
 	values := release.values
 	object.get(values, "webhook", null) != null
 	object.get(values, "cainjector", null) != null
 }
 
 is_main_release(release) if {
+	is_jetstack_repository(release)
 	lower(release.chart) == "cert-manager"
+}
+
+is_jetstack_repository(release) if {
+	contains(lower(release.repository), "jetstack")
 }
 
 is_webhook_release(release) if {

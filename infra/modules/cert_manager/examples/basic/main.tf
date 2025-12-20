@@ -79,7 +79,8 @@ variable "vault_ca_bundle_pem" {
   }
 }
 
-# Optional variables with defaults matching the module.
+# Optional variables with defaults matching the module, except where noted to
+# keep this example Vault-enabled by default.
 #
 # These defaults intentionally duplicate the module's defaults to enable test
 # flexibility. Tests can override these variables without redefining the
@@ -89,6 +90,12 @@ variable "namespace" {
   description = "Namespace where cert-manager will be installed"
   type        = string
   default     = "cert-manager"
+}
+
+variable "vault_enabled" {
+  description = "Whether to enable the Vault ClusterIssuer"
+  type        = bool
+  default     = true
 }
 
 variable "webhook_release_enabled" {
@@ -198,6 +205,7 @@ module "cert_manager" {
   webhook_chart_version    = var.webhook_chart_version
   webhook_repository_type  = var.webhook_repository_type
 
+  vault_enabled            = var.vault_enabled
   vault_server             = var.vault_server
   vault_pki_path           = var.vault_pki_path
   vault_token_secret_name  = var.vault_token_secret_name

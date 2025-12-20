@@ -74,7 +74,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Exact Helm chart version for cert-manager"
   type        = string
-  default     = "v1.18.2"
+  default     = "v1.19.2"
 
   validation {
     condition = (
@@ -84,7 +84,7 @@ variable "chart_version" {
         trimspace(var.chart_version)
       ))
     )
-    error_message = "chart_version must be a semantic version (e.g., v1.18.2)"
+    error_message = "chart_version must be a semantic version (e.g., v1.19.2)"
   }
 }
 

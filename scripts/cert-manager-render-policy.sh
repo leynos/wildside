@@ -31,6 +31,7 @@ out_dir="$tmpdir/out"
 mkdir -p "$out_dir"
 
 log_file="$tmpdir/tofu.log"
+output_log="$tmpdir/tofu-output.log"
 
 if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" init -input=false -no-color > "$log_file" 2>&1; then
   echo "tofu init failed:" >&2
@@ -44,7 +45,12 @@ if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply -auto-approve -input=fa
   exit 1
 fi
 
-TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output -json rendered_manifests > "$tmpdir/manifests.json"
+if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output -json rendered_manifests \
+  > "$tmpdir/manifests.json" 2> "$output_log"; then
+  echo "tofu output failed:" >&2
+  cat "$output_log" >&2
+  exit 1
+fi
 
 RENDER_POLICY_TMP="$tmpdir" python3 - <<'PY'
 from __future__ import annotations

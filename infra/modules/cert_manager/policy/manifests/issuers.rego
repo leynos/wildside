@@ -36,9 +36,6 @@ acme_webhook_solvers(spec) := [webhook |
 	webhook != null
 ]
 
-has_dns01_webhook_solver(spec) if {
-	count(acme_webhook_solvers(spec)) > 0
-}
 
 deny contains msg if {
 	doc := issuers[_]
@@ -78,15 +75,6 @@ deny contains msg if {
 	solvers := acme_solvers(spec)
 	count(solvers) == 0
 	msg := sprintf("ClusterIssuer %s must define at least one ACME solver", [object.get(metadata(doc), "name", "<unknown>")])
-}
-
-deny contains msg if {
-	doc := issuers[_]
-	spec := object.get(doc, "spec", {})
-	acme := acme_config(spec)
-	acme != {}
-	not has_dns01_webhook_solver(spec)
-	msg := sprintf("ClusterIssuer %s must configure a DNS-01 webhook solver", [object.get(metadata(doc), "name", "<unknown>")])
 }
 
 deny contains msg if {

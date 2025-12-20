@@ -502,12 +502,7 @@ cert-manager-test:
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/cert_manager/examples/basic init
 	if [ -n "$(CERT_MANAGER_KUBECONFIG_PATH)" ]; then \
-		if [ -z "$(CERT_MANAGER_ACME_EMAIL)" ] || [ -z "$(CERT_MANAGER_NAMECHEAP_SECRET_NAME)" ] || \
-			[ -z "$(CERT_MANAGER_VAULT_SERVER)" ] || [ -z "$(CERT_MANAGER_VAULT_PKI_PATH)" ] || \
-			[ -z "$(CERT_MANAGER_VAULT_TOKEN_SECRET_NAME)" ] || [ -z "$(CERT_MANAGER_VAULT_CA_BUNDLE_PEM)" ]; then \
-			echo "CERT_MANAGER_ACME_EMAIL, CERT_MANAGER_NAMECHEAP_SECRET_NAME, CERT_MANAGER_VAULT_SERVER, CERT_MANAGER_VAULT_PKI_PATH, CERT_MANAGER_VAULT_TOKEN_SECRET_NAME, and CERT_MANAGER_VAULT_CA_BUNDLE_PEM must be set when CERT_MANAGER_KUBECONFIG_PATH is set" >&2; \
-			exit 1; \
-		fi; \
+		./scripts/require-cert-manager-env.sh; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic validate -no-color \
 			-var "kubeconfig_path=$(CERT_MANAGER_KUBECONFIG_PATH)" \
 			-var "acme_email=$(CERT_MANAGER_ACME_EMAIL)" \
@@ -540,12 +535,7 @@ cert-manager-policy: conftest tofu
 		echo "Skipping cert-manager plan policy; set CERT_MANAGER_KUBECONFIG_PATH to run"; \
 	else \
 		set -euo pipefail; \
-		if [ -z "$(CERT_MANAGER_ACME_EMAIL)" ] || [ -z "$(CERT_MANAGER_NAMECHEAP_SECRET_NAME)" ] || \
-			[ -z "$(CERT_MANAGER_VAULT_SERVER)" ] || [ -z "$(CERT_MANAGER_VAULT_PKI_PATH)" ] || \
-			[ -z "$(CERT_MANAGER_VAULT_TOKEN_SECRET_NAME)" ] || [ -z "$(CERT_MANAGER_VAULT_CA_BUNDLE_PEM)" ]; then \
-			echo "CERT_MANAGER_ACME_EMAIL, CERT_MANAGER_NAMECHEAP_SECRET_NAME, CERT_MANAGER_VAULT_SERVER, CERT_MANAGER_VAULT_PKI_PATH, CERT_MANAGER_VAULT_TOKEN_SECRET_NAME, and CERT_MANAGER_VAULT_CA_BUNDLE_PEM must be set when CERT_MANAGER_KUBECONFIG_PATH is set" >&2; \
-			exit 1; \
-		fi; \
+		./scripts/require-cert-manager-env.sh; \
 		tmpdir=$$(mktemp -d); \
 		trap 'rm -rf "$$tmpdir"' EXIT; \
 		status=0; \

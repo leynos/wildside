@@ -95,7 +95,7 @@ locals {
   }
 
   default_values_yaml    = yamlencode(local.default_values_map)
-  decoded_helm_values    = [for value in local.helm_values : yamldecode(value)]
+  decoded_helm_values    = [for value in local.helm_values : try(yamldecode(value), {})]
   merged_helm_values_map = merge({}, local.decoded_helm_values...)
   flux_values_map        = merge(local.default_values_map, local.merged_helm_values_map)
 

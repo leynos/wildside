@@ -147,7 +147,8 @@ var planPolicyRejectionTestCases = []struct {
       "after": {
         "name": "cert-manager",
         "chart": "cert-manager",
-        "version": "v1.18.2",
+        "repository": "oci://quay.io/jetstack/charts",
+        "version": "v1.19.2",
         "values": ["replicaCount: 3\nwebhook:\n  replicaCount: 3\ncainjector:\n  replicaCount: 3\n"]
       }
     }

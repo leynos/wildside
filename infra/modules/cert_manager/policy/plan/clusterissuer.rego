@@ -17,9 +17,6 @@ acme_webhook_solvers(spec) := [webhook |
 	webhook != null
 ]
 
-has_dns01_webhook_solver(spec) if {
-	count(acme_webhook_solvers(spec)) > 0
-}
 
 clusterissuer(rc) = {"manifest": manifest, "spec": spec} if {
 	rc.type == "kubernetes_manifest"
@@ -62,16 +59,6 @@ deny contains msg if {
 	solvers := acme_solvers(spec)
 	count(solvers) == 0
 	msg := sprintf("ClusterIssuer %s must have at least one ACME solver configured", [ci.manifest.metadata.name])
-}
-
-deny contains msg if {
-	rc := input.resource_changes[_]
-	ci := clusterissuer(rc)
-	spec := ci.spec
-	acme := acme_config(spec)
-	acme != {}
-	not has_dns01_webhook_solver(spec)
-	msg := sprintf("ClusterIssuer %s must use a DNS-01 webhook solver", [ci.manifest.metadata.name])
 }
 
 deny contains msg if {

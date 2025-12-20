@@ -50,6 +50,12 @@ variable "vault_ca_bundle_pem" {
     PEM
 }
 
+variable "vault_enabled" {
+  description = "Whether to enable the Vault ClusterIssuer"
+  type        = bool
+  default     = true
+}
+
 variable "webhook_release_enabled" {
   description = "Whether to deploy the Namecheap webhook Helm release"
   type        = bool
@@ -146,6 +152,7 @@ module "cert_manager" {
   webhook_chart_version    = var.webhook_chart_version
   webhook_repository_type  = var.webhook_repository_type
 
+  vault_enabled            = var.vault_enabled
   vault_server             = var.vault_server
   vault_pki_path           = var.vault_pki_path
   vault_token_secret_name  = var.vault_token_secret_name

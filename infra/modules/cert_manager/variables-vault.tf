@@ -1,7 +1,7 @@
 variable "vault_enabled" {
   description = "Whether to render the Vault ClusterIssuer"
   type        = bool
-  default     = true
+  default     = false
   nullable    = false
 }
 
@@ -81,8 +81,11 @@ variable "vault_token_secret_key" {
   default     = "token"
 
   validation {
-    condition     = var.vault_token_secret_key != null && length(trimspace(var.vault_token_secret_key)) > 0
-    error_message = "vault_token_secret_key must not be blank"
+    condition = (
+      !var.vault_enabled ||
+      (var.vault_token_secret_key != null && length(trimspace(var.vault_token_secret_key)) > 0)
+    )
+    error_message = "vault_token_secret_key must not be blank when Vault issuer is enabled"
   }
 }
 
@@ -122,10 +125,13 @@ variable "ca_bundle_secret_name" {
 
   validation {
     condition = (
-      var.ca_bundle_secret_name != null &&
-      length(trimspace(var.ca_bundle_secret_name)) > 0
+      !var.ca_bundle_secret_enabled ||
+      (
+        var.ca_bundle_secret_name != null &&
+        length(trimspace(var.ca_bundle_secret_name)) > 0
+      )
     )
-    error_message = "ca_bundle_secret_name must not be blank"
+    error_message = "ca_bundle_secret_name must not be blank when ca_bundle_secret_enabled is true"
   }
 }
 
@@ -135,7 +141,10 @@ variable "ca_bundle_secret_key" {
   default     = "ca.crt"
 
   validation {
-    condition     = var.ca_bundle_secret_key != null && length(trimspace(var.ca_bundle_secret_key)) > 0
-    error_message = "ca_bundle_secret_key must not be blank"
+    condition = (
+      !var.ca_bundle_secret_enabled ||
+      (var.ca_bundle_secret_key != null && length(trimspace(var.ca_bundle_secret_key)) > 0)
+    )
+    error_message = "ca_bundle_secret_key must not be blank when ca_bundle_secret_enabled is true"
   }
 }

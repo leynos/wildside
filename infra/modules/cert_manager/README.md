@@ -9,8 +9,8 @@ mode for direct cluster provisioning.
 
 - A Kubernetes cluster with cluster-admin access
 - A Kubernetes Secret containing Namecheap API credentials (for ACME DNS-01)
-- A Kubernetes Secret containing a Vault token and CA bundle material (for the
-  Vault ClusterIssuer)
+- A Kubernetes Secret containing a Vault token and CA bundle material (when
+  `vault_enabled` is true)
 - OpenTofu >= 1.6.0
 - `conftest` (policy tests): requires conftest built with OPA >= 0.59.0 (Rego
   v1 syntax)
@@ -26,6 +26,7 @@ module "cert_manager" {
   acme_email               = "platform@example.test"
   namecheap_api_secret_name = "namecheap-api-credentials"
 
+  vault_enabled          = true
   vault_server           = "https://vault.example.test:8200"
   vault_pki_path          = "pki/sign/example"
   vault_token_secret_name = "vault-token"
@@ -47,6 +48,7 @@ module "cert_manager" {
   acme_email               = "platform@example.test"
   namecheap_api_secret_name = "namecheap-api-credentials"
 
+  vault_enabled          = true
   vault_server           = "https://vault.example.test:8200"
   vault_pki_path          = "pki/sign/example"
   vault_token_secret_name = "vault-token"
@@ -71,7 +73,7 @@ resource "local_file" "manifests" {
 | `helm_release_name` | Name assigned to the cert-manager Helm release | `string` | `"cert-manager"` | no |
 | `chart_repository` | Helm repository hosting the cert-manager chart | `string` | `"oci://quay.io/jetstack/charts"` | no |
 | `chart_name` | Name of the Helm chart used to install cert-manager | `string` | `"cert-manager"` | no |
-| `chart_version` | Exact Helm chart version for cert-manager | `string` | `"v1.18.2"` | no |
+| `chart_version` | Exact Helm chart version for cert-manager | `string` | `"v1.19.2"` | no |
 | `helm_wait` | Whether to wait for the Helm release to report success | `bool` | `true` | no |
 | `helm_timeout` | Timeout (in seconds) for the Helm release operation | `number` | `600` | no |
 | `helm_values` | Inline YAML values passed to the cert-manager Helm release | `list(string)` | `[]` | no |
@@ -115,13 +117,13 @@ resource "local_file" "manifests" {
 | `webhook_release_interval` | Interval for the Namecheap webhook HelmRelease reconciliation | `string` | `"1h"` | no |
 | `webhook_repository_type` | Optional repository type for the Namecheap webhook HelmRepository | `string` | `null` | no |
 | `webhook_release_replica_count` | Replica count for the Namecheap webhook | `number` | `2` | no |
-| `vault_enabled` | Whether to render the Vault ClusterIssuer | `bool` | `true` | no |
+| `vault_enabled` | Whether to render the Vault ClusterIssuer | `bool` | `false` | no |
 | `vault_issuer_name` | Name of the Vault ClusterIssuer | `string` | `"vault-issuer"` | no |
-| `vault_server` | Vault server URL (must be https://) | `string` | - | **yes** |
-| `vault_pki_path` | Vault PKI signing path (e.g., pki/sign/example) | `string` | - | **yes** |
-| `vault_token_secret_name` | Secret containing the Vault token for cert-manager | `string` | - | **yes** |
+| `vault_server` | Vault server URL (must be https://). Required when `vault_enabled` is true. | `string` | `null` | no |
+| `vault_pki_path` | Vault PKI signing path (e.g., pki/sign/example). Required when `vault_enabled` is true. | `string` | `null` | no |
+| `vault_token_secret_name` | Secret containing the Vault token for cert-manager. Required when `vault_enabled` is true. | `string` | `null` | no |
 | `vault_token_secret_key` | Key in the Vault token secret containing the token | `string` | `"token"` | no |
-| `vault_ca_bundle_pem` | PEM-encoded CA bundle for Vault TLS verification | `string` | - | **yes** |
+| `vault_ca_bundle_pem` | PEM-encoded CA bundle for Vault TLS verification. Required when `vault_enabled` is true. | `string` | `null` | no |
 | `ca_bundle_secret_enabled` | Whether to render/apply a Secret containing the Vault CA bundle | `bool` | `false` | no |
 | `ca_bundle_secret_name` | Name of the Secret containing the Vault CA bundle | `string` | `"vault-ca-bundle"` | no |
 | `ca_bundle_secret_key` | Key in the CA bundle Secret containing the PEM data | `string` | `"ca.crt"` | no |

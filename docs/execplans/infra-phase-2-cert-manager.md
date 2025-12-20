@@ -13,8 +13,9 @@ Deliver the Phase 2.3 cert-manager module so the `wildside-infra-k8s` action
 can render Flux-ready manifests into `wildside-infra` and converge TLS
 issuance on every run. Success is visible when the new OpenTofu module can
 render a `platform/cert-manager` tree containing the cert-manager HelmRelease
-and ClusterIssuers for ACME and Vault, and when its outputs expose issuer
-names, secret references, and CA bundle material for downstream modules.
+and ClusterIssuers for ACME (Automated Certificate Management Environment) and
+Vault, and when its outputs expose issuer names, secret references, and CA
+bundle material for downstream modules.
 
 ## Progress
 
@@ -52,7 +53,7 @@ names, secret references, and CA bundle material for downstream modules.
 ## Decision Log
 
 - Decision: Use the Jetstack OCI chart repository
-  (`oci://quay.io/jetstack/charts`) and pin cert-manager at `v1.18.2`.
+  (`oci://quay.io/jetstack/charts`) and pin cert-manager at `v1.19.2`.
   Rationale: Matches the declarative TLS guide and avoids unpinned updates.
   Date/Author: 2025-12-19 (assistant).
 - Decision: Default to high-availability replica counts and render
@@ -93,7 +94,7 @@ and references:
 - `docs/declarative-tls-guide.md` and
   `docs/cloud-native-ephemeral-previews.md` for expected cert-manager
   behaviours and GitOps layout. The TLS guide specifies the Jetstack OCI
-  HelmRepository, chart version `v1.18.2`, high-availability values, and
+  HelmRepository, chart version `v1.19.2`, high-availability values, and
   PodDisruptionBudgets for webhook and cainjector, plus a Namecheap DNS-01
   webhook solver whose `groupName` and `solverName` must match the
   `ClusterIssuer` configuration.
@@ -131,7 +132,7 @@ existing modules: `main.tf`, `variables-*.tf`, `outputs.tf`, `versions.tf`, a
 an HCL module header comment using `//!` per repository conventions.
 
 Implement the module so it supports both `render` and `apply` modes. Build
-`locals` that normalise input values, map defaults, merge Helm values, and
+`locals` that normalize input values, map defaults, merge Helm values, and
 construct manifests for HelmRepository, Namespace, HelmRelease, ClusterIssuers,
 and an optional CA bundle Secret/ConfigMap. Include optional manifests for the
 Namecheap webhook HelmRelease and the webhook/cainjector
@@ -142,7 +143,7 @@ PodDisruptionBudgets described in the TLS guide. Render mode must return a
 Follow the TLS guide for cert-manager release defaults: use a Jetstack
 `HelmRepository` with `type: oci` and
 `url: oci://quay.io/jetstack/charts`, set the cert-manager chart version to
-`v1.18.2`, enable CRD installation in `spec.install`, and default to
+`v1.19.2`, enable CRD installation in `spec.install`, and default to
 high-availability replica counts for the controller, webhook, and cainjector.
 Render PodDisruptionBudgets when any of those replica counts exceed one.
 
@@ -169,7 +170,7 @@ should only depend on module inputs and export `rendered_manifests`. Duplicate
 module defaults in the example variables so Terratest can override them.
 
 Create OPA/Conftest policies for both rendered manifests and plan output.
-Manifests policies should enforce pinned chart versions, correct sourceRef,
+Manifest policies should enforce pinned chart versions, correct sourceRef,
 namespace consistency, PDB presence when replica counts exceed one, and
 required issuer settings. Plan policies should
 inspect `kubernetes_manifest` resources for ACME and Vault issuers, asserting
@@ -202,7 +203,7 @@ document and update `docs/contents.md` accordingly.
 
 All commands should be run from
 `/mnt/home/leynos/Projects/wildside.worktrees/infra-phase-2-cert-manager`.
-Use a 300 second timeout and capture logs with `tee` for any command with
+Use a 300-second timeout and capture logs with `tee` for any command with
 long output.
 
 1. Create the module and policy scaffolding.
@@ -229,7 +230,7 @@ long output.
     timeout 300s bash -lc \
       'tofu -chdir=infra/modules/cert_manager/examples/render init -input=false -no-color'
 
-5. Add Terratest suites and initialise the Go module for tests.
+5. Add Terratest suites and initialize the Go module for tests.
 
     timeout 300s bash -lc \
       'cd infra/modules/cert_manager/tests && go mod init wildside/infra/modules/cert_manager/tests'
@@ -372,9 +373,12 @@ Expected outputs:
 ## Revision note
 
 - 2025-12-19: Recorded completed implementation steps (module, policies, tests,
-  scripts, README, Makefile updates) and logged finalised decisions. Validation
+  scripts, README, Makefile updates) and logged finalized decisions. Validation
   steps and lockfile generation remain outstanding and are called out in
   Progress.
 - 2025-12-19: Updated the plan to reflect completed validation gates, added
   policy/test fixes for conftest and KUBECONFIG handling, and captured the
   observed validation hiccups.
+- 2025-12-20: Updated chart version references to v1.19.2, expanded ACME on
+  first use, and aligned wording/spelling with review feedback. No remaining
+  work was added.

@@ -47,6 +47,7 @@ users:
 	return map[string]interface{}{
 		"acme_email":                "platform@example.test",
 		"namecheap_api_secret_name": "namecheap-api-credentials",
+		"vault_enabled":             true,
 		"vault_server":              "https://vault.example.test:8200",
 		"vault_pki_path":            "pki/sign/example",
 		"vault_token_secret_name":   "vault-token",
@@ -60,6 +61,7 @@ func renderVars(t *testing.T) map[string]interface{} {
 	return map[string]interface{}{
 		"acme_email":                "platform@example.test",
 		"namecheap_api_secret_name": "namecheap-api-credentials",
+		"vault_enabled":             true,
 		"vault_server":              "https://vault.example.test:8200",
 		"vault_pki_path":            "pki/sign/example",
 		"vault_token_secret_name":   "vault-token",
@@ -174,7 +176,9 @@ func runConftest(t *testing.T, cfg conftestRun) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	args := append([]string{"test", "--policy", cfg.PolicyPath, cfg.InputPath}, cfg.ExtraArgs...)
+	args := make([]string, 0, 4+len(cfg.ExtraArgs))
+	args = append(args, "test", "--policy", cfg.PolicyPath, cfg.InputPath)
+	args = append(args, cfg.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, "conftest", args...)
 	cmd.Env = testutil.TerraformEnv(t, map[string]string{
 		"KUBECONFIG": cfg.Kubeconfig,

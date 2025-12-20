@@ -171,7 +171,8 @@ func TestCertManagerModuleRenderPolicyRejections(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, "conftest", "conftest not found; skipping policy test")
 
-	tfDir, _ := setupRender(t, renderVars(t))
+	tfDir, opts := setupRender(t, renderVars(t))
+	terraform.Init(t, opts)
 	policyPath := certManagerManifestsPolicyPath(tfDir)
 
 	for _, tc := range renderPolicyRejectionTestCases {
