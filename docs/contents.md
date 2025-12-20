@@ -16,7 +16,7 @@
 
 ## Architecture decision records
 
-- [ADR 001: WebSockets on actix-ws](adr-001-websockets-on-actix-ws.md) –
+- [Architecture Decision Record (ADR) 001: WebSockets on actix-ws][adr-001] –
   rationale for migrating the WebSocket adapter to `actix-ws`. *Audience:
   backend developers.*
 
@@ -104,6 +104,7 @@
 [rust-di]: reliable-testing-in-rust-via-dependency-injection.md
 [rust-doctest]: rust-doctest-dry-guide.md
 [rust-rstest]: rust-testing-with-rstest-fixtures.md
+[adr-001]: adr-001-websockets-on-actix-ws.md
 [cloud-previews]: cloud-native-ephemeral-previews.md
 [cloudflare-opentofu]: using-cloudflare-dns-with-opentofu.md
 [infra-test-deps]: infrastructure-test-dependencies.md
