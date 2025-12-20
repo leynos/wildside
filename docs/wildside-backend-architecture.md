@@ -777,7 +777,7 @@ before invoking a port. Canonical examples include:
 > allowing the application to compile and run without Redis or job queue
 > infrastructure. Migrations reside in `backend/migrations/` and define the
 > PostgreSQL schema including audit timestamps and auto-update triggers.
-
+>
 > **Design decision (2025-12-19):** Introduce driving ports
 > `UserProfileQuery` and `UserInterestsCommand` plus domain types
 > `InterestThemeId` and `UserInterests` to support session-authenticated

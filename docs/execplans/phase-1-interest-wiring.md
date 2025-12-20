@@ -292,32 +292,32 @@ Add or update the following interfaces (final state target):
 
 - In `backend/src/domain/ports/user_interests_command.rs` (new file), define:
 
-    #[async_trait::async_trait]
-    pub trait UserInterestsCommand: Send + Sync {
-        async fn set_interests(
-            &self,
-            user_id: &UserId,
-            interest_theme_ids: Vec<InterestThemeId>,
-        ) -> Result<UserInterests, Error>;
-    }
+      #[async_trait::async_trait]
+      pub trait UserInterestsCommand: Send + Sync {
+          async fn set_interests(
+              &self,
+              user_id: &UserId,
+              interest_theme_ids: Vec<InterestThemeId>,
+          ) -> Result<UserInterests, Error>;
+      }
 
   Include a fixture implementation returning a deterministic
   `UserInterests`.
 
 - In `backend/src/inbound/http/users.rs`, add handlers:
 
-    #[get("/users/me")]
-    async fn current_user(
-        state: web::Data<HttpState>,
-        session: SessionContext,
-    ) -> ApiResult<web::Json<User>> { ... }
+      #[get("/users/me")]
+      async fn current_user(
+          state: web::Data<HttpState>,
+          session: SessionContext,
+      ) -> ApiResult<web::Json<User>> { ... }
 
-    #[put("/users/me/interests")]
-    async fn update_interests(
-        state: web::Data<HttpState>,
-        session: SessionContext,
-        payload: web::Json<InterestsRequest>,
-    ) -> ApiResult<web::Json<UserInterests>> { ... }
+      #[put("/users/me/interests")]
+      async fn update_interests(
+          state: web::Data<HttpState>,
+          session: SessionContext,
+          payload: web::Json<InterestsRequest>,
+      ) -> ApiResult<web::Json<UserInterests>> { ... }
 
   with request data transfer objects (DTOs) that convert into domain types via
   `TryFrom` so validation

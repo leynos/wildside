@@ -35,14 +35,7 @@ impl InterestThemeId {
     /// Validate and construct an [`InterestThemeId`] from borrowed input.
     pub fn new(id: impl AsRef<str>) -> Result<Self, InterestThemeIdValidationError> {
         let raw = id.as_ref();
-        if raw.is_empty() {
-            return Err(InterestThemeIdValidationError::EmptyId);
-        }
-        if raw.trim() != raw {
-            return Err(InterestThemeIdValidationError::InvalidId);
-        }
-
-        let parsed = Uuid::parse_str(raw).map_err(|_| InterestThemeIdValidationError::InvalidId)?;
+        let parsed = Self::validate_and_parse(raw)?;
         Ok(Self(parsed, raw.to_owned()))
     }
 
@@ -55,6 +48,16 @@ impl InterestThemeId {
     /// Access the underlying UUID.
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
+    }
+
+    fn validate_and_parse(id: &str) -> Result<Uuid, InterestThemeIdValidationError> {
+        if id.is_empty() {
+            return Err(InterestThemeIdValidationError::EmptyId);
+        }
+        if id.trim() != id {
+            return Err(InterestThemeIdValidationError::InvalidId);
+        }
+        Uuid::parse_str(id).map_err(|_| InterestThemeIdValidationError::InvalidId)
     }
 }
 
@@ -81,15 +84,7 @@ impl TryFrom<String> for InterestThemeId {
     type Error = InterestThemeIdValidationError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            return Err(InterestThemeIdValidationError::EmptyId);
-        }
-        if value.trim() != value {
-            return Err(InterestThemeIdValidationError::InvalidId);
-        }
-
-        let parsed =
-            Uuid::parse_str(&value).map_err(|_| InterestThemeIdValidationError::InvalidId)?;
+        let parsed = Self::validate_and_parse(&value)?;
         Ok(Self(parsed, value))
     }
 }
