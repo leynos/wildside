@@ -217,6 +217,66 @@ fn cookie_secure_from_env<E: SessionEnv>(
     }
 }
 
+fn debug_warn_or_error<T, F>(
+    mode: BuildMode,
+    fallback: T,
+    error: SessionConfigError,
+    warn_fn: F,
+) -> Result<T, SessionConfigError>
+where
+    F: FnOnce(),
+{
+    if mode.is_debug() {
+        warn_fn();
+        Ok(fallback)
+    } else {
+        Err(error)
+    }
+}
+
+fn validate_same_site_none(mode: BuildMode, cookie_secure: bool) -> Result<(), SessionConfigError> {
+    if cookie_secure {
+        return Ok(());
+    }
+
+    debug_warn_or_error(mode, (), SessionConfigError::InsecureSameSiteNone, || {
+        warn!(
+            "{}",
+            concat!(
+                "SESSION_SAMESITE=None with SESSION_COOKIE_SECURE=0; ",
+                "browsers may reject third-party cookies"
+            )
+        );
+    })
+}
+
+fn parse_same_site_value(
+    value: String,
+    mode: BuildMode,
+    cookie_secure: bool,
+    default_same_site: SameSite,
+) -> Result<SameSite, SessionConfigError> {
+    let value_lower = value.to_ascii_lowercase();
+    match value_lower.as_str() {
+        "lax" => Ok(SameSite::Lax),
+        "strict" => Ok(SameSite::Strict),
+        "none" => {
+            validate_same_site_none(mode, cookie_secure)?;
+            Ok(SameSite::None)
+        }
+        _ => debug_warn_or_error(
+            mode,
+            default_same_site,
+            SessionConfigError::InvalidEnv {
+                name: SAMESITE_ENV,
+                value: value.clone(),
+                expected: SAMESITE_EXPECTED,
+            },
+            || warn!(value = %value, "invalid SESSION_SAMESITE, using default"),
+        ),
+    }
+}
+
 fn same_site_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
@@ -231,47 +291,16 @@ fn same_site_from_env<E: SessionEnv>(
     let value = match env.string(SAMESITE_ENV) {
         Some(value) => value,
         None => {
-            if mode.is_debug() {
-                warn!("SESSION_SAMESITE not set; using default");
-                return Ok(default_same_site);
-            }
-            return Err(SessionConfigError::MissingEnv { name: SAMESITE_ENV });
+            return debug_warn_or_error(
+                mode,
+                default_same_site,
+                SessionConfigError::MissingEnv { name: SAMESITE_ENV },
+                || warn!("SESSION_SAMESITE not set; using default"),
+            );
         }
     };
 
-    let same_site = match value.to_ascii_lowercase().as_str() {
-        "lax" => SameSite::Lax,
-        "strict" => SameSite::Strict,
-        "none" => {
-            if !cookie_secure {
-                if mode.is_debug() {
-                    warn!(
-                        "{}",
-                        concat!(
-                            "SESSION_SAMESITE=None with SESSION_COOKIE_SECURE=0; ",
-                            "browsers may reject third-party cookies"
-                        )
-                    );
-                } else {
-                    return Err(SessionConfigError::InsecureSameSiteNone);
-                }
-            }
-            SameSite::None
-        }
-        _ => {
-            if mode.is_debug() {
-                warn!(value = %value, "invalid SESSION_SAMESITE, using default");
-                return Ok(default_same_site);
-            }
-            return Err(SessionConfigError::InvalidEnv {
-                name: SAMESITE_ENV,
-                value,
-                expected: SAMESITE_EXPECTED,
-            });
-        }
-    };
-
-    Ok(same_site)
+    parse_same_site_value(value, mode, cookie_secure, default_same_site)
 }
 
 fn allow_ephemeral_from_env<E: SessionEnv>(
