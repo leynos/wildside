@@ -6,16 +6,6 @@ use rstest::rstest;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-struct TestEnv {
-    inner: MockEnv,
-}
-
-impl SessionEnv for TestEnv {
-    fn string(&self, name: &str) -> Option<String> {
-        MockableEnv::string(&self.inner, name)
-    }
-}
-
 #[derive(Debug)]
 struct TempKeyFile {
     path: PathBuf,
@@ -41,21 +31,23 @@ impl Drop for TempKeyFile {
     }
 }
 
-fn mock_env(vars: HashMap<String, String>) -> TestEnv {
+struct TestEnv {
+    inner: MockEnv,
+    _key_file: Option<TempKeyFile>,
+}
+
+impl SessionEnv for TestEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        MockableEnv::string(&self.inner, name)
+    }
+}
+
+fn build_mock_env(vars: HashMap<String, String>) -> MockEnv {
     let mut env = MockEnv::new();
     env.expect_string()
         .times(0..)
         .returning(move |key| vars.get(key).cloned());
-    TestEnv { inner: env }
-}
-
-fn release_defaults(key_path: &str) -> HashMap<String, String> {
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_path.to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "1".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "Strict".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    vars
+    env
 }
 
 fn expect_error(
@@ -68,9 +60,67 @@ fn expect_error(
     }
 }
 
+struct TestEnvBuilder {
+    vars: HashMap<String, String>,
+    _key_file: Option<TempKeyFile>,
+}
+
+impl TestEnvBuilder {
+    fn new() -> Self {
+        Self {
+            vars: HashMap::new(),
+            _key_file: None,
+        }
+    }
+
+    fn with_valid_key(self) -> Self {
+        self.with_key_len(SESSION_KEY_MIN_LEN)
+    }
+
+    fn with_key_len(mut self, len: usize) -> Self {
+        let key_file = TempKeyFile::new(len).expect("key file creation should succeed");
+        self.vars
+            .insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
+        self._key_file = Some(key_file);
+        self
+    }
+
+    fn with_cookie_secure(mut self, value: &str) -> Self {
+        self.vars
+            .insert(COOKIE_SECURE_ENV.to_string(), value.to_string());
+        self
+    }
+
+    fn with_same_site(mut self, value: &str) -> Self {
+        self.vars
+            .insert(SAMESITE_ENV.to_string(), value.to_string());
+        self
+    }
+
+    fn with_allow_ephemeral(mut self, value: &str) -> Self {
+        self.vars
+            .insert(ALLOW_EPHEMERAL_ENV.to_string(), value.to_string());
+        self
+    }
+
+    fn with_release_defaults(self) -> Self {
+        self.with_cookie_secure("1")
+            .with_same_site("Strict")
+            .with_allow_ephemeral("0")
+    }
+
+    fn build(self) -> TestEnv {
+        let env = build_mock_env(self.vars);
+        TestEnv {
+            inner: env,
+            _key_file: self._key_file,
+        }
+    }
+}
+
 #[rstest]
 fn release_missing_cookie_secure_is_rejected() {
-    let env = mock_env(HashMap::new());
+    let env = TestEnvBuilder::new().build();
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
         "expected missing cookie secure to fail",
@@ -87,10 +137,11 @@ fn release_missing_cookie_secure_is_rejected() {
 #[case("maybe")]
 #[case("")]
 fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = release_defaults(key_file.path_str());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), value.to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_release_defaults()
+        .with_cookie_secure(value)
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -107,12 +158,11 @@ fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) {
 
 #[rstest]
 fn release_missing_same_site_is_rejected() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "1".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("1")
+        .with_allow_ephemeral("0")
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -126,12 +176,11 @@ fn release_missing_same_site_is_rejected() {
 
 #[rstest]
 fn release_missing_allow_ephemeral_is_rejected() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "1".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "Strict".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("1")
+        .with_same_site("Strict")
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -147,10 +196,11 @@ fn release_missing_allow_ephemeral_is_rejected() {
 
 #[rstest]
 fn release_ephemeral_enabled_is_rejected() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = release_defaults(key_file.path_str());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "1".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_release_defaults()
+        .with_allow_ephemeral("1")
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -161,11 +211,11 @@ fn release_ephemeral_enabled_is_rejected() {
 
 #[rstest]
 fn release_missing_key_file_is_rejected() {
-    let mut vars = HashMap::new();
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "1".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "Strict".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_cookie_secure("1")
+        .with_same_site("Strict")
+        .with_allow_ephemeral("0")
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -176,8 +226,10 @@ fn release_missing_key_file_is_rejected() {
 
 #[rstest]
 fn release_short_key_is_rejected() {
-    let key_file = TempKeyFile::new(32).expect("key file creation should succeed");
-    let env = mock_env(release_defaults(key_file.path_str()));
+    let env = TestEnvBuilder::new()
+        .with_key_len(32)
+        .with_release_defaults()
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -188,13 +240,12 @@ fn release_short_key_is_rejected() {
 
 #[rstest]
 fn release_insecure_none_same_site_is_rejected() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "0".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "None".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("0")
+        .with_same_site("None")
+        .with_allow_ephemeral("0")
+        .build();
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -205,8 +256,10 @@ fn release_insecure_none_same_site_is_rejected() {
 
 #[rstest]
 fn release_valid_settings_succeed() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let env = mock_env(release_defaults(key_file.path_str()));
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_release_defaults()
+        .build();
 
     let settings =
         session_settings_from_env(&env, BuildMode::Release).expect("expected valid settings");
@@ -216,7 +269,7 @@ fn release_valid_settings_succeed() {
 
 #[rstest]
 fn debug_defaults_allow_ephemeral_key() {
-    let env = mock_env(HashMap::new());
+    let env = TestEnvBuilder::new().build();
     let settings =
         session_settings_from_env(&env, BuildMode::Debug).expect("debug defaults should succeed");
     assert!(settings.cookie_secure);
@@ -225,13 +278,12 @@ fn debug_defaults_allow_ephemeral_key() {
 
 #[rstest]
 fn debug_invalid_same_site_falls_back_to_default() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "1".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "unexpected".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("1")
+        .with_same_site("unexpected")
+        .with_allow_ephemeral("0")
+        .build();
 
     let settings = session_settings_from_env(&env, BuildMode::Debug)
         .expect("debug should fall back to defaults");
@@ -240,13 +292,12 @@ fn debug_invalid_same_site_falls_back_to_default() {
 
 #[rstest]
 fn debug_explicit_overrides_are_applied() {
-    let key_file = TempKeyFile::new(SESSION_KEY_MIN_LEN).expect("key file creation should succeed");
-    let mut vars = HashMap::new();
-    vars.insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
-    vars.insert(COOKIE_SECURE_ENV.to_string(), "0".to_string());
-    vars.insert(SAMESITE_ENV.to_string(), "Strict".to_string());
-    vars.insert(ALLOW_EPHEMERAL_ENV.to_string(), "0".to_string());
-    let env = mock_env(vars);
+    let env = TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("0")
+        .with_same_site("Strict")
+        .with_allow_ephemeral("0")
+        .build();
 
     let settings = session_settings_from_env(&env, BuildMode::Debug)
         .expect("debug should accept explicit overrides");
