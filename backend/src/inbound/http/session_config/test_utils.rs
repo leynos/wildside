@@ -22,6 +22,21 @@ pub struct TempKeyFile {
 }
 
 impl TempKeyFile {
+    /// Creates a temporary session key file filled with dummy data.
+    ///
+    /// # Parameters
+    ///
+    /// - `len`: The number of bytes to write to the temporary file.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(TempKeyFile)` on success, or a `std::io::Error` on failure.
+    /// The file is created in the system temporary directory with a UUID-based
+    /// name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an IO error if the file cannot be created or written.
     pub fn new(len: usize) -> std::io::Result<Self> {
         let path = std::env::temp_dir().join(format!("session-key-{}", Uuid::new_v4()));
         std::fs::write(&path, vec![b'a'; len])?;
