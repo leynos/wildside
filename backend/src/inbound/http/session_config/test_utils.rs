@@ -16,7 +16,10 @@ use uuid::Uuid;
 #[cfg(not(test))]
 const TEST_UTILS_LINT_GUARD: () = ();
 
-/// Test helper for creating temporary session key files with automatic cleanup.
+/// A temporary session key file for testing purposes.
+///
+/// It creates a file in the system temporary directory filled with dummy data,
+/// and the file is automatically removed when the instance is dropped.
 #[derive(Debug)]
 pub struct TempKeyFile {
     path: PathBuf,
