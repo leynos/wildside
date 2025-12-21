@@ -85,6 +85,9 @@
 - [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
   design decisions for the Vault infrastructure module. *Audience:
   infrastructure developers.*
+- [Vault ESO OpenTofu module design](vault-eso-module-design.md) – design
+  decisions for the External Secrets Operator integration module. *Audience:
+  infrastructure developers.*
 
 ## Developer guidelines and tooling
 

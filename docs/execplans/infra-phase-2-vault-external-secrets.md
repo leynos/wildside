@@ -1,6 +1,6 @@
 # Vault and External Secrets Operator module plan for core cluster services
 
-This ExecPlan is a living document. The sections `Progress`,
+This Execution Plan (ExecPlan) is a living document. The sections `Progress`,
 `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must
 be kept up to date as work proceeds.
 
@@ -43,8 +43,9 @@ Kubernetes cluster via ESO.
 
 (To be updated as work proceeds. Initial anticipated decisions below.)
 
-- Decision: (Pending) Use AppRole authentication for ESO to connect to the
-  external Vault appliance.
+- Decision: (Pending) Use AppRole authentication (a Vault authentication method
+  for machine-to-machine access) for ESO to connect to the external Vault
+  appliance.
   Rationale: The `bootstrap-vault-appliance` action already provisions an
   AppRole with `doks-deployer` identity; ESO can consume the role_id and
   secret_id to authenticate.
@@ -55,8 +56,10 @@ Kubernetes cluster via ESO.
   changes.
   Date/Author: Pending.
 
-- Decision: (Pending) Provide ClusterSecretStore resources for both the KV v2
-  secrets engine and optional PKI engine.
+- Decision: (Pending) Provide ClusterSecretStore resources (cluster-scoped ESO
+  resources for external secret provider connections) for both the KV v2
+  (Vault's versioned key-value secrets engine) and optional PKI (public key
+  infrastructure) engine.
   Rationale: Supports common secret consumption patterns (credentials and
   certificates) from the existing Vault infrastructure.
   Date/Author: Pending.
@@ -299,10 +302,8 @@ as done. Record any design decisions in the design document and update
 
 ## Concrete Steps
 
-All commands should be run from
-`/mnt/home/leynos/Projects/wildside.worktrees/infra-phase-2-vault-external-secrets`.
-Use a 300-second timeout and capture logs with `tee` for any command with long
-output.
+All commands should be run from the repository root directory. Use a 300-second
+timeout and capture logs with `tee` for any command with long output.
 
 1. Create the module and policy scaffolding.
 

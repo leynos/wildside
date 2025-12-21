@@ -1,0 +1,166 @@
+package tests
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/stretchr/testify/require"
+	testutil "wildside/infra/testutil"
+)
+
+const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig file before running the example"
+
+const vaultESOPolicyManifestsNamespace = "vault_eso.policy.manifests"
+const vaultESOPolicyPlanNamespace = "vault_eso.policy.plan"
+
+func testVars(t *testing.T) map[string]interface{} {
+	t.Helper()
+	kubeconfigDir := t.TempDir()
+	kubeconfigPath := filepath.Join(kubeconfigDir, "kubeconfig")
+	stubConfig := []byte(`apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://127.0.0.1
+  name: stub
+contexts:
+- context:
+    cluster: stub
+    user: stub
+  name: stub
+current-context: stub
+kind: Config
+users:
+- name: stub
+  user:
+    token: fake-token
+`)
+	require.NoError(t, os.WriteFile(kubeconfigPath, stubConfig, 0o600))
+
+	return map[string]interface{}{
+		"vault_address":       "https://vault.example.test:8200",
+		"vault_ca_bundle_pem": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
+		"approle_role_id":     "test-role-id-12345678",
+		"approle_secret_id":   "test-secret-id-12345678",
+		"kubeconfig_path":     kubeconfigPath,
+	}
+}
+
+func renderVars(t *testing.T) map[string]interface{} {
+	t.Helper()
+	return map[string]interface{}{
+		"vault_address":       "https://vault.example.test:8200",
+		"vault_ca_bundle_pem": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
+		"approle_role_id":     "test-role-id-12345678",
+		"approle_secret_id":   "test-secret-id-12345678",
+	}
+}
+
+func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
+	t.Helper()
+	return testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/basic",
+		Vars:          vars,
+	})
+}
+
+func setupRender(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
+	t.Helper()
+	return testutil.SetupTerraform(t, testutil.TerraformConfig{
+		SourceRootRel: "..",
+		TfSubDir:      "examples/render",
+		Vars:          vars,
+	})
+}
+
+func writeAutoTfvarsJSON(t *testing.T, dir string, vars map[string]interface{}) {
+	t.Helper()
+	path := filepath.Join(dir, "terratest.auto.tfvars.json")
+	payload, err := json.Marshal(vars)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, payload, 0o600))
+	t.Cleanup(func() { _ = os.Remove(path) })
+}
+
+func requireBinary(t *testing.T, binary, skipMessage string) {
+	t.Helper()
+	if _, err := exec.LookPath(binary); err != nil {
+		t.Skip(skipMessage)
+	}
+}
+
+func requireEnvVar(t *testing.T, key, skipMessage string) string {
+	t.Helper()
+	value := os.Getenv(key)
+	if value == "" {
+		t.Skip(skipMessage)
+	}
+	return value
+}
+
+func terraformOutputExists(t *testing.T, opts *terraform.Options, name string) bool {
+	t.Helper()
+	_, err := terraform.OutputE(t, opts, name)
+	return err == nil
+}
+
+func vaultESOPolicyRoot(tfDir string) string {
+	return filepath.Join(tfDir, "..", "..", "policy")
+}
+
+func vaultESOManifestsPolicyPath(tfDir string) string {
+	return filepath.Join(vaultESOPolicyRoot(tfDir), "manifests")
+}
+
+func vaultESOPlanPolicyPath(tfDir string) string {
+	return filepath.Join(vaultESOPolicyRoot(tfDir), "plan")
+}
+
+type conftestRun struct {
+	InputPath  string
+	PolicyPath string
+	Kubeconfig string
+	ExtraArgs  []string
+	Timeout    time.Duration
+}
+
+func runConftest(t *testing.T, cfg conftestRun) ([]byte, error) {
+	t.Helper()
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	args := make([]string, 0, 4+len(cfg.ExtraArgs))
+	args = append(args, "test", "--policy", cfg.PolicyPath, cfg.InputPath)
+	args = append(args, cfg.ExtraArgs...)
+	cmd := exec.CommandContext(ctx, "conftest", args...)
+	cmd.Env = testutil.TerraformEnv(t, map[string]string{
+		"KUBECONFIG": cfg.Kubeconfig,
+	})
+	out, err := cmd.CombinedOutput()
+	require.NotEqual(t, context.DeadlineExceeded, ctx.Err(), "conftest timed out: %s", string(out))
+	return out, err
+}
+
+func writePlanFixture(t *testing.T, payload string) string {
+	t.Helper()
+	plan, err := os.CreateTemp("", "vault-eso-plan-*.json")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(plan.Name()) })
+
+	_, err = plan.WriteString(payload)
+	require.NoError(t, err)
+	require.NoError(t, plan.Close())
+
+	return plan.Name()
+}
