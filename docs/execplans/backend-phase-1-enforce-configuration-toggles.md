@@ -329,9 +329,6 @@ This ExecPlan was updated to reflect completed implementation work, test runs,
 and the switch to `DefaultEnv` for production reads. Progress, decisions,
 artifacts, and interfaces now match the shipped code and the remaining work is
 fully complete.
-
-## Revision note (2025-12-20)
-
 Updated the decision log and interface guidance to describe the local
 `SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable` to a
 dev-only dependency.
