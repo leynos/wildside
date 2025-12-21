@@ -43,6 +43,8 @@ impl TempKeyFile {
         Ok(Self { path })
     }
 
+    /// Returns the file path as a `String`, replacing non-UTF-8 sequences with
+    /// the Unicode replacement character via `to_string_lossy`.
     pub fn path_str(&self) -> String {
         self.path.to_string_lossy().to_string()
     }
