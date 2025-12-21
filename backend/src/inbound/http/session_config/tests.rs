@@ -118,19 +118,79 @@ impl TestEnvBuilder {
     }
 }
 
-#[rstest]
-fn release_missing_cookie_secure_is_rejected() {
-    let env = TestEnvBuilder::new().build();
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected missing cookie secure to fail",
-    );
-    assert!(matches!(
+fn is_missing_cookie_secure(err: &SessionConfigError) -> bool {
+    matches!(
         err,
         SessionConfigError::MissingEnv {
             name: COOKIE_SECURE_ENV
         }
-    ));
+    )
+}
+
+fn is_missing_same_site(err: &SessionConfigError) -> bool {
+    matches!(err, SessionConfigError::MissingEnv { name: SAMESITE_ENV })
+}
+
+fn is_missing_allow_ephemeral(err: &SessionConfigError) -> bool {
+    matches!(
+        err,
+        SessionConfigError::MissingEnv {
+            name: ALLOW_EPHEMERAL_ENV
+        }
+    )
+}
+
+fn is_ephemeral_not_allowed(err: &SessionConfigError) -> bool {
+    matches!(err, SessionConfigError::EphemeralNotAllowed)
+}
+
+fn is_insecure_same_site_none(err: &SessionConfigError) -> bool {
+    matches!(err, SessionConfigError::InsecureSameSiteNone)
+}
+
+fn is_key_read_error(err: &SessionConfigError) -> bool {
+    matches!(err, SessionConfigError::KeyRead { .. })
+}
+
+fn is_key_too_short(err: &SessionConfigError) -> bool {
+    matches!(err, SessionConfigError::KeyTooShort { .. })
+}
+
+#[rstest]
+#[case::missing_cookie_secure(
+    TestEnvBuilder::new(),
+    is_missing_cookie_secure,
+    "expected missing cookie secure to fail"
+)]
+#[case::missing_same_site(
+    TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("1")
+        .with_allow_ephemeral("0"),
+    is_missing_same_site,
+    "expected missing SameSite to fail",
+)]
+#[case::missing_allow_ephemeral(
+    TestEnvBuilder::new()
+        .with_valid_key()
+        .with_cookie_secure("1")
+        .with_same_site("Strict"),
+    is_missing_allow_ephemeral,
+    "expected missing allow ephemeral to fail",
+)]
+fn release_missing_env_vars_are_rejected<F>(
+    #[case] builder: TestEnvBuilder,
+    #[case] matcher: F,
+    #[case] description: &str,
+) where
+    F: FnOnce(&SessionConfigError) -> bool,
+{
+    let env = builder.build();
+    let err = expect_error(
+        session_settings_from_env(&env, BuildMode::Release),
+        description,
+    );
+    assert!(matcher(&err), "{description}");
 }
 
 #[rstest]
@@ -157,101 +217,67 @@ fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) {
 }
 
 #[rstest]
-fn release_missing_same_site_is_rejected() {
-    let env = TestEnvBuilder::new()
-        .with_valid_key()
-        .with_cookie_secure("1")
-        .with_allow_ephemeral("0")
-        .build();
-
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected missing SameSite to fail",
-    );
-    assert!(matches!(
-        err,
-        SessionConfigError::MissingEnv { name: SAMESITE_ENV }
-    ));
-}
-
-#[rstest]
-fn release_missing_allow_ephemeral_is_rejected() {
-    let env = TestEnvBuilder::new()
-        .with_valid_key()
-        .with_cookie_secure("1")
-        .with_same_site("Strict")
-        .build();
-
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected missing allow ephemeral to fail",
-    );
-    assert!(matches!(
-        err,
-        SessionConfigError::MissingEnv {
-            name: ALLOW_EPHEMERAL_ENV
-        }
-    ));
-}
-
-#[rstest]
-fn release_ephemeral_enabled_is_rejected() {
-    let env = TestEnvBuilder::new()
+#[case::ephemeral_enabled(
+    TestEnvBuilder::new()
         .with_valid_key()
         .with_release_defaults()
-        .with_allow_ephemeral("1")
-        .build();
-
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected ephemeral to be rejected in release",
-    );
-    assert!(matches!(err, SessionConfigError::EphemeralNotAllowed));
-}
-
-#[rstest]
-fn release_missing_key_file_is_rejected() {
-    let env = TestEnvBuilder::new()
-        .with_cookie_secure("1")
-        .with_same_site("Strict")
-        .with_allow_ephemeral("0")
-        .build();
-
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected missing key file to fail",
-    );
-    assert!(matches!(err, SessionConfigError::KeyRead { .. }));
-}
-
-#[rstest]
-fn release_short_key_is_rejected() {
-    let env = TestEnvBuilder::new()
-        .with_key_len(32)
-        .with_release_defaults()
-        .build();
-
-    let err = expect_error(
-        session_settings_from_env(&env, BuildMode::Release),
-        "expected short key to fail",
-    );
-    assert!(matches!(err, SessionConfigError::KeyTooShort { .. }));
-}
-
-#[rstest]
-fn release_insecure_none_same_site_is_rejected() {
-    let env = TestEnvBuilder::new()
+        .with_allow_ephemeral("1"),
+    is_ephemeral_not_allowed,
+    "expected ephemeral to be rejected in release",
+)]
+#[case::insecure_same_site_none(
+    TestEnvBuilder::new()
         .with_valid_key()
         .with_cookie_secure("0")
         .with_same_site("None")
-        .with_allow_ephemeral("0")
-        .build();
-
+        .with_allow_ephemeral("0"),
+    is_insecure_same_site_none,
+    "expected insecure SameSite=None to fail",
+)]
+fn release_invalid_configurations_are_rejected<F>(
+    #[case] builder: TestEnvBuilder,
+    #[case] matcher: F,
+    #[case] description: &str,
+) where
+    F: FnOnce(&SessionConfigError) -> bool,
+{
+    let env = builder.build();
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
-        "expected insecure SameSite=None to fail",
+        description,
     );
-    assert!(matches!(err, SessionConfigError::InsecureSameSiteNone));
+    assert!(matcher(&err), "{description}");
+}
+
+#[rstest]
+#[case::missing_key_file(
+    TestEnvBuilder::new()
+        .with_cookie_secure("1")
+        .with_same_site("Strict")
+        .with_allow_ephemeral("0"),
+    is_key_read_error,
+    "expected missing key file to fail",
+)]
+#[case::short_key(
+    TestEnvBuilder::new()
+        .with_key_len(32)
+        .with_release_defaults(),
+    is_key_too_short,
+    "expected short key to fail",
+)]
+fn release_key_errors_are_rejected<F>(
+    #[case] builder: TestEnvBuilder,
+    #[case] matcher: F,
+    #[case] description: &str,
+) where
+    F: FnOnce(&SessionConfigError) -> bool,
+{
+    let env = builder.build();
+    let err = expect_error(
+        session_settings_from_env(&env, BuildMode::Release),
+        description,
+    );
+    assert!(matcher(&err), "{description}");
 }
 
 #[rstest]
