@@ -389,7 +389,7 @@ fn session_key_from_env<E: SessionEnv>(
                 warn!(
                     path = %path.display(),
                     error = %error,
-                    "using temporary session key (dev only)"
+                    "using temporary session key (dev or allow_ephemeral)"
                 );
                 Ok(Key::generate())
             } else {
