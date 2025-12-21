@@ -1,35 +1,10 @@
 //! Unit tests for session configuration parsing.
 
+use super::test_utils::TempKeyFile;
 use super::*;
 use mockable::{Env as MockableEnv, MockEnv};
 use rstest::rstest;
 use std::collections::HashMap;
-use uuid::Uuid;
-
-#[derive(Debug)]
-struct TempKeyFile {
-    path: PathBuf,
-}
-
-impl TempKeyFile {
-    fn new(len: usize) -> std::io::Result<Self> {
-        let path = std::env::temp_dir().join(format!("session-key-{}", Uuid::new_v4()));
-        std::fs::write(&path, vec![b'a'; len])?;
-        Ok(Self { path })
-    }
-
-    fn path_str(&self) -> &str {
-        self.path
-            .to_str()
-            .expect("temporary path should be valid UTF-8")
-    }
-}
-
-impl Drop for TempKeyFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
 
 struct TestEnv {
     inner: MockEnv,
@@ -80,7 +55,7 @@ impl TestEnvBuilder {
     fn with_key_len(mut self, len: usize) -> Self {
         let key_file = TempKeyFile::new(len).expect("key file creation should succeed");
         self.vars
-            .insert(KEY_FILE_ENV.to_string(), key_file.path_str().to_string());
+            .insert(KEY_FILE_ENV.to_string(), key_file.path_str());
         self._key_file = Some(key_file);
         self
     }

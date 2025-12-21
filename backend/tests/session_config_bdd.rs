@@ -4,16 +4,14 @@
 //! configuration and reject insecure or missing settings.
 
 use backend::inbound::http::session_config::{
-    session_settings_from_env, BuildMode, SessionConfigError, SessionEnv, SessionSettings,
-    ALLOW_EPHEMERAL_ENV, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
+    session_settings_from_env, test_utils::TempKeyFile, BuildMode, SessionConfigError, SessionEnv,
+    SessionSettings, ALLOW_EPHEMERAL_ENV, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
 };
 use mockable::{Env as MockableEnv, MockEnv};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::PathBuf;
-use uuid::Uuid;
 
 struct TestEnv {
     inner: MockEnv,
@@ -54,7 +52,8 @@ impl SessionConfigWorld {
 
     fn add_key_file(&self, len: usize) {
         let file = TempKeyFile::new(len).expect("key file creation should succeed");
-        self.set_env_var(KEY_FILE_ENV, file.path_str());
+        let key_path = file.path_str();
+        self.set_env_var(KEY_FILE_ENV, &key_path);
         self.key_files.borrow_mut().push(file);
     }
 
@@ -88,31 +87,6 @@ impl SessionConfigWorld {
             Err(error) => error,
         };
         f(error);
-    }
-}
-
-#[derive(Debug)]
-struct TempKeyFile {
-    path: PathBuf,
-}
-
-impl TempKeyFile {
-    fn new(len: usize) -> std::io::Result<Self> {
-        let path = std::env::temp_dir().join(format!("session-key-{}", Uuid::new_v4()));
-        std::fs::write(&path, vec![b'a'; len])?;
-        Ok(Self { path })
-    }
-
-    fn path_str(&self) -> &str {
-        self.path
-            .to_str()
-            .expect("temporary path should be valid UTF-8")
-    }
-}
-
-impl Drop for TempKeyFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
     }
 }
 

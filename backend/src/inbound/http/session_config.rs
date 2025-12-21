@@ -410,5 +410,7 @@ fn parse_bool(value: &str) -> Option<bool> {
     }
 }
 
+pub mod test_utils;
+
 #[cfg(test)]
 mod tests;
