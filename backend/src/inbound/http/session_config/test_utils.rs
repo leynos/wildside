@@ -1,9 +1,20 @@
 //! Test utilities for session configuration.
 
-#![cfg_attr(not(test), allow(dead_code))]
+#![cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "helper functions used only in tests; allowed when built \
+non-test to avoid unreachable warnings"
+    )
+)]
 
 use std::path::PathBuf;
 use uuid::Uuid;
+
+// Ensure the dead_code expectation is exercised in non-test builds.
+#[cfg(not(test))]
+const TEST_UTILS_LINT_GUARD: () = ();
 
 #[derive(Debug)]
 pub struct TempKeyFile {
