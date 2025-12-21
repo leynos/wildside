@@ -87,7 +87,7 @@ variable "kv_mount_path" {
 }
 
 variable "pki_enabled" {
-  description = "Whether to create a ClusterSecretStore for the Vault PKI engine"
+  description = "Whether to create a ClusterSecretStore for reading secrets from the Vault PKI mount. Note: ESO cannot issue certificates; use cert-manager with Vault PKI issuer for certificate issuance."
   type        = bool
   default     = false
   nullable    = false

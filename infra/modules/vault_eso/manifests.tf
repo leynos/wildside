@@ -115,6 +115,9 @@ locals {
     }
   }
 
+  # NOTE: This PKI ClusterSecretStore is for reading existing secrets from the
+  # Vault PKI mount (e.g., CA certificates). ESO cannot issue certificates via
+  # Vault PKI. For certificate issuance, use cert-manager with Vault PKI issuer.
   cluster_secret_store_pki_manifest = {
     apiVersion = "external-secrets.io/v1beta1"
     kind       = "ClusterSecretStore"

@@ -90,6 +90,9 @@ resource "kubernetes_manifest" "cluster_secret_store_kv" {
   ]
 }
 
+# NOTE: This PKI ClusterSecretStore is for reading existing secrets from the
+# Vault PKI mount (e.g., CA certificates). ESO cannot issue certificates via
+# Vault PKI. For certificate issuance, use cert-manager with Vault PKI issuer.
 resource "kubernetes_manifest" "cluster_secret_store_pki" {
   count = local.is_apply_mode && local.pki_enabled ? 1 : 0
 
