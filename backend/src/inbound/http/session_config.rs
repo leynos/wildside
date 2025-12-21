@@ -181,29 +181,45 @@ pub fn session_settings_from_env<E: SessionEnv>(
     })
 }
 
-// clippy: too_many_arguments is acceptable here to keep the helper signature explicit.
-#[allow(clippy::too_many_arguments)]
+/// Configuration for parsing a boolean environment variable.
+struct BoolEnvConfig {
+    name: &'static str,
+    default_value: bool,
+}
+
+impl BoolEnvConfig {
+    const fn new(name: &'static str, default_value: bool) -> Self {
+        Self {
+            name,
+            default_value,
+        }
+    }
+}
+
 fn parse_bool_env<E: SessionEnv, F>(
     env: &E,
     mode: BuildMode,
-    env_name: &'static str,
-    default_value: bool,
+    config: BoolEnvConfig,
     value_validator: F,
 ) -> Result<bool, SessionConfigError>
 where
     F: FnOnce(bool, BuildMode) -> Result<bool, SessionConfigError>,
 {
-    let default_label = if default_value { "enabled" } else { "disabled" };
-    match env.string(env_name) {
+    let default_label = if config.default_value {
+        "enabled"
+    } else {
+        "disabled"
+    };
+    match env.string(config.name) {
         Some(value) => match parse_bool(&value) {
             Some(flag) => value_validator(flag, mode),
             None => {
                 let value_clone = value.clone();
                 debug_warn_or_error(
                     mode,
-                    default_value,
+                    config.default_value,
                     SessionConfigError::InvalidEnv {
-                        name: env_name,
+                        name: config.name,
                         value: value_clone,
                         expected: BOOL_EXPECTED,
                     },
@@ -211,7 +227,7 @@ where
                         warn!(
                             value = %value,
                             "invalid {}; defaulting to {}",
-                            env_name,
+                            config.name,
                             default_label
                         );
                     },
@@ -220,9 +236,9 @@ where
         },
         None => debug_warn_or_error(
             mode,
-            default_value,
-            SessionConfigError::MissingEnv { name: env_name },
-            || warn!("{} not set; defaulting to {}", env_name, default_label),
+            config.default_value,
+            SessionConfigError::MissingEnv { name: config.name },
+            || warn!("{} not set; defaulting to {}", config.name, default_label),
         ),
     }
 }
@@ -231,7 +247,12 @@ fn cookie_secure_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
 ) -> Result<bool, SessionConfigError> {
-    parse_bool_env(env, mode, COOKIE_SECURE_ENV, true, |flag, _| Ok(flag))
+    parse_bool_env(
+        env,
+        mode,
+        BoolEnvConfig::new(COOKIE_SECURE_ENV, true),
+        |flag, _| Ok(flag),
+    )
 }
 
 fn debug_warn_or_error<T, F>(
@@ -324,13 +345,18 @@ fn allow_ephemeral_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
 ) -> Result<bool, SessionConfigError> {
-    parse_bool_env(env, mode, ALLOW_EPHEMERAL_ENV, false, |flag, mode| {
-        if flag && mode == BuildMode::Release {
-            Err(SessionConfigError::EphemeralNotAllowed)
-        } else {
-            Ok(flag)
-        }
-    })
+    parse_bool_env(
+        env,
+        mode,
+        BoolEnvConfig::new(ALLOW_EPHEMERAL_ENV, false),
+        |flag, mode| {
+            if flag && mode == BuildMode::Release {
+                Err(SessionConfigError::EphemeralNotAllowed)
+            } else {
+                Ok(flag)
+            }
+        },
+    )
 }
 
 fn session_key_from_env<E: SessionEnv>(
