@@ -73,7 +73,7 @@ func TestVaultESOModuleRenderWithPKI(t *testing.T) {
 
 func TestVaultESOModuleRenderPolicy(t *testing.T) {
 	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+	requireBinary(t, binaryRequirement{Binary: "conftest", SkipMessage: "conftest not found; skipping policy test"})
 
 	tfDir, opts := setupRender(t, renderVars(t))
 	terraform.InitAndApply(t, opts)
@@ -195,7 +195,7 @@ spec:
 
 func TestVaultESOModuleRenderPolicyRejections(t *testing.T) {
 	t.Parallel()
-	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+	requireBinary(t, binaryRequirement{Binary: "conftest", SkipMessage: "conftest not found; skipping policy test"})
 
 	tfDir, opts := setupRender(t, renderVars(t))
 	terraform.Init(t, opts)

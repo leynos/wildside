@@ -19,6 +19,16 @@ const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig fil
 const vaultESOPolicyManifestsNamespace = "vault_eso.policy.manifests"
 const vaultESOPolicyPlanNamespace = "vault_eso.policy.plan"
 
+type binaryRequirement struct {
+	Binary      string
+	SkipMessage string
+}
+
+type envVarRequirement struct {
+	Key         string
+	SkipMessage string
+}
+
 func testVars(t *testing.T) map[string]interface{} {
 	t.Helper()
 	kubeconfigDir := t.TempDir()
@@ -89,18 +99,18 @@ func writeAutoTfvarsJSON(t *testing.T, dir string, vars map[string]interface{}) 
 	t.Cleanup(func() { _ = os.Remove(path) })
 }
 
-func requireBinary(t *testing.T, binary, skipMessage string) {
+func requireBinary(t *testing.T, req binaryRequirement) {
 	t.Helper()
-	if _, err := exec.LookPath(binary); err != nil {
-		t.Skip(skipMessage)
+	if _, err := exec.LookPath(req.Binary); err != nil {
+		t.Skip(req.SkipMessage)
 	}
 }
 
-func requireEnvVar(t *testing.T, key, skipMessage string) string {
+func requireEnvVar(t *testing.T, req envVarRequirement) string {
 	t.Helper()
-	value := os.Getenv(key)
+	value := os.Getenv(req.Key)
 	if value == "" {
-		t.Skip(skipMessage)
+		t.Skip(req.SkipMessage)
 	}
 	return value
 }
