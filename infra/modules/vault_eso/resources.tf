@@ -105,7 +105,6 @@ resource "kubernetes_manifest" "cluster_secret_store_pki" {
         vault = {
           server   = local.vault_address
           path     = local.pki_mount_path
-          version  = "v2"
           caBundle = local.vault_ca_bundle_base64
           auth = {
             appRole = {
@@ -135,4 +134,11 @@ resource "kubernetes_manifest" "cluster_secret_store_pki" {
     helm_release.external_secrets,
     kubernetes_secret.approle_auth
   ]
+}
+
+check "pdb_min_available_constraint" {
+  assert {
+    condition     = var.pdb_min_available < var.webhook_replica_count
+    error_message = "pdb_min_available (${var.pdb_min_available}) must be less than webhook_replica_count (${var.webhook_replica_count}) to allow rolling updates"
+  }
 }

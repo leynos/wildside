@@ -11,14 +11,14 @@ policy to follow.
 
 Deliver the Phase 2.3 Vault + External Secrets Operator (ESO) module so the
 `wildside-infra-k8s` action can render Flux-ready manifests into `wildside-infra`
-and converge secrets synchronisation on every run. Success is visible when the
+and converge secrets synchronization on every run. Success is visible when the
 new OpenTofu module can render a `platform/vault` tree containing the ESO
 HelmRelease, ClusterSecretStore resources connected to the existing Vault
 appliance, and when its outputs expose secret store names and sync policy
 contracts for downstream workloads.
 
 The module connects Kubernetes workloads to the external Vault appliance
-provisioned by the `vault_appliance` OpenTofu module and initialised by the
+provisioned by the `vault_appliance` OpenTofu module and initialized by the
 `bootstrap-vault-appliance` GitHub Action. It does not deploy a new Vault
 instance but rather bridges the existing Vault infrastructure with the
 Kubernetes cluster via ESO.
@@ -85,7 +85,7 @@ conventions. Key paths and references:
   split variable files, `rendered_manifests` outputs, and OPA/Conftest policies.
 - `infra/modules/vault_appliance/` for the existing external Vault
   infrastructure (DigitalOcean droplets, load balancer, TLS, firewall).
-- `.github/actions/bootstrap-vault-appliance/` for the Vault initialisation
+- `.github/actions/bootstrap-vault-appliance/` for the Vault initialization
   action that provisions AppRole auth and KV v2 mount.
 - `infra/testutil/` for shared Terratest helpers (`TerraformEnvVars`,
   `SetupTerraform`).
@@ -102,7 +102,7 @@ conventions. Key paths and references:
 
 Definitions used in this plan:
 
-- **ESO**: External Secrets Operator — a Kubernetes operator that synchronises
+- **ESO**: External Secrets Operator — a Kubernetes operator that synchronizes
   secrets from external secret management systems into Kubernetes Secrets.
 - **ClusterSecretStore**: A cluster-scoped ESO resource that defines how to
   connect to an external secret provider.
@@ -117,7 +117,7 @@ Definitions used in this plan:
   via sidecar containers.
 - **Render mode**: OpenTofu emits manifests for Flux to apply via GitOps.
 - **Apply mode**: OpenTofu applies resources directly to a live cluster.
-- **Sync policy contract**: A set of outputs that downstream modules can consume
+- **Synchronization policy contract**: A set of outputs that downstream modules can consume
   to reference secret stores and create ExternalSecret resources.
 
 ## Plan of Work
@@ -528,7 +528,7 @@ The module integrates with:
    secret_id) and KV v2 mount that ESO will consume.
 3. **cert_manager module** — optional integration where cert-manager can issue
    certificates via Vault PKI through the ClusterIssuer, while ESO handles
-   secret synchronisation.
+   secret synchronization.
 4. **wildside-infra-k8s action** — consumes the `rendered_manifests` output and
    commits to the GitOps repository.
 

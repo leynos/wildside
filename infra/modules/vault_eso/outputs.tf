@@ -1,10 +1,6 @@
 output "namespace" {
   description = "Namespace where External Secrets Operator is installed"
-  value = (
-    local.is_apply_mode && var.create_namespace
-    ? kubernetes_namespace.eso[0].metadata[0].name
-    : local.namespace
-  )
+  value       = local.effective_namespace
 }
 
 output "helm_release_name" {
@@ -47,7 +43,7 @@ output "approle_auth_secret_ref" {
   description = "Reference object for the AppRole credentials Secret"
   value = {
     name      = local.approle_auth_secret_name
-    namespace = local.is_apply_mode && var.create_namespace ? kubernetes_namespace.eso[0].metadata[0].name : local.namespace
+    namespace = local.effective_namespace
   }
 }
 
@@ -84,13 +80,9 @@ output "sync_policy_contract" {
       kind       = "ClusterSecretStore"
       mount_path = local.pki_mount_path
     } : null
-    vault_address    = local.vault_address
-    auth_secret_name = local.approle_auth_secret_name
-    auth_secret_namespace = (
-      local.is_apply_mode && var.create_namespace
-      ? kubernetes_namespace.eso[0].metadata[0].name
-      : local.namespace
-    )
+    vault_address         = local.vault_address
+    auth_secret_name      = local.approle_auth_secret_name
+    auth_secret_namespace = local.effective_namespace
   }
 }
 

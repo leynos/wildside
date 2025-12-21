@@ -7,7 +7,7 @@ workloads with an external HashiCorp Vault appliance.
 ## Overview
 
 The module bridges Kubernetes workloads with the Vault appliance provisioned by
-the `vault_appliance` OpenTofu module and initialised by the
+the `vault_appliance` OpenTofu module and initialized by the
 `bootstrap-vault-appliance` GitHub Action. It uses AppRole authentication to
 connect ESO to Vault.
 
@@ -70,7 +70,7 @@ module "vault_eso" {
 | `approle_secret_id` | AppRole secret_id for ESO authentication | `string` | n/a | yes |
 | `mode` | `render` for GitOps manifests, `apply` for direct deployment | `string` | `"render"` | no |
 | `namespace` | Namespace for ESO installation | `string` | `"external-secrets"` | no |
-| `chart_version` | ESO Helm chart version | `string` | `"0.12.1"` | no |
+| `chart_version` | ESO Helm chart version | `string` | `"1.1.1"` | no |
 | `kv_mount_path` | KV v2 mount path in Vault | `string` | `"secret"` | no |
 | `pki_enabled` | Enable PKI ClusterSecretStore | `bool` | `false` | no |
 | `pki_mount_path` | PKI mount path in Vault | `string` | `"pki"` | no |

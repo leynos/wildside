@@ -40,7 +40,7 @@ locals {
   secret_store_retry_interval     = trimspace(var.secret_store_retry_interval)
 
   helm_inline_values = [for value in var.helm_values : value if trimspace(value) != ""]
-  helm_values        = concat(local.helm_inline_values)
+  helm_values        = local.helm_inline_values
 
   default_values_map = {
     installCRDs = var.install_crds

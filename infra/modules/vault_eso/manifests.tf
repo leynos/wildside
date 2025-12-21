@@ -127,7 +127,6 @@ locals {
         vault = {
           server   = local.vault_address
           path     = local.pki_mount_path
-          version  = "v2"
           caBundle = local.vault_ca_bundle_base64
           auth = {
             appRole = {

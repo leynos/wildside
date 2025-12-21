@@ -57,6 +57,7 @@ fn is_transient_error(err: &str) -> bool {
         "connection reset",
         "connection refused",
         "timeout",
+        "timed out",
         "temporarily unavailable",
         "network unreachable",
         "dns error",
@@ -76,8 +77,8 @@ fn is_transient_error(err: &str) -> bool {
 /// unique directories under the target directory so the bootstrap works in
 /// sandboxed environments.
 ///
-/// This function retries on transient network errors (up to [`MAX_RETRIES`]
-/// attempts) since embedded PostgreSQL binary downloads can fail intermittently
+/// This function retries up to [`MAX_RETRIES`] times on transient network
+/// errors since embedded PostgreSQL binary downloads can fail intermittently
 /// when running parallel test suites.
 pub fn test_cluster() -> Result<TestCluster, String> {
     let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK

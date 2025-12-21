@@ -29,6 +29,7 @@ variable "vault_ca_bundle_pem" {
 variable "approle_role_id" {
   description = "AppRole role_id for ESO authentication to Vault"
   type        = string
+  sensitive   = true
 
   validation {
     condition     = var.approle_role_id != null && length(trimspace(var.approle_role_id)) > 0

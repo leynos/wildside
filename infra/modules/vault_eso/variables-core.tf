@@ -74,7 +74,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Exact Helm chart version for External Secrets Operator"
   type        = string
-  default     = "0.12.1"
+  default     = "1.1.1"
 
   validation {
     condition = (
@@ -84,7 +84,7 @@ variable "chart_version" {
         trimspace(var.chart_version)
       ))
     )
-    error_message = "chart_version must be a semantic version (e.g., 0.12.1)"
+    error_message = "chart_version must be a semantic version (e.g., 1.1.1)"
   }
 }
 
@@ -243,23 +243,29 @@ variable "flux_helm_repository_name" {
 }
 
 variable "flux_helm_repository_interval" {
-  description = "Interval for the Flux HelmRepository reconciliation"
+  description = "Interval for the Flux HelmRepository reconciliation (Go duration format)"
   type        = string
   default     = "24h"
 
   validation {
-    condition     = var.flux_helm_repository_interval != null && length(trimspace(var.flux_helm_repository_interval)) > 0
-    error_message = "flux_helm_repository_interval must not be blank"
+    condition = (
+      var.flux_helm_repository_interval != null &&
+      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.flux_helm_repository_interval)))
+    )
+    error_message = "flux_helm_repository_interval must be a valid Go duration (e.g., 1h, 24h, 30m)"
   }
 }
 
 variable "flux_helm_release_interval" {
-  description = "Interval for the Flux HelmRelease reconciliation"
+  description = "Interval for the Flux HelmRelease reconciliation (Go duration format)"
   type        = string
   default     = "1h"
 
   validation {
-    condition     = var.flux_helm_release_interval != null && length(trimspace(var.flux_helm_release_interval)) > 0
-    error_message = "flux_helm_release_interval must not be blank"
+    condition = (
+      var.flux_helm_release_interval != null &&
+      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.flux_helm_release_interval)))
+    )
+    error_message = "flux_helm_release_interval must be a valid Go duration (e.g., 1h, 24h, 30m)"
   }
 }

@@ -24,7 +24,6 @@ merge_values(raw) := {} if {
 deny contains msg if {
 	rc := input.resource_changes[_]
 	hr := helm_release(rc)
-	hr != null
 	values := hr.values
 	webhook := object.get(values, "webhook", {})
 	replicas := object.get(webhook, "replicaCount", 0)
@@ -35,7 +34,6 @@ deny contains msg if {
 warn contains msg if {
 	rc := input.resource_changes[_]
 	hr := helm_release(rc)
-	hr != null
 	values := hr.values
 	install_crds := object.get(values, "installCRDs", true)
 	not install_crds

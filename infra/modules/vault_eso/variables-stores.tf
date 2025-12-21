@@ -43,15 +43,15 @@ variable "secret_store_retry_max_attempts" {
 }
 
 variable "secret_store_retry_interval" {
-  description = "Interval between retry attempts for secret store operations"
+  description = "Interval between retry attempts for secret store operations (Go duration format)"
   type        = string
   default     = "10s"
 
   validation {
     condition = (
       var.secret_store_retry_interval != null &&
-      length(trimspace(var.secret_store_retry_interval)) > 0
+      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.secret_store_retry_interval)))
     )
-    error_message = "secret_store_retry_interval must not be blank"
+    error_message = "secret_store_retry_interval must be a valid Go duration (e.g., 10s, 1m30s, 500ms)"
   }
 }

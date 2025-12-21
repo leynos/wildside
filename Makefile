@@ -566,6 +566,10 @@ vault-eso-test:
 	|| test $$? -eq 2
 	tofu -chdir=infra/modules/vault_eso/examples/basic init
 	if [ -n "$(VAULT_ESO_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(VAULT_ESO_VAULT_ADDRESS)" ] || [ -z "$(VAULT_ESO_CA_BUNDLE_PEM)" ] || [ -z "$(VAULT_ESO_APPROLE_ROLE_ID)" ] || [ -z "$(VAULT_ESO_APPROLE_SECRET_ID)" ]; then \
+			echo "VAULT_ESO_VAULT_ADDRESS, VAULT_ESO_CA_BUNDLE_PEM, VAULT_ESO_APPROLE_ROLE_ID, and VAULT_ESO_APPROLE_SECRET_ID must be set when VAULT_ESO_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic validate -no-color \
 			-var "vault_address=$(VAULT_ESO_VAULT_ADDRESS)" \
 			-var "vault_ca_bundle_pem=$(VAULT_ESO_CA_BUNDLE_PEM)" \
@@ -594,6 +598,10 @@ vault-eso-policy: conftest tofu
 		echo "Skipping vault-eso plan policy; set VAULT_ESO_KUBECONFIG_PATH to run"; \
 	else \
 		set -euo pipefail; \
+		if [ -z "$(VAULT_ESO_VAULT_ADDRESS)" ] || [ -z "$(VAULT_ESO_CA_BUNDLE_PEM)" ] || [ -z "$(VAULT_ESO_APPROLE_ROLE_ID)" ] || [ -z "$(VAULT_ESO_APPROLE_SECRET_ID)" ]; then \
+			echo "VAULT_ESO_VAULT_ADDRESS, VAULT_ESO_CA_BUNDLE_PEM, VAULT_ESO_APPROLE_ROLE_ID, and VAULT_ESO_APPROLE_SECRET_ID must be set when VAULT_ESO_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
 		tmpdir=$$(mktemp -d); \
 		trap 'rm -rf "$$tmpdir"' EXIT; \
 		status=0; \

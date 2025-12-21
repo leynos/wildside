@@ -8,7 +8,7 @@ External Secrets Operator (ESO).
 
 The module deploys External Secrets Operator and configures ClusterSecretStore
 resources that connect to the existing Vault appliance provisioned by the
-`vault_appliance` OpenTofu module and initialised by the
+`vault_appliance` OpenTofu module and initialized by the
 `bootstrap-vault-appliance` GitHub Action.
 
 ## Architecture
@@ -71,11 +71,11 @@ Vault, which would require additional configuration and network access.
 
 ### D2: External Secrets Operator Chart Version
 
-**Decision:** Pin ESO chart version to `0.12.1` from the
+**Decision:** Pin ESO chart version to `1.1.1` from the
 `oci://ghcr.io/external-secrets/charts` repository.
 
 **Rationale:** Uses the official OCI registry from the External Secrets project
-to ensure supply chain integrity. Version 0.12.1 is the latest stable release
+to ensure supply chain integrity. Version 1.1.1 is the latest stable release
 as of December 2025 with full support for Vault provider and ClusterSecretStore
 resources.
 
@@ -111,7 +111,7 @@ cert-manager.
 
 **Rationale:**
 
-- ESO provides a GitOps-native approach to secret synchronisation that aligns
+- ESO provides a GitOps-native approach to secret synchronization that aligns
   with the overall platform architecture.
 - Vault Agent Injector adds complexity (sidecar injection, annotations, init
   containers) that is not required for the initial use cases.
@@ -173,7 +173,7 @@ with the AppRole authentication secret in the same namespace.
 | `kv_mount_path` | `string` | `"secret"` | KV v2 mount path in Vault |
 | `pki_enabled` | `bool` | `false` | Enable PKI ClusterSecretStore |
 | `pki_mount_path` | `string` | `"pki"` | PKI mount path in Vault |
-| `chart_version` | `string` | `"0.12.1"` | ESO Helm chart version |
+| `chart_version` | `string` | `"1.1.1"` | ESO Helm chart version |
 | `replica_count` | `number` | `2` | ESO webhook replicas |
 
 ### Outputs
@@ -256,13 +256,13 @@ spec:
    that should be protected by RBAC policies.
 
 4. **Namespace Isolation:** ClusterSecretStore allows cross-namespace access
-   but ExternalSecret resources must still be created by authorised workloads.
+   but ExternalSecret resources must still be created by authorized workloads.
 
 ## Future Enhancements
 
 - Vault Agent Injector support for sidecar injection patterns.
 - Kubernetes auth method as an alternative to AppRole.
-- PushSecret support for bidirectional secret synchronisation.
+- PushSecret support for bidirectional secret synchronization.
 - Webhook certificate management integration with cert-manager.
 
 ## Revision History

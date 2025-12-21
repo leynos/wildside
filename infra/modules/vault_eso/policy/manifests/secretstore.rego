@@ -30,14 +30,6 @@ approle_role_ref(doc) := object.get(vault_approle_auth(doc), "roleRef", {})
 
 approle_secret_ref(doc) := object.get(vault_approle_auth(doc), "secretRef", {})
 
-has_approle_secret(name, ns) if {
-	some secret in secrets
-	secret_name := object.get(metadata(secret), "name", "")
-	secret_ns := object.get(metadata(secret), "namespace", "")
-	secret_name == name
-	secret_ns == ns
-}
-
 deny contains msg if {
 	doc := clustersecretstores[_]
 	server := vault_server(doc)
