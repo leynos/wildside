@@ -455,11 +455,14 @@ following rules:
 - Load the signing key from `SESSION_KEY_FILE`; require ≥64 bytes in release
   builds and zeroise the raw bytes after deriving `Key`.
 - Abort start-up unless a key is available. Development builds may fall back
-  to an ephemeral key when `SESSION_ALLOW_EPHEMERAL=1`.
+  to an ephemeral key; release builds require `SESSION_ALLOW_EPHEMERAL=0` and
+  fail fast if the toggle is missing or malformed.
 - Default cookie attributes: `Secure=true`, `HttpOnly=true`,
   `SameSite=Strict`, path `/`, two-hour TTL via `PersistentSession`. Override
   with `SESSION_SAMESITE` and `SESSION_COOKIE_SECURE` when working with preview
   domains or identity-provider redirects. `SameSite=None` demands `Secure=true`.
+- Release builds require explicit `SESSION_COOKIE_SECURE` and
+  `SESSION_SAMESITE` values; missing or invalid settings abort start-up.
 - Rotate keys by publishing a new secret, performing a rolling deployment,
   and keeping at least two replicas live so existing cookies remain valid until
   expiry. Document the active key fingerprint in the runbook.

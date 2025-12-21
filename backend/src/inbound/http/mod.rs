@@ -4,6 +4,7 @@ pub mod error;
 pub mod health;
 pub mod schemas;
 pub mod session;
+pub mod session_config;
 pub mod state;
 #[cfg(test)]
 pub mod test_utils;
