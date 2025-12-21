@@ -4,11 +4,11 @@
     not(test),
     expect(
         dead_code,
-        reason = "helper functions used only in tests; allowed when built \
-non-test to avoid unreachable warnings"
+        reason = "helper functions used only in tests; allowed when built non-test to avoid unreachable warnings"
     )
 )]
 
+use std::io::Write;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -16,6 +16,7 @@ use uuid::Uuid;
 #[cfg(not(test))]
 const TEST_UTILS_LINT_GUARD: () = ();
 
+/// Test helper for creating temporary session key files with automatic cleanup.
 #[derive(Debug)]
 pub struct TempKeyFile {
     path: PathBuf,
@@ -39,7 +40,14 @@ impl TempKeyFile {
     /// Returns an IO error if the file cannot be created or written.
     pub fn new(len: usize) -> std::io::Result<Self> {
         let path = std::env::temp_dir().join(format!("session-key-{}", Uuid::new_v4()));
-        std::fs::write(&path, vec![b'a'; len])?;
+        let mut file = std::fs::File::create(&path)?;
+        let buffer = [b'a'; 4096];
+        let mut remaining = len;
+        while remaining > 0 {
+            let chunk_len = remaining.min(buffer.len());
+            file.write_all(&buffer[..chunk_len])?;
+            remaining -= chunk_len;
+        }
         Ok(Self { path })
     }
 
