@@ -463,12 +463,97 @@ following rules:
   domains or identity-provider redirects. `SameSite=None` demands `Secure=true`.
 - Release builds require explicit `SESSION_COOKIE_SECURE` and
   `SESSION_SAMESITE` values; missing or invalid settings abort start-up.
-- Rotate keys by publishing a new secret, performing a rolling deployment,
-  and keeping at least two replicas live so existing cookies remain valid until
-  expiry. Document the active key fingerprint in the runbook.
 
 Sessions intentionally avoid Redis or database storage, keeping the web tier
 stateless and allowing horizontal scaling without stickiness.
+
+##### Key fingerprinting
+
+On startup, the backend logs a truncated SHA-256 fingerprint of the active
+signing key for operational visibility. The fingerprint is the first 8 bytes
+of the hash encoded as 16 hexadecimal characters. Example log entry:
+
+```json
+{"level":"INFO","message":"session signing key loaded","fingerprint":"a1b2c3d4e5f67890"}
+```
+
+Operators use fingerprints to verify which key is active across replicas and to
+confirm rotation completed successfully. The fingerprint module is located at
+`backend/src/inbound/http/session_config/fingerprint.rs`.
+
+##### Key rotation procedure
+
+Rotation relies on **rolling deployment overlap** rather than in-app dual-key
+validation. During rotation:
+
+1. Publish the new key to the Kubernetes Secret.
+2. Trigger a rolling deployment (`kubectl rollout restart`).
+3. New pods start with the new key; old pods continue with the old key.
+4. After all old pods terminate, only the new key is active.
+
+The 2-hour session TTL means existing sessions expire naturally within the
+overlap window. Users routed to new pods during rotation receive new sessions.
+
+**Requirements for zero-downtime rotation:**
+
+- At least 2 replicas must be running.
+- The Helm chart's `sessionSecret.enabled` must be `true`.
+- The deployment must use `maxUnavailable: 0` (the default).
+
+**Automation:** Use `scripts/rotate_session_key.py` to automate the rotation
+procedure. The script generates a new key, updates the secret, triggers the
+rollout, and outputs fingerprints for audit logging.
+
+**Runbook:** See `docs/runbooks/session-key-rotation.md` for the complete
+rotation procedure, post-rotation verification, rollback steps, and
+troubleshooting guidance.
+
+*Figure: Session key rotation sequence showing the operator-initiated workflow
+from key generation through rolling deployment and fingerprint verification.*
+
+```mermaid
+sequenceDiagram
+  actor Operator
+  participant Script as RotateSessionKeyScript
+  participant Kubectl
+  participant K8sAPI
+  participant Deployment as wildside-backend
+  participant Pod as BackendPods
+
+  Operator->>Script: Run rotate_session_key_py with namespace, secret, deployment
+
+  Script->>Kubectl: get secret wildside-session-key
+  Kubectl->>K8sAPI: HTTP GET secret
+  K8sAPI-->>Kubectl: Base64 session_key
+  Kubectl-->>Script: session_key bytes
+  Script->>Script: compute old_fingerprint
+
+  Script->>Script: generate new 64-byte key
+  Script->>Script: compute new_fingerprint
+
+  Script->>Kubectl: patch secret wildside-session-key with new key
+  Kubectl->>K8sAPI: HTTP PATCH secret
+  K8sAPI-->>Kubectl: 200 OK
+  Kubectl-->>Script: Patch success
+
+  Script->>Kubectl: rollout restart deployment/wildside-backend
+  Kubectl->>K8sAPI: Trigger rolling restart
+  K8sAPI-->>Deployment: Start new pods, terminate old pods
+
+  loop For each new pod
+    Deployment->>Pod: Start pod with updated secret volume
+    Pod->>Pod: Read session_key file
+    Pod->>Pod: compute fingerprint via key_fingerprint
+    Pod->>Pod: log "session signing key loaded" with fingerprint
+  end
+
+  Script->>Kubectl: rollout status deployment/wildside-backend
+  Kubectl->>K8sAPI: Watch rollout
+  K8sAPI-->>Kubectl: Rollout complete
+  Kubectl-->>Script: status success
+
+  Script-->>Operator: Print old and new fingerprints and verification steps
+```
 
 **Hexagonal perspective:** In hexagonal terms, Actix Web is an **outer
 adapter** – it converts external inputs (HTTP requests, WebSocket messages)

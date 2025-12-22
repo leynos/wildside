@@ -44,6 +44,9 @@ utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 actix-web-prom = { version = "0.10", optional = true }
 
 zeroize = "1.7"
+# Cryptographic hashing for key fingerprinting
+sha2 = "0.10"
+hex = "0.4"
 
 [features]
 default = []

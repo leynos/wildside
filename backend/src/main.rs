@@ -8,7 +8,7 @@ use actix_web_prom::PrometheusMetricsBuilder;
 use backend::inbound::http::session_config::{session_settings_from_env, BuildMode, DefaultEnv};
 use std::env;
 use std::net::SocketAddr;
-use tracing::warn;
+use tracing::{info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use backend::inbound::http::health::HealthState;
@@ -85,6 +85,10 @@ async fn main() -> std::io::Result<()> {
     let session_settings =
         session_settings_from_env(&session_env, BuildMode::from_debug_assertions())
             .map_err(std::io::Error::other)?;
+    info!(
+        fingerprint = %session_settings.fingerprint,
+        "session signing key loaded"
+    );
     let cookie_secure = session_settings.cookie_secure;
     let same_site = session_settings.same_site;
     let key = session_settings.key;

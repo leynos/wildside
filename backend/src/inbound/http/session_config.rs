@@ -87,6 +87,9 @@ pub struct SessionSettings {
     pub cookie_secure: bool,
     /// Configured `SameSite` policy for session cookies.
     pub same_site: SameSite,
+    /// Truncated SHA-256 fingerprint of the signing key for operational
+    /// visibility.
+    pub fingerprint: String,
 }
 
 /// Errors raised while validating session configuration.
@@ -173,11 +176,13 @@ pub fn session_settings_from_env<E: SessionEnv>(
     let same_site = same_site_from_env(env, mode, cookie_secure)?;
     let allow_ephemeral = allow_ephemeral_from_env(env, mode)?;
     let key = session_key_from_env(env, mode, allow_ephemeral)?;
+    let fingerprint = fingerprint::key_fingerprint(&key);
 
     Ok(SessionSettings {
         key,
         cookie_secure,
         same_site,
+        fingerprint,
     })
 }
 
@@ -410,6 +415,7 @@ fn parse_bool(value: &str) -> Option<bool> {
     }
 }
 
+pub mod fingerprint;
 pub mod test_utils;
 
 #[cfg(test)]
