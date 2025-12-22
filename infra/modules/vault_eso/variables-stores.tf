@@ -50,7 +50,7 @@ variable "secret_store_retry_interval" {
   validation {
     condition = (
       var.secret_store_retry_interval != null &&
-      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.secret_store_retry_interval)))
+      can(regex("^([0-9]+(ns|us|µs|ms|s|m|h))+$", trimspace(var.secret_store_retry_interval)))
     )
     error_message = "secret_store_retry_interval must be a valid Go duration (e.g., 10s, 1m30s, 500ms)"
   }

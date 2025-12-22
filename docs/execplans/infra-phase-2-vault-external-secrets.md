@@ -166,7 +166,7 @@ conventions.
 ### Phase 3: Module Implementation
 
 Implement the module so it supports both `render` and `apply` modes. Build
-`locals` that normalise input values, map defaults, merge Helm values, and
+`locals` that normalize input values, map defaults, merge Helm values, and
 construct manifests for:
 
 1. **ESO Namespace** — dedicated namespace for the operator.
@@ -335,7 +335,7 @@ timeout and capture logs with `tee` for any command with long output.
      'tofu -chdir=infra/modules/vault_eso/examples/render init -input=false -no-color'
    ```
 
-5. Add Terratest suites and initialise the Go module for tests.
+5. Add Terratest suites and initialize the Go module for tests.
 
    ```bash
    timeout 300s bash -lc \

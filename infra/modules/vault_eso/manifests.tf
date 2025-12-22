@@ -175,6 +175,7 @@ locals {
   }
 
   kustomization_resources = concat(
+    ["../sources/external-secrets-repo.yaml"],
     ["namespace.yaml", "helmrelease.yaml", "approle-auth-secret.yaml"],
     ["cluster-secret-store-kv.yaml"],
     local.pki_enabled ? ["cluster-secret-store-pki.yaml"] : [],

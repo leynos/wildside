@@ -30,6 +30,10 @@ approle_role_ref(doc) := object.get(vault_approle_auth(doc), "roleRef", {})
 
 approle_secret_ref(doc) := object.get(vault_approle_auth(doc), "secretRef", {})
 
+uses_approle_auth(doc) if {
+	vault_approle_auth(doc) != {}
+}
+
 deny contains msg if {
 	doc := clustersecretstores[_]
 	server := vault_server(doc)
@@ -56,8 +60,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	role_ref := approle_role_ref(doc)
 	trim_space(object.get(role_ref, "name", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")
@@ -66,8 +69,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	role_ref := approle_role_ref(doc)
 	trim_space(object.get(role_ref, "namespace", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")
@@ -76,8 +78,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	role_ref := approle_role_ref(doc)
 	trim_space(object.get(role_ref, "key", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")
@@ -86,8 +87,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	secret_ref := approle_secret_ref(doc)
 	trim_space(object.get(secret_ref, "name", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")
@@ -96,8 +96,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	secret_ref := approle_secret_ref(doc)
 	trim_space(object.get(secret_ref, "namespace", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")
@@ -106,8 +105,7 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	approle := vault_approle_auth(doc)
-	approle != {}
+	uses_approle_auth(doc)
 	secret_ref := approle_secret_ref(doc)
 	trim_space(object.get(secret_ref, "key", "")) == ""
 	name := object.get(metadata(doc), "name", "<unknown>")

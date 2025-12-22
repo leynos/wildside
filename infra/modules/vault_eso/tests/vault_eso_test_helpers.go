@@ -49,15 +49,15 @@ kind: Config
 users:
 - name: stub
   user:
-    token: fake-token
+    token: STUB-TOKEN-NOT-A-REAL-SECRET
 `)
 	require.NoError(t, os.WriteFile(kubeconfigPath, stubConfig, 0o600))
 
 	return map[string]interface{}{
 		"vault_address":       "https://vault.example.test:8200",
 		"vault_ca_bundle_pem": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
-		"approle_role_id":     "test-role-id-12345678",
-		"approle_secret_id":   "test-secret-id-12345678",
+		"approle_role_id":     "00000000-0000-0000-0000-000000000000", // #nosec G101 -- test fixture
+		"approle_secret_id":   "00000000-0000-0000-0000-000000000001", // #nosec G101 -- test fixture
 		"kubeconfig_path":     kubeconfigPath,
 	}
 }
@@ -67,8 +67,8 @@ func renderVars(t *testing.T) map[string]interface{} {
 	return map[string]interface{}{
 		"vault_address":       "https://vault.example.test:8200",
 		"vault_ca_bundle_pem": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
-		"approle_role_id":     "test-role-id-12345678",
-		"approle_secret_id":   "test-secret-id-12345678",
+		"approle_role_id":     "00000000-0000-0000-0000-000000000000", // #nosec G101 -- test fixture
+		"approle_secret_id":   "00000000-0000-0000-0000-000000000001", // #nosec G101 -- test fixture
 	}
 }
 

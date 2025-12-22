@@ -250,7 +250,7 @@ variable "flux_helm_repository_interval" {
   validation {
     condition = (
       var.flux_helm_repository_interval != null &&
-      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.flux_helm_repository_interval)))
+      can(regex("^([0-9]+(ns|us|µs|ms|s|m|h))+$", trimspace(var.flux_helm_repository_interval)))
     )
     error_message = "flux_helm_repository_interval must be a valid Go duration (e.g., 1h, 24h, 30m)"
   }
@@ -264,7 +264,7 @@ variable "flux_helm_release_interval" {
   validation {
     condition = (
       var.flux_helm_release_interval != null &&
-      can(regex("^[0-9]+(ns|us|µs|ms|s|m|h)+$", trimspace(var.flux_helm_release_interval)))
+      can(regex("^([0-9]+(ns|us|µs|ms|s|m|h))+$", trimspace(var.flux_helm_release_interval)))
     )
     error_message = "flux_helm_release_interval must be a valid Go duration (e.g., 1h, 24h, 30m)"
   }

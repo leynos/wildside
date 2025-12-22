@@ -20,9 +20,10 @@ variable "vault_ca_bundle_pem" {
     condition = (
       var.vault_ca_bundle_pem != null &&
       length(trimspace(var.vault_ca_bundle_pem)) > 0 &&
-      can(regex("-----BEGIN CERTIFICATE-----", var.vault_ca_bundle_pem))
+      can(regex("-----BEGIN CERTIFICATE-----", var.vault_ca_bundle_pem)) &&
+      can(regex("-----END CERTIFICATE-----", var.vault_ca_bundle_pem))
     )
-    error_message = "vault_ca_bundle_pem must be a valid PEM-encoded certificate"
+    error_message = "vault_ca_bundle_pem must be a valid PEM-encoded certificate with BEGIN and END markers"
   }
 }
 
@@ -70,8 +71,13 @@ variable "approle_mount_path" {
   default     = "approle"
 
   validation {
-    condition     = var.approle_mount_path != null && length(trimspace(var.approle_mount_path)) > 0
-    error_message = "approle_mount_path must not be blank"
+    condition = (
+      var.approle_mount_path != null &&
+      length(trimspace(var.approle_mount_path)) > 0 &&
+      !startswith(trimspace(var.approle_mount_path), "/") &&
+      !endswith(trimspace(var.approle_mount_path), "/")
+    )
+    error_message = "approle_mount_path must not be blank and must not have leading or trailing slashes"
   }
 }
 
@@ -81,8 +87,13 @@ variable "kv_mount_path" {
   default     = "secret"
 
   validation {
-    condition     = var.kv_mount_path != null && length(trimspace(var.kv_mount_path)) > 0
-    error_message = "kv_mount_path must not be blank"
+    condition = (
+      var.kv_mount_path != null &&
+      length(trimspace(var.kv_mount_path)) > 0 &&
+      !startswith(trimspace(var.kv_mount_path), "/") &&
+      !endswith(trimspace(var.kv_mount_path), "/")
+    )
+    error_message = "kv_mount_path must not be blank and must not have leading or trailing slashes"
   }
 }
 
@@ -99,7 +110,12 @@ variable "pki_mount_path" {
   default     = "pki"
 
   validation {
-    condition     = var.pki_mount_path != null && length(trimspace(var.pki_mount_path)) > 0
-    error_message = "pki_mount_path must not be blank"
+    condition = (
+      var.pki_mount_path != null &&
+      length(trimspace(var.pki_mount_path)) > 0 &&
+      !startswith(trimspace(var.pki_mount_path), "/") &&
+      !endswith(trimspace(var.pki_mount_path), "/")
+    )
+    error_message = "pki_mount_path must not be blank and must not have leading or trailing slashes"
   }
 }
