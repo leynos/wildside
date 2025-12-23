@@ -159,12 +159,13 @@ Terminology (plain-language):
    - Add `sessionSecret.keyName` (default: `session_key`).
    - Add `sessionSecret.mountPath` (default: `/var/run/secrets`).
 
-7. Create `scripts/rotate-session-key.sh`:
-   - Parse namespace and secret name arguments.
-   - Generate new 64-byte key using `openssl rand -hex 64`.
-   - Compute fingerprints of old and new keys.
+7. Create `scripts/rotate_session_key.py`:
+   - Parse namespace and secret name arguments using argparse.
+   - Generate new 64-byte key using Python's secrets module.
+   - Compute fingerprints of old and new keys (matching backend's HKDF
+     derivation).
    - Update Kubernetes Secret with `kubectl patch`.
-   - Trigger rolling restart by updating annotation.
+   - Trigger rolling restart with `kubectl rollout restart`.
    - Monitor rollout status with `kubectl rollout status`.
    - Output summary with fingerprints for runbook logging.
 

@@ -28,7 +28,10 @@ spec:
       annotations:
         checksum/config: {{ if .Values.config }}{{ toYaml .Values.config | sha256sum }}{{ end }}
         {{- if .Values.sessionSecret.enabled }}
-        checksum/session-secret: {{ .Values.sessionSecret.name | default "wildside-session-key" | sha256sum }}
+        {{- $secret := lookup "v1" "Secret" .Release.Namespace (.Values.sessionSecret.name | default "wildside-session-key") }}
+        {{- if $secret }}
+        checksum/session-secret: {{ $secret.data | toYaml | sha256sum }}
+        {{- end }}
         {{- end }}
     spec:
       terminationGracePeriodSeconds: 30

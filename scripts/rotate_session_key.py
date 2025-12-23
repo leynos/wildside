@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run python
 # /// script
 # requires-python = ">=3.13"
-# dependencies = ["plumbum"]
+# dependencies = ["plumbum", "cryptography"]
 # ///
 
 """Rotate session signing key for the Wildside backend.
@@ -40,6 +40,9 @@ if TYPE_CHECKING:
 # Session key must be at least 64 bytes per backend requirements.
 SESSION_KEY_LENGTH = 64
 FINGERPRINT_BYTES = 8
+# HKDF parameters matching actix-web cookie crate's Key::derive_from
+HKDF_SIGNING_INFO = b"COOKIE;SIGNING"
+HKDF_SIGNING_KEY_LENGTH = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,14 +64,35 @@ class RotationResult:
     rollout_triggered: bool
 
 
-def compute_fingerprint(key_bytes: bytes) -> str:
-    """Compute truncated SHA-256 fingerprint of key material.
+def derive_signing_key(key_bytes: bytes) -> bytes:
+    """Derive the signing key using HKDF, matching actix-web's Key::derive_from.
 
-    Returns the first 8 bytes as a 16-character hex string, matching the
-    backend's fingerprinting algorithm.
+    The actix-web cookie crate uses HKDF-SHA256 with no salt and the info
+    string "COOKIE;SIGNING" to derive a 32-byte signing key from the input
+    material.
     """
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives import hashes
+
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=HKDF_SIGNING_KEY_LENGTH,
+        salt=None,
+        info=HKDF_SIGNING_INFO,
+    )
+    return hkdf.derive(key_bytes)
+
+
+def compute_fingerprint(key_bytes: bytes) -> str:
+    """Compute truncated SHA-256 fingerprint matching the backend.
+
+    First derives the signing key using HKDF (matching actix-web's
+    Key::derive_from), then computes SHA-256 of the derived signing key.
+    Returns the first 8 bytes as a 16-character hex string.
+    """
+    signing_key = derive_signing_key(key_bytes)
     hasher = hashlib.sha256()
-    hasher.update(key_bytes)
+    hasher.update(signing_key)
     return hasher.hexdigest()[: FINGERPRINT_BYTES * 2]
 
 
@@ -223,7 +247,7 @@ def validate_replica_count(config: RotationConfig) -> bool:
     return True
 
 
-def print_rotation_summary(config: RotationConfig, result: RotationResult) -> None:
+def print_rotation_summary(_config: RotationConfig, result: RotationResult) -> None:
     """Print the rotation summary with old and new fingerprints."""
     print("\n=== Rotation Summary ===")
     if result.old_fingerprint:
