@@ -198,6 +198,70 @@ def rotate_session_key(config: RotationConfig) -> RotationResult:
     )
 
 
+def validate_replica_count(config: RotationConfig) -> bool:
+    """Check replica count and prompt for confirmation if below threshold.
+
+    Returns True if rotation should proceed, False if cancelled.
+    """
+    if not config.deployment_name:
+        return True
+
+    replicas = check_replica_count(config)
+    if replicas >= 2:
+        return True
+
+    print(
+        f"WARNING: Deployment has {replicas} replica(s). "
+        "Zero-downtime rotation requires at least 2 replicas.",
+        file=sys.stderr,
+    )
+    print("Continue anyway? [y/N] ", end="", file=sys.stderr)
+    response = input().strip().lower()
+    if response not in ("y", "yes"):
+        print("Rotation cancelled.", file=sys.stderr)
+        return False
+    return True
+
+
+def print_rotation_summary(config: RotationConfig, result: RotationResult) -> None:
+    """Print the rotation summary with old and new fingerprints."""
+    print("\n=== Rotation Summary ===")
+    if result.old_fingerprint:
+        print(f"Old fingerprint: {result.old_fingerprint}")
+    else:
+        print("Old fingerprint: (none - new secret)")
+    print(f"New fingerprint: {result.new_fingerprint}")
+
+
+def handle_rollout(config: RotationConfig, result: RotationResult) -> None:
+    """Handle rollout triggering, waiting, and status messages."""
+    if result.rollout_triggered:
+        print(f"\nTriggered rollout for deployment '{config.deployment_name}'")
+        print("Waiting for rollout to complete...")
+        try:
+            wait_for_rollout(config)
+            print("Rollout completed successfully.")
+        except ProcessExecutionError as exc:
+            print(f"warning: rollout status check failed: {exc}", file=sys.stderr)
+            print("Check deployment status manually with:")
+            print(f"  kubectl rollout status deployment/{config.deployment_name} "
+                  f"-n {config.namespace}")
+    else:
+        print("\nNo deployment specified; rollout not triggered.")
+        print("Trigger manually with:")
+        print(f"  kubectl rollout restart deployment/<name> -n {config.namespace}")
+
+
+def print_verification_instructions(
+    config: RotationConfig, result: RotationResult
+) -> None:
+    """Print post-rotation verification instructions."""
+    print("\n=== Post-Rotation Verification ===")
+    print("Verify the new fingerprint appears in pod logs:")
+    print(f'  kubectl logs -n {config.namespace} -l app.kubernetes.io/name=wildside '
+          f'| grep "fingerprint={result.new_fingerprint}"')
+
+
 def parse_args(argv: list[str]) -> RotationConfig:
     """Parse command-line arguments."""
     namespace = "default"
@@ -248,20 +312,8 @@ def main(argv: list[str] | None = None) -> int:
 
     config = parse_args(argv)
 
-    # Safety check: warn if fewer than 2 replicas
-    if config.deployment_name:
-        replicas = check_replica_count(config)
-        if replicas < 2:
-            print(
-                f"WARNING: Deployment has {replicas} replica(s). "
-                "Zero-downtime rotation requires at least 2 replicas.",
-                file=sys.stderr,
-            )
-            print("Continue anyway? [y/N] ", end="", file=sys.stderr)
-            response = input().strip().lower()
-            if response not in ("y", "yes"):
-                print("Rotation cancelled.", file=sys.stderr)
-                return 1
+    if not validate_replica_count(config):
+        return 1
 
     print(f"Rotating session key in secret '{config.secret_name}' "
           f"(namespace: {config.namespace})")
@@ -272,34 +324,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: kubectl command failed: {exc}", file=sys.stderr)
         return 1
 
-    # Output summary for runbook logging
-    print("\n=== Rotation Summary ===")
-    if result.old_fingerprint:
-        print(f"Old fingerprint: {result.old_fingerprint}")
-    else:
-        print("Old fingerprint: (none - new secret)")
-    print(f"New fingerprint: {result.new_fingerprint}")
-
-    if result.rollout_triggered:
-        print(f"\nTriggered rollout for deployment '{config.deployment_name}'")
-        print("Waiting for rollout to complete...")
-        try:
-            wait_for_rollout(config)
-            print("Rollout completed successfully.")
-        except ProcessExecutionError as exc:
-            print(f"warning: rollout status check failed: {exc}", file=sys.stderr)
-            print("Check deployment status manually with:")
-            print(f"  kubectl rollout status deployment/{config.deployment_name} "
-                  f"-n {config.namespace}")
-    else:
-        print("\nNo deployment specified; rollout not triggered.")
-        print("Trigger manually with:")
-        print(f"  kubectl rollout restart deployment/<name> -n {config.namespace}")
-
-    print("\n=== Post-Rotation Verification ===")
-    print("Verify the new fingerprint appears in pod logs:")
-    print(f'  kubectl logs -n {config.namespace} -l app.kubernetes.io/name=wildside '
-          f'| grep "fingerprint={result.new_fingerprint}"')
+    print_rotation_summary(config, result)
+    handle_rollout(config, result)
+    print_verification_instructions(config, result)
 
     return 0
 
