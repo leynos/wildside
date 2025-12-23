@@ -78,7 +78,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 - [x] Enforce configuration toggles for `SESSION_SAMESITE`,
   `SESSION_COOKIE_SECURE`, and `SESSION_ALLOW_EPHEMERAL`, failing fast in
   release builds when secrets are missing or keys are too short.
-- [ ] Document and script the rotation procedure for session signing keys,
+- [x] Document and script the rotation procedure for session signing keys,
   including Kubernetes secret rollout and dual validation during deploys.
 
 ### Step: Route submission idempotency

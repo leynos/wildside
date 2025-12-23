@@ -27,6 +27,12 @@ spec:
         app.kubernetes.io/part-of: {{ .Chart.Name }}
       annotations:
         checksum/config: {{ if .Values.config }}{{ toYaml .Values.config | sha256sum }}{{ end }}
+        {{- if .Values.sessionSecret.enabled }}
+        {{- $secret := lookup "v1" "Secret" .Release.Namespace (.Values.sessionSecret.name | default "wildside-session-key") }}
+        {{- if $secret }}
+        checksum/session-secret: {{ $secret.data | toYaml | sha256sum }}
+        {{- end }}
+        {{- end }}
     spec:
       terminationGracePeriodSeconds: 30
       {{- with .Values.podSecurityContext }}
@@ -100,3 +106,18 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if .Values.sessionSecret.enabled }}
+          volumeMounts:
+            - name: session-key
+              mountPath: {{ .Values.sessionSecret.mountPath | default "/var/run/secrets" }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.sessionSecret.enabled }}
+      volumes:
+        - name: session-key
+          secret:
+            secretName: {{ .Values.sessionSecret.name | default "wildside-session-key" }}
+            items:
+              - key: {{ .Values.sessionSecret.keyName | default "session_key" }}
+                path: session_key
+      {{- end }}

@@ -133,7 +133,24 @@
     "affinity": { "type": "object" },
     "podSecurityContext": { "type": "object" },
     "securityContext": { "type": "object" },
-    "container": { "type": "object" }
+    "container": { "type": "object" },
+    "sessionSecret": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "type": "string", "minLength": 1 },
+        "keyName": { "type": "string", "minLength": 1 },
+        "mountPath": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false,
+      "if": {
+        "properties": { "enabled": { "const": true } },
+        "required": ["enabled"]
+      },
+      "then": {
+        "required": ["name", "keyName", "mountPath"]
+      }
+    }
   },
   "allOf": [
     {

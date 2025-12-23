@@ -51,6 +51,18 @@ existingSecretName: ""
 allowMissingSecret: true
 secretEnvFromKeys: {}
 
+# Session signing key secret configuration for zero-downtime key rotation.
+# When enabled, the secret is mounted as a file at mountPath/session_key.
+# See docs/runbooks/session-key-rotation.md for the rotation procedure.
+sessionSecret:
+  enabled: false
+  # Name of the Kubernetes Secret containing the session signing key.
+  name: "wildside-session-key"
+  # Key within the Secret that holds the 64+ byte signing key.
+  keyName: "session_key"
+  # Mount path for the session key file.
+  mountPath: "/var/run/secrets"
+
 affinity: {}
 
 podSecurityContext:
