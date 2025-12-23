@@ -232,7 +232,7 @@ Expose outputs that downstream modules can consume (the sync policy contract):
 - `rendered_manifests` — map for render mode.
 
 The sync policy contract object should bundle the secret store references and
-mount paths so workloads can construct ExternalSecret resources without knowing
+mount paths, so workloads can construct ExternalSecret resources without knowing
 the underlying Vault configuration.
 
 ### Phase 6: Examples

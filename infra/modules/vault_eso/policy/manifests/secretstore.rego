@@ -14,7 +14,11 @@ secrets := [doc |
 	is_external_secrets(doc)
 ]
 
-vault_provider(doc) := object.get(object.get(object.get(doc, "spec", {}), "provider", {}), "vault", {})
+doc_spec(doc) := object.get(doc, "spec", {})
+
+spec_provider(doc) := object.get(doc_spec(doc), "provider", {})
+
+vault_provider(doc) := object.get(spec_provider(doc), "vault", {})
 
 vault_server(doc) := object.get(vault_provider(doc), "server", "")
 
