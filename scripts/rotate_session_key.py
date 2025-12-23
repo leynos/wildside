@@ -264,44 +264,41 @@ def print_verification_instructions(
 
 def parse_args(argv: list[str]) -> RotationConfig:
     """Parse command-line arguments."""
-    namespace = "default"
-    secret_name = "wildside-session-key"
-    secret_key = "session_key"
-    deployment_name: str | None = None
+    import argparse
 
-    i = 1
-    while i < len(argv):
-        arg = argv[i]
-        if arg in ("-n", "--namespace") and i + 1 < len(argv):
-            namespace = argv[i + 1]
-            i += 2
-        elif arg in ("-s", "--secret-name") and i + 1 < len(argv):
-            secret_name = argv[i + 1]
-            i += 2
-        elif arg in ("-k", "--secret-key") and i + 1 < len(argv):
-            secret_key = argv[i + 1]
-            i += 2
-        elif arg in ("-d", "--deployment") and i + 1 < len(argv):
-            deployment_name = argv[i + 1]
-            i += 2
-        elif arg in ("-h", "--help"):
-            print(__doc__)
-            print("\nOptions:")
-            print("  -n, --namespace    Kubernetes namespace (default: default)")
-            print("  -s, --secret-name  Secret name (default: wildside-session-key)")
-            print("  -k, --secret-key   Key within secret (default: session_key)")
-            print("  -d, --deployment   Deployment name for rollout (optional)")
-            print("  -h, --help         Show this help message")
-            raise SystemExit(0)
-        else:
-            print(f"Unknown argument: {arg}", file=sys.stderr)
-            raise SystemExit(1)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-n", "--namespace",
+        default="default",
+        help="Kubernetes namespace (default: default)",
+    )
+    parser.add_argument(
+        "-s", "--secret-name",
+        default="wildside-session-key",
+        help="Secret name (default: wildside-session-key)",
+    )
+    parser.add_argument(
+        "-k", "--secret-key",
+        default="session_key",
+        help="Key within secret (default: session_key)",
+    )
+    parser.add_argument(
+        "-d", "--deployment",
+        dest="deployment_name",
+        default=None,
+        help="Deployment name for rollout (optional)",
+    )
+
+    args = parser.parse_args(argv[1:])
 
     return RotationConfig(
-        namespace=namespace,
-        secret_name=secret_name,
-        secret_key=secret_key,
-        deployment_name=deployment_name,
+        namespace=args.namespace,
+        secret_name=args.secret_name,
+        secret_key=args.secret_key,
+        deployment_name=args.deployment_name,
     )
 
 
