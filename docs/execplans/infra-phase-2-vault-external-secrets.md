@@ -117,8 +117,8 @@ Definitions used in this plan:
   via sidecar containers.
 - **Render mode**: OpenTofu emits manifests for Flux to apply via GitOps.
 - **Apply mode**: OpenTofu applies resources directly to a live cluster.
-- **Synchronization policy contract**: A set of outputs that downstream modules can consume
-  to reference secret stores and create ExternalSecret resources.
+- **Synchronization policy contract**: A set of outputs that downstream modules
+  can consume to reference secret stores and create ExternalSecret resources.
 
 ## Plan of Work
 
