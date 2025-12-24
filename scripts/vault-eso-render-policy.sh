@@ -32,6 +32,10 @@ mkdir -p "$out_dir"
 
 log_file="$tmpdir/tofu.log"
 output_log="$tmpdir/tofu-output.log"
+state_file="$tmpdir/terraform.tfstate"
+
+# Redirect .terraform and state to temp directory to avoid leaving artifacts
+export TF_DATA_DIR="$tmpdir/.terraform"
 
 if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" init -input=false -no-color > "$log_file" 2>&1; then
   echo "tofu init failed:" >&2
@@ -39,13 +43,17 @@ if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" init -input=false -no-color >
   exit 1
 fi
 
-if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply -auto-approve -input=false -no-color > "$log_file" 2>&1; then
+if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply \
+  -auto-approve -input=false -no-color \
+  -state="$state_file" \
+  > "$log_file" 2>&1; then
   echo "tofu apply failed:" >&2
   cat "$log_file" >&2
   exit 1
 fi
 
 if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output -json rendered_manifests \
+  -state="$state_file" \
   > "$tmpdir/manifests.json" 2> "$output_log"; then
   echo "tofu output failed:" >&2
   cat "$output_log" >&2

@@ -128,3 +128,40 @@ pub fn test_cluster() -> Result<TestCluster, String> {
 
     Err(last_error)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_transient_error_matches_known_patterns() {
+        assert!(is_transient_error("error decoding response body"));
+        assert!(is_transient_error("connection reset by peer"));
+        assert!(is_transient_error("connection refused"));
+        assert!(is_transient_error("request timeout"));
+        assert!(is_transient_error("operation timed out"));
+        assert!(is_transient_error("service temporarily unavailable"));
+        assert!(is_transient_error("network unreachable"));
+        assert!(is_transient_error("dns error: lookup failed"));
+        assert!(is_transient_error("failed to lookup address"));
+    }
+
+    #[test]
+    fn is_transient_error_is_case_insensitive() {
+        assert!(is_transient_error("TIMEOUT"));
+        assert!(is_transient_error("Connection Reset"));
+        assert!(is_transient_error("DNS ERROR"));
+        assert!(is_transient_error("TIMED OUT"));
+        assert!(is_transient_error("Temporarily Unavailable"));
+    }
+
+    #[test]
+    fn is_transient_error_rejects_non_transient_errors() {
+        assert!(!is_transient_error("unknown error"));
+        assert!(!is_transient_error("permission denied"));
+        assert!(!is_transient_error("file not found"));
+        assert!(!is_transient_error("invalid configuration"));
+        assert!(!is_transient_error("authentication failed"));
+        assert!(!is_transient_error(""));
+    }
+}
