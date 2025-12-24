@@ -105,6 +105,28 @@ deny contains msg if {
 	msg := sprintf("ClusterSecretStore %s must set appRole.secretRef.namespace", [css.manifest.metadata.name])
 }
 
+deny contains msg if {
+	rc := input.resource_changes[_]
+	css := clustersecretstore(rc)
+	spec := css.spec
+	approle := vault_approle_auth(spec)
+	approle != {}
+	role_ref := approle_role_ref(spec)
+	trim_space(object.get(role_ref, "key", "")) == ""
+	msg := sprintf("ClusterSecretStore %s must set appRole.roleRef.key", [css.manifest.metadata.name])
+}
+
+deny contains msg if {
+	rc := input.resource_changes[_]
+	css := clustersecretstore(rc)
+	spec := css.spec
+	approle := vault_approle_auth(spec)
+	approle != {}
+	secret_ref := approle_secret_ref(spec)
+	trim_space(object.get(secret_ref, "key", "")) == ""
+	msg := sprintf("ClusterSecretStore %s must set appRole.secretRef.key", [css.manifest.metadata.name])
+}
+
 retry_settings(spec) := object.get(spec, "retrySettings", {})
 
 warn contains msg if {
