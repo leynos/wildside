@@ -48,7 +48,7 @@ resources that connect to the existing Vault appliance provisioned by the
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-*DOKS = DigitalOcean Kubernetes Service*
+DOKS = DigitalOcean Kubernetes Service
 
 ## Design Decisions
 
