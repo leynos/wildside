@@ -27,6 +27,12 @@ pub enum ErrorCodeSchema {
     /// The requested resource does not exist.
     #[schema(rename = "not_found")]
     NotFound,
+    /// The request conflicts with existing state (e.g., idempotency key reuse with different payload).
+    #[schema(rename = "conflict")]
+    Conflict,
+    /// The service is temporarily unavailable.
+    #[schema(rename = "service_unavailable")]
+    ServiceUnavailable,
     /// An unexpected error occurred on the server.
     #[schema(rename = "internal_error")]
     InternalError,
