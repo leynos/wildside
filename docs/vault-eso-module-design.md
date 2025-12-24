@@ -52,7 +52,7 @@ DOKS = DigitalOcean Kubernetes Service
 
 ## Design Decisions
 
-### D1: Authentication Method — AppRole
+### D1: Authentication Method — Application Role (AppRole)
 
 **Decision:** Use AppRole authentication for ESO to connect to the external
 Vault appliance.
@@ -68,7 +68,7 @@ Vault, which would require additional configuration and network access.
 - AppRole credentials must be rotated periodically (handled by the bootstrap
   action with `rotate_secret_id` option).
 - Credentials are stored as Kubernetes Secrets rather than dynamically obtained.
-- Simpler setup than Kubernetes auth method which requires Vault to call back
+- Simpler setup than Kubernetes auth method, which requires Vault to call back
   to the Kubernetes API server.
 
 ### D2: External Secrets Operator Chart Version
@@ -97,13 +97,15 @@ namespace-scoped SecretStore resources.
 
 ### D4: Supported Vault Secret Engines
 
-**Decision:** Provide a ClusterSecretStore resource for KV v2 secrets only.
+**Decision:** Provide a ClusterSecretStore resource for Key-Value (KV) v2
+secrets only.
 
 **Rationale:** KV v2 covers the majority of secret storage use cases
-(credentials, API keys, connection strings). PKI certificate issuance is
+(credentials, API keys, connection strings). Public Key Infrastructure (PKI)
+certificate issuance is
 handled by cert-manager with Vault PKI issuer, which is the appropriate tool
 for dynamic certificate generation. ESO's standard Vault provider only supports
-KV secret engines; PKI would require VaultDynamicSecret generators which add
+KV secret engines; PKI would require VaultDynamicSecret generators, which add
 complexity without clear benefit given cert-manager's capabilities.
 
 ### D5: Vault Agent Injector
@@ -116,7 +118,7 @@ complexity without clear benefit given cert-manager's capabilities.
   with the overall platform architecture.
 - Vault Agent Injector adds complexity (sidecar injection, annotations, init
   containers) that is not required for the initial use cases.
-- Can be added as a separate optional component in a future iteration if
+- It can be added as a separate optional component in a future iteration if
   sidecar injection patterns are needed.
 
 ### D6: Sync Policy Contract Output
@@ -145,7 +147,8 @@ with the AppRole authentication secret in the same namespace.
 
 ### D8: High Availability Configuration
 
-**Decision:** Default to 2 replicas for ESO webhook with PodDisruptionBudget.
+**Decision:** Default to 2 replicas for ESO webhook with PodDisruptionBudget
+(PDB).
 
 **Rationale:**
 

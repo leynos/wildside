@@ -146,6 +146,34 @@ spec:
 		expectedMessage: "must set provider.vault.caBundle",
 	},
 	{
+		name: "MissingVaultServer",
+		manifest: `apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-kv
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+spec:
+  provider:
+    vault:
+      path: secret
+      version: v2
+      caBundle: dGVzdA==
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: role_id
+          secretRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: secret_id
+`,
+		expectedMessage: "must set provider.vault.server",
+	},
+	{
 		name: "NonHTTPSVaultServer",
 		manifest: `apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore

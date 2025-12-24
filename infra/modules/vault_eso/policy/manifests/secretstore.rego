@@ -54,6 +54,15 @@ approle_field_checks := [
 deny contains msg if {
 	doc := clustersecretstores[_]
 	server := vault_server(doc)
+	trim_space(server) == ""
+	name := object.get(metadata(doc), "name", "<unknown>")
+	msg := sprintf("ClusterSecretStore %s must set provider.vault.server", [name])
+}
+
+deny contains msg if {
+	doc := clustersecretstores[_]
+	server := vault_server(doc)
+	trim_space(server) != ""
 	not startswith(server, "https://")
 	name := object.get(metadata(doc), "name", "<unknown>")
 	msg := sprintf("ClusterSecretStore %s must use HTTPS Vault server URL", [name])
