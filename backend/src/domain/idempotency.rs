@@ -300,29 +300,6 @@ pub struct IdempotencyRecord {
     pub created_at: DateTime<Utc>,
 }
 
-impl IdempotencyRecord {
-    /// Construct a new record for storage.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "flat constructor for a domain record with several required fields"
-    )]
-    pub fn new(
-        key: IdempotencyKey,
-        payload_hash: PayloadHash,
-        response_snapshot: serde_json::Value,
-        user_id: UserId,
-        created_at: DateTime<Utc>,
-    ) -> Self {
-        Self {
-            key,
-            payload_hash,
-            response_snapshot,
-            user_id,
-            created_at,
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // IdempotencyLookupResult
 // ---------------------------------------------------------------------------

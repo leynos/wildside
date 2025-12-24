@@ -233,6 +233,7 @@ mod tests {
         FixtureUserProfileQuery, FixtureUsersQuery,
     };
     use crate::domain::ErrorCode;
+    use crate::inbound::http::state::HttpStatePorts;
     use actix_web::{test as actix_test, web, App};
     use rstest::rstest;
     use serde_json::Value;
@@ -296,13 +297,13 @@ mod tests {
             InitError = (),
         >,
     > {
-        let state = HttpState::new(
+        let state = HttpState::new(HttpStatePorts::new(
             Arc::new(FixtureLoginService),
             Arc::new(FixtureUsersQuery),
             Arc::new(FixtureUserProfileQuery),
             Arc::new(FixtureUserInterestsCommand),
             Arc::new(FixtureRouteSubmissionService),
-        );
+        ));
         App::new()
             .app_data(web::Data::new(state))
             .wrap(crate::inbound::http::test_utils::test_session_middleware())

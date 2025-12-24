@@ -85,13 +85,13 @@ where
                     Error::internal(format!("failed to serialize response: {err}"))
                 })?;
 
-                let record = IdempotencyRecord::new(
-                    idempotency_key,
+                let record = IdempotencyRecord {
+                    key: idempotency_key,
                     payload_hash,
                     response_snapshot,
-                    request.user_id,
-                    Utc::now(),
-                );
+                    user_id: request.user_id,
+                    created_at: Utc::now(),
+                };
 
                 self.idempotency_store
                     .store(&record)

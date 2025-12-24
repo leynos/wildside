@@ -27,7 +27,7 @@ use backend::domain::ports::{
 use backend::domain::UserOnboardingService;
 use backend::inbound::http::health::{live, ready, HealthState};
 use backend::inbound::http::routes::submit_route;
-use backend::inbound::http::state::HttpState;
+use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
@@ -123,13 +123,13 @@ pub fn create_server(
     config: ServerConfig,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-    let http_state = web::Data::new(HttpState::new(
+    let http_state = web::Data::new(HttpState::new(HttpStatePorts::new(
         Arc::new(FixtureLoginService),
         Arc::new(FixtureUsersQuery),
         Arc::new(FixtureUserProfileQuery),
         Arc::new(FixtureUserInterestsCommand),
         Arc::new(FixtureRouteSubmissionService),
-    ));
+    )));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,

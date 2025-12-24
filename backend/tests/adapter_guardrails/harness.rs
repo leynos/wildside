@@ -28,7 +28,7 @@ use crate::doubles::{
 };
 use backend::domain::ports::FixtureRouteSubmissionService;
 use backend::domain::{DisplayName, InterestThemeId, User, UserId, UserInterests};
-use backend::inbound::http::state::HttpState;
+use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{
     current_user as current_user_handler, list_users as list_users_handler, login as login_handler,
     update_interests as update_interests_handler,
@@ -170,13 +170,13 @@ pub(crate) fn world() -> WorldFixture {
         )));
     let onboarding = QueueUserOnboarding::new(Vec::new());
 
-    let http_state = HttpState::new(
+    let http_state = HttpState::new(HttpStatePorts::new(
         Arc::new(login.clone()),
         Arc::new(users.clone()),
         Arc::new(profile.clone()),
         Arc::new(interests.clone()),
         Arc::new(FixtureRouteSubmissionService),
-    );
+    ));
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local

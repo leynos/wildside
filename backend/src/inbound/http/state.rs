@@ -9,6 +9,35 @@ use crate::domain::ports::{
     LoginService, RouteSubmissionService, UserInterestsCommand, UserProfileQuery, UsersQuery,
 };
 
+/// Parameter object bundling all port implementations for HTTP handlers.
+#[derive(Clone)]
+pub struct HttpStatePorts {
+    pub login: Arc<dyn LoginService>,
+    pub users: Arc<dyn UsersQuery>,
+    pub profile: Arc<dyn UserProfileQuery>,
+    pub interests: Arc<dyn UserInterestsCommand>,
+    pub route_submission: Arc<dyn RouteSubmissionService>,
+}
+
+impl HttpStatePorts {
+    /// Construct a new ports bundle.
+    pub fn new(
+        login: Arc<dyn LoginService>,
+        users: Arc<dyn UsersQuery>,
+        profile: Arc<dyn UserProfileQuery>,
+        interests: Arc<dyn UserInterestsCommand>,
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> Self {
+        Self {
+            login,
+            users,
+            profile,
+            interests,
+            route_submission,
+        }
+    }
+}
+
 /// Dependency bundle for HTTP handlers.
 #[derive(Clone)]
 pub struct HttpState {
@@ -20,18 +49,15 @@ pub struct HttpState {
 }
 
 impl HttpState {
-    /// Construct state from explicit port implementations.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "flat constructor injecting multiple port implementations"
-    )]
-    pub fn new(
-        login: Arc<dyn LoginService>,
-        users: Arc<dyn UsersQuery>,
-        profile: Arc<dyn UserProfileQuery>,
-        interests: Arc<dyn UserInterestsCommand>,
-        route_submission: Arc<dyn RouteSubmissionService>,
-    ) -> Self {
+    /// Construct state from a ports bundle.
+    pub fn new(ports: HttpStatePorts) -> Self {
+        let HttpStatePorts {
+            login,
+            users,
+            profile,
+            interests,
+            route_submission,
+        } = ports;
         Self {
             login,
             users,

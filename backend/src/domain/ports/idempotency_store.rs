@@ -106,13 +106,13 @@ mod tests {
     #[tokio::test]
     async fn fixture_store_accepts_store_operations() {
         let store = FixtureIdempotencyStore;
-        let record = IdempotencyRecord::new(
-            IdempotencyKey::random(),
-            canonicalize_and_hash(&json!({"test": true})),
-            json!({"request_id": "123"}),
-            UserId::random(),
-            Utc::now(),
-        );
+        let record = IdempotencyRecord {
+            key: IdempotencyKey::random(),
+            payload_hash: canonicalize_and_hash(&json!({"test": true})),
+            response_snapshot: json!({"request_id": "123"}),
+            user_id: UserId::random(),
+            created_at: Utc::now(),
+        };
 
         let result = store.store(&record).await;
         assert!(result.is_ok());

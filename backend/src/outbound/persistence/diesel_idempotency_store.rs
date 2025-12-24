@@ -91,13 +91,13 @@ fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, Idempotenc
     })?;
     let user_id = UserId::from_uuid(row.user_id);
 
-    Ok(IdempotencyRecord::new(
+    Ok(IdempotencyRecord {
         key,
         payload_hash,
-        row.response_snapshot,
+        response_snapshot: row.response_snapshot,
         user_id,
-        row.created_at,
-    ))
+        created_at: row.created_at,
+    })
 }
 
 #[async_trait]

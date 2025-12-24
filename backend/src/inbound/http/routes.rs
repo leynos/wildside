@@ -155,6 +155,7 @@ mod tests {
         FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
         FixtureUserProfileQuery, FixtureUsersQuery,
     };
+    use crate::inbound::http::state::HttpStatePorts;
     use crate::inbound::http::users::LoginRequest;
     use actix_web::http::StatusCode;
     use actix_web::{test as actix_test, web, App};
@@ -171,13 +172,13 @@ mod tests {
             InitError = (),
         >,
     > {
-        let state = HttpState::new(
+        let state = HttpState::new(HttpStatePorts::new(
             Arc::new(FixtureLoginService),
             Arc::new(FixtureUsersQuery),
             Arc::new(FixtureUserProfileQuery),
             Arc::new(FixtureUserInterestsCommand),
             Arc::new(FixtureRouteSubmissionService),
-        );
+        ));
         App::new()
             .app_data(web::Data::new(state))
             .wrap(crate::inbound::http::test_utils::test_session_middleware())
