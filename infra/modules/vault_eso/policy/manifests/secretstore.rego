@@ -30,13 +30,26 @@ vault_auth(doc) := object.get(vault_provider(doc), "auth", {})
 
 vault_approle_auth(doc) := object.get(vault_auth(doc), "appRole", {})
 
-approle_role_ref(doc) := object.get(vault_approle_auth(doc), "roleRef", {})
-
-approle_secret_ref(doc) := object.get(vault_approle_auth(doc), "secretRef", {})
-
 uses_approle_auth(doc) if {
 	vault_approle_auth(doc) != {}
 }
+
+approle_ref(doc, ref_type) := object.get(vault_approle_auth(doc), ref_type, {})
+
+missing_approle_field(doc, ref_type, field) if {
+	uses_approle_auth(doc)
+	ref := approle_ref(doc, ref_type)
+	trim_space(object.get(ref, field, "")) == ""
+}
+
+approle_field_checks := [
+	["roleRef", "name"],
+	["roleRef", "namespace"],
+	["roleRef", "key"],
+	["secretRef", "name"],
+	["secretRef", "namespace"],
+	["secretRef", "key"],
+]
 
 deny contains msg if {
 	doc := clustersecretstores[_]
@@ -64,54 +77,8 @@ deny contains msg if {
 
 deny contains msg if {
 	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	role_ref := approle_role_ref(doc)
-	trim_space(object.get(role_ref, "name", "")) == ""
+	check := approle_field_checks[_]
+	missing_approle_field(doc, check[0], check[1])
 	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.roleRef.name", [name])
-}
-
-deny contains msg if {
-	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	role_ref := approle_role_ref(doc)
-	trim_space(object.get(role_ref, "namespace", "")) == ""
-	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.roleRef.namespace", [name])
-}
-
-deny contains msg if {
-	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	role_ref := approle_role_ref(doc)
-	trim_space(object.get(role_ref, "key", "")) == ""
-	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.roleRef.key", [name])
-}
-
-deny contains msg if {
-	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	secret_ref := approle_secret_ref(doc)
-	trim_space(object.get(secret_ref, "name", "")) == ""
-	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.secretRef.name", [name])
-}
-
-deny contains msg if {
-	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	secret_ref := approle_secret_ref(doc)
-	trim_space(object.get(secret_ref, "namespace", "")) == ""
-	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.secretRef.namespace", [name])
-}
-
-deny contains msg if {
-	doc := clustersecretstores[_]
-	uses_approle_auth(doc)
-	secret_ref := approle_secret_ref(doc)
-	trim_space(object.get(secret_ref, "key", "")) == ""
-	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("ClusterSecretStore %s must set appRole.secretRef.key", [name])
+	msg := sprintf("ClusterSecretStore %s must set appRole.%s.%s", [name, check[0], check[1]])
 }
