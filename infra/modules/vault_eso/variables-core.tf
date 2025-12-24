@@ -112,6 +112,13 @@ variable "helm_values" {
   type        = list(string)
   default     = []
   nullable    = false
+
+  validation {
+    condition = alltrue([
+      for v in var.helm_values : can(yamldecode(v))
+    ])
+    error_message = "All helm_values entries must be valid YAML"
+  }
 }
 
 variable "install_crds" {
