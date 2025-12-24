@@ -30,12 +30,9 @@ locals {
   approle_auth_secret_name = trimspace(var.approle_auth_secret_name)
   approle_mount_path       = trimspace(var.approle_mount_path)
 
-  kv_mount_path  = trimspace(var.kv_mount_path)
-  pki_enabled    = var.pki_enabled
-  pki_mount_path = trimspace(var.pki_mount_path)
+  kv_mount_path = trimspace(var.kv_mount_path)
 
   cluster_secret_store_kv_name    = trimspace(var.cluster_secret_store_kv_name)
-  cluster_secret_store_pki_name   = trimspace(var.cluster_secret_store_pki_name)
   secret_store_retry_max_attempts = var.secret_store_retry_max_attempts
   secret_store_retry_interval     = trimspace(var.secret_store_retry_interval)
 

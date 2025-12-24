@@ -33,9 +33,9 @@ resources that connect to the existing Vault appliance provisioned by the
 │  │                    vault_eso module resources                         │  │
 │  │  ┌─────────────────────┐  ┌─────────────────────────────────────────┐ │  │
 │  │  │  External Secrets   │  │         ClusterSecretStore             │ │  │
-│  │  │     Operator        │◀─│  ┌─────────────┐ ┌─────────────────┐   │ │  │
-│  │  │   (HelmRelease)     │  │  │  KV v2      │ │  PKI (optional) │   │ │  │
-│  │  └─────────────────────┘  │  └─────────────┘ └─────────────────┘   │ │  │
+│  │  │     Operator        │◀─│  ┌─────────────────────────────────┐   │ │  │
+│  │  │   (HelmRelease)     │  │  │           KV v2                 │   │ │  │
+│  │  └─────────────────────┘  │  └─────────────────────────────────┘   │ │  │
 │  │                           └─────────────────────────────────────────┘ │  │
 │  │  ┌─────────────────────┐  ┌─────────────────────────────────────────┐ │  │
 │  │  │  AppRole Auth       │  │       Workload Namespace                │ │  │
@@ -97,15 +97,14 @@ namespace-scoped SecretStore resources.
 
 ### D4: Supported Vault Secret Engines
 
-**Decision:** Provide ClusterSecretStore resources for:
-
-1. **KV v2** (required) — for general secret storage.
-2. **PKI** (optional) — for certificate generation via Vault PKI engine.
+**Decision:** Provide a ClusterSecretStore resource for KV v2 secrets only.
 
 **Rationale:** KV v2 covers the majority of secret storage use cases
-(credentials, API keys, connection strings). PKI support is optional for
-workloads that need to generate certificates dynamically rather than using
-cert-manager.
+(credentials, API keys, connection strings). PKI certificate issuance is
+handled by cert-manager with Vault PKI issuer, which is the appropriate tool
+for dynamic certificate generation. ESO's standard Vault provider only supports
+KV secret engines; PKI would require VaultDynamicSecret generators which add
+complexity without clear benefit given cert-manager's capabilities.
 
 ### D5: Vault Agent Injector
 
@@ -130,7 +129,6 @@ and application modules to reference secret stores without depending on
 internal naming conventions. The contract includes:
 
 - Secret store name and kind for KV v2.
-- Secret store name and kind for PKI (if enabled).
 - Vault address for documentation purposes.
 - Mount paths for constructing ExternalSecret `remoteRef.key` values.
 
@@ -173,8 +171,6 @@ with the AppRole authentication secret in the same namespace.
 | `mode` | `string` | `"render"` | `render` or `apply` |
 | `namespace` | `string` | `"external-secrets"` | ESO namespace |
 | `kv_mount_path` | `string` | `"secret"` | KV v2 mount path in Vault |
-| `pki_enabled` | `bool` | `false` | Enable PKI ClusterSecretStore |
-| `pki_mount_path` | `string` | `"pki"` | PKI mount path in Vault |
 | `chart_version` | `string` | `"1.1.1"` | ESO Helm chart version |
 | `replica_count` | `number` | `2` | ESO webhook replicas |
 
@@ -185,8 +181,6 @@ with the AppRole authentication secret in the same namespace.
 | `namespace` | `string` | ESO namespace |
 | `cluster_secret_store_kv_name` | `string` | KV ClusterSecretStore name |
 | `cluster_secret_store_kv_ref` | `object` | KV store reference object |
-| `cluster_secret_store_pki_name` | `string` | PKI ClusterSecretStore name |
-| `cluster_secret_store_pki_ref` | `object` | PKI store reference object |
 | `sync_policy_contract` | `object` | Contract for downstream consumers |
 | `rendered_manifests` | `map(string)` | GitOps manifests (render mode) |
 
@@ -199,8 +193,6 @@ The module produces the following GitOps-ready manifests:
 - `platform/vault/helmrelease.yaml` — ESO HelmRelease
 - `platform/vault/approle-auth-secret.yaml` — AppRole credentials Secret
 - `platform/vault/cluster-secret-store-kv.yaml` — KV v2 ClusterSecretStore
-- `platform/vault/cluster-secret-store-pki.yaml` — PKI ClusterSecretStore
-  (optional)
 - `platform/vault/pdb-external-secrets-webhook.yaml` — PDB (when replicas > 1)
 - `platform/vault/kustomization.yaml` — Kustomization manifest
 
@@ -266,6 +258,8 @@ spec:
 - Kubernetes auth method as an alternative to AppRole.
 - PushSecret support for bidirectional secret synchronization.
 - Webhook certificate management integration with cert-manager.
+- VaultDynamicSecret generators for PKI certificate issuance (if cert-manager
+  integration proves insufficient for specific use cases).
 
 ## Revision History
 

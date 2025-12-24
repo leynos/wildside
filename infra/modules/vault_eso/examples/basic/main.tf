@@ -76,28 +76,10 @@ variable "kv_mount_path" {
   default     = "secret"
 }
 
-variable "pki_enabled" {
-  description = "Whether to create a ClusterSecretStore for Vault PKI"
-  type        = bool
-  default     = false
-}
-
-variable "pki_mount_path" {
-  description = "PKI mount path in Vault"
-  type        = string
-  default     = "pki"
-}
-
 variable "cluster_secret_store_kv_name" {
   description = "Name of the ClusterSecretStore for Vault KV v2"
   type        = string
   default     = "vault-kv"
-}
-
-variable "cluster_secret_store_pki_name" {
-  description = "Name of the ClusterSecretStore for Vault PKI"
-  type        = string
-  default     = "vault-pki"
 }
 
 provider "kubernetes" {
@@ -122,10 +104,7 @@ module "vault_eso" {
   approle_secret_id   = var.approle_secret_id
   kv_mount_path       = var.kv_mount_path
 
-  pki_enabled                   = var.pki_enabled
-  pki_mount_path                = var.pki_mount_path
-  cluster_secret_store_kv_name  = var.cluster_secret_store_kv_name
-  cluster_secret_store_pki_name = var.cluster_secret_store_pki_name
+  cluster_secret_store_kv_name = var.cluster_secret_store_kv_name
 }
 
 output "namespace" {
@@ -136,11 +115,6 @@ output "namespace" {
 output "cluster_secret_store_kv_name" {
   description = "Name of the KV ClusterSecretStore"
   value       = module.vault_eso.cluster_secret_store_kv_name
-}
-
-output "cluster_secret_store_pki_name" {
-  description = "Name of the PKI ClusterSecretStore"
-  value       = module.vault_eso.cluster_secret_store_pki_name
 }
 
 output "sync_policy_contract" {

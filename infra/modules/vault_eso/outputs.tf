@@ -21,19 +21,6 @@ output "cluster_secret_store_kv_ref" {
   }
 }
 
-output "cluster_secret_store_pki_name" {
-  description = "Name of the ClusterSecretStore for Vault PKI engine"
-  value       = local.pki_enabled ? local.cluster_secret_store_pki_name : null
-}
-
-output "cluster_secret_store_pki_ref" {
-  description = "Reference object for the Vault PKI ClusterSecretStore"
-  value = local.pki_enabled ? {
-    name = local.cluster_secret_store_pki_name
-    kind = "ClusterSecretStore"
-  } : null
-}
-
 output "approle_auth_secret_name" {
   description = "Name of the Kubernetes Secret storing AppRole credentials"
   value       = local.approle_auth_secret_name
@@ -57,16 +44,6 @@ output "kv_mount_path" {
   value       = local.kv_mount_path
 }
 
-output "pki_mount_path" {
-  description = "PKI mount path in Vault (if enabled)"
-  value       = local.pki_enabled ? local.pki_mount_path : null
-}
-
-output "pki_enabled" {
-  description = "Whether the PKI ClusterSecretStore is enabled"
-  value       = local.pki_enabled
-}
-
 output "sync_policy_contract" {
   description = "Contract for downstream workloads to consume secrets from Vault"
   value = {
@@ -75,11 +52,6 @@ output "sync_policy_contract" {
       kind       = "ClusterSecretStore"
       mount_path = local.kv_mount_path
     }
-    pki_secret_store = local.pki_enabled ? {
-      name       = local.cluster_secret_store_pki_name
-      kind       = "ClusterSecretStore"
-      mount_path = local.pki_mount_path
-    } : null
     vault_address         = local.vault_address
     auth_secret_name      = local.approle_auth_secret_name
     auth_secret_namespace = local.effective_namespace

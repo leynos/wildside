@@ -115,46 +115,6 @@ locals {
     }
   }
 
-  # NOTE: This PKI ClusterSecretStore is for reading existing secrets from the
-  # Vault PKI mount (e.g., CA certificates). ESO cannot issue certificates via
-  # Vault PKI. For certificate issuance, use cert-manager with Vault PKI issuer.
-  cluster_secret_store_pki_manifest = {
-    apiVersion = "external-secrets.io/v1beta1"
-    kind       = "ClusterSecretStore"
-    metadata = {
-      name   = local.cluster_secret_store_pki_name
-      labels = local.common_labels
-    }
-    spec = {
-      provider = {
-        vault = {
-          server   = local.vault_address
-          path     = local.pki_mount_path
-          caBundle = local.vault_ca_bundle_base64
-          auth = {
-            appRole = {
-              path = local.approle_mount_path
-              roleRef = {
-                name      = local.approle_auth_secret_name
-                namespace = local.namespace
-                key       = "role_id"
-              }
-              secretRef = {
-                name      = local.approle_auth_secret_name
-                namespace = local.namespace
-                key       = "secret_id"
-              }
-            }
-          }
-        }
-      }
-      retrySettings = {
-        maxRetries    = local.secret_store_retry_max_attempts
-        retryInterval = local.secret_store_retry_interval
-      }
-    }
-  }
-
   webhook_pdb_manifest = {
     apiVersion = "policy/v1"
     kind       = "PodDisruptionBudget"
@@ -178,7 +138,6 @@ locals {
     ["../sources/external-secrets-repo.yaml"],
     ["namespace.yaml", "helmrelease.yaml", "approle-auth-secret.yaml"],
     ["cluster-secret-store-kv.yaml"],
-    local.pki_enabled ? ["cluster-secret-store-pki.yaml"] : [],
     local.webhook_pdb_enabled ? ["pdb-external-secrets-webhook.yaml"] : []
   )
 
@@ -215,12 +174,6 @@ locals {
         yamlencode(local.kustomization_manifest)
       )
     },
-    local.pki_enabled ? {
-      "platform/vault/cluster-secret-store-pki.yaml" = format(
-        "%s\n",
-        yamlencode(local.cluster_secret_store_pki_manifest)
-      )
-    } : {},
     local.webhook_pdb_enabled ? {
       "platform/vault/pdb-external-secrets-webhook.yaml" = format(
         "%s\n",

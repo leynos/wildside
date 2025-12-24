@@ -14,22 +14,6 @@ variable "cluster_secret_store_kv_name" {
   }
 }
 
-variable "cluster_secret_store_pki_name" {
-  description = "Name of the ClusterSecretStore for Vault PKI engine"
-  type        = string
-  default     = "vault-pki"
-
-  validation {
-    condition = (
-      var.cluster_secret_store_pki_name != null &&
-      length(trimspace(var.cluster_secret_store_pki_name)) > 0 &&
-      length(trimspace(var.cluster_secret_store_pki_name)) <= 253 &&
-      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.cluster_secret_store_pki_name)))
-    )
-    error_message = "cluster_secret_store_pki_name must be a valid Kubernetes resource name"
-  }
-}
-
 variable "secret_store_retry_max_attempts" {
   description = "Maximum number of retry attempts for secret store operations"
   type        = number

@@ -54,23 +54,6 @@ func TestVaultESOModuleRenderOutputs(t *testing.T) {
 	require.True(t, ok, "expected kustomization output")
 }
 
-func TestVaultESOModuleRenderWithPKI(t *testing.T) {
-	t.Parallel()
-
-	vars := renderVars(t)
-	vars["pki_enabled"] = true
-	vars["pki_mount_path"] = "pki"
-
-	_, opts := setupRender(t, vars)
-	terraform.InitAndApply(t, opts)
-
-	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
-	require.NotEmpty(t, rendered, "expected rendered_manifests output to be non-empty")
-
-	_, ok := rendered["platform/vault/cluster-secret-store-pki.yaml"]
-	require.True(t, ok, "expected PKI ClusterSecretStore output when pki_enabled=true")
-}
-
 func TestVaultESOModuleRenderPolicy(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, binaryRequirement{Binary: "conftest", SkipMessage: "conftest not found; skipping policy test"})

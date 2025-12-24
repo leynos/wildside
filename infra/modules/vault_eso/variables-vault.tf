@@ -97,25 +97,3 @@ variable "kv_mount_path" {
   }
 }
 
-variable "pki_enabled" {
-  description = "Whether to create a ClusterSecretStore for reading secrets from the Vault PKI mount. Note: ESO cannot issue certificates; use cert-manager with Vault PKI issuer for certificate issuance."
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-variable "pki_mount_path" {
-  description = "Mount path for the PKI secrets engine in Vault"
-  type        = string
-  default     = "pki"
-
-  validation {
-    condition = (
-      var.pki_mount_path != null &&
-      length(trimspace(var.pki_mount_path)) > 0 &&
-      !startswith(trimspace(var.pki_mount_path), "/") &&
-      !endswith(trimspace(var.pki_mount_path), "/")
-    )
-    error_message = "pki_mount_path must not be blank and must not have leading or trailing slashes"
-  }
-}

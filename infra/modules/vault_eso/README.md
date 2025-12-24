@@ -54,9 +54,6 @@ module "vault_eso" {
   vault_ca_bundle_pem = file("${path.module}/vault-ca.pem")
   approle_role_id     = var.approle_role_id
   approle_secret_id   = var.approle_secret_id
-
-  pki_enabled    = true
-  pki_mount_path = "pki"
 }
 ```
 
@@ -72,8 +69,6 @@ module "vault_eso" {
 | `namespace` | Namespace for ESO installation | `string` | `"external-secrets"` | no |
 | `chart_version` | ESO Helm chart version | `string` | `"1.1.1"` | no |
 | `kv_mount_path` | Key-value (KV) v2 mount path in Vault | `string` | `"secret"` | no |
-| `pki_enabled` | Enable public key infrastructure (PKI) ClusterSecretStore | `bool` | `false` | no |
-| `pki_mount_path` | PKI mount path in Vault | `string` | `"pki"` | no |
 
 See `variables-*.tf` files for the complete list of inputs.
 
@@ -84,8 +79,6 @@ See `variables-*.tf` files for the complete list of inputs.
 | `namespace` | Namespace where ESO is installed |
 | `cluster_secret_store_kv_name` | Name of the KV ClusterSecretStore |
 | `cluster_secret_store_kv_ref` | Reference object for the KV store |
-| `cluster_secret_store_pki_name` | Name of the PKI ClusterSecretStore (if enabled) |
-| `cluster_secret_store_pki_ref` | Reference object for the PKI store (if enabled) |
 | `sync_policy_contract` | Contract for downstream workload consumption |
 | `rendered_manifests` | GitOps manifests (render mode only) |
 
@@ -100,11 +93,6 @@ workloads:
     name       = "vault-kv"
     kind       = "ClusterSecretStore"
     mount_path = "secret"
-  }
-  pki_secret_store = {
-    name       = "vault-pki"
-    kind       = "ClusterSecretStore"
-    mount_path = "pki"
   }
   vault_address         = "https://vault.example.com"
   auth_secret_name      = "vault-approle-credentials"
