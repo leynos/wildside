@@ -191,6 +191,90 @@ spec:
 `,
 		expectedMessage: "must use HTTPS Vault server URL",
 	},
+	{
+		name: "MissingVaultPath",
+		manifest: `apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-kv
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+spec:
+  provider:
+    vault:
+      server: https://vault.example.test:8200
+      version: v2
+      caBundle: dGVzdA==
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: role_id
+          secretRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: secret_id
+`,
+		expectedMessage: "must set provider.vault.path",
+	},
+	{
+		name: "MissingAppRoleSecretRefName",
+		manifest: `apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-kv
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+spec:
+  provider:
+    vault:
+      server: https://vault.example.test:8200
+      path: secret
+      version: v2
+      caBundle: dGVzdA==
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: role_id
+          secretRef:
+            namespace: external-secrets
+            key: secret_id
+`,
+		expectedMessage: "must set appRole.secretRef.name",
+	},
+	{
+		name: "MissingAppRoleRoleRefKey",
+		manifest: `apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-kv
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+spec:
+  provider:
+    vault:
+      server: https://vault.example.test:8200
+      path: secret
+      version: v2
+      caBundle: dGVzdA==
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+          secretRef:
+            name: vault-approle-credentials
+            namespace: external-secrets
+            key: secret_id
+`,
+		expectedMessage: "must set appRole.roleRef.key",
+	},
 }
 
 func TestVaultESOModuleRenderPolicyRejections(t *testing.T) {

@@ -52,8 +52,8 @@ if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" apply \
   exit 1
 fi
 
-if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output -json rendered_manifests \
-  -state="$state_file" \
+if ! TF_IN_AUTOMATION=1 tofu -chdir="$EXAMPLE_DIR" output \
+  -json -state="$state_file" rendered_manifests \
   > "$tmpdir/manifests.json" 2> "$output_log"; then
   echo "tofu output failed:" >&2
   cat "$output_log" >&2
