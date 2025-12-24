@@ -65,14 +65,14 @@ module "vault_eso" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | `vault_address` | HTTPS endpoint of the external Vault appliance | `string` | n/a | yes |
-| `vault_ca_bundle_pem` | PEM-encoded CA certificate for Vault TLS | `string` | n/a | yes |
+| `vault_ca_bundle_pem` | PEM-encoded Certificate Authority (CA) certificate for Vault TLS | `string` | n/a | yes |
 | `approle_role_id` | AppRole role_id for ESO authentication | `string` | n/a | yes |
 | `approle_secret_id` | AppRole secret_id for ESO authentication | `string` | n/a | yes |
 | `mode` | `render` for GitOps manifests, `apply` for direct deployment | `string` | `"render"` | no |
 | `namespace` | Namespace for ESO installation | `string` | `"external-secrets"` | no |
 | `chart_version` | ESO Helm chart version | `string` | `"1.1.1"` | no |
-| `kv_mount_path` | KV v2 mount path in Vault | `string` | `"secret"` | no |
-| `pki_enabled` | Enable PKI ClusterSecretStore | `bool` | `false` | no |
+| `kv_mount_path` | Key-value (KV) v2 mount path in Vault | `string` | `"secret"` | no |
+| `pki_enabled` | Enable public key infrastructure (PKI) ClusterSecretStore | `bool` | `false` | no |
 | `pki_mount_path` | PKI mount path in Vault | `string` | `"pki"` | no |
 
 See `variables-*.tf` files for the complete list of inputs.
