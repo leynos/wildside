@@ -82,7 +82,8 @@ demonstrate the expected render/apply pattern, policy structure, and Terratest
 conventions. Key paths and references:
 
 - `infra/modules/cert_manager/` for the most recent module structure including
-  split variable files, `rendered_manifests` outputs, and OPA/Conftest policies.
+  split variable files, `rendered_manifests` outputs, and Open Policy Agent
+  (OPA)/Conftest policies.
 - `infra/modules/vault_appliance/` for the existing external Vault
   infrastructure (DigitalOcean droplets, load balancer, TLS, firewall).
 - `.github/actions/bootstrap-vault-appliance/` for the Vault initialization
@@ -171,7 +172,8 @@ construct manifests for:
 
 1. **ESO Namespace** — dedicated namespace for the operator.
 2. **ESO HelmRepository** — source for the external-secrets chart.
-3. **ESO HelmRelease** — the operator deployment with HA settings.
+3. **ESO HelmRelease** — the operator deployment with high-availability (HA)
+   settings.
 4. **ClusterSecretStore (KV v2)** — connects to Vault's KV secrets engine.
 5. **ClusterSecretStore (PKI)** — optional; connects to Vault's PKI engine.
 6. **AppRole authentication Secret** — stores role_id and secret_id for ESO.
