@@ -148,6 +148,30 @@ impl TryFrom<String> for IdempotencyKey {
 // PayloadHash
 // ---------------------------------------------------------------------------
 
+/// Validation errors for [`PayloadHash`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PayloadHashError {
+    /// The byte slice had an incorrect length.
+    InvalidLength {
+        /// Expected number of bytes.
+        expected: usize,
+        /// Actual number of bytes.
+        actual: usize,
+    },
+}
+
+impl fmt::Display for PayloadHashError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidLength { expected, actual } => {
+                write!(f, "payload hash must be {expected} bytes, got {actual}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PayloadHashError {}
+
 /// SHA-256 hash of a canonicalized request payload.
 ///
 /// Used to detect whether two requests with the same idempotency key have
@@ -158,11 +182,33 @@ pub struct PayloadHash([u8; 32]);
 impl PayloadHash {
     /// Construct a [`PayloadHash`] from raw bytes.
     ///
-    /// Panics if the slice is not exactly 32 bytes.
+    /// # Errors
+    ///
+    /// Returns an error if the slice is not exactly 32 bytes.
+    pub fn try_from_bytes(bytes: &[u8]) -> Result<Self, PayloadHashError> {
+        let arr: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| PayloadHashError::InvalidLength {
+                expected: 32,
+                actual: bytes.len(),
+            })?;
+        Ok(Self(arr))
+    }
+
+    /// Construct a [`PayloadHash`] from raw bytes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slice is not exactly 32 bytes. Prefer [`try_from_bytes`]
+    /// when handling untrusted input.
+    ///
+    /// [`try_from_bytes`]: Self::try_from_bytes
+    #[expect(
+        clippy::expect_used,
+        reason = "panic is acceptable for known-valid internal input; use try_from_bytes for external data"
+    )]
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(bytes);
-        Self(arr)
+        Self::try_from_bytes(bytes).expect("payload hash must be exactly 32 bytes")
     }
 
     /// Access the raw hash bytes.
@@ -207,9 +253,10 @@ impl fmt::Display for PayloadHash {
 /// ```
 pub fn canonicalize_and_hash(value: &serde_json::Value) -> PayloadHash {
     let canonical = canonicalize(value);
-    // SAFETY: Serializing a serde_json::Value to JSON bytes is infallible since
-    // the value was already valid JSON. This unwrap is safe.
-    #[allow(clippy::unwrap_used)]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "serde_json::Value serialization to JSON bytes is infallible"
+    )]
     let json_bytes = serde_json::to_vec(&canonical).unwrap();
     let hash = Sha256::digest(&json_bytes);
     PayloadHash::from_bytes(&hash)
@@ -255,7 +302,10 @@ pub struct IdempotencyRecord {
 
 impl IdempotencyRecord {
     /// Construct a new record for storage.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "flat constructor for a domain record with several required fields"
+    )]
     pub fn new(
         key: IdempotencyKey,
         payload_hash: PayloadHash,

@@ -43,7 +43,7 @@ pub use self::idempotency::{
 };
 pub use self::idempotency::{
     canonicalize_and_hash, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult,
-    IdempotencyRecord, PayloadHash,
+    IdempotencyRecord, PayloadHash, PayloadHashError,
 };
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::route_submission::RouteSubmissionServiceImpl;
