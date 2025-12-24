@@ -48,6 +48,8 @@ resources that connect to the existing Vault appliance provisioned by the
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+*DOKS = DigitalOcean Kubernetes Service*
+
 ## Design Decisions
 
 ### D1: Authentication Method — AppRole
@@ -253,7 +255,7 @@ spec:
    provided to ensure TLS verification against the Vault endpoint.
 
 3. **Secret Storage:** AppRole credentials are stored in a Kubernetes Secret
-   that should be protected by RBAC policies.
+   that should be protected by role-based access control (RBAC) policies.
 
 4. **Namespace Isolation:** ClusterSecretStore allows cross-namespace access
    but ExternalSecret resources must still be created by authorized workloads.
