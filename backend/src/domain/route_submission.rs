@@ -142,7 +142,10 @@ mod tests {
             payload: json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.unwrap();
+        let response = service
+            .submit(request)
+            .await
+            .expect("submission should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 
@@ -155,8 +158,11 @@ mod tests {
             payload: json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.unwrap();
         // FixtureIdempotencyStore always returns NotFound, so new keys are accepted.
+        let response = service
+            .submit(request)
+            .await
+            .expect("submission should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 }

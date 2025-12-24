@@ -21,7 +21,10 @@ pub struct HttpState {
 
 impl HttpState {
     /// Construct state from explicit port implementations.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "flat constructor injecting multiple port implementations"
+    )]
     pub fn new(
         login: Arc<dyn LoginService>,
         users: Arc<dyn UsersQuery>,

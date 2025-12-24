@@ -19,7 +19,7 @@ pub enum ErrorCode {
     NotFound,
     /// The request conflicts with current state (e.g., duplicate idempotency key).
     Conflict,
-    /// A dependent service is unavailable.
+    /// A dependent service is unavailable (e.g., database, idempotency store, queue).
     ServiceUnavailable,
     /// An unexpected error occurred on the server.
     InternalError,

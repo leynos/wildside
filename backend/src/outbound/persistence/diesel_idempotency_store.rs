@@ -86,7 +86,9 @@ fn map_diesel_error(error: diesel::result::Error) -> IdempotencyStoreError {
 /// Convert a database row to a domain IdempotencyRecord.
 fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, IdempotencyStoreError> {
     let key = IdempotencyKey::from_uuid(row.key);
-    let payload_hash = PayloadHash::from_bytes(&row.payload_hash);
+    let payload_hash = PayloadHash::try_from_bytes(&row.payload_hash).map_err(|err| {
+        IdempotencyStoreError::query(format!("corrupted payload hash in database: {err}"))
+    })?;
     let user_id = UserId::from_uuid(row.user_id);
 
     Ok(IdempotencyRecord::new(

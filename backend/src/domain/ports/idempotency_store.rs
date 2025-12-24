@@ -96,7 +96,10 @@ mod tests {
         let key = IdempotencyKey::random();
         let hash = canonicalize_and_hash(&json!({"test": true}));
 
-        let result = store.lookup(&key, &hash).await.unwrap();
+        let result = store
+            .lookup(&key, &hash)
+            .await
+            .expect("fixture lookup should succeed");
         assert!(matches!(result, IdempotencyLookupResult::NotFound));
     }
 
@@ -121,7 +124,7 @@ mod tests {
         let deleted = store
             .cleanup_expired(Duration::from_secs(3600))
             .await
-            .unwrap();
+            .expect("fixture cleanup should succeed");
         assert_eq!(deleted, 0);
     }
 }

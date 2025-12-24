@@ -102,17 +102,14 @@ pub struct FixtureRouteSubmissionService;
 impl RouteSubmissionService for FixtureRouteSubmissionService {
     async fn submit(
         &self,
-        request: RouteSubmissionRequest,
+        _request: RouteSubmissionRequest,
     ) -> Result<RouteSubmissionResponse, Error> {
-        // Generate a deterministic request ID for testing predictability.
+        // In fixture mode, all requests are accepted with a random request ID.
         let request_id = Uuid::new_v4();
-        let status = if request.idempotency_key.is_some() {
-            // In fixture mode, first request is always accepted.
-            RouteSubmissionStatus::Accepted
-        } else {
-            RouteSubmissionStatus::Accepted
-        };
-        Ok(RouteSubmissionResponse { request_id, status })
+        Ok(RouteSubmissionResponse {
+            request_id,
+            status: RouteSubmissionStatus::Accepted,
+        })
     }
 }
 
