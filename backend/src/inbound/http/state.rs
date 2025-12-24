@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use crate::domain::ports::{LoginService, UserInterestsCommand, UserProfileQuery, UsersQuery};
+use crate::domain::ports::{
+    LoginService, RouteSubmissionService, UserInterestsCommand, UserProfileQuery, UsersQuery,
+};
 
 /// Dependency bundle for HTTP handlers.
 #[derive(Clone)]
@@ -14,21 +16,25 @@ pub struct HttpState {
     pub users: Arc<dyn UsersQuery>,
     pub profile: Arc<dyn UserProfileQuery>,
     pub interests: Arc<dyn UserInterestsCommand>,
+    pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
 impl HttpState {
     /// Construct state from explicit port implementations.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         login: Arc<dyn LoginService>,
         users: Arc<dyn UsersQuery>,
         profile: Arc<dyn UserProfileQuery>,
         interests: Arc<dyn UserInterestsCommand>,
+        route_submission: Arc<dyn RouteSubmissionService>,
     ) -> Self {
         Self {
             login,
             users,
             profile,
             interests,
+            route_submission,
         }
     }
 }

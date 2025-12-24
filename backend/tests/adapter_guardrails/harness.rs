@@ -26,6 +26,7 @@ use crate::doubles::{
     RecordingUserProfileQuery, RecordingUsersQuery, UserInterestsResponse, UserProfileResponse,
     UsersResponse,
 };
+use backend::domain::ports::FixtureRouteSubmissionService;
 use backend::domain::{DisplayName, InterestThemeId, User, UserId, UserInterests};
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{
@@ -174,6 +175,7 @@ pub(crate) fn world() -> WorldFixture {
         Arc::new(users.clone()),
         Arc::new(profile.clone()),
         Arc::new(interests.clone()),
+        Arc::new(FixtureRouteSubmissionService),
     );
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 

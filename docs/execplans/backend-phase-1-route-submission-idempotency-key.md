@@ -1,6 +1,6 @@
 # Phase 1 route submission idempotency key
 
-This ExecPlan is a living document. The sections `Progress`,
+This Execution Plan (ExecPlan) is a living document. The sections `Progress`,
 `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must
 be kept up to date as work proceeds.
 
@@ -27,7 +27,7 @@ Success is observable when:
   response.
 - Mismatched payloads for existing keys return `409 Conflict`.
 - Idempotency records persist in PostgreSQL and survive server restarts.
-- Records automatically expire after the configured TTL.
+- Records automatically expire after the configured time-to-live (TTL).
 - Unit tests (`rstest`) cover domain logic for key validation and payload
   hashing.
 - Behavioural tests (`rstest-bdd` v0.2.0) cover happy and unhappy paths against
@@ -42,7 +42,7 @@ Success is observable when:
 - [ ] Define domain types: `IdempotencyKey`, `IdempotencyRecord`,
   `IdempotencyLookupResult`.
 - [ ] Define domain port: `IdempotencyStore` trait with error enum.
-- [ ] Implement payload canonicalisation and SHA-256 hashing.
+- [ ] Implement payload canonicalization and SHA-256 hashing.
 - [ ] Create Diesel migration for `idempotency_keys` table.
 - [ ] Update Diesel schema.rs with new table.
 - [ ] Implement PostgreSQL adapter: `DieselIdempotencyStore`.
@@ -64,16 +64,16 @@ Success is observable when:
 
 ## Decision Log
 
-- Decision: Use SHA-256 hash of canonicalised JSON payload for conflict
+- Decision: Use SHA-256 hash of canonicalized JSON payload for conflict
   detection.
-  Rationale: Canonicalised JSON (sorted keys, deterministic formatting) ensures
+  Rationale: Canonicalized JSON (sorted keys, deterministic formatting) ensures
   semantically identical payloads produce the same hash regardless of
   whitespace or key ordering differences. SHA-256 provides collision resistance
   sufficient for this use case.
   Date/Author: 2025-12-23 / Claude Code.
 
 - Decision: Store idempotency records in PostgreSQL rather than Redis.
-  Rationale: The roadmap explicitly requires PostgreSQL persistence so keys
+  Rationale: The roadmap explicitly requires PostgreSQL persistence, so keys
   survive server restarts. Redis would be faster but would not meet the
   durability requirement without additional complexity. PostgreSQL with index
   on key provides adequate performance for expected load.
@@ -131,7 +131,7 @@ Terminology (plain-language):
 
 - *Idempotency key*: A client-provided unique identifier (UUID) sent via the
   `Idempotency-Key` HTTP header to enable safe request retries.
-- *Payload hash*: SHA-256 hash of the canonicalised request body, used to
+- *Payload hash*: SHA-256 hash of the canonicalized request body, used to
   detect conflicting payloads for the same key.
 - *Replay*: Returning a previously stored response for a matching idempotency
   key without re-processing the request.
@@ -157,13 +157,13 @@ Add unit tests for:
 - Key validation (valid UUID format).
 - Key rejection for malformed input.
 
-### 2. Payload canonicalisation (backend/src/domain/idempotency.rs)
+### 2. Payload canonicalization (backend/src/domain/idempotency.rs)
 
-Implement `canonicalise_and_hash`:
+Implement `canonicalize_and_hash`:
 
 - Accept a `serde_json::Value`.
 - Sort object keys recursively.
-- Serialise to compact JSON (no whitespace).
+- Serialize to compact JSON (no whitespace).
 - Hash with SHA-256.
 - Return `PayloadHash`.
 
@@ -180,17 +180,27 @@ Create `idempotency_store.rs`:
 ```rust
 #[async_trait]
 pub trait IdempotencyStore: Send + Sync {
-    async fn lookup(&self, key: &IdempotencyKey) -> Result<IdempotencyLookupResult, IdempotencyStoreError>;
+    async fn lookup(
+        &self,
+        key: &IdempotencyKey,
+        payload_hash: &PayloadHash,
+    ) -> Result<IdempotencyLookupResult, IdempotencyStoreError>;
+
     async fn store(&self, record: &IdempotencyRecord) -> Result<(), IdempotencyStoreError>;
+
     async fn cleanup_expired(&self, ttl: Duration) -> Result<u64, IdempotencyStoreError>;
 }
 ```
+
+The `lookup` method requires both the key and payload hash because the store
+must compare the incoming hash against any stored record to determine whether
+the request is a replay (matching hash) or a conflict (different hash).
 
 Define `IdempotencyStoreError` enum using `define_port_error!` macro:
 
 - `Connection`: database connection failure.
 - `Query`: query execution failure.
-- `Serialisation`: response serialisation failure.
+- `Serialization`: response serialization failure.
 
 ### 4. Driving port (backend/src/domain/ports/)
 
@@ -369,7 +379,7 @@ Add to domain module tests:
 
 - `IdempotencyKey::new` accepts valid UUIDs.
 - `IdempotencyKey::new` rejects invalid strings.
-- `canonicalise_and_hash` determinism tests.
+- `canonicalize_and_hash` determinism tests.
 - `PayloadHash` equality semantics.
 
 ### 15. Documentation updates
@@ -475,7 +485,8 @@ Acceptance criteria:
 ## Idempotence and Recovery
 
 - Domain types are pure and testable.
-- Migration is idempotent (`CREATE TABLE IF NOT EXISTS` pattern in practice).
+- Diesel migrations are tracked in the `__diesel_schema_migrations` table,
+  preventing re-execution of already-applied migrations.
 - Store operations use UPSERT semantics where appropriate.
 - If a command fails, fix the issue and re-run only the failed command.
 
@@ -496,7 +507,7 @@ New domain types in `backend/src/domain/idempotency.rs`:
 /// Validated idempotency key (UUID v4).
 pub struct IdempotencyKey(Uuid);
 
-/// SHA-256 hash of canonicalised request payload.
+/// SHA-256 hash of canonicalized request payload.
 pub struct PayloadHash([u8; 32]);
 
 /// Stored idempotency record.

@@ -18,6 +18,8 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::NotFound => StatusCode::NOT_FOUND,
+        ErrorCode::Conflict => StatusCode::CONFLICT,
+        ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

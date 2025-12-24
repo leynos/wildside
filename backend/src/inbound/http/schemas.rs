@@ -232,6 +232,8 @@ mod tests {
                 ErrorCode::Unauthorized => "unauthorized",
                 ErrorCode::Forbidden => "forbidden",
                 ErrorCode::NotFound => "not_found",
+                ErrorCode::Conflict => "conflict",
+                ErrorCode::ServiceUnavailable => "service_unavailable",
                 ErrorCode::InternalError => "internal_error",
             }
         }
@@ -241,6 +243,8 @@ mod tests {
             ErrorCode::Unauthorized,
             ErrorCode::Forbidden,
             ErrorCode::NotFound,
+            ErrorCode::Conflict,
+            ErrorCode::ServiceUnavailable,
             ErrorCode::InternalError,
         ];
 

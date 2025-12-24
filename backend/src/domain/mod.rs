@@ -18,11 +18,17 @@
 //!   events, including `UserCreatedEvent` and `DisplayNameRejectedEvent`.
 //! - UserOnboardingService — validated onboarding
 //!   input and orchestration service for user creation workflows.
+//! - IdempotencyKey — validated client-provided key for safe request retries.
+//! - PayloadHash — SHA-256 hash of canonicalized request payload.
+//! - IdempotencyRecord — stored record for idempotency tracking.
+//! - IdempotencyLookupResult — outcome of idempotency key lookup.
 
 pub mod auth;
 pub mod error;
+pub mod idempotency;
 pub mod interest_theme;
 pub mod ports;
+pub mod route_submission;
 pub mod trace_id;
 pub mod user;
 pub mod user_events;
@@ -31,7 +37,12 @@ pub mod user_onboarding;
 
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
+pub use self::idempotency::{
+    canonicalize_and_hash, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult,
+    IdempotencyRecord, PayloadHash,
+};
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
+pub use self::route_submission::RouteSubmissionServiceImpl;
 pub use self::trace_id::TraceId;
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};

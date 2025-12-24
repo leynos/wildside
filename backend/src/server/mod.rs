@@ -21,10 +21,12 @@ use actix_web::{web, App, HttpServer};
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::domain::ports::{
-    FixtureLoginService, FixtureUserInterestsCommand, FixtureUserProfileQuery, FixtureUsersQuery,
+    FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
+    FixtureUserProfileQuery, FixtureUsersQuery,
 };
 use backend::domain::UserOnboardingService;
 use backend::inbound::http::health::{live, ready, HealthState};
+use backend::inbound::http::routes::submit_route;
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
@@ -84,7 +86,8 @@ fn build_app(
         .service(login)
         .service(list_users)
         .service(current_user)
-        .service(update_interests);
+        .service(update_interests)
+        .service(submit_route);
 
     let app = App::new()
         .app_data(health_state)
@@ -125,6 +128,7 @@ pub fn create_server(
         Arc::new(FixtureUsersQuery),
         Arc::new(FixtureUserProfileQuery),
         Arc::new(FixtureUserInterestsCommand),
+        Arc::new(FixtureRouteSubmissionService),
     ));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {

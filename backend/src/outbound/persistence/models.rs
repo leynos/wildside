@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use super::schema::users;
+use super::schema::{idempotency_keys, users};
 
 /// Row struct for reading from the users table.
 ///
@@ -51,4 +51,30 @@ pub(crate) struct NewUserRow<'a> {
 #[diesel(table_name = users)]
 pub(crate) struct UserUpdate<'a> {
     pub display_name: &'a str,
+}
+
+// ---------------------------------------------------------------------------
+// Idempotency key models
+// ---------------------------------------------------------------------------
+
+/// Row struct for reading from the idempotency_keys table.
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = idempotency_keys)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub(crate) struct IdempotencyKeyRow {
+    pub key: Uuid,
+    pub payload_hash: Vec<u8>,
+    pub response_snapshot: serde_json::Value,
+    pub user_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Insertable struct for creating new idempotency records.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = idempotency_keys)]
+pub(crate) struct NewIdempotencyKeyRow<'a> {
+    pub key: Uuid,
+    pub payload_hash: &'a [u8],
+    pub response_snapshot: &'a serde_json::Value,
+    pub user_id: Uuid,
 }

@@ -10,6 +10,29 @@
 //! command can generate these definitions from a live database.
 
 // -----------------------------------------------------------------------------
+// idempotency_keys table
+// -----------------------------------------------------------------------------
+//
+// Stores idempotency records for safe request retries on POST /api/v1/routes.
+// Columns:
+//
+// - key: Primary key (client-provided UUID v4 idempotency key)
+// - payload_hash: SHA-256 hash of the canonicalised request payload (32 bytes)
+// - response_snapshot: JSONB snapshot of the original response to replay
+// - user_id: User who made the original request
+// - created_at: Record creation timestamp (used for TTL-based cleanup)
+
+diesel::table! {
+    idempotency_keys (key) {
+        key -> Uuid,
+        payload_hash -> Bytea,
+        response_snapshot -> Jsonb,
+        user_id -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+// -----------------------------------------------------------------------------
 // users table
 // -----------------------------------------------------------------------------
 //

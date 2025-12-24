@@ -229,8 +229,8 @@ pub async fn update_interests(
 mod tests {
     use super::*;
     use crate::domain::ports::{
-        FixtureLoginService, FixtureUserInterestsCommand, FixtureUserProfileQuery,
-        FixtureUsersQuery,
+        FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
+        FixtureUserProfileQuery, FixtureUsersQuery,
     };
     use crate::domain::ErrorCode;
     use actix_web::{test as actix_test, web, App};
@@ -301,6 +301,7 @@ mod tests {
             Arc::new(FixtureUsersQuery),
             Arc::new(FixtureUserProfileQuery),
             Arc::new(FixtureUserInterestsCommand),
+            Arc::new(FixtureRouteSubmissionService),
         );
         App::new()
             .app_data(web::Data::new(state))
