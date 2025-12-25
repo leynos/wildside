@@ -93,8 +93,7 @@ pub trait RouteSubmissionService: Send + Sync {
 
 /// Fixture implementation for testing.
 ///
-/// Always accepts requests and generates a deterministic request ID based on
-/// the payload hash for repeatability.
+/// Always accepts requests and generates a random request ID.
 #[derive(Debug, Default)]
 pub struct FixtureRouteSubmissionService;
 
@@ -126,7 +125,7 @@ mod tests {
             payload: serde_json::json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.unwrap();
+        let response = service.submit(request).await.expect("submit should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 
@@ -139,7 +138,7 @@ mod tests {
             payload: serde_json::json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.unwrap();
+        let response = service.submit(request).await.expect("submit should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 }

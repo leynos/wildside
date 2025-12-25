@@ -21,6 +21,8 @@ define_port_error! {
         Query { message: String } => "idempotency store query failed: {message}",
         /// Response serialization or deserialization failed.
         Serialization { message: String } => "idempotency store serialization failed: {message}",
+        /// A record with this key already exists (concurrent insert race).
+        DuplicateKey { message: String } => "idempotency key already exists: {message}",
     }
 }
 

@@ -72,7 +72,7 @@ fn map_diesel_error(error: diesel::result::Error) -> IdempotencyStoreError {
         DieselError::QueryBuilderError(_) => IdempotencyStoreError::query("database query error"),
         DieselError::DatabaseError(kind, _) => match kind {
             DatabaseErrorKind::UniqueViolation => {
-                IdempotencyStoreError::query("duplicate idempotency key")
+                IdempotencyStoreError::duplicate_key("concurrent insert detected")
             }
             DatabaseErrorKind::ClosedConnection => {
                 IdempotencyStoreError::connection("database connection error")
@@ -163,7 +163,11 @@ impl IdempotencyStore for DieselIdempotencyStore {
             .map_err(map_diesel_error)?;
 
         debug!(deleted, cutoff = %cutoff, "cleaned up expired idempotency records");
-        Ok(deleted as u64)
+        #[expect(
+            clippy::expect_used,
+            reason = "usize row count always fits in u64"
+        )]
+        Ok(u64::try_from(deleted).expect("row count fits in u64"))
     }
 }
 
@@ -203,6 +207,14 @@ mod tests {
         );
         let store_err = map_diesel_error(diesel_err);
 
-        assert!(store_err.to_string().contains("duplicate idempotency key"));
+        assert!(
+            matches!(store_err, IdempotencyStoreError::DuplicateKey { .. }),
+            "expected DuplicateKey error, got {store_err:?}"
+        );
+        assert!(
+            store_err.to_string().contains("concurrent insert"),
+            "expected 'concurrent insert' in message, got: {}",
+            store_err
+        );
     }
 }
