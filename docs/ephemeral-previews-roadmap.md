@@ -69,7 +69,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   - [x] **cert-manager module**: Configure ClusterIssuers for ACME and Vault;
     expose issuer resource names, secret refs, and CA bundle material.
 
-  - [ ] **Vault + External Secrets Operator module**: Provision the Vault helm
+  - [x] **Vault + External Secrets Operator module**: Provision the Vault helm
     release, ESO configuration, and a sync policy contract that hands back
     secret store names for workloads.
 

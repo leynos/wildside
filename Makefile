@@ -47,7 +47,7 @@ GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCAC
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
 	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
 	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture \
-	        external-dns-test external-dns-policy
+	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -150,6 +150,7 @@ lint-infra:
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/external_dns && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/cert_manager && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/vault_eso && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
@@ -230,7 +231,9 @@ INFRA_TEST_TARGETS := \
         external-dns-test \
         external-dns-policy \
         cert-manager-test \
-        cert-manager-policy
+        cert-manager-policy \
+        vault-eso-test \
+        vault-eso-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -553,4 +556,65 @@ cert-manager-policy: conftest tofu
 		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/cert_manager/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
 		conftest test --policy infra/modules/cert_manager/policy/plan --fail-on-warn --namespace cert_manager.policy.plan "$$tmpdir/plan.json"; \
+	fi
+
+vault-eso-test:
+	tofu fmt -check infra/modules/vault_eso
+	tofu -chdir=infra/modules/vault_eso/examples/render init
+	tofu -chdir=infra/modules/vault_eso/examples/render validate
+	TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/render plan -input=false -no-color -detailed-exitcode \
+	|| test $$? -eq 2
+	tofu -chdir=infra/modules/vault_eso/examples/basic init
+	if [ -n "$(VAULT_ESO_KUBECONFIG_PATH)" ]; then \
+		if [ -z "$(VAULT_ESO_VAULT_ADDRESS)" ] || [ -z "$(VAULT_ESO_CA_BUNDLE_PEM)" ] || [ -z "$(VAULT_ESO_APPROLE_ROLE_ID)" ] || [ -z "$(VAULT_ESO_APPROLE_SECRET_ID)" ]; then \
+			echo "VAULT_ESO_VAULT_ADDRESS, VAULT_ESO_CA_BUNDLE_PEM, VAULT_ESO_APPROLE_ROLE_ID, and VAULT_ESO_APPROLE_SECRET_ID must be set when VAULT_ESO_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic validate -no-color \
+			-var "vault_address=$(VAULT_ESO_VAULT_ADDRESS)" \
+			-var "vault_ca_bundle_pem=$(VAULT_ESO_CA_BUNDLE_PEM)" \
+			-var "approle_role_id=$(VAULT_ESO_APPROLE_ROLE_ID)" \
+			-var "approle_secret_id=$(VAULT_ESO_APPROLE_SECRET_ID)" \
+			-var "kubeconfig_path=$(VAULT_ESO_KUBECONFIG_PATH)"; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic plan -input=false -no-color -detailed-exitcode \
+			-var "vault_address=$(VAULT_ESO_VAULT_ADDRESS)" \
+			-var "vault_ca_bundle_pem=$(VAULT_ESO_CA_BUNDLE_PEM)" \
+			-var "approle_role_id=$(VAULT_ESO_APPROLE_ROLE_ID)" \
+			-var "approle_secret_id=$(VAULT_ESO_APPROLE_SECRET_ID)" \
+			-var "kubeconfig_path=$(VAULT_ESO_KUBECONFIG_PATH)"; \
+		status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+	else \
+		echo "Skipping vault-eso validate; set VAULT_ESO_KUBECONFIG_PATH to enable"; \
+	fi
+	command -v tflint >/dev/null
+	cd infra/modules/vault_eso && tflint --init && tflint --config .tflint.hcl --version && tflint --config .tflint.hcl
+	cd infra/modules/vault_eso/tests && $(GO_TEST_ENV) KUBECONFIG="$(VAULT_ESO_KUBECONFIG_PATH)" go test -v
+	$(MAKE) vault-eso-policy
+
+vault-eso-policy: conftest tofu
+	./scripts/vault-eso-render-policy.sh
+	if [ -z "$(VAULT_ESO_KUBECONFIG_PATH)" ]; then \
+		echo "Skipping vault-eso plan policy; set VAULT_ESO_KUBECONFIG_PATH to run"; \
+	else \
+		set -euo pipefail; \
+		if [ -z "$(VAULT_ESO_VAULT_ADDRESS)" ] || [ -z "$(VAULT_ESO_CA_BUNDLE_PEM)" ] || [ -z "$(VAULT_ESO_APPROLE_ROLE_ID)" ] || [ -z "$(VAULT_ESO_APPROLE_SECRET_ID)" ]; then \
+			echo "VAULT_ESO_VAULT_ADDRESS, VAULT_ESO_CA_BUNDLE_PEM, VAULT_ESO_APPROLE_ROLE_ID, and VAULT_ESO_APPROLE_SECRET_ID must be set when VAULT_ESO_KUBECONFIG_PATH is set" >&2; \
+			exit 1; \
+		fi; \
+		tmpdir=$$(mktemp -d); \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		status=0; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic plan \
+			-out="$$tmpdir/tfplan.binary" \
+			-detailed-exitcode \
+			-var "vault_address=$(VAULT_ESO_VAULT_ADDRESS)" \
+			-var "vault_ca_bundle_pem=$(VAULT_ESO_CA_BUNDLE_PEM)" \
+			-var "approle_role_id=$(VAULT_ESO_APPROLE_ROLE_ID)" \
+			-var "approle_secret_id=$(VAULT_ESO_APPROLE_SECRET_ID)" \
+			-var "kubeconfig_path=$(VAULT_ESO_KUBECONFIG_PATH)" \
+			|| status=$$?; \
+		if [ $$status -ne 0 ] && [ $$status -ne 2 ]; then exit $$status; fi; \
+		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
+		conftest test --policy infra/modules/vault_eso/policy/plan --fail-on-warn --namespace vault_eso.policy.plan "$$tmpdir/plan.json"; \
 	fi

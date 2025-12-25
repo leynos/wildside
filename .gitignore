@@ -86,3 +86,6 @@ coverage/
 /logs_llm/
 
 deploy/k8s/backend/secret.env
+
+# Rendered secrets from vault_eso module (encrypt with SOPS before committing)
+**/approle-auth-secret.yaml

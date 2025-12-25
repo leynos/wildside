@@ -15,11 +15,18 @@
 
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use pg_embedded_setup_unpriv::TestCluster;
 use uuid::Uuid;
 
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Maximum number of retry attempts for transient network errors.
+const MAX_RETRIES: u32 = 3;
+
+/// Base delay between retry attempts (doubles with each retry).
+const RETRY_DELAY_MS: u64 = 500;
 
 fn pg_embed_target_dir() -> PathBuf {
     if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
@@ -43,12 +50,36 @@ fn create_unique_pg_embed_dirs() -> Result<(PathBuf, PathBuf), std::io::Error> {
     Ok((runtime_dir, data_dir))
 }
 
+/// Returns true if the error message suggests a transient network issue.
+fn is_transient_error(err: &str) -> bool {
+    let transient_patterns = [
+        "error decoding response body",
+        "connection reset",
+        "connection refused",
+        "timeout",
+        "timed out",
+        "temporarily unavailable",
+        "network unreachable",
+        "dns error",
+        "failed to lookup",
+    ];
+
+    let err_lower = err.to_lowercase();
+    transient_patterns
+        .iter()
+        .any(|pattern| err_lower.contains(pattern))
+}
+
 /// Bootstraps a [`TestCluster`] using workspace-backed data directories when needed.
 ///
 /// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set, this function leaves
 /// them untouched. If either value is missing, this function sets both to
 /// unique directories under the target directory so the bootstrap works in
 /// sandboxed environments.
+///
+/// This function retries up to [`MAX_RETRIES`] times on transient network
+/// errors since embedded PostgreSQL binary downloads can fail intermittently
+/// when running parallel test suites.
 pub fn test_cluster() -> Result<TestCluster, String> {
     let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
@@ -73,6 +104,64 @@ pub fn test_cluster() -> Result<TestCluster, String> {
         None
     };
 
-    let cluster = TestCluster::new().map_err(|err| format!("{err:?}"))?;
-    Ok(cluster)
+    let mut last_error = String::new();
+    for attempt in 0..=MAX_RETRIES {
+        match TestCluster::new() {
+            Ok(cluster) => return Ok(cluster),
+            Err(err) => {
+                last_error = format!("{err:?}");
+                if attempt < MAX_RETRIES && is_transient_error(&last_error) {
+                    let delay = Duration::from_millis(RETRY_DELAY_MS * (1 << attempt));
+                    eprintln!(
+                        "pg-embed: transient error on attempt {}/{}, retrying in {:?}: {last_error}",
+                        attempt + 1,
+                        MAX_RETRIES + 1,
+                        delay
+                    );
+                    std::thread::sleep(delay);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_transient_error_matches_known_patterns() {
+        assert!(is_transient_error("error decoding response body"));
+        assert!(is_transient_error("connection reset by peer"));
+        assert!(is_transient_error("connection refused"));
+        assert!(is_transient_error("request timeout"));
+        assert!(is_transient_error("operation timed out"));
+        assert!(is_transient_error("service temporarily unavailable"));
+        assert!(is_transient_error("network unreachable"));
+        assert!(is_transient_error("dns error: lookup failed"));
+        assert!(is_transient_error("failed to lookup address"));
+    }
+
+    #[test]
+    fn is_transient_error_is_case_insensitive() {
+        assert!(is_transient_error("TIMEOUT"));
+        assert!(is_transient_error("Connection Reset"));
+        assert!(is_transient_error("DNS ERROR"));
+        assert!(is_transient_error("TIMED OUT"));
+        assert!(is_transient_error("Temporarily Unavailable"));
+    }
+
+    #[test]
+    fn is_transient_error_rejects_non_transient_errors() {
+        assert!(!is_transient_error("unknown error"));
+        assert!(!is_transient_error("permission denied"));
+        assert!(!is_transient_error("file not found"));
+        assert!(!is_transient_error("invalid configuration"));
+        assert!(!is_transient_error("authentication failed"));
+        assert!(!is_transient_error(""));
+    }
 }
