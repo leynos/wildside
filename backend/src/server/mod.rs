@@ -136,13 +136,14 @@ pub fn create_server(
         None => Arc::new(FixtureRouteSubmissionService),
     };
 
-    let http_state = web::Data::new(HttpState::new(HttpStatePorts::new(HttpStatePorts {
+    let http_state = web::Data::new(HttpState::new(HttpStatePorts {
         login: Arc::new(FixtureLoginService),
         users: Arc::new(FixtureUsersQuery),
         profile: Arc::new(FixtureUserProfileQuery),
         interests: Arc::new(FixtureUserInterestsCommand),
         route_submission,
-    })));
+        route_submission: Arc::new(FixtureRouteSubmissionService),
+    }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,

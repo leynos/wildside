@@ -172,13 +172,13 @@ pub(crate) fn world() -> WorldFixture {
         )));
     let onboarding = QueueUserOnboarding::new(Vec::new());
 
-    let http_state = HttpState::new(HttpStatePorts::new(HttpStatePorts {
+    let http_state = HttpState::new(HttpStatePorts {
         login: Arc::new(login.clone()),
         users: Arc::new(users.clone()),
         profile: Arc::new(profile.clone()),
         interests: Arc::new(interests.clone()),
         route_submission: Arc::new(FixtureRouteSubmissionService),
-    }));
+    });
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
