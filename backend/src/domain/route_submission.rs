@@ -48,6 +48,10 @@ fn map_store_error(error: IdempotencyStoreError) -> Error {
         IdempotencyStoreError::Serialization { message } => {
             Error::internal(format!("response serialization failed: {message}"))
         }
+        IdempotencyStoreError::DuplicateKey { message } => {
+            // This shouldn't reach here if race handling works correctly.
+            Error::internal(format!("unexpected duplicate key: {message}"))
+        }
     }
 }
 
@@ -86,20 +90,52 @@ where
                 })?;
 
                 let record = IdempotencyRecord {
-                    key: idempotency_key,
-                    payload_hash,
+                    key: idempotency_key.clone(),
+                    payload_hash: payload_hash.clone(),
                     response_snapshot,
                     user_id: request.user_id,
                     created_at: Utc::now(),
                 };
 
-                self.idempotency_store
-                    .store(&record)
-                    .await
-                    .map_err(map_store_error)?;
+                match self.idempotency_store.store(&record).await {
+                    Ok(()) => {
+                        // TODO: Dispatch to route queue here when integrated.
+                        Ok(response)
+                    }
+                    Err(IdempotencyStoreError::DuplicateKey { .. }) => {
+                        // Race condition: another request stored first.
+                        // Retry lookup to get the winning response.
+                        let retry_result = self
+                            .idempotency_store
+                            .lookup(&idempotency_key, &payload_hash)
+                            .await
+                            .map_err(map_store_error)?;
 
-                // TODO: Dispatch to route queue here when integrated.
-                Ok(response)
+                        match retry_result {
+                            IdempotencyLookupResult::MatchingPayload(existing) => {
+                                let stored_response: RouteSubmissionResponse =
+                                    serde_json::from_value(existing.response_snapshot)
+                                        .map_err(|err| {
+                                            Error::internal(format!(
+                                                "failed to deserialize stored response: {err}"
+                                            ))
+                                        })?;
+                                Ok(RouteSubmissionResponse::replayed(stored_response.request_id))
+                            }
+                            IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
+                                "idempotency key already used with different payload",
+                            )),
+                            IdempotencyLookupResult::NotFound => {
+                                // Extremely unlikely: the race winner's record was deleted
+                                // between our store attempt and retry lookup.
+                                Err(Error::internal(
+                                    "idempotency record disappeared during race resolution",
+                                ))
+                            }
+                        }
+                    }
+                    Err(err) => Err(map_store_error(err)),
+                }
             }
             IdempotencyLookupResult::MatchingPayload(record) => {
                 // Duplicate request with same payload: replay response.
