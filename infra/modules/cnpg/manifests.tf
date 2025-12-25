@@ -84,11 +84,11 @@ locals {
     }
     spec = merge(
       {
-        instances               = local.instances
-        imageName               = local.image_name
-        primaryUpdateStrategy   = local.primary_update_strategy
-        primaryUpdateMethod     = local.primary_update_method
-        enableSuperuserAccess   = true
+        instances             = local.instances
+        imageName             = local.image_name
+        primaryUpdateStrategy = local.primary_update_strategy
+        primaryUpdateMethod   = local.primary_update_method
+        enableSuperuserAccess = true
         superuserSecret = local.eso_enabled ? {
           name = local.superuser_credentials_secret_name
         } : null
@@ -174,7 +174,7 @@ locals {
     local.backup_enabled &&
     length(trimspace(var.backup_s3_access_key_id)) > 0 &&
     length(trimspace(var.backup_s3_secret_access_key)) > 0
-  ) ? {
+    ) ? {
     apiVersion = "v1"
     kind       = "Secret"
     metadata = {
@@ -212,7 +212,7 @@ locals {
   superuser_external_secret_manifest = (
     local.eso_enabled &&
     length(local.superuser_credentials_vault_path) > 0
-  ) ? {
+    ) ? {
     apiVersion = "external-secrets.io/v1beta1"
     kind       = "ExternalSecret"
     metadata = {
@@ -253,7 +253,7 @@ locals {
   app_external_secret_manifest = (
     local.eso_enabled &&
     length(local.app_credentials_vault_path) > 0
-  ) ? {
+    ) ? {
     apiVersion = "external-secrets.io/v1beta1"
     kind       = "ExternalSecret"
     metadata = {
@@ -295,7 +295,7 @@ locals {
     local.eso_enabled &&
     local.backup_enabled &&
     length(local.backup_credentials_vault_path) > 0
-  ) ? {
+    ) ? {
     apiVersion = "external-secrets.io/v1beta1"
     kind       = "ExternalSecret"
     metadata = {
