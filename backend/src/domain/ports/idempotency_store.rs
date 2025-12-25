@@ -116,8 +116,10 @@ mod tests {
             created_at: Utc::now(),
         };
 
-        let result = store.store(&record).await;
-        assert!(result.is_ok());
+        store
+            .store(&record)
+            .await
+            .expect("fixture store should accept records");
     }
 
     #[tokio::test]

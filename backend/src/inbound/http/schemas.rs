@@ -218,6 +218,11 @@ mod tests {
             schema_json.contains("internal_error"),
             "missing internal_error"
         );
+        assert!(schema_json.contains("conflict"), "missing conflict");
+        assert!(
+            schema_json.contains("service_unavailable"),
+            "missing service_unavailable"
+        );
     }
 
     /// Verify domain ErrorCode serialization matches schema renames.
