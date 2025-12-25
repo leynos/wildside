@@ -163,10 +163,7 @@ impl IdempotencyStore for DieselIdempotencyStore {
             .map_err(map_diesel_error)?;
 
         debug!(deleted, cutoff = %cutoff, "cleaned up expired idempotency records");
-        #[expect(
-            clippy::expect_used,
-            reason = "usize row count always fits in u64"
-        )]
+        #[expect(clippy::expect_used, reason = "usize row count always fits in u64")]
         Ok(u64::try_from(deleted).expect("row count fits in u64"))
     }
 }

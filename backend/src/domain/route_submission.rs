@@ -114,13 +114,16 @@ where
                         match retry_result {
                             IdempotencyLookupResult::MatchingPayload(existing) => {
                                 let stored_response: RouteSubmissionResponse =
-                                    serde_json::from_value(existing.response_snapshot)
-                                        .map_err(|err| {
+                                    serde_json::from_value(existing.response_snapshot).map_err(
+                                        |err| {
                                             Error::internal(format!(
                                                 "failed to deserialize stored response: {err}"
                                             ))
-                                        })?;
-                                Ok(RouteSubmissionResponse::replayed(stored_response.request_id))
+                                        },
+                                    )?;
+                                Ok(RouteSubmissionResponse::replayed(
+                                    stored_response.request_id,
+                                ))
                             }
                             IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
                                 "idempotency key already used with different payload",

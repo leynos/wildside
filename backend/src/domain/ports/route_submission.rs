@@ -125,7 +125,10 @@ mod tests {
             payload: serde_json::json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.expect("submit should succeed");
+        let response = service
+            .submit(request)
+            .await
+            .expect("submit should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 
@@ -138,7 +141,10 @@ mod tests {
             payload: serde_json::json!({"origin": "A", "destination": "B"}),
         };
 
-        let response = service.submit(request).await.expect("submit should succeed");
+        let response = service
+            .submit(request)
+            .await
+            .expect("submit should succeed");
         assert_eq!(response.status, RouteSubmissionStatus::Accepted);
     }
 }
