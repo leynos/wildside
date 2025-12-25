@@ -19,25 +19,6 @@ pub struct HttpStatePorts {
     pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
-impl HttpStatePorts {
-    /// Construct a new ports bundle.
-    pub fn new(
-        login: Arc<dyn LoginService>,
-        users: Arc<dyn UsersQuery>,
-        profile: Arc<dyn UserProfileQuery>,
-        interests: Arc<dyn UserInterestsCommand>,
-        route_submission: Arc<dyn RouteSubmissionService>,
-    ) -> Self {
-        Self {
-            login,
-            users,
-            profile,
-            interests,
-            route_submission,
-        }
-    }
-}
-
 /// Dependency bundle for HTTP handlers.
 #[derive(Clone)]
 pub struct HttpState {

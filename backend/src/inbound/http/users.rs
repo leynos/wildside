@@ -297,13 +297,13 @@ mod tests {
             InitError = (),
         >,
     > {
-        let state = HttpState::new(HttpStatePorts::new(
-            Arc::new(FixtureLoginService),
-            Arc::new(FixtureUsersQuery),
-            Arc::new(FixtureUserProfileQuery),
-            Arc::new(FixtureUserInterestsCommand),
-            Arc::new(FixtureRouteSubmissionService),
-        ));
+        let state = HttpState::new(HttpStatePorts {
+            login: Arc::new(FixtureLoginService),
+            users: Arc::new(FixtureUsersQuery),
+            profile: Arc::new(FixtureUserProfileQuery),
+            interests: Arc::new(FixtureUserInterestsCommand),
+            route_submission: Arc::new(FixtureRouteSubmissionService),
+        });
         App::new()
             .app_data(web::Data::new(state))
             .wrap(crate::inbound::http::test_utils::test_session_middleware())

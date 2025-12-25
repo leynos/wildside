@@ -123,13 +123,13 @@ pub fn create_server(
     config: ServerConfig,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-    let http_state = web::Data::new(HttpState::new(HttpStatePorts::new(
-        Arc::new(FixtureLoginService),
-        Arc::new(FixtureUsersQuery),
-        Arc::new(FixtureUserProfileQuery),
-        Arc::new(FixtureUserInterestsCommand),
-        Arc::new(FixtureRouteSubmissionService),
-    )));
+    let http_state = web::Data::new(HttpState::new(HttpStatePorts {
+        login: Arc::new(FixtureLoginService),
+        users: Arc::new(FixtureUsersQuery),
+        profile: Arc::new(FixtureUserProfileQuery),
+        interests: Arc::new(FixtureUserInterestsCommand),
+        route_submission: Arc::new(FixtureRouteSubmissionService),
+    }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,
