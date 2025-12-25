@@ -828,6 +828,247 @@ be updated optimistically (as described in the next section). When the user
 comes back online, Tanstack Query will automatically execute the queued
 mutations, synchronizing the local changes with the server.[^26]
 
+
+---
+
+## Handling Large Offline Assets: Offline Bundles, Tiles, and “Stuff That Isn’t JSON”
+
+The patterns above work extremely well for “JSON-ish” domain data: routes, POIs, user notes, progress, favourites, and so on. However, mapping and media-heavy PWAs usually have a second problem domain: **large, binary-ish assets** (vector tiles, raster tiles, sprites, fonts, GeoJSON blobs, audio guides, etc.). They arrive in many small requests, they add up to hundreds of megabytes, and they do not fit neatly into “React state”.
+
+A pragmatic approach is to keep the same mental model—**Zustand for UI state, TanStack Query for server state**—and add one extra concept: an **offline bundle** that describes what you downloaded, while a dedicated storage layer holds the bytes. This follows the “tile/asset store alongside Query” approach described in the design critique. 
+
+### Modelling an Offline Bundle as First-Class Data
+
+Treat the *bundle manifest* as a normal domain entity that TanStack Query owns and persists:
+
+```ts
+export type OfflineBundle = {
+  id: string; // e.g. route id or “edinburgh_old_town_2025_11”
+  routeId: string;
+
+  // Coverage
+  bounds: [minLng: number, minLat: number, maxLng: number, maxLat: number];
+  zoomRange: [minZoom: number, maxZoom: number];
+
+  // Asset addressing
+  tileKeyPrefix: string; // e.g. "offline/edinburgh-old-town"
+  sizeBytes: number;
+
+  // Lifecycle
+  createdAt: string; // ISO-8601
+  updatedAt?: string;
+};
+```
+
+A simple Query key scheme usually does the job:
+
+- `['offline-bundles', userId]` → list bundles
+- `['offline-bundles', userId, bundleId]` → bundle detail
+- mutations: `createOfflineBundle(...)`, `deleteOfflineBundle(...)`
+
+Now your UI can answer “is this route available offline?” without needing to understand storage internals.
+
+### Where the Tile Bytes Live: Two Sane Options
+
+#### Option A (default): Service Worker + Cache Storage API
+
+Use Cache Storage as a content-addressable HTTP cache, with a service worker (SW) as the traffic cop:
+
+- The app computes the list of tile URLs it wants to prefetch (bounds + zoom range).
+- The app sends the SW a message: “prefetch these URLs, associate them with bundle X”.
+- The SW fetches and stores responses in Cache Storage.
+- The map library requests tiles by URL as usual; the SW serves cached responses while offline.
+
+This keeps MapLibre/Leaflet blissfully unaware that “offline mode” exists.
+
+A minimal SW sketch:
+
+```ts
+// sw.ts (illustrative)
+self.addEventListener('message', (event: MessageEvent) => {
+  const msg = event.data;
+  if (msg?.type !== 'PRECACHE_TILES') return;
+
+  const { cacheName, urls } = msg as { cacheName: string; urls: string[] };
+
+  event.waitUntil((async () => {
+    const cache = await caches.open(cacheName);
+    await Promise.all(urls.map(async (url) => {
+      const req = new Request(url, { cache: 'reload' });
+      const res = await fetch(req);
+      if (res.ok) await cache.put(req, res);
+    }));
+  })());
+});
+
+self.addEventListener('fetch', (event: FetchEvent) => {
+  const url = new URL(event.request.url);
+
+  // Keep this predicate tight: you do *not* want to hijack your entire site.
+  const isTile = url.pathname.includes('/tiles/');
+  if (!isTile) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open('tiles-v1');
+    const cached = await cache.match(event.request);
+    if (cached) return cached;
+
+    try {
+      const fresh = await fetch(event.request);
+      if (fresh.ok) await cache.put(event.request, fresh.clone());
+      return fresh;
+    } catch {
+      // Offline and not cached: choose your failure mode (empty tile, 404, etc.)
+      return new Response('', { status: 503 });
+    }
+  })());
+});
+```
+
+When you want “purge bundle X”, you can either:
+- delete a whole cache by name, or
+- track per-URL membership in IndexedDB (metadata only) and selectively delete entries.
+
+#### Option B (control-first): IndexedDB / Dexie for Tiles
+
+Use IndexedDB when you need explicit control over eviction, accounting, or non-HTTP sources. Dexie makes this approach ergonomic by giving you a “small SQLite” mental model over IndexedDB. 
+
+You store tile blobs keyed by `{bundleId, z, x, y}` (or a compound key), and you teach your map library how to read from that store before falling back to the network.
+
+An illustrative Dexie schema:
+
+```ts
+import Dexie, { type Table } from 'dexie';
+
+type TileRow = {
+  bundleId: string;
+  z: number;
+  x: number;
+  y: number;
+  mime: string;
+  blob: Blob;
+  etag?: string;
+  updatedAt: number;
+};
+
+class AppDB extends Dexie {
+  tiles!: Table<TileRow, [string, number, number, number]>;
+
+  constructor() {
+    super('app');
+    this.version(1).stores({
+      tiles: '[bundleId+z+x+y],bundleId,z,x,y,updatedAt',
+    });
+  }
+}
+```
+
+MapLibre in particular supports custom protocols; you can wire `app://bundle/z/x/y` to an IndexedDB lookup and return an `ArrayBuffer`. This route buys you deterministic storage and predictable purging, at the cost of more bespoke integration code.
+
+### Computing Tile URLs from Bounds
+
+Bundle creation usually boils down to “given a bounding box, enumerate tile coordinates for zoom levels Zmin..Zmax”.
+
+For slippy-map/WebMercator tiles:
+
+```ts
+const lon2tileX = (lon: number, z: number) =>
+  Math.floor(((lon + 180) / 360) * (1 << z));
+
+const lat2tileY = (lat: number, z: number) => {
+  const rad = (lat * Math.PI) / 180;
+  const n = Math.log(Math.tan(Math.PI / 4 + rad / 2));
+  return Math.floor((1 - n / Math.PI) / 2 * (1 << z));
+};
+
+export function enumerateTiles(bounds: [number, number, number, number], zMin: number, zMax: number) {
+  const [minLng, minLat, maxLng, maxLat] = bounds;
+
+  const tiles: Array<{ z: number; x: number; y: number }> = [];
+  for (let z = zMin; z <= zMax; z++) {
+    const xMin = lon2tileX(minLng, z);
+    const xMax = lon2tileX(maxLng, z);
+    const yMin = lat2tileY(maxLat, z); // note: lat decreases as y increases
+    const yMax = lat2tileY(minLat, z);
+
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        tiles.push({ z, x, y });
+      }
+    }
+  }
+  return tiles;
+}
+```
+
+In practice you will also:
+- cap bundle size (hard limits, user-configured limits, “Wi‑Fi only” toggles),
+- download with bounded concurrency and cancellation,
+- show progress based on tiles completed / bytes completed,
+- handle quota errors and “persistent storage” requests (`navigator.storage.persist()`), and
+- version bundles so you can invalidate old caches cleanly when the basemap style changes.
+
+---
+
+## Durable Offline Writes: An Outbox (Because Reality Dislikes Perfect Networks)
+
+TanStack Query’s paused-offline-mutation behaviour covers a surprising amount of ground. However, you often still want an explicit **durable outbox** when:
+
+- you need pending writes to survive refreshes and restarts,
+- you want richer retry/backoff logic than “try again when online”,
+- you want to group multiple client actions into a single server transaction, or
+- you want an audit trail of “what did we try to send?”.
+
+The critique recommends the “Query as the authoritative local view + outbox as sync bookkeeping” approach.
+
+### Outbox Data Model
+
+```ts
+export type OutboxItem = {
+  id: string; // client-generated UUID; also works as an idempotency key
+  type: 'ADD_NOTE' | 'EDIT_NOTE' | 'SET_VISITED' | 'RATE_POI';
+  routeId: string;
+
+  payload: unknown;
+
+  createdAt: string; // ISO-8601
+  lastAttemptAt?: string;
+  attemptCount: number;
+
+  status: 'pending' | 'in-flight' | 'failed' | 'done';
+  error?: string;
+};
+```
+
+### Write Path: Optimistic UI + Append to Outbox
+
+When the user performs an action while offline (or on a flaky link):
+
+1. Apply the optimistic update to the relevant Query cache (`setQueryData` in `onMutate`).
+2. Append an `OutboxItem` to IndexedDB (Dexie works nicely here).
+3. Return control to the user immediately.
+
+The UI reads from Query, so it stays responsive even though the server has not seen the change yet.
+
+### Sync Path: Drain the Outbox When Online
+
+A straightforward sync loop:
+
+- Watch connectivity (`onlineManager` or `navigator.onLine`).
+- On reconnect, read `pending` items in order.
+- For each item:
+  - mark `in-flight`,
+  - POST/PUT to the server with an **Idempotency-Key** header derived from `id`,
+  - on success: mark `done`, invalidate/refresh relevant queries,
+  - on failure: increment attempt count, mark `failed` or requeue with backoff.
+
+Because the outbox uses durable storage, you can run this loop from:
+- the app runtime,
+- a service worker (Background Sync when supported), or
+- a dedicated “sync worker” in a Web Worker.
+
+The important invariant stays the same: **Query drives the UI; the outbox drives the synchronizer**.
+
 ## Real-Time Data Flow: Integrating REST and WebSockets
 
 ### Understanding the Communication Protocols
@@ -1251,6 +1492,25 @@ problem that requires a deliberate strategy. Common strategies include:
 The choice of strategy is highly dependent on the nature of the data and the
 application's requirements. It is a critical design decision that must be
 addressed when building any non-trivial local-first application.
+
+
+### When to Reach for Something Heavier Than “Query + Persistence + Outbox”
+
+The stack in this guide intentionally stays “in the family”: Zustand for UI state, TanStack Query for server state, and IndexedDB for persistence. It scales further than people expect, especially for single-user or mostly-single-user apps where conflicts stay rare.
+
+However, some requirements change the game:
+
+- **Multi-writer collaboration on the same entities**, including concurrent edits while offline.
+- **Bidirectional sync as a product feature**, not a background convenience.
+- **Strong guarantees about convergence** (every replica ends up identical) without user mediation.
+
+When those show up, you should consider purpose-built local-first databases and sync engines:
+
+- **RxDB:** a browser/Node database on top of IndexedDB/SQLite with replication and conflict handling. It can integrate with Query, but in practice it starts to *own* your server state lifecycle.
+- **ElectricSQL (+ local SQLite):** a Postgres-centric approach that syncs into a local replica (often with CRDT-based merge semantics). It pushes you towards a database-first architecture.
+- **Replicache / CRDT toolkits (Automerge, Yjs):** best suited to collaborative editing. They can feel like overkill until the day they are not.
+
+These tools are excellent, but they also shift the centre of gravity: the database and sync engine become the main abstraction, and TanStack Query becomes an accessory rather than the backbone.
 
 ### The Future is Purpose-Built: The Emergence of Tanstack DB
 
