@@ -4,7 +4,7 @@
 //! handlers to turn domain failures into consistent JSON responses and status
 //! codes.
 
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use tracing::error;
 
 use crate::domain::{Error, ErrorCode, TRACE_ID_HEADER};

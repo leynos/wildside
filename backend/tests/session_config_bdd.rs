@@ -4,8 +4,9 @@
 //! configuration and reject insecure or missing settings.
 
 use backend::inbound::http::session_config::{
-    session_settings_from_env, test_utils::TempKeyFile, BuildMode, SessionConfigError, SessionEnv,
-    SessionSettings, ALLOW_EPHEMERAL_ENV, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
+    ALLOW_EPHEMERAL_ENV, BuildMode, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
+    SessionConfigError, SessionEnv, SessionSettings, session_settings_from_env,
+    test_utils::TempKeyFile,
 };
 use mockable::{Env as MockableEnv, MockEnv};
 use rstest::fixture;

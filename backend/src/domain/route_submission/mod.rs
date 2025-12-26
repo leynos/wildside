@@ -14,8 +14,8 @@ use super::ports::{
     RouteSubmissionService,
 };
 use super::{
-    canonicalize_and_hash, Error, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord,
-    PayloadHash, UserId,
+    Error, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
+    canonicalize_and_hash,
 };
 
 /// Concrete implementation of [`RouteSubmissionService`].

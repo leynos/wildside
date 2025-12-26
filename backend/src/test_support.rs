@@ -10,8 +10,8 @@ pub mod openapi {
     //! particularly for resolving `RefOr<Schema>` wrappers to concrete `Object`
     //! schemas with diagnostic error messages on type mismatches.
 
-    use utoipa::openapi::schema::{Object, Schema};
     use utoipa::openapi::RefOr;
+    use utoipa::openapi::schema::{Object, Schema};
 
     /// Extract an `Object` schema, panicking with a diagnostic if not an Object.
     ///

@@ -96,7 +96,7 @@ impl IdempotencyStore for FixtureIdempotencyStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{canonicalize_and_hash, UserId};
+    use crate::domain::{UserId, canonicalize_and_hash};
     use chrono::Utc;
     use serde_json::json;
 

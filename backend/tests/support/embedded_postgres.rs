@@ -9,9 +9,9 @@
 //! - Table teardown helpers provide a standard way to simulate schema loss.
 
 use backend::domain::ports::UserPersistenceError;
-use diesel::pg::PgConnection;
 use diesel::Connection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel::pg::PgConnection;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use pg_embedded_setup_unpriv::TestCluster;
 use postgres::{Client, NoTls};
 

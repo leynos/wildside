@@ -5,21 +5,21 @@
 use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
-use backend::inbound::http::session_config::{session_settings_from_env, BuildMode, DefaultEnv};
+use backend::inbound::http::session_config::{BuildMode, DefaultEnv, session_settings_from_env};
 use std::env;
 use std::net::SocketAddr;
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 use backend::inbound::http::health::HealthState;
 
 mod server;
 
-use server::{create_server, ServerConfig};
+use server::{ServerConfig, create_server};
 
 #[cfg(feature = "metrics")]
-fn make_metrics(
-) -> Result<actix_web_prom::PrometheusMetrics, Box<dyn std::error::Error + Send + Sync>> {
+fn make_metrics()
+-> Result<actix_web_prom::PrometheusMetrics, Box<dyn std::error::Error + Send + Sync>> {
     PrometheusMetricsBuilder::new("wildside")
         .endpoint("/metrics")
         .build()

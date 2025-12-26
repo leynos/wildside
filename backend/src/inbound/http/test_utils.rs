@@ -1,6 +1,6 @@
 //! Test helpers for inbound HTTP components.
 
-use actix_session::{storage::CookieSessionStore, SessionMiddleware};
+use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
 
 /// Build a session middleware configured for tests.

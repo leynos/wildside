@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::domain::Error;
+use actix_web::ResponseError;
 use actix_web::body::to_bytes;
 use actix_web::http::StatusCode;
-use actix_web::ResponseError;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;

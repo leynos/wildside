@@ -7,14 +7,14 @@
 //! Supports idempotent request submission via the `Idempotency-Key` header.
 
 use actix_web::http::header::HeaderMap;
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
 use crate::domain::{Error, IdempotencyKey, IdempotencyKeyValidationError};
+use crate::inbound::http::ApiResult;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::ApiResult;
 
 /// HTTP header name for idempotency keys.
 pub const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
@@ -158,9 +158,9 @@ mod tests {
     use crate::inbound::http::state::HttpStatePorts;
     use crate::inbound::http::users::LoginRequest;
     use actix_web::http::StatusCode;
-    use actix_web::{test as actix_test, web, App};
+    use actix_web::{App, test as actix_test, web};
     use rstest::rstest;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::sync::Arc;
 
     fn test_app() -> App<

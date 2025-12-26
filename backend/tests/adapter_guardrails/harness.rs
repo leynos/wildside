@@ -9,12 +9,12 @@ use std::net::TcpListener;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use actix_session::SessionMiddleware;
 use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::CookieSessionStore;
-use actix_session::SessionMiddleware;
-use actix_web::cookie::{time::Duration as CookieDuration, Key, SameSite};
+use actix_web::cookie::{Key, SameSite, time::Duration as CookieDuration};
 use actix_web::dev::ServerHandle;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use actix_ws::CloseCode;
 use rstest::fixture;
 use serde_json::Value;
@@ -26,6 +26,7 @@ use crate::doubles::{
     RecordingUserProfileQuery, RecordingUsersQuery, UserInterestsResponse, UserProfileResponse,
     UsersResponse,
 };
+use backend::Trace;
 use backend::domain::ports::FixtureRouteSubmissionService;
 use backend::domain::{DisplayName, InterestThemeId, User, UserId, UserInterests};
 use backend::inbound::http::state::{HttpState, HttpStatePorts};
@@ -35,7 +36,6 @@ use backend::inbound::http::users::{
 };
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
-use backend::Trace;
 
 pub(crate) struct AdapterWorld {
     pub(crate) runtime: Runtime,
@@ -165,8 +165,10 @@ pub(crate) fn world() -> WorldFixture {
     let interests =
         RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
             UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
-            vec![InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-                .expect("fixture interest theme id")],
+            vec![
+                InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                    .expect("fixture interest theme id"),
+            ],
         )));
     let onboarding = QueueUserOnboarding::new(Vec::new());
 

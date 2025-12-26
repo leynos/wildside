@@ -1,8 +1,8 @@
 //! Optional Prometheus metrics middleware wrapper.
 
 use actix_service::{
-    boxed::{self, BoxService},
     Service, ServiceExt as _, Transform,
+    boxed::{self, BoxService},
 };
 use actix_web::body::BoxBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};

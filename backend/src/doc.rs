@@ -85,9 +85,9 @@ mod tests {
 
     use super::*;
     use crate::test_support::openapi::unwrap_object_schema;
-    use utoipa::openapi::schema::Schema;
-    use utoipa::openapi::RefOr;
     use utoipa::OpenApi;
+    use utoipa::openapi::RefOr;
+    use utoipa::openapi::schema::Schema;
 
     // Note: utoipa replaces :: with . in schema names
     const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";

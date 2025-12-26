@@ -9,11 +9,11 @@
 
 use std::task::{Context, Poll};
 
-use crate::domain::{TraceId, TRACE_ID_HEADER};
+use crate::domain::{TRACE_ID_HEADER, TraceId};
+use actix_web::Error;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderName, HeaderValue};
-use actix_web::Error;
-use futures_util::future::{ready, LocalBoxFuture, Ready};
+use futures_util::future::{LocalBoxFuture, Ready, ready};
 use tracing::error;
 
 /// Tracing middleware attaching a request-scoped UUID and
@@ -105,7 +105,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{web, App, HttpResponse};
+    use actix_web::{App, HttpResponse, web};
 
     #[actix_web::test]
     async fn adds_trace_id_header() {

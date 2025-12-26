@@ -10,7 +10,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::PathBuf;
 
-use color_eyre::eyre::{eyre, Context, Report, Result};
+use color_eyre::eyre::{Context, Report, Result, eyre};
 use pg_embedded_setup_unpriv::worker::WorkerPayload;
 use postgresql_embedded::PostgreSQL;
 use tokio::runtime::Builder;
@@ -76,9 +76,10 @@ fn execute(operation: Operation, payload: WorkerPayload) -> Result<()> {
 
 fn apply_environment(env: Vec<(String, Option<String>)>) {
     for (key, value) in env {
+        // SAFETY: Called before spawning any threads, so no data races possible.
         match value {
-            Some(val) => env::set_var(&key, val),
-            None => env::remove_var(&key),
+            Some(val) => unsafe { env::set_var(&key, val) },
+            None => unsafe { env::remove_var(&key) },
         }
     }
 }

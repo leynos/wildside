@@ -13,9 +13,9 @@
 
 use std::time::Duration;
 
-use diesel_async::pooled_connection::bb8::{Pool, PooledConnection};
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::bb8::{Pool, PooledConnection};
 
 /// Errors that can occur during pool operations.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -102,13 +102,13 @@ impl PoolConfig {
             return Err(PoolError::build("max_size must be greater than 0"));
         }
 
-        if let Some(min_idle) = self.min_idle {
-            if min_idle > self.max_size {
-                return Err(PoolError::build(format!(
-                    "min_idle ({min_idle}) must not exceed max_size ({})",
-                    self.max_size
-                )));
-            }
+        if let Some(min_idle) = self.min_idle
+            && min_idle > self.max_size
+        {
+            return Err(PoolError::build(format!(
+                "min_idle ({min_idle}) must not exceed max_size ({})",
+                self.max_size
+            )));
         }
 
         Ok(())

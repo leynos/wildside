@@ -11,8 +11,8 @@ use crate::domain::ports::{
     RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
 };
 use crate::domain::{
-    canonicalize_and_hash, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash,
-    UserId,
+    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
+    canonicalize_and_hash,
 };
 
 /// Helper to build a RouteSubmissionRequest for tests.
@@ -180,9 +180,11 @@ async fn returns_conflict_for_different_payload() {
         .expect_err("submission should fail with conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
-    assert!(error
-        .message()
-        .contains("idempotency key already used with different payload"));
+    assert!(
+        error
+            .message()
+            .contains("idempotency key already used with different payload")
+    );
 }
 
 #[tokio::test]

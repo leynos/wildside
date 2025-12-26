@@ -114,8 +114,10 @@ mod tests {
                 "displayName"
             ))
         );
-        assert!(UserValidationError::InvalidId
-            .display_name_error_meta()
-            .is_none());
+        assert!(
+            UserValidationError::InvalidId
+                .display_name_error_meta()
+                .is_none()
+        );
     }
 }

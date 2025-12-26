@@ -4,13 +4,13 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use backend::TraceId;
 use backend::domain::ports::{
     LoginService, UserInterestsCommand, UserOnboarding, UserProfileQuery, UsersQuery,
 };
 use backend::domain::{
     Error, InterestThemeId, LoginCredentials, User, UserEvent, UserId, UserInterests,
 };
-use backend::TraceId;
 use uuid::Uuid;
 
 /// Configurable success or failure outcome for RecordingLoginService.

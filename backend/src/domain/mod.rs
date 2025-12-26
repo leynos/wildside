@@ -38,8 +38,8 @@ pub mod user_onboarding;
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::idempotency::{
-    canonicalize_and_hash, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult,
-    IdempotencyRecord, PayloadHash, PayloadHashError,
+    IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult, IdempotencyRecord,
+    PayloadHash, PayloadHashError, canonicalize_and_hash,
 };
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::route_submission::RouteSubmissionServiceImpl;

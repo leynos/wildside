@@ -10,14 +10,15 @@ pub use config::ServerConfig;
 use metrics::MetricsLayer;
 
 use actix_session::{
+    SessionMiddleware,
     config::{CookieContentSecurity, PersistentSession},
     storage::CookieSessionStore,
-    SessionMiddleware,
 };
 use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::{Server, ServiceFactory, ServiceRequest, ServiceResponse};
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 
+use backend::Trace;
 #[cfg(debug_assertions)]
 use backend::doc::ApiDoc;
 use backend::domain::ports::{
@@ -25,14 +26,13 @@ use backend::domain::ports::{
     FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
 };
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
-use backend::inbound::http::health::{live, ready, HealthState};
+use backend::inbound::http::health::{HealthState, live, ready};
 use backend::inbound::http::routes::submit_route;
 use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 use backend::outbound::persistence::DieselIdempotencyStore;
-use backend::Trace;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]

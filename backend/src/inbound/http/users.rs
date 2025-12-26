@@ -11,11 +11,11 @@ use crate::domain::{
     Error, InterestThemeId, InterestThemeIdValidationError, LoginCredentials, LoginValidationError,
     User, UserInterests,
 };
+use crate::inbound::http::ApiResult;
 use crate::inbound::http::schemas::{ErrorSchema, UserInterestsSchema, UserSchema};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::ApiResult;
-use actix_web::{get, post, put, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, put, web};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -228,13 +228,13 @@ pub async fn update_interests(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::ErrorCode;
     use crate::domain::ports::{
         FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
         FixtureUserProfileQuery, FixtureUsersQuery,
     };
-    use crate::domain::ErrorCode;
     use crate::inbound::http::state::HttpStatePorts;
-    use actix_web::{test as actix_test, web, App};
+    use actix_web::{App, test as actix_test, web};
     use rstest::rstest;
     use serde_json::Value;
     use std::sync::Arc;
