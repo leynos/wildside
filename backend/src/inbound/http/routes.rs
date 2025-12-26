@@ -97,7 +97,7 @@ fn map_idempotency_key_error(err: IdempotencyKeyValidationError) -> Error {
     responses(
         (status = 202, description = "Route request accepted", body = RouteResponse),
         (status = 400, description = "Invalid request", body = crate::inbound::http::schemas::ErrorSchema),
-        (status = 401, description = "Unauthorised", body = crate::inbound::http::schemas::ErrorSchema),
+        (status = 401, description = "Unauthorized", body = crate::inbound::http::schemas::ErrorSchema),
         (status = 409, description = "Idempotency key conflict", body = crate::inbound::http::schemas::ErrorSchema),
         (status = 503, description = "Service unavailable", body = crate::inbound::http::schemas::ErrorSchema)
     ),
