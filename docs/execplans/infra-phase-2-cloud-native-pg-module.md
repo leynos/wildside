@@ -211,7 +211,7 @@ All commands should be run from the repository root directory.
 
 1. Module scaffolding completed:
 
-   ```
+   ```text
    infra/modules/cnpg/
    ├── .tflint.hcl
    ├── main.tf
@@ -288,7 +288,7 @@ The work is complete when all of the following are true:
 
 ## Rendered Manifests Structure
 
-```
+```text
 platform/
 ├── sources/
 │   └── cloudnative-pg-repo.yaml        # HelmRepository
