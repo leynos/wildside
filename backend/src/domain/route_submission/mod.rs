@@ -138,14 +138,15 @@ where
         &self,
         request: RouteSubmissionRequest,
     ) -> Result<RouteSubmissionResponse, Error> {
-        let payload_hash = canonicalize_and_hash(&request.payload);
-
-        // If no idempotency key, proceed without tracking.
+        // If no idempotency key, proceed without tracking (skip hash computation).
         let Some(idempotency_key) = request.idempotency_key else {
             let request_id = Uuid::new_v4();
             // TODO: Dispatch to route queue here when integrated.
             return Ok(RouteSubmissionResponse::accepted(request_id));
         };
+
+        // Compute payload hash only when idempotency key is present.
+        let payload_hash = canonicalize_and_hash(&request.payload);
 
         // Look up existing record for this key (scoped to user).
         let lookup_result = self

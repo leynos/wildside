@@ -1,3 +1,8 @@
+//! Unit tests for the route submission service.
+//!
+//! Tests cover idempotency key handling, payload hash matching, conflict
+//! detection, and concurrent insert race conditions.
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -80,6 +85,56 @@ fn expect_store_duplicate_key(mock: &mut MockIdempotencyStore) {
     mock.expect_store()
         .times(1)
         .return_once(|_| Err(IdempotencyStoreError::duplicate_key("concurrent insert")));
+}
+
+/// Helper to set up a concurrent insert race condition test scenario.
+/// Returns the configured service and request for the test to execute and assert.
+fn setup_race_condition_test(
+    is_matching_payload: bool,
+    our_payload: serde_json::Value,
+    their_hash: PayloadHash,
+    their_request_id: Uuid,
+) -> (
+    RouteSubmissionServiceImpl<MockIdempotencyStore>,
+    RouteSubmissionRequest,
+) {
+    let idempotency_key = IdempotencyKey::random();
+    let user_id = UserId::random();
+
+    let their_record = build_record(
+        idempotency_key.clone(),
+        their_hash,
+        their_request_id,
+        user_id.clone(),
+    );
+
+    let mut mock_store = MockIdempotencyStore::new();
+
+    // First lookup returns NotFound (simulating a race where another request
+    // inserted between our lookup and store).
+    expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
+
+    // Store fails with DuplicateKey (the other request won the race).
+    expect_store_duplicate_key(&mut mock_store);
+
+    // Retry lookup after race returns either MatchingPayload or ConflictingPayload.
+    let retry_result = if is_matching_payload {
+        IdempotencyLookupResult::MatchingPayload(their_record)
+    } else {
+        IdempotencyLookupResult::ConflictingPayload(their_record)
+    };
+
+    expect_lookup_returns(
+        &mut mock_store,
+        idempotency_key.clone(),
+        user_id.clone(),
+        retry_result,
+    );
+
+    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let request = build_request(Some(idempotency_key), user_id, our_payload);
+
+    (service, request)
 }
 
 fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
@@ -189,38 +244,16 @@ async fn returns_conflict_for_different_payload() {
 
 #[tokio::test]
 async fn handles_concurrent_insert_race_with_matching_payload() {
-    let idempotency_key = IdempotencyKey::random();
-    let user_id = UserId::random();
     let payload = default_payload();
     let payload_hash = canonicalize_and_hash(&payload);
     let original_request_id = Uuid::new_v4();
 
-    let existing_record = build_record(
-        idempotency_key.clone(),
+    let (service, request) = setup_race_condition_test(
+        true, // is_matching_payload
+        payload,
         payload_hash,
         original_request_id,
-        user_id.clone(),
     );
-
-    let mut mock_store = MockIdempotencyStore::new();
-
-    // First lookup returns NotFound (simulating a race where another request
-    // inserted between our lookup and store).
-    expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
-
-    // Store fails with DuplicateKey (the other request won the race).
-    expect_store_duplicate_key(&mut mock_store);
-
-    // Retry lookup after race returns MatchingPayload.
-    expect_lookup_returns(
-        &mut mock_store,
-        idempotency_key.clone(),
-        user_id.clone(),
-        IdempotencyLookupResult::MatchingPayload(existing_record),
-    );
-
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-    let request = build_request(Some(idempotency_key), user_id, payload);
 
     let response = service
         .submit(request)
@@ -233,36 +266,15 @@ async fn handles_concurrent_insert_race_with_matching_payload() {
 
 #[tokio::test]
 async fn handles_concurrent_insert_race_with_conflicting_payload() {
-    let idempotency_key = IdempotencyKey::random();
-    let user_id = UserId::random();
     let our_payload = default_payload();
     let their_hash = canonicalize_and_hash(&alternative_payload());
 
-    let their_record = build_record(
-        idempotency_key.clone(),
+    let (service, request) = setup_race_condition_test(
+        false, // is_matching_payload
+        our_payload,
         their_hash,
-        Uuid::new_v4(),
-        user_id.clone(),
+        Uuid::new_v4(), // their_request_id doesn't matter for conflict case
     );
-
-    let mut mock_store = MockIdempotencyStore::new();
-
-    // First lookup returns NotFound.
-    expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
-
-    // Store fails with DuplicateKey.
-    expect_store_duplicate_key(&mut mock_store);
-
-    // Retry lookup after race returns ConflictingPayload.
-    expect_lookup_returns(
-        &mut mock_store,
-        idempotency_key.clone(),
-        user_id.clone(),
-        IdempotencyLookupResult::ConflictingPayload(their_record),
-    );
-
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-    let request = build_request(Some(idempotency_key), user_id, our_payload);
 
     let error = service
         .submit(request)
