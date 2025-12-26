@@ -8,9 +8,8 @@
 use actix_web::rt;
 use actix_web::web::{self, Payload};
 use actix_web::{
-    get,
+    HttpRequest, HttpResponse, get,
     http::header::{HeaderValue, ORIGIN},
-    HttpRequest, HttpResponse,
 };
 use actix_ws;
 use tracing::{error, warn};
@@ -106,7 +105,7 @@ fn is_allowed_origin(origin: &Url) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::http::{header::HeaderValue, StatusCode};
+    use actix_web::http::{StatusCode, header::HeaderValue};
     use rstest::rstest;
 
     fn header(value: &str) -> HeaderValue {

@@ -39,7 +39,7 @@ jobs:
           echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
 
       - name: Cache workspace node_modules
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809  # v4
+        uses: ubicloud/cache@v4
         with:
           path: |
             node_modules
@@ -50,7 +50,7 @@ jobs:
           restore-keys: ${{ runner.os }}-modules-
 
       - name: Cache Bun downloads
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809  # v4
+        uses: ubicloud/cache@v4
         with:
           path: |
             ~/.bun/install/cache
@@ -210,7 +210,7 @@ jobs:
 
       # Backend
       - name: Cache cargo
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809  # v4
+        uses: ubicloud/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -220,16 +220,22 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Rust build
-        run: cargo build --manifest-path backend/Cargo.toml --release
+        run: cargo check --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
         run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
       - name: Rust clippy
         run: cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: Install nextest
+        uses: taiki-e/install-action@db22c42b5af88356329b9a8056bb2c2f026d5a10
+        with:
+          tool: nextest@0.9.114
+
       - name: Rust tests
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: RUSTFLAGS="-D warnings" cargo test --manifest-path backend/Cargo.toml --all-targets --all-features
+        run: RUSTFLAGS="-D warnings" cargo nextest run --manifest-path backend/Cargo.toml --all-targets --all-features
 
       # OpenAPI dump (at runtime or via a small bin)
       - name: Generate OpenAPI specification

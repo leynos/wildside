@@ -5,9 +5,9 @@
 
 use actix_web::cookie::Key;
 use backend::inbound::http::session_config::{
-    fingerprint::key_fingerprint, session_settings_from_env, test_utils::TempKeyFile, BuildMode,
-    SessionConfigError, SessionEnv, SessionSettings, ALLOW_EPHEMERAL_ENV, COOKIE_SECURE_ENV,
-    KEY_FILE_ENV, SAMESITE_ENV,
+    ALLOW_EPHEMERAL_ENV, BuildMode, COOKIE_SECURE_ENV, KEY_FILE_ENV, SAMESITE_ENV,
+    SessionConfigError, SessionEnv, SessionSettings, fingerprint::key_fingerprint,
+    session_settings_from_env, test_utils::TempKeyFile,
 };
 use mockable::{Env as MockableEnv, MockEnv};
 use rstest::fixture;

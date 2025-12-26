@@ -1,6 +1,7 @@
 //! HTTP server configuration object and helpers.
 
 use actix_web::cookie::{Key, SameSite};
+use backend::outbound::persistence::DbPool;
 use std::net::SocketAddr;
 
 #[cfg(feature = "metrics")]
@@ -12,6 +13,7 @@ pub struct ServerConfig {
     pub(crate) cookie_secure: bool,
     pub(crate) same_site: SameSite,
     pub(crate) bind_addr: SocketAddr,
+    pub(crate) db_pool: Option<DbPool>,
     #[cfg(feature = "metrics")]
     pub(crate) prometheus: Option<PrometheusMetrics>,
 }
@@ -25,9 +27,21 @@ impl ServerConfig {
             cookie_secure,
             same_site,
             bind_addr,
+            db_pool: None,
             #[cfg(feature = "metrics")]
             prometheus: None,
         }
+    }
+
+    /// Attach a database connection pool for persistence adapters.
+    ///
+    /// When provided, the server will use database-backed implementations
+    /// for ports that have adapters available (e.g., `RouteSubmissionService`).
+    #[expect(dead_code, reason = "Reserved for production DB integration")]
+    #[must_use]
+    pub fn with_db_pool(mut self, pool: DbPool) -> Self {
+        self.db_pool = Some(pool);
+        self
     }
 
     /// Return the socket address the server will bind to.

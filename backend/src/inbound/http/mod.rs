@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod health;
+pub mod routes;
 pub mod schemas;
 pub mod session;
 pub mod session_config;

@@ -17,6 +17,10 @@ pub enum ErrorCode {
     Forbidden,
     /// The requested resource does not exist.
     NotFound,
+    /// The request conflicts with current state (e.g., duplicate idempotency key).
+    Conflict,
+    /// A dependent service is unavailable (e.g., database, idempotency store, queue).
+    ServiceUnavailable,
     /// An unexpected error occurred on the server.
     InternalError,
 }
@@ -210,6 +214,30 @@ impl Error {
     /// ```
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::NotFound, message)
+    }
+
+    /// Convenience constructor for [`ErrorCode::Conflict`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::domain::Error;
+    ///
+    /// let err = Error::conflict("duplicate key");
+    /// ```
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::Conflict, message)
+    }
+
+    /// Convenience constructor for [`ErrorCode::ServiceUnavailable`].
+    ///
+    /// # Examples
+    /// ```
+    /// use backend::domain::Error;
+    ///
+    /// let err = Error::service_unavailable("database down");
+    /// ```
+    pub fn service_unavailable(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::ServiceUnavailable, message)
     }
 
     /// Convenience constructor for [`ErrorCode::InternalError`].

@@ -6,11 +6,12 @@ mod ws_support;
 use actix_http::Request;
 use actix_web::http::header::HeaderValue;
 use actix_web::{
+    App,
     body::BoxBody,
     dev::{Service, ServiceResponse},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     test::{self, TestRequest},
-    web, App,
+    web,
 };
 use backend::domain::UserOnboardingService;
 use backend::inbound::ws;

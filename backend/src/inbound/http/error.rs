@@ -4,7 +4,7 @@
 //! handlers to turn domain failures into consistent JSON responses and status
 //! codes.
 
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use tracing::error;
 
 use crate::domain::{Error, ErrorCode, TRACE_ID_HEADER};
@@ -18,6 +18,8 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::NotFound => StatusCode::NOT_FOUND,
+        ErrorCode::Conflict => StatusCode::CONFLICT,
+        ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

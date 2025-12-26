@@ -3,14 +3,14 @@
 
 #[cfg(feature = "metrics")]
 use super::initialize_metrics;
-use super::{create_server, HealthState, ServerConfig};
+use super::{HealthState, ServerConfig, create_server};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
 use rstest::{fixture, rstest};
 use std::net::SocketAddr;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 #[fixture]
 fn health_state() -> web::Data<HealthState> {

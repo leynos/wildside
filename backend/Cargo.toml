@@ -1,7 +1,7 @@
 [package]
 name = "backend"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 url = "2"
@@ -25,7 +25,7 @@ paste = "1.0.15"
 thiserror = "2.0.17"
 
 # Diesel ORM with PostgreSQL and async support
-diesel = { version = "2.2", features = ["postgres", "uuid", "chrono"] }
+diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
 chrono = { version = "0.4", features = ["serde"] }
 
@@ -58,6 +58,7 @@ test-support = []
 [dev-dependencies]
 # Enable test-support feature for integration tests
 backend = { path = ".", features = ["test-support"] }
+mockall = "0.13"
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"

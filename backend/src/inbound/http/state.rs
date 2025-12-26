@@ -5,7 +5,19 @@
 
 use std::sync::Arc;
 
-use crate::domain::ports::{LoginService, UserInterestsCommand, UserProfileQuery, UsersQuery};
+use crate::domain::ports::{
+    LoginService, RouteSubmissionService, UserInterestsCommand, UserProfileQuery, UsersQuery,
+};
+
+/// Parameter object bundling all port implementations for HTTP handlers.
+#[derive(Clone)]
+pub struct HttpStatePorts {
+    pub login: Arc<dyn LoginService>,
+    pub users: Arc<dyn UsersQuery>,
+    pub profile: Arc<dyn UserProfileQuery>,
+    pub interests: Arc<dyn UserInterestsCommand>,
+    pub route_submission: Arc<dyn RouteSubmissionService>,
+}
 
 /// Dependency bundle for HTTP handlers.
 #[derive(Clone)]
@@ -14,21 +26,31 @@ pub struct HttpState {
     pub users: Arc<dyn UsersQuery>,
     pub profile: Arc<dyn UserProfileQuery>,
     pub interests: Arc<dyn UserInterestsCommand>,
+    pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
-impl HttpState {
-    /// Construct state from explicit port implementations.
-    pub fn new(
-        login: Arc<dyn LoginService>,
-        users: Arc<dyn UsersQuery>,
-        profile: Arc<dyn UserProfileQuery>,
-        interests: Arc<dyn UserInterestsCommand>,
-    ) -> Self {
+impl From<HttpStatePorts> for HttpState {
+    fn from(ports: HttpStatePorts) -> Self {
+        let HttpStatePorts {
+            login,
+            users,
+            profile,
+            interests,
+            route_submission,
+        } = ports;
         Self {
             login,
             users,
             profile,
             interests,
+            route_submission,
         }
+    }
+}
+
+impl HttpState {
+    /// Construct state from a ports bundle.
+    pub fn new(ports: HttpStatePorts) -> Self {
+        ports.into()
     }
 }

@@ -24,10 +24,10 @@ mod harness;
 #[path = "support/ws.rs"]
 mod ws_support;
 
-use actix_web::http::{header, Method};
+use actix_web::http::{Method, header};
 use awc::Client;
 use backend::domain::TRACE_ID_HEADER;
-use harness::{with_world_async, WorldFixture};
+use harness::{WorldFixture, with_world_async};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;

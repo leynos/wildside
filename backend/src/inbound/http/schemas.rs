@@ -27,6 +27,12 @@ pub enum ErrorCodeSchema {
     /// The requested resource does not exist.
     #[schema(rename = "not_found")]
     NotFound,
+    /// The request conflicts with existing state (e.g., idempotency key reuse with different payload).
+    #[schema(rename = "conflict")]
+    Conflict,
+    /// The service is temporarily unavailable (e.g., idempotency store unavailable).
+    #[schema(rename = "service_unavailable")]
+    ServiceUnavailable,
     /// An unexpected error occurred on the server.
     #[schema(rename = "internal_error")]
     InternalError,
@@ -212,6 +218,11 @@ mod tests {
             schema_json.contains("internal_error"),
             "missing internal_error"
         );
+        assert!(schema_json.contains("conflict"), "missing conflict");
+        assert!(
+            schema_json.contains("service_unavailable"),
+            "missing service_unavailable"
+        );
     }
 
     /// Verify domain ErrorCode serialization matches schema renames.
@@ -232,6 +243,8 @@ mod tests {
                 ErrorCode::Unauthorized => "unauthorized",
                 ErrorCode::Forbidden => "forbidden",
                 ErrorCode::NotFound => "not_found",
+                ErrorCode::Conflict => "conflict",
+                ErrorCode::ServiceUnavailable => "service_unavailable",
                 ErrorCode::InternalError => "internal_error",
             }
         }
@@ -241,6 +254,8 @@ mod tests {
             ErrorCode::Unauthorized,
             ErrorCode::Forbidden,
             ErrorCode::NotFound,
+            ErrorCode::Conflict,
+            ErrorCode::ServiceUnavailable,
             ErrorCode::InternalError,
         ];
 

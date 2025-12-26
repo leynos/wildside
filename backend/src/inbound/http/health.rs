@@ -1,6 +1,6 @@
 //! Health endpoints: liveness & readiness probes for orchestration and load balancers.
 //! Document endpoints in OpenAPI via Utoipa.
-use actix_web::{get, http::header, web, HttpResponse};
+use actix_web::{HttpResponse, get, http::header, web};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Shared health state for readiness and liveness checks.

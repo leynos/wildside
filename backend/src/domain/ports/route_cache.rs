@@ -1,7 +1,7 @@
 //! Port interface for caching computed route plans.
 use async_trait::async_trait;
 
-use super::{define_port_error, RouteCacheKey};
+use super::{RouteCacheKey, define_port_error};
 
 define_port_error! {
     /// Errors surfaced by the caching adapter.

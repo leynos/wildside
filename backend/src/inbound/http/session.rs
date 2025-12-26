@@ -4,7 +4,7 @@
 //! domain-friendly operations such as persisting or retrieving a user id.
 
 use actix_session::Session;
-use actix_web::{dev::Payload, FromRequest, HttpRequest};
+use actix_web::{FromRequest, HttpRequest, dev::Payload};
 use futures_util::future::LocalBoxFuture;
 
 use crate::domain::{Error, UserId};
@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use actix_session::Session;
     use actix_web::http::StatusCode;
-    use actix_web::{test, web, App, HttpResponse};
+    use actix_web::{App, HttpResponse, test, web};
 
     fn session_test_app() -> App<
         impl actix_web::dev::ServiceFactory<
