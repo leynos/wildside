@@ -41,10 +41,6 @@ pub use self::idempotency::{
     IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult, IdempotencyRecord,
     PayloadHash, PayloadHashError, canonicalize_and_hash,
 };
-pub use self::idempotency::{
-    canonicalize_and_hash, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult,
-    IdempotencyRecord, PayloadHash, PayloadHashError,
-};
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::route_submission::RouteSubmissionServiceImpl;
 pub use self::trace_id::TraceId;
