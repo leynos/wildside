@@ -497,6 +497,190 @@ errors into domain enums. Adapters must never introduce UI-layer data such as
 CSS classes; instead, use semantic identifiers like `icon_key` and let the PWA
 resolve them.
 
+#### Catalogue and user state diagrams
+
+For screen readers: The following entity-relationship diagram shows how
+catalogue entities, descriptors, and user state relate to routes and users.
+
+```mermaid
+erDiagram
+  Users {
+    uuid id PK
+    text email
+  }
+
+  Routes {
+    uuid id PK
+    uuid user_id FK
+  }
+
+  RouteSummaries {
+    uuid id PK
+    uuid route_id FK
+    uuid category_id FK
+    uuid theme_id FK
+    jsonb localisations
+  }
+
+  RouteCategories {
+    uuid id PK
+    text slug
+    jsonb localisations
+  }
+
+  Themes {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  RouteCollections {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  TrendingRouteHighlights {
+    uuid id PK
+    uuid route_summary_id FK
+    timestamptz highlighted_at
+  }
+
+  CommunityPicks {
+    uuid id PK
+    uuid route_summary_id FK
+    uuid user_id FK
+    timestamptz picked_at
+  }
+
+  Tags {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  Badges {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  SafetyToggles {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  SafetyPresets {
+    uuid id PK
+    text slug
+    text icon_key
+    jsonb localisations
+  }
+
+  RouteNotes {
+    uuid id PK
+    uuid route_id FK
+    uuid user_id FK
+    int revision
+    text body
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  RouteProgress {
+    uuid id PK
+    uuid route_id FK
+    uuid user_id FK
+    int revision
+    jsonb progress_payload
+    timestamptz updated_at
+  }
+
+  OfflineBundles {
+    uuid id PK
+    uuid user_id FK
+    text device_id
+    jsonb bounds
+    int min_zoom
+    int max_zoom
+    text status
+    numeric progress
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  WalkSessions {
+    uuid id PK
+    uuid user_id FK
+    uuid route_id FK
+    jsonb completion_summary
+    timestamptz started_at
+    timestamptz ended_at
+  }
+
+  Users ||--o{ Routes : owns
+  Routes ||--|| RouteSummaries : summarized_by
+  RouteCategories ||--o{ RouteSummaries : categorizes
+  Themes ||--o{ RouteSummaries : themed_by
+  RouteCollections ||--o{ RouteSummaries : collected_in
+  RouteSummaries ||--o{ TrendingRouteHighlights : can_be_trending
+  RouteSummaries ||--o{ CommunityPicks : can_be_picked
+  Users ||--o{ CommunityPicks : picks
+
+  Routes ||--o{ RouteNotes : annotated_by
+  Users ||--o{ RouteNotes : writes
+
+  Routes ||--o{ RouteProgress : progressed_by
+  Users ||--o{ RouteProgress : tracks
+
+  Users ||--o{ OfflineBundles : owns
+
+  Users ||--o{ WalkSessions : walks
+  Routes ||--o{ WalkSessions : completed_on
+```
+
+For screen readers: The following sequence diagram shows the idempotent
+preference update flow, including how idempotency keys are reserved and how
+conflicts are reported.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant PWA as PWA_client
+  participant API as PreferencesEndpoint
+  participant Cmd as UserPreferencesCommand
+  participant IdRepo as IdempotencyRepository
+  participant PrefRepo as UserPreferencesRepository
+
+  User->>PWA: Change preferences (interests, safety, units)
+  PWA->>API: PUT /api/v1/users/me/preferences
+  API->>Cmd: updatePreferences(userId, preferences, idempotencyKey)
+
+  Cmd->>IdRepo: reserveKey(userId, idempotencyKey, requestFingerprint)
+  alt key_seen_with_same_fingerprint
+    IdRepo-->>Cmd: stored_response
+    Cmd-->>API: replay stored_response
+    API-->>PWA: 200 OK (replayed, deterministic body)
+  else key_conflict_different_fingerprint
+    IdRepo-->>Cmd: conflict
+    Cmd-->>API: raise conflict_error
+    API-->>PWA: 409 Conflict
+  else key_new
+    IdRepo-->>Cmd: reserved
+    Cmd->>PrefRepo: putUserPreferences(userId, preferences, expectedRevision)
+    PrefRepo-->>Cmd: updated_preferences
+    Cmd->>IdRepo: storeResponse(userId, idempotencyKey, responseEnvelope)
+    Cmd-->>API: updated_preferences
+    API-->>PWA: 200 OK (new revision)
+  end
+```
+
 #### WebSocket Message Contracts
 
 The `/ws` endpoint upgrades authenticated requests using the session cookie.
