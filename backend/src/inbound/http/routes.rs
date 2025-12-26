@@ -142,7 +142,7 @@ pub async fn submit_route(
 
     let body = RouteResponse {
         request_id: response.request_id.to_string(),
-        status: status_str.to_owned(),
+        status: status_str.to_string(),
     };
 
     Ok(HttpResponse::Accepted().json(body))
