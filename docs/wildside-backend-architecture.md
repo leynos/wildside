@@ -498,7 +498,7 @@ fixtures to API data without rewriting view components.
 - `WalkSessionCommand` records walk sessions and returns completion summaries.
 
 All ports retain the existing rules: domain types enforce invariants,
-localisations are stored as `EntityLocalizations`, and adapters map infra
+localizations are stored as `EntityLocalizations`, and adapters map infra
 errors into domain enums. Adapters must never introduce UI-layer data such as
 CSS classes; instead, use semantic identifiers like `icon_key` and let the PWA
 resolve them.
@@ -507,7 +507,7 @@ resolve them.
 
 For screen readers: The following entity-relationship diagram shows how
 catalogue entities, descriptors, and user state relate to routes and users.
-`localisations` columns store the `EntityLocalizations` shape defined in
+`localizations` columns store the `EntityLocalizations` shape defined in
 `docs/wildside-pwa-data-model.md`.
 
 ```mermaid
@@ -527,27 +527,27 @@ erDiagram
     uuid route_id FK
     uuid category_id FK
     uuid theme_id FK
-    jsonb localisations
+    jsonb localizations
   }
 
   RouteCategories {
     uuid id PK
     text slug
-    jsonb localisations
+    jsonb localizations
   }
 
   Themes {
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   RouteCollections {
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   TrendingRouteHighlights {
@@ -567,28 +567,28 @@ erDiagram
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   Badges {
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   SafetyToggles {
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   SafetyPresets {
     uuid id PK
     text slug
     text icon_key
-    jsonb localisations
+    jsonb localizations
   }
 
   RouteNotes {
@@ -1277,7 +1277,7 @@ and local-first user state. The planned persistence additions include:
 - `route_summaries`, `route_categories`, `themes`, `route_collections`,
   `trending_route_highlights`, and `community_picks` for Explore and Discover.
 - `tags`, `badges`, `safety_toggles`, and `safety_presets` as descriptor
-  registries, each with `localisations` stored as JSONB or translation tables.
+  registries, each with `localizations` stored as JSONB or translation tables.
 - `route_notes` and `route_progress` for user annotations with `revision`
   counters and audit timestamps.
 - `offline_bundles` for bundle manifests (bounds, zoom range, status, and
