@@ -86,8 +86,25 @@ adapter; direct stateful logic belongs behind the ports established above.
 - [ ] Persist `Idempotency-Key` headers for `POST /api/v1/routes` in
   PostgreSQL, rejecting conflicting payloads with `409` and replaying
   successful responses within 24 hours.
+- [ ] Introduce a shared `IdempotencyRepository` with configurable TTL and
+  reuse it for outbox-backed mutations (notes, progress, preferences, and
+  offline bundles).
 - [ ] Capture idempotency audit metrics (hits, misses, conflicts) and expose
   them via Prometheus with labels for user scope and key age buckets.
+
+### Step: PWA preferences and annotations
+
+- [ ] Add domain types for `UserPreferences`, `RouteNote`, and
+  `RouteProgress`, plus ports `UserPreferencesRepository`,
+  `RouteAnnotationRepository`, and driving commands that enforce revision
+  checks.
+- [ ] Implement `GET/PUT /api/v1/users/me/preferences`,
+  `GET /api/v1/routes/{route_id}/annotations`,
+  `POST /api/v1/routes/{route_id}/notes`, and
+  `PUT /api/v1/routes/{route_id}/progress` with idempotency headers and
+  consistent error envelopes.
+- [ ] Add contract tests covering optimistic concurrency, idempotency
+  conflicts, and deterministic responses for retried requests.
 
 ## Phase 2 – Data platform foundation
 
@@ -97,10 +114,33 @@ so persistence details stay confined to outbound adapters.
 ### Step: Schema baseline
 
 - [ ] Deliver Diesel migrations that materialize the schema in
-  `docs/wildside-backend-architecture.md`, including GiST/GIN indices and
-  unique constraints for composite keys.
+  `docs/wildside-backend-architecture.md`, including catalogue, descriptor,
+  and user state tables plus GiST/GIN indices and unique constraints for
+  composite keys.
 - [ ] Generate ER-diagram snapshots from migrations and store them alongside
   documentation for traceability.
+
+### Step: Catalogue and descriptor read models
+
+- [ ] Define catalogue and descriptor domain types (`RouteSummary`,
+  `RouteCategory`, `Theme`, `RouteCollection`, `TrendingRouteHighlight`,
+  `CommunityPick`, `Tag`, `Badge`, `SafetyToggle`, and `SafetyPreset`) with
+  localisation maps and semantic icon identifiers.
+- [ ] Add `CatalogueRepository` and `DescriptorRepository` ports plus
+  persistence adapters with contract tests for localisation payloads.
+- [ ] Implement `GET /api/v1/catalogue/explore` and
+  `GET /api/v1/catalogue/descriptors` endpoints backed by the read models,
+  with cache headers and snapshot `generated_at` metadata.
+
+### Step: Offline bundles and walk completion
+
+- [ ] Add `OfflineBundle` and `WalkSession` domain types plus repositories
+  for manifests and completion summaries.
+- [ ] Deliver migrations for `offline_bundles` and `walk_sessions` with audit
+  timestamps and bounds/zoom metadata.
+- [ ] Implement `GET/POST/DELETE /api/v1/offline/bundles` and
+  `POST /api/v1/walk-sessions` endpoints, returning stable IDs and revision
+  updates where applicable.
 
 ### Step: Data ingestion and enrichment
 
