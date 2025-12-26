@@ -182,6 +182,49 @@ mod tests {
     use mockall::predicate::*;
     use serde_json::json;
 
+    /// Helper to build a RouteSubmissionRequest for tests.
+    fn build_request(
+        idempotency_key: Option<IdempotencyKey>,
+        user_id: UserId,
+        payload: serde_json::Value,
+    ) -> RouteSubmissionRequest {
+        RouteSubmissionRequest {
+            idempotency_key,
+            user_id,
+            payload,
+        }
+    }
+
+    /// Helper to build an IdempotencyRecord fixture.
+    fn build_record(
+        key: IdempotencyKey,
+        payload_hash: PayloadHash,
+        request_id: Uuid,
+        user_id: UserId,
+    ) -> IdempotencyRecord {
+        let response = RouteSubmissionResponse::accepted(request_id);
+        let response_snapshot =
+            serde_json::to_value(&response).expect("serialization should succeed");
+
+        IdempotencyRecord {
+            key,
+            payload_hash,
+            response_snapshot,
+            user_id,
+            created_at: Utc::now(),
+        }
+    }
+
+    /// Default test payload.
+    fn default_payload() -> serde_json::Value {
+        json!({"origin": "A", "destination": "B"})
+    }
+
+    /// Alternative test payload (different from default).
+    fn alternative_payload() -> serde_json::Value {
+        json!({"origin": "X", "destination": "Y"})
+    }
+
     fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
         RouteSubmissionServiceImpl::new(Arc::new(FixtureIdempotencyStore))
     }
@@ -189,11 +232,7 @@ mod tests {
     #[tokio::test]
     async fn accepts_request_without_idempotency_key() {
         let service = make_service();
-        let request = RouteSubmissionRequest {
-            idempotency_key: None,
-            user_id: UserId::random(),
-            payload: json!({"origin": "A", "destination": "B"}),
-        };
+        let request = build_request(None, UserId::random(), default_payload());
 
         let response = service
             .submit(request)
@@ -205,11 +244,11 @@ mod tests {
     #[tokio::test]
     async fn accepts_request_with_new_idempotency_key() {
         let service = make_service();
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(IdempotencyKey::random()),
-            user_id: UserId::random(),
-            payload: json!({"origin": "A", "destination": "B"}),
-        };
+        let request = build_request(
+            Some(IdempotencyKey::random()),
+            UserId::random(),
+            default_payload(),
+        );
 
         // FixtureIdempotencyStore always returns NotFound, so new keys are accepted.
         let response = service
@@ -223,21 +262,16 @@ mod tests {
     async fn replays_response_for_matching_payload() {
         let idempotency_key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let payload = json!({"origin": "A", "destination": "B"});
+        let payload = default_payload();
         let payload_hash = canonicalize_and_hash(&payload);
         let original_request_id = Uuid::new_v4();
 
-        let stored_response = RouteSubmissionResponse::accepted(original_request_id);
-        let response_snapshot =
-            serde_json::to_value(&stored_response).expect("serialization should succeed");
-
-        let existing_record = IdempotencyRecord {
-            key: idempotency_key.clone(),
-            payload_hash: payload_hash.clone(),
-            response_snapshot,
-            user_id: user_id.clone(),
-            created_at: Utc::now(),
-        };
+        let existing_record = build_record(
+            idempotency_key.clone(),
+            payload_hash,
+            original_request_id,
+            user_id.clone(),
+        );
 
         let mut mock_store = MockIdempotencyStore::new();
         mock_store
@@ -251,11 +285,7 @@ mod tests {
             });
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(idempotency_key),
-            user_id,
-            payload,
-        };
+        let request = build_request(Some(idempotency_key), user_id, payload);
 
         let response = service
             .submit(request)
@@ -270,21 +300,14 @@ mod tests {
     async fn returns_conflict_for_different_payload() {
         let idempotency_key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let original_payload = json!({"origin": "A", "destination": "B"});
-        let different_payload = json!({"origin": "X", "destination": "Y"});
+        let original_hash = canonicalize_and_hash(&default_payload());
 
-        let original_hash = canonicalize_and_hash(&original_payload);
-        let stored_response = RouteSubmissionResponse::accepted(Uuid::new_v4());
-        let response_snapshot =
-            serde_json::to_value(&stored_response).expect("serialization should succeed");
-
-        let existing_record = IdempotencyRecord {
-            key: idempotency_key.clone(),
-            payload_hash: original_hash,
-            response_snapshot,
-            user_id: user_id.clone(),
-            created_at: Utc::now(),
-        };
+        let existing_record = build_record(
+            idempotency_key.clone(),
+            original_hash,
+            Uuid::new_v4(),
+            user_id.clone(),
+        );
 
         let mut mock_store = MockIdempotencyStore::new();
         mock_store
@@ -298,11 +321,7 @@ mod tests {
             });
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(idempotency_key),
-            user_id,
-            payload: different_payload,
-        };
+        let request = build_request(Some(idempotency_key), user_id, alternative_payload());
 
         let error = service
             .submit(request)
@@ -319,21 +338,16 @@ mod tests {
     async fn handles_concurrent_insert_race_with_matching_payload() {
         let idempotency_key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let payload = json!({"origin": "A", "destination": "B"});
+        let payload = default_payload();
         let payload_hash = canonicalize_and_hash(&payload);
         let original_request_id = Uuid::new_v4();
 
-        let stored_response = RouteSubmissionResponse::accepted(original_request_id);
-        let response_snapshot =
-            serde_json::to_value(&stored_response).expect("serialization should succeed");
-
-        let existing_record = IdempotencyRecord {
-            key: idempotency_key.clone(),
-            payload_hash: payload_hash.clone(),
-            response_snapshot,
-            user_id: user_id.clone(),
-            created_at: Utc::now(),
-        };
+        let existing_record = build_record(
+            idempotency_key.clone(),
+            payload_hash,
+            original_request_id,
+            user_id.clone(),
+        );
 
         let mut mock_store = MockIdempotencyStore::new();
 
@@ -364,11 +378,7 @@ mod tests {
             });
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(idempotency_key),
-            user_id,
-            payload,
-        };
+        let request = build_request(Some(idempotency_key), user_id, payload);
 
         let response = service
             .submit(request)
@@ -383,21 +393,15 @@ mod tests {
     async fn handles_concurrent_insert_race_with_conflicting_payload() {
         let idempotency_key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let our_payload = json!({"origin": "A", "destination": "B"});
-        let their_payload = json!({"origin": "X", "destination": "Y"});
+        let our_payload = default_payload();
+        let their_hash = canonicalize_and_hash(&alternative_payload());
 
-        let their_hash = canonicalize_and_hash(&their_payload);
-        let their_response = RouteSubmissionResponse::accepted(Uuid::new_v4());
-        let response_snapshot =
-            serde_json::to_value(&their_response).expect("serialization should succeed");
-
-        let their_record = IdempotencyRecord {
-            key: idempotency_key.clone(),
-            payload_hash: their_hash,
-            response_snapshot,
-            user_id: user_id.clone(),
-            created_at: Utc::now(),
-        };
+        let their_record = build_record(
+            idempotency_key.clone(),
+            their_hash,
+            Uuid::new_v4(),
+            user_id.clone(),
+        );
 
         let mut mock_store = MockIdempotencyStore::new();
 
@@ -427,11 +431,7 @@ mod tests {
             });
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(idempotency_key),
-            user_id,
-            payload: our_payload,
-        };
+        let request = build_request(Some(idempotency_key), user_id, our_payload);
 
         let error = service
             .submit(request)
