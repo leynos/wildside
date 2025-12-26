@@ -116,7 +116,6 @@ pub async fn submit_route(
 ) -> ApiResult<HttpResponse> {
     let user_id = session.require_user_id()?;
 
-    // Extract and validate idempotency key from headers.
     let idempotency_key =
         extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
 
@@ -124,17 +123,14 @@ pub async fn submit_route(
     let payload_value = serde_json::to_value(payload.into_inner())
         .map_err(|err| Error::internal(format!("failed to serialize request: {err}")))?;
 
-    // Build submission request.
     let submission_request = RouteSubmissionRequest {
         idempotency_key,
         user_id,
         payload: payload_value,
     };
 
-    // Delegate to service.
     let response = state.route_submission.submit(submission_request).await?;
 
-    // Build HTTP response.
     let status_str = match response.status {
         RouteSubmissionStatus::Accepted => "accepted",
         RouteSubmissionStatus::Replayed => "replayed",
