@@ -104,11 +104,7 @@ impl RouteSubmissionService for FixtureRouteSubmissionService {
         _request: RouteSubmissionRequest,
     ) -> Result<RouteSubmissionResponse, Error> {
         // In fixture mode, all requests are accepted with a random request ID.
-        let request_id = Uuid::new_v4();
-        Ok(RouteSubmissionResponse {
-            request_id,
-            status: RouteSubmissionStatus::Accepted,
-        })
+        Ok(RouteSubmissionResponse::accepted(Uuid::new_v4()))
     }
 }
 

@@ -30,7 +30,7 @@ pub enum ErrorCodeSchema {
     /// The request conflicts with existing state (e.g., idempotency key reuse with different payload).
     #[schema(rename = "conflict")]
     Conflict,
-    /// The service is temporarily unavailable (e.g., idempotency store unreachable).
+    /// The service is temporarily unavailable (e.g., idempotency store unavailable).
     #[schema(rename = "service_unavailable")]
     ServiceUnavailable,
     /// An unexpected error occurred on the server.
