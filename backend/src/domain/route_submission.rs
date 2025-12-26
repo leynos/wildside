@@ -225,6 +225,38 @@ mod tests {
         json!({"origin": "X", "destination": "Y"})
     }
 
+    /// Helper to configure a mock store that returns a specific lookup result.
+    fn expect_lookup_returns(
+        mock: &mut MockIdempotencyStore,
+        key: IdempotencyKey,
+        user_id: UserId,
+        result: IdempotencyLookupResult,
+    ) {
+        mock.expect_lookup()
+            .with(eq(key), eq(user_id), always())
+            .times(1)
+            .return_once(move |_, _, _| Ok(result));
+    }
+
+    /// Helper to configure a mock store that returns NotFound.
+    fn expect_lookup_not_found(
+        mock: &mut MockIdempotencyStore,
+        key: IdempotencyKey,
+        user_id: UserId,
+    ) {
+        mock.expect_lookup()
+            .with(eq(key), eq(user_id), always())
+            .times(1)
+            .return_once(|_, _, _| Ok(IdempotencyLookupResult::NotFound));
+    }
+
+    /// Helper to configure a mock store that fails with DuplicateKey on store.
+    fn expect_store_duplicate_key(mock: &mut MockIdempotencyStore) {
+        mock.expect_store()
+            .times(1)
+            .return_once(|_| Err(IdempotencyStoreError::duplicate_key("concurrent insert")));
+    }
+
     fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
         RouteSubmissionServiceImpl::new(Arc::new(FixtureIdempotencyStore))
     }
@@ -274,15 +306,12 @@ mod tests {
         );
 
         let mut mock_store = MockIdempotencyStore::new();
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(move |_, _, _| {
-                Ok(IdempotencyLookupResult::MatchingPayload(
-                    existing_record.clone(),
-                ))
-            });
+        expect_lookup_returns(
+            &mut mock_store,
+            idempotency_key.clone(),
+            user_id.clone(),
+            IdempotencyLookupResult::MatchingPayload(existing_record),
+        );
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
         let request = build_request(Some(idempotency_key), user_id, payload);
@@ -310,15 +339,12 @@ mod tests {
         );
 
         let mut mock_store = MockIdempotencyStore::new();
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(move |_, _, _| {
-                Ok(IdempotencyLookupResult::ConflictingPayload(
-                    existing_record.clone(),
-                ))
-            });
+        expect_lookup_returns(
+            &mut mock_store,
+            idempotency_key.clone(),
+            user_id.clone(),
+            IdempotencyLookupResult::ConflictingPayload(existing_record),
+        );
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
         let request = build_request(Some(idempotency_key), user_id, alternative_payload());
@@ -353,29 +379,18 @@ mod tests {
 
         // First lookup returns NotFound (simulating a race where another request
         // inserted between our lookup and store).
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(|_, _, _| Ok(IdempotencyLookupResult::NotFound));
+        expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
 
         // Store fails with DuplicateKey (the other request won the race).
-        mock_store
-            .expect_store()
-            .times(1)
-            .returning(|_| Err(IdempotencyStoreError::duplicate_key("concurrent insert")));
+        expect_store_duplicate_key(&mut mock_store);
 
         // Retry lookup after race returns MatchingPayload.
-        let record_for_retry = existing_record.clone();
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(move |_, _, _| {
-                Ok(IdempotencyLookupResult::MatchingPayload(
-                    record_for_retry.clone(),
-                ))
-            });
+        expect_lookup_returns(
+            &mut mock_store,
+            idempotency_key.clone(),
+            user_id.clone(),
+            IdempotencyLookupResult::MatchingPayload(existing_record),
+        );
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
         let request = build_request(Some(idempotency_key), user_id, payload);
@@ -406,29 +421,18 @@ mod tests {
         let mut mock_store = MockIdempotencyStore::new();
 
         // First lookup returns NotFound.
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(|_, _, _| Ok(IdempotencyLookupResult::NotFound));
+        expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
 
         // Store fails with DuplicateKey.
-        mock_store
-            .expect_store()
-            .times(1)
-            .returning(|_| Err(IdempotencyStoreError::duplicate_key("concurrent insert")));
+        expect_store_duplicate_key(&mut mock_store);
 
         // Retry lookup after race returns ConflictingPayload.
-        let record_for_retry = their_record.clone();
-        mock_store
-            .expect_lookup()
-            .with(eq(idempotency_key.clone()), eq(user_id.clone()), always())
-            .times(1)
-            .returning(move |_, _, _| {
-                Ok(IdempotencyLookupResult::ConflictingPayload(
-                    record_for_retry.clone(),
-                ))
-            });
+        expect_lookup_returns(
+            &mut mock_store,
+            idempotency_key.clone(),
+            user_id.clone(),
+            IdempotencyLookupResult::ConflictingPayload(their_record),
+        );
 
         let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
         let request = build_request(Some(idempotency_key), user_id, our_payload);
