@@ -105,12 +105,17 @@ impl IdempotencyStore for DieselIdempotencyStore {
     async fn lookup(
         &self,
         key: &IdempotencyKey,
+        user_id: &UserId,
         payload_hash: &PayloadHash,
     ) -> Result<IdempotencyLookupResult, IdempotencyStoreError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
         let result: Option<IdempotencyKeyRow> = idempotency_keys::table
-            .filter(idempotency_keys::key.eq(key.as_uuid()))
+            .filter(
+                idempotency_keys::key
+                    .eq(key.as_uuid())
+                    .and(idempotency_keys::user_id.eq(user_id.as_uuid())),
+            )
             .select(IdempotencyKeyRow::as_select())
             .first(&mut conn)
             .await

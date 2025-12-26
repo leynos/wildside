@@ -18,6 +18,8 @@ mod user_repository;
 mod users_query;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
+#[cfg(test)]
+pub use idempotency_store::MockIdempotencyStore;
 pub use idempotency_store::{FixtureIdempotencyStore, IdempotencyStore, IdempotencyStoreError};
 pub use login_service::{FixtureLoginService, LoginService};
 pub use route_cache::{RouteCache, RouteCacheError};

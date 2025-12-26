@@ -2,6 +2,7 @@
 name = "backend"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.76"
 
 [dependencies]
 url = "2"
@@ -58,6 +59,7 @@ test-support = []
 [dev-dependencies]
 # Enable test-support feature for integration tests
 backend = { path = ".", features = ["test-support"] }
+mockall = "0.13"
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"

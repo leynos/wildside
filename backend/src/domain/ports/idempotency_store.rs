@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::domain::{IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash};
+use crate::domain::{
+    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
+};
 
 use super::define_port_error;
 
@@ -31,9 +33,13 @@ define_port_error! {
 /// Implementations provide durable storage for idempotency records, enabling
 /// safe request retries by detecting duplicate requests and replaying previous
 /// responses.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait IdempotencyStore: Send + Sync {
-    /// Look up an idempotency key and compare against the provided payload hash.
+    /// Look up an idempotency key for a specific user and compare against the
+    /// provided payload hash.
+    ///
+    /// The lookup is scoped to the given user to prevent cross-user key reuse.
     ///
     /// Returns:
     /// - [`IdempotencyLookupResult::NotFound`] if no record exists for the key.
@@ -44,6 +50,7 @@ pub trait IdempotencyStore: Send + Sync {
     async fn lookup(
         &self,
         key: &IdempotencyKey,
+        user_id: &UserId,
         payload_hash: &PayloadHash,
     ) -> Result<IdempotencyLookupResult, IdempotencyStoreError>;
 
@@ -71,6 +78,7 @@ impl IdempotencyStore for FixtureIdempotencyStore {
     async fn lookup(
         &self,
         _key: &IdempotencyKey,
+        _user_id: &UserId,
         _payload_hash: &PayloadHash,
     ) -> Result<IdempotencyLookupResult, IdempotencyStoreError> {
         Ok(IdempotencyLookupResult::NotFound)
@@ -96,10 +104,11 @@ mod tests {
     async fn fixture_store_lookup_returns_not_found() {
         let store = FixtureIdempotencyStore;
         let key = IdempotencyKey::random();
+        let user_id = UserId::random();
         let hash = canonicalize_and_hash(&json!({"test": true}));
 
         let result = store
-            .lookup(&key, &hash)
+            .lookup(&key, &user_id, &hash)
             .await
             .expect("fixture lookup should succeed");
         assert!(matches!(result, IdempotencyLookupResult::NotFound));

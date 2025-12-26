@@ -22,15 +22,16 @@ use actix_web::{web, App, HttpServer};
 use backend::doc::ApiDoc;
 use backend::domain::ports::{
     FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-    FixtureUserProfileQuery, FixtureUsersQuery,
+    FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
 };
-use backend::domain::UserOnboardingService;
+use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::health::{live, ready, HealthState};
 use backend::inbound::http::routes::submit_route;
 use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
+use backend::outbound::persistence::DieselIdempotencyStore;
 use backend::Trace;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
@@ -123,12 +124,24 @@ pub fn create_server(
     config: ServerConfig,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
+
+    // Build the route submission service: use the real DB-backed implementation
+    // when a pool is available, otherwise fall back to the fixture for tests.
+    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
+    // to real DB-backed implementations once their adapters are ready.
+    let route_submission: Arc<dyn RouteSubmissionService> = match &config.db_pool {
+        Some(pool) => Arc::new(RouteSubmissionServiceImpl::new(Arc::new(
+            DieselIdempotencyStore::new(pool.clone()),
+        ))),
+        None => Arc::new(FixtureRouteSubmissionService),
+    };
+
     let http_state = web::Data::new(HttpState::new(HttpStatePorts {
         login: Arc::new(FixtureLoginService),
         users: Arc::new(FixtureUsersQuery),
         profile: Arc::new(FixtureUserProfileQuery),
         interests: Arc::new(FixtureUserInterestsCommand),
-        route_submission: Arc::new(FixtureRouteSubmissionService),
+        route_submission,
     }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
@@ -136,6 +149,7 @@ pub fn create_server(
         cookie_secure,
         same_site,
         bind_addr,
+        db_pool: _,
         #[cfg(feature = "metrics")]
         prometheus,
     } = config;

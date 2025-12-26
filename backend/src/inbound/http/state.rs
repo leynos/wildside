@@ -29,9 +29,8 @@ pub struct HttpState {
     pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
-impl HttpState {
-    /// Construct state from a ports bundle.
-    pub fn new(ports: HttpStatePorts) -> Self {
+impl From<HttpStatePorts> for HttpState {
+    fn from(ports: HttpStatePorts) -> Self {
         let HttpStatePorts {
             login,
             users,
@@ -46,5 +45,12 @@ impl HttpState {
             interests,
             route_submission,
         }
+    }
+}
+
+impl HttpState {
+    /// Construct state from a ports bundle.
+    pub fn new(ports: HttpStatePorts) -> Self {
+        ports.into()
     }
 }
