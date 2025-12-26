@@ -389,6 +389,12 @@ stability.
 | `POST`   | `/api/v1/offline/bundles`               | Create an offline bundle manifest (idempotent).     | Session cookie |
 | `DELETE` | `/api/v1/offline/bundles/{bundle_id}`   | Delete an offline bundle manifest (idempotent).     | Session cookie |
 
+`PUT /api/v1/users/me/interests` updates the interest subset only and
+remains available for backward compatibility, while
+`GET/PUT /api/v1/users/me/preferences` exposes the full preference payload
+(interests, safety toggles, and unit system) and should be preferred for new
+clients.
+
 `POST /api/v1/routes` validates the request, hands it to the driving domain
 port (`RouteService`), and allows the service to coordinate cache lookup,
 idempotency tracking, queueing, and persistence. Responses follow the sequence
@@ -501,6 +507,8 @@ resolve them.
 
 For screen readers: The following entity-relationship diagram shows how
 catalogue entities, descriptors, and user state relate to routes and users.
+`localisations` columns store the `EntityLocalizations` shape defined in
+`docs/wildside-pwa-data-model.md`.
 
 ```mermaid
 erDiagram
@@ -659,8 +667,8 @@ sequenceDiagram
   participant PrefRepo as UserPreferencesRepository
 
   User->>PWA: Change preferences (interests, safety, units)
-  PWA->>API: PUT /api/v1/users/me/preferences
-  API->>Cmd: updatePreferences(userId, preferences, idempotencyKey)
+  PWA->>API: PUT /api/v1/users/me/preferences (Idempotency-Key header)
+  API->>Cmd: updatePreferences(userId, preferences, idempotencyKeyHeader)
 
   Cmd->>IdRepo: reserveKey(userId, idempotencyKey, requestFingerprint)
   alt key_seen_with_same_fingerprint
