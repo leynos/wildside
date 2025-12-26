@@ -64,10 +64,10 @@ fn extract_idempotency_key(
 fn map_idempotency_key_error(err: IdempotencyKeyValidationError) -> Error {
     match err {
         IdempotencyKeyValidationError::EmptyKey => {
-            Error::invalid_request("Idempotency-Key header must not be empty")
+            Error::invalid_request("idempotency-key header must not be empty")
         }
         IdempotencyKeyValidationError::InvalidKey => {
-            Error::invalid_request("Idempotency-Key header must be a valid UUID")
+            Error::invalid_request("idempotency-key header must be a valid uuid")
         }
     }
 }

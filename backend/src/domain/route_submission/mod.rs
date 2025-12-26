@@ -98,7 +98,7 @@ where
 
         match self.idempotency_store.store(&record).await {
             Ok(()) => {
-                // TODO: Dispatch to route queue here when integrated.
+                // TODO(#276): Dispatch to route queue here when integrated.
                 Ok(response)
             }
             Err(IdempotencyStoreError::DuplicateKey { .. }) => {
@@ -141,7 +141,7 @@ where
         // If no idempotency key, proceed without tracking (skip hash computation).
         let Some(idempotency_key) = request.idempotency_key else {
             let request_id = Uuid::new_v4();
-            // TODO: Dispatch to route queue here when integrated.
+            // TODO(#276): Dispatch to route queue here when integrated.
             return Ok(RouteSubmissionResponse::accepted(request_id));
         };
 
