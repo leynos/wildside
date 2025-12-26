@@ -220,7 +220,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Rust build
-        run: cargo build --manifest-path backend/Cargo.toml --release
+        run: cargo check --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
         run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
       - name: Rust clippy
