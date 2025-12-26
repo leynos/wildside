@@ -51,26 +51,6 @@ impl From<HttpStatePorts> for HttpState {
 impl HttpState {
     /// Construct state from a ports bundle.
     pub fn new(ports: HttpStatePorts) -> Self {
-        let HttpStatePorts {
-            login,
-            users,
-            profile,
-            interests,
-            route_submission,
-        } = ports;
-        Self {
-            login,
-            users,
-            profile,
-            interests,
-            route_submission,
-        }
-    }
-}
-
-impl HttpState {
-    /// Construct state from a ports bundle.
-    pub fn new(ports: HttpStatePorts) -> Self {
         ports.into()
     }
 }

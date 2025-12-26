@@ -142,7 +142,6 @@ pub fn create_server(
         profile: Arc::new(FixtureUserProfileQuery),
         interests: Arc::new(FixtureUserInterestsCommand),
         route_submission,
-        route_submission: Arc::new(FixtureRouteSubmissionService),
     }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
