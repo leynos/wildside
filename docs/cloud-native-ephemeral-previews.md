@@ -958,6 +958,166 @@ commands after the cluster is initialised, automatically creating the necessary
 PostGIS extensions in the `template1` database so they are available to all
 databases created in the cluster.
 
+##### CloudNativePG Resource Relationships
+
+The following diagram illustrates the relationships between Kubernetes resources
+managed by the CNPG module. Namespaces contain the various resources, while the
+Cluster resource references Secrets for credentials and backup configuration.
+External Secrets Operator bridges Vault paths to Kubernetes Secrets.
+
+```mermaid
+erDiagram
+  Namespace ||--o{ HelmRelease : "contains in namespace"
+  Namespace ||--o{ Cluster : "contains in namespace"
+  Namespace ||--o{ PodDisruptionBudget : "contains in namespace"
+  Namespace ||--o{ ScheduledBackup : "contains in namespace"
+  Namespace ||--o{ Secret : "contains in namespace"
+  Namespace ||--o{ ExternalSecret : "contains in namespace"
+  Namespace ||--o{ HelmRepository : "contains in namespace"
+
+  HelmRepository ||--o{ HelmRelease : "referenced by sourceRef"
+  HelmRelease ||--o{ CNPGOperatorDeployment : "manages operator pods"
+
+  Cluster ||--o{ PodDisruptionBudget : "selected by label cnpg.io/cluster"
+  Cluster ||--o{ ScheduledBackup : "referenced by spec.cluster.name"
+  Cluster ||--o{ Secret : "references S3 creds in spec.backup.barmanObjectStore"
+  Cluster ||--o{ Secret : "references superuserSecret in spec.superuserSecret"
+
+  ExternalSecret ||--|| Secret : "targets Secret via spec.target.name"
+  ExternalSecret }o--|| VaultPath : "reads from Vault KV path"
+
+  Cluster {
+    string name
+    string namespace
+    int instances
+    string imageName
+    string storageClass
+    string storageSize
+    string database
+    string owner
+    string primaryUpdateStrategy
+    string primaryUpdateMethod
+  }
+
+  ScheduledBackup {
+    string name
+    string namespace
+    string schedule
+    string backupOwnerReference
+  }
+
+  PodDisruptionBudget {
+    string name
+    string namespace
+    int minAvailable
+  }
+
+  Secret {
+    string name
+    string namespace
+    map stringData
+  }
+
+  ExternalSecret {
+    string name
+    string namespace
+    string secretStoreRefName
+    string refreshInterval
+  }
+
+  VaultPath {
+    string path
+  }
+
+  HelmRepository {
+    string name
+    string namespace
+    string url
+    string type
+  }
+
+  HelmRelease {
+    string name
+    string namespace
+    string chart
+    string version
+  }
+
+  CNPGOperatorDeployment {
+    string deploymentName
+  }
+
+  Namespace {
+    string name
+  }
+```
+
+##### CNPG Module Decision Flow
+
+The module supports both render and apply modes, with conditional resource
+creation based on backup, ESO integration, and high availability settings. This
+flowchart shows the decision paths that determine which resources are created.
+
+```mermaid
+flowchart TD
+  Start([Start])
+  Mode{mode value}
+  RenderPath["Compute locals and manifests.tf<br/>populate rendered_manifests map"]
+  ApplyPath["Create namespaces, HelmRelease,<br/>and kubernetes_manifest resources"]
+
+  BackupEnabled{backup_enabled?}
+  ESOEnabled{eso_enabled?}
+  InlineCreds{inline S3 creds set?}
+  VaultBackupPath{backup_credentials_vault_path set?}
+
+  PDBEnabled{pdb_enabled and<br/>instances>1?}
+
+  RBCluster["Render/apply CNPG Cluster<br/>with backup section"]
+  RNCluster["Render/apply CNPG Cluster<br/>without backup section"]
+
+  SchedBackup["Render/apply ScheduledBackup"]
+  S3Secret["Render/apply S3 credentials Secret"]
+  ESOBackup["Render/apply ExternalSecret backup"]
+
+  ESOSuperuser["Render/apply ExternalSecret superuser"]
+  ESOApp["Render/apply ExternalSecret app"]
+
+  PDB["Render/apply PodDisruptionBudget"]
+
+  End([Outputs<br/>endpoints + sync_policy_contract])
+
+  Start --> Mode
+  Mode -->|"render"| RenderPath
+  Mode -->|"apply"| ApplyPath
+
+  RenderPath --> BackupEnabled
+  ApplyPath --> BackupEnabled
+
+  BackupEnabled -->|"true"| RBCluster
+  BackupEnabled -->|"false"| RNCluster
+
+  RBCluster --> SchedBackup
+  RBCluster --> InlineCreds
+  InlineCreds -->|"yes"| S3Secret
+  InlineCreds -->|"no"| VaultBackupPath
+  VaultBackupPath -->|"yes and eso_enabled"| ESOBackup
+  VaultBackupPath -->|"no"| ESOEnabled
+
+  RNCluster --> ESOEnabled
+
+  ESOEnabled -->|"true"| ESOSuperuser
+  ESOEnabled -->|"true"| ESOApp
+  ESOEnabled -->|"false"| PDBEnabled
+
+  ESOSuperuser --> PDBEnabled
+  ESOApp --> PDBEnabled
+  ESOBackup --> PDBEnabled
+
+  PDBEnabled -->|"true"| PDB
+  PDBEnabled -->|"false"| End
+  PDB --> End
+```
+
 #### Redis cache
 
 For caching, a Redis cluster is deployed using the highly configurable and
