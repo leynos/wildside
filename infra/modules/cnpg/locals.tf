@@ -73,6 +73,17 @@ locals {
   app_credentials_secret_name       = trimspace(var.app_credentials_secret_name)
   backup_credentials_vault_path     = trimspace(var.backup_credentials_vault_path)
 
+  # Effective credential secret names for sync_policy_contract
+  # When ESO is enabled, use ESO-managed secret names from variables.
+  # When ESO is disabled, CNPG generates its own superuser secret named
+  # <cluster>-superuser and does not create an app secret.
+  effective_superuser_secret_name = (
+    local.eso_enabled
+    ? local.superuser_credentials_secret_name
+    : "${local.cluster_name}-superuser"
+  )
+  effective_app_secret_name = local.eso_enabled ? local.app_credentials_secret_name : null
+
   # Helm values processing
   helm_inline_values     = [for value in var.helm_values : value if trimspace(value) != ""]
   decoded_helm_values    = [for value in local.helm_inline_values : try(yamldecode(value), {})]

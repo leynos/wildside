@@ -49,13 +49,13 @@ output "database_owner" {
 }
 
 output "superuser_credentials_secret_name" {
-  description = "Kubernetes Secret name containing superuser credentials"
-  value       = local.superuser_credentials_secret_name
+  description = "Kubernetes Secret name containing superuser credentials (CNPG-generated or ESO-managed)"
+  value       = local.effective_superuser_secret_name
 }
 
 output "app_credentials_secret_name" {
-  description = "Kubernetes Secret name containing application credentials"
-  value       = local.app_credentials_secret_name
+  description = "Kubernetes Secret name containing application credentials (null when ESO disabled)"
+  value       = local.effective_app_secret_name
 }
 
 output "backup_enabled" {
@@ -86,13 +86,13 @@ output "sync_policy_contract" {
     }
     credentials = {
       superuser_secret = {
-        name      = local.superuser_credentials_secret_name
+        name      = local.effective_superuser_secret_name
         namespace = local.cluster_namespace
       }
-      app_secret = {
-        name      = local.app_credentials_secret_name
+      app_secret = local.effective_app_secret_name != null ? {
+        name      = local.effective_app_secret_name
         namespace = local.cluster_namespace
-      }
+      } : null
     }
     backup = local.backup_enabled ? {
       enabled          = true
