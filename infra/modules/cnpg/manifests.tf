@@ -215,7 +215,7 @@ locals {
     local.eso_enabled &&
     length(local.superuser_credentials_vault_path) > 0
     ) ? {
-    apiVersion = "external-secrets.io/v1beta1"
+    apiVersion = "external-secrets.io/v1"
     kind       = "ExternalSecret"
     metadata = {
       name      = local.superuser_credentials_secret_name
@@ -256,7 +256,7 @@ locals {
     local.eso_enabled &&
     length(local.app_credentials_vault_path) > 0
     ) ? {
-    apiVersion = "external-secrets.io/v1beta1"
+    apiVersion = "external-secrets.io/v1"
     kind       = "ExternalSecret"
     metadata = {
       name      = local.app_credentials_secret_name
@@ -298,7 +298,7 @@ locals {
     local.backup_enabled &&
     length(local.backup_credentials_vault_path) > 0
     ) ? {
-    apiVersion = "external-secrets.io/v1beta1"
+    apiVersion = "external-secrets.io/v1"
     kind       = "ExternalSecret"
     metadata = {
       name      = local.backup_s3_credentials_secret_name
