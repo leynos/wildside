@@ -83,10 +83,10 @@ adapter; direct stateful logic belongs behind the ports established above.
 
 ### Step: Route submission idempotency
 
-- [ ] Persist `Idempotency-Key` headers for `POST /api/v1/routes` in
+- [x] Persist `Idempotency-Key` headers for `POST /api/v1/routes` in
   PostgreSQL, rejecting conflicting payloads with `409` and replaying
   successful responses within 24 hours.
-- [ ] Capture idempotency audit metrics (hits, misses, conflicts) and expose
+- [x] Capture idempotency audit metrics (hits, misses, conflicts) and expose
   them via Prometheus with labels for user scope and key age buckets.
 
 ## Phase 2 – Data platform foundation

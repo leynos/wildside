@@ -131,14 +131,14 @@ fn setup_race_condition_test(
         retry_result,
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, our_payload);
 
     (service, request)
 }
 
 fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
-    RouteSubmissionServiceImpl::new(Arc::new(FixtureIdempotencyStore))
+    RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(FixtureIdempotencyStore))
 }
 
 #[tokio::test]
@@ -193,7 +193,7 @@ async fn replays_response_for_matching_payload() {
         IdempotencyLookupResult::MatchingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, payload);
 
     let response = service
@@ -226,7 +226,7 @@ async fn returns_conflict_for_different_payload() {
         IdempotencyLookupResult::ConflictingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, alternative_payload());
 
     let error = service
@@ -282,4 +282,136 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
         .expect_err("submission should fail with conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+}
+
+// Tests for helper functions
+
+mod age_bucket_tests {
+    use chrono::{Duration, Utc};
+
+    use super::super::calculate_age_bucket;
+
+    #[test]
+    fn zero_minutes_returns_0_1m() {
+        let now = Utc::now();
+        assert_eq!(calculate_age_bucket(now), "0-1m");
+    }
+
+    #[test]
+    fn thirty_seconds_returns_0_1m() {
+        let created = Utc::now() - Duration::seconds(30);
+        assert_eq!(calculate_age_bucket(created), "0-1m");
+    }
+
+    #[test]
+    fn one_minute_returns_1_5m() {
+        let created = Utc::now() - Duration::seconds(60);
+        assert_eq!(calculate_age_bucket(created), "1-5m");
+    }
+
+    #[test]
+    fn four_minutes_returns_1_5m() {
+        let created = Utc::now() - Duration::seconds(4 * 60);
+        assert_eq!(calculate_age_bucket(created), "1-5m");
+    }
+
+    #[test]
+    fn five_minutes_returns_5_30m() {
+        let created = Utc::now() - Duration::seconds(5 * 60);
+        assert_eq!(calculate_age_bucket(created), "5-30m");
+    }
+
+    #[test]
+    fn twenty_nine_minutes_returns_5_30m() {
+        let created = Utc::now() - Duration::seconds(29 * 60);
+        assert_eq!(calculate_age_bucket(created), "5-30m");
+    }
+
+    #[test]
+    fn thirty_minutes_returns_30m_2h() {
+        let created = Utc::now() - Duration::seconds(30 * 60);
+        assert_eq!(calculate_age_bucket(created), "30m-2h");
+    }
+
+    #[test]
+    fn one_hour_returns_30m_2h() {
+        let created = Utc::now() - Duration::hours(1);
+        assert_eq!(calculate_age_bucket(created), "30m-2h");
+    }
+
+    #[test]
+    fn two_hours_returns_2h_6h() {
+        let created = Utc::now() - Duration::hours(2);
+        assert_eq!(calculate_age_bucket(created), "2h-6h");
+    }
+
+    #[test]
+    fn five_hours_returns_2h_6h() {
+        let created = Utc::now() - Duration::hours(5);
+        assert_eq!(calculate_age_bucket(created), "2h-6h");
+    }
+
+    #[test]
+    fn six_hours_returns_6h_24h() {
+        let created = Utc::now() - Duration::hours(6);
+        assert_eq!(calculate_age_bucket(created), "6h-24h");
+    }
+
+    #[test]
+    fn twenty_four_hours_returns_6h_24h() {
+        let created = Utc::now() - Duration::hours(24);
+        assert_eq!(calculate_age_bucket(created), "6h-24h");
+    }
+}
+
+mod user_scope_hash_tests {
+    use super::super::user_scope_hash;
+    use crate::domain::UserId;
+
+    #[test]
+    fn returns_8_character_hex_string() {
+        let user_id = UserId::random();
+        let scope = user_scope_hash(&user_id);
+
+        assert_eq!(scope.len(), 8, "user scope hash should be 8 characters");
+        assert!(
+            scope.chars().all(|c| c.is_ascii_hexdigit()),
+            "user scope hash should contain only hex characters"
+        );
+    }
+
+    #[test]
+    fn returns_lowercase_hex() {
+        let user_id = UserId::random();
+        let scope = user_scope_hash(&user_id);
+
+        assert_eq!(
+            scope,
+            scope.to_lowercase(),
+            "user scope hash should be lowercase"
+        );
+    }
+
+    #[test]
+    fn is_deterministic_for_same_user() {
+        let user_id = UserId::random();
+        let scope1 = user_scope_hash(&user_id);
+        let scope2 = user_scope_hash(&user_id);
+
+        assert_eq!(scope1, scope2, "same user should produce same hash");
+    }
+
+    #[test]
+    fn different_users_produce_different_hashes() {
+        let user_a = UserId::random();
+        let user_b = UserId::random();
+
+        let scope_a = user_scope_hash(&user_a);
+        let scope_b = user_scope_hash(&user_b);
+
+        assert_ne!(
+            scope_a, scope_b,
+            "different users should produce different hashes"
+        );
+    }
 }

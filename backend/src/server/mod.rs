@@ -23,7 +23,7 @@ use backend::Trace;
 use backend::doc::ApiDoc;
 use backend::domain::ports::{
     FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-    FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
+    FixtureUserProfileQuery, FixtureUsersQuery, NoOpIdempotencyMetrics, RouteSubmissionService,
 };
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::health::{HealthState, live, ready};
@@ -32,6 +32,8 @@ use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
+#[cfg(feature = "metrics")]
+use backend::outbound::metrics::PrometheusIdempotencyMetrics;
 use backend::outbound::persistence::DieselIdempotencyStore;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
@@ -129,8 +131,27 @@ pub fn create_server(
     // when a pool is available, otherwise fall back to the fixture for tests.
     // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
     // to real DB-backed implementations once their adapters are ready.
+    #[cfg(feature = "metrics")]
+    let route_submission: Arc<dyn RouteSubmissionService> =
+        match (&config.db_pool, &config.prometheus) {
+            (Some(pool), Some(prom)) => {
+                // Create idempotency metrics backed by the same registry as HTTP metrics.
+                let idempotency_metrics = PrometheusIdempotencyMetrics::new(&prom.registry)
+                    .expect("idempotency metrics registration should succeed");
+                Arc::new(RouteSubmissionServiceImpl::new(
+                    Arc::new(DieselIdempotencyStore::new(pool.clone())),
+                    Arc::new(idempotency_metrics),
+                ))
+            }
+            (Some(pool), None) => Arc::new(RouteSubmissionServiceImpl::new(
+                Arc::new(DieselIdempotencyStore::new(pool.clone())),
+                Arc::new(NoOpIdempotencyMetrics),
+            )),
+            (None, _) => Arc::new(FixtureRouteSubmissionService),
+        };
+    #[cfg(not(feature = "metrics"))]
     let route_submission: Arc<dyn RouteSubmissionService> = match &config.db_pool {
-        Some(pool) => Arc::new(RouteSubmissionServiceImpl::new(Arc::new(
+        Some(pool) => Arc::new(RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(
             DieselIdempotencyStore::new(pool.clone()),
         ))),
         None => Arc::new(FixtureRouteSubmissionService),
