@@ -23,8 +23,10 @@ use backend::Trace;
 use backend::doc::ApiDoc;
 use backend::domain::ports::{
     FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-    FixtureUserProfileQuery, FixtureUsersQuery, NoOpIdempotencyMetrics, RouteSubmissionService,
+    FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
 };
+#[cfg(feature = "metrics")]
+use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::health::{HealthState, live, ready};
 use backend::inbound::http::routes::submit_route;

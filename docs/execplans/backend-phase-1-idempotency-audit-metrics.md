@@ -289,17 +289,19 @@ match lookup_result {
         self.handle_new_request(idempotency_key, payload_hash, request.user_id).await
     }
     IdempotencyLookupResult::MatchingPayload(record) => {
+        let now = Utc::now();
         let labels = IdempotencyMetricLabels {
             user_scope: user_scope_hash(&request.user_id),
-            age_bucket: Some(calculate_age_bucket(record.created_at)),
+            age_bucket: Some(calculate_age_bucket(record.created_at, now)),
         };
         let _ = self.idempotency_metrics.record_hit(&labels).await;
         // ... existing replay logic
     }
     IdempotencyLookupResult::ConflictingPayload(record) => {
+        let now = Utc::now();
         let labels = IdempotencyMetricLabels {
             user_scope: user_scope_hash(&request.user_id),
-            age_bucket: Some(calculate_age_bucket(record.created_at)),
+            age_bucket: Some(calculate_age_bucket(record.created_at, now)),
         };
         let _ = self.idempotency_metrics.record_conflict(&labels).await;
         // ... existing conflict logic
@@ -485,7 +487,7 @@ Example output:
 ```text
 wildside_idempotency_requests_total{outcome="miss",user_scope="a1b2c3d4",age_bucket="n/a"} 150
 wildside_idempotency_requests_total{outcome="hit",user_scope="a1b2c3d4",age_bucket="0-1m"} 23
-wildside_idempotency_requests_total{outcome="conflict",user_scope="e5f6g7h8",age_bucket="5-30m"} 2
+wildside_idempotency_requests_total{outcome="conflict",user_scope="e5f6a7b8",age_bucket="5-30m"} 2
 ```
 
 ## File Changes Summary

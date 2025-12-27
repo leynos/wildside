@@ -288,6 +288,7 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
 
 mod age_bucket_tests {
     use chrono::{Duration, TimeZone, Utc};
+    use rstest::rstest;
 
     use super::super::calculate_age_bucket;
 
@@ -296,109 +297,37 @@ mod age_bucket_tests {
         Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap()
     }
 
-    #[test]
-    fn zero_minutes_returns_0_1m() {
+    /// Parameterized test for age bucket boundary values.
+    ///
+    /// Tests cover all bucket boundaries and edge cases:
+    /// - `0-1m`: 0 to 59 seconds
+    /// - `1-5m`: 1 to 4 minutes
+    /// - `5-30m`: 5 to 29 minutes
+    /// - `30m-2h`: 30 to 119 minutes
+    /// - `2h-6h`: 120 to 359 minutes
+    /// - `6h-24h`: 360 to 1439 minutes
+    /// - `>24h`: 1440+ minutes
+    /// - Future timestamps (clock skew) clamp to `0-1m`
+    #[rstest]
+    #[case::zero_seconds(0, "0-1m")]
+    #[case::thirty_seconds(30, "0-1m")]
+    #[case::one_minute(60, "1-5m")]
+    #[case::four_minutes(4 * 60, "1-5m")]
+    #[case::five_minutes(5 * 60, "5-30m")]
+    #[case::twenty_nine_minutes(29 * 60, "5-30m")]
+    #[case::thirty_minutes(30 * 60, "30m-2h")]
+    #[case::one_hour(60 * 60, "30m-2h")]
+    #[case::two_hours(2 * 60 * 60, "2h-6h")]
+    #[case::five_hours(5 * 60 * 60, "2h-6h")]
+    #[case::six_hours(6 * 60 * 60, "6h-24h")]
+    #[case::twenty_three_hours(23 * 60 * 60, "6h-24h")]
+    #[case::twenty_four_hours(24 * 60 * 60, ">24h")]
+    #[case::forty_eight_hours(48 * 60 * 60, ">24h")]
+    #[case::future_timestamp_clamps(-5 * 60, "0-1m")]
+    fn age_bucket_boundaries(#[case] offset_seconds: i64, #[case] expected: &str) {
         let now = fixed_now();
-        assert_eq!(calculate_age_bucket(now, now), "0-1m");
-    }
-
-    #[test]
-    fn thirty_seconds_returns_0_1m() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(30);
-        assert_eq!(calculate_age_bucket(created, now), "0-1m");
-    }
-
-    #[test]
-    fn one_minute_returns_1_5m() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(60);
-        assert_eq!(calculate_age_bucket(created, now), "1-5m");
-    }
-
-    #[test]
-    fn four_minutes_returns_1_5m() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(4 * 60);
-        assert_eq!(calculate_age_bucket(created, now), "1-5m");
-    }
-
-    #[test]
-    fn five_minutes_returns_5_30m() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(5 * 60);
-        assert_eq!(calculate_age_bucket(created, now), "5-30m");
-    }
-
-    #[test]
-    fn twenty_nine_minutes_returns_5_30m() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(29 * 60);
-        assert_eq!(calculate_age_bucket(created, now), "5-30m");
-    }
-
-    #[test]
-    fn thirty_minutes_returns_30m_2h() {
-        let now = fixed_now();
-        let created = now - Duration::seconds(30 * 60);
-        assert_eq!(calculate_age_bucket(created, now), "30m-2h");
-    }
-
-    #[test]
-    fn one_hour_returns_30m_2h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(1);
-        assert_eq!(calculate_age_bucket(created, now), "30m-2h");
-    }
-
-    #[test]
-    fn two_hours_returns_2h_6h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(2);
-        assert_eq!(calculate_age_bucket(created, now), "2h-6h");
-    }
-
-    #[test]
-    fn five_hours_returns_2h_6h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(5);
-        assert_eq!(calculate_age_bucket(created, now), "2h-6h");
-    }
-
-    #[test]
-    fn six_hours_returns_6h_24h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(6);
-        assert_eq!(calculate_age_bucket(created, now), "6h-24h");
-    }
-
-    #[test]
-    fn twenty_three_hours_returns_6h_24h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(23);
-        assert_eq!(calculate_age_bucket(created, now), "6h-24h");
-    }
-
-    #[test]
-    fn twenty_four_hours_returns_gt_24h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(24);
-        assert_eq!(calculate_age_bucket(created, now), ">24h");
-    }
-
-    #[test]
-    fn forty_eight_hours_returns_gt_24h() {
-        let now = fixed_now();
-        let created = now - Duration::hours(48);
-        assert_eq!(calculate_age_bucket(created, now), ">24h");
-    }
-
-    #[test]
-    fn future_timestamp_clamps_to_0_1m() {
-        let now = fixed_now();
-        // Simulate clock skew: created_at is in the future
-        let created = now + Duration::minutes(5);
-        assert_eq!(calculate_age_bucket(created, now), "0-1m");
+        let created = now - Duration::seconds(offset_seconds);
+        assert_eq!(calculate_age_bucket(created, now), expected);
     }
 }
 
