@@ -90,7 +90,7 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Exact Helm chart version for CloudNativePG operator"
   type        = string
-  default     = "0.23.2"
+  default     = "0.26.1"
 
   validation {
     condition = (

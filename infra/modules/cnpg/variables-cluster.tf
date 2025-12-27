@@ -45,9 +45,9 @@ variable "storage_size" {
   validation {
     condition = (
       var.storage_size != null &&
-      can(regex("^[0-9]+(Ki|Mi|Gi|Ti|Pi|Ei)?$", trimspace(var.storage_size)))
+      can(regex("^[0-9]+(Ki|Mi|Gi|Ti|Pi|Ei)$", trimspace(var.storage_size)))
     )
-    error_message = "storage_size must be a valid Kubernetes quantity (e.g., 50Gi, 100Gi)"
+    error_message = "storage_size must be a valid Kubernetes quantity with unit suffix (e.g., 50Gi, 100Gi)"
   }
 }
 
@@ -141,6 +141,20 @@ variable "resource_requests" {
     memory = "256Mi"
   }
   nullable = false
+
+  validation {
+    condition = (
+      can(regex("^[0-9]+(\\.[0-9]+)?m?$", trimspace(var.resource_requests.cpu)))
+    )
+    error_message = "resource_requests.cpu must be a valid Kubernetes CPU quantity (e.g., 100m, 0.5, 2)"
+  }
+
+  validation {
+    condition = (
+      can(regex("^[0-9]+(Ki|Mi|Gi|Ti|Pi|Ei)$", trimspace(var.resource_requests.memory)))
+    )
+    error_message = "resource_requests.memory must be a valid Kubernetes memory quantity (e.g., 256Mi, 1Gi)"
+  }
 }
 
 variable "resource_limits" {
@@ -154,6 +168,20 @@ variable "resource_limits" {
     memory = "2Gi"
   }
   nullable = false
+
+  validation {
+    condition = (
+      can(regex("^[0-9]+(\\.[0-9]+)?m?$", trimspace(var.resource_limits.cpu)))
+    )
+    error_message = "resource_limits.cpu must be a valid Kubernetes CPU quantity (e.g., 100m, 0.5, 2)"
+  }
+
+  validation {
+    condition = (
+      can(regex("^[0-9]+(Ki|Mi|Gi|Ti|Pi|Ei)$", trimspace(var.resource_limits.memory)))
+    )
+    error_message = "resource_limits.memory must be a valid Kubernetes memory quantity (e.g., 256Mi, 1Gi)"
+  }
 }
 
 variable "pdb_enabled" {
