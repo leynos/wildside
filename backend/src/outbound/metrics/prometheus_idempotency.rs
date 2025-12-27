@@ -84,12 +84,51 @@ impl IdempotencyMetrics for PrometheusIdempotencyMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn registers_metric_with_registry() {
+    /// Helper to create a fresh metrics instance for testing.
+    fn make_metrics() -> (Registry, PrometheusIdempotencyMetrics) {
         let registry = Registry::new();
         let metrics = PrometheusIdempotencyMetrics::new(&registry)
             .expect("metric registration should succeed");
+        (registry, metrics)
+    }
+
+    /// Helper to record a metric by outcome type and verify the counter.
+    async fn record_and_verify(
+        metrics: &PrometheusIdempotencyMetrics,
+        outcome: &str,
+        user_scope: &str,
+        age_bucket: Option<&str>,
+    ) {
+        let labels = IdempotencyMetricLabels {
+            user_scope: user_scope.to_string(),
+            age_bucket: age_bucket.map(String::from),
+        };
+
+        let result = match outcome {
+            "miss" => metrics.record_miss(&labels).await,
+            "hit" => metrics.record_hit(&labels).await,
+            "conflict" => metrics.record_conflict(&labels).await,
+            _ => panic!("unknown outcome: {outcome}"),
+        };
+        result.expect("recording should succeed");
+
+        let expected_bucket = age_bucket.unwrap_or("n/a");
+        let counter =
+            metrics
+                .requests_total
+                .with_label_values(&[outcome, user_scope, expected_bucket]);
+        assert_eq!(
+            counter.get() as u64,
+            1,
+            "{outcome} counter should be incremented"
+        );
+    }
+
+    #[test]
+    fn registers_metric_with_registry() {
+        let (registry, metrics) = make_metrics();
 
         let labels = IdempotencyMetricLabels {
             user_scope: "a1b2c3d4".to_string(),
@@ -97,7 +136,6 @@ mod tests {
         };
         metrics.record("miss", &labels);
 
-        // Verify the metric was registered by checking the registry.
         let families = registry.gather();
         assert!(
             families
@@ -109,9 +147,7 @@ mod tests {
 
     #[test]
     fn increments_counter_with_correct_labels() {
-        let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
+        let (_registry, metrics) = make_metrics();
 
         let labels = IdempotencyMetricLabels {
             user_scope: "deadbeef".to_string(),
@@ -120,7 +156,6 @@ mod tests {
         metrics.record("hit", &labels);
         metrics.record("hit", &labels);
 
-        // Get the counter value directly.
         let counter = metrics
             .requests_total
             .with_label_values(&["hit", "deadbeef", "1-5m"]);
@@ -133,9 +168,7 @@ mod tests {
 
     #[test]
     fn uses_na_for_missing_age_bucket() {
-        let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
+        let (_registry, metrics) = make_metrics();
 
         let labels = IdempotencyMetricLabels {
             user_scope: "abcd1234".to_string(),
@@ -143,7 +176,6 @@ mod tests {
         };
         metrics.record("miss", &labels);
 
-        // Verify the n/a label is used.
         let counter = metrics
             .requests_total
             .with_label_values(&["miss", "abcd1234", "n/a"]);
@@ -154,67 +186,17 @@ mod tests {
         );
     }
 
+    /// Parameterised test for all three outcome recording methods.
+    #[rstest]
+    #[case::miss("miss", None)]
+    #[case::hit("hit", Some("5-30m"))]
+    #[case::conflict("conflict", Some("30m-2h"))]
     #[tokio::test]
-    async fn record_miss_increments_counter() {
-        let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
-
-        let labels = IdempotencyMetricLabels {
-            user_scope: "test1234".to_string(),
-            age_bucket: None,
-        };
-        metrics
-            .record_miss(&labels)
-            .await
-            .expect("recording should succeed");
-
-        let counter = metrics
-            .requests_total
-            .with_label_values(&["miss", "test1234", "n/a"]);
-        assert_eq!(counter.get() as u64, 1);
-    }
-
-    #[tokio::test]
-    async fn record_hit_increments_counter() {
-        let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
-
-        let labels = IdempotencyMetricLabels {
-            user_scope: "test5678".to_string(),
-            age_bucket: Some("5-30m".to_string()),
-        };
-        metrics
-            .record_hit(&labels)
-            .await
-            .expect("recording should succeed");
-
-        let counter = metrics
-            .requests_total
-            .with_label_values(&["hit", "test5678", "5-30m"]);
-        assert_eq!(counter.get() as u64, 1);
-    }
-
-    #[tokio::test]
-    async fn record_conflict_increments_counter() {
-        let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
-
-        let labels = IdempotencyMetricLabels {
-            user_scope: "conflictu".to_string(),
-            age_bucket: Some("30m-2h".to_string()),
-        };
-        metrics
-            .record_conflict(&labels)
-            .await
-            .expect("recording should succeed");
-
-        let counter =
-            metrics
-                .requests_total
-                .with_label_values(&["conflict", "conflictu", "30m-2h"]);
-        assert_eq!(counter.get() as u64, 1);
+    async fn records_outcome_and_increments_counter(
+        #[case] outcome: &str,
+        #[case] age_bucket: Option<&str>,
+    ) {
+        let (_registry, metrics) = make_metrics();
+        record_and_verify(&metrics, outcome, "testuser", age_bucket).await;
     }
 }
