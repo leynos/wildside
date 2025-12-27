@@ -72,6 +72,30 @@ variable "backup_s3_secret_access_key" {
   sensitive   = true
 }
 
+variable "eso_enabled" {
+  description = "Enable External Secrets Operator integration"
+  type        = bool
+  default     = false
+}
+
+variable "eso_cluster_secret_store_name" {
+  description = "Name of the ClusterSecretStore for ESO"
+  type        = string
+  default     = "vault-backend"
+}
+
+variable "superuser_credentials_vault_path" {
+  description = "Vault path for superuser credentials"
+  type        = string
+  default     = ""
+}
+
+variable "app_credentials_vault_path" {
+  description = "Vault path for application credentials"
+  type        = string
+  default     = ""
+}
+
 module "cnpg" {
   source = "../.."
 
@@ -89,6 +113,11 @@ module "cnpg" {
   backup_endpoint_url         = var.backup_endpoint_url
   backup_s3_access_key_id     = var.backup_s3_access_key_id
   backup_s3_secret_access_key = var.backup_s3_secret_access_key
+
+  eso_enabled                      = var.eso_enabled
+  eso_cluster_secret_store_name    = var.eso_cluster_secret_store_name
+  superuser_credentials_vault_path = var.superuser_credentials_vault_path
+  app_credentials_vault_path       = var.app_credentials_vault_path
 }
 
 output "rendered_manifests" {
@@ -105,4 +134,9 @@ output "sync_policy_contract" {
 output "primary_endpoint" {
   description = "Primary endpoint for database connections"
   value       = module.cnpg.primary_endpoint
+}
+
+output "replica_endpoint" {
+  description = "Replica endpoint for read-only connections"
+  value       = module.cnpg.replica_endpoint
 }

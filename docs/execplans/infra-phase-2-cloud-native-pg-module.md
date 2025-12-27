@@ -18,7 +18,7 @@ backup configuration, and when its outputs expose connection endpoints and sync
 policy contracts for downstream applications.
 
 The module deploys both the CloudNativePG operator (via Flux HelmRelease) and
-the CNPG Cluster CRD for PostgreSQL. It integrates with the `vault_eso` module
+the CNPG Cluster CustomResourceDefinition (CRD) for PostgreSQL. It integrates with the `vault_eso` module
 for credential management via External Secrets Operator.
 
 ## Progress
@@ -183,7 +183,7 @@ Expose outputs for downstream consumption:
   credential references, and backup status.
 - `rendered_manifests` — map for render mode.
 
-### Phase 7: OPA Policies
+### Phase 7: Open Policy Agent (OPA) Policies
 
 Create OPA/Conftest policies for rendered manifests:
 
@@ -386,7 +386,7 @@ The module declares the following providers in `versions.tf`:
 The module integrates with:
 
 1. **vault_eso module** — provides ClusterSecretStore for credential management.
-2. **cert_manager module** — optional TLS for PostgreSQL connections.
+2. **cert_manager module** — optional Transport Layer Security (TLS) for PostgreSQL connections.
 3. **wildside-infra-k8s action** — consumes `rendered_manifests` and commits to
    GitOps repository.
 

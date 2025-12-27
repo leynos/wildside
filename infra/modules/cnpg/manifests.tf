@@ -89,9 +89,6 @@ locals {
         primaryUpdateStrategy = local.primary_update_strategy
         primaryUpdateMethod   = local.primary_update_method
         enableSuperuserAccess = true
-        superuserSecret = local.eso_enabled ? {
-          name = local.superuser_credentials_secret_name
-        } : null
 
         storage = {
           size         = local.storage_size
@@ -124,6 +121,11 @@ locals {
       length(var.postgresql_parameters) > 0 ? {
         postgresql = {
           parameters = var.postgresql_parameters
+        }
+      } : {},
+      local.eso_enabled ? {
+        superuserSecret = {
+          name = local.superuser_credentials_secret_name
         }
       } : {},
       local.backup_enabled ? {

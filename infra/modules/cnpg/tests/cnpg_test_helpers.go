@@ -93,6 +93,22 @@ func renderVarsWithBackup(t *testing.T) map[string]interface{} {
 	}
 }
 
+func renderVarsWithESO(t *testing.T) map[string]interface{} {
+	t.Helper()
+	return map[string]interface{}{
+		"cluster_name":                    "test-pg-cluster",
+		"instances":                       3,
+		"storage_size":                    "10Gi",
+		"database_name":                   "testdb",
+		"database_owner":                  "testuser",
+		"postgis_enabled":                 true,
+		"eso_enabled":                     true,
+		"eso_cluster_secret_store_name":   "vault-backend",
+		"superuser_credentials_vault_path": "secret/data/cnpg/superuser",
+		"app_credentials_vault_path":      "secret/data/cnpg/app",
+	}
+}
+
 func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
 	t.Helper()
 	return testutil.SetupTerraform(t, testutil.TerraformConfig{

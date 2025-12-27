@@ -114,6 +114,13 @@ func TestCNPGModuleSyncPolicyContract(t *testing.T) {
 
 	contract := terraform.OutputMap(t, opts, "sync_policy_contract")
 	require.NotEmpty(t, contract, "expected sync_policy_contract output")
+
+	// Verify required contract keys exist
+	requiredKeys := []string{"cluster", "endpoints", "database", "credentials", "postgis_enabled"}
+	for _, key := range requiredKeys {
+		_, ok := contract[key]
+		require.True(t, ok, "sync_policy_contract missing required key: %s", key)
+	}
 }
 
 func TestCNPGModuleEndpoints(t *testing.T) {
@@ -124,10 +131,37 @@ func TestCNPGModuleEndpoints(t *testing.T) {
 
 	primary := terraform.Output(t, opts, "primary_endpoint")
 	require.NotEmpty(t, primary, "expected primary_endpoint output")
-	require.Contains(t, primary, "-rw.", "expected primary endpoint to contain -rw")
+	require.Contains(t, primary, "-rw.", "expected primary endpoint to contain -rw suffix")
 
-	// Note: replica_endpoint may not be directly accessible in render example
-	// unless explicitly exported
+	replica := terraform.Output(t, opts, "replica_endpoint")
+	require.NotEmpty(t, replica, "expected replica_endpoint output")
+	require.Contains(t, replica, "-ro.", "expected replica endpoint to contain -ro suffix")
+}
+
+func TestCNPGModuleRenderWithESO(t *testing.T) {
+	t.Parallel()
+
+	_, opts := setupRender(t, renderVarsWithESO(t))
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	require.NotEmpty(t, rendered, "expected rendered_manifests output to be non-empty")
+
+	// Verify ExternalSecret for superuser credentials is rendered
+	superuserES, ok := rendered["platform/databases/external-secret-superuser.yaml"]
+	require.True(t, ok, "expected external-secret-superuser.yaml when ESO enabled")
+	require.Contains(t, superuserES, "ExternalSecret", "expected ExternalSecret kind")
+	require.Contains(t, superuserES, "vault-backend", "expected ClusterSecretStore reference")
+
+	// Verify ExternalSecret for app credentials is rendered
+	appES, ok := rendered["platform/databases/external-secret-app.yaml"]
+	require.True(t, ok, "expected external-secret-app.yaml when ESO enabled")
+	require.Contains(t, appES, "ExternalSecret", "expected ExternalSecret kind")
+
+	// Verify cluster references the superuser secret
+	cluster, ok := rendered["platform/databases/wildside-pg-cluster.yaml"]
+	require.True(t, ok, "expected cluster manifest")
+	require.Contains(t, cluster, "superuserSecret", "cluster should reference superuserSecret when ESO enabled")
 }
 
 func TestCNPGModuleRenderPolicy(t *testing.T) {
