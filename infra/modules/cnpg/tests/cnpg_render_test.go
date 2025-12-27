@@ -164,6 +164,29 @@ func TestCNPGModuleRenderWithESO(t *testing.T) {
 	require.Contains(t, cluster, "superuserSecret", "cluster should reference superuserSecret when ESO enabled")
 }
 
+func TestCNPGModuleRenderWithoutESO(t *testing.T) {
+	t.Parallel()
+
+	// Use default renderVars which has eso_enabled=false (default)
+	_, opts := setupRender(t, renderVars(t))
+	terraform.InitAndApply(t, opts)
+
+	rendered := terraform.OutputMap(t, opts, "rendered_manifests")
+	require.NotEmpty(t, rendered, "expected rendered_manifests output to be non-empty")
+
+	// Verify no ExternalSecret manifests are rendered when ESO is disabled
+	_, hasSuperuserES := rendered["platform/databases/external-secret-superuser.yaml"]
+	require.False(t, hasSuperuserES, "should not render external-secret-superuser.yaml when ESO disabled")
+
+	_, hasAppES := rendered["platform/databases/external-secret-app.yaml"]
+	require.False(t, hasAppES, "should not render external-secret-app.yaml when ESO disabled")
+
+	// Verify cluster does NOT reference superuserSecret when ESO is disabled
+	cluster, ok := rendered["platform/databases/wildside-pg-cluster.yaml"]
+	require.True(t, ok, "expected cluster manifest")
+	require.NotContains(t, cluster, "superuserSecret", "cluster should not reference superuserSecret when ESO disabled")
+}
+
 func TestCNPGModuleRenderPolicy(t *testing.T) {
 	t.Parallel()
 	requireBinary(t, binaryRequirement{Binary: "conftest", SkipMessage: "conftest not found; skipping policy test"})
