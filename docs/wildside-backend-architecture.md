@@ -279,6 +279,14 @@ lint`:
   integration
   guardrail tests (`backend/tests/adapter_guardrails.rs`) to exercise HTTP and
   WebSocket paths against deterministic test doubles.
+- **2025-12-27:** Add `IdempotencyMetrics` port for recording request outcomes
+  (hits, misses, conflicts) independently of the HTTP layer. User scope labels
+  use first 8 hex characters of SHA-256 hash of user ID to preserve privacy
+  while enabling per-user analysis with low Prometheus label cardinality. Age
+  buckets (`0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`) align with
+  typical retry patterns for the 24-hour TTL. Metrics are recorded in the
+  domain service (`RouteSubmissionServiceImpl`) as fire-and-forget operations
+  to avoid impacting request latency.
 
 ### Web API and WebSocket Layer (Actix Web)
 

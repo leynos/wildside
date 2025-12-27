@@ -4,6 +4,7 @@ mod macros;
 pub(crate) use macros::define_port_error;
 
 mod cache_key;
+mod idempotency_metrics;
 mod idempotency_store;
 mod login_service;
 mod route_cache;
@@ -18,6 +19,9 @@ mod user_repository;
 mod users_query;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
+pub use idempotency_metrics::{
+    IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyMetricsError, NoOpIdempotencyMetrics,
+};
 #[cfg(test)]
 pub use idempotency_store::MockIdempotencyStore;
 pub use idempotency_store::{FixtureIdempotencyStore, IdempotencyStore, IdempotencyStoreError};

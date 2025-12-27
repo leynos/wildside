@@ -25,6 +25,8 @@ use backend::domain::ports::{
     FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
     FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
 };
+#[cfg(feature = "metrics")]
+use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::health::{HealthState, live, ready};
 use backend::inbound::http::routes::submit_route;
@@ -32,6 +34,8 @@ use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
+#[cfg(feature = "metrics")]
+use backend::outbound::metrics::PrometheusIdempotencyMetrics;
 use backend::outbound::persistence::DieselIdempotencyStore;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
@@ -39,6 +43,45 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use std::sync::Arc;
+
+/// Build the route submission service based on configuration.
+///
+/// Uses the real DB-backed implementation when a pool is available, otherwise
+/// falls back to the fixture for tests.
+#[cfg(feature = "metrics")]
+fn build_route_submission_service(
+    config: &ServerConfig,
+) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
+    match (&config.db_pool, &config.prometheus) {
+        (Some(pool), Some(prom)) => {
+            let idempotency_metrics =
+                PrometheusIdempotencyMetrics::new(&prom.registry).map_err(|e| {
+                    std::io::Error::other(format!("idempotency metrics registration failed: {e}"))
+                })?;
+            Ok(Arc::new(RouteSubmissionServiceImpl::new(
+                Arc::new(DieselIdempotencyStore::new(pool.clone())),
+                Arc::new(idempotency_metrics),
+            )))
+        }
+        (Some(pool), None) => Ok(Arc::new(RouteSubmissionServiceImpl::new(
+            Arc::new(DieselIdempotencyStore::new(pool.clone())),
+            Arc::new(NoOpIdempotencyMetrics),
+        ))),
+        (None, _) => Ok(Arc::new(FixtureRouteSubmissionService)),
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+fn build_route_submission_service(
+    config: &ServerConfig,
+) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
+    match &config.db_pool {
+        Some(pool) => Ok(Arc::new(RouteSubmissionServiceImpl::with_noop_metrics(
+            Arc::new(DieselIdempotencyStore::new(pool.clone())),
+        ))),
+        None => Ok(Arc::new(FixtureRouteSubmissionService)),
+    }
+}
 
 #[derive(Clone)]
 struct AppDependencies {
@@ -125,16 +168,9 @@ pub fn create_server(
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
 
-    // Build the route submission service: use the real DB-backed implementation
-    // when a pool is available, otherwise fall back to the fixture for tests.
     // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
     // to real DB-backed implementations once their adapters are ready.
-    let route_submission: Arc<dyn RouteSubmissionService> = match &config.db_pool {
-        Some(pool) => Arc::new(RouteSubmissionServiceImpl::new(Arc::new(
-            DieselIdempotencyStore::new(pool.clone()),
-        ))),
-        None => Arc::new(FixtureRouteSubmissionService),
-    };
+    let route_submission = build_route_submission_service(&config)?;
 
     let http_state = web::Data::new(HttpState::new(HttpStatePorts {
         login: Arc::new(FixtureLoginService),
