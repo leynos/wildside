@@ -137,7 +137,11 @@ pub fn create_server(
             (Some(pool), Some(prom)) => {
                 // Create idempotency metrics backed by the same registry as HTTP metrics.
                 let idempotency_metrics = PrometheusIdempotencyMetrics::new(&prom.registry)
-                    .expect("idempotency metrics registration should succeed");
+                    .map_err(|e| {
+                        std::io::Error::other(format!(
+                            "idempotency metrics registration failed: {e}"
+                        ))
+                    })?;
                 Arc::new(RouteSubmissionServiceImpl::new(
                     Arc::new(DieselIdempotencyStore::new(pool.clone())),
                     Arc::new(idempotency_metrics),

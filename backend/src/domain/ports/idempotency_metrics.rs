@@ -23,7 +23,7 @@ define_port_error! {
 /// and filtering in the metrics backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdempotencyMetricLabels {
-    /// Anonymised user scope (first 8 hex chars of SHA-256 hash of user ID).
+    /// Anonymized user scope (first 8 hex chars of SHA-256 hash of user ID).
     pub user_scope: String,
     /// Age bucket of the idempotency key (e.g., "0-1m", "1-5m").
     /// `None` for misses (no prior key exists).

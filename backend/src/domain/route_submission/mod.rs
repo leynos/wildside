@@ -22,13 +22,18 @@ use super::{
 
 /// Compute age bucket string from record creation time.
 ///
-/// Age buckets are aligned to typical retry patterns for a 24-hour TTL:
+/// Age buckets are aligned to typical retry patterns for a 24-hour time-to-live
+/// (TTL):
 /// - `0-1m`: Immediate retries (network issues)
 /// - `1-5m`: Client-side backoff retries
 /// - `5-30m`: Session recovery
 /// - `30m-2h`: Tab refresh / browser restart
 /// - `2h-6h`: Same-day return
 /// - `6h-24h`: Next-day retry before TTL expiry
+/// - `>24h`: Records older than 24 hours (approaching or past TTL)
+///
+/// Negative ages (future timestamps due to clock skew) are clamped to the
+/// `0-1m` bucket.
 ///
 /// # Example
 ///
@@ -41,17 +46,21 @@ fn calculate_age_bucket(created_at: DateTime<Utc>) -> String {
     let age = Utc::now() - created_at;
     let minutes = age.num_minutes();
 
+    // Clamp negative ages (future timestamps) to 0
+    let minutes = minutes.max(0);
+
     match minutes {
         0 => "0-1m".to_string(),
         1..=4 => "1-5m".to_string(),
         5..=29 => "5-30m".to_string(),
         30..=119 => "30m-2h".to_string(),
         120..=359 => "2h-6h".to_string(),
-        _ => "6h-24h".to_string(),
+        360..=1439 => "6h-24h".to_string(),
+        _ => ">24h".to_string(),
     }
 }
 
-/// Compute anonymised user scope from user ID.
+/// Compute anonymized user scope from user ID.
 ///
 /// Returns the first 8 hexadecimal characters of the SHA-256 hash of the
 /// user ID string. This provides:
@@ -105,6 +114,16 @@ where
     }
 }
 
+/// Idempotency outcome for metrics recording.
+enum IdempotencyOutcome {
+    /// New request (no prior key or key not found).
+    Miss,
+    /// Replay of existing matching request.
+    Hit(DateTime<Utc>),
+    /// Same key with different payload.
+    Conflict(DateTime<Utc>),
+}
+
 impl<S, M> RouteSubmissionServiceImpl<S, M>
 where
     S: IdempotencyStore,
@@ -116,6 +135,33 @@ where
             idempotency_store,
             idempotency_metrics,
         }
+    }
+
+    /// Record an idempotency outcome metric.
+    ///
+    /// Computes labels and dispatches to the appropriate metrics method.
+    /// Errors are ignored (fire-and-forget) to avoid impacting request processing.
+    async fn record_outcome(&self, outcome: IdempotencyOutcome, user_scope: &str) {
+        let labels = match &outcome {
+            IdempotencyOutcome::Miss => IdempotencyMetricLabels {
+                user_scope: user_scope.to_string(),
+                age_bucket: None,
+            },
+            IdempotencyOutcome::Hit(created_at) | IdempotencyOutcome::Conflict(created_at) => {
+                IdempotencyMetricLabels {
+                    user_scope: user_scope.to_string(),
+                    age_bucket: Some(calculate_age_bucket(*created_at)),
+                }
+            }
+        };
+
+        let _ = match outcome {
+            IdempotencyOutcome::Miss => self.idempotency_metrics.record_miss(&labels).await,
+            IdempotencyOutcome::Hit(_) => self.idempotency_metrics.record_hit(&labels).await,
+            IdempotencyOutcome::Conflict(_) => {
+                self.idempotency_metrics.record_conflict(&labels).await
+            }
+        };
     }
 
     /// Deserialise a stored response snapshot.
@@ -219,15 +265,13 @@ where
         &self,
         request: RouteSubmissionRequest,
     ) -> Result<RouteSubmissionResponse, Error> {
+        // Compute user scope hash once for all metric calls.
+        let user_scope = user_scope_hash(&request.user_id);
+
         // If no idempotency key, proceed without tracking (skip hash computation).
-        // Record a miss metric since no idempotency key means a new request.
         let Some(idempotency_key) = request.idempotency_key else {
-            let labels = IdempotencyMetricLabels {
-                user_scope: user_scope_hash(&request.user_id),
-                age_bucket: None,
-            };
-            // Fire-and-forget: metrics errors should not fail the request.
-            let _ = self.idempotency_metrics.record_miss(&labels).await;
+            self.record_outcome(IdempotencyOutcome::Miss, &user_scope)
+                .await;
 
             let request_id = Uuid::new_v4();
             // TODO(#276): Dispatch to route queue here when integrated.
@@ -246,37 +290,22 @@ where
 
         match lookup_result {
             IdempotencyLookupResult::NotFound => {
-                // Record miss metric for new idempotent request.
-                let labels = IdempotencyMetricLabels {
-                    user_scope: user_scope_hash(&request.user_id),
-                    age_bucket: None,
-                };
-                let _ = self.idempotency_metrics.record_miss(&labels).await;
-
+                self.record_outcome(IdempotencyOutcome::Miss, &user_scope)
+                    .await;
                 self.handle_new_request(idempotency_key, payload_hash, request.user_id)
                     .await
             }
             IdempotencyLookupResult::MatchingPayload(record) => {
-                // Record hit metric for replayed response.
-                let labels = IdempotencyMetricLabels {
-                    user_scope: user_scope_hash(&request.user_id),
-                    age_bucket: Some(calculate_age_bucket(record.created_at)),
-                };
-                let _ = self.idempotency_metrics.record_hit(&labels).await;
-
+                self.record_outcome(IdempotencyOutcome::Hit(record.created_at), &user_scope)
+                    .await;
                 let stored_response = Self::deserialize_stored_response(record.response_snapshot)?;
                 Ok(RouteSubmissionResponse::replayed(
                     stored_response.request_id,
                 ))
             }
             IdempotencyLookupResult::ConflictingPayload(record) => {
-                // Record conflict metric for payload mismatch.
-                let labels = IdempotencyMetricLabels {
-                    user_scope: user_scope_hash(&request.user_id),
-                    age_bucket: Some(calculate_age_bucket(record.created_at)),
-                };
-                let _ = self.idempotency_metrics.record_conflict(&labels).await;
-
+                self.record_outcome(IdempotencyOutcome::Conflict(record.created_at), &user_scope)
+                    .await;
                 Err(Error::conflict(
                     "idempotency key already used with different payload",
                 ))

@@ -358,9 +358,28 @@ mod age_bucket_tests {
     }
 
     #[test]
-    fn twenty_four_hours_returns_6h_24h() {
-        let created = Utc::now() - Duration::hours(24);
+    fn twenty_three_hours_returns_6h_24h() {
+        let created = Utc::now() - Duration::hours(23);
         assert_eq!(calculate_age_bucket(created), "6h-24h");
+    }
+
+    #[test]
+    fn twenty_four_hours_returns_gt_24h() {
+        let created = Utc::now() - Duration::hours(24);
+        assert_eq!(calculate_age_bucket(created), ">24h");
+    }
+
+    #[test]
+    fn forty_eight_hours_returns_gt_24h() {
+        let created = Utc::now() - Duration::hours(48);
+        assert_eq!(calculate_age_bucket(created), ">24h");
+    }
+
+    #[test]
+    fn future_timestamp_clamps_to_0_1m() {
+        // Simulate clock skew: created_at is in the future
+        let created = Utc::now() + Duration::minutes(5);
+        assert_eq!(calculate_age_bucket(created), "0-1m");
     }
 }
 
@@ -403,8 +422,10 @@ mod user_scope_hash_tests {
 
     #[test]
     fn different_users_produce_different_hashes() {
-        let user_a = UserId::random();
-        let user_b = UserId::random();
+        // Use fixed UUIDs to ensure deterministic test (avoid rare hash collisions
+        // with random IDs).
+        let user_a = UserId::new("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let user_b = UserId::new("550e8400-e29b-41d4-a716-446655440001").unwrap();
 
         let scope_a = user_scope_hash(&user_a);
         let scope_b = user_scope_hash(&user_b);

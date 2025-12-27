@@ -37,7 +37,8 @@ Success is observable when:
 - [x] Implement `PrometheusIdempotencyMetrics` adapter (feature-gated).
 - [x] Wire Prometheus adapter in `server/mod.rs`.
 - [x] Add unit tests for helpers (age buckets, user scope).
-- [~] Create BDD feature file for metrics scenarios (deferred - unit tests
+- [~] Create Behaviour-Driven Development (BDD) feature file for metrics
+  scenarios (deferred - unit tests
   provide adequate coverage).
 - [~] Implement BDD step definitions (deferred - unit tests provide adequate
   coverage).
@@ -73,7 +74,8 @@ Success is observable when:
   traceability (same user always maps to same label).
   Date/Author: 2025-12-26 / Claude Code.
 
-- Decision: Age buckets aligned to 24-hour TTL with retry-pattern semantics.
+- Decision: Age buckets aligned to 24-hour time-to-live (TTL) with retry-pattern
+  semantics.
   Rationale: TTL is 24 hours; buckets should cover this range meaningfully.
   Buckets: `0-1m` (immediate retries), `1-5m` (client backoff), `5-30m`
   (session recovery), `30m-2h` (tab refresh), `2h-6h` (same-day return),
@@ -111,7 +113,7 @@ Terminology:
 - *Hit*: Idempotency key exists and payload hash matches; response is replayed.
 - *Miss*: Idempotency key is new or absent; request proceeds normally.
 - *Conflict*: Idempotency key exists but payload hash differs; returns 409.
-- *User scope*: Anonymised user identifier (first 8 hex chars of SHA-256 hash).
+- *User scope*: Anonymized user identifier (first 8 hex chars of SHA-256 hash).
 - *Age bucket*: Time elapsed since idempotency key was created.
 
 ## Plan of Work
@@ -138,7 +140,7 @@ define_port_error! {
 /// Labels for idempotency metric recording.
 #[derive(Debug, Clone)]
 pub struct IdempotencyMetricLabels {
-    /// Anonymised user scope (first 8 hex chars of SHA-256 hash of user ID).
+    /// Anonymized user scope (first 8 hex chars of SHA-256 hash of user ID).
     pub user_scope: String,
     /// Age bucket of the idempotency key (e.g., "0-1m", "1-5m").
     /// `None` for misses (no prior key).
@@ -223,7 +225,7 @@ fn calculate_age_bucket(created_at: DateTime<Utc>) -> String {
     }
 }
 
-/// Compute anonymised user scope from user ID.
+/// Compute anonymized user scope from user ID.
 ///
 /// Returns the first 8 hexadecimal characters of the SHA-256 hash.
 fn user_scope_hash(user_id: &UserId) -> String {
@@ -470,7 +472,7 @@ Run and verify:
 | Label        | Values                                                       | Description                       |
 | ------------ | ------------------------------------------------------------ | --------------------------------- |
 | `outcome`    | `miss`, `hit`, `conflict`                                    | Request outcome                   |
-| `user_scope` | 8 hex chars                                                  | Anonymised user identifier        |
+| `user_scope` | 8 hex chars                                                  | Anonymized user identifier        |
 | `age_bucket` | `0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`, `n/a`  | Key age at reuse (n/a for misses) |
 
 Example output:
