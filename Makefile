@@ -47,7 +47,7 @@ GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCAC
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
 	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
 	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture \
-	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy
+	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy cnpg-test cnpg-policy
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -233,7 +233,9 @@ INFRA_TEST_TARGETS := \
         cert-manager-test \
         cert-manager-policy \
         vault-eso-test \
-        vault-eso-policy
+        vault-eso-policy \
+        cnpg-test \
+        cnpg-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -618,3 +620,13 @@ vault-eso-policy: conftest tofu
 		TF_IN_AUTOMATION=1 tofu -chdir=infra/modules/vault_eso/examples/basic show -json "$$tmpdir/tfplan.binary" > "$$tmpdir/plan.json"; \
 		conftest test --policy infra/modules/vault_eso/policy/plan --fail-on-warn --namespace vault_eso.policy.plan "$$tmpdir/plan.json"; \
 	fi
+
+.PHONY: cnpg-test
+cnpg-test: ## Run CNPG module Terratest suite
+	@echo "Running CNPG module tests..."
+	cd infra/modules/cnpg/tests && go test -v -timeout 30m ./...
+
+.PHONY: cnpg-policy
+cnpg-policy: ## Run CNPG render policy checks
+	@echo "Running CNPG render policy checks..."
+	./scripts/cnpg-render-policy.sh

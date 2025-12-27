@@ -73,7 +73,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
     release, ESO configuration, and a sync policy contract that hands back
     secret store names for workloads.
 
-  - [ ] **CloudNativePG module**: Model cluster, replica, and backup settings;
+  - [x] **CloudNativePG module**: Model cluster, replica, and backup settings;
     surface connection endpoints, admin credentials, and secret read handles
     for applications.
 
