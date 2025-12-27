@@ -17,7 +17,6 @@ import (
 const exampleKubeconfigError = "Set kubeconfig_path to a readable kubeconfig file before running the example"
 
 const cnpgPolicyManifestsNamespace = "cnpg.policy.manifests"
-const cnpgPolicyPlanNamespace = "cnpg.policy.plan"
 
 type binaryRequirement struct {
 	Binary      string
