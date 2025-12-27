@@ -35,15 +35,21 @@ use super::{
 /// Negative ages (future timestamps due to clock skew) are clamped to the
 /// `0-1m` bucket.
 ///
+/// # Parameters
+///
+/// - `created_at`: The timestamp when the idempotency record was created.
+/// - `now`: The current time (injected for testability).
+///
 /// # Example
 ///
 /// ```ignore
 /// use chrono::{Duration, Utc};
-/// let created = Utc::now() - Duration::seconds(90);
-/// assert_eq!(calculate_age_bucket(created), "1-5m");
+/// let now = Utc::now();
+/// let created = now - Duration::seconds(90);
+/// assert_eq!(calculate_age_bucket(created, now), "1-5m");
 /// ```
-fn calculate_age_bucket(created_at: DateTime<Utc>) -> String {
-    let age = Utc::now() - created_at;
+fn calculate_age_bucket(created_at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let age = now - created_at;
     let minutes = age.num_minutes();
 
     // Clamp negative ages (future timestamps) to 0
@@ -142,6 +148,7 @@ where
     /// Computes labels and dispatches to the appropriate metrics method.
     /// Errors are ignored (fire-and-forget) to avoid impacting request processing.
     async fn record_outcome(&self, outcome: IdempotencyOutcome, user_scope: &str) {
+        let now = Utc::now();
         let labels = match &outcome {
             IdempotencyOutcome::Miss => IdempotencyMetricLabels {
                 user_scope: user_scope.to_string(),
@@ -150,7 +157,7 @@ where
             IdempotencyOutcome::Hit(created_at) | IdempotencyOutcome::Conflict(created_at) => {
                 IdempotencyMetricLabels {
                     user_scope: user_scope.to_string(),
-                    age_bucket: Some(calculate_age_bucket(*created_at)),
+                    age_bucket: Some(calculate_age_bucket(*created_at, now)),
                 }
             }
         };

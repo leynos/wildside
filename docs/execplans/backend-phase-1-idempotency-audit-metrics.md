@@ -208,12 +208,16 @@ use sha2::{Sha256, Digest};
 ///
 /// ```
 /// use chrono::{Utc, Duration};
-/// let created = Utc::now() - Duration::seconds(90);
-/// assert_eq!(calculate_age_bucket(created), "1-5m");
+/// let now = Utc::now();
+/// let created = now - Duration::seconds(90);
+/// assert_eq!(calculate_age_bucket(created, now), "1-5m");
 /// ```
-fn calculate_age_bucket(created_at: DateTime<Utc>) -> String {
-    let age = Utc::now() - created_at;
+fn calculate_age_bucket(created_at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let age = now - created_at;
     let minutes = age.num_minutes();
+
+    // Clamp negative ages (future timestamps) to 0
+    let minutes = minutes.max(0);
 
     match minutes {
         0 => "0-1m".to_string(),
@@ -221,7 +225,8 @@ fn calculate_age_bucket(created_at: DateTime<Utc>) -> String {
         5..=29 => "5-30m".to_string(),
         30..=119 => "30m-2h".to_string(),
         120..=359 => "2h-6h".to_string(),
-        _ => "6h-24h".to_string(),
+        360..=1439 => "6h-24h".to_string(),
+        _ => ">24h".to_string(),
     }
 }
 
@@ -469,11 +474,11 @@ Run and verify:
 | ------------------------------------- | ------- | ---------------------------------------- |
 | `wildside_idempotency_requests_total` | Counter | Total idempotency requests by outcome    |
 
-| Label        | Values                                                       | Description                       |
-| ------------ | ------------------------------------------------------------ | --------------------------------- |
-| `outcome`    | `miss`, `hit`, `conflict`                                    | Request outcome                   |
-| `user_scope` | 8 hex chars                                                  | Anonymized user identifier        |
-| `age_bucket` | `0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`, `n/a`  | Key age at reuse (n/a for misses) |
+| Label        | Values                                                               | Description                       |
+| ------------ | -------------------------------------------------------------------- | --------------------------------- |
+| `outcome`    | `miss`, `hit`, `conflict`                                            | Request outcome                   |
+| `user_scope` | 8 hex chars                                                          | Anonymized user identifier        |
+| `age_bucket` | `0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`, `>24h`, `n/a`  | Key age at reuse (n/a for misses) |
 
 Example output:
 
