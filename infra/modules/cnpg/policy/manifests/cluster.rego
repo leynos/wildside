@@ -102,14 +102,29 @@ deny contains msg if {
 	msg := sprintf("CNPG Cluster %s with multiple instances requires a PodDisruptionBudget", [name])
 }
 
-# Warn if not using PostGIS image when postgis may be expected
+# Helper to check if PostGIS is expected based on bootstrap SQL or annotations
+cluster_expects_postgis(doc) if {
+	bootstrap := cluster_bootstrap(doc)
+	initdb := object.get(bootstrap, "initdb", {})
+	post_init_sql := object.get(initdb, "postInitTemplateSQL", [])
+	some sql in post_init_sql
+	contains(lower(sql), "postgis")
+}
+
+cluster_expects_postgis(doc) if {
+	annotations := object.get(metadata(doc), "annotations", {})
+	object.get(annotations, "cnpg.io/postgis-required", "") == "true"
+}
+
+# Warn if not using PostGIS image when postgis is expected
 warn contains msg if {
 	doc := clusters[_]
+	cluster_expects_postgis(doc)
 	image := cluster_image(doc)
 	image != ""
 	not contains(image, "postgis")
 	name := object.get(metadata(doc), "name", "<unknown>")
-	msg := sprintf("CNPG Cluster %s is not using a PostGIS image", [name])
+	msg := sprintf("CNPG Cluster %s expects PostGIS but is not using a PostGIS image", [name])
 }
 
 # Warn if using unsupervised update strategy in production
