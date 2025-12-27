@@ -37,6 +37,12 @@ variable "database_name" {
   default     = "wildside_prod"
 }
 
+variable "database_owner" {
+  description = "Owner of the initial database"
+  type        = string
+  default     = "wildside_app"
+}
+
 variable "postgis_enabled" {
   description = "Enable PostGIS extensions"
   type        = bool
@@ -94,6 +100,7 @@ module "cnpg" {
   instances       = var.instances
   storage_size    = var.storage_size
   database_name   = var.database_name
+  database_owner  = var.database_owner
   postgis_enabled = var.postgis_enabled
 
   backup_enabled              = var.backup_enabled
