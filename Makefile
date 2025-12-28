@@ -47,7 +47,7 @@ GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCAC
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
 	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
 	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture \
-	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy cnpg-test cnpg-policy
+	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy cnpg-test cnpg-policy valkey-test valkey-policy
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -151,6 +151,7 @@ lint-infra:
 	cd infra/modules/external_dns && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/cert_manager && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_eso && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/valkey && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
@@ -235,7 +236,9 @@ INFRA_TEST_TARGETS := \
         vault-eso-test \
         vault-eso-policy \
         cnpg-test \
-        cnpg-policy
+        cnpg-policy \
+        valkey-test \
+        valkey-policy
 
 $(INFRA_TEST_TARGETS): check-test-deps
 
@@ -630,3 +633,13 @@ cnpg-test: ## Run CNPG module Terratest suite
 cnpg-policy: ## Run CNPG render policy checks
 	@echo "Running CNPG render policy checks..."
 	./scripts/cnpg-render-policy.sh
+
+.PHONY: valkey-test
+valkey-test: ## Run Valkey module Terratest suite
+	@echo "Running Valkey module tests..."
+	cd infra/modules/valkey/tests && $(GO_TEST_ENV) go test -v -timeout 30m ./...
+
+.PHONY: valkey-policy
+valkey-policy: ## Run Valkey render policy checks
+	@echo "Running Valkey render policy checks..."
+	./scripts/valkey-render-policy.sh
