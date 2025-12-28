@@ -156,6 +156,7 @@ The `tls` field in the Valkey CRD expects a string value (`"true"` or
 ### Service Naming
 
 The Valkey operator creates services following the pattern:
+
 - Primary: `<cluster_name>-primary.<namespace>.svc.<cluster_domain>`
 - Replicas: `<cluster_name>-replicas.<namespace>.svc.<cluster_domain>`
 
