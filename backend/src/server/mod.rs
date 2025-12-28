@@ -47,7 +47,21 @@ use std::sync::Arc;
 /// Build the route submission service based on configuration.
 ///
 /// Uses the real DB-backed implementation when a pool is available, otherwise
-/// falls back to the fixture for tests.
+/// falls back to the fixture for tests. When the metrics feature is enabled,
+/// Prometheus-backed idempotency metrics are registered if both a DB pool and
+/// Prometheus registry are available; otherwise, a no-op metrics implementation
+/// is used.
+///
+/// # Parameters
+/// - `config`: server configuration containing optional DB pool and Prometheus registry.
+///
+/// # Returns
+/// An `Arc<dyn RouteSubmissionService>` wrapping either:
+/// - `RouteSubmissionServiceImpl` with DB-backed storage and metrics (real or no-op).
+/// - `FixtureRouteSubmissionService` when no DB pool is configured.
+///
+/// # Errors
+/// Returns [`std::io::Error`] if Prometheus metric registration fails.
 #[cfg(feature = "metrics")]
 fn build_route_submission_service(
     config: &ServerConfig,
@@ -71,6 +85,19 @@ fn build_route_submission_service(
     }
 }
 
+/// Build the route submission service based on configuration.
+///
+/// Uses the real DB-backed implementation when a pool is available, otherwise
+/// falls back to the fixture for tests. When the metrics feature is disabled,
+/// a no-op metrics implementation is always used.
+///
+/// # Parameters
+/// - `config`: server configuration containing optional DB pool.
+///
+/// # Returns
+/// An `Arc<dyn RouteSubmissionService>` wrapping either:
+/// - `RouteSubmissionServiceImpl` with DB-backed storage and no-op metrics.
+/// - `FixtureRouteSubmissionService` when no DB pool is configured.
 #[cfg(not(feature = "metrics"))]
 fn build_route_submission_service(
     config: &ServerConfig,
