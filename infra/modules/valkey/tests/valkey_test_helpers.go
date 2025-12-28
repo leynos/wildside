@@ -170,12 +170,6 @@ func requireEnvVar(t *testing.T, req envVarRequirement) string {
 	return value
 }
 
-func terraformOutputExists(t *testing.T, opts *terraform.Options, name string) bool {
-	t.Helper()
-	_, err := terraform.OutputE(t, opts, name)
-	return err == nil
-}
-
 func valkeyPolicyRoot(tfDir string) string {
 	return filepath.Join(tfDir, "..", "..", "policy")
 }

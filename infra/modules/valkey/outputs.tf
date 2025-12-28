@@ -63,7 +63,7 @@ output "sync_policy_contract" {
   value = {
     cluster = {
       name      = local.cluster_name
-      namespace = local.namespace
+      namespace = local.effective_namespace
     }
     endpoints = {
       primary = {
@@ -78,7 +78,7 @@ output "sync_policy_contract" {
     credentials = local.anonymous_auth ? null : {
       secret_name = local.password_secret_name
       secret_key  = local.password_secret_key
-      namespace   = local.namespace
+      namespace   = local.effective_namespace
     }
     tls = {
       enabled     = local.tls_enabled

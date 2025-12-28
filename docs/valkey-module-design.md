@@ -146,12 +146,14 @@ Three authentication strategies are supported:
 
 1. **Anonymous auth**: No password required (`anonymous_auth = true`)
 2. **Inline password**: Secret created from `password_inline` variable
-3. **ESO integration**: ExternalSecret fetches credentials from Vault
+3. **External Secrets Operator (ESO) integration**: ExternalSecret fetches
+   credentials from Vault
 
 ### TLS Configuration
 
-The `tls` field in the Valkey CRD expects a string value (`"true"` or
-`"false"`), not a boolean. This is a constraint of the operator's CRD schema.
+The `tls` field in the Valkey CustomResourceDefinition (CRD) expects a string
+value (`"true"` or `"false"`), not a boolean. This is a constraint of the
+operator's CRD schema.
 
 ### Service Naming
 
@@ -166,7 +168,8 @@ The module includes:
 
 - **Terratest suite**: Validates render outputs, sync policy contract, and
   configuration variants
-- **OPA policies**: Conftest rules for HelmRelease and Valkey cluster manifests
+- **Open Policy Agent (OPA) policies**: Conftest rules for HelmRelease and
+  Valkey cluster manifests
 
 Run tests with:
 

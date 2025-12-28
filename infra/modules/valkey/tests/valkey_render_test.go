@@ -123,6 +123,22 @@ func TestValkeyModuleSyncPolicyContract(t *testing.T) {
 		_, ok := contract[key]
 		require.True(t, ok, "sync_policy_contract missing required key: %s", key)
 	}
+
+	// Verify contract values match expected inputs
+	require.Contains(t, contract["cluster"], "test-valkey", "cluster should contain expected name")
+	require.Contains(t, contract["cluster"], "valkey", "cluster should contain expected namespace")
+
+	require.Contains(t, contract["endpoints"], "test-valkey-primary", "endpoints should contain primary host")
+	require.Contains(t, contract["endpoints"], "test-valkey-replicas", "endpoints should contain replica host")
+	require.Contains(t, contract["endpoints"], "6379", "endpoints should contain port")
+
+	require.Contains(t, contract["credentials"], "valkey-password", "credentials should contain secret name")
+	require.Contains(t, contract["credentials"], "password", "credentials should contain secret key")
+
+	require.Contains(t, contract["persistence"], "true", "persistence should be enabled")
+	require.Contains(t, contract["persistence"], "1Gi", "persistence should contain storage size")
+
+	require.Contains(t, contract["replication"], "1", "replication should show nodes count")
 }
 
 func TestValkeyModuleEndpoints(t *testing.T) {
@@ -170,14 +186,13 @@ func TestValkeyModuleRenderWithTLS(t *testing.T) {
 	require.NotEmpty(t, rendered, "expected rendered_manifests output to be non-empty")
 
 	// Verify cluster includes TLS configuration
-	// Note: The Valkey operator CRD expects tls as a string value
 	cluster, ok := rendered["platform/redis/valkey-cluster.yaml"]
 	require.True(t, ok, "expected cluster manifest")
 	require.True(
 		t,
-		strings.Contains(cluster, "tls: \"true\"") ||
-			strings.Contains(cluster, "\"tls\": \"true\""),
-		"expected cluster to have TLS enabled (as string 'true')",
+		strings.Contains(cluster, "tls: true") ||
+			strings.Contains(cluster, "\"tls\": true"),
+		"expected cluster to have TLS enabled",
 	)
 	require.Contains(t, cluster, "letsencrypt-staging", "expected cluster to reference cert issuer")
 }

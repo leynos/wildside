@@ -84,21 +84,19 @@ locals {
     }
     spec = merge(
       {
-        nodes         = local.nodes
-        replicas      = local.replicas
-        anonymousAuth = local.anonymous_auth
-        clusterDomain = local.cluster_domain
-        prometheus    = var.prometheus_enabled
-        serviceMonitor = var.service_monitor_enabled
+        nodes             = local.nodes
+        replicas          = local.replicas
+        anonymousAuth     = local.anonymous_auth
+        clusterDomain     = local.cluster_domain
+        prometheus        = var.prometheus_enabled
+        serviceMonitor    = var.service_monitor_enabled
         volumePermissions = false
+        tls               = local.tls_enabled && length(local.cert_issuer_name) > 0
       },
       local.tls_enabled && length(local.cert_issuer_name) > 0 ? {
-        tls            = "true"
         certIssuer     = local.cert_issuer_name
         certIssuerType = local.cert_issuer_type
-      } : {
-        tls = "false"
-      },
+      } : {},
       var.persistence_enabled ? {
         storage = {
           resources = {

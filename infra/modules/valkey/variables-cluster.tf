@@ -64,9 +64,9 @@ variable "storage_size" {
   validation {
     condition = (
       var.storage_size != null &&
-      can(regex("^[0-9]+(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$", trimspace(var.storage_size)))
+      can(regex("^([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$", trimspace(var.storage_size)))
     )
-    error_message = "storage_size must be a valid Kubernetes quantity (e.g., 1Gi, 500Mi)"
+    error_message = "storage_size must be a valid Kubernetes quantity (e.g., 1Gi, 500Mi, 1e9)"
   }
 }
 

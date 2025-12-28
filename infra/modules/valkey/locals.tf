@@ -64,9 +64,22 @@ locals {
   cert_issuer_type  = var.cert_issuer_type
 
   # Helm values processing
-  helm_inline_values     = [for value in var.helm_values : value if trimspace(value) != ""]
-  decoded_helm_values    = [for value in local.helm_inline_values : try(yamldecode(value), {})]
-  merged_helm_values_map = merge({}, local.decoded_helm_values...)
+  helm_inline_values  = [for value in var.helm_values : value if trimspace(value) != ""]
+  decoded_helm_values = [for value in local.helm_inline_values : try(yamldecode(value), {})]
+  merged_helm_values  = merge({}, local.decoded_helm_values...)
+
+  # Flatten nested maps to dot-notation keys for Helm set blocks.
+  # The Helm provider's set block expects flat key=value pairs with dot notation
+  # for nested values (e.g., "controller.replicas" = "3").
+  merged_helm_values_map = merge([
+    for k, v in local.merged_helm_values : (
+      can(tomap(v)) ? {
+        for nk, nv in v : "${k}.${nk}" => tostring(nv)
+      } : {
+        (k) = tostring(v)
+      }
+    )
+  ]...)
 
   # PDB settings - only enable if replicas > 0 (HA mode)
   pdb_enabled = var.pdb_enabled && var.replicas > 0

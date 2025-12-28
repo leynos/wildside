@@ -75,6 +75,14 @@ variable "password_vault_path" {
   description = "Vault KV path for the Valkey password (used when eso_enabled is true)"
   type        = string
   default     = ""
+
+  validation {
+    condition = (
+      var.password_vault_path == "" ||
+      can(regex("^[a-zA-Z0-9_/-]+$", trimspace(var.password_vault_path)))
+    )
+    error_message = "password_vault_path must be a valid Vault path (alphanumeric with /, -, _)"
+  }
 }
 
 variable "password_vault_key" {

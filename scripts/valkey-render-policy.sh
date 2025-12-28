@@ -69,9 +69,11 @@ from pathlib import Path
 
 root = Path(os.environ["RENDER_POLICY_TMP"])
 out_dir = root / "out"
-payload = json.loads((root / "manifests.json").read_text())
+# tofu output -json wraps the value in {"sensitive": bool, "type": ..., "value": ...}
+raw = json.loads((root / "manifests.json").read_text())
+payload = raw.get("value", {}) if isinstance(raw, dict) else {}
 if not isinstance(payload, dict):
-    raise SystemExit(f"expected rendered_manifests to be a JSON object, got {type(payload)}")
+    raise SystemExit(f"expected rendered_manifests.value to be a JSON object, got {type(payload)}")
 
 for rel_path, content in payload.items():
     if not isinstance(rel_path, str) or not rel_path:
