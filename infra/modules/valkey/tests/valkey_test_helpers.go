@@ -62,63 +62,69 @@ users:
 	}
 }
 
+// baseRenderVars returns the common base configuration for render tests.
+func baseRenderVars() map[string]interface{} {
+	return map[string]interface{}{
+		"cluster_name": "test-valkey",
+		"nodes":        1,
+		"replicas":     0,
+		"storage_size": "1Gi",
+	}
+}
+
+// mergeVars merges base and override maps, with overrides taking precedence.
+func mergeVars(base, overrides map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(base)+len(overrides))
+	for k, v := range base {
+		result[k] = v
+	}
+	for k, v := range overrides {
+		result[k] = v
+	}
+	return result
+}
+
 func renderVars(t *testing.T) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
-		"cluster_name":    "test-valkey",
-		"nodes":           1,
-		"replicas":        0,
-		"storage_size":    "1Gi",
+	return mergeVars(baseRenderVars(), map[string]interface{}{
 		"password_inline": "test-password-for-render",
-	}
+	})
 }
 
 func renderVarsHA(t *testing.T) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
+	return mergeVars(baseRenderVars(), map[string]interface{}{
 		"cluster_name":    "test-valkey-ha",
 		"nodes":           3,
 		"replicas":        1,
 		"storage_size":    "2Gi",
 		"password_inline": "test-password-for-ha",
-	}
+	})
 }
 
 func renderVarsWithESO(t *testing.T) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
-		"cluster_name":                  "test-valkey",
-		"nodes":                         1,
-		"replicas":                      0,
-		"storage_size":                  "1Gi",
+	return mergeVars(baseRenderVars(), map[string]interface{}{
 		"eso_enabled":                   true,
 		"eso_cluster_secret_store_name": "vault-backend",
 		"password_vault_path":           "secret/data/valkey/password",
-	}
+	})
 }
 
 func renderVarsWithTLS(t *testing.T) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
-		"cluster_name":     "test-valkey",
-		"nodes":            1,
-		"replicas":         0,
-		"storage_size":     "1Gi",
+	return mergeVars(baseRenderVars(), map[string]interface{}{
 		"password_inline":  "test-password",
 		"tls_enabled":      true,
 		"cert_issuer_name": "letsencrypt-staging",
-	}
+	})
 }
 
 func renderVarsAnonymous(t *testing.T) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
-		"cluster_name":   "test-valkey",
-		"nodes":          1,
-		"replicas":       0,
-		"storage_size":   "1Gi",
+	return mergeVars(baseRenderVars(), map[string]interface{}{
 		"anonymous_auth": true,
-	}
+	})
 }
 
 func setup(t *testing.T, vars map[string]interface{}) (string, *terraform.Options) {
