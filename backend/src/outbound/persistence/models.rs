@@ -63,9 +63,10 @@ pub(crate) struct UserUpdate<'a> {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub(crate) struct IdempotencyKeyRow {
     pub key: Uuid,
+    pub user_id: Uuid,
+    pub mutation_type: String,
     pub payload_hash: Vec<u8>,
     pub response_snapshot: serde_json::Value,
-    pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
@@ -74,6 +75,7 @@ pub(crate) struct IdempotencyKeyRow {
 #[diesel(table_name = idempotency_keys)]
 pub(crate) struct NewIdempotencyKeyRow<'a> {
     pub key: Uuid,
+    pub mutation_type: &'a str,
     pub payload_hash: &'a [u8],
     pub response_snapshot: &'a serde_json::Value,
     pub user_id: Uuid,

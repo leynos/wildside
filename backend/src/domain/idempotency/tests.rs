@@ -1,9 +1,12 @@
 //! Unit tests for idempotency primitives.
 
-use super::*;
+use std::time::Duration;
+
 use rstest::rstest;
 use serde_json::json;
 use uuid::Uuid;
+
+use super::*;
 
 // IdempotencyKey tests
 
@@ -116,4 +119,120 @@ fn canonicalize_and_hash_handles_primitives() {
         canonicalize_and_hash(&json!("a")),
         canonicalize_and_hash(&json!("b"))
     );
+}
+
+// MutationType tests
+
+#[rstest]
+#[case(MutationType::Routes, "routes")]
+#[case(MutationType::Notes, "notes")]
+#[case(MutationType::Progress, "progress")]
+#[case(MutationType::Preferences, "preferences")]
+#[case(MutationType::Bundles, "bundles")]
+fn mutation_type_as_str(#[case] mutation: MutationType, #[case] expected: &str) {
+    assert_eq!(mutation.as_str(), expected);
+}
+
+#[rstest]
+#[case(MutationType::Routes, "routes")]
+#[case(MutationType::Notes, "notes")]
+#[case(MutationType::Progress, "progress")]
+#[case(MutationType::Preferences, "preferences")]
+#[case(MutationType::Bundles, "bundles")]
+fn mutation_type_display(#[case] mutation: MutationType, #[case] expected: &str) {
+    assert_eq!(format!("{mutation}"), expected);
+}
+
+#[rstest]
+#[case("routes", MutationType::Routes)]
+#[case("notes", MutationType::Notes)]
+#[case("progress", MutationType::Progress)]
+#[case("preferences", MutationType::Preferences)]
+#[case("bundles", MutationType::Bundles)]
+fn mutation_type_from_str(#[case] input: &str, #[case] expected: MutationType) {
+    use std::str::FromStr;
+    assert_eq!(
+        MutationType::from_str(input).expect("valid input"),
+        expected
+    );
+}
+
+#[rstest]
+#[case("invalid")]
+#[case("Routes")]
+#[case("ROUTES")]
+#[case("")]
+fn mutation_type_from_str_rejects_invalid(#[case] input: &str) {
+    use std::str::FromStr;
+    let result = MutationType::from_str(input);
+    assert!(result.is_err(), "expected error for input '{input}'");
+    let err = result.unwrap_err();
+    assert_eq!(err.input, input);
+}
+
+#[test]
+fn mutation_type_serde_roundtrip() {
+    for mutation in [
+        MutationType::Routes,
+        MutationType::Notes,
+        MutationType::Progress,
+        MutationType::Preferences,
+        MutationType::Bundles,
+    ] {
+        let json = serde_json::to_string(&mutation).expect("serialization should succeed");
+        let parsed: MutationType =
+            serde_json::from_str(&json).expect("deserialization should succeed");
+        assert_eq!(mutation, parsed);
+    }
+}
+
+#[test]
+fn mutation_type_serializes_to_snake_case() {
+    let json = serde_json::to_string(&MutationType::Routes).expect("serialization should succeed");
+    assert_eq!(json, "\"routes\"");
+}
+
+// IdempotencyConfig tests
+
+#[test]
+fn idempotency_config_default_is_24_hours() {
+    let config = IdempotencyConfig::default();
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+}
+
+#[test]
+fn idempotency_config_with_ttl_sets_custom_duration() {
+    let ttl = Duration::from_secs(12 * 3600);
+    let config = IdempotencyConfig::with_ttl(ttl);
+    assert_eq!(config.ttl(), ttl);
+}
+
+#[test]
+fn idempotency_config_from_env_uses_default_without_var() {
+    // Clear the env var if set
+    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
+    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
+    let config = IdempotencyConfig::from_env();
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+}
+
+#[test]
+fn idempotency_config_from_env_respects_env_var() {
+    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
+    unsafe { std::env::set_var("IDEMPOTENCY_TTL_HOURS", "48") };
+    let config = IdempotencyConfig::from_env();
+    assert_eq!(config.ttl(), Duration::from_secs(48 * 3600));
+    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
+    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
+}
+
+#[test]
+fn idempotency_config_from_env_ignores_invalid_value() {
+    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
+    unsafe { std::env::set_var("IDEMPOTENCY_TTL_HOURS", "not_a_number") };
+    let config = IdempotencyConfig::from_env();
+    // Falls back to default
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
+    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
 }

@@ -36,7 +36,7 @@ use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 #[cfg(feature = "metrics")]
 use backend::outbound::metrics::PrometheusIdempotencyMetrics;
-use backend::outbound::persistence::DieselIdempotencyStore;
+use backend::outbound::persistence::DieselIdempotencyRepository;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]
@@ -73,12 +73,12 @@ fn build_route_submission_service(
                     std::io::Error::other(format!("idempotency metrics registration failed: {e}"))
                 })?;
             Ok(Arc::new(RouteSubmissionServiceImpl::new(
-                Arc::new(DieselIdempotencyStore::new(pool.clone())),
+                Arc::new(DieselIdempotencyRepository::new(pool.clone())),
                 Arc::new(idempotency_metrics),
             )))
         }
         (Some(pool), None) => Ok(Arc::new(RouteSubmissionServiceImpl::new(
-            Arc::new(DieselIdempotencyStore::new(pool.clone())),
+            Arc::new(DieselIdempotencyRepository::new(pool.clone())),
             Arc::new(NoOpIdempotencyMetrics),
         ))),
         (None, _) => Ok(Arc::new(FixtureRouteSubmissionService)),
@@ -104,7 +104,7 @@ fn build_route_submission_service(
 ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
     match &config.db_pool {
         Some(pool) => Ok(Arc::new(RouteSubmissionServiceImpl::with_noop_metrics(
-            Arc::new(DieselIdempotencyStore::new(pool.clone())),
+            Arc::new(DieselIdempotencyRepository::new(pool.clone())),
         ))),
         None => Ok(Arc::new(FixtureRouteSubmissionService)),
     }

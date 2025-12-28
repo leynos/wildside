@@ -11,13 +11,13 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::ports::{
-    IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyStore, IdempotencyStoreError,
+    IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyRepository, IdempotencyRepositoryError,
     NoOpIdempotencyMetrics, RouteSubmissionRequest, RouteSubmissionResponse,
     RouteSubmissionService,
 };
 use super::{
-    Error, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
-    canonicalize_and_hash,
+    Error, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, MutationType, PayloadHash,
+    UserId, canonicalize_and_hash,
 };
 
 /// Compute age bucket string from record creation time.
@@ -92,7 +92,7 @@ fn user_scope_hash(user_id: &UserId) -> String {
 /// Concrete implementation of [`RouteSubmissionService`].
 ///
 /// Orchestrates route submission with idempotency support by:
-/// 1. Looking up idempotency keys in the store.
+/// 1. Looking up idempotency keys in the repository.
 /// 2. Comparing payload hashes to detect conflicts.
 /// 3. Generating request IDs for new submissions.
 /// 4. Storing responses for future replay.
@@ -100,21 +100,21 @@ fn user_scope_hash(user_id: &UserId) -> String {
 ///
 /// The `M` type parameter allows injection of a metrics recorder. When metrics
 /// are not needed (e.g., in tests), use [`NoOpIdempotencyMetrics`] as the default.
-pub struct RouteSubmissionServiceImpl<S, M = NoOpIdempotencyMetrics> {
-    idempotency_store: Arc<S>,
+pub struct RouteSubmissionServiceImpl<R, M = NoOpIdempotencyMetrics> {
+    idempotency_repository: Arc<R>,
     idempotency_metrics: Arc<M>,
 }
 
-impl<S> RouteSubmissionServiceImpl<S, NoOpIdempotencyMetrics>
+impl<R> RouteSubmissionServiceImpl<R, NoOpIdempotencyMetrics>
 where
-    S: IdempotencyStore,
+    R: IdempotencyRepository,
 {
-    /// Create a new service with the given idempotency store and no-op metrics.
+    /// Create a new service with the given idempotency repository and no-op metrics.
     ///
     /// Use this constructor when metrics recording is not required.
-    pub fn with_noop_metrics(idempotency_store: Arc<S>) -> Self {
+    pub fn with_noop_metrics(idempotency_repository: Arc<R>) -> Self {
         Self {
-            idempotency_store,
+            idempotency_repository,
             idempotency_metrics: Arc::new(NoOpIdempotencyMetrics),
         }
     }
@@ -130,15 +130,15 @@ enum IdempotencyOutcome {
     Conflict(DateTime<Utc>),
 }
 
-impl<S, M> RouteSubmissionServiceImpl<S, M>
+impl<R, M> RouteSubmissionServiceImpl<R, M>
 where
-    S: IdempotencyStore,
+    R: IdempotencyRepository,
     M: IdempotencyMetrics,
 {
-    /// Create a new service with the given idempotency store and metrics recorder.
-    pub fn new(idempotency_store: Arc<S>, idempotency_metrics: Arc<M>) -> Self {
+    /// Create a new service with the given idempotency repository and metrics recorder.
+    pub fn new(idempotency_repository: Arc<R>, idempotency_metrics: Arc<M>) -> Self {
         Self {
-            idempotency_store,
+            idempotency_repository,
             idempotency_metrics,
         }
     }
@@ -187,10 +187,10 @@ where
         payload_hash: &PayloadHash,
     ) -> Result<RouteSubmissionResponse, Error> {
         let retry_result = self
-            .idempotency_store
-            .lookup(idempotency_key, user_id, payload_hash)
+            .idempotency_repository
+            .lookup(idempotency_key, user_id, MutationType::Routes, payload_hash)
             .await
-            .map_err(map_store_error)?;
+            .map_err(map_repository_error)?;
 
         match retry_result {
             IdempotencyLookupResult::MatchingPayload(existing) => {
@@ -223,39 +223,40 @@ where
 
         let record = IdempotencyRecord {
             key: idempotency_key.clone(),
+            mutation_type: MutationType::Routes,
             payload_hash: payload_hash.clone(),
             response_snapshot,
             user_id: user_id.clone(),
             created_at: Utc::now(),
         };
 
-        match self.idempotency_store.store(&record).await {
+        match self.idempotency_repository.store(&record).await {
             Ok(()) => {
                 // TODO(#276): Dispatch to route queue here when integrated.
                 Ok(response)
             }
-            Err(IdempotencyStoreError::DuplicateKey { .. }) => {
+            Err(IdempotencyRepositoryError::DuplicateKey { .. }) => {
                 self.handle_duplicate_key_race(&idempotency_key, &user_id, &payload_hash)
                     .await
             }
-            Err(err) => Err(map_store_error(err)),
+            Err(err) => Err(map_repository_error(err)),
         }
     }
 }
 
-/// Map idempotency store errors to domain errors.
-fn map_store_error(error: IdempotencyStoreError) -> Error {
+/// Map idempotency repository errors to domain errors.
+fn map_repository_error(error: IdempotencyRepositoryError) -> Error {
     match error {
-        IdempotencyStoreError::Connection { message } => {
-            Error::service_unavailable(format!("idempotency store unavailable: {message}"))
+        IdempotencyRepositoryError::Connection { message } => {
+            Error::service_unavailable(format!("idempotency repository unavailable: {message}"))
         }
-        IdempotencyStoreError::Query { message } => {
-            Error::internal(format!("idempotency store error: {message}"))
+        IdempotencyRepositoryError::Query { message } => {
+            Error::internal(format!("idempotency repository error: {message}"))
         }
-        IdempotencyStoreError::Serialization { message } => {
+        IdempotencyRepositoryError::Serialization { message } => {
             Error::internal(format!("response serialization failed: {message}"))
         }
-        IdempotencyStoreError::DuplicateKey { message } => {
+        IdempotencyRepositoryError::DuplicateKey { message } => {
             // This shouldn't reach here if race handling works correctly.
             Error::internal(format!("unexpected duplicate key: {message}"))
         }
@@ -263,9 +264,9 @@ fn map_store_error(error: IdempotencyStoreError) -> Error {
 }
 
 #[async_trait]
-impl<S, M> RouteSubmissionService for RouteSubmissionServiceImpl<S, M>
+impl<R, M> RouteSubmissionService for RouteSubmissionServiceImpl<R, M>
 where
-    S: IdempotencyStore,
+    R: IdempotencyRepository,
     M: IdempotencyMetrics,
 {
     async fn submit(
@@ -288,12 +289,17 @@ where
         // Compute payload hash only when idempotency key is present.
         let payload_hash = canonicalize_and_hash(&request.payload);
 
-        // Look up existing record for this key (scoped to user).
+        // Look up existing record for this key (scoped to user and mutation type).
         let lookup_result = self
-            .idempotency_store
-            .lookup(&idempotency_key, &request.user_id, &payload_hash)
+            .idempotency_repository
+            .lookup(
+                &idempotency_key,
+                &request.user_id,
+                MutationType::Routes,
+                &payload_hash,
+            )
             .await
-            .map_err(map_store_error)?;
+            .map_err(map_repository_error)?;
 
         match lookup_result {
             IdempotencyLookupResult::NotFound => {

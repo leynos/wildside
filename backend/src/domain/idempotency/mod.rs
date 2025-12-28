@@ -10,6 +10,8 @@
 //!   original response.
 //! - [`IdempotencyLookupResult`]: Outcome of looking up an idempotency key in
 //!   the store.
+//! - [`MutationType`]: Discriminator for different outbox-backed operations.
+//! - [`IdempotencyConfig`]: Configuration for idempotency TTL.
 //!
 //! # Payload Canonicalization
 //!
@@ -25,6 +27,8 @@
 mod tests;
 
 use std::fmt;
+use std::str::FromStr;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -32,6 +36,177 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::UserId;
+
+// ---------------------------------------------------------------------------
+// MutationType
+// ---------------------------------------------------------------------------
+
+/// The type of mutation protected by idempotency.
+///
+/// Each variant corresponds to an outbox-backed operation that supports
+/// idempotent retries. The discriminator ensures keys are isolated per
+/// mutation kind, preventing collisions when different operations use
+/// the same UUID.
+///
+/// # Example
+///
+/// ```
+/// # use backend::domain::idempotency::MutationType;
+/// let mutation = MutationType::Routes;
+/// assert_eq!(mutation.as_str(), "routes");
+/// assert_eq!(mutation.to_string(), "routes");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MutationType {
+    /// Route submission (`POST /api/v1/routes`).
+    Routes,
+    /// Route note upsert (`POST /api/v1/routes/{route_id}/notes`).
+    Notes,
+    /// Route progress update (`PUT /api/v1/routes/{route_id}/progress`).
+    Progress,
+    /// User preferences update (`PUT /api/v1/users/me/preferences`).
+    Preferences,
+    /// Offline bundle operations (`POST/DELETE /api/v1/offline/bundles`).
+    Bundles,
+}
+
+impl MutationType {
+    /// Returns the database string representation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::MutationType;
+    /// assert_eq!(MutationType::Routes.as_str(), "routes");
+    /// assert_eq!(MutationType::Notes.as_str(), "notes");
+    /// assert_eq!(MutationType::Progress.as_str(), "progress");
+    /// assert_eq!(MutationType::Preferences.as_str(), "preferences");
+    /// assert_eq!(MutationType::Bundles.as_str(), "bundles");
+    /// ```
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Routes => "routes",
+            Self::Notes => "notes",
+            Self::Progress => "progress",
+            Self::Preferences => "preferences",
+            Self::Bundles => "bundles",
+        }
+    }
+}
+
+impl fmt::Display for MutationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Error returned when parsing an invalid mutation type string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseMutationTypeError {
+    /// The invalid input string.
+    pub input: String,
+}
+
+impl fmt::Display for ParseMutationTypeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid mutation type '{}': expected one of routes, notes, progress, preferences, bundles",
+            self.input
+        )
+    }
+}
+
+impl std::error::Error for ParseMutationTypeError {}
+
+impl FromStr for MutationType {
+    type Err = ParseMutationTypeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "routes" => Ok(Self::Routes),
+            "notes" => Ok(Self::Notes),
+            "progress" => Ok(Self::Progress),
+            "preferences" => Ok(Self::Preferences),
+            "bundles" => Ok(Self::Bundles),
+            _ => Err(ParseMutationTypeError {
+                input: s.to_owned(),
+            }),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IdempotencyConfig
+// ---------------------------------------------------------------------------
+
+/// Configuration for idempotency behaviour.
+///
+/// Controls the time-to-live (TTL) for idempotency records. Records older than
+/// the TTL are eligible for cleanup.
+///
+/// # Example
+///
+/// ```
+/// # use backend::domain::idempotency::IdempotencyConfig;
+/// # use std::time::Duration;
+/// let config = IdempotencyConfig::default();
+/// assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+///
+/// let custom = IdempotencyConfig::with_ttl(Duration::from_secs(12 * 3600));
+/// assert_eq!(custom.ttl(), Duration::from_secs(12 * 3600));
+/// ```
+#[derive(Debug, Clone)]
+pub struct IdempotencyConfig {
+    ttl: Duration,
+}
+
+impl IdempotencyConfig {
+    /// Default TTL in hours.
+    const DEFAULT_TTL_HOURS: u64 = 24;
+
+    /// Load configuration from environment.
+    ///
+    /// Reads `IDEMPOTENCY_TTL_HOURS` (default: 24).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyConfig;
+    /// # use std::time::Duration;
+    /// // Without env var set, uses default of 24 hours
+    /// let config = IdempotencyConfig::from_env();
+    /// assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+    /// ```
+    pub fn from_env() -> Self {
+        let hours = std::env::var("IDEMPOTENCY_TTL_HOURS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(Self::DEFAULT_TTL_HOURS);
+        Self {
+            ttl: Duration::from_secs(hours * 3600),
+        }
+    }
+
+    /// Create with explicit TTL (for testing).
+    pub fn with_ttl(ttl: Duration) -> Self {
+        Self { ttl }
+    }
+
+    /// Returns the configured TTL.
+    pub fn ttl(&self) -> Duration {
+        self.ttl
+    }
+}
+
+impl Default for IdempotencyConfig {
+    fn default() -> Self {
+        Self {
+            ttl: Duration::from_secs(Self::DEFAULT_TTL_HOURS * 3600),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // IdempotencyKey
@@ -293,6 +468,8 @@ fn canonicalize(value: &serde_json::Value) -> serde_json::Value {
 pub struct IdempotencyRecord {
     /// The idempotency key provided by the client.
     pub key: IdempotencyKey,
+    /// The type of mutation this record protects.
+    pub mutation_type: MutationType,
     /// SHA-256 hash of the canonicalized request payload.
     pub payload_hash: PayloadHash,
     /// Snapshot of the original response to replay.
