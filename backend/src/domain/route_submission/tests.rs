@@ -131,14 +131,14 @@ fn setup_race_condition_test(
         retry_result,
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, our_payload);
 
     (service, request)
 }
 
 fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
-    RouteSubmissionServiceImpl::new(Arc::new(FixtureIdempotencyStore))
+    RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(FixtureIdempotencyStore))
 }
 
 #[tokio::test]
@@ -193,7 +193,7 @@ async fn replays_response_for_matching_payload() {
         IdempotencyLookupResult::MatchingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, payload);
 
     let response = service
@@ -226,7 +226,7 @@ async fn returns_conflict_for_different_payload() {
         IdempotencyLookupResult::ConflictingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::new(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
     let request = build_request(Some(idempotency_key), user_id, alternative_payload());
 
     let error = service
@@ -282,4 +282,105 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
         .expect_err("submission should fail with conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+}
+
+// Tests for helper functions
+
+mod age_bucket_tests {
+    use chrono::{Duration, TimeZone, Utc};
+    use rstest::rstest;
+
+    use super::super::calculate_age_bucket;
+
+    /// Fixed reference time for deterministic tests.
+    fn fixed_now() -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap()
+    }
+
+    /// Parameterized test for age bucket boundary values.
+    ///
+    /// Tests cover all bucket boundaries and edge cases:
+    /// - `0-1m`: 0 to 59 seconds
+    /// - `1-5m`: 1 to 4 minutes
+    /// - `5-30m`: 5 to 29 minutes
+    /// - `30m-2h`: 30 to 119 minutes
+    /// - `2h-6h`: 120 to 359 minutes
+    /// - `6h-24h`: 360 to 1439 minutes
+    /// - `>24h`: 1440+ minutes
+    /// - Future timestamps (clock skew) clamp to `0-1m`
+    #[rstest]
+    #[case::zero_seconds(0, "0-1m")]
+    #[case::thirty_seconds(30, "0-1m")]
+    #[case::one_minute(60, "1-5m")]
+    #[case::four_minutes(4 * 60, "1-5m")]
+    #[case::five_minutes(5 * 60, "5-30m")]
+    #[case::twenty_nine_minutes(29 * 60, "5-30m")]
+    #[case::thirty_minutes(30 * 60, "30m-2h")]
+    #[case::one_hour(60 * 60, "30m-2h")]
+    #[case::two_hours(2 * 60 * 60, "2h-6h")]
+    #[case::five_hours(5 * 60 * 60, "2h-6h")]
+    #[case::six_hours(6 * 60 * 60, "6h-24h")]
+    #[case::twenty_three_hours(23 * 60 * 60, "6h-24h")]
+    #[case::twenty_four_hours(24 * 60 * 60, ">24h")]
+    #[case::forty_eight_hours(48 * 60 * 60, ">24h")]
+    #[case::future_timestamp_clamps(-5 * 60, "0-1m")]
+    fn age_bucket_boundaries(#[case] offset_seconds: i64, #[case] expected: &str) {
+        let now = fixed_now();
+        let created = now - Duration::seconds(offset_seconds);
+        assert_eq!(calculate_age_bucket(created, now), expected);
+    }
+}
+
+mod user_scope_hash_tests {
+    use super::super::user_scope_hash;
+    use crate::domain::UserId;
+
+    #[test]
+    fn returns_8_character_hex_string() {
+        let user_id = UserId::random();
+        let scope = user_scope_hash(&user_id);
+
+        assert_eq!(scope.len(), 8, "user scope hash should be 8 characters");
+        assert!(
+            scope.chars().all(|c| c.is_ascii_hexdigit()),
+            "user scope hash should contain only hex characters"
+        );
+    }
+
+    #[test]
+    fn returns_lowercase_hex() {
+        let user_id = UserId::random();
+        let scope = user_scope_hash(&user_id);
+
+        assert_eq!(
+            scope,
+            scope.to_lowercase(),
+            "user scope hash should be lowercase"
+        );
+    }
+
+    #[test]
+    fn is_deterministic_for_same_user() {
+        let user_id = UserId::random();
+        let scope1 = user_scope_hash(&user_id);
+        let scope2 = user_scope_hash(&user_id);
+
+        assert_eq!(scope1, scope2, "same user should produce same hash");
+    }
+
+    #[test]
+    fn different_users_produce_different_hashes() {
+        // Use fixed UUIDs to ensure deterministic test (avoid rare hash collisions
+        // with random IDs).
+        let user_a = UserId::new("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let user_b = UserId::new("550e8400-e29b-41d4-a716-446655440001").unwrap();
+
+        let scope_a = user_scope_hash(&user_a);
+        let scope_b = user_scope_hash(&user_b);
+
+        assert_ne!(
+            scope_a, scope_b,
+            "different users should produce different hashes"
+        );
+    }
 }

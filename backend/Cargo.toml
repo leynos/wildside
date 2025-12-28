@@ -42,6 +42,7 @@ utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 # Kept behind the `metrics` feature to allow local builds without
 # fetching new dependencies. Enable with `--features metrics`.
 actix-web-prom = { version = "0.10", optional = true }
+prometheus = { version = "0.14", optional = true }
 
 zeroize = "1.7"
 # Cryptographic hashing for key fingerprinting
@@ -51,7 +52,7 @@ hex = "0.4"
 [features]
 default = []
 # Enable Prometheus metrics middleware and endpoint
-metrics = ["dep:actix-web-prom"]
+metrics = ["dep:actix-web-prom", "dep:prometheus"]
 # Expose test utilities for integration tests
 test-support = []
 
