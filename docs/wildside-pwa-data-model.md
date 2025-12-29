@@ -572,7 +572,7 @@ in `wildside-backend-architecture.md`) that applies uniformly to all
 mutation-type–scoped endpoints (routes, notes, progress, preferences, bundles):
 
 - Keys are scoped per mutation type and user.
-- Keys persist for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`).
+- Keys persist for 24 hours by default (configurable via `IDEMPOTENCY_TTL_HOURS`).
 - Supplying the same key with a different payload yields `409 Conflict`.
 
 All outbox-backed mutation endpoints follow this contract shape.

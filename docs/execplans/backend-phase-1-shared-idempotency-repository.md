@@ -45,23 +45,23 @@ Success is observable when:
 
 ## Progress
 
-- [ ] Draft ExecPlan for shared idempotency repository.
-- [ ] Define `MutationType` enum in domain.
-- [ ] Define `IdempotencyConfig` for configurable TTL.
-- [ ] Rename `IdempotencyStore` to `IdempotencyRepository`.
-- [ ] Update `IdempotencyRecord` to include `mutation_type`.
-- [ ] Create Diesel migration for `mutation_type` column.
-- [ ] Update `DieselIdempotencyStore` to `DieselIdempotencyRepository`.
-- [ ] Update `RouteSubmissionServiceImpl` to use renamed port.
-- [ ] Update `HttpState` to use renamed types.
-- [ ] Update fixture implementation (`FixtureIdempotencyStore`).
-- [ ] Update mock implementation.
-- [ ] Create unit tests for `MutationType` and `IdempotencyConfig`.
-- [ ] Create contract tests for `IdempotencyRepository` port.
+- [x] Draft ExecPlan for shared idempotency repository.
+- [x] Define `MutationType` enum in domain.
+- [x] Define `IdempotencyConfig` for configurable TTL.
+- [x] Rename `IdempotencyStore` to `IdempotencyRepository`.
+- [x] Update `IdempotencyRecord` to include `mutation_type`.
+- [x] Create Diesel migration for `mutation_type` column.
+- [x] Update `DieselIdempotencyStore` to `DieselIdempotencyRepository`.
+- [x] Update `RouteSubmissionServiceImpl` to use renamed port.
+- [x] Update `HttpState` to use renamed types.
+- [x] Update fixture implementation (`FixtureIdempotencyStore`).
+- [x] Update mock implementation.
+- [x] Create unit tests for `MutationType` and `IdempotencyConfig`.
+- [x] Create contract tests for `IdempotencyRepository` port.
 - [ ] Create BDD feature file and step definitions.
-- [ ] Update architecture documentation.
-- [ ] Update roadmap to mark task complete.
-- [ ] Run quality gates.
+- [x] Update architecture documentation.
+- [x] Update roadmap to mark task complete.
+- [x] Run quality gates.
 
 ## Surprises & Discoveries
 
@@ -140,7 +140,7 @@ Key locations (repository-relative):
 Terminology (plain-language):
 
 - *Idempotency repository*: A port trait defining storage and retrieval of
-  idempotency records, now generalised for multiple mutation types.
+  idempotency records, now generalized for multiple mutation types.
 - *Mutation type*: An enum discriminating between different outbox-backed
   operations (routes, notes, progress, preferences, bundles).
 - *TTL*: Time-to-live; the duration after which idempotency records expire and

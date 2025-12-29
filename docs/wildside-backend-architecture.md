@@ -705,7 +705,8 @@ sequenceDiagram
 > progress, preferences, bundles). The composite primary key `(key, user_id,
 > mutation_type)` allows clients to reuse the same UUID across different
 > mutation types without collision. TTL is configurable via
-> `IDEMPOTENCY_TTL_HOURS` (default 24 hours) and read at application start via
+> `IDEMPOTENCY_TTL_HOURS` (default 24 hours, clamped between 1 hour and 10
+> years) and read at application start via
 > `IdempotencyConfig::from_env()`. The domain defines `MutationType` with
 > `FromStr`, `Display`, and serde traits for consistent serialization. The
 > Diesel adapter `DieselIdempotencyRepository` stores the mutation type as a
