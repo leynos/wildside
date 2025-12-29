@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use mockall::predicate::*;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -16,8 +15,8 @@ use crate::domain::ports::{
     RouteSubmissionRequest, RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
 };
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, MutationType, PayloadHash, UserId,
-    canonicalize_and_hash,
+    IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    MutationType, PayloadHash, UserId, canonicalize_and_hash,
 };
 
 /// Helper to build a RouteSubmissionRequest for tests.
@@ -71,9 +70,13 @@ fn expect_lookup_returns(
     result: IdempotencyLookupResult,
 ) {
     mock.expect_lookup()
-        .with(eq(key), eq(user_id), eq(MutationType::Routes), always())
+        .withf(move |query: &IdempotencyLookupQuery| {
+            query.key == key
+                && query.user_id == user_id
+                && query.mutation_type == MutationType::Routes
+        })
         .times(1)
-        .return_once(move |_, _, _, _| Ok(result));
+        .return_once(move |_| Ok(result));
 }
 
 /// Helper to configure a mock repository that returns NotFound.

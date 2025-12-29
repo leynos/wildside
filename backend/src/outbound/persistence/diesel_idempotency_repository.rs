@@ -27,7 +27,8 @@ use tracing::debug;
 
 use crate::domain::ports::{IdempotencyRepository, IdempotencyRepositoryError};
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, MutationType, PayloadHash, UserId,
+    IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    MutationType, PayloadHash, UserId,
 };
 
 use super::models::{IdempotencyKeyRow, NewIdempotencyKeyRow};
@@ -117,19 +118,16 @@ fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, Idempotenc
 impl IdempotencyRepository for DieselIdempotencyRepository {
     async fn lookup(
         &self,
-        key: &IdempotencyKey,
-        user_id: &UserId,
-        mutation_type: MutationType,
-        payload_hash: &PayloadHash,
+        query: &IdempotencyLookupQuery,
     ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
         let result: Option<IdempotencyKeyRow> = idempotency_keys::table
             .filter(
                 idempotency_keys::key
-                    .eq(key.as_uuid())
-                    .and(idempotency_keys::user_id.eq(user_id.as_uuid()))
-                    .and(idempotency_keys::mutation_type.eq(mutation_type.as_str())),
+                    .eq(query.key.as_uuid())
+                    .and(idempotency_keys::user_id.eq(query.user_id.as_uuid()))
+                    .and(idempotency_keys::mutation_type.eq(query.mutation_type.as_str())),
             )
             .select(IdempotencyKeyRow::as_select())
             .first(&mut conn)
@@ -141,7 +139,7 @@ impl IdempotencyRepository for DieselIdempotencyRepository {
             None => Ok(IdempotencyLookupResult::NotFound),
             Some(row) => {
                 let record = row_to_record(row)?;
-                if record.payload_hash == *payload_hash {
+                if record.payload_hash == query.payload_hash {
                     Ok(IdempotencyLookupResult::MatchingPayload(record))
                 } else {
                     Ok(IdempotencyLookupResult::ConflictingPayload(record))

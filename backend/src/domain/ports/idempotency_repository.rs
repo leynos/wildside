@@ -11,9 +11,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::domain::{
-    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, MutationType, PayloadHash, UserId,
-};
+use crate::domain::{IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord};
 
 use super::define_port_error;
 
@@ -39,7 +37,6 @@ define_port_error! {
 /// to be scoped per operation kind.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
-#[allow(clippy::too_many_arguments)]
 pub trait IdempotencyRepository: Send + Sync {
     /// Look up an idempotency key for a specific user and mutation type.
     ///
@@ -54,10 +51,7 @@ pub trait IdempotencyRepository: Send + Sync {
     ///   the payload hash differs.
     async fn lookup(
         &self,
-        key: &IdempotencyKey,
-        user_id: &UserId,
-        mutation_type: MutationType,
-        payload_hash: &PayloadHash,
+        query: &IdempotencyLookupQuery,
     ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError>;
 
     /// Store an idempotency record.
@@ -83,10 +77,7 @@ pub struct FixtureIdempotencyRepository;
 impl IdempotencyRepository for FixtureIdempotencyRepository {
     async fn lookup(
         &self,
-        _key: &IdempotencyKey,
-        _user_id: &UserId,
-        _mutation_type: MutationType,
-        _payload_hash: &PayloadHash,
+        _query: &IdempotencyLookupQuery,
     ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError> {
         Ok(IdempotencyLookupResult::NotFound)
     }
@@ -103,7 +94,7 @@ impl IdempotencyRepository for FixtureIdempotencyRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{MutationType, UserId, canonicalize_and_hash};
+    use crate::domain::{IdempotencyKey, MutationType, UserId, canonicalize_and_hash};
     use chrono::Utc;
     use serde_json::json;
 
@@ -113,9 +104,10 @@ mod tests {
         let key = IdempotencyKey::random();
         let user_id = UserId::random();
         let hash = canonicalize_and_hash(&json!({"test": true}));
+        let query = IdempotencyLookupQuery::new(key, user_id, MutationType::Routes, hash);
 
         let result = repo
-            .lookup(&key, &user_id, MutationType::Routes, &hash)
+            .lookup(&query)
             .await
             .expect("fixture lookup should succeed");
         assert!(matches!(result, IdempotencyLookupResult::NotFound));
@@ -163,8 +155,10 @@ mod tests {
             MutationType::Preferences,
             MutationType::Bundles,
         ] {
+            let query =
+                IdempotencyLookupQuery::new(key.clone(), user_id.clone(), mutation_type, hash.clone());
             let result = repo
-                .lookup(&key, &user_id, mutation_type, &hash)
+                .lookup(&query)
                 .await
                 .expect("fixture lookup should succeed");
             assert!(

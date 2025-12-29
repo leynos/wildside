@@ -494,3 +494,40 @@ pub enum IdempotencyLookupResult {
     /// A record exists but the payload hash differs (conflict).
     ConflictingPayload(IdempotencyRecord),
 }
+
+// ---------------------------------------------------------------------------
+// IdempotencyLookupQuery
+// ---------------------------------------------------------------------------
+
+/// Query parameters for looking up an idempotency key.
+///
+/// Bundles the parameters needed for an idempotency lookup into a single struct,
+/// reducing the number of arguments passed to repository methods.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdempotencyLookupQuery {
+    /// The idempotency key to look up.
+    pub key: IdempotencyKey,
+    /// The user who made the request.
+    pub user_id: UserId,
+    /// The type of mutation being performed.
+    pub mutation_type: MutationType,
+    /// The hash of the request payload.
+    pub payload_hash: PayloadHash,
+}
+
+impl IdempotencyLookupQuery {
+    /// Create a new lookup query.
+    pub fn new(
+        key: IdempotencyKey,
+        user_id: UserId,
+        mutation_type: MutationType,
+        payload_hash: PayloadHash,
+    ) -> Self {
+        Self {
+            key,
+            user_id,
+            mutation_type,
+            payload_hash,
+        }
+    }
+}

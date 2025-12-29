@@ -40,9 +40,9 @@ pub mod user_onboarding;
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::idempotency::{
-    IdempotencyConfig, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupResult,
-    IdempotencyRecord, MutationType, ParseMutationTypeError, PayloadHash, PayloadHashError,
-    canonicalize_and_hash,
+    IdempotencyConfig, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupQuery,
+    IdempotencyLookupResult, IdempotencyRecord, MutationType, ParseMutationTypeError, PayloadHash,
+    PayloadHashError, canonicalize_and_hash,
 };
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::route_submission::RouteSubmissionServiceImpl;

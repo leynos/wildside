@@ -16,8 +16,8 @@ use super::ports::{
     RouteSubmissionService,
 };
 use super::{
-    Error, IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, MutationType, PayloadHash,
-    UserId, canonicalize_and_hash,
+    Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    MutationType, PayloadHash, UserId, canonicalize_and_hash,
 };
 
 /// Compute age bucket string from record creation time.
@@ -186,9 +186,15 @@ where
         user_id: &UserId,
         payload_hash: &PayloadHash,
     ) -> Result<RouteSubmissionResponse, Error> {
+        let query = IdempotencyLookupQuery::new(
+            idempotency_key.clone(),
+            user_id.clone(),
+            MutationType::Routes,
+            payload_hash.clone(),
+        );
         let retry_result = self
             .idempotency_repository
-            .lookup(idempotency_key, user_id, MutationType::Routes, payload_hash)
+            .lookup(&query)
             .await
             .map_err(map_repository_error)?;
 
@@ -290,14 +296,15 @@ where
         let payload_hash = canonicalize_and_hash(&request.payload);
 
         // Look up existing record for this key (scoped to user and mutation type).
+        let query = IdempotencyLookupQuery::new(
+            idempotency_key.clone(),
+            request.user_id.clone(),
+            MutationType::Routes,
+            payload_hash.clone(),
+        );
         let lookup_result = self
             .idempotency_repository
-            .lookup(
-                &idempotency_key,
-                &request.user_id,
-                MutationType::Routes,
-                &payload_hash,
-            )
+            .lookup(&query)
             .await
             .map_err(map_repository_error)?;
 
