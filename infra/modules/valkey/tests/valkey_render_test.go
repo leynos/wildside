@@ -141,6 +141,63 @@ func TestValkeyModuleSyncPolicyContract(t *testing.T) {
 	require.Contains(t, contract["replication"], "1", "replication should show nodes count")
 }
 
+func TestValkeyModuleSyncPolicyContractAnonymous(t *testing.T) {
+	t.Parallel()
+
+	_, opts := setupRender(t, renderVarsAnonymous(t))
+	terraform.InitAndApply(t, opts)
+
+	contract := terraform.OutputMap(t, opts, "sync_policy_contract")
+	require.NotEmpty(t, contract, "expected sync_policy_contract output")
+
+	// Credentials should be null when anonymous_auth is true
+	// OutputMap returns <nil> for null values
+	require.Equal(t, "<nil>", contract["credentials"], "credentials should be null for anonymous auth")
+
+	// Other required fields should still be present
+	require.Contains(t, contract["cluster"], "test-valkey", "cluster should contain expected name")
+	require.Contains(t, contract["endpoints"], "test-valkey-primary", "endpoints should contain primary host")
+	require.Contains(t, contract["tls"], "enabled:false", "TLS should be disabled")
+}
+
+func TestValkeyModuleSyncPolicyContractWithTLS(t *testing.T) {
+	t.Parallel()
+
+	_, opts := setupRender(t, renderVarsWithTLS(t))
+	terraform.InitAndApply(t, opts)
+
+	contract := terraform.OutputMap(t, opts, "sync_policy_contract")
+	require.NotEmpty(t, contract, "expected sync_policy_contract output")
+
+	// TLS fields should reflect enabled state
+	require.Contains(t, contract["tls"], "true", "TLS should be enabled")
+	require.Contains(t, contract["tls"], "letsencrypt-staging", "TLS should contain cert issuer")
+
+	// Credentials should be present (not anonymous)
+	require.Contains(t, contract["credentials"], "valkey-password", "credentials should contain secret name")
+}
+
+func TestValkeyModuleSyncPolicyContractHA(t *testing.T) {
+	t.Parallel()
+
+	_, opts := setupRender(t, renderVarsHA(t))
+	terraform.InitAndApply(t, opts)
+
+	contract := terraform.OutputMap(t, opts, "sync_policy_contract")
+	require.NotEmpty(t, contract, "expected sync_policy_contract output")
+
+	// Replication fields should reflect HA configuration
+	// OutputMap stringifies nested maps as "map[key:value ...]"
+	require.Contains(t, contract["replication"], "nodes:3", "replication should show 3 nodes")
+	require.Contains(t, contract["replication"], "replicas:1", "replication should show 1 replica")
+
+	// Persistence should reflect HA storage size
+	require.Contains(t, contract["persistence"], "2Gi", "persistence should contain HA storage size")
+
+	// Cluster name should be the HA cluster name
+	require.Contains(t, contract["cluster"], "test-valkey-ha", "cluster should contain HA cluster name")
+}
+
 func TestValkeyModuleEndpoints(t *testing.T) {
 	t.Parallel()
 
