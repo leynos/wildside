@@ -586,6 +586,198 @@ Keep log files created by the `tee` commands until the work is complete:
 - `/tmp/wildside-test.log`
 - `/tmp/wildside-markdownlint.log`
 
+## Design Diagrams
+
+### Database Schema (E-R Diagram)
+
+The following entity-relationship diagram shows the `idempotency_keys` table
+structure, including the composite primary key `(key, user_id, mutation_type)`,
+the CHECK constraint on `mutation_type`, and the index supporting lookups by
+user and mutation type:
+
+```mermaid
+erDiagram
+    idempotency_keys {
+        UUID key
+        UUID user_id
+        TEXT mutation_type
+        BYTEA payload_hash
+        JSONB response_snapshot
+        TIMESTAMPTZ created_at
+    }
+
+    %% Composite primary key
+    idempotency_keys ||--o{ idempotency_keys_key_user_mutation_pk : has
+
+    idempotency_keys_key_user_mutation_pk {
+        UUID key
+        UUID user_id
+        TEXT mutation_type
+    }
+
+    %% Check constraint domain for mutation_type
+    mutation_type_domain {
+        TEXT mutation_type
+    }
+
+    mutation_type_domain ||--o{ idempotency_keys : constrains
+
+    %% Index supporting lookups and TTL cleanup
+    idempotency_keys_user_mutation_idx {
+        UUID user_id
+        TEXT mutation_type
+    }
+
+    idempotency_keys ||--o{ idempotency_keys_user_mutation_idx : indexed_by
+```
+
+### Domain and Port Types (Class Diagram)
+
+The following class diagram shows the domain types (`MutationType`,
+`IdempotencyConfig`, `IdempotencyRecord`, `IdempotencyLookupQuery`), the
+`IdempotencyRepository` port trait, its implementations
+(`FixtureIdempotencyRepository`, `DieselIdempotencyRepository`), and how
+`RouteSubmissionServiceImpl` consumes the port:
+
+```mermaid
+classDiagram
+    direction LR
+
+    class MutationType {
+        <<enum>>
+        +Routes
+        +Notes
+        +Progress
+        +Preferences
+        +Bundles
+        +as_str() &'static str
+        +to_string() String
+    }
+
+    class ParseMutationTypeError {
+        +input String
+        +to_string() String
+    }
+
+    MutationType ..> ParseMutationTypeError : from_str()
+
+    class IdempotencyConfig {
+        -ttl Duration
+        +from_env() IdempotencyConfig
+        +with_ttl(ttl Duration) IdempotencyConfig
+        +ttl() Duration
+        +DEFAULT_TTL_HOURS u64
+    }
+
+    class IdempotencyKey {
+    }
+
+    class PayloadHash {
+    }
+
+    class UserId {
+    }
+
+    class IdempotencyRecord {
+        +key IdempotencyKey
+        +mutation_type MutationType
+        +payload_hash PayloadHash
+        +response_snapshot serde_json_Value
+        +user_id UserId
+        +created_at DateTime_Utc
+    }
+
+    IdempotencyRecord --> MutationType
+    IdempotencyRecord --> IdempotencyKey
+    IdempotencyRecord --> PayloadHash
+    IdempotencyRecord --> UserId
+
+    class IdempotencyLookupQuery {
+        +key IdempotencyKey
+        +user_id UserId
+        +mutation_type MutationType
+        +payload_hash PayloadHash
+        +new(key IdempotencyKey, user_id UserId, mutation_type MutationType, payload_hash PayloadHash) IdempotencyLookupQuery
+    }
+
+    IdempotencyLookupQuery --> MutationType
+    IdempotencyLookupQuery --> IdempotencyKey
+    IdempotencyLookupQuery --> PayloadHash
+    IdempotencyLookupQuery --> UserId
+
+    class IdempotencyLookupResult {
+        <<enum>>
+        +NotFound
+        +MatchingPayload(IdempotencyRecord)
+        +ConflictingPayload(IdempotencyRecord)
+    }
+
+    IdempotencyLookupResult --> IdempotencyRecord
+
+    class IdempotencyRepositoryError {
+        <<enum>>
+        +Connection message String
+        +Query message String
+        +Serialization message String
+        +DuplicateKey message String
+    }
+
+    class IdempotencyRepository {
+        <<interface>>
+        +lookup(query IdempotencyLookupQuery) Result~IdempotencyLookupResult, IdempotencyRepositoryError~
+        +store(record IdempotencyRecord) Result~(), IdempotencyRepositoryError~
+        +cleanup_expired(ttl Duration) Result~u64, IdempotencyRepositoryError~
+    }
+
+    IdempotencyRepository ..> IdempotencyLookupQuery
+    IdempotencyRepository ..> IdempotencyLookupResult
+    IdempotencyRepository ..> IdempotencyRecord
+    IdempotencyRepository ..> IdempotencyRepositoryError
+
+    class FixtureIdempotencyRepository {
+        +lookup(query IdempotencyLookupQuery) Result~IdempotencyLookupResult, IdempotencyRepositoryError~
+        +store(record IdempotencyRecord) Result~(), IdempotencyRepositoryError~
+        +cleanup_expired(ttl Duration) Result~u64, IdempotencyRepositoryError~
+    }
+
+    FixtureIdempotencyRepository ..|> IdempotencyRepository
+
+    class DieselIdempotencyRepository {
+        -pool DbPool
+        +new(pool DbPool) DieselIdempotencyRepository
+        +lookup(query IdempotencyLookupQuery) Result~IdempotencyLookupResult, IdempotencyRepositoryError~
+        +store(record IdempotencyRecord) Result~(), IdempotencyRepositoryError~
+        +cleanup_expired(ttl Duration) Result~u64, IdempotencyRepositoryError~
+    }
+
+    DieselIdempotencyRepository ..|> IdempotencyRepository
+
+    class RouteSubmissionServiceImpl {
+        -idempotency_repository Arc_IdempotencyRepository
+        -idempotency_metrics Arc_IdempotencyMetrics
+        +with_noop_metrics(idempotency_repository Arc_IdempotencyRepository) RouteSubmissionServiceImpl
+        +new(idempotency_repository Arc_IdempotencyRepository, idempotency_metrics Arc_IdempotencyMetrics) RouteSubmissionServiceImpl
+        +submit(request RouteSubmissionRequest, idempotency_key IdempotencyKey) RouteSubmissionResponse
+    }
+
+    RouteSubmissionServiceImpl --> IdempotencyRepository
+    RouteSubmissionServiceImpl --> MutationType
+    RouteSubmissionServiceImpl --> IdempotencyLookupQuery
+    RouteSubmissionServiceImpl --> IdempotencyRecord
+
+    class IdempotencyMetrics {
+    }
+
+    RouteSubmissionServiceImpl --> IdempotencyMetrics
+
+    class IdempotencyConfigUser {
+        +config IdempotencyConfig
+    }
+
+    IdempotencyConfigUser --> IdempotencyConfig
+    IdempotencyRepository --> IdempotencyConfigUser : cleanup_expired uses ttl
+```
+
 ## Interfaces and Dependencies
 
 Updated domain types in `backend/src/domain/idempotency/mod.rs`:
