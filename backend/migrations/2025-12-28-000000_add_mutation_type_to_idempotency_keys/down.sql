@@ -20,7 +20,7 @@ BEGIN
     ) AS duplicates;
 
     IF dup_count > 0 THEN
-        RAISE EXCEPTION 'Cannot revert migration: % duplicate (key, user_id) pair(s) exist across different mutation types. Resolve duplicates before reverting.', dup_count;
+        RAISE EXCEPTION 'Cannot revert migration: % duplicate (key, user_id) pair(s) exist across different mutation types. Run this query to identify them: SELECT key, user_id, array_agg(mutation_type) AS mutation_types, COUNT(*) AS cnt FROM idempotency_keys GROUP BY key, user_id HAVING COUNT(*) > 1;', dup_count;
     END IF;
 END $$;
 

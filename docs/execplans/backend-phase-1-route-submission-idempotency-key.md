@@ -38,23 +38,23 @@ Success is observable when:
 
 ## Progress
 
-- [ ] Draft ExecPlan for route submission idempotency.
-- [ ] Define domain types: `IdempotencyKey`, `IdempotencyRecord`,
+- [x] Draft ExecPlan for route submission idempotency.
+- [x] Define domain types: `IdempotencyKey`, `IdempotencyRecord`,
   `IdempotencyLookupResult`.
-- [ ] Define domain port: `IdempotencyStore` trait with error enum.
-- [ ] Implement payload canonicalization and SHA-256 hashing.
-- [ ] Create Diesel migration for `idempotency_keys` table.
-- [ ] Update Diesel schema.rs with new table.
-- [ ] Implement PostgreSQL adapter: `DieselIdempotencyStore`.
+- [x] Define domain port: `IdempotencyStore` trait with error enum.
+- [x] Implement payload canonicalization and SHA-256 hashing.
+- [x] Create Diesel migration for `idempotency_keys` table.
+- [x] Update Diesel schema.rs with new table.
+- [x] Implement PostgreSQL adapter: `DieselIdempotencyStore`.
 - [ ] Create domain service: `RouteSubmissionService` driving port.
 - [ ] Implement HTTP handler: `POST /api/v1/routes` with idempotency middleware.
 - [ ] Add `IdempotencyStore` to `HttpState`.
 - [ ] Wire adapter in `main.rs`.
 - [ ] Create feature file for BDD scenarios.
 - [ ] Implement BDD step definitions.
-- [ ] Create unit tests for domain types and hashing.
-- [ ] Create contract tests for `IdempotencyStore` port.
-- [ ] Update architecture documentation.
+- [x] Create unit tests for domain types and hashing.
+- [x] Create contract tests for `IdempotencyStore` port.
+- [x] Update architecture documentation.
 - [ ] Update roadmap to mark task complete.
 - [ ] Run quality gates.
 
