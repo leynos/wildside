@@ -192,6 +192,32 @@ fn mutation_type_serializes_to_snake_case() {
     assert_eq!(json, "\"routes\"");
 }
 
+/// Validates that MutationType::ALL matches the CHECK constraint in the migration.
+///
+/// If this test fails, you likely added a new MutationType variant. You must also
+/// update the CHECK constraint in:
+/// `backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql`
+#[test]
+fn mutation_type_values_match_migration_constraint() {
+    use std::collections::HashSet;
+
+    // These values must match the CHECK constraint in the migration file:
+    // backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql
+    let migration_values: HashSet<&str> =
+        ["routes", "notes", "progress", "preferences", "bundles"]
+            .into_iter()
+            .collect();
+
+    let code_values: HashSet<&str> = MutationType::ALL.iter().map(|m| m.as_str()).collect();
+
+    assert_eq!(
+        code_values, migration_values,
+        "MutationType::ALL does not match migration CHECK constraint. \
+         If you added a variant, update the migration CHECK constraint in \
+         backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql"
+    );
+}
+
 // IdempotencyConfig tests
 
 use mockable::{Env as MockableEnv, MockEnv};
