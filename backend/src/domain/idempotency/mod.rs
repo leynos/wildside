@@ -72,6 +72,19 @@ pub enum MutationType {
 }
 
 impl MutationType {
+    /// All mutation type variants.
+    ///
+    /// Useful for iteration, validation, and documentation.
+    pub const ALL: [MutationType; 5] = [
+        MutationType::Routes,
+        MutationType::Notes,
+        MutationType::Progress,
+        MutationType::Preferences,
+        MutationType::Bundles,
+    ];
+}
+
+impl MutationType {
     /// Returns the database string representation.
     ///
     /// # Example
@@ -110,10 +123,12 @@ pub struct ParseMutationTypeError {
 
 impl fmt::Display for ParseMutationTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let variants: Vec<_> = MutationType::ALL.iter().map(|v| v.as_str()).collect();
         write!(
             f,
-            "invalid mutation type '{}': expected one of routes, notes, progress, preferences, bundles",
-            self.input
+            "invalid mutation type '{}': expected one of {}",
+            self.input,
+            variants.join(", ")
         )
     }
 }
@@ -124,22 +139,49 @@ impl FromStr for MutationType {
     type Err = ParseMutationTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "routes" => Ok(Self::Routes),
-            "notes" => Ok(Self::Notes),
-            "progress" => Ok(Self::Progress),
-            "preferences" => Ok(Self::Preferences),
-            "bundles" => Ok(Self::Bundles),
-            _ => Err(ParseMutationTypeError {
+        Self::ALL
+            .iter()
+            .find(|v| v.as_str() == s)
+            .copied()
+            .ok_or_else(|| ParseMutationTypeError {
                 input: s.to_owned(),
-            }),
-        }
+            })
     }
 }
 
 // ---------------------------------------------------------------------------
 // IdempotencyConfig
 // ---------------------------------------------------------------------------
+
+/// Environment variable name for idempotency TTL configuration.
+pub const IDEMPOTENCY_TTL_HOURS_ENV: &str = "IDEMPOTENCY_TTL_HOURS";
+
+/// Environment abstraction for idempotency configuration lookups.
+///
+/// This trait allows testing with mock environments without unsafe env var
+/// mutations.
+pub trait IdempotencyEnv {
+    /// Fetch a string value by name.
+    fn string(&self, name: &str) -> Option<String>;
+}
+
+/// Environment access backed by the real process environment.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DefaultIdempotencyEnv;
+
+impl DefaultIdempotencyEnv {
+    /// Create a new environment reader.
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl IdempotencyEnv for DefaultIdempotencyEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
+    }
+}
 
 /// Configuration for idempotency behaviour.
 ///
@@ -166,9 +208,23 @@ impl IdempotencyConfig {
     /// Default TTL in hours.
     const DEFAULT_TTL_HOURS: u64 = 24;
 
-    /// Load configuration from environment.
+    /// Minimum allowed TTL in hours.
     ///
-    /// Reads `IDEMPOTENCY_TTL_HOURS` (default: 24).
+    /// Prevents pathologically short TTLs that would cause records to expire
+    /// before retries can complete.
+    const MIN_TTL_HOURS: u64 = 1;
+
+    /// Maximum allowed TTL in hours (10 years).
+    ///
+    /// Prevents pathologically long TTLs that could cause database bloat or
+    /// overflow issues.
+    const MAX_TTL_HOURS: u64 = 24 * 365 * 10;
+
+    /// Load configuration from the real process environment.
+    ///
+    /// Reads `IDEMPOTENCY_TTL_HOURS` (default: 24). Values are clamped to
+    /// the range \[1, 87600\] (1 hour to 10 years) to prevent pathological
+    /// configurations.
     ///
     /// # Example
     ///
@@ -180,12 +236,20 @@ impl IdempotencyConfig {
     /// assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
     /// ```
     pub fn from_env() -> Self {
-        let hours = std::env::var("IDEMPOTENCY_TTL_HOURS")
-            .ok()
+        Self::from_env_with(&DefaultIdempotencyEnv)
+    }
+
+    /// Load configuration from a custom environment source.
+    ///
+    /// Useful for testing without unsafe env var mutations.
+    pub fn from_env_with(env: &impl IdempotencyEnv) -> Self {
+        let hours = env
+            .string(IDEMPOTENCY_TTL_HOURS_ENV)
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(Self::DEFAULT_TTL_HOURS);
+            .unwrap_or(Self::DEFAULT_TTL_HOURS)
+            .clamp(Self::MIN_TTL_HOURS, Self::MAX_TTL_HOURS);
         Self {
-            ttl: Duration::from_secs(hours * 3600),
+            ttl: Duration::from_secs(hours.saturating_mul(3600)),
         }
     }
 

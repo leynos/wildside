@@ -4,6 +4,26 @@
 -- across different mutation types. Such records would need to be manually resolved
 -- before reverting.
 
+-- Pre-flight check: fail fast if there are duplicate (key, user_id) pairs across
+-- different mutation types. Without this check, the primary key recreation would
+-- fail with a less informative error.
+DO $$
+DECLARE
+    dup_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO dup_count
+    FROM (
+        SELECT key, user_id
+        FROM idempotency_keys
+        GROUP BY key, user_id
+        HAVING COUNT(*) > 1
+    ) AS duplicates;
+
+    IF dup_count > 0 THEN
+        RAISE EXCEPTION 'Cannot revert migration: % duplicate (key, user_id) pair(s) exist across different mutation types. Resolve duplicates before reverting.', dup_count;
+    END IF;
+END $$;
+
 -- Drop the index on user_id and mutation_type.
 DROP INDEX IF EXISTS idx_idempotency_keys_user_mutation;
 

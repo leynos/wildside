@@ -56,8 +56,19 @@ pub trait IdempotencyRepository: Send + Sync {
 
     /// Store an idempotency record.
     ///
-    /// If a record already exists for the key, the behaviour is
-    /// implementation-defined (typically a no-op or conflict error).
+    /// # Contract Requirements
+    ///
+    /// Implementations MUST return [`IdempotencyRepositoryError::DuplicateKey`]
+    /// when a record with the same composite key `(key, user_id, mutation_type)`
+    /// already exists. This is essential for the service layer to handle
+    /// concurrent insert race conditions correctly.
+    ///
+    /// The service layer relies on this contract to:
+    /// 1. Detect when another request won a race to insert
+    /// 2. Retry the lookup to determine if payloads match or conflict
+    ///
+    /// Implementations that silently succeed on duplicate keys will cause
+    /// incorrect behaviour in concurrent scenarios.
     async fn store(&self, record: &IdempotencyRecord) -> Result<(), IdempotencyRepositoryError>;
 
     /// Remove records older than the specified TTL.

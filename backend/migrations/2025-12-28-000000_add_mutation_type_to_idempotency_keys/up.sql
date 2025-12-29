@@ -16,6 +16,12 @@ ADD CONSTRAINT chk_mutation_type CHECK (
 );
 
 -- Drop the existing primary key (key, user_id) and recreate with mutation_type.
+--
+-- WARNING: This operation acquires an ACCESS EXCLUSIVE lock on the table,
+-- blocking all reads and writes until completion. For large tables, consider:
+-- - Running during a maintenance window
+-- - Using pg_repack or similar tools for zero-downtime migrations
+-- - The idempotency_keys table is expected to be small (records expire via TTL)
 ALTER TABLE idempotency_keys DROP CONSTRAINT idempotency_keys_pkey;
 ALTER TABLE idempotency_keys ADD PRIMARY KEY (key, user_id, mutation_type);
 

@@ -194,6 +194,38 @@ fn mutation_type_serializes_to_snake_case() {
 
 // IdempotencyConfig tests
 
+use mockable::{Env as MockableEnv, MockEnv};
+use std::collections::HashMap;
+
+/// Test environment implementation using mockable.
+struct TestEnv {
+    inner: MockEnv,
+}
+
+impl IdempotencyEnv for TestEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        MockableEnv::string(&self.inner, name)
+    }
+}
+
+/// Build a mock environment with the given variables.
+fn build_mock_env(vars: HashMap<&'static str, &str>) -> TestEnv {
+    let vars: HashMap<String, String> = vars
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    let mut env = MockEnv::new();
+    env.expect_string()
+        .times(0..)
+        .returning(move |key| vars.get(key).cloned());
+    TestEnv { inner: env }
+}
+
+/// Build a mock environment with no variables set.
+fn empty_mock_env() -> TestEnv {
+    build_mock_env(HashMap::new())
+}
+
 #[test]
 fn idempotency_config_default_is_24_hours() {
     let config = IdempotencyConfig::default();
@@ -209,30 +241,39 @@ fn idempotency_config_with_ttl_sets_custom_duration() {
 
 #[test]
 fn idempotency_config_from_env_uses_default_without_var() {
-    // Clear the env var if set
-    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
-    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
-    let config = IdempotencyConfig::from_env();
+    let env = empty_mock_env();
+    let config = IdempotencyConfig::from_env_with(&env);
     assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
 }
 
 #[test]
 fn idempotency_config_from_env_respects_env_var() {
-    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
-    unsafe { std::env::set_var("IDEMPOTENCY_TTL_HOURS", "48") };
-    let config = IdempotencyConfig::from_env();
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "48")]));
+    let config = IdempotencyConfig::from_env_with(&env);
     assert_eq!(config.ttl(), Duration::from_secs(48 * 3600));
-    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
-    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
 }
 
 #[test]
 fn idempotency_config_from_env_ignores_invalid_value() {
-    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
-    unsafe { std::env::set_var("IDEMPOTENCY_TTL_HOURS", "not_a_number") };
-    let config = IdempotencyConfig::from_env();
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "not_a_number")]));
+    let config = IdempotencyConfig::from_env_with(&env);
     // Falls back to default
     assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
-    // SAFETY: Test-only code, single-threaded test execution ensured by rstest serial
-    unsafe { std::env::remove_var("IDEMPOTENCY_TTL_HOURS") };
+}
+
+#[test]
+fn idempotency_config_from_env_clamps_to_minimum() {
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "0")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    // Clamped to MIN_TTL_HOURS (1 hour)
+    assert_eq!(config.ttl(), Duration::from_secs(3600));
+}
+
+#[test]
+fn idempotency_config_from_env_clamps_to_maximum() {
+    // 10 years in hours = 87600
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "999999")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    // Clamped to MAX_TTL_HOURS (87600 hours = 10 years)
+    assert_eq!(config.ttl(), Duration::from_secs(87600 * 3600));
 }

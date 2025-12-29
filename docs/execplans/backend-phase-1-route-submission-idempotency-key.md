@@ -18,7 +18,7 @@ a request with an `Idempotency-Key` header:
   original response without re-processing.
 - If the key matches an existing request with a different payload, reject with
   `409 Conflict`.
-- Keys expire after 24 hours (configurable via `ROUTES_IDEMPOTENCY_TTL_HOURS`).
+- Keys expire after 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`).
 
 Success is observable when:
 

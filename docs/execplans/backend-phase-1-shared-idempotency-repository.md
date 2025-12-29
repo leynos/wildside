@@ -19,14 +19,14 @@ Introduce a shared `IdempotencyRepository` port with configurable time-to-live
 - Offline bundles
 
 The existing `IdempotencyStore` port was designed specifically for route
-submission. This work generalises it into a repository pattern that supports
+submission. This work generalizes it into a repository pattern that supports
 multiple mutation types with a configurable TTL, enabling consistent
 idempotency semantics across the backend.
 
 Success is observable when:
 
 - The `IdempotencyStore` port is renamed to `IdempotencyRepository` and
-  generalised for multiple mutation types.
+  generalized for multiple mutation types.
 - A `MutationType` enum distinguishes between idempotency scopes (routes, notes,
   progress, preferences, bundles).
 - TTL is configurable via `IDEMPOTENCY_TTL_HOURS` environment variable with a
@@ -37,8 +37,8 @@ Success is observable when:
   changes.
 - Database schema includes a `mutation_type` column for future filtering.
 - Unit tests (`rstest`) cover the new `MutationType` enum and TTL configuration.
-- Behavioural tests (`rstest-bdd` v0.3.1) cover happy and unhappy paths against
-  an embedded PostgreSQL instance.
+- Behavioural tests (`rstest-bdd` v0.3.1, Behaviour-Driven Development (BDD)
+  style) cover happy and unhappy paths against an embedded PostgreSQL instance.
 - `docs/wildside-backend-architecture.md` records design decisions.
 - `docs/backend-roadmap.md` marks the task as done.
 - `make check-fmt`, `make lint`, and `make test` succeed.
@@ -123,12 +123,11 @@ Key locations (repository-relative):
 
 - `backend/src/domain/idempotency/mod.rs`: Domain types (`IdempotencyKey`,
   `IdempotencyRecord`, `PayloadHash`).
-- `backend/src/domain/ports/idempotency_store.rs`: Current port trait (to be
-  renamed).
+- `backend/src/domain/ports/idempotency_repository.rs`: Port trait.
 - `backend/src/domain/ports/mod.rs`: Port module root.
 - `backend/src/domain/route_submission/mod.rs`: `RouteSubmissionServiceImpl`.
-- `backend/src/outbound/persistence/diesel_idempotency_store.rs`: Diesel
-  adapter (to be renamed).
+- `backend/src/outbound/persistence/diesel_idempotency_repository.rs`: Diesel
+  adapter.
 - `backend/src/outbound/persistence/models.rs`: Diesel models.
 - `backend/src/outbound/persistence/schema.rs`: Diesel table definitions.
 - `backend/src/inbound/http/state.rs`: HTTP adapter state bundle.
@@ -538,7 +537,7 @@ PG_WORKER_PATH=/tmp/pg_worker timeout 600 make test 2>&1 \
 
 Acceptance criteria:
 
-1. **Port renamed and generalised**:
+1. **Port renamed and generalized**:
    - `IdempotencyStore` renamed to `IdempotencyRepository`.
    - Port trait accepts `MutationType` parameter.
    - Error enum renamed to `IdempotencyRepositoryError`.
@@ -627,10 +626,7 @@ Updated port trait in `backend/src/domain/ports/idempotency_repository.rs`:
 pub trait IdempotencyRepository: Send + Sync {
     async fn lookup(
         &self,
-        key: &IdempotencyKey,
-        user_id: &UserId,
-        mutation_type: MutationType,
-        payload_hash: &PayloadHash,
+        query: &IdempotencyLookupQuery,
     ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError>;
 
     async fn store(
@@ -643,6 +639,14 @@ pub trait IdempotencyRepository: Send + Sync {
         ttl: Duration,
     ) -> Result<u64, IdempotencyRepositoryError>;
 }
+
+/// Query parameters for looking up an idempotency key.
+pub struct IdempotencyLookupQuery {
+    pub key: IdempotencyKey,
+    pub user_id: UserId,
+    pub mutation_type: MutationType,
+    pub payload_hash: PayloadHash,
+}
 ```
 
 Updated `RouteSubmissionServiceImpl` usage:
@@ -652,7 +656,6 @@ Updated `RouteSubmissionServiceImpl` usage:
 self.idempotency_store.lookup(&key, &user_id, &hash).await
 
 // After
-self.idempotency_repository
-    .lookup(&key, &user_id, MutationType::Routes, &hash)
-    .await
+let query = IdempotencyLookupQuery::new(key, user_id, MutationType::Routes, hash);
+self.idempotency_repository.lookup(&query).await
 ```

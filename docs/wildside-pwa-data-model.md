@@ -571,7 +571,7 @@ The backend already documents an idempotency contract for `POST /api/v1/routes`
 in `wildside-backend-architecture.md`:
 
 - Keys are scoped per endpoint.
-- Keys persist for 24 hours (configurable via `ROUTES_IDEMPOTENCY_TTL_HOURS`).
+- Keys persist for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`).
 - Supplying the same key with a different payload yields `409 Conflict`.
 
 For outbox-backed mutations, the backend endpoints that accept queued writes

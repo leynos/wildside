@@ -413,7 +413,7 @@ below:
   `/api/v1/routes/{request_id}` for polling.
 - `409 Conflict` if the supplied `Idempotency-Key` header matches an
   existing payload with different parameters. Keys are persisted in PostgreSQL
-  for 24 hours (configurable via `ROUTES_IDEMPOTENCY_TTL_HOURS`) so retries
+  for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`) so retries
   survive restarts.
 - Standardised errors use the structure
   `{ "error": { "code": "string", "message": "string", "trace_id": "uuid" } }`
