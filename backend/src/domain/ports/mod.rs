@@ -5,7 +5,7 @@ pub(crate) use macros::define_port_error;
 
 mod cache_key;
 mod idempotency_metrics;
-mod idempotency_store;
+mod idempotency_repository;
 mod login_service;
 mod route_cache;
 mod route_metrics;
@@ -23,8 +23,10 @@ pub use idempotency_metrics::{
     IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyMetricsError, NoOpIdempotencyMetrics,
 };
 #[cfg(test)]
-pub use idempotency_store::MockIdempotencyStore;
-pub use idempotency_store::{FixtureIdempotencyStore, IdempotencyStore, IdempotencyStoreError};
+pub use idempotency_repository::MockIdempotencyRepository;
+pub use idempotency_repository::{
+    FixtureIdempotencyRepository, IdempotencyRepository, IdempotencyRepositoryError,
+};
 pub use login_service::{FixtureLoginService, LoginService};
 pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_metrics::{RouteMetrics, RouteMetricsError};

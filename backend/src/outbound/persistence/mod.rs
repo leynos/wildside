@@ -28,12 +28,12 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
-mod diesel_idempotency_store;
+mod diesel_idempotency_repository;
 mod diesel_user_repository;
 mod models;
 mod pool;
 mod schema;
 
-pub use diesel_idempotency_store::DieselIdempotencyStore;
+pub use diesel_idempotency_repository::DieselIdempotencyRepository;
 pub use diesel_user_repository::DieselUserRepository;
 pub use pool::{DbPool, PoolConfig, PoolError};

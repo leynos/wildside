@@ -6,18 +6,17 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use mockall::predicate::*;
 use serde_json::json;
 use uuid::Uuid;
 
 use super::RouteSubmissionServiceImpl;
 use crate::domain::ports::{
-    FixtureIdempotencyStore, IdempotencyStoreError, MockIdempotencyStore, RouteSubmissionRequest,
-    RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
+    FixtureIdempotencyRepository, IdempotencyRepositoryError, MockIdempotencyRepository,
+    RouteSubmissionRequest, RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
 };
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
-    canonicalize_and_hash,
+    IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    MutationType, PayloadHash, UserId, canonicalize_and_hash,
 };
 
 /// Helper to build a RouteSubmissionRequest for tests.
@@ -45,6 +44,7 @@ fn build_record(
 
     IdempotencyRecord {
         key,
+        mutation_type: MutationType::Routes,
         payload_hash,
         response_snapshot,
         user_id,
@@ -62,29 +62,39 @@ fn alternative_payload() -> serde_json::Value {
     json!({"origin": "X", "destination": "Y"})
 }
 
-/// Helper to configure a mock store that returns a specific lookup result.
+/// Helper to configure a mock repository that returns a specific lookup result.
 fn expect_lookup_returns(
-    mock: &mut MockIdempotencyStore,
+    mock: &mut MockIdempotencyRepository,
     key: IdempotencyKey,
     user_id: UserId,
     result: IdempotencyLookupResult,
 ) {
     mock.expect_lookup()
-        .with(eq(key), eq(user_id), always())
+        .withf(move |query: &IdempotencyLookupQuery| {
+            query.key == key
+                && query.user_id == user_id
+                && query.mutation_type == MutationType::Routes
+        })
         .times(1)
-        .return_once(move |_, _, _| Ok(result));
+        .return_once(move |_| Ok(result));
 }
 
-/// Helper to configure a mock store that returns NotFound.
-fn expect_lookup_not_found(mock: &mut MockIdempotencyStore, key: IdempotencyKey, user_id: UserId) {
+/// Helper to configure a mock repository that returns NotFound.
+fn expect_lookup_not_found(
+    mock: &mut MockIdempotencyRepository,
+    key: IdempotencyKey,
+    user_id: UserId,
+) {
     expect_lookup_returns(mock, key, user_id, IdempotencyLookupResult::NotFound);
 }
 
-/// Helper to configure a mock store that fails with DuplicateKey on store.
-fn expect_store_duplicate_key(mock: &mut MockIdempotencyStore) {
-    mock.expect_store()
-        .times(1)
-        .return_once(|_| Err(IdempotencyStoreError::duplicate_key("concurrent insert")));
+/// Helper to configure a mock repository that fails with DuplicateKey on store.
+fn expect_store_duplicate_key(mock: &mut MockIdempotencyRepository) {
+    mock.expect_store().times(1).return_once(|_| {
+        Err(IdempotencyRepositoryError::duplicate_key(
+            "concurrent insert",
+        ))
+    });
 }
 
 /// Helper to set up a concurrent insert race condition test scenario.
@@ -95,7 +105,7 @@ fn setup_race_condition_test(
     their_hash: PayloadHash,
     their_request_id: Uuid,
 ) -> (
-    RouteSubmissionServiceImpl<MockIdempotencyStore>,
+    RouteSubmissionServiceImpl<MockIdempotencyRepository>,
     RouteSubmissionRequest,
 ) {
     let idempotency_key = IdempotencyKey::random();
@@ -108,14 +118,14 @@ fn setup_race_condition_test(
         user_id.clone(),
     );
 
-    let mut mock_store = MockIdempotencyStore::new();
+    let mut mock_repo = MockIdempotencyRepository::new();
 
     // First lookup returns NotFound (simulating a race where another request
     // inserted between our lookup and store).
-    expect_lookup_not_found(&mut mock_store, idempotency_key.clone(), user_id.clone());
+    expect_lookup_not_found(&mut mock_repo, idempotency_key.clone(), user_id.clone());
 
     // Store fails with DuplicateKey (the other request won the race).
-    expect_store_duplicate_key(&mut mock_store);
+    expect_store_duplicate_key(&mut mock_repo);
 
     // Retry lookup after race returns either MatchingPayload or ConflictingPayload.
     let retry_result = if is_matching_payload {
@@ -125,20 +135,20 @@ fn setup_race_condition_test(
     };
 
     expect_lookup_returns(
-        &mut mock_store,
+        &mut mock_repo,
         idempotency_key.clone(),
         user_id.clone(),
         retry_result,
     );
 
-    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_repo));
     let request = build_request(Some(idempotency_key), user_id, our_payload);
 
     (service, request)
 }
 
-fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyStore> {
-    RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(FixtureIdempotencyStore))
+fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyRepository> {
+    RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(FixtureIdempotencyRepository))
 }
 
 #[tokio::test]
@@ -185,15 +195,15 @@ async fn replays_response_for_matching_payload() {
         user_id.clone(),
     );
 
-    let mut mock_store = MockIdempotencyStore::new();
+    let mut mock_repo = MockIdempotencyRepository::new();
     expect_lookup_returns(
-        &mut mock_store,
+        &mut mock_repo,
         idempotency_key.clone(),
         user_id.clone(),
         IdempotencyLookupResult::MatchingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_repo));
     let request = build_request(Some(idempotency_key), user_id, payload);
 
     let response = service
@@ -218,15 +228,15 @@ async fn returns_conflict_for_different_payload() {
         user_id.clone(),
     );
 
-    let mut mock_store = MockIdempotencyStore::new();
+    let mut mock_repo = MockIdempotencyRepository::new();
     expect_lookup_returns(
-        &mut mock_store,
+        &mut mock_repo,
         idempotency_key.clone(),
         user_id.clone(),
         IdempotencyLookupResult::ConflictingPayload(existing_record),
     );
 
-    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_store));
+    let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_repo));
     let request = build_request(Some(idempotency_key), user_id, alternative_payload());
 
     let error = service

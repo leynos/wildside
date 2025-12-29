@@ -1,6 +1,6 @@
-//! PostgreSQL-backed `IdempotencyStore` implementation using Diesel ORM.
+//! PostgreSQL-backed `IdempotencyRepository` implementation using Diesel ORM.
 //!
-//! This adapter implements the domain's `IdempotencyStore` port, providing
+//! This adapter implements the domain's `IdempotencyRepository` port, providing
 //! durable storage for idempotency records. All database operations are async
 //! via `diesel-async`.
 //!
@@ -9,7 +9,14 @@
 //! Records are not filtered by TTL during lookups. Instead, the `cleanup_expired`
 //! method should be called periodically (e.g., on startup or via a scheduled job)
 //! to remove stale records.
+//!
+//! # Mutation Type Scoping
+//!
+//! Idempotency records are scoped by mutation type, allowing the same UUID to be
+//! used as an idempotency key across different operation types (routes, notes,
+//! progress, preferences, bundles) without collision.
 
+use std::str::FromStr;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -18,43 +25,44 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tracing::debug;
 
-use crate::domain::ports::{IdempotencyStore, IdempotencyStoreError};
+use crate::domain::ports::{IdempotencyRepository, IdempotencyRepositoryError};
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupResult, IdempotencyRecord, PayloadHash, UserId,
+    IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    MutationType, PayloadHash, UserId,
 };
 
 use super::models::{IdempotencyKeyRow, NewIdempotencyKeyRow};
 use super::pool::{DbPool, PoolError};
 use super::schema::idempotency_keys;
 
-/// Diesel-backed implementation of the `IdempotencyStore` port.
+/// Diesel-backed implementation of the `IdempotencyRepository` port.
 ///
 /// Provides PostgreSQL persistence for idempotency records, enabling safe
 /// request retries by detecting duplicate requests and replaying previous
-/// responses.
+/// responses. Records are scoped by user ID and mutation type.
 #[derive(Clone)]
-pub struct DieselIdempotencyStore {
+pub struct DieselIdempotencyRepository {
     pool: DbPool,
 }
 
-impl DieselIdempotencyStore {
-    /// Create a new store with the given connection pool.
+impl DieselIdempotencyRepository {
+    /// Create a new repository with the given connection pool.
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
     }
 }
 
-/// Map pool errors to domain idempotency store errors.
-fn map_pool_error(error: PoolError) -> IdempotencyStoreError {
+/// Map pool errors to domain idempotency repository errors.
+fn map_pool_error(error: PoolError) -> IdempotencyRepositoryError {
     match error {
         PoolError::Checkout { message } | PoolError::Build { message } => {
-            IdempotencyStoreError::connection(message)
+            IdempotencyRepositoryError::connection(message)
         }
     }
 }
 
-/// Map Diesel errors to domain idempotency store errors.
-fn map_diesel_error(error: diesel::result::Error) -> IdempotencyStoreError {
+/// Map Diesel errors to domain idempotency repository errors.
+fn map_diesel_error(error: diesel::result::Error) -> IdempotencyRepositoryError {
     use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
     match &error {
@@ -68,31 +76,37 @@ fn map_diesel_error(error: diesel::result::Error) -> IdempotencyStoreError {
     }
 
     match error {
-        DieselError::NotFound => IdempotencyStoreError::query("record not found"),
-        DieselError::QueryBuilderError(_) => IdempotencyStoreError::query("database query error"),
+        DieselError::NotFound => IdempotencyRepositoryError::query("record not found"),
+        DieselError::QueryBuilderError(_) => {
+            IdempotencyRepositoryError::query("database query error")
+        }
         DieselError::DatabaseError(kind, _) => match kind {
             DatabaseErrorKind::UniqueViolation => {
-                IdempotencyStoreError::duplicate_key("concurrent insert detected")
+                IdempotencyRepositoryError::duplicate_key("concurrent insert detected")
             }
             DatabaseErrorKind::ClosedConnection => {
-                IdempotencyStoreError::connection("database connection error")
+                IdempotencyRepositoryError::connection("database connection error")
             }
-            _ => IdempotencyStoreError::query("database error"),
+            _ => IdempotencyRepositoryError::query("database error"),
         },
-        _ => IdempotencyStoreError::query("database error"),
+        _ => IdempotencyRepositoryError::query("database error"),
     }
 }
 
 /// Convert a database row to a domain IdempotencyRecord.
-fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, IdempotencyStoreError> {
+fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, IdempotencyRepositoryError> {
     let key = IdempotencyKey::from_uuid(row.key);
     let payload_hash = PayloadHash::try_from_bytes(&row.payload_hash).map_err(|err| {
-        IdempotencyStoreError::query(format!("corrupted payload hash in database: {err}"))
+        IdempotencyRepositoryError::query(format!("corrupted payload hash in database: {err}"))
     })?;
     let user_id = UserId::from_uuid(row.user_id);
+    let mutation_type = MutationType::from_str(&row.mutation_type).map_err(|err| {
+        IdempotencyRepositoryError::query(format!("invalid mutation type in database: {err}"))
+    })?;
 
     Ok(IdempotencyRecord {
         key,
+        mutation_type,
         payload_hash,
         response_snapshot: row.response_snapshot,
         user_id,
@@ -101,20 +115,19 @@ fn row_to_record(row: IdempotencyKeyRow) -> Result<IdempotencyRecord, Idempotenc
 }
 
 #[async_trait]
-impl IdempotencyStore for DieselIdempotencyStore {
+impl IdempotencyRepository for DieselIdempotencyRepository {
     async fn lookup(
         &self,
-        key: &IdempotencyKey,
-        user_id: &UserId,
-        payload_hash: &PayloadHash,
-    ) -> Result<IdempotencyLookupResult, IdempotencyStoreError> {
+        query: &IdempotencyLookupQuery,
+    ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
         let result: Option<IdempotencyKeyRow> = idempotency_keys::table
             .filter(
                 idempotency_keys::key
-                    .eq(key.as_uuid())
-                    .and(idempotency_keys::user_id.eq(user_id.as_uuid())),
+                    .eq(query.key.as_uuid())
+                    .and(idempotency_keys::user_id.eq(query.user_id.as_uuid()))
+                    .and(idempotency_keys::mutation_type.eq(query.mutation_type.as_str())),
             )
             .select(IdempotencyKeyRow::as_select())
             .first(&mut conn)
@@ -126,7 +139,7 @@ impl IdempotencyStore for DieselIdempotencyStore {
             None => Ok(IdempotencyLookupResult::NotFound),
             Some(row) => {
                 let record = row_to_record(row)?;
-                if record.payload_hash == *payload_hash {
+                if record.payload_hash == query.payload_hash {
                     Ok(IdempotencyLookupResult::MatchingPayload(record))
                 } else {
                     Ok(IdempotencyLookupResult::ConflictingPayload(record))
@@ -135,11 +148,12 @@ impl IdempotencyStore for DieselIdempotencyStore {
         }
     }
 
-    async fn store(&self, record: &IdempotencyRecord) -> Result<(), IdempotencyStoreError> {
+    async fn store(&self, record: &IdempotencyRecord) -> Result<(), IdempotencyRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
         let new_record = NewIdempotencyKeyRow {
             key: *record.key.as_uuid(),
+            mutation_type: record.mutation_type.as_str(),
             payload_hash: record.payload_hash.as_bytes(),
             response_snapshot: &record.response_snapshot,
             user_id: *record.user_id.as_uuid(),
@@ -153,12 +167,12 @@ impl IdempotencyStore for DieselIdempotencyStore {
             .map_err(map_diesel_error)
     }
 
-    async fn cleanup_expired(&self, ttl: Duration) -> Result<u64, IdempotencyStoreError> {
+    async fn cleanup_expired(&self, ttl: Duration) -> Result<u64, IdempotencyRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
         let cutoff = Utc::now()
             - chrono::Duration::from_std(ttl).map_err(|err| {
-                IdempotencyStoreError::query(format!("invalid TTL duration: {err}"))
+                IdempotencyRepositoryError::query(format!("invalid TTL duration: {err}"))
             })?;
 
         let deleted = diesel::delete(idempotency_keys::table)
@@ -181,22 +195,22 @@ mod tests {
     #[rstest]
     fn pool_error_maps_to_connection_error() {
         let pool_err = PoolError::checkout("connection refused");
-        let store_err = map_pool_error(pool_err);
+        let repo_err = map_pool_error(pool_err);
 
         assert!(matches!(
-            store_err,
-            IdempotencyStoreError::Connection { .. }
+            repo_err,
+            IdempotencyRepositoryError::Connection { .. }
         ));
-        assert!(store_err.to_string().contains("connection refused"));
+        assert!(repo_err.to_string().contains("connection refused"));
     }
 
     #[rstest]
     fn diesel_error_maps_to_query_error() {
         let diesel_err = diesel::result::Error::NotFound;
-        let store_err = map_diesel_error(diesel_err);
+        let repo_err = map_diesel_error(diesel_err);
 
-        assert!(matches!(store_err, IdempotencyStoreError::Query { .. }));
-        assert!(store_err.to_string().contains("record not found"));
+        assert!(matches!(repo_err, IdempotencyRepositoryError::Query { .. }));
+        assert!(repo_err.to_string().contains("record not found"));
     }
 
     #[rstest]
@@ -207,16 +221,16 @@ mod tests {
             DatabaseErrorKind::UniqueViolation,
             Box::new("duplicate key".to_string()),
         );
-        let store_err = map_diesel_error(diesel_err);
+        let repo_err = map_diesel_error(diesel_err);
 
         assert!(
-            matches!(store_err, IdempotencyStoreError::DuplicateKey { .. }),
-            "expected DuplicateKey error, got {store_err:?}"
+            matches!(repo_err, IdempotencyRepositoryError::DuplicateKey { .. }),
+            "expected DuplicateKey error, got {repo_err:?}"
         );
         assert!(
-            store_err.to_string().contains("concurrent insert"),
+            repo_err.to_string().contains("concurrent insert"),
             "expected 'concurrent insert' in message, got: {}",
-            store_err
+            repo_err
         );
     }
 }

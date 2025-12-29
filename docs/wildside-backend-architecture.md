@@ -413,7 +413,7 @@ below:
   `/api/v1/routes/{request_id}` for polling.
 - `409 Conflict` if the supplied `Idempotency-Key` header matches an
   existing payload with different parameters. Keys are persisted in PostgreSQL
-  for 24 hours (configurable via `ROUTES_IDEMPOTENCY_TTL_HOURS`) so retries
+  for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`) so retries
   survive restarts.
 - Standardised errors use the structure
   `{ "error": { "code": "string", "message": "string", "trace_id": "uuid" } }`
@@ -492,7 +492,10 @@ fixtures to API data without rewriting view components.
 - `WalkSessionRepository` (read/write): persists walk sessions and completion
   summaries.
 - `IdempotencyRepository` (read/write): persists idempotency keys for outbox
-  style mutations (notes, progress, offline bundles, preferences).
+  style mutations (routes, notes, progress, offline bundles, preferences).
+  Scopes keys by `MutationType` enum so the same client-generated UUID can be
+  reused across different mutation types without collision. TTL is configurable
+  via `IDEMPOTENCY_TTL_HOURS` environment variable (defaults to 24 hours).
 
 #### Driving ports (services and queries)
 
@@ -696,6 +699,20 @@ sequenceDiagram
     API-->>PWA: 200 OK (new revision)
   end
 ```
+
+> **Design decision (2025-12-28):** Introduce a shared `IdempotencyRepository`
+> port that scopes idempotency keys by `MutationType` enum (routes, notes,
+> progress, preferences, bundles). The composite primary key `(key, user_id,
+> mutation_type)` allows clients to reuse the same UUID across different
+> mutation types without collision. TTL is configurable via
+> `IDEMPOTENCY_TTL_HOURS` (default 24 hours, clamped between 1 hour and 10
+> years) and read at application start via
+> `IdempotencyConfig::from_env()`. The domain defines `MutationType` with
+> `FromStr`, `Display`, and serde traits for consistent serialization. The
+> Diesel adapter `DieselIdempotencyRepository` stores the mutation type as a
+> TEXT column with a CHECK constraint. This design unifies idempotency handling
+> for all outbox-backed mutations while remaining open to per-mutation-type TTL
+> overrides in the future.
 
 #### WebSocket Message Contracts
 

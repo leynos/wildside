@@ -1,9 +1,12 @@
 //! Unit tests for idempotency primitives.
 
-use super::*;
+use std::time::Duration;
+
 use rstest::rstest;
 use serde_json::json;
 use uuid::Uuid;
+
+use super::*;
 
 // IdempotencyKey tests
 
@@ -116,4 +119,186 @@ fn canonicalize_and_hash_handles_primitives() {
         canonicalize_and_hash(&json!("a")),
         canonicalize_and_hash(&json!("b"))
     );
+}
+
+// MutationType tests
+
+#[rstest]
+#[case(MutationType::Routes, "routes")]
+#[case(MutationType::Notes, "notes")]
+#[case(MutationType::Progress, "progress")]
+#[case(MutationType::Preferences, "preferences")]
+#[case(MutationType::Bundles, "bundles")]
+fn mutation_type_as_str(#[case] mutation: MutationType, #[case] expected: &str) {
+    assert_eq!(mutation.as_str(), expected);
+}
+
+#[rstest]
+#[case(MutationType::Routes, "routes")]
+#[case(MutationType::Notes, "notes")]
+#[case(MutationType::Progress, "progress")]
+#[case(MutationType::Preferences, "preferences")]
+#[case(MutationType::Bundles, "bundles")]
+fn mutation_type_display(#[case] mutation: MutationType, #[case] expected: &str) {
+    assert_eq!(format!("{mutation}"), expected);
+}
+
+#[rstest]
+#[case("routes", MutationType::Routes)]
+#[case("notes", MutationType::Notes)]
+#[case("progress", MutationType::Progress)]
+#[case("preferences", MutationType::Preferences)]
+#[case("bundles", MutationType::Bundles)]
+fn mutation_type_from_str(#[case] input: &str, #[case] expected: MutationType) {
+    use std::str::FromStr;
+    assert_eq!(
+        MutationType::from_str(input).expect("valid input"),
+        expected
+    );
+}
+
+#[rstest]
+#[case("invalid")]
+#[case("Routes")]
+#[case("ROUTES")]
+#[case("")]
+fn mutation_type_from_str_rejects_invalid(#[case] input: &str) {
+    use std::str::FromStr;
+    let result = MutationType::from_str(input);
+    assert!(result.is_err(), "expected error for input '{input}'");
+    let err = result.unwrap_err();
+    assert_eq!(err.input, input);
+}
+
+#[test]
+fn mutation_type_serde_roundtrip() {
+    for mutation in [
+        MutationType::Routes,
+        MutationType::Notes,
+        MutationType::Progress,
+        MutationType::Preferences,
+        MutationType::Bundles,
+    ] {
+        let json = serde_json::to_string(&mutation).expect("serialization should succeed");
+        let parsed: MutationType =
+            serde_json::from_str(&json).expect("deserialization should succeed");
+        assert_eq!(mutation, parsed);
+    }
+}
+
+#[test]
+fn mutation_type_serializes_to_snake_case() {
+    let json = serde_json::to_string(&MutationType::Routes).expect("serialization should succeed");
+    assert_eq!(json, "\"routes\"");
+}
+
+/// Validates that MutationType::ALL matches the CHECK constraint in the migration.
+///
+/// If this test fails, you likely added a new MutationType variant. You must also
+/// update the CHECK constraint in:
+/// `backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql`
+#[test]
+fn mutation_type_values_match_migration_constraint() {
+    use std::collections::HashSet;
+
+    // These values must match the CHECK constraint in the migration file:
+    // backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql
+    let migration_values: HashSet<&str> = ["routes", "notes", "progress", "preferences", "bundles"]
+        .into_iter()
+        .collect();
+
+    let code_values: HashSet<&str> = MutationType::ALL.iter().map(|m| m.as_str()).collect();
+
+    assert_eq!(
+        code_values, migration_values,
+        "MutationType::ALL does not match migration CHECK constraint. \
+         If you added a variant, update the migration CHECK constraint in \
+         backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql"
+    );
+}
+
+// IdempotencyConfig tests
+
+use mockable::{Env as MockableEnv, MockEnv};
+use std::collections::HashMap;
+
+/// Test environment implementation using mockable.
+struct TestEnv {
+    inner: MockEnv,
+}
+
+impl IdempotencyEnv for TestEnv {
+    fn string(&self, name: &str) -> Option<String> {
+        MockableEnv::string(&self.inner, name)
+    }
+}
+
+/// Build a mock environment with the given variables.
+fn build_mock_env(vars: HashMap<&'static str, &str>) -> TestEnv {
+    let vars: HashMap<String, String> = vars
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    let mut env = MockEnv::new();
+    env.expect_string()
+        .times(0..)
+        .returning(move |key| vars.get(key).cloned());
+    TestEnv { inner: env }
+}
+
+/// Build a mock environment with no variables set.
+fn empty_mock_env() -> TestEnv {
+    build_mock_env(HashMap::new())
+}
+
+#[test]
+fn idempotency_config_default_is_24_hours() {
+    let config = IdempotencyConfig::default();
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+}
+
+#[test]
+fn idempotency_config_with_ttl_sets_custom_duration() {
+    let ttl = Duration::from_secs(12 * 3600);
+    let config = IdempotencyConfig::with_ttl(ttl);
+    assert_eq!(config.ttl(), ttl);
+}
+
+#[test]
+fn idempotency_config_from_env_uses_default_without_var() {
+    let env = empty_mock_env();
+    let config = IdempotencyConfig::from_env_with(&env);
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+}
+
+#[test]
+fn idempotency_config_from_env_respects_env_var() {
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "48")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    assert_eq!(config.ttl(), Duration::from_secs(48 * 3600));
+}
+
+#[test]
+fn idempotency_config_from_env_ignores_invalid_value() {
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "not_a_number")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    // Falls back to default
+    assert_eq!(config.ttl(), Duration::from_secs(24 * 3600));
+}
+
+#[test]
+fn idempotency_config_from_env_clamps_to_minimum() {
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "0")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    // Clamped to MIN_TTL_HOURS (1 hour)
+    assert_eq!(config.ttl(), Duration::from_secs(3600));
+}
+
+#[test]
+fn idempotency_config_from_env_clamps_to_maximum() {
+    // 10 years in hours = 87600
+    let env = build_mock_env(HashMap::from([("IDEMPOTENCY_TTL_HOURS", "999999")]));
+    let config = IdempotencyConfig::from_env_with(&env);
+    // Clamped to MAX_TTL_HOURS (87600 hours = 10 years)
+    assert_eq!(config.ttl(), Duration::from_secs(87600 * 3600));
 }
