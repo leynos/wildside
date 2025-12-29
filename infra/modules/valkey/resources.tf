@@ -32,13 +32,8 @@ resource "helm_release" "valkey_operator" {
   wait       = var.helm_wait
   timeout    = local.helm_timeout
 
-  dynamic "set" {
-    for_each = local.merged_helm_values_map
-    content {
-      name  = set.key
-      value = set.value
-    }
-  }
+  # Helm provider 3.x uses list of objects instead of dynamic blocks
+  set = [for k, v in local.merged_helm_values_map : { name = k, value = v }]
 
   depends_on = [kubernetes_namespace.operator]
 }

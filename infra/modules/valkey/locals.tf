@@ -82,7 +82,7 @@ locals {
   ]...)
 
   # PDB settings - only enable if replicas > 0 (HA mode)
-  pdb_enabled = var.pdb_enabled && var.replicas > 0
+  pdb_enabled = var.pdb_enabled && local.replicas > 0
   pdb_name    = trimspace(var.pdb_name)
 
   # Common labels

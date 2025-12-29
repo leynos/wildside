@@ -91,4 +91,10 @@ if not paths:
     raise SystemExit(f"no rendered manifests written under {out_dir}")
 PY
 
-conftest test "$out_dir" --policy "$POLICY_DIR" --namespace valkey.policy.manifests --combine
+conftest_log="$tmpdir/conftest.log"
+if ! conftest test "$out_dir" --policy "$POLICY_DIR" --namespace valkey.policy.manifests --combine > "$conftest_log" 2>&1; then
+  echo "conftest policy validation failed:" >&2
+  cat "$conftest_log" >&2
+  exit 1
+fi
+cat "$conftest_log"

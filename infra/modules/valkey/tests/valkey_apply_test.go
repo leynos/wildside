@@ -16,19 +16,28 @@ import (
 const (
 	applyTestKubeconfigEnv = "VALKEY_TEST_KUBECONFIG"
 	applyTestSkipMessage   = "Set VALKEY_TEST_KUBECONFIG to a valid kubeconfig path to run apply-mode tests"
+	kubectlTimeout         = 30 * time.Second
 )
 
+// baseApplyVars returns the common base configuration for apply-mode tests.
+// This follows the same pattern as baseRenderVars in valkey_test_helpers.go.
+func baseApplyVars() map[string]interface{} {
+	return map[string]interface{}{
+		"cluster_name": "test-valkey-apply",
+		"nodes":        1,
+		"replicas":     0,
+		"storage_size": "1Gi",
+	}
+}
+
 // applyVars returns variables for apply-mode tests with a real kubeconfig.
+// It composes from baseApplyVars and adds apply-specific fields.
 func applyVars(t *testing.T, kubeconfigPath string) map[string]interface{} {
 	t.Helper()
-	return map[string]interface{}{
-		"cluster_name":    "test-valkey-apply",
-		"nodes":           1,
-		"replicas":        0,
-		"storage_size":    "1Gi",
+	return mergeVars(baseApplyVars(), map[string]interface{}{
 		"password_inline": "test-password-apply",
 		"kubeconfig_path": kubeconfigPath,
-	}
+	})
 }
 
 // setupApply creates terraform options for apply-mode example.
@@ -44,7 +53,7 @@ func setupApply(t *testing.T, vars map[string]interface{}) (string, *terraform.O
 // runKubectl executes kubectl with the given arguments and returns output.
 func runKubectl(t *testing.T, kubeconfig string, args ...string) ([]byte, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), kubectlTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "kubectl", args...)
@@ -106,14 +115,16 @@ func TestValkeyModuleApplyCreatesResources(t *testing.T) {
 			"expected HelmRelease to exist when Flux is installed")
 	}
 
-	// Verify Valkey CR was created (if CRD is installed)
+	// Verify Valkey CR was created.
+	// The test documentation states that the cluster must have the Valkey operator
+	// CRDs installed, so we require the CR to exist (not conditionally check).
 	out, err = runKubectl(t, kubeconfig,
 		"get", "valkey.hyperspike.io", "test-valkey-apply",
-		"-n", "valkey", "-o", "name", "--ignore-not-found")
-	if err == nil && len(out) > 0 {
-		require.Contains(t, string(out), "valkey.hyperspike.io/test-valkey-apply",
-			"expected Valkey CR to exist when CRD is installed")
-	}
+		"-n", "valkey", "-o", "name")
+	require.NoError(t, err,
+		"failed to get Valkey CR (ensure Valkey CRDs are installed): %s", string(out))
+	require.Contains(t, string(out), "valkey.hyperspike.io/test-valkey-apply",
+		"expected Valkey CR to exist")
 
 	// Verify outputs are populated
 	primaryEndpoint := terraform.Output(t, opts, "primary_endpoint")

@@ -4,12 +4,12 @@ terraform {
   required_providers {
     kubernetes = {
       source  = "opentofu/kubernetes"
-      version = "~> 2.38.0"
+      version = "~> 3.0.1"
     }
 
     helm = {
       source  = "opentofu/helm"
-      version = "~> 2.17.0"
+      version = "~> 3.1.1"
     }
   }
 }

@@ -104,6 +104,22 @@ variable "resource_requests" {
     memory = "128Mi"
   }
   nullable = false
+
+  validation {
+    condition = can(regex(
+      "^([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?m?$",
+      trimspace(var.resource_requests.cpu)
+    ))
+    error_message = "resource_requests.cpu must be a valid Kubernetes CPU quantity (e.g., 100m, 0.5, 1)"
+  }
+
+  validation {
+    condition = can(regex(
+      "^([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$",
+      trimspace(var.resource_requests.memory)
+    ))
+    error_message = "resource_requests.memory must be a valid Kubernetes memory quantity (e.g., 128Mi, 1Gi)"
+  }
 }
 
 variable "resource_limits" {
@@ -117,6 +133,22 @@ variable "resource_limits" {
     memory = "512Mi"
   }
   nullable = false
+
+  validation {
+    condition = can(regex(
+      "^([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?m?$",
+      trimspace(var.resource_limits.cpu)
+    ))
+    error_message = "resource_limits.cpu must be a valid Kubernetes CPU quantity (e.g., 500m, 1, 2)"
+  }
+
+  validation {
+    condition = can(regex(
+      "^([0-9]+\\.?[0-9]*|[0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$",
+      trimspace(var.resource_limits.memory)
+    ))
+    error_message = "resource_limits.memory must be a valid Kubernetes memory quantity (e.g., 512Mi, 1Gi)"
+  }
 }
 
 variable "prometheus_enabled" {
