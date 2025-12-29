@@ -29,7 +29,7 @@ Success is observable when:
   generalized for multiple mutation types.
 - A `MutationType` enum distinguishes between idempotency scopes (routes, notes,
   progress, preferences, bundles).
-- TTL is configurable via `IDEMPOTENCY_TTL_HOURS` environment variable with a
+- TTL is configurable via `IDEMPOTENCY_TTL_HOURS` environment variable, with a
   default of 24 hours for backward compatibility.
 - The Diesel adapter (`DieselIdempotencyStore`) is updated to implement the
   renamed port.
@@ -391,7 +391,7 @@ method signatures.
 ### 11. Update HTTP state and server wiring
 
 - Update `HttpState` field type if necessary.
-- Update `main.rs` or `server/mod.rs` wiring.
+- Adjust wiring in `main.rs` or `server/mod.rs`.
 
 ### 12. BDD tests
 
