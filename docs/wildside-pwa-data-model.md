@@ -567,15 +567,15 @@ type OutboxItem = Readonly<
 Outbound HTTP writes include `Idempotency-Key = OutboxItem.id` so the backend
 can deduplicate retries safely.
 
-The backend already documents an idempotency contract for `POST /api/v1/routes`
-in `wildside-backend-architecture.md`:
+The backend implements an idempotency contract (documented for `POST /api/v1/routes`
+in `wildside-backend-architecture.md`) that applies uniformly to all
+mutation-type–scoped endpoints (routes, notes, progress, preferences, bundles):
 
-- Keys are scoped per endpoint.
+- Keys are scoped per mutation type and user.
 - Keys persist for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`).
 - Supplying the same key with a different payload yields `409 Conflict`.
 
-For outbox-backed mutations, the backend endpoints that accept queued writes
-should follow the same contract shape.
+All outbox-backed mutation endpoints follow this contract shape.
 
 ## Backend hexagon mapping (domain modules and ports)
 
