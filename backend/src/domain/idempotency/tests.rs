@@ -203,10 +203,9 @@ fn mutation_type_values_match_migration_constraint() {
 
     // These values must match the CHECK constraint in the migration file:
     // backend/migrations/2025-12-28-000000_add_mutation_type_to_idempotency_keys/up.sql
-    let migration_values: HashSet<&str> =
-        ["routes", "notes", "progress", "preferences", "bundles"]
-            .into_iter()
-            .collect();
+    let migration_values: HashSet<&str> = ["routes", "notes", "progress", "preferences", "bundles"]
+        .into_iter()
+        .collect();
 
     let code_values: HashSet<&str> = MutationType::ALL.iter().map(|m| m.as_str()).collect();
 
