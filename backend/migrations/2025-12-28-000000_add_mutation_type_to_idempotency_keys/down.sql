@@ -1,12 +1,8 @@
 -- Revert mutation_type addition.
 --
--- WARNING: This migration may fail if there are records with the same (key, user_id)
--- across different mutation types. Such records would need to be manually resolved
--- before reverting.
-
--- Pre-flight check: fail fast if there are duplicate (key, user_id) pairs across
--- different mutation types. Without this check, the primary key recreation would
--- fail with a less informative error.
+-- Includes automated pre-flight duplicate detection: if any (key, user_id) pairs
+-- exist across multiple mutation types, the migration aborts with a diagnostic
+-- query to identify the affected records.
 DO $$
 DECLARE
     dup_count INTEGER;
