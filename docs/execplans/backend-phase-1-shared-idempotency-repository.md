@@ -276,16 +276,13 @@ Rename `idempotency_store.rs` to `idempotency_repository.rs`:
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait IdempotencyRepository: Send + Sync {
-    /// Look up an idempotency key for a specific user and mutation type.
+    /// Look up an idempotency record matching the query parameters.
     ///
-    /// The lookup is scoped to the given user and mutation type to prevent
-    /// cross-user or cross-operation key reuse.
+    /// The query includes key, user_id, mutation_type, and payload_hash to scope
+    /// lookups and detect payload conflicts.
     async fn lookup(
         &self,
-        key: &IdempotencyKey,
-        user_id: &UserId,
-        mutation_type: MutationType,
-        payload_hash: &PayloadHash,
+        query: &IdempotencyLookupQuery,
     ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError>;
 
     /// Store an idempotency record.
@@ -376,13 +373,13 @@ Add `mutation_type` to `IdempotencyKeyRow` and `NewIdempotencyKeyRow`.
 Rename `diesel_idempotency_store.rs` to `diesel_idempotency_repository.rs`:
 
 - Rename struct to `DieselIdempotencyRepository`.
-- Update `lookup` to filter by `mutation_type`.
-- Update `store` to include `mutation_type`.
-- Update error mapping to use `IdempotencyRepositoryError`.
+- Modify `lookup` to filter by `mutation_type`.
+- Extend `store` to include `mutation_type`.
+- Adjust error mapping to use `IdempotencyRepositoryError`.
 
 ### 9. Update domain service (backend/src/domain/route_submission/mod.rs)
 
-- Update imports to use `IdempotencyRepository`.
+- Adjust imports to use `IdempotencyRepository`.
 - Pass `MutationType::Routes` to lookup and store calls.
 - No behaviour change for existing route submission flow.
 
@@ -445,13 +442,13 @@ Create `backend/tests/shared_idempotency_repository_bdd.rs`:
 
 Create `backend/tests/idempotency_repository_contract.rs`:
 
-- Test `lookup` returns `NotFound` for unknown keys.
-- Test `lookup` respects mutation type isolation.
+- Verify `lookup` returns `NotFound` for unknown keys.
+- Ensure `lookup` respects mutation type isolation.
 - Test `store` persists record with mutation type.
-- Test `lookup` returns `MatchingPayload` when hash matches.
-- Test `lookup` returns `ConflictingPayload` when hash differs.
-- Test `cleanup_expired` removes old records.
-- Test `cleanup_expired` respects mutation type.
+- Confirm `lookup` returns `MatchingPayload` when hash matches.
+- Assert `lookup` returns `ConflictingPayload` when hash differs.
+- Validate `cleanup_expired` removes old records.
+- Verify `cleanup_expired` respects mutation type.
 
 ### 14. Unit tests
 
