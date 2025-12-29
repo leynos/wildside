@@ -10,6 +10,10 @@ ALTER TABLE idempotency_keys
 ADD COLUMN mutation_type TEXT NOT NULL DEFAULT 'routes';
 
 -- Add CHECK constraint for known mutation types.
+--
+-- IMPORTANT: Keep this list synchronised with MutationType::ALL in
+-- backend/src/domain/idempotency/mod.rs. The test
+-- `mutation_type_values_match_migration_constraint` validates this at build time.
 ALTER TABLE idempotency_keys
 ADD CONSTRAINT chk_mutation_type CHECK (
     mutation_type IN ('routes', 'notes', 'progress', 'preferences', 'bundles')
