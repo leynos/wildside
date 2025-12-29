@@ -92,7 +92,7 @@ Success is observable when:
   Date/Author: 2025-12-28 / Claude Code.
 
 - Decision: Use `IDEMPOTENCY_TTL_HOURS` environment variable for TTL
-  configuration with 24-hour default.
+  configuration, with 24-hour default.
   Rationale: The existing route submission idempotency uses a 24-hour TTL via
   `ROUTES_IDEMPOTENCY_TTL_HOURS`. A shared config simplifies operations while
   preserving the existing behaviour. Future work can add per-type TTL overrides
@@ -102,8 +102,8 @@ Success is observable when:
 - Decision: Make `mutation_type` column NOT NULL with a default of `'routes'`
   for backward compatibility.
   Rationale: Existing records from route submission should continue to work
-  without migration issues. The default ensures `mutation_type` is always
-  populated even for records created before this migration.
+  without migration issues; the default ensures `mutation_type` is always
+  populated, even for records created before this migration.
   Date/Author: 2025-12-28 / Claude Code.
 
 - Decision: Include `mutation_type` in the composite primary key alongside `key`
@@ -316,6 +316,8 @@ ALTER TABLE idempotency_keys
 ADD COLUMN mutation_type TEXT NOT NULL DEFAULT 'routes';
 
 -- Add CHECK constraint for known mutation types.
+-- IMPORTANT: Keep this list synchronised with MutationType::ALL in
+-- backend/src/domain/idempotency/mod.rs.
 ALTER TABLE idempotency_keys
 ADD CONSTRAINT chk_mutation_type CHECK (
     mutation_type IN ('routes', 'notes', 'progress', 'preferences', 'bundles')
