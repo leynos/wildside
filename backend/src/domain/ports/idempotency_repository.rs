@@ -155,8 +155,12 @@ mod tests {
             MutationType::Preferences,
             MutationType::Bundles,
         ] {
-            let query =
-                IdempotencyLookupQuery::new(key.clone(), user_id.clone(), mutation_type, hash.clone());
+            let query = IdempotencyLookupQuery::new(
+                key.clone(),
+                user_id.clone(),
+                mutation_type,
+                hash.clone(),
+            );
             let result = repo
                 .lookup(&query)
                 .await
