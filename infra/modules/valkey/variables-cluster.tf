@@ -190,8 +190,13 @@ variable "pdb_name" {
   default     = "pdb-valkey"
 
   validation {
-    condition     = var.pdb_name != null && length(trimspace(var.pdb_name)) > 0
-    error_message = "pdb_name must not be blank"
+    condition = (
+      var.pdb_name != null &&
+      length(trimspace(var.pdb_name)) > 0 &&
+      length(trimspace(var.pdb_name)) <= 63 &&
+      can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", trimspace(var.pdb_name)))
+    )
+    error_message = "pdb_name must be a valid Kubernetes resource name (DNS-1123 label: lowercase alphanumeric, may contain hyphens, max 63 chars)"
   }
 }
 
@@ -212,4 +217,22 @@ variable "tolerations" {
   }))
   default  = []
   nullable = false
+
+  validation {
+    condition = alltrue([
+      for t in var.tolerations :
+      t.operator == null || t.operator == "" ||
+      contains(["Equal", "Exists"], t.operator)
+    ])
+    error_message = "tolerations[*].operator must be 'Equal', 'Exists', or empty"
+  }
+
+  validation {
+    condition = alltrue([
+      for t in var.tolerations :
+      t.effect == null || t.effect == "" ||
+      contains(["NoSchedule", "PreferNoSchedule", "NoExecute"], t.effect)
+    ])
+    error_message = "tolerations[*].effect must be 'NoSchedule', 'PreferNoSchedule', 'NoExecute', or empty"
+  }
 }

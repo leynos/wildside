@@ -35,6 +35,8 @@ resource "helm_release" "valkey_operator" {
   # Helm provider 3.x uses list of objects instead of dynamic blocks
   set = [for k, v in local.merged_helm_values_map : { name = k, value = v }]
 
+  # Note: depends_on with counted resources is safe - when count=0, the
+  # dependency is a no-op. OpenTofu handles this correctly.
   depends_on = [kubernetes_namespace.operator]
 }
 
