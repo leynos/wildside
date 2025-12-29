@@ -467,7 +467,7 @@ Add to domain module tests:
 Update `docs/wildside-backend-architecture.md`:
 
 - Add design decision for shared `IdempotencyRepository`.
-- Update driven ports section to reflect renamed port.
+- Update the driven ports section to reflect the renamed port.
 - Add `MutationType` to domain types documentation.
 - Document `IDEMPOTENCY_TTL_HOURS` configuration.
 
