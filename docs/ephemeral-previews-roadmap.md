@@ -77,7 +77,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
     surface connection endpoints, admin credentials, and secret read handles
     for applications.
 
-  - [ ] **Redis module**: Package high-availability settings, persistence
+  - [x] **Redis module**: Package high-availability settings, persistence
     options, and export primary/endpoints plus secret keys for clients.
 
   - [ ] **Module interoperability contract**: Document shared variables and
