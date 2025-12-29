@@ -128,12 +128,17 @@ async fn closes_on_malformed_json(
         .await
         .expect("send text");
 
-    let frame = socket.next().await.expect("response frame").expect("frame");
-    match frame {
-        Frame::Close(reason) => {
-            assert_eq!(reason.expect("reason").code, CloseCode::Policy);
+    // Skip any Ping/Pong frames that may arrive before the Close frame.
+    loop {
+        let frame = socket.next().await.expect("response frame").expect("frame");
+        match frame {
+            Frame::Ping(_) | Frame::Pong(_) => continue,
+            Frame::Close(reason) => {
+                assert_eq!(reason.expect("reason").code, CloseCode::Policy);
+                break;
+            }
+            other => panic!("expected close frame, got {other:?}"),
         }
-        other => panic!("expected close frame, got {other:?}"),
     }
 }
 
