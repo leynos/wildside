@@ -29,7 +29,7 @@ ADD CONSTRAINT chk_mutation_type CHECK (
 ALTER TABLE idempotency_keys DROP CONSTRAINT idempotency_keys_pkey;
 ALTER TABLE idempotency_keys ADD PRIMARY KEY (key, user_id, mutation_type);
 
--- Create index for lookups by user and mutation type (supports TTL cleanup).
+-- Create index for lookups by user and mutation type.
 CREATE INDEX idx_idempotency_keys_user_mutation
 ON idempotency_keys (user_id, mutation_type);
 
