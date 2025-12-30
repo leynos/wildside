@@ -91,6 +91,37 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
     }
 }
 
+/// Handle failed preferences update by checking if it's a revision mismatch or missing record.
+async fn handle_preferences_update_failure<C>(
+    conn: &mut C,
+    user_id: uuid::Uuid,
+    expected_revision: u32,
+) -> UserPreferencesRepositoryError
+where
+    C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
+{
+    let current: Option<UserPreferencesRow> = user_preferences::table
+        .filter(user_preferences::user_id.eq(user_id))
+        .select(UserPreferencesRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+        .map_err(map_diesel_error)
+        .unwrap_or(None);
+
+    match current {
+        Some(row) => {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "revision is always non-negative in database"
+            )]
+            let actual = row.revision as u32;
+            UserPreferencesRepositoryError::revision_mismatch(expected_revision, actual)
+        }
+        None => UserPreferencesRepositoryError::query("preferences not found for update"),
+    }
+}
+
 #[async_trait]
 impl UserPreferencesRepository for DieselUserPreferencesRepository {
     async fn find_by_user_id(
@@ -173,34 +204,14 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
                     .map_err(map_diesel_error)?;
 
                 if updated_rows == 0 {
-                    // Check if the record exists to determine if it's a revision mismatch
-                    // or a missing record
-                    let current: Option<UserPreferencesRow> = user_preferences::table
-                        .filter(user_preferences::user_id.eq(preferences.user_id.as_uuid()))
-                        .select(UserPreferencesRow::as_select())
-                        .first(&mut conn)
-                        .await
-                        .optional()
-                        .map_err(map_diesel_error)?;
-
-                    match current {
-                        Some(row) => {
-                            #[expect(
-                                clippy::cast_sign_loss,
-                                reason = "revision is always non-negative in database"
-                            )]
-                            let actual = row.revision as u32;
-                            Err(UserPreferencesRepositoryError::revision_mismatch(
-                                expected, actual,
-                            ))
-                        }
-                        None => Err(UserPreferencesRepositoryError::query(
-                            "preferences not found for update",
-                        )),
-                    }
-                } else {
-                    Ok(())
+                    return Err(handle_preferences_update_failure(
+                        &mut conn,
+                        *preferences.user_id.as_uuid(),
+                        expected,
+                    )
+                    .await);
                 }
+                Ok(())
             }
         }
     }

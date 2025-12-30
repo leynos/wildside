@@ -185,30 +185,46 @@ mod tests {
     use chrono::Utc;
     use rstest::rstest;
 
-    #[tokio::test]
-    async fn fixture_repository_note_lookup_returns_none() {
-        let repo = FixtureRouteAnnotationRepository;
-        let note_id = Uuid::new_v4();
-
-        let result = repo
-            .find_note_by_id(&note_id)
-            .await
-            .expect("fixture lookup should succeed");
-        assert!(result.is_none());
+    /// Macro for testing fixture repository methods that return empty results.
+    ///
+    /// Reduces duplication when testing that the fixture implementation returns
+    /// None or empty collections.
+    macro_rules! test_fixture_returns_empty {
+        // Pattern for methods returning Option<T> - assert is_none()
+        ($test_name:ident, $method:ident($($arg:expr),*) => None) => {
+            #[tokio::test]
+            async fn $test_name() {
+                let repo = FixtureRouteAnnotationRepository;
+                let result = repo
+                    .$method($($arg),*)
+                    .await
+                    .expect("fixture lookup should succeed");
+                assert!(result.is_none());
+            }
+        };
+        // Pattern for methods returning Vec<T> - assert is_empty()
+        ($test_name:ident, $method:ident($($arg:expr),*) => Empty) => {
+            #[tokio::test]
+            async fn $test_name() {
+                let repo = FixtureRouteAnnotationRepository;
+                let result = repo
+                    .$method($($arg),*)
+                    .await
+                    .expect("fixture lookup should succeed");
+                assert!(result.is_empty());
+            }
+        };
     }
 
-    #[tokio::test]
-    async fn fixture_repository_notes_by_route_returns_empty() {
-        let repo = FixtureRouteAnnotationRepository;
-        let route_id = Uuid::new_v4();
-        let user_id = UserId::random();
+    test_fixture_returns_empty!(
+        fixture_repository_note_lookup_returns_none,
+        find_note_by_id(&Uuid::new_v4()) => None
+    );
 
-        let result = repo
-            .find_notes_by_route_and_user(&route_id, &user_id)
-            .await
-            .expect("fixture lookup should succeed");
-        assert!(result.is_empty());
-    }
+    test_fixture_returns_empty!(
+        fixture_repository_notes_by_route_returns_empty,
+        find_notes_by_route_and_user(&Uuid::new_v4(), &UserId::random()) => Empty
+    );
 
     #[tokio::test]
     async fn fixture_repository_accepts_save_note() {
@@ -241,18 +257,10 @@ mod tests {
         assert!(!deleted);
     }
 
-    #[tokio::test]
-    async fn fixture_repository_progress_lookup_returns_none() {
-        let repo = FixtureRouteAnnotationRepository;
-        let route_id = Uuid::new_v4();
-        let user_id = UserId::random();
-
-        let result = repo
-            .find_progress(&route_id, &user_id)
-            .await
-            .expect("fixture lookup should succeed");
-        assert!(result.is_none());
-    }
+    test_fixture_returns_empty!(
+        fixture_repository_progress_lookup_returns_none,
+        find_progress(&Uuid::new_v4(), &UserId::random()) => None
+    );
 
     #[tokio::test]
     async fn fixture_repository_accepts_save_progress() {

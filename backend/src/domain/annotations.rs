@@ -55,29 +55,44 @@ pub struct RouteNote {
     pub revision: u32,
 }
 
+/// Content parameters for creating a route note.
+#[derive(Debug, Clone)]
+pub struct RouteNoteContent {
+    /// The note body text.
+    pub body: String,
+    /// Optional POI this note is attached to.
+    pub poi_id: Option<Uuid>,
+}
+
+impl RouteNoteContent {
+    /// Create content with a body and optional POI attachment.
+    pub fn new(body: impl Into<String>) -> Self {
+        Self {
+            body: body.into(),
+            poi_id: None,
+        }
+    }
+
+    /// Attach the note to a specific POI.
+    pub fn with_poi(mut self, poi_id: Uuid) -> Self {
+        self.poi_id = Some(poi_id);
+        self
+    }
+}
+
 impl RouteNote {
     /// Create a new note with initial revision.
     ///
     /// Sets both `created_at` and `updated_at` to the current time and
     /// initialises `revision` to 1.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "constructor for struct with many required fields; use builder for optional fields"
-    )]
-    pub fn new(
-        id: Uuid,
-        route_id: Uuid,
-        poi_id: Option<Uuid>,
-        user_id: UserId,
-        body: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: Uuid, route_id: Uuid, user_id: UserId, content: RouteNoteContent) -> Self {
         let now = Utc::now();
         Self {
             id,
             route_id,
-            poi_id,
+            poi_id: content.poi_id,
             user_id,
-            body: body.into(),
+            body: content.body,
             created_at: now,
             updated_at: now,
             revision: 1,
@@ -298,9 +313,8 @@ mod tests {
         let note = RouteNote::new(
             Uuid::new_v4(),
             Uuid::new_v4(),
-            None,
             UserId::random(),
-            "Test note",
+            RouteNoteContent::new("Test note"),
         );
 
         assert_eq!(note.revision, 1);
@@ -313,9 +327,8 @@ mod tests {
         let note = RouteNote::new(
             Uuid::new_v4(),
             Uuid::new_v4(),
-            Some(poi_id),
             UserId::random(),
-            "Note on POI",
+            RouteNoteContent::new("Note on POI").with_poi(poi_id),
         );
 
         assert_eq!(note.poi_id, Some(poi_id));

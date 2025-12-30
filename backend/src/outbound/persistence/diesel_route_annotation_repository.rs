@@ -115,6 +115,73 @@ fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
     }
 }
 
+/// Handle failed note update by checking if it's a revision mismatch or missing note.
+async fn handle_note_update_failure<C>(
+    conn: &mut C,
+    note_id: Uuid,
+    expected_revision: u32,
+) -> RouteAnnotationRepositoryError
+where
+    C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
+{
+    let current: Option<RouteNoteRow> = route_notes::table
+        .filter(route_notes::id.eq(note_id))
+        .select(RouteNoteRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+        .map_err(map_diesel_error)
+        .unwrap_or(None);
+
+    match current {
+        Some(row) => {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "revision is always non-negative in database"
+            )]
+            let actual = row.revision as u32;
+            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, actual)
+        }
+        None => RouteAnnotationRepositoryError::query("note not found"),
+    }
+}
+
+/// Handle failed progress update by checking if it's a revision mismatch or missing progress.
+async fn handle_progress_update_failure<C>(
+    conn: &mut C,
+    route_id: Uuid,
+    user_id: Uuid,
+    expected_revision: u32,
+) -> RouteAnnotationRepositoryError
+where
+    C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
+{
+    let current: Option<RouteProgressRow> = route_progress::table
+        .filter(
+            route_progress::route_id
+                .eq(route_id)
+                .and(route_progress::user_id.eq(user_id)),
+        )
+        .select(RouteProgressRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+        .map_err(map_diesel_error)
+        .unwrap_or(None);
+
+    match current {
+        Some(row) => {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "revision is always non-negative in database"
+            )]
+            let actual = row.revision as u32;
+            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, actual)
+        }
+        None => RouteAnnotationRepositoryError::query("progress not found"),
+    }
+}
+
 #[async_trait]
 impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
     // --- Notes ---
@@ -216,31 +283,9 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .map_err(map_diesel_error)?;
 
                 if updated_rows == 0 {
-                    // Check if it's a revision mismatch or missing note
-                    let current: Option<RouteNoteRow> = route_notes::table
-                        .filter(route_notes::id.eq(note.id))
-                        .select(RouteNoteRow::as_select())
-                        .first(&mut conn)
-                        .await
-                        .optional()
-                        .map_err(map_diesel_error)?;
-
-                    match current {
-                        Some(row) => {
-                            #[expect(
-                                clippy::cast_sign_loss,
-                                reason = "revision is always non-negative in database"
-                            )]
-                            let actual = row.revision as u32;
-                            Err(RouteAnnotationRepositoryError::revision_mismatch(
-                                expected, actual,
-                            ))
-                        }
-                        None => Err(RouteAnnotationRepositoryError::query("note not found")),
-                    }
-                } else {
-                    Ok(())
+                    return Err(handle_note_update_failure(&mut conn, note.id, expected).await);
                 }
+                Ok(())
             }
         }
     }
@@ -336,35 +381,15 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .map_err(map_diesel_error)?;
 
                 if updated_rows == 0 {
-                    // Check if it's a revision mismatch or missing progress
-                    let current: Option<RouteProgressRow> = route_progress::table
-                        .filter(
-                            route_progress::route_id
-                                .eq(progress.route_id)
-                                .and(route_progress::user_id.eq(progress.user_id.as_uuid())),
-                        )
-                        .select(RouteProgressRow::as_select())
-                        .first(&mut conn)
-                        .await
-                        .optional()
-                        .map_err(map_diesel_error)?;
-
-                    match current {
-                        Some(row) => {
-                            #[expect(
-                                clippy::cast_sign_loss,
-                                reason = "revision is always non-negative in database"
-                            )]
-                            let actual = row.revision as u32;
-                            Err(RouteAnnotationRepositoryError::revision_mismatch(
-                                expected, actual,
-                            ))
-                        }
-                        None => Err(RouteAnnotationRepositoryError::query("progress not found")),
-                    }
-                } else {
-                    Ok(())
+                    return Err(handle_progress_update_failure(
+                        &mut conn,
+                        progress.route_id,
+                        *progress.user_id.as_uuid(),
+                        expected,
+                    )
+                    .await);
                 }
+                Ok(())
             }
         }
     }

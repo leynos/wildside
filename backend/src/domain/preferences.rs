@@ -129,14 +129,7 @@ impl UserPreferences {
     /// Initialises with empty theme and safety selections, metric units,
     /// revision 1, and the current timestamp.
     pub fn new_default(user_id: UserId) -> Self {
-        Self {
-            user_id,
-            interest_theme_ids: Vec::new(),
-            safety_toggle_ids: Vec::new(),
-            unit_system: UnitSystem::default(),
-            revision: 1,
-            updated_at: Utc::now(),
-        }
+        UserPreferencesBuilder::new(user_id).build()
     }
 
     /// Create a builder for constructing preferences incrementally.

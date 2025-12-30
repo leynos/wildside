@@ -27,6 +27,7 @@
 //! - UserPreferences — user preferences for interests, safety, and display.
 //! - UnitSystem — metric or imperial unit display preference.
 //! - RouteNote — user annotation on a route or POI.
+//! - RouteNoteContent — content parameters for creating route notes.
 //! - RouteProgress — progress tracking for a route walk.
 
 pub mod annotations;
@@ -43,7 +44,9 @@ pub mod user_events;
 pub mod user_interests;
 pub mod user_onboarding;
 
-pub use self::annotations::{RouteNote, RouteNoteBuilder, RouteProgress, RouteProgressBuilder};
+pub use self::annotations::{
+    RouteNote, RouteNoteBuilder, RouteNoteContent, RouteProgress, RouteProgressBuilder,
+};
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 pub use self::idempotency::{
