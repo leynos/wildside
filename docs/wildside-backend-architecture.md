@@ -287,6 +287,16 @@ lint`:
   typical retry patterns for the 24-hour TTL. Metrics are recorded in the
   domain service (`RouteSubmissionServiceImpl`) as fire-and-forget operations
   to avoid impacting request latency.
+- **2025-12-29:** Add optimistic concurrency via revision fields to
+  `UserPreferences`, `RouteNote`, and `RouteProgress` domain types. Updates
+  require clients to provide an `expected_revision`; mismatches result in
+  `RevisionMismatch` errors. This pattern detects concurrent edits without
+  pessimistic locking. Repository ports (`UserPreferencesRepository`,
+  `RouteAnnotationRepository`) and driving command ports
+  (`UserPreferencesCommand`, `RouteAnnotationsCommand`) enforce revision
+  semantics. Diesel adapters implement the pattern with conditional UPDATE
+  queries (`WHERE revision = expected`). Combined with idempotency keys, this
+  provides safe retries for offline-first PWA scenarios.
 
 ### Web API and WebSocket Layer (Actix Web)
 
