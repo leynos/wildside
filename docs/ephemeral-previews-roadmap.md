@@ -80,7 +80,7 @@ repository and commits Flux-ready manifests into `wildside-infra`.
   - [x] **Redis module**: Package high-availability settings, persistence
     options, and export primary/endpoints plus secret keys for clients.
 
-  - [ ] **Module interoperability contract**: Document shared variables and
+  - [x] **Module interoperability contract**: Document shared variables and
     outputs in module READMEs so the `wildside-infra-k8s` action can thread DNS
     zones, issuers, and credential handles between modules.
 
