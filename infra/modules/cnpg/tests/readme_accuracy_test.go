@@ -12,14 +12,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// FilePath represents a file system path.
+type FilePath string
+
+// MarkdownTableRow represents a markdown table row.
+type MarkdownTableRow string
+
 // TestREADMEDocumentsAllOutputs verifies that all outputs defined in outputs.tf
 // are documented in README.md.
 func TestREADMEDocumentsAllOutputs(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
-	outputsPath := filepath.Join(moduleDir, "outputs.tf")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
+	outputsPath := FilePath(filepath.Join(moduleDir, "outputs.tf"))
 
 	// Extract output names from outputs.tf
 	actualOutputs := extractHCLOutputNames(t, outputsPath)
@@ -42,20 +48,20 @@ func TestREADMEDocumentsAllRequiredInputs(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
 
 	// Find all variables files
-	variablesFiles := []string{
-		filepath.Join(moduleDir, "variables-core.tf"),
-		filepath.Join(moduleDir, "variables-cluster.tf"),
-		filepath.Join(moduleDir, "variables-backup.tf"),
-		filepath.Join(moduleDir, "variables-credentials.tf"),
+	variablesFiles := []FilePath{
+		FilePath(filepath.Join(moduleDir, "variables-core.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-cluster.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-backup.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-credentials.tf")),
 	}
 
 	// Extract all variable names from variables files
 	var allVariables []string
 	for _, vf := range variablesFiles {
-		if _, err := os.Stat(vf); err == nil {
+		if _, err := os.Stat(string(vf)); err == nil {
 			vars := extractHCLVariableNames(t, vf)
 			allVariables = append(allVariables, vars...)
 		}
@@ -79,9 +85,9 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
 
-	content, err := os.ReadFile(readmePath)
+	content, err := os.ReadFile(string(readmePath))
 	require.NoError(t, err)
 
 	readme := string(content)
@@ -100,10 +106,10 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 }
 
 // extractHCLOutputNames parses an HCL file and returns all output block names.
-func extractHCLOutputNames(t *testing.T, path string) []string {
+func extractHCLOutputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
 	// Match output "name" { patterns
@@ -121,10 +127,10 @@ func extractHCLOutputNames(t *testing.T, path string) []string {
 
 // extractHCLVariableNames parses an HCL file and returns all variable block
 // names.
-func extractHCLVariableNames(t *testing.T, path string) []string {
+func extractHCLVariableNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
 	// Match variable "name" { patterns
@@ -142,10 +148,10 @@ func extractHCLVariableNames(t *testing.T, path string) []string {
 
 // extractREADMEOutputNames parses a README.md file and extracts output names
 // from the Outputs table.
-func extractREADMEOutputNames(t *testing.T, path string) []string {
+func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	file, err := os.Open(path)
+	file, err := os.Open(string(path))
 	require.NoError(t, err)
 	defer file.Close()
 
@@ -169,7 +175,7 @@ func extractREADMEOutputNames(t *testing.T, path string) []string {
 
 		// Parse table rows in Outputs section
 		if inOutputsSection && strings.HasPrefix(line, "|") {
-			name := extractTableFirstColumn(line)
+			name := extractTableFirstColumn(MarkdownTableRow(line))
 			if name != "" && name != "Name" && !strings.HasPrefix(name, "-") {
 				names = append(names, name)
 			}
@@ -182,10 +188,10 @@ func extractREADMEOutputNames(t *testing.T, path string) []string {
 
 // extractREADMEInputNames parses a README.md file and extracts input names
 // from Inputs tables.
-func extractREADMEInputNames(t *testing.T, path string) []string {
+func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	file, err := os.Open(path)
+	file, err := os.Open(string(path))
 	require.NoError(t, err)
 	defer file.Close()
 
@@ -215,7 +221,7 @@ func extractREADMEInputNames(t *testing.T, path string) []string {
 
 		// Parse table rows in Inputs sections
 		if inInputsSection && strings.HasPrefix(line, "|") {
-			name := extractTableFirstColumn(line)
+			name := extractTableFirstColumn(MarkdownTableRow(line))
 			if name != "" && name != "Name" && !strings.HasPrefix(name, "-") {
 				names = append(names, name)
 			}
@@ -228,9 +234,9 @@ func extractREADMEInputNames(t *testing.T, path string) []string {
 
 // extractTableFirstColumn extracts the first column value from a markdown
 // table row.
-func extractTableFirstColumn(line string) string {
+func extractTableFirstColumn(line MarkdownTableRow) string {
 	// Split by | and get the first non-empty cell
-	parts := strings.Split(line, "|")
+	parts := strings.Split(string(line), "|")
 	if len(parts) < 2 {
 		return ""
 	}
