@@ -161,22 +161,10 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		inOutputsSection = updateOutputsSectionState(line, inOutputsSection)
 
-		// Detect start of Outputs section
-		if strings.HasPrefix(line, "## Outputs") {
-			inOutputsSection = true
-			continue
-		}
-
-		// Detect end of Outputs section (next heading)
-		if inOutputsSection && strings.HasPrefix(line, "## ") {
-			break
-		}
-
-		// Parse table rows in Outputs section
-		if inOutputsSection && strings.HasPrefix(line, "|") {
-			name := extractTableFirstColumn(MarkdownTableRow(line))
-			if name != "" && name != "Name" && !strings.HasPrefix(name, "-") {
+		if shouldParseOutputRow(line, inOutputsSection) {
+			if name := parseValidTableName(line); name != "" {
 				names = append(names, name)
 			}
 		}
@@ -230,6 +218,35 @@ func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 
 	require.NoError(t, scanner.Err())
 	return names
+}
+
+// updateOutputsSectionState determines whether we're entering or exiting the
+// Outputs section based on the current line and previous state.
+func updateOutputsSectionState(line string, inSection bool) bool {
+	if strings.HasPrefix(line, "## Outputs") {
+		return true
+	}
+	if inSection && strings.HasPrefix(line, "## ") {
+		return false
+	}
+	return inSection
+}
+
+// shouldParseOutputRow returns true if the line should be parsed as a table
+// row (starts with "|" and we're in the Outputs section).
+func shouldParseOutputRow(line string, inSection bool) bool {
+	return inSection && strings.HasPrefix(line, "|")
+}
+
+// parseValidTableName extracts the first column from a table row and validates
+// it. Returns empty string for invalid entries (empty, "Name", or separator
+// rows starting with "-").
+func parseValidTableName(line string) string {
+	name := extractTableFirstColumn(MarkdownTableRow(line))
+	if name == "" || name == "Name" || strings.HasPrefix(name, "-") {
+		return ""
+	}
+	return name
 }
 
 // extractTableFirstColumn extracts the first column value from a markdown
