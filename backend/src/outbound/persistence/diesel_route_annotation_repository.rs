@@ -82,6 +82,18 @@ fn map_diesel_error(error: diesel::result::Error) -> RouteAnnotationRepositoryEr
     }
 }
 
+/// Cast database revision (i32) to domain revision (u32).
+///
+/// Database stores revisions as `i32` but domain uses `u32`. Revisions are
+/// always non-negative in practice, enforced by database constraints.
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "revision is always non-negative in database"
+)]
+fn cast_revision(revision: i32) -> u32 {
+    revision as u32
+}
+
 /// Convert a database row to a domain RouteNote.
 fn row_to_note(row: RouteNoteRow) -> RouteNote {
     RouteNote {
@@ -92,11 +104,7 @@ fn row_to_note(row: RouteNoteRow) -> RouteNote {
         body: row.body,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        #[expect(
-            clippy::cast_sign_loss,
-            reason = "revision is always non-negative in database"
-        )]
-        revision: row.revision as u32,
+        revision: cast_revision(row.revision),
     }
 }
 
@@ -107,11 +115,7 @@ fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
         user_id: UserId::from_uuid(row.user_id),
         visited_stop_ids: row.visited_stop_ids,
         updated_at: row.updated_at,
-        #[expect(
-            clippy::cast_sign_loss,
-            reason = "revision is always non-negative in database"
-        )]
-        revision: row.revision as u32,
+        revision: cast_revision(row.revision),
     }
 }
 
@@ -135,12 +139,10 @@ where
 
     match current {
         Some(row) => {
-            #[expect(
-                clippy::cast_sign_loss,
-                reason = "revision is always non-negative in database"
-            )]
-            let actual = row.revision as u32;
-            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, actual)
+            RouteAnnotationRepositoryError::revision_mismatch(
+                expected_revision,
+                cast_revision(row.revision),
+            )
         }
         None => RouteAnnotationRepositoryError::query("note not found"),
     }
@@ -171,12 +173,10 @@ where
 
     match current {
         Some(row) => {
-            #[expect(
-                clippy::cast_sign_loss,
-                reason = "revision is always non-negative in database"
-            )]
-            let actual = row.revision as u32;
-            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, actual)
+            RouteAnnotationRepositoryError::revision_mismatch(
+                expected_revision,
+                cast_revision(row.revision),
+            )
         }
         None => RouteAnnotationRepositoryError::query("progress not found"),
     }
