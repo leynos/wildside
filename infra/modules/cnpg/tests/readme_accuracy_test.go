@@ -189,28 +189,10 @@ func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		inInputsSection = updateInputsSectionState(line, inInputsSection)
 
-		// Detect start of Inputs section (any heading containing "configuration"
-		// or exactly "## Inputs")
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
-			lower := strings.ToLower(line)
-			if strings.Contains(lower, "configuration") ||
-				strings.Contains(lower, "inputs") {
-				inInputsSection = true
-				continue
-			}
-			// Other section headings end the inputs parsing unless they're
-			// subsections
-			if inInputsSection && strings.HasPrefix(line, "## ") &&
-				!strings.Contains(lower, "configuration") {
-				inInputsSection = false
-			}
-		}
-
-		// Parse table rows in Inputs sections
-		if inInputsSection && strings.HasPrefix(line, "|") {
-			name := extractTableFirstColumn(MarkdownTableRow(line))
-			if name != "" && name != "Name" && !strings.HasPrefix(name, "-") {
+		if shouldParseInputRow(line, inInputsSection) {
+			if name := parseValidInputTableName(line); name != "" {
 				names = append(names, name)
 			}
 		}
@@ -236,6 +218,60 @@ func updateOutputsSectionState(line string, inSection bool) bool {
 // row (starts with "|" and we're in the Outputs section).
 func shouldParseOutputRow(line string, inSection bool) bool {
 	return inSection && strings.HasPrefix(line, "|")
+}
+
+// updateInputsSectionState determines whether we're entering or exiting an
+// Inputs section based on the current line and previous state.
+func updateInputsSectionState(line string, inSection bool) bool {
+	if isInputsSectionHeader(line) {
+		return true
+	}
+	if inSection && isNonInputsSectionHeader(line) {
+		return false
+	}
+	return inSection
+}
+
+// isInputsSectionHeader returns true if the line is a ## or ### level header
+// containing "configuration" or "inputs" (case-insensitive).
+func isInputsSectionHeader(line string) bool {
+	if !isHeadingLevel2Or3(line) {
+		return false
+	}
+	lower := strings.ToLower(line)
+	return strings.Contains(lower, "configuration") ||
+		strings.Contains(lower, "inputs")
+}
+
+// isNonInputsSectionHeader returns true if the line is a ## level header that
+// doesn't contain "configuration" (case-insensitive).
+func isNonInputsSectionHeader(line string) bool {
+	if !strings.HasPrefix(line, "## ") {
+		return false
+	}
+	return !strings.Contains(strings.ToLower(line), "configuration")
+}
+
+// isHeadingLevel2Or3 returns true if the line starts with "## " or "### ".
+func isHeadingLevel2Or3(line string) bool {
+	return strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ")
+}
+
+// shouldParseInputRow returns true if the line should be parsed as a table row
+// (starts with "|" and we're in an inputs section).
+func shouldParseInputRow(line string, inSection bool) bool {
+	return inSection && strings.HasPrefix(line, "|")
+}
+
+// parseValidInputTableName extracts the first column from a table row and
+// validates it using isInvalidTableName. Returns empty string for invalid
+// entries.
+func parseValidInputTableName(line string) string {
+	name := extractTableFirstColumn(MarkdownTableRow(line))
+	if isInvalidTableName(name) {
+		return ""
+	}
+	return name
 }
 
 // parseValidTableName extracts the first column from a table row and validates
