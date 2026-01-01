@@ -119,6 +119,43 @@ fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
     }
 }
 
+/// Trait for database rows that have a revision field.
+trait HasRevision {
+    /// Get the revision as a u32.
+    fn revision(&self) -> u32;
+}
+
+impl HasRevision for RouteNoteRow {
+    fn revision(&self) -> u32 { cast_revision(self.revision) }
+}
+
+impl HasRevision for RouteProgressRow {
+    fn revision(&self) -> u32 { cast_revision(self.revision) }
+}
+
+/// Disambiguate update failure by checking if it's a revision mismatch or missing record.
+///
+/// Given the result of querying for the current record, returns either a revision
+/// mismatch error (if the record exists with different revision) or a not-found error
+/// (if the record doesn't exist). Propagates any query errors.
+fn disambiguate_update_failure<R>(
+    current_result: Result<Option<R>, RouteAnnotationRepositoryError>,
+    expected_revision: u32,
+    not_found_message: &str,
+) -> RouteAnnotationRepositoryError
+where
+    R: HasRevision,
+{
+    match current_result {
+        Ok(Some(record)) => RouteAnnotationRepositoryError::revision_mismatch(
+            expected_revision,
+            record.revision(),
+        ),
+        Ok(None) => RouteAnnotationRepositoryError::query(not_found_message),
+        Err(e) => e,
+    }
+}
+
 /// Handle failed note update by checking if it's a revision mismatch or missing note.
 async fn handle_note_update_failure<C>(
     conn: &mut C,
@@ -128,24 +165,15 @@ async fn handle_note_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current: Option<RouteNoteRow> = route_notes::table
+    let current_result = route_notes::table
         .filter(route_notes::id.eq(note_id))
         .select(RouteNoteRow::as_select())
         .first(conn)
         .await
         .optional()
-        .map_err(map_diesel_error)
-        .unwrap_or(None);
+        .map_err(map_diesel_error);
 
-    match current {
-        Some(row) => {
-            RouteAnnotationRepositoryError::revision_mismatch(
-                expected_revision,
-                cast_revision(row.revision),
-            )
-        }
-        None => RouteAnnotationRepositoryError::query("note not found"),
-    }
+    disambiguate_update_failure(current_result, expected_revision, "note not found")
 }
 
 /// Handle failed progress update by checking if it's a revision mismatch or missing progress.
@@ -158,7 +186,7 @@ async fn handle_progress_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current: Option<RouteProgressRow> = route_progress::table
+    let current_result = route_progress::table
         .filter(
             route_progress::route_id
                 .eq(route_id)
@@ -168,18 +196,9 @@ where
         .first(conn)
         .await
         .optional()
-        .map_err(map_diesel_error)
-        .unwrap_or(None);
+        .map_err(map_diesel_error);
 
-    match current {
-        Some(row) => {
-            RouteAnnotationRepositoryError::revision_mismatch(
-                expected_revision,
-                cast_revision(row.revision),
-            )
-        }
-        None => RouteAnnotationRepositoryError::query("progress not found"),
-    }
+    disambiguate_update_failure(current_result, expected_revision, "progress not found")
 }
 
 #[async_trait]
