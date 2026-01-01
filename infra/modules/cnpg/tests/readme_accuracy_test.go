@@ -243,10 +243,33 @@ func shouldParseOutputRow(line string, inSection bool) bool {
 // rows starting with "-").
 func parseValidTableName(line string) string {
 	name := extractTableFirstColumn(MarkdownTableRow(line))
-	if name == "" || name == "Name" || strings.HasPrefix(name, "-") {
+	if isInvalidTableName(name) {
 		return ""
 	}
 	return name
+}
+
+// isInvalidTableName returns true if the name should be excluded from results.
+// This includes empty names, table headers, and separator rows.
+func isInvalidTableName(name string) bool {
+	return isEmptyName(name) || isTableHeaderName(name) || isSeparatorRow(name)
+}
+
+// isEmptyName returns true if the name is an empty string.
+func isEmptyName(name string) bool {
+	return name == ""
+}
+
+// isTableHeaderName returns true if the name equals "Name", indicating it is
+// the table header row rather than actual content.
+func isTableHeaderName(name string) bool {
+	return name == "Name"
+}
+
+// isSeparatorRow returns true if the name starts with "-", indicating it is
+// a markdown table separator row.
+func isSeparatorRow(name string) bool {
+	return strings.HasPrefix(name, "-")
 }
 
 // extractTableFirstColumn extracts the first column value from a markdown
