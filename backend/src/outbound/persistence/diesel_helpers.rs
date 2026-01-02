@@ -6,7 +6,7 @@
 //! - Traits and helpers for optimistic concurrency control
 //! - Declarative macros for common query patterns
 
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::domain::ports::RouteAnnotationRepositoryError;
 
@@ -18,6 +18,35 @@ pub fn map_pool_error(error: PoolError) -> RouteAnnotationRepositoryError {
         PoolError::Checkout { message } | PoolError::Build { message } => {
             RouteAnnotationRepositoryError::connection(message)
         }
+    }
+}
+
+/// Check if message indicates a foreign key constraint violation.
+fn is_foreign_key_message(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("foreign key") || lower.contains("violates foreign key constraint")
+}
+
+/// Map foreign key violation to appropriate domain error.
+///
+/// Identifies route FK violations by checking that the message both indicates a
+/// foreign key constraint and references the routes table. Unrecognised FK
+/// violations are logged for monitoring.
+fn map_foreign_key_violation(message: &str) -> RouteAnnotationRepositoryError {
+    let lower = message.to_lowercase();
+    let is_fk_message = is_foreign_key_message(message);
+    let references_routes = lower.contains("routes");
+
+    if is_fk_message && references_routes {
+        RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
+    } else {
+        // Log unrecognised FK violations for monitoring; may indicate new FK
+        // constraints that need specific handling.
+        warn!(
+            message,
+            "unrecognised foreign key violation - may need specific error mapping"
+        );
+        RouteAnnotationRepositoryError::query("foreign key violation")
     }
 }
 
@@ -42,14 +71,7 @@ pub fn map_diesel_error(error: diesel::result::Error) -> RouteAnnotationReposito
         }
         DieselError::DatabaseError(kind, info) => match kind {
             DatabaseErrorKind::ForeignKeyViolation => {
-                // Check message content to identify which FK failed; Diesel doesn't expose
-                // constraint names in a structured way, so string matching is necessary.
-                let message = info.message();
-                if message.contains("routes") {
-                    RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
-                } else {
-                    RouteAnnotationRepositoryError::query("foreign key violation")
-                }
+                map_foreign_key_violation(info.message())
             }
             DatabaseErrorKind::ClosedConnection => {
                 RouteAnnotationRepositoryError::connection("database connection error")
