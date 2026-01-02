@@ -98,7 +98,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 
 ### 2.3. Progressive web app preferences and annotations
 
-- [ ] 2.3.1. Add domain types for `UserPreferences`, `RouteNote`, and
+- [x] 2.3.1. Add domain types for `UserPreferences`, `RouteNote`, and
   `RouteProgress`, plus ports `UserPreferencesRepository`,
   `RouteAnnotationRepository`, and driving commands that enforce revision
   checks.
