@@ -119,6 +119,57 @@ fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
     }
 }
 
+/// Macro for query methods that return `Option<T>`.
+///
+/// Reduces boilerplate: acquire connection, execute query, map errors, convert row.
+macro_rules! query_optional {
+    (
+        $self:ident,
+        $table:expr,
+        $filter:expr,
+        $row_type:ty,
+        $converter:expr
+    ) => {{
+        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
+
+        let result: Option<$row_type> = $table
+            .filter($filter)
+            .select(<$row_type>::as_select())
+            .first(&mut conn)
+            .await
+            .optional()
+            .map_err(map_diesel_error)?;
+
+        Ok(result.map($converter))
+    }};
+}
+
+/// Macro for query methods that return `Vec<T>`.
+///
+/// Reduces boilerplate: acquire connection, execute query with ordering, map errors, convert rows.
+macro_rules! query_vec {
+    (
+        $self:ident,
+        $table:expr,
+        $filter:expr,
+        $order_by:expr,
+        $row_type:ty,
+        $converter:expr
+    ) => {{
+        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
+
+        let rows: Vec<$row_type> = $table
+            .filter($filter)
+            .select(<$row_type>::as_select())
+            .order_by($order_by)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        Ok(rows.into_iter().map($converter).collect())
+    }};
+}
+
 /// Trait for database rows that have a revision field.
 trait HasRevision {
     /// Get the revision as a u32.
@@ -235,6 +286,65 @@ fn is_zero_rows_error(error: &RouteAnnotationRepositoryError) -> bool {
     error.to_string().contains("update affected 0 rows")
 }
 
+/// Macro for save operations with optimistic concurrency control.
+///
+/// Handles: acquire connection, insert (if None) or update with revision check
+/// (if Some), disambiguate zero-row updates.
+macro_rules! save_with_revision {
+    (
+        $self:ident,
+        $expected_revision:expr,
+        insert: { $($insert_body:tt)* },
+        update($expected:ident): { $($update_body:tt)* }
+    ) => {{
+        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
+
+        match $expected_revision {
+            None => {
+                save_with_revision!(@insert conn, { $($insert_body)* })
+            }
+            Some($expected) => {
+                save_with_revision!(@update conn, $expected, { $($update_body)* })
+            }
+        }
+    }};
+
+    (@insert $conn:ident, {
+        table: $table:expr,
+        new_row: $new_row:expr
+    }) => {
+        diesel::insert_into($table)
+            .values(&$new_row)
+            .execute(&mut $conn)
+            .await
+            .map(|_| ())
+            .map_err(map_diesel_error)
+    };
+
+    (@update $conn:ident, $expected:ident, {
+        table: $table:expr,
+        filter: $filter:expr,
+        changeset: $changeset:expr,
+        on_zero_rows: $handler:expr
+    }) => {{
+        let changeset = $changeset;
+        let updated_rows = diesel::update($table)
+            .filter($filter)
+            .set(&changeset)
+            .execute(&mut $conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        let result = execute_optimistic_update(updated_rows).await;
+        if let Err(ref e) = result
+            && is_zero_rows_error(e)
+        {
+            return Err($handler(&mut $conn, $expected).await);
+        }
+        result
+    }};
+}
+
 #[async_trait]
 impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
     // --- Notes ---
@@ -243,17 +353,13 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         &self,
         note_id: &Uuid,
     ) -> Result<Option<RouteNote>, RouteAnnotationRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        let result: Option<RouteNoteRow> = route_notes::table
-            .filter(route_notes::id.eq(note_id))
-            .select(RouteNoteRow::as_select())
-            .first(&mut conn)
-            .await
-            .optional()
-            .map_err(map_diesel_error)?;
-
-        Ok(result.map(row_to_note))
+        query_optional!(
+            self,
+            route_notes::table,
+            route_notes::id.eq(note_id),
+            RouteNoteRow,
+            row_to_note
+        )
     }
 
     async fn find_notes_by_route_and_user(
@@ -261,21 +367,16 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         route_id: &Uuid,
         user_id: &UserId,
     ) -> Result<Vec<RouteNote>, RouteAnnotationRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        let rows: Vec<RouteNoteRow> = route_notes::table
-            .filter(
-                route_notes::route_id
-                    .eq(route_id)
-                    .and(route_notes::user_id.eq(user_id.as_uuid())),
-            )
-            .select(RouteNoteRow::as_select())
-            .order_by(route_notes::created_at.asc())
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        Ok(rows.into_iter().map(row_to_note).collect())
+        query_vec!(
+            self,
+            route_notes::table,
+            route_notes::route_id
+                .eq(route_id)
+                .and(route_notes::user_id.eq(user_id.as_uuid())),
+            route_notes::created_at.asc(),
+            RouteNoteRow,
+            row_to_note
+        )
     }
 
     async fn save_note(
@@ -283,54 +384,33 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         note: &RouteNote,
         expected_revision: Option<u32>,
     ) -> Result<(), RouteAnnotationRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        let revision_i32 = cast_revision_for_db(note.revision);
-
-        match expected_revision {
-            None => {
-                let new_row = NewRouteNoteRow {
+        save_with_revision!(
+            self,
+            expected_revision,
+            insert: {
+                table: route_notes::table,
+                new_row: NewRouteNoteRow {
                     id: note.id,
                     route_id: note.route_id,
                     poi_id: note.poi_id,
                     user_id: *note.user_id.as_uuid(),
                     body: &note.body,
-                    revision: revision_i32,
-                };
-                diesel::insert_into(route_notes::table)
-                    .values(&new_row)
-                    .execute(&mut conn)
-                    .await
-                    .map(|_| ())
-                    .map_err(map_diesel_error)
-            }
-            Some(expected) => {
-                let expected_i32 = cast_revision_for_db(expected);
-                let update = RouteNoteUpdate {
+                    revision: cast_revision_for_db(note.revision),
+                }
+            },
+            update(expected): {
+                table: route_notes::table,
+                filter: route_notes::id
+                    .eq(note.id)
+                    .and(route_notes::revision.eq(cast_revision_for_db(expected))),
+                changeset: RouteNoteUpdate {
                     poi_id: note.poi_id,
                     body: &note.body,
-                    revision: revision_i32,
-                };
-
-                let updated_rows = diesel::update(route_notes::table)
-                    .filter(
-                        route_notes::id
-                            .eq(note.id)
-                            .and(route_notes::revision.eq(expected_i32)),
-                    )
-                    .set(&update)
-                    .execute(&mut conn)
-                    .await
-                    .map_err(map_diesel_error)?;
-
-                let result = execute_optimistic_update(updated_rows).await;
-                if let Err(ref e) = result
-                    && is_zero_rows_error(e)
-                {
-                    return Err(handle_note_update_failure(&mut conn, note.id, expected).await);
-                }
-                result
+                    revision: cast_revision_for_db(note.revision),
+                },
+                on_zero_rows: |conn, expected| handle_note_update_failure(conn, note.id, expected)
             }
-        }
+        )
     }
 
     async fn delete_note(&self, note_id: &Uuid) -> Result<bool, RouteAnnotationRepositoryError> {
@@ -351,21 +431,15 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         route_id: &Uuid,
         user_id: &UserId,
     ) -> Result<Option<RouteProgress>, RouteAnnotationRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        let result: Option<RouteProgressRow> = route_progress::table
-            .filter(
-                route_progress::route_id
-                    .eq(route_id)
-                    .and(route_progress::user_id.eq(user_id.as_uuid())),
-            )
-            .select(RouteProgressRow::as_select())
-            .first(&mut conn)
-            .await
-            .optional()
-            .map_err(map_diesel_error)?;
-
-        Ok(result.map(row_to_progress))
+        query_optional!(
+            self,
+            route_progress::table,
+            route_progress::route_id
+                .eq(route_id)
+                .and(route_progress::user_id.eq(user_id.as_uuid())),
+            RouteProgressRow,
+            row_to_progress
+        )
     }
 
     async fn save_progress(
@@ -373,58 +447,36 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         progress: &RouteProgress,
         expected_revision: Option<u32>,
     ) -> Result<(), RouteAnnotationRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        let revision_i32 = cast_revision_for_db(progress.revision);
-
-        match expected_revision {
-            None => {
-                let new_row = NewRouteProgressRow {
+        save_with_revision!(
+            self,
+            expected_revision,
+            insert: {
+                table: route_progress::table,
+                new_row: NewRouteProgressRow {
                     route_id: progress.route_id,
                     user_id: *progress.user_id.as_uuid(),
                     visited_stop_ids: &progress.visited_stop_ids,
-                    revision: revision_i32,
-                };
-                diesel::insert_into(route_progress::table)
-                    .values(&new_row)
-                    .execute(&mut conn)
-                    .await
-                    .map(|_| ())
-                    .map_err(map_diesel_error)
-            }
-            Some(expected) => {
-                let expected_i32 = cast_revision_for_db(expected);
-                let update = RouteProgressUpdate {
-                    visited_stop_ids: &progress.visited_stop_ids,
-                    revision: revision_i32,
-                };
-
-                let updated_rows = diesel::update(route_progress::table)
-                    .filter(
-                        route_progress::route_id
-                            .eq(progress.route_id)
-                            .and(route_progress::user_id.eq(progress.user_id.as_uuid()))
-                            .and(route_progress::revision.eq(expected_i32)),
-                    )
-                    .set(&update)
-                    .execute(&mut conn)
-                    .await
-                    .map_err(map_diesel_error)?;
-
-                let result = execute_optimistic_update(updated_rows).await;
-                if let Err(ref e) = result
-                    && is_zero_rows_error(e)
-                {
-                    return Err(handle_progress_update_failure(
-                        &mut conn,
-                        progress.route_id,
-                        *progress.user_id.as_uuid(),
-                        expected,
-                    )
-                    .await);
+                    revision: cast_revision_for_db(progress.revision),
                 }
-                result
+            },
+            update(expected): {
+                table: route_progress::table,
+                filter: route_progress::route_id
+                    .eq(progress.route_id)
+                    .and(route_progress::user_id.eq(progress.user_id.as_uuid()))
+                    .and(route_progress::revision.eq(cast_revision_for_db(expected))),
+                changeset: RouteProgressUpdate {
+                    visited_stop_ids: &progress.visited_stop_ids,
+                    revision: cast_revision_for_db(progress.revision),
+                },
+                on_zero_rows: |conn, expected| handle_progress_update_failure(
+                    conn,
+                    progress.route_id,
+                    *progress.user_id.as_uuid(),
+                    expected
+                )
             }
-        }
+        )
     }
 }
 
