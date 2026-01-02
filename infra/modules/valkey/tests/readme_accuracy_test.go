@@ -173,22 +173,10 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	for scanner.Scan() {
 		line := MarkdownLine(scanner.Text())
+		inOutputsSection = updateOutputsSectionState(line, inOutputsSection)
 
-		// Detect start of Outputs section
-		if strings.HasPrefix(string(line), "## Outputs") {
-			inOutputsSection = true
-			continue
-		}
-
-		// Detect end of Outputs section (next heading)
-		if bool(inOutputsSection) && strings.HasPrefix(string(line), "## ") {
-			break
-		}
-
-		// Parse table rows in Outputs section
-		if bool(inOutputsSection) && strings.HasPrefix(string(line), "|") {
-			name := extractTableFirstColumn(line)
-			if name != "" && name != "Name" && !strings.HasPrefix(string(name), "-") {
+		if shouldParseOutputRow(line, inOutputsSection) {
+			if name := parseValidTableName(line); name != "" {
 				names = append(names, string(name))
 			}
 		}
@@ -196,6 +184,24 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	require.NoError(t, scanner.Err())
 	return names
+}
+
+// updateOutputsSectionState determines whether we're entering or exiting the
+// Outputs section based on the current line and previous state.
+func updateOutputsSectionState(line MarkdownLine, inSection SectionState) SectionState {
+	if strings.HasPrefix(string(line), "## Outputs") {
+		return true
+	}
+	if bool(inSection) && strings.HasPrefix(string(line), "## ") {
+		return false
+	}
+	return inSection
+}
+
+// shouldParseOutputRow returns true if the line should be parsed as a table
+// row (starts with "|" and we're in the Outputs section).
+func shouldParseOutputRow(line MarkdownLine, inSection SectionState) bool {
+	return bool(inSection) && strings.HasPrefix(string(line), "|")
 }
 
 // extractREADMEInputNames parses a README.md file and extracts input names
