@@ -236,6 +236,9 @@ impl RouteProgress {
     }
 
     /// Check if a stop has been visited.
+    ///
+    /// Uses `Vec::contains` which is O(n). For routes with many stops, consider
+    /// caching in a `HashSet` if this becomes a bottleneck.
     pub fn has_visited(&self, stop_id: &Uuid) -> bool {
         self.visited_stop_ids.contains(stop_id)
     }

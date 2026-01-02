@@ -74,7 +74,15 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
     let user_id = UserId::from_uuid(row.user_id);
     let unit_system = match row.unit_system.as_str() {
         "imperial" => UnitSystem::Imperial,
-        _ => UnitSystem::Metric,
+        "metric" => UnitSystem::Metric,
+        other => {
+            tracing::warn!(
+                value = other,
+                user_id = %row.user_id,
+                "unrecognised unit_system value, defaulting to Metric"
+            );
+            UnitSystem::Metric
+        }
     };
 
     UserPreferences {
@@ -100,17 +108,16 @@ async fn handle_preferences_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current: Option<UserPreferencesRow> = user_preferences::table
+    let current_result = user_preferences::table
         .filter(user_preferences::user_id.eq(user_id))
         .select(UserPreferencesRow::as_select())
         .first(conn)
         .await
         .optional()
-        .map_err(map_diesel_error)
-        .unwrap_or(None);
+        .map_err(map_diesel_error);
 
-    match current {
-        Some(row) => {
+    match current_result {
+        Ok(Some(row)) => {
             #[expect(
                 clippy::cast_sign_loss,
                 reason = "revision is always non-negative in database"
@@ -118,8 +125,18 @@ where
             let actual = row.revision as u32;
             UserPreferencesRepositoryError::revision_mismatch(expected_revision, actual)
         }
-        None => UserPreferencesRepositoryError::query("preferences not found for update"),
+        Ok(None) => UserPreferencesRepositoryError::query("preferences not found for update"),
+        Err(e) => e,
     }
+}
+
+/// Cast domain revision (u32) to database revision (i32).
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "revision values are always small positive integers"
+)]
+fn cast_revision_for_db(revision: u32) -> i32 {
+    revision as i32
 }
 
 #[async_trait]
@@ -153,11 +170,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
             UnitSystem::Imperial => "imperial",
         };
 
-        #[expect(
-            clippy::cast_possible_wrap,
-            reason = "revision values are always small positive integers"
-        )]
-        let revision_i32 = preferences.revision as i32;
+        let revision_i32 = cast_revision_for_db(preferences.revision);
 
         match expected_revision {
             None => {
@@ -179,11 +192,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
             }
             Some(expected) => {
                 // Update with revision check
-                #[expect(
-                    clippy::cast_possible_wrap,
-                    reason = "revision values are always small positive integers"
-                )]
-                let expected_i32 = expected as i32;
+                let expected_i32 = cast_revision_for_db(expected);
 
                 let update = UserPreferencesUpdate {
                     interest_theme_ids: &preferences.interest_theme_ids,
@@ -259,7 +268,7 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        let prefs = row_to_preferences(row.clone());
+        let prefs = row_to_preferences(row);
 
         assert_eq!(prefs.unit_system, UnitSystem::Metric);
         assert_eq!(prefs.revision, 3);

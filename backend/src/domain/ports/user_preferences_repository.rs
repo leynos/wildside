@@ -45,7 +45,7 @@ pub trait UserPreferencesRepository: Send + Sync {
     /// Fetch preferences for a user.
     ///
     /// Returns `None` if no preferences have been saved yet for this user.
-    /// Callers should initialise default preferences when `None` is returned.
+    /// Callers should initialize default preferences when `None` is returned.
     async fn find_by_user_id(
         &self,
         user_id: &UserId,
@@ -107,17 +107,29 @@ mod tests {
     use rstest::rstest;
     use uuid::Uuid;
 
-    #[tokio::test]
-    async fn fixture_repository_lookup_returns_none() {
-        let repo = FixtureUserPreferencesRepository;
-        let user_id = UserId::random();
-
-        let result = repo
-            .find_by_user_id(&user_id)
-            .await
-            .expect("fixture lookup should succeed");
-        assert!(result.is_none());
+    /// Macro for testing fixture repository methods that return empty results.
+    ///
+    /// Reduces duplication when testing that the fixture implementation returns
+    /// None or empty collections.
+    macro_rules! test_fixture_returns_empty {
+        // Pattern for methods returning Option<T> - assert is_none()
+        ($test_name:ident, $method:ident($($arg:expr),*) => None) => {
+            #[tokio::test]
+            async fn $test_name() {
+                let repo = FixtureUserPreferencesRepository;
+                let result = repo
+                    .$method($($arg),*)
+                    .await
+                    .expect("fixture lookup should succeed");
+                assert!(result.is_none());
+            }
+        };
     }
+
+    test_fixture_returns_empty!(
+        fixture_repository_lookup_returns_none,
+        find_by_user_id(&UserId::random()) => None
+    );
 
     #[tokio::test]
     async fn fixture_repository_accepts_save_operations() {
