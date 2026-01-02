@@ -285,26 +285,26 @@ fn cast_revision_for_db(revision: u32) -> i32 {
     revision as i32
 }
 
+/// Sentinel message for zero-row update failures.
+const ZERO_ROWS_SENTINEL: &str = "update affected 0 rows";
+
 /// Execute update with optimistic concurrency and return sentinel error if zero rows affected.
 ///
-/// This helper executes an update operation and returns a sentinel Query error with
-/// message "update affected 0 rows" if no rows were updated, allowing callers to
-/// disambiguate the failure.
+/// This helper returns a sentinel Query error with message [`ZERO_ROWS_SENTINEL`] if no
+/// rows were updated, allowing callers to disambiguate the failure.
 async fn execute_optimistic_update(
     updated_rows: usize,
 ) -> Result<(), RouteAnnotationRepositoryError> {
     if updated_rows == 0 {
-        Err(RouteAnnotationRepositoryError::query(
-            "update affected 0 rows",
-        ))
+        Err(RouteAnnotationRepositoryError::query(ZERO_ROWS_SENTINEL))
     } else {
         Ok(())
     }
 }
 
-/// Check if an error is the sentinel "update affected 0 rows" error.
+/// Check if an error is the sentinel [`ZERO_ROWS_SENTINEL`] error.
 fn is_zero_rows_error(error: &RouteAnnotationRepositoryError) -> bool {
-    error.to_string().contains("update affected 0 rows")
+    error.to_string().contains(ZERO_ROWS_SENTINEL)
 }
 
 /// Macro for save operations with optimistic concurrency control.
