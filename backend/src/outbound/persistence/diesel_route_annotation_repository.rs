@@ -126,11 +126,15 @@ trait HasRevision {
 }
 
 impl HasRevision for RouteNoteRow {
-    fn revision(&self) -> u32 { cast_revision(self.revision) }
+    fn revision(&self) -> u32 {
+        cast_revision(self.revision)
+    }
 }
 
 impl HasRevision for RouteProgressRow {
-    fn revision(&self) -> u32 { cast_revision(self.revision) }
+    fn revision(&self) -> u32 {
+        cast_revision(self.revision)
+    }
 }
 
 /// Disambiguate update failure by checking if it's a revision mismatch or missing record.
@@ -147,10 +151,9 @@ where
     R: HasRevision,
 {
     match current_result {
-        Ok(Some(record)) => RouteAnnotationRepositoryError::revision_mismatch(
-            expected_revision,
-            record.revision(),
-        ),
+        Ok(Some(record)) => {
+            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, record.revision())
+        }
         Ok(None) => RouteAnnotationRepositoryError::query(not_found_message),
         Err(e) => e,
     }
@@ -219,7 +222,9 @@ async fn execute_optimistic_update(
     updated_rows: usize,
 ) -> Result<(), RouteAnnotationRepositoryError> {
     if updated_rows == 0 {
-        Err(RouteAnnotationRepositoryError::query("update affected 0 rows"))
+        Err(RouteAnnotationRepositoryError::query(
+            "update affected 0 rows",
+        ))
     } else {
         Ok(())
     }
