@@ -259,7 +259,7 @@ secret names without coupling to the module's internal implementation.
 ## Integration with vault_eso module
 
 When `eso_enabled = true`, the module creates ExternalSecret resources that
-synchronise credentials from Vault:
+synchronize credentials from Vault:
 
 ```hcl
 module "vault_eso" {

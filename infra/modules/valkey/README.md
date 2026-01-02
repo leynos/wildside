@@ -1,10 +1,12 @@
 # Valkey module
 
 This module deploys a [Valkey](https://valkey.io/) cluster (Redis-compatible)
-using the [Hyperspike Valkey operator](https://github.com/hyperspike/valkey-operator)
-to provide high-availability key-value storage. It supports TLS via cert-manager
-and integrates with the `vault_eso` module for credential management via
-External Secrets Operator (ESO).
+using the [Hyperspike Valkey operator][valkey-operator] to provide
+high-availability key-value storage. It supports TLS via cert-manager and
+integrates with the `vault_eso` module for credential management via External
+Secrets Operator (ESO).
+
+[valkey-operator]: https://github.com/hyperspike/valkey-operator
 
 ## Overview
 
@@ -287,7 +289,7 @@ module "valkey" {
 ## Integration with vault_eso module
 
 When `eso_enabled = true`, the module creates an ExternalSecret resource that
-synchronises the password from Vault:
+synchronizes the password from Vault:
 
 ```hcl
 module "vault_eso" {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,13 @@ type MarkdownLine string
 
 // TableCellName represents extracted table cell content.
 type TableCellName string
+
+// SectionStateUpdater is a function type that updates section state based on
+// the current line and previous state.
+type SectionStateUpdater func(line MarkdownLine, inSection bool) bool
+
+// RowChecker is a function type that determines if a line should be parsed.
+type RowChecker func(line MarkdownLine, inSection bool) bool
 
 // TestREADMEDocumentsAllOutputs verifies that all outputs defined in outputs.tf
 // are documented in README.md.
@@ -89,6 +97,12 @@ func TestREADMEDocumentsAllRequiredInputs(t *testing.T) {
 		assert.Contains(t, documentedInputs, variable,
 			"variable %q is defined but not documented in README.md", variable)
 	}
+
+	// Verify README does not document inputs that are not defined as variables
+	for _, documentedInput := range documentedInputs {
+		assert.Contains(t, allVariables, documentedInput,
+			"README.md documents input %q, but no matching variable is defined in variables-*.tf", documentedInput)
+	}
 }
 
 // TestREADMEDocumentsSyncPolicyContract verifies that the sync_policy_contract
@@ -117,15 +131,16 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 		"sync_policy_contract documentation should include 'credentials' field")
 }
 
-// extractHCLOutputNames parses an HCL file and returns all output block names.
-func extractHCLOutputNames(t *testing.T, path FilePath) []string {
+// extractHCLBlockNames parses an HCL file and returns all block names of the
+// specified type (e.g., "output" or "variable").
+func extractHCLBlockNames(t *testing.T, path FilePath, blockType string) []string {
 	t.Helper()
 
 	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
-	// Match output "name" { patterns, allowing for leading indentation
-	re := regexp.MustCompile(`(?m)^\s*output\s+"([^"]+)"\s*\{`)
+	pattern := fmt.Sprintf(`(?m)^\s*%s\s+"([^"]+)"\s*\{`, blockType)
+	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(string(content), -1)
 
 	var names []string
@@ -135,32 +150,28 @@ func extractHCLOutputNames(t *testing.T, path FilePath) []string {
 		}
 	}
 	return names
+}
+
+// extractHCLOutputNames parses an HCL file and returns all output block names.
+func extractHCLOutputNames(t *testing.T, path FilePath) []string {
+	return extractHCLBlockNames(t, path, "output")
 }
 
 // extractHCLVariableNames parses an HCL file and returns all variable block
 // names.
 func extractHCLVariableNames(t *testing.T, path FilePath) []string {
-	t.Helper()
-
-	content, err := os.ReadFile(string(path))
-	require.NoError(t, err)
-
-	// Match variable "name" { patterns, allowing for leading indentation
-	re := regexp.MustCompile(`(?m)^\s*variable\s+"([^"]+)"\s*\{`)
-	matches := re.FindAllStringSubmatch(string(content), -1)
-
-	var names []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			names = append(names, match[1])
-		}
-	}
-	return names
+	return extractHCLBlockNames(t, path, "variable")
 }
 
-// extractREADMEOutputNames parses a README.md file and extracts output names
-// from the Outputs table.
-func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
+// extractREADMESectionTableNames parses a README.md file and extracts table
+// names from a specific section using the provided state updater and row
+// checker functions.
+func extractREADMESectionTableNames(
+	t *testing.T,
+	path FilePath,
+	stateUpdater SectionStateUpdater,
+	shouldParseRow RowChecker,
+) []string {
 	t.Helper()
 
 	file, err := os.Open(string(path))
@@ -169,13 +180,13 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	var names []string
 	scanner := bufio.NewScanner(file)
-	inOutputsSection := false
+	inSection := false
 
 	for scanner.Scan() {
 		line := MarkdownLine(scanner.Text())
-		inOutputsSection = updateOutputsSectionState(line, inOutputsSection)
+		inSection = stateUpdater(line, inSection)
 
-		if shouldParseOutputRow(line, inOutputsSection) {
+		if shouldParseRow(line, inSection) {
 			if name := parseValidTableName(line); name != "" {
 				names = append(names, string(name))
 			}
@@ -186,32 +197,26 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 	return names
 }
 
+// extractREADMEOutputNames parses a README.md file and extracts output names
+// from the Outputs table.
+func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
+	return extractREADMESectionTableNames(
+		t,
+		path,
+		updateOutputsSectionState,
+		shouldParseOutputRow,
+	)
+}
+
 // extractREADMEInputNames parses a README.md file and extracts input names
 // from Inputs tables.
 func extractREADMEInputNames(t *testing.T, path FilePath) []string {
-	t.Helper()
-
-	file, err := os.Open(string(path))
-	require.NoError(t, err)
-	defer file.Close()
-
-	var names []string
-	scanner := bufio.NewScanner(file)
-	inInputsSection := false
-
-	for scanner.Scan() {
-		line := MarkdownLine(scanner.Text())
-		inInputsSection = updateInputsSectionState(line, inInputsSection)
-
-		if shouldParseInputRow(line, inInputsSection) {
-			if name := parseValidInputTableName(line); name != "" {
-				names = append(names, string(name))
-			}
-		}
-	}
-
-	require.NoError(t, scanner.Err())
-	return names
+	return extractREADMESectionTableNames(
+		t,
+		path,
+		updateInputsSectionState,
+		shouldParseInputRow,
+	)
 }
 
 // updateOutputsSectionState determines whether we're entering or exiting the
@@ -274,17 +279,6 @@ func isHeadingLevel2Or3(line MarkdownLine) bool {
 // (starts with "|" and we're in an inputs section).
 func shouldParseInputRow(line MarkdownLine, inSection bool) bool {
 	return inSection && strings.HasPrefix(string(line), "|")
-}
-
-// parseValidInputTableName extracts the first column from a table row and
-// validates it using isInvalidTableName. Returns empty TableCellName for
-// invalid entries.
-func parseValidInputTableName(line MarkdownLine) TableCellName {
-	name := extractTableFirstColumn(MarkdownTableRow(line))
-	if isInvalidTableName(name) {
-		return ""
-	}
-	return name
 }
 
 // parseValidTableName extracts the first column from a table row and validates
