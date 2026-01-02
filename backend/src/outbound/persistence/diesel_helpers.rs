@@ -254,6 +254,10 @@ macro_rules! save_with_revision {
         table: $table:expr,
         new_row: $new_row:expr
     }) => {{
+        // Using #[allow] rather than #[expect] because the unused_imports lint does not
+        // fire consistently for glob imports in macro expansion contexts. When the call
+        // site already has `use diesel::prelude::*`, the lint should fire but doesn't,
+        // causing #[expect] to fail with "unfulfilled lint expectation".
         #[allow(unused_imports, reason = "prelude may be imported at call site")]
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
@@ -273,6 +277,7 @@ macro_rules! save_with_revision {
         changeset: $changeset:expr,
         on_zero_rows: $handler:expr
     }) => {{
+        // See comment in @insert branch for why #[allow] is used instead of #[expect].
         #[allow(unused_imports, reason = "prelude may be imported at call site")]
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
