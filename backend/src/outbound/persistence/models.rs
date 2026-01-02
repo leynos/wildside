@@ -190,6 +190,7 @@ pub(crate) struct RouteNoteUpdate<'a> {
     pub poi_id: Option<Uuid>,
     pub body: &'a str,
     pub revision: i32,
+    pub updated_at: DateTime<Utc>,
 }
 
 // ---------------------------------------------------------------------------
@@ -224,4 +225,5 @@ pub(crate) struct NewRouteProgressRow<'a> {
 pub(crate) struct RouteProgressUpdate<'a> {
     pub visited_stop_ids: &'a [Uuid],
     pub revision: i32,
+    pub updated_at: DateTime<Utc>,
 }

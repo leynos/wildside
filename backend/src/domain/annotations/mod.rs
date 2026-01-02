@@ -4,6 +4,8 @@
 //! including `RouteNote` for textual notes and `RouteProgress` for tracking
 //! visited stops. Both types support optimistic concurrency via revision numbers.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -194,29 +196,41 @@ impl RouteNoteBuilder {
 /// # use backend::domain::{RouteProgress, UserId};
 /// # use chrono::Utc;
 /// # use uuid::Uuid;
-/// let progress = RouteProgress {
-///     route_id: Uuid::new_v4(),
-///     user_id: UserId::random(),
-///     visited_stop_ids: vec![Uuid::new_v4()],
-///     updated_at: Utc::now(),
-///     revision: 1,
-/// };
+/// let stop_id = Uuid::new_v4();
+/// let progress = RouteProgress::builder(Uuid::new_v4(), UserId::random())
+///     .visited_stop_ids(vec![stop_id])
+///     .build();
 ///
-/// assert_eq!(progress.visited_stop_ids.len(), 1);
+/// assert_eq!(progress.visited_stop_ids().len(), 1);
+/// assert!(progress.has_visited(&stop_id));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RouteProgress {
     /// The route being tracked.
     pub route_id: Uuid,
     /// The user tracking progress.
     pub user_id: UserId,
-    /// IDs of stops that have been visited.
-    pub visited_stop_ids: Vec<Uuid>,
+    /// IDs of stops that have been visited (ordered for serialization).
+    visited_stop_ids: Vec<Uuid>,
+    /// HashSet for O(1) membership checks (derived from visited_stop_ids).
+    visited_stop_set: HashSet<Uuid>,
     /// Last update timestamp.
     pub updated_at: DateTime<Utc>,
     /// Revision number for optimistic concurrency.
     pub revision: u32,
 }
+
+impl PartialEq for RouteProgress {
+    fn eq(&self, other: &Self) -> bool {
+        self.route_id == other.route_id
+            && self.user_id == other.user_id
+            && self.visited_stop_ids == other.visited_stop_ids
+            && self.updated_at == other.updated_at
+            && self.revision == other.revision
+    }
+}
+
+impl Eq for RouteProgress {}
 
 impl RouteProgress {
     /// Create new progress tracking with no visited stops.
@@ -228,6 +242,7 @@ impl RouteProgress {
             route_id,
             user_id,
             visited_stop_ids: Vec::new(),
+            visited_stop_set: HashSet::new(),
             updated_at: Utc::now(),
             revision: 1,
         }
@@ -238,12 +253,16 @@ impl RouteProgress {
         RouteProgressBuilder::new(route_id, user_id)
     }
 
+    /// Get the visited stop IDs.
+    pub fn visited_stop_ids(&self) -> &[Uuid] {
+        &self.visited_stop_ids
+    }
+
     /// Check if a stop has been visited.
     ///
-    /// Uses `Vec::contains` which is O(n). For routes with many stops, consider
-    /// caching in a `HashSet` if this becomes a bottleneck.
+    /// Uses an internal `HashSet` for O(1) lookup performance.
     pub fn has_visited(&self, stop_id: &Uuid) -> bool {
-        self.visited_stop_ids.contains(stop_id)
+        self.visited_stop_set.contains(stop_id)
     }
 
     /// Calculate the completion percentage given the total number of stops.
@@ -299,10 +318,12 @@ impl RouteProgressBuilder {
 
     /// Build the final [`RouteProgress`] instance.
     pub fn build(self) -> RouteProgress {
+        let visited_stop_set: HashSet<Uuid> = self.visited_stop_ids.iter().copied().collect();
         RouteProgress {
             route_id: self.route_id,
             user_id: self.user_id,
             visited_stop_ids: self.visited_stop_ids,
+            visited_stop_set,
             updated_at: self.updated_at.unwrap_or_else(Utc::now),
             revision: self.revision,
         }

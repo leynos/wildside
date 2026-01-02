@@ -94,7 +94,7 @@ pub const ZERO_ROWS_SENTINEL: &str = "update affected 0 rows";
 ///
 /// This helper returns a sentinel Query error with message [`ZERO_ROWS_SENTINEL`] if no
 /// rows were updated, allowing callers to disambiguate the failure.
-pub async fn execute_optimistic_update(
+pub fn execute_optimistic_update(
     updated_rows: usize,
 ) -> Result<(), RouteAnnotationRepositoryError> {
     if updated_rows == 0 {
@@ -259,7 +259,7 @@ macro_rules! save_with_revision {
         table: $table:expr,
         new_row: $new_row:expr
     }) => {{
-        #[allow(unused_imports)]
+        #[allow(unused_imports, reason = "prelude may be imported at call site")]
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
         use $crate::outbound::persistence::diesel_helpers::map_diesel_error;
@@ -278,7 +278,7 @@ macro_rules! save_with_revision {
         changeset: $changeset:expr,
         on_zero_rows: $handler:expr
     }) => {{
-        #[allow(unused_imports)]
+        #[allow(unused_imports, reason = "prelude may be imported at call site")]
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
         use $crate::outbound::persistence::diesel_helpers::map_diesel_error;
@@ -293,7 +293,7 @@ macro_rules! save_with_revision {
             .await
             .map_err(map_diesel_error)?;
 
-        let result = execute_optimistic_update(updated_rows).await;
+        let result = execute_optimistic_update(updated_rows);
         if let Err(ref e) = result
             && is_zero_rows_error(e)
         {

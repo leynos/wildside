@@ -58,13 +58,11 @@ fn row_to_note(row: RouteNoteRow) -> RouteNote {
 
 /// Convert a database row to a domain RouteProgress.
 fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
-    RouteProgress {
-        route_id: row.route_id,
-        user_id: UserId::from_uuid(row.user_id),
-        visited_stop_ids: row.visited_stop_ids,
-        updated_at: row.updated_at,
-        revision: cast_revision(row.revision),
-    }
+    RouteProgress::builder(row.route_id, UserId::from_uuid(row.user_id))
+        .visited_stop_ids(row.visited_stop_ids)
+        .updated_at(row.updated_at)
+        .revision(cast_revision(row.revision))
+        .build()
 }
 
 impl HasRevision for RouteNoteRow {
@@ -182,6 +180,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     poi_id: note.poi_id,
                     body: &note.body,
                     revision: cast_revision_for_db(note.revision),
+                    updated_at: note.updated_at,
                 },
                 on_zero_rows: |conn, expected| handle_note_update_failure(conn, note.id, expected)
             }
@@ -230,7 +229,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                 new_row: NewRouteProgressRow {
                     route_id: progress.route_id,
                     user_id: *progress.user_id.as_uuid(),
-                    visited_stop_ids: &progress.visited_stop_ids,
+                    visited_stop_ids: progress.visited_stop_ids(),
                     revision: cast_revision_for_db(progress.revision),
                 }
             },
@@ -241,8 +240,9 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .and(route_progress::user_id.eq(progress.user_id.as_uuid()))
                     .and(route_progress::revision.eq(cast_revision_for_db(expected))),
                 changeset: RouteProgressUpdate {
-                    visited_stop_ids: &progress.visited_stop_ids,
+                    visited_stop_ids: progress.visited_stop_ids(),
                     revision: cast_revision_for_db(progress.revision),
+                    updated_at: progress.updated_at,
                 },
                 on_zero_rows: |conn, expected| handle_progress_update_failure(
                     conn,
@@ -326,7 +326,7 @@ mod tests {
         let progress = row_to_progress(row.clone());
 
         assert_eq!(progress.route_id, row.route_id);
-        assert_eq!(progress.visited_stop_ids, stops);
+        assert_eq!(progress.visited_stop_ids(), stops.as_slice());
         assert_eq!(progress.revision, 3);
     }
 }

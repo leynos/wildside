@@ -265,13 +265,10 @@ mod tests {
     #[tokio::test]
     async fn fixture_repository_accepts_save_progress() {
         let repo = FixtureRouteAnnotationRepository;
-        let progress = RouteProgress {
-            route_id: Uuid::new_v4(),
-            user_id: UserId::random(),
-            visited_stop_ids: vec![Uuid::new_v4()],
-            updated_at: Utc::now(),
-            revision: 1,
-        };
+        let progress = RouteProgress::builder(Uuid::new_v4(), UserId::random())
+            .visited_stop_ids(vec![Uuid::new_v4()])
+            .revision(1)
+            .build();
 
         repo.save_progress(&progress, None)
             .await

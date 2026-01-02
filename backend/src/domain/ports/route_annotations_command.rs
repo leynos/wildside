@@ -188,13 +188,11 @@ impl RouteAnnotationsCommand for FixtureRouteAnnotationsCommand {
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        let progress = RouteProgress {
-            route_id: request.route_id,
-            user_id: request.user_id,
-            visited_stop_ids: request.visited_stop_ids,
-            updated_at: chrono::Utc::now(),
-            revision: request.expected_revision.map_or(1, |r| r + 1),
-        };
+        let progress = RouteProgress::builder(request.route_id, request.user_id)
+            .visited_stop_ids(request.visited_stop_ids)
+            .updated_at(chrono::Utc::now())
+            .revision(request.expected_revision.map_or(1, |r| r + 1))
+            .build();
 
         Ok(UpdateProgressResponse {
             progress,
@@ -279,7 +277,7 @@ mod tests {
 
         assert!(!response.replayed);
         assert_eq!(response.progress.revision, 1);
-        assert_eq!(response.progress.visited_stop_ids, stop_ids);
+        assert_eq!(response.progress.visited_stop_ids(), stop_ids.as_slice());
     }
 
     #[tokio::test]
