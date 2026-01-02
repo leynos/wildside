@@ -210,6 +210,31 @@ where
     }
 }
 
+/// Macro for querying from an existing connection and disambiguating update failures.
+///
+/// Reduces boilerplate in handle_*_update_failure functions: execute query with filter,
+/// map errors, then disambiguate revision mismatch vs not-found.
+macro_rules! query_and_disambiguate {
+    (
+        $conn:expr,
+        $table:expr,
+        $filter:expr,
+        $row_type:ty,
+        $expected_revision:expr,
+        $not_found_msg:expr
+    ) => {{
+        let current_result = $table
+            .filter($filter)
+            .select(<$row_type>::as_select())
+            .first($conn)
+            .await
+            .optional()
+            .map_err(map_diesel_error);
+
+        disambiguate_update_failure(current_result, $expected_revision, $not_found_msg)
+    }};
+}
+
 /// Handle failed note update by checking if it's a revision mismatch or missing note.
 async fn handle_note_update_failure<C>(
     conn: &mut C,
@@ -219,15 +244,14 @@ async fn handle_note_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current_result = route_notes::table
-        .filter(route_notes::id.eq(note_id))
-        .select(RouteNoteRow::as_select())
-        .first(conn)
-        .await
-        .optional()
-        .map_err(map_diesel_error);
-
-    disambiguate_update_failure(current_result, expected_revision, "note not found")
+    query_and_disambiguate!(
+        conn,
+        route_notes::table,
+        route_notes::id.eq(note_id),
+        RouteNoteRow,
+        expected_revision,
+        "note not found"
+    )
 }
 
 /// Handle failed progress update by checking if it's a revision mismatch or missing progress.
@@ -240,19 +264,16 @@ async fn handle_progress_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current_result = route_progress::table
-        .filter(
-            route_progress::route_id
-                .eq(route_id)
-                .and(route_progress::user_id.eq(user_id)),
-        )
-        .select(RouteProgressRow::as_select())
-        .first(conn)
-        .await
-        .optional()
-        .map_err(map_diesel_error);
-
-    disambiguate_update_failure(current_result, expected_revision, "progress not found")
+    query_and_disambiguate!(
+        conn,
+        route_progress::table,
+        route_progress::route_id
+            .eq(route_id)
+            .and(route_progress::user_id.eq(user_id)),
+        RouteProgressRow,
+        expected_revision,
+        "progress not found"
+    )
 }
 
 /// Cast domain revision (u32) to database revision (i32).
