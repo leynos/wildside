@@ -40,11 +40,11 @@ fn map_foreign_key_violation(message: &str) -> RouteAnnotationRepositoryError {
     if is_fk_message && references_routes {
         RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
     } else {
-        // Log unrecognised FK violations for monitoring; may indicate new FK
+        // Log unrecognized FK violations for monitoring; may indicate new FK
         // constraints that need specific handling.
         warn!(
             message,
-            "unrecognised foreign key violation - may need specific error mapping"
+            "unrecognized foreign key violation - may need specific error mapping"
         );
         RouteAnnotationRepositoryError::query("foreign key violation")
     }
@@ -70,9 +70,7 @@ pub fn map_diesel_error(error: diesel::result::Error) -> RouteAnnotationReposito
             RouteAnnotationRepositoryError::query("database query error")
         }
         DieselError::DatabaseError(kind, info) => match kind {
-            DatabaseErrorKind::ForeignKeyViolation => {
-                map_foreign_key_violation(info.message())
-            }
+            DatabaseErrorKind::ForeignKeyViolation => map_foreign_key_violation(info.message()),
             DatabaseErrorKind::ClosedConnection => {
                 RouteAnnotationRepositoryError::connection("database connection error")
             }
