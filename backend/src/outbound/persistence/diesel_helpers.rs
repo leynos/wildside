@@ -87,30 +87,25 @@ pub trait HasRevision {
     fn revision(&self) -> u32;
 }
 
-/// Sentinel message for zero-row update failures.
-pub const ZERO_ROWS_SENTINEL: &str = "update affected 0 rows";
-
-/// Execute update with optimistic concurrency and return sentinel error if zero rows affected.
-///
-/// This helper returns a sentinel Query error with message [`ZERO_ROWS_SENTINEL`] if no
-/// rows were updated, allowing callers to disambiguate the failure.
-pub fn execute_optimistic_update(
-    updated_rows: usize,
-) -> Result<(), RouteAnnotationRepositoryError> {
-    if updated_rows == 0 {
-        Err(RouteAnnotationRepositoryError::query(ZERO_ROWS_SENTINEL))
-    } else {
-        Ok(())
-    }
+/// Result of an optimistic update operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateResult {
+    /// Update succeeded (one or more rows affected).
+    Success,
+    /// Update affected zero rows (revision mismatch or record not found).
+    ZeroRows,
 }
 
-/// Check if an error is the sentinel [`ZERO_ROWS_SENTINEL`] error.
+/// Check if an update affected any rows.
 ///
-/// Uses string matching on the error message to detect the sentinel. This is internal
-/// to the module and the sentinel constant is clearly defined, making it acceptable
-/// for this use case.
-pub fn is_zero_rows_error(error: &RouteAnnotationRepositoryError) -> bool {
-    error.to_string().contains(ZERO_ROWS_SENTINEL)
+/// Returns [`UpdateResult::ZeroRows`] if no rows were updated, allowing callers to
+/// disambiguate revision mismatch from missing record.
+pub fn execute_optimistic_update(updated_rows: usize) -> UpdateResult {
+    if updated_rows == 0 {
+        UpdateResult::ZeroRows
+    } else {
+        UpdateResult::Success
+    }
 }
 
 /// Disambiguate update failure by checking if it's a revision mismatch or missing record.
@@ -283,7 +278,7 @@ macro_rules! save_with_revision {
         use diesel_async::RunQueryDsl;
         use $crate::outbound::persistence::diesel_helpers::map_diesel_error;
         use $crate::outbound::persistence::diesel_helpers::execute_optimistic_update;
-        use $crate::outbound::persistence::diesel_helpers::is_zero_rows_error;
+        use $crate::outbound::persistence::diesel_helpers::UpdateResult;
 
         let changeset = $changeset;
         let updated_rows = diesel::update($table)
@@ -293,12 +288,11 @@ macro_rules! save_with_revision {
             .await
             .map_err(map_diesel_error)?;
 
-        let result = execute_optimistic_update(updated_rows);
-        if let Err(ref e) = result
-            && is_zero_rows_error(e)
-        {
-            return Err($handler(&mut $conn, $expected).await);
+        match execute_optimistic_update(updated_rows) {
+            UpdateResult::ZeroRows => {
+                return Err($handler(&mut $conn, $expected).await);
+            }
+            UpdateResult::Success => Ok(()),
         }
-        result
     }};
 }
