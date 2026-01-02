@@ -30,7 +30,7 @@ fn is_foreign_key_message(message: &str) -> bool {
 /// Map foreign key violation to appropriate domain error.
 ///
 /// Identifies route FK violations by checking that the message both indicates a
-/// foreign key constraint and references the routes table. Unrecognised FK
+/// foreign key constraint and references the routes table. Unrecognized FK
 /// violations are logged for monitoring.
 fn map_foreign_key_violation(message: &str) -> RouteAnnotationRepositoryError {
     let lower = message.to_lowercase();
