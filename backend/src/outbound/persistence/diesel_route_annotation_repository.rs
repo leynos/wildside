@@ -7,17 +7,23 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositoryError};
 use crate::domain::{RouteNote, RouteProgress, UserId};
+use crate::query_and_disambiguate;
+use crate::query_optional;
+use crate::query_vec;
+use crate::save_with_revision;
 
+use super::diesel_helpers::{
+    HasRevision, cast_revision, cast_revision_for_db, map_diesel_error, map_pool_error,
+};
 use super::models::{
     NewRouteNoteRow, NewRouteProgressRow, RouteNoteRow, RouteNoteUpdate, RouteProgressRow,
     RouteProgressUpdate,
 };
-use super::pool::{DbPool, PoolError};
+use super::pool::DbPool;
 use super::schema::{route_notes, route_progress};
 
 /// Diesel-backed implementation of the `RouteAnnotationRepository` port.
@@ -34,64 +40,6 @@ impl DieselRouteAnnotationRepository {
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
     }
-}
-
-/// Map pool errors to domain route annotation repository errors.
-fn map_pool_error(error: PoolError) -> RouteAnnotationRepositoryError {
-    match error {
-        PoolError::Checkout { message } | PoolError::Build { message } => {
-            RouteAnnotationRepositoryError::connection(message)
-        }
-    }
-}
-
-/// Map Diesel errors to domain route annotation repository errors.
-fn map_diesel_error(error: diesel::result::Error) -> RouteAnnotationRepositoryError {
-    use diesel::result::{DatabaseErrorKind, Error as DieselError};
-
-    match &error {
-        DieselError::DatabaseError(kind, info) => {
-            debug!(?kind, message = info.message(), "diesel operation failed");
-        }
-        _ => debug!(
-            error_type = %std::any::type_name_of_val(&error),
-            "diesel operation failed"
-        ),
-    }
-
-    match error {
-        DieselError::NotFound => RouteAnnotationRepositoryError::query("record not found"),
-        DieselError::QueryBuilderError(_) => {
-            RouteAnnotationRepositoryError::query("database query error")
-        }
-        DieselError::DatabaseError(kind, info) => match kind {
-            DatabaseErrorKind::ForeignKeyViolation => {
-                let message = info.message();
-                if message.contains("routes") {
-                    RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
-                } else {
-                    RouteAnnotationRepositoryError::query("foreign key violation")
-                }
-            }
-            DatabaseErrorKind::ClosedConnection => {
-                RouteAnnotationRepositoryError::connection("database connection error")
-            }
-            _ => RouteAnnotationRepositoryError::query("database error"),
-        },
-        _ => RouteAnnotationRepositoryError::query("database error"),
-    }
-}
-
-/// Cast database revision (i32) to domain revision (u32).
-///
-/// Database stores revisions as `i32` but domain uses `u32`. Revisions are
-/// always non-negative in practice, enforced by database constraints.
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "revision is always non-negative in database"
-)]
-fn cast_revision(revision: i32) -> u32 {
-    revision as u32
 }
 
 /// Convert a database row to a domain RouteNote.
@@ -119,63 +67,6 @@ fn row_to_progress(row: RouteProgressRow) -> RouteProgress {
     }
 }
 
-/// Macro for query methods that return `Option<T>`.
-///
-/// Reduces boilerplate: acquire connection, execute query, map errors, convert row.
-macro_rules! query_optional {
-    (
-        $self:ident,
-        $table:expr,
-        $filter:expr,
-        $row_type:ty,
-        $converter:expr
-    ) => {{
-        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
-
-        let result: Option<$row_type> = $table
-            .filter($filter)
-            .select(<$row_type>::as_select())
-            .first(&mut conn)
-            .await
-            .optional()
-            .map_err(map_diesel_error)?;
-
-        Ok(result.map($converter))
-    }};
-}
-
-/// Macro for query methods that return `Vec<T>`.
-///
-/// Reduces boilerplate: acquire connection, execute query with ordering, map errors, convert rows.
-macro_rules! query_vec {
-    (
-        $self:ident,
-        $table:expr,
-        $filter:expr,
-        $order_by:expr,
-        $row_type:ty,
-        $converter:expr
-    ) => {{
-        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
-
-        let rows: Vec<$row_type> = $table
-            .filter($filter)
-            .select(<$row_type>::as_select())
-            .order_by($order_by)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        Ok(rows.into_iter().map($converter).collect())
-    }};
-}
-
-/// Trait for database rows that have a revision field.
-trait HasRevision {
-    /// Get the revision as a u32.
-    fn revision(&self) -> u32;
-}
-
 impl HasRevision for RouteNoteRow {
     fn revision(&self) -> u32 {
         cast_revision(self.revision)
@@ -186,53 +77,6 @@ impl HasRevision for RouteProgressRow {
     fn revision(&self) -> u32 {
         cast_revision(self.revision)
     }
-}
-
-/// Disambiguate update failure by checking if it's a revision mismatch or missing record.
-///
-/// Given the result of querying for the current record, returns either a revision
-/// mismatch error (if the record exists with different revision) or a not-found error
-/// (if the record doesn't exist). Propagates any query errors.
-fn disambiguate_update_failure<R>(
-    current_result: Result<Option<R>, RouteAnnotationRepositoryError>,
-    expected_revision: u32,
-    not_found_message: &str,
-) -> RouteAnnotationRepositoryError
-where
-    R: HasRevision,
-{
-    match current_result {
-        Ok(Some(record)) => {
-            RouteAnnotationRepositoryError::revision_mismatch(expected_revision, record.revision())
-        }
-        Ok(None) => RouteAnnotationRepositoryError::query(not_found_message),
-        Err(e) => e,
-    }
-}
-
-/// Macro for querying from an existing connection and disambiguating update failures.
-///
-/// Reduces boilerplate in handle_*_update_failure functions: execute query with filter,
-/// map errors, then disambiguate revision mismatch vs not-found.
-macro_rules! query_and_disambiguate {
-    (
-        $conn:expr,
-        $table:expr,
-        $filter:expr,
-        $row_type:ty,
-        $expected_revision:expr,
-        $not_found_msg:expr
-    ) => {{
-        let current_result = $table
-            .filter($filter)
-            .select(<$row_type>::as_select())
-            .first($conn)
-            .await
-            .optional()
-            .map_err(map_diesel_error);
-
-        disambiguate_update_failure(current_result, $expected_revision, $not_found_msg)
-    }};
 }
 
 /// Handle failed note update by checking if it's a revision mismatch or missing note.
@@ -274,96 +118,6 @@ where
         expected_revision,
         "progress not found"
     )
-}
-
-/// Cast domain revision (u32) to database revision (i32).
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "revision values are always small positive integers"
-)]
-fn cast_revision_for_db(revision: u32) -> i32 {
-    revision as i32
-}
-
-/// Sentinel message for zero-row update failures.
-const ZERO_ROWS_SENTINEL: &str = "update affected 0 rows";
-
-/// Execute update with optimistic concurrency and return sentinel error if zero rows affected.
-///
-/// This helper returns a sentinel Query error with message [`ZERO_ROWS_SENTINEL`] if no
-/// rows were updated, allowing callers to disambiguate the failure.
-async fn execute_optimistic_update(
-    updated_rows: usize,
-) -> Result<(), RouteAnnotationRepositoryError> {
-    if updated_rows == 0 {
-        Err(RouteAnnotationRepositoryError::query(ZERO_ROWS_SENTINEL))
-    } else {
-        Ok(())
-    }
-}
-
-/// Check if an error is the sentinel [`ZERO_ROWS_SENTINEL`] error.
-fn is_zero_rows_error(error: &RouteAnnotationRepositoryError) -> bool {
-    error.to_string().contains(ZERO_ROWS_SENTINEL)
-}
-
-/// Macro for save operations with optimistic concurrency control.
-///
-/// Handles: acquire connection, insert (if None) or update with revision check
-/// (if Some), disambiguate zero-row updates.
-macro_rules! save_with_revision {
-    (
-        $self:ident,
-        $expected_revision:expr,
-        insert: { $($insert_body:tt)* },
-        update($expected:ident): { $($update_body:tt)* }
-    ) => {{
-        let mut conn = $self.pool.get().await.map_err(map_pool_error)?;
-
-        match $expected_revision {
-            None => {
-                save_with_revision!(@insert conn, { $($insert_body)* })
-            }
-            Some($expected) => {
-                save_with_revision!(@update conn, $expected, { $($update_body)* })
-            }
-        }
-    }};
-
-    (@insert $conn:ident, {
-        table: $table:expr,
-        new_row: $new_row:expr
-    }) => {
-        diesel::insert_into($table)
-            .values(&$new_row)
-            .execute(&mut $conn)
-            .await
-            .map(|_| ())
-            .map_err(map_diesel_error)
-    };
-
-    (@update $conn:ident, $expected:ident, {
-        table: $table:expr,
-        filter: $filter:expr,
-        changeset: $changeset:expr,
-        on_zero_rows: $handler:expr
-    }) => {{
-        let changeset = $changeset;
-        let updated_rows = diesel::update($table)
-            .filter($filter)
-            .set(&changeset)
-            .execute(&mut $conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let result = execute_optimistic_update(updated_rows).await;
-        if let Err(ref e) = result
-            && is_zero_rows_error(e)
-        {
-            return Err($handler(&mut $conn, $expected).await);
-        }
-        result
-    }};
 }
 
 #[async_trait]
@@ -504,6 +258,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::outbound::persistence::pool::PoolError;
     use rstest::rstest;
 
     #[rstest]

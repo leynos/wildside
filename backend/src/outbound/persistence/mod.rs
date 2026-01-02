@@ -28,6 +28,7 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
+pub(crate) mod diesel_helpers;
 mod diesel_idempotency_repository;
 mod diesel_route_annotation_repository;
 mod diesel_user_preferences_repository;
