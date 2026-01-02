@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,13 @@ type TableCellName string
 
 // SectionState represents whether we're inside a specific markdown section.
 type SectionState bool
+
+// sectionStateUpdater is a function type that updates section state based on
+// the current line and previous state.
+type sectionStateUpdater func(line MarkdownLine, inSection SectionState) SectionState
+
+// rowChecker is a function type that determines if a line should be parsed.
+type rowChecker func(line MarkdownLine, inSection SectionState) bool
 
 // TestREADMEDocumentsAllOutputs verifies that all outputs defined in outputs.tf
 // are documented in README.md.
@@ -123,15 +131,16 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 		"sync_policy_contract documentation should include 'replication' field")
 }
 
-// extractHCLOutputNames parses an HCL file and returns all output block names.
-func extractHCLOutputNames(t *testing.T, path FilePath) []string {
+// extractHCLBlockNames parses an HCL file and returns all block names of the
+// specified type (e.g., "output" or "variable").
+func extractHCLBlockNames(t *testing.T, path FilePath, blockType string) []string {
 	t.Helper()
 
 	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
-	// Match output "name" { patterns
-	re := regexp.MustCompile(`(?m)^output\s+"([^"]+)"\s*\{`)
+	pattern := fmt.Sprintf(`(?m)^%s\s+"([^"]+)"\s*\{`, blockType)
+	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(string(content), -1)
 
 	var names []string
@@ -141,32 +150,28 @@ func extractHCLOutputNames(t *testing.T, path FilePath) []string {
 		}
 	}
 	return names
+}
+
+// extractHCLOutputNames parses an HCL file and returns all output block names.
+func extractHCLOutputNames(t *testing.T, path FilePath) []string {
+	return extractHCLBlockNames(t, path, "output")
 }
 
 // extractHCLVariableNames parses an HCL file and returns all variable block
 // names.
 func extractHCLVariableNames(t *testing.T, path FilePath) []string {
-	t.Helper()
-
-	content, err := os.ReadFile(string(path))
-	require.NoError(t, err)
-
-	// Match variable "name" { patterns
-	re := regexp.MustCompile(`(?m)^variable\s+"([^"]+)"\s*\{`)
-	matches := re.FindAllStringSubmatch(string(content), -1)
-
-	var names []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			names = append(names, match[1])
-		}
-	}
-	return names
+	return extractHCLBlockNames(t, path, "variable")
 }
 
-// extractREADMEOutputNames parses a README.md file and extracts output names
-// from the Outputs table.
-func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
+// extractREADMESectionTableNames parses a README.md file and extracts table
+// names from a specific section using the provided state updater and row
+// checker functions.
+func extractREADMESectionTableNames(
+	t *testing.T,
+	path FilePath,
+	stateUpdater sectionStateUpdater,
+	shouldParseRow rowChecker,
+) []string {
 	t.Helper()
 
 	file, err := os.Open(string(path))
@@ -175,13 +180,13 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	var names []string
 	scanner := bufio.NewScanner(file)
-	inOutputsSection := SectionState(false)
+	inSection := SectionState(false)
 
 	for scanner.Scan() {
 		line := MarkdownLine(scanner.Text())
-		inOutputsSection = updateOutputsSectionState(line, inOutputsSection)
+		inSection = stateUpdater(line, inSection)
 
-		if shouldParseOutputRow(line, inOutputsSection) {
+		if shouldParseRow(line, inSection) {
 			if name := parseValidTableName(line); name != "" {
 				names = append(names, string(name))
 			}
@@ -190,6 +195,17 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 
 	require.NoError(t, scanner.Err())
 	return names
+}
+
+// extractREADMEOutputNames parses a README.md file and extracts output names
+// from the Outputs table.
+func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
+	return extractREADMESectionTableNames(
+		t,
+		path,
+		updateOutputsSectionState,
+		shouldParseOutputRow,
+	)
 }
 
 // updateOutputsSectionState determines whether we're entering or exiting the
@@ -213,29 +229,12 @@ func shouldParseOutputRow(line MarkdownLine, inSection SectionState) bool {
 // extractREADMEInputNames parses a README.md file and extracts input names
 // from Inputs tables.
 func extractREADMEInputNames(t *testing.T, path FilePath) []string {
-	t.Helper()
-
-	file, err := os.Open(string(path))
-	require.NoError(t, err)
-	defer file.Close()
-
-	var names []string
-	scanner := bufio.NewScanner(file)
-	inInputsSection := SectionState(false)
-
-	for scanner.Scan() {
-		line := MarkdownLine(scanner.Text())
-		inInputsSection = updateInputsSectionState(line, inInputsSection)
-
-		if shouldParseInputRow(line, inInputsSection) {
-			if name := parseValidTableName(line); name != "" {
-				names = append(names, string(name))
-			}
-		}
-	}
-
-	require.NoError(t, scanner.Err())
-	return names
+	return extractREADMESectionTableNames(
+		t,
+		path,
+		updateInputsSectionState,
+		shouldParseInputRow,
+	)
 }
 
 // updateInputsSectionState determines whether we're entering or exiting an
