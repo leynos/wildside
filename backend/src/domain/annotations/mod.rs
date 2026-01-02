@@ -238,14 +238,7 @@ impl RouteProgress {
     /// Initialises with an empty `visited_stop_ids` list, revision 1, and the
     /// current timestamp.
     pub fn new(route_id: Uuid, user_id: UserId) -> Self {
-        Self {
-            route_id,
-            user_id,
-            visited_stop_ids: Vec::new(),
-            visited_stop_set: HashSet::new(),
-            updated_at: Utc::now(),
-            revision: 1,
-        }
+        RouteProgressBuilder::new(route_id, user_id).build()
     }
 
     /// Create a builder for constructing progress incrementally.
