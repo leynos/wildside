@@ -201,6 +201,35 @@ where
     disambiguate_update_failure(current_result, expected_revision, "progress not found")
 }
 
+/// Cast domain revision (u32) to database revision (i32).
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "revision values are always small positive integers"
+)]
+fn cast_revision_for_db(revision: u32) -> i32 {
+    revision as i32
+}
+
+/// Execute update with optimistic concurrency and return sentinel error if zero rows affected.
+///
+/// This helper executes an update operation and returns a sentinel Query error with
+/// message "update affected 0 rows" if no rows were updated, allowing callers to
+/// disambiguate the failure.
+async fn execute_optimistic_update(
+    updated_rows: usize,
+) -> Result<(), RouteAnnotationRepositoryError> {
+    if updated_rows == 0 {
+        Err(RouteAnnotationRepositoryError::query("update affected 0 rows"))
+    } else {
+        Ok(())
+    }
+}
+
+/// Check if an error is the sentinel "update affected 0 rows" error.
+fn is_zero_rows_error(error: &RouteAnnotationRepositoryError) -> bool {
+    error.to_string().contains("update affected 0 rows")
+}
+
 #[async_trait]
 impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
     // --- Notes ---
@@ -250,16 +279,10 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         expected_revision: Option<u32>,
     ) -> Result<(), RouteAnnotationRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        #[expect(
-            clippy::cast_possible_wrap,
-            reason = "revision values are always small positive integers"
-        )]
-        let revision_i32 = note.revision as i32;
+        let revision_i32 = cast_revision_for_db(note.revision);
 
         match expected_revision {
             None => {
-                // Insert new note
                 let new_row = NewRouteNoteRow {
                     id: note.id,
                     route_id: note.route_id,
@@ -268,7 +291,6 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     body: &note.body,
                     revision: revision_i32,
                 };
-
                 diesel::insert_into(route_notes::table)
                     .values(&new_row)
                     .execute(&mut conn)
@@ -277,13 +299,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .map_err(map_diesel_error)
             }
             Some(expected) => {
-                // Update with revision check
-                #[expect(
-                    clippy::cast_possible_wrap,
-                    reason = "revision values are always small positive integers"
-                )]
-                let expected_i32 = expected as i32;
-
+                let expected_i32 = cast_revision_for_db(expected);
                 let update = RouteNoteUpdate {
                     poi_id: note.poi_id,
                     body: &note.body,
@@ -301,10 +317,13 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .await
                     .map_err(map_diesel_error)?;
 
-                if updated_rows == 0 {
+                let result = execute_optimistic_update(updated_rows).await;
+                if let Err(ref e) = result
+                    && is_zero_rows_error(e)
+                {
                     return Err(handle_note_update_failure(&mut conn, note.id, expected).await);
                 }
-                Ok(())
+                result
             }
         }
     }
@@ -350,23 +369,16 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
         expected_revision: Option<u32>,
     ) -> Result<(), RouteAnnotationRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        #[expect(
-            clippy::cast_possible_wrap,
-            reason = "revision values are always small positive integers"
-        )]
-        let revision_i32 = progress.revision as i32;
+        let revision_i32 = cast_revision_for_db(progress.revision);
 
         match expected_revision {
             None => {
-                // Insert new progress
                 let new_row = NewRouteProgressRow {
                     route_id: progress.route_id,
                     user_id: *progress.user_id.as_uuid(),
                     visited_stop_ids: &progress.visited_stop_ids,
                     revision: revision_i32,
                 };
-
                 diesel::insert_into(route_progress::table)
                     .values(&new_row)
                     .execute(&mut conn)
@@ -375,13 +387,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .map_err(map_diesel_error)
             }
             Some(expected) => {
-                // Update with revision check
-                #[expect(
-                    clippy::cast_possible_wrap,
-                    reason = "revision values are always small positive integers"
-                )]
-                let expected_i32 = expected as i32;
-
+                let expected_i32 = cast_revision_for_db(expected);
                 let update = RouteProgressUpdate {
                     visited_stop_ids: &progress.visited_stop_ids,
                     revision: revision_i32,
@@ -399,7 +405,10 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     .await
                     .map_err(map_diesel_error)?;
 
-                if updated_rows == 0 {
+                let result = execute_optimistic_update(updated_rows).await;
+                if let Err(ref e) = result
+                    && is_zero_rows_error(e)
+                {
                     return Err(handle_progress_update_failure(
                         &mut conn,
                         progress.route_id,
@@ -408,7 +417,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
                     )
                     .await);
                 }
-                Ok(())
+                result
             }
         }
     }
