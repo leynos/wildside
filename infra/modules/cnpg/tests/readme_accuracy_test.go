@@ -18,6 +18,12 @@ type FilePath string
 // MarkdownTableRow represents a markdown table row.
 type MarkdownTableRow string
 
+// MarkdownLine represents a line from a markdown document.
+type MarkdownLine string
+
+// TableCellName represents extracted table cell content.
+type TableCellName string
+
 // TestREADMEDocumentsAllOutputs verifies that all outputs defined in outputs.tf
 // are documented in README.md.
 func TestREADMEDocumentsAllOutputs(t *testing.T) {
@@ -160,12 +166,12 @@ func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 	inOutputsSection := false
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := MarkdownLine(scanner.Text())
 		inOutputsSection = updateOutputsSectionState(line, inOutputsSection)
 
 		if shouldParseOutputRow(line, inOutputsSection) {
 			if name := parseValidTableName(line); name != "" {
-				names = append(names, name)
+				names = append(names, string(name))
 			}
 		}
 	}
@@ -188,12 +194,12 @@ func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 	inInputsSection := false
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := MarkdownLine(scanner.Text())
 		inInputsSection = updateInputsSectionState(line, inInputsSection)
 
 		if shouldParseInputRow(line, inInputsSection) {
 			if name := parseValidInputTableName(line); name != "" {
-				names = append(names, name)
+				names = append(names, string(name))
 			}
 		}
 	}
@@ -204,11 +210,11 @@ func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 
 // updateOutputsSectionState determines whether we're entering or exiting the
 // Outputs section based on the current line and previous state.
-func updateOutputsSectionState(line string, inSection bool) bool {
-	if strings.HasPrefix(line, "## Outputs") {
+func updateOutputsSectionState(line MarkdownLine, inSection bool) bool {
+	if strings.HasPrefix(string(line), "## Outputs") {
 		return true
 	}
-	if inSection && strings.HasPrefix(line, "## ") {
+	if inSection && strings.HasPrefix(string(line), "## ") {
 		return false
 	}
 	return inSection
@@ -216,13 +222,13 @@ func updateOutputsSectionState(line string, inSection bool) bool {
 
 // shouldParseOutputRow returns true if the line should be parsed as a table
 // row (starts with "|" and we're in the Outputs section).
-func shouldParseOutputRow(line string, inSection bool) bool {
-	return inSection && strings.HasPrefix(line, "|")
+func shouldParseOutputRow(line MarkdownLine, inSection bool) bool {
+	return inSection && strings.HasPrefix(string(line), "|")
 }
 
 // updateInputsSectionState determines whether we're entering or exiting an
 // Inputs section based on the current line and previous state.
-func updateInputsSectionState(line string, inSection bool) bool {
+func updateInputsSectionState(line MarkdownLine, inSection bool) bool {
 	if isInputsSectionHeader(line) {
 		return true
 	}
@@ -234,39 +240,40 @@ func updateInputsSectionState(line string, inSection bool) bool {
 
 // isInputsSectionHeader returns true if the line is a ## or ### level header
 // containing "configuration" or "inputs" (case-insensitive).
-func isInputsSectionHeader(line string) bool {
+func isInputsSectionHeader(line MarkdownLine) bool {
 	if !isHeadingLevel2Or3(line) {
 		return false
 	}
-	lower := strings.ToLower(line)
+	lower := strings.ToLower(string(line))
 	return strings.Contains(lower, "configuration") ||
 		strings.Contains(lower, "inputs")
 }
 
 // isNonInputsSectionHeader returns true if the line is a ## level header that
 // doesn't contain "configuration" (case-insensitive).
-func isNonInputsSectionHeader(line string) bool {
-	if !strings.HasPrefix(line, "## ") {
+func isNonInputsSectionHeader(line MarkdownLine) bool {
+	if !strings.HasPrefix(string(line), "## ") {
 		return false
 	}
-	return !strings.Contains(strings.ToLower(line), "configuration")
+	return !strings.Contains(strings.ToLower(string(line)), "configuration")
 }
 
 // isHeadingLevel2Or3 returns true if the line starts with "## " or "### ".
-func isHeadingLevel2Or3(line string) bool {
-	return strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ")
+func isHeadingLevel2Or3(line MarkdownLine) bool {
+	s := string(line)
+	return strings.HasPrefix(s, "## ") || strings.HasPrefix(s, "### ")
 }
 
 // shouldParseInputRow returns true if the line should be parsed as a table row
 // (starts with "|" and we're in an inputs section).
-func shouldParseInputRow(line string, inSection bool) bool {
-	return inSection && strings.HasPrefix(line, "|")
+func shouldParseInputRow(line MarkdownLine, inSection bool) bool {
+	return inSection && strings.HasPrefix(string(line), "|")
 }
 
 // parseValidInputTableName extracts the first column from a table row and
-// validates it using isInvalidTableName. Returns empty string for invalid
-// entries.
-func parseValidInputTableName(line string) string {
+// validates it using isInvalidTableName. Returns empty TableCellName for
+// invalid entries.
+func parseValidInputTableName(line MarkdownLine) TableCellName {
 	name := extractTableFirstColumn(MarkdownTableRow(line))
 	if isInvalidTableName(name) {
 		return ""
@@ -275,9 +282,9 @@ func parseValidInputTableName(line string) string {
 }
 
 // parseValidTableName extracts the first column from a table row and validates
-// it. Returns empty string for invalid entries (empty, "Name", or separator
-// rows starting with "-").
-func parseValidTableName(line string) string {
+// it. Returns empty TableCellName for invalid entries (empty, "Name", or
+// separator rows starting with "-").
+func parseValidTableName(line MarkdownLine) TableCellName {
 	name := extractTableFirstColumn(MarkdownTableRow(line))
 	if isInvalidTableName(name) {
 		return ""
@@ -287,30 +294,30 @@ func parseValidTableName(line string) string {
 
 // isInvalidTableName returns true if the name should be excluded from results.
 // This includes empty names, table headers, and separator rows.
-func isInvalidTableName(name string) bool {
+func isInvalidTableName(name TableCellName) bool {
 	return isEmptyName(name) || isTableHeaderName(name) || isSeparatorRow(name)
 }
 
 // isEmptyName returns true if the name is an empty string.
-func isEmptyName(name string) bool {
+func isEmptyName(name TableCellName) bool {
 	return name == ""
 }
 
 // isTableHeaderName returns true if the name equals "Name", indicating it is
 // the table header row rather than actual content.
-func isTableHeaderName(name string) bool {
+func isTableHeaderName(name TableCellName) bool {
 	return name == "Name"
 }
 
 // isSeparatorRow returns true if the name starts with "-", indicating it is
 // a markdown table separator row.
-func isSeparatorRow(name string) bool {
-	return strings.HasPrefix(name, "-")
+func isSeparatorRow(name TableCellName) bool {
+	return strings.HasPrefix(string(name), "-")
 }
 
 // extractTableFirstColumn extracts the first column value from a markdown
 // table row.
-func extractTableFirstColumn(line MarkdownTableRow) string {
+func extractTableFirstColumn(line MarkdownTableRow) TableCellName {
 	// Split by | and get the first non-empty cell
 	parts := strings.Split(string(line), "|")
 	if len(parts) < 2 {
@@ -328,5 +335,5 @@ func extractTableFirstColumn(line MarkdownTableRow) string {
 		return ""
 	}
 
-	return cell
+	return TableCellName(cell)
 }
