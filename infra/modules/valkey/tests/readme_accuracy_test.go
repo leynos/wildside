@@ -83,6 +83,12 @@ func TestREADMEDocumentsAllRequiredInputs(t *testing.T) {
 		assert.Contains(t, documentedInputs, variable,
 			"variable %q is defined but not documented in README.md", variable)
 	}
+
+	// Verify README does not document inputs that are not defined as variables
+	for _, documentedInput := range documentedInputs {
+		assert.Contains(t, allVariables, documentedInput,
+			"README.md documents input %q, but no matching variable is defined in variables-*.tf", documentedInput)
+	}
 }
 
 // TestREADMEDocumentsSyncPolicyContract verifies that the sync_policy_contract

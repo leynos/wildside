@@ -46,6 +46,12 @@ func TestREADMEDocumentsAllOutputs(t *testing.T) {
 		assert.Contains(t, documentedOutputs, output,
 			"output %q is defined in outputs.tf but not documented in README.md", output)
 	}
+
+	// Verify README does not document outputs that are not defined in outputs.tf
+	for _, output := range documentedOutputs {
+		assert.Contains(t, actualOutputs, output,
+			"output %q is documented in README.md but not defined in outputs.tf", output)
+	}
 }
 
 // TestREADMEDocumentsAllRequiredInputs verifies that all required inputs are
@@ -118,8 +124,8 @@ func extractHCLOutputNames(t *testing.T, path FilePath) []string {
 	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
-	// Match output "name" { patterns
-	re := regexp.MustCompile(`(?m)^output\s+"([^"]+)"\s*\{`)
+	// Match output "name" { patterns, allowing for leading indentation
+	re := regexp.MustCompile(`(?m)^\s*output\s+"([^"]+)"\s*\{`)
 	matches := re.FindAllStringSubmatch(string(content), -1)
 
 	var names []string
@@ -139,8 +145,8 @@ func extractHCLVariableNames(t *testing.T, path FilePath) []string {
 	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
-	// Match variable "name" { patterns
-	re := regexp.MustCompile(`(?m)^variable\s+"([^"]+)"\s*\{`)
+	// Match variable "name" { patterns, allowing for leading indentation
+	re := regexp.MustCompile(`(?m)^\s*variable\s+"([^"]+)"\s*\{`)
 	matches := re.FindAllStringSubmatch(string(content), -1)
 
 	var names []string

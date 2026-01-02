@@ -342,8 +342,8 @@ Module tests verify interoperability through:
 3. **Documentation accuracy tests**: Verify README inputs/outputs match actual
    HCL definitions (`readme_accuracy_test.go`).
 
-4. **OPA/Conftest policy tests**: Validate rendered manifests against security
-   and configuration policies.
+4. **Open Policy Agent (OPA)/Conftest policy tests**: Validate rendered
+   manifests against security and configuration policies.
 
 Run module tests with:
 

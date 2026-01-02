@@ -20,8 +20,8 @@ The module provisions:
 
 - A Kubernetes cluster with cluster-admin access
 - OpenTofu >= 1.6.0
-- `conftest` (policy tests): requires conftest built with OPA >= 0.59.0 (Rego
-  v1 syntax)
+- `conftest` (policy tests): requires conftest built with Open Policy Agent
+  (OPA) >= 0.59.0 (Rego v1 syntax)
 - (Optional) `vault_eso` module deployed for ESO-managed credentials
 - (Optional) S3-compatible storage for backups (e.g., DigitalOcean Spaces)
 
