@@ -12,14 +12,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// FilePath represents a file system path.
+type FilePath string
+
+// MarkdownLine represents a line from a markdown document.
+type MarkdownLine string
+
+// TableCellName represents extracted table cell content.
+type TableCellName string
+
+// SectionState represents whether we're inside a specific markdown section.
+type SectionState bool
+
 // TestREADMEDocumentsAllOutputs verifies that all outputs defined in outputs.tf
 // are documented in README.md.
 func TestREADMEDocumentsAllOutputs(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
-	outputsPath := filepath.Join(moduleDir, "outputs.tf")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
+	outputsPath := FilePath(filepath.Join(moduleDir, "outputs.tf"))
 
 	// Extract output names from outputs.tf
 	actualOutputs := extractHCLOutputNames(t, outputsPath)
@@ -42,20 +54,20 @@ func TestREADMEDocumentsAllRequiredInputs(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
 
 	// Find all variables files
-	variablesFiles := []string{
-		filepath.Join(moduleDir, "variables-core.tf"),
-		filepath.Join(moduleDir, "variables-cluster.tf"),
-		filepath.Join(moduleDir, "variables-credentials.tf"),
-		filepath.Join(moduleDir, "variables-tls.tf"),
+	variablesFiles := []FilePath{
+		FilePath(filepath.Join(moduleDir, "variables-core.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-cluster.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-credentials.tf")),
+		FilePath(filepath.Join(moduleDir, "variables-tls.tf")),
 	}
 
 	// Extract all variable names from variables files
 	var allVariables []string
 	for _, vf := range variablesFiles {
-		if _, err := os.Stat(vf); err == nil {
+		if _, err := os.Stat(string(vf)); err == nil {
 			vars := extractHCLVariableNames(t, vf)
 			allVariables = append(allVariables, vars...)
 		}
@@ -79,9 +91,9 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := ".."
-	readmePath := filepath.Join(moduleDir, "README.md")
+	readmePath := FilePath(filepath.Join(moduleDir, "README.md"))
 
-	content, err := os.ReadFile(readmePath)
+	content, err := os.ReadFile(string(readmePath))
 	require.NoError(t, err)
 
 	readme := string(content)
@@ -106,10 +118,10 @@ func TestREADMEDocumentsSyncPolicyContract(t *testing.T) {
 }
 
 // extractHCLOutputNames parses an HCL file and returns all output block names.
-func extractHCLOutputNames(t *testing.T, path string) []string {
+func extractHCLOutputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
 	// Match output "name" { patterns
@@ -127,10 +139,10 @@ func extractHCLOutputNames(t *testing.T, path string) []string {
 
 // extractHCLVariableNames parses an HCL file and returns all variable block
 // names.
-func extractHCLVariableNames(t *testing.T, path string) []string {
+func extractHCLVariableNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
 	// Match variable "name" { patterns
@@ -148,36 +160,36 @@ func extractHCLVariableNames(t *testing.T, path string) []string {
 
 // extractREADMEOutputNames parses a README.md file and extracts output names
 // from the Outputs table.
-func extractREADMEOutputNames(t *testing.T, path string) []string {
+func extractREADMEOutputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	file, err := os.Open(path)
+	file, err := os.Open(string(path))
 	require.NoError(t, err)
 	defer file.Close()
 
 	var names []string
 	scanner := bufio.NewScanner(file)
-	inOutputsSection := false
+	inOutputsSection := SectionState(false)
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := MarkdownLine(scanner.Text())
 
 		// Detect start of Outputs section
-		if strings.HasPrefix(line, "## Outputs") {
+		if strings.HasPrefix(string(line), "## Outputs") {
 			inOutputsSection = true
 			continue
 		}
 
 		// Detect end of Outputs section (next heading)
-		if inOutputsSection && strings.HasPrefix(line, "## ") {
+		if bool(inOutputsSection) && strings.HasPrefix(string(line), "## ") {
 			break
 		}
 
 		// Parse table rows in Outputs section
-		if inOutputsSection && strings.HasPrefix(line, "|") {
+		if bool(inOutputsSection) && strings.HasPrefix(string(line), "|") {
 			name := extractTableFirstColumn(line)
-			if name != "" && name != "Name" && !strings.HasPrefix(name, "-") {
-				names = append(names, name)
+			if name != "" && name != "Name" && !strings.HasPrefix(string(name), "-") {
+				names = append(names, string(name))
 			}
 		}
 	}
@@ -188,24 +200,24 @@ func extractREADMEOutputNames(t *testing.T, path string) []string {
 
 // extractREADMEInputNames parses a README.md file and extracts input names
 // from Inputs tables.
-func extractREADMEInputNames(t *testing.T, path string) []string {
+func extractREADMEInputNames(t *testing.T, path FilePath) []string {
 	t.Helper()
 
-	file, err := os.Open(path)
+	file, err := os.Open(string(path))
 	require.NoError(t, err)
 	defer file.Close()
 
 	var names []string
 	scanner := bufio.NewScanner(file)
-	inInputsSection := false
+	inInputsSection := SectionState(false)
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := MarkdownLine(scanner.Text())
 		inInputsSection = updateInputsSectionState(line, inInputsSection)
 
 		if shouldParseInputRow(line, inInputsSection) {
 			if name := parseValidTableName(line); name != "" {
-				names = append(names, name)
+				names = append(names, string(name))
 			}
 		}
 	}
@@ -216,11 +228,11 @@ func extractREADMEInputNames(t *testing.T, path string) []string {
 
 // updateInputsSectionState determines whether we're entering or exiting an
 // Inputs section based on the current line and previous state.
-func updateInputsSectionState(line string, inSection bool) bool {
+func updateInputsSectionState(line MarkdownLine, inSection SectionState) SectionState {
 	if isInputsSectionHeader(line) {
 		return true
 	}
-	if inSection && isNonInputsSectionHeader(line) {
+	if bool(inSection) && isNonInputsSectionHeader(line) {
 		return false
 	}
 	return inSection
@@ -228,34 +240,36 @@ func updateInputsSectionState(line string, inSection bool) bool {
 
 // isInputsSectionHeader returns true if the line is an Inputs or Configuration
 // section header (## or ### level containing "configuration" or "inputs").
-func isInputsSectionHeader(line string) bool {
-	if !strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "### ") {
+func isInputsSectionHeader(line MarkdownLine) bool {
+	s := string(line)
+	if !strings.HasPrefix(s, "## ") && !strings.HasPrefix(s, "### ") {
 		return false
 	}
-	lower := strings.ToLower(line)
+	lower := strings.ToLower(s)
 	return strings.Contains(lower, "configuration") ||
 		strings.Contains(lower, "inputs")
 }
 
 // isNonInputsSectionHeader returns true if the line is a ## level section
 // header that doesn't contain "configuration".
-func isNonInputsSectionHeader(line string) bool {
-	if !strings.HasPrefix(line, "## ") {
+func isNonInputsSectionHeader(line MarkdownLine) bool {
+	s := string(line)
+	if !strings.HasPrefix(s, "## ") {
 		return false
 	}
-	return !strings.Contains(strings.ToLower(line), "configuration")
+	return !strings.Contains(strings.ToLower(s), "configuration")
 }
 
 // shouldParseInputRow returns true if the line should be parsed as a table row
 // (starts with "|" and we're in an inputs section).
-func shouldParseInputRow(line string, inSection bool) bool {
-	return inSection && strings.HasPrefix(line, "|")
+func shouldParseInputRow(line MarkdownLine, inSection SectionState) bool {
+	return bool(inSection) && strings.HasPrefix(string(line), "|")
 }
 
 // parseValidTableName extracts the first column from a table row and validates
-// it. Returns empty string for invalid entries (empty, "Name", or separator
-// rows starting with "-").
-func parseValidTableName(line string) string {
+// it. Returns empty TableCellName for invalid entries (empty, "Name", or
+// separator rows starting with "-").
+func parseValidTableName(line MarkdownLine) TableCellName {
 	name := extractTableFirstColumn(line)
 	if isInvalidTableName(name) {
 		return ""
@@ -265,32 +279,32 @@ func parseValidTableName(line string) string {
 
 // isInvalidTableName returns true if the name should be excluded from results.
 // This includes empty names, table headers, and separator rows.
-func isInvalidTableName(name string) bool {
+func isInvalidTableName(name TableCellName) bool {
 	return isEmptyName(name) || isTableHeaderName(name) || isSeparatorRow(name)
 }
 
 // isEmptyName returns true if the name is an empty string.
-func isEmptyName(name string) bool {
+func isEmptyName(name TableCellName) bool {
 	return name == ""
 }
 
 // isTableHeaderName returns true if the name equals "Name", indicating it is
 // the table header row rather than actual content.
-func isTableHeaderName(name string) bool {
+func isTableHeaderName(name TableCellName) bool {
 	return name == "Name"
 }
 
 // isSeparatorRow returns true if the name starts with "-", indicating it is
 // a markdown table separator row.
-func isSeparatorRow(name string) bool {
-	return strings.HasPrefix(name, "-")
+func isSeparatorRow(name TableCellName) bool {
+	return strings.HasPrefix(string(name), "-")
 }
 
 // extractTableFirstColumn extracts the first column value from a markdown
 // table row.
-func extractTableFirstColumn(line string) string {
+func extractTableFirstColumn(line MarkdownLine) TableCellName {
 	// Split by | and get the first non-empty cell
-	parts := strings.Split(line, "|")
+	parts := strings.Split(string(line), "|")
 	if len(parts) < 2 {
 		return ""
 	}
@@ -306,5 +320,5 @@ func extractTableFirstColumn(line string) string {
 		return ""
 	}
 
-	return cell
+	return TableCellName(cell)
 }
