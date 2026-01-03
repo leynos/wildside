@@ -209,34 +209,31 @@ trait PayloadHashable {
 
 impl PayloadHashable for UpsertNoteRequest {
     fn compute_payload_hash(&self) -> PayloadHash {
-        let payload = json!({
+        canonicalize_and_hash(&json!({
             "routeId": self.route_id,
             "noteId": self.note_id,
             "poiId": self.poi_id,
             "body": self.body,
             "expectedRevision": self.expected_revision,
-        });
-        canonicalize_and_hash(&payload)
+        }))
     }
 }
 
 impl PayloadHashable for UpdateProgressRequest {
     fn compute_payload_hash(&self) -> PayloadHash {
-        let payload = json!({
+        canonicalize_and_hash(&json!({
             "routeId": self.route_id,
             "visitedStopIds": self.visited_stop_ids,
             "expectedRevision": self.expected_revision,
-        });
-        canonicalize_and_hash(&payload)
+        }))
     }
 }
 
 impl PayloadHashable for DeleteNoteRequest {
     fn compute_payload_hash(&self) -> PayloadHash {
-        let payload = json!({
+        canonicalize_and_hash(&json!({
             "noteId": self.note_id,
-        });
-        canonicalize_and_hash(&payload)
+        }))
     }
 }
 
