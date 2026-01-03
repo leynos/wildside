@@ -3,6 +3,9 @@
 //! These tests validate note and progress persistence with revision checking
 //! using `pg-embedded-setup-unpriv`.
 
+use std::future::Future;
+use std::pin::Pin;
+
 use backend::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositoryError};
 use backend::domain::{RouteNote, RouteNoteContent, RouteProgress, UserId};
 use backend::outbound::persistence::{DbPool, DieselRouteAnnotationRepository, PoolConfig};
@@ -94,6 +97,39 @@ fn repo_context() -> Option<TestContext> {
     }
 }
 
+async fn assert_revision_mismatch_rejected<T, InitFn, UpdateFn, SaveFn>(
+    repository: &DieselRouteAnnotationRepository,
+    create_initial: InitFn,
+    create_updated: UpdateFn,
+    save: SaveFn,
+) -> Result<(), RouteAnnotationRepositoryError>
+where
+    InitFn: FnOnce() -> T,
+    UpdateFn: FnOnce() -> T,
+    SaveFn: for<'a> Fn(
+        &'a DieselRouteAnnotationRepository,
+        T,
+        Option<u32>,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<(), RouteAnnotationRepositoryError>> + Send + 'a>,
+    >,
+{
+    let initial = create_initial();
+    save(repository, initial, None).await?;
+
+    let updated = create_updated();
+    let error = save(repository, updated, Some(2))
+        .await
+        .expect_err("revision mismatch");
+
+    assert!(matches!(
+        error,
+        RouteAnnotationRepositoryError::RevisionMismatch { expected: 2, .. }
+    ));
+
+    Ok(())
+}
+
 #[rstest]
 fn route_notes_round_trip(repo_context: Option<TestContext>) {
     let Some(context) = repo_context else {
@@ -147,32 +183,35 @@ fn route_notes_reject_revision_mismatch(repo_context: Option<TestContext>) {
 
     let repository = context.repository.clone();
     let note_id = Uuid::new_v4();
-    let note = RouteNote::new(
-        note_id,
-        context.route_id,
-        context.user_id.clone(),
-        RouteNoteContent::new("First note"),
-    );
+    let route_id = context.route_id;
+    let user_id = context.user_id.clone();
 
     context
         .runtime
-        .block_on(async { repository.save_note(&note, None).await })
-        .expect("save note");
-
-    let updated = RouteNote::builder(note_id, context.route_id, context.user_id.clone())
-        .body("Updated note")
-        .revision(2)
-        .build();
-
-    let error = context
-        .runtime
-        .block_on(async { repository.save_note(&updated, Some(2)).await })
-        .expect_err("revision mismatch");
-
-    assert!(matches!(
-        error,
-        RouteAnnotationRepositoryError::RevisionMismatch { expected: 2, .. }
-    ));
+        .block_on(async {
+            assert_revision_mismatch_rejected(
+                &repository,
+                || {
+                    RouteNote::new(
+                        note_id,
+                        route_id,
+                        user_id.clone(),
+                        RouteNoteContent::new("First note"),
+                    )
+                },
+                || {
+                    RouteNote::builder(note_id, route_id, user_id.clone())
+                        .body("Updated note")
+                        .revision(2)
+                        .build()
+                },
+                |repo, note, expected| {
+                    Box::pin(async move { repo.save_note(&note, expected).await })
+                },
+            )
+            .await
+        })
+        .expect("revision mismatch test");
 }
 
 #[rstest]
@@ -246,28 +285,31 @@ fn route_progress_rejects_revision_mismatch(repo_context: Option<TestContext>) {
     };
 
     let repository = context.repository.clone();
-    let progress = RouteProgress::builder(context.route_id, context.user_id.clone())
-        .visited_stop_ids(vec![Uuid::new_v4()])
-        .revision(1)
-        .build();
+    let route_id = context.route_id;
+    let user_id = context.user_id.clone();
 
     context
         .runtime
-        .block_on(async { repository.save_progress(&progress, None).await })
-        .expect("save progress");
-
-    let updated = RouteProgress::builder(context.route_id, context.user_id.clone())
-        .visited_stop_ids(vec![Uuid::new_v4()])
-        .revision(2)
-        .build();
-
-    let error = context
-        .runtime
-        .block_on(async { repository.save_progress(&updated, Some(2)).await })
-        .expect_err("revision mismatch");
-
-    assert!(matches!(
-        error,
-        RouteAnnotationRepositoryError::RevisionMismatch { expected: 2, .. }
-    ));
+        .block_on(async {
+            assert_revision_mismatch_rejected(
+                &repository,
+                || {
+                    RouteProgress::builder(route_id, user_id.clone())
+                        .visited_stop_ids(vec![Uuid::new_v4()])
+                        .revision(1)
+                        .build()
+                },
+                || {
+                    RouteProgress::builder(route_id, user_id.clone())
+                        .visited_stop_ids(vec![Uuid::new_v4()])
+                        .revision(2)
+                        .build()
+                },
+                |repo, progress, expected| {
+                    Box::pin(async move { repo.save_progress(&progress, expected).await })
+                },
+            )
+            .await
+        })
+        .expect("revision mismatch test");
 }
