@@ -11,6 +11,8 @@
 #[path = "adapter_guardrails/doubles.rs"]
 mod doubles;
 // Shared harness has extra fields used by other integration suites.
+#[path = "support/bdd_common.rs"]
+mod bdd_common;
 #[expect(
     dead_code,
     reason = "Shared harness has extra fields used by other integration suites."
@@ -29,7 +31,6 @@ use doubles::{
     RouteAnnotationsQueryResponse, UpdateProgressCommandResponse, UpsertNoteCommandResponse,
 };
 use harness::WorldFixture;
-use pwa_http::{JsonRequest, login_and_store_cookie, perform_json_request};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
@@ -49,13 +50,12 @@ fn world() -> WorldFixture {
 
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
-    let _ = world;
+    bdd_common::setup_server(world);
 }
 
 #[given("the client has an authenticated session")]
 fn the_client_has_an_authenticated_session(world: &WorldFixture) {
-    let shared_world = world.world();
-    login_and_store_cookie(&shared_world);
+    bdd_common::setup_authenticated_session(world);
 }
 
 #[given("the annotations query returns a note and progress")]
@@ -121,34 +121,22 @@ fn the_progress_update_is_configured_to_conflict(world: &WorldFixture) {
 
 #[when("the client requests annotations for the route")]
 fn the_client_requests_annotations_for_the_route(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
-            method: Method::GET,
-            path: &format!("/api/v1/routes/{}/annotations", ROUTE_ID),
-            payload: None,
-            idempotency_key: None,
-        },
-    );
+    bdd_common::perform_get_request(world, &format!("/api/v1/routes/{}/annotations", ROUTE_ID));
 }
 
 #[when("the client upserts a note with an idempotency key")]
 fn the_client_upserts_a_note_with_an_idempotency_key(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
             method: Method::POST,
             path: &format!("/api/v1/routes/{}/notes", ROUTE_ID),
-            payload: Some(serde_json::json!({
+            payload: serde_json::json!({
                 "noteId": NOTE_ID,
                 "poiId": POI_ID,
                 "body": "New note",
                 "expectedRevision": null
-            })),
+            }),
             idempotency_key: Some(IDEMPOTENCY_KEY),
         },
     );
@@ -156,17 +144,15 @@ fn the_client_upserts_a_note_with_an_idempotency_key(world: &WorldFixture) {
 
 #[when("the client updates progress with a valid payload")]
 fn the_client_updates_progress_with_a_valid_payload(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
             method: Method::PUT,
             path: &format!("/api/v1/routes/{}/progress", ROUTE_ID),
-            payload: Some(serde_json::json!({
+            payload: serde_json::json!({
                 "visitedStopIds": [STOP_ID],
                 "expectedRevision": 1
-            })),
+            }),
             idempotency_key: Some(IDEMPOTENCY_KEY),
         },
     );
@@ -174,9 +160,7 @@ fn the_client_updates_progress_with_a_valid_payload(world: &WorldFixture) {
 
 #[then("the response is ok")]
 fn the_response_is_ok(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.last_status, Some(200));
+    bdd_common::assert_response_ok(world);
 }
 
 #[then("the annotations response includes the note and progress")]
@@ -218,12 +202,18 @@ fn the_note_response_includes_the_note_id(world: &WorldFixture) {
 
 #[then("the note command captures the idempotency key")]
 fn the_note_command_captures_the_idempotency_key(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    let calls = ctx.route_annotations.upsert_calls();
-    let request = calls.first().expect("note upsert call");
-    let idempotency_key = request.idempotency_key.as_ref().expect("idempotency key");
-    assert_eq!(idempotency_key.to_string(), IDEMPOTENCY_KEY);
+    bdd_common::assert_idempotency_key_captured(
+        world,
+        |ctx| {
+            let calls = ctx.route_annotations.upsert_calls();
+            let request = calls.first().expect("note upsert call");
+            request
+                .idempotency_key
+                .as_ref()
+                .map(|key: &backend::domain::IdempotencyKey| key.to_string())
+        },
+        IDEMPOTENCY_KEY,
+    );
 }
 
 #[then("the response is a conflict error")]

@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::recording_double_macro::recording_double;
 use async_trait::async_trait;
 use backend::domain::ports::{LoginService, UserInterestsCommand, UserProfileQuery, UsersQuery};
 use backend::domain::{Error, InterestThemeId, LoginCredentials, User, UserId, UserInterests};
@@ -10,20 +11,6 @@ use backend::domain::{Error, InterestThemeId, LoginCredentials, User, UserId, Us
 #[derive(Clone)]
 pub(crate) enum LoginResponse {
     Ok(UserId),
-    Err(Error),
-}
-
-/// Configurable success or failure outcome for RecordingUsersQuery.
-#[derive(Clone)]
-pub(crate) enum UsersResponse {
-    Ok(Vec<User>),
-    Err(Error),
-}
-
-/// Configurable success or failure outcome for RecordingUserProfileQuery.
-#[derive(Clone)]
-pub(crate) enum UserProfileResponse {
-    Ok(User),
     Err(Error),
 }
 
@@ -71,77 +58,37 @@ impl LoginService for RecordingLoginService {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct RecordingUsersQuery {
-    calls: Arc<Mutex<Vec<String>>>,
-    response: Arc<Mutex<UsersResponse>>,
-}
-
-impl RecordingUsersQuery {
-    pub(crate) fn new(response: UsersResponse) -> Self {
-        Self {
-            calls: Arc::new(Mutex::new(Vec::new())),
-            response: Arc::new(Mutex::new(response)),
-        }
+recording_double! {
+    /// Configurable success or failure outcome for RecordingUsersQuery.
+    pub(crate) enum UsersResponse {
+        Ok(Vec<User>),
+        Err(Error),
     }
 
-    pub(crate) fn calls(&self) -> Vec<String> {
-        self.calls.lock().expect("users calls lock").clone()
-    }
-
-    pub(crate) fn set_response(&self, response: UsersResponse) {
-        *self.response.lock().expect("users response lock") = response;
+    pub(crate) struct RecordingUsersQuery {
+        calls: String,
+        trait: UsersQuery,
+        method: list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error>,
+        record: authenticated_user.to_string(),
+        calls_lock: "users calls lock",
+        response_lock: "users response lock",
     }
 }
 
-#[async_trait]
-impl UsersQuery for RecordingUsersQuery {
-    async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
-        self.calls
-            .lock()
-            .expect("users calls lock")
-            .push(authenticated_user.to_string());
-        match self.response.lock().expect("users response lock").clone() {
-            UsersResponse::Ok(users) => Ok(users),
-            UsersResponse::Err(error) => Err(error),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct RecordingUserProfileQuery {
-    calls: Arc<Mutex<Vec<String>>>,
-    response: Arc<Mutex<UserProfileResponse>>,
-}
-
-impl RecordingUserProfileQuery {
-    pub(crate) fn new(response: UserProfileResponse) -> Self {
-        Self {
-            calls: Arc::new(Mutex::new(Vec::new())),
-            response: Arc::new(Mutex::new(response)),
-        }
+recording_double! {
+    /// Configurable success or failure outcome for RecordingUserProfileQuery.
+    pub(crate) enum UserProfileResponse {
+        Ok(User),
+        Err(Error),
     }
 
-    pub(crate) fn calls(&self) -> Vec<String> {
-        self.calls.lock().expect("profile calls lock").clone()
-    }
-
-    pub(crate) fn set_response(&self, response: UserProfileResponse) {
-        *self.response.lock().expect("profile response lock") = response;
-    }
-}
-
-#[async_trait]
-impl UserProfileQuery for RecordingUserProfileQuery {
-    async fn fetch_profile(&self, user_id: &UserId) -> Result<User, Error> {
-        self.calls
-            .lock()
-            .expect("profile calls lock")
-            .push(user_id.to_string());
-        match self.response.lock().expect("profile response lock").clone() {
-            UserProfileResponse::Ok(user) => Ok(user),
-            UserProfileResponse::Err(error) => Err(error),
-        }
+    pub(crate) struct RecordingUserProfileQuery {
+        calls: String,
+        trait: UserProfileQuery,
+        method: fetch_profile(&self, user_id: &UserId) -> Result<User, Error>,
+        record: user_id.to_string(),
+        calls_lock: "profile calls lock",
+        response_lock: "profile response lock",
     }
 }
 

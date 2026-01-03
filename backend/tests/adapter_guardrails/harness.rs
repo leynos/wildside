@@ -170,15 +170,27 @@ async fn spawn_adapter_server(
     Ok((format!("http://{addr}"), handle))
 }
 
-#[fixture]
-pub(crate) fn world() -> WorldFixture {
+fn create_runtime_and_local() -> (Runtime, LocalSet) {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("tokio runtime");
     let local = LocalSet::new();
 
-    let user_id = UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id");
+    (runtime, local)
+}
+
+fn create_fixture_user_id() -> UserId {
+    UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id")
+}
+
+fn create_user_doubles(
+    user_id: &UserId,
+) -> (
+    RecordingLoginService,
+    RecordingUsersQuery,
+    RecordingUserProfileQuery,
+) {
     let login = RecordingLoginService::new(LoginResponse::Ok(user_id.clone()));
     let users = RecordingUsersQuery::new(UsersResponse::Ok(vec![User::new(
         UserId::new("22222222-2222-2222-2222-222222222222").expect("fixture user id"),
@@ -188,14 +200,26 @@ pub(crate) fn world() -> WorldFixture {
         user_id.clone(),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
     )));
-    let interests =
-        RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
-            user_id.clone(),
-            vec![
-                InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-                    .expect("fixture interest theme id"),
-            ],
-        )));
+
+    (login, users, profile)
+}
+
+fn create_interests_double(user_id: &UserId) -> RecordingUserInterestsCommand {
+    RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
+        user_id.clone(),
+        vec![
+            InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                .expect("fixture interest theme id"),
+        ],
+    )))
+}
+
+fn create_preferences_doubles(
+    user_id: &UserId,
+) -> (
+    RecordingUserPreferencesCommand,
+    RecordingUserPreferencesQuery,
+) {
     let preferences = RecordingUserPreferencesCommand::new(UserPreferencesCommandResponse::Ok(
         UpdatePreferencesResponse {
             preferences: UserPreferences::builder(user_id.clone())
@@ -215,6 +239,16 @@ pub(crate) fn world() -> WorldFixture {
             .revision(1)
             .build(),
     ));
+
+    (preferences, preferences_query)
+}
+
+fn create_route_annotations_doubles(
+    user_id: &UserId,
+) -> (
+    RecordingRouteAnnotationsCommand,
+    RecordingRouteAnnotationsQuery,
+) {
     let route_id = Uuid::new_v4();
     let note_id = Uuid::new_v4();
     let note = RouteNote::builder(note_id, route_id, user_id.clone())
@@ -245,20 +279,59 @@ pub(crate) fn world() -> WorldFixture {
             replayed: false,
         }),
     );
-    let onboarding = QueueUserOnboarding::new(Vec::new());
 
+    (route_annotations, route_annotations_query)
+}
+
+struct HttpWsStateInputs<'a> {
+    login: &'a RecordingLoginService,
+    users: &'a RecordingUsersQuery,
+    profile: &'a RecordingUserProfileQuery,
+    interests: &'a RecordingUserInterestsCommand,
+    preferences: &'a RecordingUserPreferencesCommand,
+    preferences_query: &'a RecordingUserPreferencesQuery,
+    route_annotations: &'a RecordingRouteAnnotationsCommand,
+    route_annotations_query: &'a RecordingRouteAnnotationsQuery,
+    onboarding: &'a QueueUserOnboarding,
+}
+
+fn create_http_and_ws_state(inputs: HttpWsStateInputs<'_>) -> (HttpState, WsState) {
     let http_state = HttpState::new(HttpStatePorts {
-        login: Arc::new(login.clone()),
-        users: Arc::new(users.clone()),
-        profile: Arc::new(profile.clone()),
-        interests: Arc::new(interests.clone()),
-        preferences: Arc::new(preferences.clone()),
-        preferences_query: Arc::new(preferences_query.clone()),
-        route_annotations: Arc::new(route_annotations.clone()),
-        route_annotations_query: Arc::new(route_annotations_query.clone()),
+        login: Arc::new(inputs.login.clone()),
+        users: Arc::new(inputs.users.clone()),
+        profile: Arc::new(inputs.profile.clone()),
+        interests: Arc::new(inputs.interests.clone()),
+        preferences: Arc::new(inputs.preferences.clone()),
+        preferences_query: Arc::new(inputs.preferences_query.clone()),
+        route_annotations: Arc::new(inputs.route_annotations.clone()),
+        route_annotations_query: Arc::new(inputs.route_annotations_query.clone()),
         route_submission: Arc::new(FixtureRouteSubmissionService),
     });
-    let ws_state = crate::ws_support::ws_state(onboarding.clone());
+    let ws_state = crate::ws_support::ws_state(inputs.onboarding.clone());
+
+    (http_state, ws_state)
+}
+
+#[fixture]
+pub(crate) fn world() -> WorldFixture {
+    let (runtime, local) = create_runtime_and_local();
+    let user_id = create_fixture_user_id();
+    let (login, users, profile) = create_user_doubles(&user_id);
+    let interests = create_interests_double(&user_id);
+    let (preferences, preferences_query) = create_preferences_doubles(&user_id);
+    let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
+    let onboarding = QueueUserOnboarding::new(Vec::new());
+    let (http_state, ws_state) = create_http_and_ws_state(HttpWsStateInputs {
+        login: &login,
+        users: &users,
+        profile: &profile,
+        interests: &interests,
+        preferences: &preferences,
+        preferences_query: &preferences_query,
+        route_annotations: &route_annotations,
+        route_annotations_query: &route_annotations_query,
+        onboarding: &onboarding,
+    });
 
     let (base_url, server) = local
         .block_on(&runtime, async {
