@@ -41,6 +41,7 @@ override.tf.json
 .terraformrc
 terraform.rc
 .tflint.d/
+.tflint/
 
 # Misc
 .DS_Store
