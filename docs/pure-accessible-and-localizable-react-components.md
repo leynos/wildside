@@ -797,7 +797,7 @@ pointed towards the interior regardless of writing mode. MapLibre also loads
 the published RTL text plugin via `setRTLTextPlugin` during lazy import, so
 Arabic and Hebrew labels render with proper glyph shaping.
 
-#### The ,`useTranslation`, Hook and ,`<Trans>`, Component
+#### The `useTranslation` Hook and `<Trans>` Component
 
 The `useTranslation` hook still returns the familiar `t` helper; the difference
 is that it now resolves Fluent messages while honouring namespaces.[^41][^50]
@@ -817,7 +817,7 @@ and plural selectors just need a `count` (or similar) argument:
 not use braces for JSX, developers should continue to reach for `<Trans>` when
 a sentence needs a React component (for example, a link) embedded inside it;
 the component injects the React nodes while the Fluent string keeps the prose,
-yielding truly localisable markup without unsafe HTML.[^45]
+yielding truly localizable markup without unsafe HTML.[^45]
 
 The following table compares leading React i18n libraries, justifying the
 selection of `react-i18next` for its comprehensive feature set and robust
