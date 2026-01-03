@@ -308,6 +308,9 @@ Module boundaries are enforced by a repo-local lint that runs during
   semantics. Diesel adapters implement the pattern with conditional UPDATE
   queries (`WHERE revision = expected`). Combined with idempotency keys, this
   provides safe retries for offline-first PWA scenarios.
+- **2025-12-30:** `GET /api/v1/users/me/preferences` persists default
+  preferences when none exist so responses always include a revisioned payload
+  for offline caching. The endpoint is therefore a side-effecting read.
 
 ### Web API and WebSocket Layer (Actix Web)
 
@@ -435,6 +438,13 @@ available for backward compatibility, while
 `GET/PUT /api/v1/users/me/preferences` exposes the full preference payload
 (interests, safety toggles, and unit system) and should be preferred for new
 clients.
+
+`GET /api/v1/users/me/preferences` always returns a fully populated
+preferences payload. When the user has never saved preferences, the service
+creates and persists default preferences (revision 1) before responding so
+clients can cache a stable baseline. Updates via
+`PUT /api/v1/users/me/preferences` require `expectedRevision` once a record
+exists; omitting it yields a conflict to prevent silent overwrites.
 
 `POST /api/v1/routes` validates the request, hands it to the driving domain
 port (`RouteService`), and allows the service to coordinate cache lookup,

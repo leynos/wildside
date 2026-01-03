@@ -8,7 +8,8 @@
       "tables": false,
       "headings": false
     },
-    "MD029": { "style": "ordered" }
+    "MD029": { "style": "ordered" },
+    "MD060": false
   },
   "ignores": [
     "**/.venv/**",

@@ -59,8 +59,13 @@ impl Modify for SecurityAddon {
         crate::inbound::http::users::login,
         crate::inbound::http::users::current_user,
         crate::inbound::http::users::update_interests,
+        crate::inbound::http::preferences::get_preferences,
+        crate::inbound::http::preferences::update_preferences,
         crate::inbound::http::health::ready,
         crate::inbound::http::health::live,
+        crate::inbound::http::annotations::get_annotations,
+        crate::inbound::http::annotations::upsert_note,
+        crate::inbound::http::annotations::update_progress,
     ),
     components(schemas(
         UserSchema,
@@ -71,6 +76,7 @@ impl Modify for SecurityAddon {
     )),
     tags(
         (name = "users", description = "Operations related to users"),
+        (name = "routes", description = "Operations related to routes"),
         (name = "health", description = "Endpoints for health checks")
     )
 )]

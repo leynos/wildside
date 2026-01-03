@@ -27,7 +27,8 @@ mod pg_embed;
 mod support;
 
 use pg_embed::test_cluster;
-use support::{drop_users_table, handle_cluster_setup_failure, migrate_schema, reset_database};
+use support::embedded_postgres::drop_users_table;
+use support::{handle_cluster_setup_failure, migrate_schema, reset_database};
 
 const TEST_DB: &str = "diesel_user_repo_test";
 

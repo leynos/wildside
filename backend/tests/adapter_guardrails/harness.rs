@@ -22,13 +22,30 @@ use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 
 use crate::doubles::{
-    LoginResponse, QueueUserOnboarding, RecordingLoginService, RecordingUserInterestsCommand,
-    RecordingUserProfileQuery, RecordingUsersQuery, UserInterestsResponse, UserProfileResponse,
+    DeleteNoteCommandResponse, LoginResponse, QueueUserOnboarding, RecordingLoginService,
+    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
+    RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
+    RecordingUserProfileQuery, RecordingUsersQuery, RouteAnnotationsQueryResponse,
+    UpdateProgressCommandResponse, UpsertNoteCommandResponse, UserInterestsResponse,
+    UserPreferencesCommandResponse, UserPreferencesQueryResponse, UserProfileResponse,
     UsersResponse,
 };
 use backend::Trace;
-use backend::domain::ports::FixtureRouteSubmissionService;
-use backend::domain::{DisplayName, InterestThemeId, User, UserId, UserInterests};
+use backend::domain::ports::{
+    DeleteNoteResponse, FixtureRouteSubmissionService, UpdatePreferencesResponse,
+    UpdateProgressResponse, UpsertNoteResponse,
+};
+use backend::domain::{
+    DisplayName, InterestThemeId, RouteAnnotations, RouteNote, RouteProgress, UnitSystem, User,
+    UserId, UserInterests, UserPreferences,
+};
+use backend::inbound::http::annotations::{
+    get_annotations as get_annotations_handler, update_progress as update_progress_handler,
+    upsert_note as upsert_note_handler,
+};
+use backend::inbound::http::preferences::{
+    get_preferences as get_preferences_handler, update_preferences as update_preferences_handler,
+};
 use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{
     current_user as current_user_handler, list_users as list_users_handler, login as login_handler,
@@ -36,6 +53,7 @@ use backend::inbound::http::users::{
 };
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
+use uuid::Uuid;
 
 pub(crate) struct AdapterWorld {
     pub(crate) runtime: Runtime,
@@ -46,6 +64,10 @@ pub(crate) struct AdapterWorld {
     pub(crate) users: RecordingUsersQuery,
     pub(crate) profile: RecordingUserProfileQuery,
     pub(crate) interests: RecordingUserInterestsCommand,
+    pub(crate) preferences: RecordingUserPreferencesCommand,
+    pub(crate) preferences_query: RecordingUserPreferencesQuery,
+    pub(crate) route_annotations: RecordingRouteAnnotationsCommand,
+    pub(crate) route_annotations_query: RecordingRouteAnnotationsQuery,
     pub(crate) onboarding: QueueUserOnboarding,
     pub(crate) last_status: Option<u16>,
     pub(crate) last_body: Option<Value>,
@@ -122,7 +144,12 @@ async fn spawn_adapter_server(
             .service(login_handler)
             .service(list_users_handler)
             .service(current_user_handler)
-            .service(update_interests_handler);
+            .service(update_interests_handler)
+            .service(get_preferences_handler)
+            .service(update_preferences_handler)
+            .service(get_annotations_handler)
+            .service(upsert_note_handler)
+            .service(update_progress_handler);
 
         App::new()
             .app_data(http_data.clone())
@@ -151,25 +178,73 @@ pub(crate) fn world() -> WorldFixture {
         .expect("tokio runtime");
     let local = LocalSet::new();
 
-    let login = RecordingLoginService::new(LoginResponse::Ok(
-        UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
-    ));
+    let user_id = UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id");
+    let login = RecordingLoginService::new(LoginResponse::Ok(user_id.clone()));
     let users = RecordingUsersQuery::new(UsersResponse::Ok(vec![User::new(
         UserId::new("22222222-2222-2222-2222-222222222222").expect("fixture user id"),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
     )]));
     let profile = RecordingUserProfileQuery::new(UserProfileResponse::Ok(User::new(
-        UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
+        user_id.clone(),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
     )));
     let interests =
         RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
-            UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id"),
+            user_id.clone(),
             vec![
                 InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
                     .expect("fixture interest theme id"),
             ],
         )));
+    let preferences = RecordingUserPreferencesCommand::new(UserPreferencesCommandResponse::Ok(
+        UpdatePreferencesResponse {
+            preferences: UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(vec![Uuid::new_v4()])
+                .safety_toggle_ids(vec![Uuid::new_v4()])
+                .unit_system(UnitSystem::Metric)
+                .revision(2)
+                .build(),
+            replayed: false,
+        },
+    ));
+    let preferences_query = RecordingUserPreferencesQuery::new(UserPreferencesQueryResponse::Ok(
+        UserPreferences::builder(user_id.clone())
+            .interest_theme_ids(vec![Uuid::new_v4()])
+            .safety_toggle_ids(vec![Uuid::new_v4()])
+            .unit_system(UnitSystem::Metric)
+            .revision(1)
+            .build(),
+    ));
+    let route_id = Uuid::new_v4();
+    let note_id = Uuid::new_v4();
+    let note = RouteNote::builder(note_id, route_id, user_id.clone())
+        .body("First note")
+        .revision(1)
+        .build();
+    let progress = RouteProgress::builder(route_id, user_id.clone())
+        .visited_stop_ids(vec![Uuid::new_v4()])
+        .revision(1)
+        .build();
+    let route_annotations_query =
+        RecordingRouteAnnotationsQuery::new(RouteAnnotationsQueryResponse::Ok(RouteAnnotations {
+            route_id,
+            notes: vec![note.clone()],
+            progress: Some(progress.clone()),
+        }));
+    let route_annotations = RecordingRouteAnnotationsCommand::new(
+        UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
+            note: note.clone(),
+            replayed: false,
+        }),
+        UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
+            progress: progress.clone(),
+            replayed: false,
+        }),
+        DeleteNoteCommandResponse::Ok(DeleteNoteResponse {
+            deleted: false,
+            replayed: false,
+        }),
+    );
     let onboarding = QueueUserOnboarding::new(Vec::new());
 
     let http_state = HttpState::new(HttpStatePorts {
@@ -177,6 +252,10 @@ pub(crate) fn world() -> WorldFixture {
         users: Arc::new(users.clone()),
         profile: Arc::new(profile.clone()),
         interests: Arc::new(interests.clone()),
+        preferences: Arc::new(preferences.clone()),
+        preferences_query: Arc::new(preferences_query.clone()),
+        route_annotations: Arc::new(route_annotations.clone()),
+        route_annotations_query: Arc::new(route_annotations_query.clone()),
         route_submission: Arc::new(FixtureRouteSubmissionService),
     });
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
@@ -196,6 +275,10 @@ pub(crate) fn world() -> WorldFixture {
         users,
         profile,
         interests,
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
         onboarding,
         last_status: None,
         last_body: None,
