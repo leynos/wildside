@@ -6,12 +6,14 @@
 //! concurrency.
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{Error, IdempotencyKey, UnitSystem, UserId, UserPreferences};
 
 /// Request to update user preferences.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePreferencesRequest {
     /// The user whose preferences are being updated.
     pub user_id: UserId,
@@ -32,7 +34,8 @@ pub struct UpdatePreferencesRequest {
 }
 
 /// Response from updating preferences.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePreferencesResponse {
     /// The updated preferences with new revision.
     pub preferences: UserPreferences,

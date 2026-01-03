@@ -230,8 +230,9 @@ mod tests {
     use super::*;
     use crate::domain::ErrorCode;
     use crate::domain::ports::{
-        FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-        FixtureUserProfileQuery, FixtureUsersQuery,
+        FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+        FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
+        FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
     };
     use crate::inbound::http::state::HttpStatePorts;
     use actix_web::{App, test as actix_test, web};
@@ -302,6 +303,10 @@ mod tests {
             users: Arc::new(FixtureUsersQuery),
             profile: Arc::new(FixtureUserProfileQuery),
             interests: Arc::new(FixtureUserInterestsCommand),
+            preferences: Arc::new(FixtureUserPreferencesCommand),
+            preferences_query: Arc::new(FixtureUserPreferencesQuery),
+            route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
+            route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
             route_submission: Arc::new(FixtureRouteSubmissionService),
         });
         App::new()

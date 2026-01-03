@@ -107,7 +107,9 @@ impl std::str::FromStr for UnitSystem {
 ///
 /// assert_eq!(prefs.revision, 1);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct UserPreferences {
     /// The user these preferences belong to.
     pub user_id: UserId,

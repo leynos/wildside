@@ -7,10 +7,14 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::UserId;
 
+mod query_impl;
+pub mod service;
+mod service_ops;
 #[cfg(test)]
 mod tests;
 
@@ -40,7 +44,9 @@ mod tests;
 /// assert_eq!(note.revision, 1);
 /// assert!(note.poi_id.is_none());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct RouteNote {
     /// Unique identifier (client-generated UUID).
     pub id: Uuid,
@@ -61,7 +67,9 @@ pub struct RouteNote {
 }
 
 /// Content parameters for creating a route note.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct RouteNoteContent {
     /// The note body text.
     pub body: String,
@@ -220,6 +228,17 @@ pub struct RouteProgress {
     pub revision: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+struct RouteProgressDto {
+    route_id: Uuid,
+    user_id: UserId,
+    visited_stop_ids: Vec<Uuid>,
+    updated_at: DateTime<Utc>,
+    revision: u32,
+}
+
 impl PartialEq for RouteProgress {
     fn eq(&self, other: &Self) -> bool {
         self.route_id == other.route_id
@@ -231,6 +250,57 @@ impl PartialEq for RouteProgress {
 }
 
 impl Eq for RouteProgress {}
+
+impl From<&RouteProgress> for RouteProgressDto {
+    fn from(value: &RouteProgress) -> Self {
+        Self {
+            route_id: value.route_id,
+            user_id: value.user_id.clone(),
+            visited_stop_ids: value.visited_stop_ids.clone(),
+            updated_at: value.updated_at,
+            revision: value.revision,
+        }
+    }
+}
+
+impl From<RouteProgressDto> for RouteProgress {
+    fn from(value: RouteProgressDto) -> Self {
+        RouteProgress::builder(value.route_id, value.user_id)
+            .visited_stop_ids(value.visited_stop_ids)
+            .updated_at(value.updated_at)
+            .revision(value.revision)
+            .build()
+    }
+}
+
+impl Serialize for RouteProgress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        RouteProgressDto::from(self).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for RouteProgress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        RouteProgressDto::deserialize(deserializer).map(RouteProgress::from)
+    }
+}
+
+/// Aggregated annotations for a route.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteAnnotations {
+    /// The route these annotations belong to.
+    pub route_id: Uuid,
+    /// Notes created by the user for this route.
+    pub notes: Vec<RouteNote>,
+    /// Progress state for this route.
+    pub progress: Option<RouteProgress>,
+}
 
 impl RouteProgress {
     /// Create new progress tracking with no visited stops.

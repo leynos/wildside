@@ -1,7 +1,10 @@
 //! HTTP inbound adapter exposing REST endpoints.
 
+pub mod annotations;
 pub mod error;
 pub mod health;
+pub mod idempotency;
+pub mod preferences;
 pub mod routes;
 pub mod schemas;
 pub mod session;

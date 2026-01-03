@@ -223,19 +223,19 @@ long output.
 
 4. Generate provider lock files for the module and examples.
 
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager init -input=false -no-color'
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager/examples/basic init -input=false -no-color'
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager/examples/render init -input=false -no-color'
+        timeout 300s bash -lc \
+          'tofu -chdir=infra/modules/cert_manager init -input=false -no-color'
+        timeout 300s bash -lc \
+          'tofu -chdir=infra/modules/cert_manager/examples/basic init -input=false -no-color'
+        timeout 300s bash -lc \
+          'tofu -chdir=infra/modules/cert_manager/examples/render init -input=false -no-color'
 
 5. Add Terratest suites and initialize the Go module for tests.
 
-    timeout 300s bash -lc \
-      'cd infra/modules/cert_manager/tests && go mod init wildside/infra/modules/cert_manager/tests'
-    timeout 300s bash -lc \
-      'cd infra/modules/cert_manager/tests && go mod tidy'
+        timeout 300s bash -lc \
+          'cd infra/modules/cert_manager/tests && go mod init wildside/infra/modules/cert_manager/tests'
+        timeout 300s bash -lc \
+          'cd infra/modules/cert_manager/tests && go mod tidy'
 
 6. Add OPA policies and the render-policy script.
 

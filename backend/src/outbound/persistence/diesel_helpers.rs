@@ -29,22 +29,32 @@ fn is_foreign_key_message(message: &str) -> bool {
 
 /// Map foreign key violation to appropriate domain error.
 ///
-/// Identifies route FK violations by checking that the message both indicates a
-/// foreign key constraint and references the routes table. Unrecognized FK
-/// violations are logged for monitoring.
-fn map_foreign_key_violation(message: &str) -> RouteAnnotationRepositoryError {
+/// Identifies route FK violations by inspecting the constraint name (when
+/// available) and the error message for route-id-related constraints.
+/// Unrecognised FK violations are logged for monitoring.
+fn map_foreign_key_violation(
+    message: &str,
+    constraint_name: Option<&str>,
+) -> RouteAnnotationRepositoryError {
     let lower = message.to_lowercase();
     let is_fk_message = is_foreign_key_message(message);
-    let references_routes = lower.contains("routes");
+    let constraint_lower = constraint_name.map(str::to_lowercase);
+    let references_route_fk = constraint_lower
+        .as_deref()
+        .map(|name| name.contains("route_id_fkey") || name.contains("routes"))
+        .unwrap_or(false)
+        || lower.contains("route_id_fkey")
+        || (is_fk_message && lower.contains("routes"));
 
-    if is_fk_message && references_routes {
+    if references_route_fk {
         RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
     } else {
-        // Log unrecognized FK violations for monitoring; may indicate new FK
+        // Log unrecognised FK violations for monitoring; may indicate new FK
         // constraints that need specific handling.
         warn!(
             message,
-            "unrecognized foreign key violation - may need specific error mapping"
+            constraint_name = ?constraint_name,
+            "unrecognised foreign key violation - may need specific error mapping"
         );
         RouteAnnotationRepositoryError::query("foreign key violation")
     }
@@ -70,7 +80,9 @@ pub fn map_diesel_error(error: diesel::result::Error) -> RouteAnnotationReposito
             RouteAnnotationRepositoryError::query("database query error")
         }
         DieselError::DatabaseError(kind, info) => match kind {
-            DatabaseErrorKind::ForeignKeyViolation => map_foreign_key_violation(info.message()),
+            DatabaseErrorKind::ForeignKeyViolation => {
+                map_foreign_key_violation(info.message(), info.constraint_name())
+            }
             DatabaseErrorKind::ClosedConnection => {
                 RouteAnnotationRepositoryError::connection("database connection error")
             }

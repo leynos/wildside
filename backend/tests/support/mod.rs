@@ -6,7 +6,7 @@
 //! common test-only utilities.
 
 mod cluster_skip;
-mod embedded_postgres;
+pub mod embedded_postgres;
 
 /// Render a `postgres` error with enough detail to be useful in CI logs.
 ///
@@ -43,4 +43,4 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
 }
 
 pub use cluster_skip::handle_cluster_setup_failure;
-pub use embedded_postgres::{drop_users_table, migrate_schema, reset_database};
+pub use embedded_postgres::{migrate_schema, reset_database};
