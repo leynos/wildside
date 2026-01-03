@@ -88,6 +88,12 @@
 - [Vault External Secrets Operator (ESO) OpenTofu module design](vault-eso-module-design.md)
   – design decisions for the ESO integration module. *Audience: infrastructure
   developers.*
+- [Valkey OpenTofu module design](valkey-module-design.md) – design decisions
+  for the Valkey (Redis-compatible) module. *Audience: infrastructure
+  developers.*
+- [OpenTofu module interoperability contract](opentofu-module-interoperability-contract.md)
+  – defines how modules thread DNS zones, issuers, and credential handles.
+  *Audience: infrastructure developers.*
 
 ## Developer guidelines and tooling
 
