@@ -102,9 +102,9 @@ module "valkey" {
 
   cluster_name = "valkey"
 
-  # ESO integration
+  # ESO integration (use vault_eso module output for store name)
   eso_enabled                   = true
-  eso_cluster_secret_store_name = "vault-kv"
+  eso_cluster_secret_store_name = "vault-backend"
   password_vault_path           = "databases/valkey/password"
 }
 ```

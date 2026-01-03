@@ -54,6 +54,12 @@ func TestREADMEDocumentsAllOutputs(t *testing.T) {
 		assert.Contains(t, documentedOutputs, output,
 			"output %q is defined in outputs.tf but not documented in README.md", output)
 	}
+
+	// Verify README does not document outputs that are not defined in outputs.tf
+	for _, output := range documentedOutputs {
+		assert.Contains(t, actualOutputs, output,
+			"output %q is documented in README.md but not defined in outputs.tf", output)
+	}
 }
 
 // TestREADMEDocumentsAllRequiredInputs verifies that all required inputs are
@@ -139,7 +145,7 @@ func extractHCLBlockNames(t *testing.T, path FilePath, blockType string) []strin
 	content, err := os.ReadFile(string(path))
 	require.NoError(t, err)
 
-	pattern := fmt.Sprintf(`(?m)^%s\s+"([^"]+)"\s*\{`, blockType)
+	pattern := fmt.Sprintf(`(?m)^\s*%s\s+"([^"]+)"\s*\{`, blockType)
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(string(content), -1)
 
