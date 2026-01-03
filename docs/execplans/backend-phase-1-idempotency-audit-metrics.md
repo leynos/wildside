@@ -38,8 +38,8 @@ Success is observable when:
 - [x] Wire Prometheus adapter in `server/mod.rs`.
 - [x] Add unit tests for helpers (age buckets, user scope).
 - [~] Create Behaviour-Driven Development (BDD) feature file for metrics
-  scenarios (deferred - unit tests provide adequate coverage).
-- [~] Implement BDD step definitions (deferred - unit tests provide adequate
+  scenarios (deferred — unit tests provide adequate coverage).
+- [~] Implement BDD step definitions (deferred — unit tests provide adequate
   coverage).
 - [x] Update architecture documentation.
 - [x] Update roadmap to mark task complete.

@@ -96,7 +96,7 @@ Success is observable when:
   Date/Author: 2025-12-23 / Claude Code.
 
 - Decision: TTL enforcement via background cleanup job triggered by application
-  startup or scheduled task, not per-query filtering. Rationale: Per-query
+  startup or scheduled task — not per-query filtering. Rationale: Per-query
   `WHERE created_at > NOW() - interval` adds complexity to every lookup. A
   periodic cleanup (hourly or on startup) removes stale records while keeping
   lookups simple. Expired records that slip through are harmless—they just get

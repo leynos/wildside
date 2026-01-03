@@ -224,7 +224,7 @@ queue, cache, and repository ports defined in section 1.
 ### 5.4. Caching strategy
 
 - [ ] 5.4.1. Finalize the Redis caching adapter, so requests share
-  canonicalized keys, jittered TTLs, and metrics for hit and miss ratios before
+  canonicalized keys, jittered TTLs, and metrics for hit-and-miss ratios before
   enabling caching in production.
 - [ ] 5.4.2. Implement cache invalidation hooks for schema or engine version
   upgrades, including namespace suffix rotation and eviction-safe rollouts.

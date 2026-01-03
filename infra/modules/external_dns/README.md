@@ -84,7 +84,7 @@ resource "local_file" "manifests" {
 | `service_monitor_enabled`          | Create ServiceMonitor for Prometheus Operator                                     | `bool`         | `false`                                             | no       |
 | `flux_namespace`                   | Namespace where Flux controllers run (render mode)                                | `string`       | `"flux-system"`                                     | no       |
 | `flux_helm_repository_name`        | Flux HelmRepository name (render mode)                                            | `string`       | `"external-dns"`                                    | no       |
-| `interval`                         | Interval between DNS synchronisation cycles                                       | `string`       | `"1m"`                                              | no       |
+| `interval`                         | Interval between DNS synchronization cycles                                       | `string`       | `"1m"`                                              | no       |
 | `registry_type`                    | Registry type for tracking DNS record ownership                                   | `string`       | `"txt"`                                             | no       |
 | `txt_prefix`                       | Prefix for TXT ownership records                                                  | `string`       | `""`                                                | no       |
 | `txt_suffix`                       | Suffix for TXT ownership records                                                  | `string`       | `""`                                                | no       |
@@ -270,4 +270,4 @@ spec:
 If rate limit errors occur:
 
 1. Increase `dns_records_per_page` to reduce API calls
-2. Increase `interval` to reduce synchronisation frequency
+2. Increase `interval` to reduce synchronization frequency

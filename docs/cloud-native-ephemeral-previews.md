@@ -58,7 +58,7 @@ before handing control back to Flux:
   `wildside-infra` GitOps repository that FluxCD watches. Every execution
   performs the following steps idempotently:
 
-  - Ensure the repository presents the expected GitOps layout, including the
+  - Generate and enforce the full GitOps tree layout, including the
     `clusters`, `modules`, and `platform` directories with
     `platform/sources`, `platform/traefik`, `platform/cert-manager`,
     `platform/external-dns`, `platform/vault`, `platform/databases`, and
@@ -428,23 +428,23 @@ the expected manifests.
 
 #### Table 1: GitOps repository structure
 
-| Repository     | Path                   | Purpose                                                                                                                                     |
-| -------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| wildside-infra | /                      | Defines the desired state of the cluster's shared platform infrastructure.                                                                  |
-|                | `clusters/<cluster>/`  | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`).                                                  |
-|                | modules/               | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`.                                   |
-|                | platform/sources/      | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
-|                | platform/traefik/      | HelmRelease and supporting manifests for the Traefik ingress controller.                                                                    |
-|                | platform/cert-manager/ | HelmRelease and issuers for cert-manager-driven TLS automation.                                                                             |
-|                | platform/external-dns/ | HelmRelease and configuration for ExternalDNS.                                                                                              |
-|                | platform/vault/        | HelmReleases plus External Secrets Operator resources for secrets replication from Vault.                                                   |
-|                | platform/databases/    | CloudNativePG operator, clusters, and supporting manifests.                                                                                 |
-|                | platform/redis/        | Redis-compatible (Valkey) operator, clusters, and supporting manifests.                                                                     |
-| wildside-apps  | /                      | Defines the desired state of the Wildside application across all environments.                                                              |
-|                | base/                  | Canonical, environment-agnostic HelmRelease manifest for the Wildside application.                                                          |
-|                | overlays/production/   | Kustomize overlay with production-specific patches (hostnames, scaling, resources).                                                         |
-|                | overlays/staging/      | Kustomize overlay with staging configuration.                                                                                               |
-|                | overlays/ephemeral/    | Directory of dynamically generated overlays for each pull request (e.g., `pr-123/`).                                                        |
+| Repository     | Path                     | Purpose                                                                                                                                     |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| wildside-infra | `/`                      | Defines the desired state of the cluster's shared platform infrastructure.                                                                  |
+|                | `clusters/<cluster>/`    | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`).                                                  |
+|                | `modules/`               | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`.                                   |
+|                | `platform/sources/`      | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
+|                | `platform/traefik/`      | HelmRelease and supporting manifests for the Traefik ingress controller.                                                                    |
+|                | `platform/cert-manager/` | HelmRelease and issuers for cert-manager-driven TLS automation.                                                                             |
+|                | `platform/external-dns/` | HelmRelease and configuration for ExternalDNS.                                                                                              |
+|                | `platform/vault/`        | HelmReleases plus External Secrets Operator resources for secrets replication from Vault.                                                   |
+|                | `platform/databases/`    | CloudNativePG operator, clusters, and supporting manifests.                                                                                 |
+|                | `platform/redis/`        | Redis-compatible (Valkey) operator, clusters, and supporting manifests.                                                                     |
+| wildside-apps  | `/`                      | Defines the desired state of the Wildside application across all environments.                                                              |
+|                | `base/`                  | Canonical, environment-agnostic HelmRelease manifest for the Wildside application.                                                          |
+|                | `overlays/production/`   | Kustomize overlay with production-specific patches (hostnames, scaling, resources).                                                         |
+|                | `overlays/staging/`      | Kustomize overlay with staging configuration.                                                                                               |
+|                | `overlays/ephemeral/`    | Directory of dynamically generated overlays for each pull request (e.g., `pr-123/`).                                                        |
 
 This structure provides a clear separation of concerns and a logical hierarchy
 for defining the cluster's state while keeping the repositories ready for the
@@ -474,7 +474,7 @@ The helper runs the following idempotent steps on every execution:
   `platform/vault/`, `platform/databases/` for CloudNativePG, and
   `platform/redis/` for Redis via Valkey).
 - Write each manifest using atomic writes, normalize line endings, and ensure a
-  trailing newline so reruns produce identical content.
+  trailing newline, so reruns produce identical content.
 - Store the list of generated paths (for example
   `platform/.rendered-manifests.json`) and delete any previously generated file
   that no longer appears in the latest render output.

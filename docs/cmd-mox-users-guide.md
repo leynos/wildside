@@ -198,7 +198,7 @@ is treated as unexpected—register it explicitly:
 cmd_mox.register_command("name")
 ```
 
-CmdMox will create the shim so the command is routed through the IPC server
+CmdMox will create the shim, so the command is routed through the IPC server
 even without a stub, mock, or spy.
 
 ## Fluent API reference

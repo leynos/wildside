@@ -29,7 +29,7 @@ goals include:
   response to prevent expensive `COUNT(*)` queries on large tables. Clients can
   detect the end of data by the absence of a `next` link.
 
-These goals summarise the expectations captured in issue #52
+These goals summarize the expectations captured in issue #52
 requirements[^issue-52-requirements].
 
 This design focuses initially on the `GET /api/users` endpoint (replacing the
@@ -225,7 +225,7 @@ or enforce those limits in the handler logic.
 
 **Ordering:** The keyset pagination relies on a **total ordering** of records.
 For `/api/users`, we use `ORDER BY created_at, id` (both ascending) as the
-stable sort. This ensures no two records share the exact same position: if two
+stable sort. This ensures no two records share the same position: if two
 users have the same `created_at`, the tiebreaker `id` (e.g., a UUID or
 surrogate primary key) provides a deterministic order. The ordering must remain
 **consistent** for all pages of a given endpoint. We will always apply this
@@ -509,7 +509,7 @@ Let’s clarify the logic:
   in a backward query, that would indicate a further `prev` (older) page
   exists. We should handle that similarly by setting `prev_cursor_str` (even in
   backward mode) using the first item of the list as boundary. (The snippet
-  above hints at this but we should add it explicitly.)
+  above hints at this, but we should add it explicitly.)
 
 To summarize:
 

@@ -305,7 +305,7 @@ re-run validation.
 
 - **Decision**: Follow `vault_eso/README.md` as the primary pattern for new
   READMEs rather than `cert_manager/README.md`. **Rationale**: `vault_eso`
-  demonstrates the `sync_policy_contract` pattern which is the key
+  demonstrates the `sync_policy_contract` pattern, which is the key
   interoperability mechanism for data services. **Date/Author**: 2025-12-29
 
 - **Decision**: Create documentation accuracy tests in Go using the existing

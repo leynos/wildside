@@ -8,6 +8,9 @@
   layout and request flow. *Audience: new contributors.*
 - [Wildside backend: functional design specification](wildside-backend-design.md)
   – outlines backend components and tasks. *Audience: backend developers.*
+- [Wildside backend architecture](wildside-backend-architecture.md) – hexagonal
+  modular monolith overview and domain boundaries. *Audience: backend
+  developers.*
 - [Backend MVP architecture and observability](backend-design.md) – details
   monolithic backend and observability plan. *Audience: backend developers.*
 - [Values class diagram](values-class-diagram.mmd) – Mermaid diagram of Helm

@@ -715,7 +715,7 @@ per environment so blast radius stays contained.
 
 - The action's `scripts/bootstrap_doks.py` executes `tofu init`, `tofu plan`,
   and `tofu apply` with `-refresh=true` and never issues destroy operations. It
-  uses `-target` only when reconciling newly added modules so re-runs simply
+  uses `-target` only when reconciling newly added modules, so re-runs simply
   converge the cluster to the declared state.
 - Generated credentials (Flux deploy key, kubeconfig, admin tokens) are only
   minted when Vault lacks the corresponding keys. The script first attempts a
@@ -726,7 +726,7 @@ per environment so blast radius stays contained.
   operator-added metadata untouched.
 - Flux bootstrap is invoked with `--components-upgrade` and
   `--reconcile-strategy=merge`, which makes it safe to run repeatedly. The
-  command is guarded by `kubectl apply --server-side --dry-run=client` checks
+  command is guarded by `kubectl apply --server-side --dry-run=client` checks,
   so configuration is validated before touching the cluster.
 - The final `git push` to `wildside-infra` happens only when `git status` is
   dirty, avoiding empty commits and ensuring the run is a no-op if nothing has

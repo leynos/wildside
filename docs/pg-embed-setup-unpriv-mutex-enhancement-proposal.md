@@ -44,7 +44,7 @@ tests construct clusters at the same time, each test can:
 - restore variables while another test still needs them.
 
 The resulting failures are typically intermittent and scheduler dependent. They
-are hard to reproduce, and they often manifest as test flakiness.
+are difficult to reproduce and often manifest as test flakiness.
 
 ### Why this is not a user error
 

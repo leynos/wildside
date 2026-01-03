@@ -74,7 +74,7 @@ This work must also:
 
 - Observation: GitHub composite action inputs do not support a `secret` key,
   but unit tests expected it. Evidence: `action-validator` rejected
-  `.github/actions/bootstrap-vault- appliance/action.yml` until `secret: true`
+  `.github/actions/bootstrap-vault-appliance/action.yml` until `secret: true`
   was removed and the test suite updated.
 
 - Observation: Terratest’s `CopyTerraformFolderToTemp` did not remove its

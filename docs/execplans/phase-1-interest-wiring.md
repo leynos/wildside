@@ -61,7 +61,7 @@ Observable success:
 
 - Decision: Introduce explicit driving ports for the authenticated user
   profile and interest selection rather than letting handlers touch persistence
-  or shared state. Rationale: Keeps inbound adapters side effect free and
+  or shared state. Rationale: Keeps inbound adapters side-effect-free and
   preserves the hexagonal boundary by routing stateful behaviour through domain
   ports. Date/Author: 2025-12-19 / Codex CLI.
 
@@ -122,7 +122,7 @@ Terminology (plain language):
 
 1. Confirm how `Trace` middleware and `SessionContext` currently behave by
    locating the existing handler wiring in `backend/src/server/mod.rs` and test
-   harnesses. Note where Trace is (and is not) applied so tests can assert
+   harnesses. Note where Trace is (and is not) applied, so tests can assert
    trace IDs consistently.
 
 2. Define domain primitives and ports for these endpoints:

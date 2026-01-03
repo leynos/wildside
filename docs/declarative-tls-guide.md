@@ -25,15 +25,13 @@ and untrusted by clients until a valid TLS certificate is in place.
 This report details a comprehensive, production-grade architecture for
 achieving "TLS-as-Code." By integrating cert-manager, the de-facto standard for
 certificate automation in Kubernetes, into the existing GitOps ecosystem, we
-can complete the application exposure pipeline.[^2] The architectural vision is
-to enable a seamless, end-to-end workflow where a single
-
-`git push` of a standard Kubernetes Ingress manifest triggers a chain of
-automated events: FluxCD applies the manifest, ExternalDNS creates the
-necessary public DNS record, and cert-manager provisions a valid, trusted TLS
-certificate from Let's Encrypt. The result is a fully secure, publicly
-accessible application endpoint, brought online in minutes with zero manual
-intervention.
+can complete the application exposure pipeline.[^2] The architectural vision
+is to enable a seamless, end-to-end workflow where a single `git push` of a
+standard Kubernetes Ingress manifest triggers a chain of automated events:
+FluxCD applies the manifest, ExternalDNS creates the necessary public DNS
+record, and cert-manager provisions a valid, trusted TLS certificate from
+Let's Encrypt. The result is a fully secure, publicly accessible application
+endpoint, brought online in minutes with zero manual intervention.
 
 This solution leverages a synergistic stack of components, each with a
 well-defined role, to create a resilient and secure system. This report will

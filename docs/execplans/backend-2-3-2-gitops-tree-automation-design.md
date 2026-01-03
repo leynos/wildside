@@ -78,8 +78,8 @@ The roadmap item in `docs/ephemeral-previews-roadmap.md` requires the
 `traefik`, `cert-manager`, `external-dns`, `vault`, and shared data services
 (CloudNativePG and Redis). The design document at
 `docs/cloud-native-ephemeral-previews.md` already mentions the target layout
-and the `wildside-infra-k8s` action but does not yet describe an end-to-end,
-idempotent automation for generating the tree.
+and the `wildside-infra-k8s` action but does not yet describe an idempotent
+end-to-end automation for generating the tree.
 
 The OpenTofu interoperability contract in
 `docs/opentofu-module-interoperability-contract.md` defines a
@@ -162,7 +162,7 @@ references to the old paths.
   data service directories matching the module outputs (CloudNativePG and
   Redis-compatible).
 - `rg -n "platform/(cnpg|valkey)" docs/cloud-native-ephemeral-previews.md`
-  returns no references to superseded paths, if they were replaced.
+  returns no references to superseded paths that were replaced.
 - `make fmt`, `make markdownlint`, `make nixie`, and `make check-fmt` all pass.
 
 ## Idempotence and Recovery

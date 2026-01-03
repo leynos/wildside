@@ -222,7 +222,7 @@ example:
 
     set -o pipefail
     PG_WORKER_PATH=/tmp/pg_worker timeout 300 make test 2>&1 \
-        | tee /tmp/wildside-test.log |
+        | tee /tmp/wildside-test.log
 
 Always check the exit status of each command and inspect the log if a command
 fails.
