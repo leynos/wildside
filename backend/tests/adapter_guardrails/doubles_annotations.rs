@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::recording_double_macro::recording_double;
 use async_trait::async_trait;
 use backend::domain::ports::{
     DeleteNoteRequest, DeleteNoteResponse, RouteAnnotationsCommand, RouteAnnotationsQuery,
@@ -152,61 +153,20 @@ impl RouteAnnotationsCommand for RecordingRouteAnnotationsCommand {
     }
 }
 
-/// Configurable success or failure outcome for RecordingRouteAnnotationsQuery.
-#[derive(Clone)]
-pub(crate) enum RouteAnnotationsQueryResponse {
-    Ok(RouteAnnotations),
-    Err(Error),
-}
-
-#[derive(Clone)]
-pub(crate) struct RecordingRouteAnnotationsQuery {
-    calls: Arc<Mutex<Vec<(Uuid, String)>>>,
-    response: Arc<Mutex<RouteAnnotationsQueryResponse>>,
-}
-
-impl RecordingRouteAnnotationsQuery {
-    pub(crate) fn new(response: RouteAnnotationsQueryResponse) -> Self {
-        Self {
-            calls: Arc::new(Mutex::new(Vec::new())),
-            response: Arc::new(Mutex::new(response)),
-        }
+recording_double! {
+    /// Configurable success or failure outcome for RecordingRouteAnnotationsQuery.
+    pub(crate) enum RouteAnnotationsQueryResponse {
+        Ok(RouteAnnotations),
+        Err(Error),
     }
 
-    pub(crate) fn calls(&self) -> Vec<(Uuid, String)> {
-        self.calls
-            .lock()
-            .expect("annotations query calls lock")
-            .clone()
-    }
-
-    pub(crate) fn set_response(&self, response: RouteAnnotationsQueryResponse) {
-        *self
-            .response
-            .lock()
-            .expect("annotations query response lock") = response;
-    }
-}
-
-#[async_trait]
-impl RouteAnnotationsQuery for RecordingRouteAnnotationsQuery {
-    async fn fetch_annotations(
-        &self,
-        route_id: Uuid,
-        user_id: &UserId,
-    ) -> Result<RouteAnnotations, Error> {
-        self.calls
-            .lock()
-            .expect("annotations query calls lock")
-            .push((route_id, user_id.to_string()));
-        match self
-            .response
-            .lock()
-            .expect("annotations query response lock")
-            .clone()
-        {
-            RouteAnnotationsQueryResponse::Ok(response) => Ok(response),
-            RouteAnnotationsQueryResponse::Err(error) => Err(error),
-        }
+    pub(crate) struct RecordingRouteAnnotationsQuery {
+        calls: (Uuid, String),
+        trait: RouteAnnotationsQuery,
+        method: fetch_annotations(&self, route_id: Uuid, user_id: &UserId)
+            -> Result<RouteAnnotations, Error>,
+        record: (route_id, user_id.to_string()),
+        calls_lock: "annotations query calls lock",
+        response_lock: "annotations query response lock",
     }
 }

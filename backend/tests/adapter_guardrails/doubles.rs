@@ -4,6 +4,8 @@ mod doubles_annotations;
 mod doubles_preferences;
 mod doubles_users;
 mod doubles_ws;
+#[path = "recording_double_macro.rs"]
+mod recording_double_macro;
 
 pub(crate) use doubles_annotations::{
     DeleteNoteCommandResponse, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,

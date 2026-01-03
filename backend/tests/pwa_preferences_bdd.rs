@@ -11,6 +11,8 @@
 #[path = "adapter_guardrails/doubles.rs"]
 mod doubles;
 // Shared harness has extra fields used by other integration suites.
+#[path = "support/bdd_common.rs"]
+mod bdd_common;
 #[expect(
     dead_code,
     reason = "Shared harness has extra fields used by other integration suites."
@@ -27,7 +29,6 @@ use backend::domain::ports::UpdatePreferencesResponse;
 use backend::domain::{UnitSystem, UserId, UserPreferences};
 use doubles::{UserPreferencesCommandResponse, UserPreferencesQueryResponse};
 use harness::WorldFixture;
-use pwa_http::{JsonRequest, login_and_store_cookie, perform_json_request};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
@@ -45,13 +46,12 @@ fn world() -> WorldFixture {
 
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
-    let _ = world;
+    bdd_common::setup_server(world);
 }
 
 #[given("the client has an authenticated session")]
 fn the_client_has_an_authenticated_session(world: &WorldFixture) {
-    let shared_world = world.world();
-    login_and_store_cookie(&shared_world);
+    bdd_common::setup_authenticated_session(world);
 }
 
 #[given("the preferences query returns default preferences")]
@@ -95,33 +95,21 @@ fn the_preferences_command_returns_updated_preferences(world: &WorldFixture) {
 
 #[when("the client requests preferences")]
 fn the_client_requests_preferences(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
-            method: Method::GET,
-            path: "/api/v1/users/me/preferences",
-            payload: None,
-            idempotency_key: None,
-        },
-    );
+    bdd_common::perform_get_request(world, "/api/v1/users/me/preferences");
 }
 
 #[when("the client updates preferences with an invalid unit system")]
 fn the_client_updates_preferences_with_an_invalid_unit_system(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
             method: Method::PUT,
             path: "/api/v1/users/me/preferences",
-            payload: Some(serde_json::json!({
+            payload: serde_json::json!({
                 "interestThemeIds": [INTEREST_THEME_ID],
                 "safetyToggleIds": [SAFETY_TOGGLE_ID],
                 "unitSystem": "unknown"
-            })),
+            }),
             idempotency_key: None,
         },
     );
@@ -129,19 +117,17 @@ fn the_client_updates_preferences_with_an_invalid_unit_system(world: &WorldFixtu
 
 #[when("the client updates preferences with an idempotency key")]
 fn the_client_updates_preferences_with_an_idempotency_key(world: &WorldFixture) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
-        JsonRequest {
-            include_cookie: true,
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
             method: Method::PUT,
             path: "/api/v1/users/me/preferences",
-            payload: Some(serde_json::json!({
+            payload: serde_json::json!({
                 "interestThemeIds": [INTEREST_THEME_ID],
                 "safetyToggleIds": [SAFETY_TOGGLE_ID],
                 "unitSystem": "metric",
                 "expectedRevision": 1
-            })),
+            }),
             idempotency_key: Some(IDEMPOTENCY_KEY),
         },
     );
@@ -149,9 +135,7 @@ fn the_client_updates_preferences_with_an_idempotency_key(world: &WorldFixture) 
 
 #[then("the response is ok")]
 fn the_response_is_ok(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.last_status, Some(200));
+    bdd_common::assert_response_ok(world);
 }
 
 #[then("the preferences response includes the expected unit system")]
@@ -182,12 +166,18 @@ fn the_preferences_query_was_called_with_the_authenticated_user_id(world: &World
 
 #[then("the preferences command captures the idempotency key")]
 fn the_preferences_command_captures_the_idempotency_key(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    let calls = ctx.preferences.calls();
-    let request = calls.first().expect("preferences call");
-    let idempotency_key = request.idempotency_key.as_ref().expect("idempotency key");
-    assert_eq!(idempotency_key.to_string(), IDEMPOTENCY_KEY);
+    bdd_common::assert_idempotency_key_captured(
+        world,
+        |ctx| {
+            let calls = ctx.preferences.calls();
+            let request = calls.first().expect("preferences call");
+            request
+                .idempotency_key
+                .as_ref()
+                .map(|key: &backend::domain::IdempotencyKey| key.to_string())
+        },
+        IDEMPOTENCY_KEY,
+    );
 }
 
 #[then("the response is a bad request with unit system details")]
