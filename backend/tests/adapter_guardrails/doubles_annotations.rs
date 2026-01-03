@@ -97,59 +97,74 @@ impl RecordingRouteAnnotationsCommand {
             .lock()
             .expect("notes delete response lock") = response;
     }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keeps call-site clarity while matching the required helper signature."
+    )]
+    fn record_call_and_get_response<Req, RespEnum, Res, F>(
+        calls: &Arc<Mutex<Vec<Req>>>,
+        response: &Arc<Mutex<RespEnum>>,
+        request: Req,
+        calls_lock_msg: &str,
+        response_lock_msg: &str,
+        match_response: F,
+    ) -> Result<Res, Error>
+    where
+        RespEnum: Clone,
+        F: FnOnce(RespEnum) -> Result<Res, Error>,
+    {
+        calls.lock().expect(calls_lock_msg).push(request);
+        let response = response.lock().expect(response_lock_msg).clone();
+        match_response(response)
+    }
 }
 
 #[async_trait]
 impl RouteAnnotationsCommand for RecordingRouteAnnotationsCommand {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        self.upsert_calls
-            .lock()
-            .expect("notes upsert calls lock")
-            .push(request);
-        match self
-            .upsert_response
-            .lock()
-            .expect("notes upsert response lock")
-            .clone()
-        {
-            UpsertNoteCommandResponse::Ok(response) => Ok(response),
-            UpsertNoteCommandResponse::Err(error) => Err(error),
-        }
+        Self::record_call_and_get_response(
+            &self.upsert_calls,
+            &self.upsert_response,
+            request,
+            "notes upsert calls lock",
+            "notes upsert response lock",
+            |response| match response {
+                UpsertNoteCommandResponse::Ok(response) => Ok(response),
+                UpsertNoteCommandResponse::Err(error) => Err(error),
+            },
+        )
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        self.delete_calls
-            .lock()
-            .expect("notes delete calls lock")
-            .push(request);
-        match self
-            .delete_response
-            .lock()
-            .expect("notes delete response lock")
-            .clone()
-        {
-            DeleteNoteCommandResponse::Ok(response) => Ok(response),
-            DeleteNoteCommandResponse::Err(error) => Err(error),
-        }
+        Self::record_call_and_get_response(
+            &self.delete_calls,
+            &self.delete_response,
+            request,
+            "notes delete calls lock",
+            "notes delete response lock",
+            |response| match response {
+                DeleteNoteCommandResponse::Ok(response) => Ok(response),
+                DeleteNoteCommandResponse::Err(error) => Err(error),
+            },
+        )
     }
 
     async fn update_progress(
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        self.update_calls
-            .lock()
-            .expect("progress update calls lock")
-            .push(request);
-        match self
-            .update_response
-            .lock()
-            .expect("progress update response lock")
-            .clone()
-        {
-            UpdateProgressCommandResponse::Ok(response) => Ok(response),
-            UpdateProgressCommandResponse::Err(error) => Err(error),
-        }
+        Self::record_call_and_get_response(
+            &self.update_calls,
+            &self.update_response,
+            request,
+            "progress update calls lock",
+            "progress update response lock",
+            |response| match response {
+                UpdateProgressCommandResponse::Ok(response) => Ok(response),
+                UpdateProgressCommandResponse::Err(error) => Err(error),
+            },
+        )
     }
 }
 
