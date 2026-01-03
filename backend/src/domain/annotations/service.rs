@@ -105,33 +105,6 @@ where
         response
     }
 
-    fn note_payload_hash(request: &UpsertNoteRequest) -> PayloadHash {
-        let payload = json!({
-            "routeId": request.route_id,
-            "noteId": request.note_id,
-            "poiId": request.poi_id,
-            "body": request.body,
-            "expectedRevision": request.expected_revision,
-        });
-        canonicalize_and_hash(&payload)
-    }
-
-    fn progress_payload_hash(request: &UpdateProgressRequest) -> PayloadHash {
-        let payload = json!({
-            "routeId": request.route_id,
-            "visitedStopIds": request.visited_stop_ids,
-            "expectedRevision": request.expected_revision,
-        });
-        canonicalize_and_hash(&payload)
-    }
-
-    fn delete_payload_hash(request: &DeleteNoteRequest) -> PayloadHash {
-        let payload = json!({
-            "noteId": request.note_id,
-        });
-        canonicalize_and_hash(&payload)
-    }
-
     async fn handle_duplicate_key_race<T>(&self, context: &IdempotencyContext) -> Result<T, Error>
     where
         T: DeserializeOwned + HasReplayFlag,
@@ -197,6 +170,74 @@ where
             )),
         }
     }
+
+    async fn execute_idempotent_mutation<Req, Res, F, Fut>(
+        &self,
+        params: IdempotentMutationParams<'_, Req>,
+        operation: F,
+    ) -> Result<Res, Error>
+    where
+        Req: PayloadHashable,
+        Res: DeserializeOwned + Serialize + HasReplayFlag,
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Res, Error>>,
+    {
+        let Some(idempotency_key) = params.idempotency_key else {
+            return operation().await;
+        };
+
+        let context = IdempotencyContext::new(
+            idempotency_key,
+            params.user_id.clone(),
+            params.mutation_type,
+            params.request.compute_payload_hash(),
+        );
+        self.handle_idempotent(context, operation).await
+    }
+}
+
+struct IdempotentMutationParams<'a, Req> {
+    request: &'a Req,
+    user_id: &'a UserId,
+    mutation_type: MutationType,
+    idempotency_key: Option<IdempotencyKey>,
+}
+
+trait PayloadHashable {
+    fn compute_payload_hash(&self) -> PayloadHash;
+}
+
+impl PayloadHashable for UpsertNoteRequest {
+    fn compute_payload_hash(&self) -> PayloadHash {
+        let payload = json!({
+            "routeId": self.route_id,
+            "noteId": self.note_id,
+            "poiId": self.poi_id,
+            "body": self.body,
+            "expectedRevision": self.expected_revision,
+        });
+        canonicalize_and_hash(&payload)
+    }
+}
+
+impl PayloadHashable for UpdateProgressRequest {
+    fn compute_payload_hash(&self) -> PayloadHash {
+        let payload = json!({
+            "routeId": self.route_id,
+            "visitedStopIds": self.visited_stop_ids,
+            "expectedRevision": self.expected_revision,
+        });
+        canonicalize_and_hash(&payload)
+    }
+}
+
+impl PayloadHashable for DeleteNoteRequest {
+    fn compute_payload_hash(&self) -> PayloadHash {
+        let payload = json!({
+            "noteId": self.note_id,
+        });
+        canonicalize_and_hash(&payload)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -250,54 +291,40 @@ where
     I: IdempotencyRepository,
 {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        let Some(idempotency_key) = request.idempotency_key.clone() else {
-            let note = self.perform_upsert_note(&request).await?;
-            return Ok(UpsertNoteResponse {
-                note,
-                replayed: false,
-            });
-        };
-
-        let payload_hash = Self::note_payload_hash(&request);
-        let context = IdempotencyContext::new(
-            idempotency_key,
-            request.user_id.clone(),
-            MutationType::Notes,
-            payload_hash,
-        );
-        self.handle_idempotent(context, || async {
-            let note = self.perform_upsert_note(&request).await?;
-            Ok(UpsertNoteResponse {
-                note,
-                replayed: false,
-            })
-        })
+        self.execute_idempotent_mutation(
+            IdempotentMutationParams {
+                request: &request,
+                user_id: &request.user_id,
+                mutation_type: MutationType::Notes,
+                idempotency_key: request.idempotency_key.clone(),
+            },
+            || async {
+                let note = self.perform_upsert_note(&request).await?;
+                Ok(UpsertNoteResponse {
+                    note,
+                    replayed: false,
+                })
+            },
+        )
         .await
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        let Some(idempotency_key) = request.idempotency_key.clone() else {
-            let deleted = self.perform_delete_note(&request).await?;
-            return Ok(DeleteNoteResponse {
-                deleted,
-                replayed: false,
-            });
-        };
-
-        let payload_hash = Self::delete_payload_hash(&request);
-        let context = IdempotencyContext::new(
-            idempotency_key,
-            request.user_id.clone(),
-            MutationType::Notes,
-            payload_hash,
-        );
-        self.handle_idempotent(context, || async {
-            let deleted = self.perform_delete_note(&request).await?;
-            Ok(DeleteNoteResponse {
-                deleted,
-                replayed: false,
-            })
-        })
+        self.execute_idempotent_mutation(
+            IdempotentMutationParams {
+                request: &request,
+                user_id: &request.user_id,
+                mutation_type: MutationType::Notes,
+                idempotency_key: request.idempotency_key.clone(),
+            },
+            || async {
+                let deleted = self.perform_delete_note(&request).await?;
+                Ok(DeleteNoteResponse {
+                    deleted,
+                    replayed: false,
+                })
+            },
+        )
         .await
     }
 
@@ -305,28 +332,21 @@ where
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        let Some(idempotency_key) = request.idempotency_key.clone() else {
-            let progress = self.perform_update_progress(&request).await?;
-            return Ok(UpdateProgressResponse {
-                progress,
-                replayed: false,
-            });
-        };
-
-        let payload_hash = Self::progress_payload_hash(&request);
-        let context = IdempotencyContext::new(
-            idempotency_key,
-            request.user_id.clone(),
-            MutationType::Progress,
-            payload_hash,
-        );
-        self.handle_idempotent(context, || async {
-            let progress = self.perform_update_progress(&request).await?;
-            Ok(UpdateProgressResponse {
-                progress,
-                replayed: false,
-            })
-        })
+        self.execute_idempotent_mutation(
+            IdempotentMutationParams {
+                request: &request,
+                user_id: &request.user_id,
+                mutation_type: MutationType::Progress,
+                idempotency_key: request.idempotency_key.clone(),
+            },
+            || async {
+                let progress = self.perform_update_progress(&request).await?;
+                Ok(UpdateProgressResponse {
+                    progress,
+                    replayed: false,
+                })
+            },
+        )
         .await
     }
 }
