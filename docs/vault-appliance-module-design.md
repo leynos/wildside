@@ -40,12 +40,13 @@ material required to bootstrap Vault in a deterministic, GitOps-friendly way.
   intervention. The keys are emitted as sensitive outputs to encourage storage
   in a secure backend.
 - **Scripted bootstrap with state capture.** The repository ships a dedicated
-  Python helper (`scripts/bootstrap_vault_appliance.py`) that initializes Vault,
-  records the generated recovery material in a local state file, unseals the
-  appliance, enables the KV v2 secrets engine, and provisions the DOKS AppRole.
-  The helper is idempotent—re-running it verifies mounts and rotates the AppRole
-  secret identifier only when requested. Tests use `cmd-mox` to emulate `vault`,
-  `doctl`, and `ssh` so the workflow is covered without real infrastructure.
+  Python helper (`scripts/bootstrap_vault_appliance.py`) that initializes
+  Vault, records the generated recovery material in a local state file, unseals
+  the appliance, enables the KV v2 secrets engine, and provisions the DOKS
+  AppRole. The helper is idempotent—re-running it verifies mounts and rotates
+  the AppRole secret identifier only when requested. Tests use `cmd-mox` to
+  emulate `vault`, `doctl`, and `ssh` so the workflow is covered without real
+  infrastructure.
 - **Secure perimeter.** The module provisions a firewall that only accepts SSH
   from explicitly listed CIDRs and API traffic from the managed load balancer.
   Conftest policies enforce HTTPS termination, HTTP→HTTPS redirects, and forbid

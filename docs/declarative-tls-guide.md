@@ -7,13 +7,12 @@ demands a paradigm shift from imperative, manual operations to declarative,
 automated workflows. A foundational element of this shift, detailed in the
 complementary guide [Declarative DNS](../declarative-dns-guide.md), is the
 automation of DNS management using a GitOps-centric architecture. This approach
-establishes a Git
-repository as the single source of truth (SSOT), with controllers like FluxCD
-and ExternalDNS continuously reconciling the cluster's state to match the
-declarative configurations committed to Git. This model successfully decouples
-application deployment from the once-manual process of creating public DNS
-records, dramatically increasing development velocity and operational
-reliability.[^1]
+establishes a Git repository as the single source of truth (SSOT), with
+controllers like FluxCD and ExternalDNS continuously reconciling the cluster's
+state to match the declarative configurations committed to Git. This model
+successfully decouples application deployment from the once-manual process of
+creating public DNS records, dramatically increasing development velocity and
+operational reliability.[^1]
 
 However, a publicly accessible endpoint is incomplete without robust security.
 The logical and necessary next step in this automation journey is to apply the
@@ -26,8 +25,8 @@ and untrusted by clients until a valid TLS certificate is in place.
 This report details a comprehensive, production-grade architecture for
 achieving "TLS-as-Code." By integrating cert-manager, the de-facto standard for
 certificate automation in Kubernetes, into the existing GitOps ecosystem, we
-can complete the application exposure pipeline.[^2] The architectural vision is to
-enable a seamless, end-to-end workflow where a single
+can complete the application exposure pipeline.[^2] The architectural vision is
+to enable a seamless, end-to-end workflow where a single
 
 `git push` of a standard Kubernetes Ingress manifest triggers a chain of
 automated events: FluxCD applies the manifest, ExternalDNS creates the
@@ -39,8 +38,8 @@ intervention.
 This solution leverages a synergistic stack of components, each with a
 well-defined role, to create a resilient and secure system. This report will
 provide a deep dive into the provisioning of the foundational infrastructure on
-DigitalOcean Kubernetes (DOKS) using OpenTofu, the secure deployment of the
-TLS automation stack via FluxCD, the intricacies of integrating with a
+DigitalOcean Kubernetes (DOKS) using OpenTofu, the secure deployment of the TLS
+automation stack via FluxCD, the intricacies of integrating with a
 Namecheap-provided domain, and advanced strategies for overcoming
 provider-specific challenges to ensure operational excellence.
 
@@ -51,7 +50,7 @@ integrated system.
 | Component                          | Primary Role                   | Scope of Control                                                                    | Managed By                           |
 | ---------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------ |
 | Kubernetes                         | Application Orchestration      | Manages the lifecycle of containers, Pods, Services, and Ingresses.                 | Platform/Application Teams           |
-| DigitalOcean                      | Cloud & IaaS Provider          | Hosts the DOKS cluster, VPC networking, and optional NAT Gateways.                  | OpenTofu                             |
+| DigitalOcean                       | Cloud & IaaS Provider          | Hosts the DOKS cluster, VPC networking, and optional NAT Gateways.                  | OpenTofu                             |
 | Namecheap                          | Domain Registrar & DNS         | Hosts the authoritative domain and provides an API for DNS record management.       | OpenTofu (Domain), Webhook (Records) |
 | OpenTofu                           | Infrastructure as Code Tool    | Provisions and manages the foundational DOKS cluster and Namecheap domain settings. | Platform Team                        |
 | FluxCD                             | GitOps Operator                | Synchronizes the entire Kubernetes cluster state with a Git repository.             | Platform Team                        |
@@ -176,9 +175,9 @@ resource "digitalocean_kubernetes_cluster" "primary" {
 
 DigitalOcean provides a highly available control plane by default, mitigating
 the risk of a single-point-of-failure for the Kubernetes API server. This
-configuration also enables automatic patch upgrades
-(`auto_upgrade = true`) during a non-critical maintenance window, ensuring the
-cluster remains secure and up-to-date with minimal operational overhead.[^5]
+configuration also enables automatic patch upgrades (`auto_upgrade = true`)
+during a non-critical maintenance window, ensuring the cluster remains secure
+and up-to-date with minimal operational overhead.[^5]
 
 ### 1.3 Managing the Namecheap Domain and API
 
@@ -254,8 +253,8 @@ delegation itself can be managed via OpenTofu using the
 A crucial detail of this resource is that the `record` and `nameservers`
 arguments are mutually exclusive. A single `namecheap_domain_records` resource
 block cannot be used to set both custom nameservers and other record types like
-`A` or `TXT` simultaneously.[^10] This is an important consideration for the DNS
-delegation strategy discussed in Part 5, as it implies that managing the
+`A` or `TXT` simultaneously.[^10] This is an important consideration for the
+DNS delegation strategy discussed in Part 5, as it implies that managing the
 delegation will require a dedicated resource block separate from any other
 record management.
 
@@ -344,10 +343,10 @@ This setup ensures that sensitive credentials remain encrypted at rest in Git
 and are only handled in plain text within the secure confines of the cluster's
 control plane.[^11]
 
-| Key in Secret | Description                                                   | Example Value                     |
-| ------------- | ------------------------------------------------------------- | --------------------------------- |
-| `api-key`     | The API key generated from the Namecheap dashboard.           | `<REDACTED_API_KEY>`              |
-| `api-user`    | The Namecheap account username, which serves as the API user. | `mynamecheapuser`                 |
+| Key in Secret | Description                                                   | Example Value        |
+| ------------- | ------------------------------------------------------------- | -------------------- |
+| `api-key`     | The API key generated from the Namecheap dashboard.           | `<REDACTED_API_KEY>` |
+| `api-user`    | The Namecheap account username, which serves as the API user. | `mynamecheapuser`    |
 
 ### 2.2 Deploying cert-manager via HelmRelease
 
@@ -462,7 +461,8 @@ spec:
       app.kubernetes.io/instance: cert-manager
 ```
 
-Reference these manifests in the controllers' kustomization to apply them with FluxCD:
+Reference these manifests in the controllers' kustomization to apply them with
+FluxCD:
 
 ```yaml
 # infrastructure/controllers/kustomization.yaml
@@ -483,9 +483,9 @@ via the Namecheap API.[^16]
 A critical security assessment of the available community-provided webhooks is
 necessary. The options available on public repositories like ArtifactHub and
 GitHub are often several years old, are not signed by their authors, and come
-from unverified publishers.[^17] Deploying an unmaintained and untrusted container
-image directly into a production cluster, especially one that handles API
-credentials, represents a significant supply chain security risk.
+from unverified publishers.[^17] Deploying an unmaintained and untrusted
+container image directly into a production cluster, especially one that handles
+API credentials, represents a significant supply chain security risk.
 
 The most responsible and secure approach is to treat this third-party code as
 untrusted and take ownership of its lifecycle:
@@ -707,16 +707,15 @@ and begins the issuance process, creating the necessary `Certificate`,
 
 Wildcard certificates are invaluable for environments with dynamic, per-tenant
 subdomains or for simplifying the management of multiple services under a
-single domain. A single wildcard certificate for `*.example.com` can secure
-any number of subdomains like `api.example.com`,
-`dashboard.example.com`, etc.
+single domain. A single wildcard certificate for `*.example.com` can secure any
+number of subdomains like `api.example.com`, `dashboard.example.com`, etc.
 
 A critical requirement from Let's Encrypt is that wildcard certificates can
-**only** be issued using the DNS-01 challenge method.[^21] The HTTP-01 challenge,
-which involves serving a file from a web server, cannot prove control over an
-entire domain and is therefore not supported for wildcards. This makes the
-successful integration of the DNS-01 webhook solver a mandatory prerequisite
-for this use case.
+**only** be issued using the DNS-01 challenge method.[^21] The HTTP-01
+challenge, which involves serving a file from a web server, cannot prove
+control over an entire domain and is therefore not supported for wildcards.
+This makes the successful integration of the DNS-01 webhook solver a mandatory
+prerequisite for this use case.
 
 Requesting a wildcard certificate is as simple as specifying the wildcard
 domain in the `spec.tls` block of the Ingress.
@@ -846,12 +845,12 @@ issuance pipeline.[^23]
 
 <!-- markdownlint-disable MD013 -->
 
-| Symptom                                                                       | Diagnostic Command(s)                                                                                                                                                 | Likely Cause & Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Certificate` is stuck in `Issuing` state for a long time.                    | `kubectl describe certificate <cert-name>` `kubectl describe order <order-name>`                                                                                      | **Stalled ACME Order:** The `Order` is likely waiting for a `Challenge` to complete. Use the `describe order` command to find the name of the pending `Challenge` resource and investigate it further.                                                                                                                                                                                                                                                                           |
+| Symptom                                                                       | Diagnostic Command(s)                                                                                                                                                                                                        | Likely Cause & Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Certificate` is stuck in `Issuing` state for a long time.                    | `kubectl describe certificate <cert-name>` `kubectl describe order <order-name>`                                                                                                                                             | **Stalled ACME Order:** The `Order` is likely waiting for a `Challenge` to complete. Use the `describe order` command to find the name of the pending `Challenge` resource and investigate it further.                                                                                                                                                                                                                                                                           |
 | `Challenge` fails with DNS propagation error.                                 | `kubectl describe challenge <challenge-name>` `kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager-webhook-namecheap,app.kubernetes.io/instance=cert-manager` `dig TXT _acme-challenge.example.com @8.8.8.8` | **Webhook API Failure:** Check the webhook logs for authentication errors (invalid credentials) or connection errors (IP not whitelisted). **Slow DNS Propagation:** The DNS provider may be slow to propagate the TXT record. Some webhooks allow configuring a longer propagation delay. **Incorrect Nameservers:** cert-manager's self-check may be failing. Consider configuring recursive nameservers for the controller via Helm values (`--dns01-recursive-nameservers`). |
-| Webhook pod is in `CrashLoopBackOff`.                                         | `kubectl logs -n cert-manager <webhook-pod-name> --previous` `kubectl describe pod -n cert-manager <webhook-pod-name>`                                                | **Missing Secret:** The pod cannot find the Kubernetes secret containing the API credentials. Verify the secret exists in the correct namespace and its name matches the `ClusterIssuer` configuration. **RBAC Permissions:** The webhook's `ServiceAccount` may lack the necessary permissions to read secrets or interact with the Kubernetes API. Check the `ClusterRole` associated with it.                                                                                 |
-| `kubectl` commands fail with `x509: certificate signed by unknown authority`. | `kubectl get apiservice v1.webhook.cert-manager.io`                                                                                                                   | **Webhook Not Ready:** This is common immediately after installation. The cert-manager webhook needs time to generate its self-signed CA and inject it into the `APIService` resource. Wait a few minutes and retry. If it persists, the `cainjector` component may be failing.                                                                                                                                                                                                  |
+| Webhook pod is in `CrashLoopBackOff`.                                         | `kubectl logs -n cert-manager <webhook-pod-name> --previous` `kubectl describe pod -n cert-manager <webhook-pod-name>`                                                                                                       | **Missing Secret:** The pod cannot find the Kubernetes secret containing the API credentials. Verify the secret exists in the correct namespace and its name matches the `ClusterIssuer` configuration. **RBAC Permissions:** The webhook's `ServiceAccount` may lack the necessary permissions to read secrets or interact with the Kubernetes API. Check the `ClusterRole` associated with it.                                                                                 |
+| `kubectl` commands fail with `x509: certificate signed by unknown authority`. | `kubectl get apiservice v1.webhook.cert-manager.io`                                                                                                                                                                          | **Webhook Not Ready:** This is common immediately after installation. The cert-manager webhook needs time to generate its self-signed CA and inject it into the `APIService` resource. Wait a few minutes and retry. If it persists, the `cainjector` component may be failing.                                                                                                                                                                                                  |
 <!-- markdownlint-enable MD013 -->
 
 ### 5.3 Advanced Architecture: Mitigating the IP Whitelisting Constraint
@@ -881,11 +880,11 @@ strategies provide robust solutions to this problem.
 
 - **Concept:** This more nuanced strategy avoids the need for a static IP
   altogether. It leverages the fact that the DNS-01 challenge only requires
-  control over a specific TXT record: `_acme-challenge.example.com`.
-  Instead of giving the Namecheap webhook control over the entire domain,
-  authority for just this specific subdomain is delegated to a different, more
-  API-friendly DNS provider that has native support in cert-manager (e.g.,
-  DigitalOcean DNS or Cloudflare).
+  control over a specific TXT record: `_acme-challenge.example.com`. Instead of
+  giving the Namecheap webhook control over the entire domain, authority for
+  just this specific subdomain is delegated to a different, more API-friendly
+  DNS provider that has native support in cert-manager (e.g., DigitalOcean DNS
+  or Cloudflare).
 - **Implementation:**
 
   1. **Create a DNS Zone:** In the secondary provider (e.g., DigitalOcean),
@@ -996,7 +995,8 @@ for a production environment. By implementing this strategy, the organization
 can achieve a truly automated, secure, and operationally excellent application
 delivery platform.
 
-[^1]: Kubernetes Dynamic DNS With Cloudflare — Cloudflare Blog, accessed on 1 September 2025,
+[^1]: Kubernetes Dynamic DNS With Cloudflare — Cloudflare Blog, accessed on 1
+      September 2025,
 <https://blog.cloudflare.com/kubernetes-dynamic-dns-with-cloudflare/>
 
 [^2]: cert-manager/cert-manager: Automatically provision and manage TLS
@@ -1023,7 +1023,8 @@ delivery platform.
 [^8]: Namecheap API introduction, accessed on 1 September 2025,
     <https://www.namecheap.com/support/api/intro/>
 
-[^9]: Enable Dynamic DNS for your domain — Namecheap Knowledgebase, accessed on 1 September 2025,
+[^9]: Enable Dynamic DNS for your domain — Namecheap Knowledgebase, accessed on
+      1 September 2025,
     <https://www.namecheap.com/support/knowledgebase/article.aspx/29/11/enable-dynamic-dns>
 
 [^10]: namecheap_domain_records | resources | namecheap/namecheap | Providers |
@@ -1035,7 +1036,8 @@ delivery platform.
     September 2025,
     [https://fluxcd.io/flux/guides/mozilla-sops/](https://fluxcd.io/flux/guides/mozilla-sops/)
 
-[^12]: Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. — Medium,
+[^12]: Setting Up Flux CD in a Kubernetes Cluster with SOPS Encryption. —
+       Medium,
     accessed on 1 September 2025,
     [https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468](https://medium.com/@deepakraajesh/setting-up-flux-cd-in-a-kubernetes-cluster-with-sops-encryption-bd72b2d0e468)
 
@@ -1055,14 +1057,16 @@ delivery platform.
     1 September 2025,
     [https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap](https://github.com/jamesgoodhouse/cert-manager-webhook-namecheap)
 
-[^18]: Issuer Configuration — cert-manager Documentation, accessed on 1 September
+[^18]: Issuer Configuration — cert-manager Documentation, accessed on 1
+       September
     2025,
     [https://cert-manager.io/docs/configuration/](https://cert-manager.io/docs/configuration/)
 
 [^19]: DNS01 — cert-manager Documentation, accessed on 1 September 2025,
     [https://cert-manager.io/docs/configuration/acme/dns01/](https://cert-manager.io/docs/configuration/acme/dns01/)
 
-[^20]: Certificate resource — cert-manager Documentation, accessed on 1 September
+[^20]: Certificate resource — cert-manager Documentation, accessed on 1
+       September
     2025,
     [https://cert-manager.io/docs/usage/certificate/](https://cert-manager.io/docs/usage/certificate/)
 

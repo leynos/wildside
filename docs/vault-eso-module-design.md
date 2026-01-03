@@ -77,8 +77,8 @@ Vault, which would require additional configuration and network access.
 `oci://ghcr.io/external-secrets/charts` repository.
 
 **Rationale:** Uses the official OCI registry from the External Secrets project
-to ensure supply chain integrity. Version 1.1.1 is the latest stable release
-as of December 2025 with full support for Vault provider and ClusterSecretStore
+to ensure supply chain integrity. Version 1.1.1 is the latest stable release as
+of December 2025 with full support for Vault provider and ClusterSecretStore
 resources.
 
 ### D3: ClusterSecretStore vs SecretStore
@@ -102,11 +102,11 @@ secrets only.
 
 **Rationale:** KV v2 covers the majority of secret storage use cases
 (credentials, API keys, connection strings). Public Key Infrastructure (PKI)
-certificate issuance is
-handled by cert-manager with Vault PKI issuer, which is the appropriate tool
-for dynamic certificate generation. ESO's standard Vault provider only supports
-KV secret engines; PKI would require VaultDynamicSecret generators, which add
-complexity without clear benefit given cert-manager's capabilities.
+certificate issuance is handled by cert-manager with Vault PKI issuer, which is
+the appropriate tool for dynamic certificate generation. ESO's standard Vault
+provider only supports KV secret engines; PKI would require VaultDynamicSecret
+generators, which add complexity without clear benefit given cert-manager's
+capabilities.
 
 ### D5: Vault Agent Injector
 
@@ -160,32 +160,32 @@ with the AppRole authentication secret in the same namespace.
 
 ### Required Inputs
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `vault_address` | `string` | HTTPS endpoint of the external Vault appliance |
-| `vault_ca_bundle_pem` | `string` | PEM-encoded CA certificate for Vault TLS |
-| `approle_role_id` | `string` | AppRole role_id for ESO authentication |
-| `approle_secret_id` | `string` | AppRole secret_id (sensitive) |
+| Variable              | Type     | Description                                    |
+| --------------------- | -------- | ---------------------------------------------- |
+| `vault_address`       | `string` | HTTPS endpoint of the external Vault appliance |
+| `vault_ca_bundle_pem` | `string` | PEM-encoded CA certificate for Vault TLS       |
+| `approle_role_id`     | `string` | AppRole role_id for ESO authentication         |
+| `approle_secret_id`   | `string` | AppRole secret_id (sensitive)                  |
 
 ### Key Optional Inputs
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `mode` | `string` | `"render"` | `render` or `apply` |
-| `namespace` | `string` | `"external-secrets"` | ESO namespace |
-| `kv_mount_path` | `string` | `"secret"` | KV v2 mount path in Vault |
-| `chart_version` | `string` | `"1.1.1"` | ESO Helm chart version |
-| `replica_count` | `number` | `2` | ESO webhook replicas |
+| Variable        | Type     | Default              | Description               |
+| --------------- | -------- | -------------------- | ------------------------- |
+| `mode`          | `string` | `"render"`           | `render` or `apply`       |
+| `namespace`     | `string` | `"external-secrets"` | ESO namespace             |
+| `kv_mount_path` | `string` | `"secret"`           | KV v2 mount path in Vault |
+| `chart_version` | `string` | `"1.1.1"`            | ESO Helm chart version    |
+| `replica_count` | `number` | `2`                  | ESO webhook replicas      |
 
 ### Outputs
 
-| Output | Type | Description |
-|--------|------|-------------|
-| `namespace` | `string` | ESO namespace |
-| `cluster_secret_store_kv_name` | `string` | KV ClusterSecretStore name |
-| `cluster_secret_store_kv_ref` | `object` | KV store reference object |
-| `sync_policy_contract` | `object` | Contract for downstream consumers |
-| `rendered_manifests` | `map(string)` | GitOps manifests (render mode) |
+| Output                         | Type          | Description                       |
+| ------------------------------ | ------------- | --------------------------------- |
+| `namespace`                    | `string`      | ESO namespace                     |
+| `cluster_secret_store_kv_name` | `string`      | KV ClusterSecretStore name        |
+| `cluster_secret_store_kv_ref`  | `object`      | KV store reference object         |
+| `sync_policy_contract`         | `object`      | Contract for downstream consumers |
+| `rendered_manifests`           | `map(string)` | GitOps manifests (render mode)    |
 
 ## Rendered Manifests (render mode)
 

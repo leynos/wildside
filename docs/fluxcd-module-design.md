@@ -39,8 +39,8 @@ module.
   with the GitOps conventions defined for Wildside.
 - **Testing strategy.** Terratest covers validation failures, provider errors
   (missing kubeconfig), detailed exit codes, Conftest enforcement, and a gated
-  apply flow that runs only when `FLUXCD_ACCEPT_APPLY` and `KUBECONFIG` are set.
-  Tests reuse the shared `infra/testutil` helpers for consistency across
+  apply flow that runs only when `FLUXCD_ACCEPT_APPLY` and `KUBECONFIG` are
+  set. Tests reuse the shared `infra/testutil` helpers for consistency across
   modules.
 
 ## Integration with the dev cluster configuration
@@ -52,8 +52,8 @@ module.
   kubeconfig file or the cluster credentials fetched from DigitalOcean.
 - **Validations.** The root module validates that enabling Flux requires a DOKS
   cluster (or kubeconfig path) and ensures the object attributes, such as the
-  Git URL and repository path, remain policy compliant. Tests assert these guard
-  rails.
+  Git URL and repository path, remain policy compliant. Tests assert these
+  guard rails.
 - **Outputs.** The dev configuration exports the Flux namespace, Git repository
   name, and Kustomization name to simplify downstream automation.
 

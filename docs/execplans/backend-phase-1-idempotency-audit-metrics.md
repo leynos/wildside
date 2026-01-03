@@ -38,8 +38,7 @@ Success is observable when:
 - [x] Wire Prometheus adapter in `server/mod.rs`.
 - [x] Add unit tests for helpers (age buckets, user scope).
 - [~] Create Behaviour-Driven Development (BDD) feature file for metrics
-  scenarios (deferred - unit tests
-  provide adequate coverage).
+  scenarios (deferred - unit tests provide adequate coverage).
 - [~] Implement BDD step definitions (deferred - unit tests provide adequate
   coverage).
 - [x] Update architecture documentation.
@@ -54,39 +53,32 @@ Success is observable when:
 ## Decision Log
 
 - Decision: Create a separate `IdempotencyMetrics` port (not extend
-  `RouteMetrics`).
-  Rationale: Separation of concerns. `RouteMetrics` is for cache hits/misses;
-  idempotency metrics have different labels and semantic meaning. Allows
-  independent evolution.
-  Date/Author: 2025-12-26 / Claude Code.
+  `RouteMetrics`). Rationale: Separation of concerns. `RouteMetrics` is for
+  cache hits/misses; idempotency metrics have different labels and semantic
+  meaning. Allows independent evolution. Date/Author: 2025-12-26 / Claude Code.
 
 - Decision: Record metrics in the domain service (`RouteSubmissionServiceImpl`),
-  not the HTTP handler.
-  Rationale: The domain service knows the semantic outcome (hit/miss/conflict)
-  and has access to `IdempotencyRecord.created_at` for age calculation. Keeps
-  the HTTP handler thin per hexagonal architecture.
+  not the HTTP handler. Rationale: The domain service knows the semantic
+  outcome (hit/miss/conflict) and has access to `IdempotencyRecord.created_at`
+  for age calculation. Keeps the HTTP handler thin per hexagonal architecture.
   Date/Author: 2025-12-26 / Claude Code.
 
 - Decision: Use first 8 characters of SHA-256 hash of user ID for `user_scope`
-  label.
-  Rationale: Full user IDs create high-cardinality labels (problematic for
-  Prometheus). Hashed prefix provides privacy, low cardinality, and
-  traceability (same user always maps to same label).
-  Date/Author: 2025-12-26 / Claude Code.
+  label. Rationale: Full user IDs create high-cardinality labels (problematic
+  for Prometheus). Hashed prefix provides privacy, low cardinality, and
+  traceability (same user always maps to same label). Date/Author: 2025-12-26 /
+  Claude Code.
 
 - Decision: Age buckets aligned to 24-hour time-to-live (TTL) with retry-pattern
-  semantics.
-  Rationale: TTL is 24 hours; buckets should cover this range meaningfully.
-  Buckets: `0-1m` (immediate retries), `1-5m` (client backoff), `5-30m`
-  (session recovery), `30m-2h` (tab refresh), `2h-6h` (same-day return),
-  `6h-24h` (next-day retry).
-  Date/Author: 2025-12-26 / Claude Code.
+  semantics. Rationale: TTL is 24 hours; buckets should cover this range
+  meaningfully. Buckets: `0-1m` (immediate retries), `1-5m` (client backoff),
+  `5-30m` (session recovery), `30m-2h` (tab refresh), `2h-6h` (same-day
+  return), `6h-24h` (next-day retry). Date/Author: 2025-12-26 / Claude Code.
 
 - Decision: Use single counter metric with `outcome` label rather than separate
-  counters.
-  Rationale: Reduces metric proliferation. A single counter with outcome labels
-  is idiomatic for Prometheus and allows easy sum-by-outcome queries.
-  Date/Author: 2025-12-26 / Claude Code.
+  counters. Rationale: Reduces metric proliferation. A single counter with
+  outcome labels is idiomatic for Prometheus and allows easy sum-by-outcome
+  queries. Date/Author: 2025-12-26 / Claude Code.
 
 ## Outcomes & Retrospective
 
@@ -472,15 +464,15 @@ Run and verify:
 
 ## Prometheus Metric Specification
 
-| Metric Name                           | Type    | Description                              |
-| ------------------------------------- | ------- | ---------------------------------------- |
-| `wildside_idempotency_requests_total` | Counter | Total idempotency requests by outcome    |
+| Metric Name                           | Type    | Description                           |
+| ------------------------------------- | ------- | ------------------------------------- |
+| `wildside_idempotency_requests_total` | Counter | Total idempotency requests by outcome |
 
-| Label        | Values                                                               | Description                       |
-| ------------ | -------------------------------------------------------------------- | --------------------------------- |
-| `outcome`    | `miss`, `hit`, `conflict`                                            | Request outcome                   |
-| `user_scope` | 8 hex chars                                                          | Anonymized user identifier        |
-| `age_bucket` | `0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`, `>24h`, `n/a`  | Key age at reuse (n/a for misses) |
+| Label        | Values                                                              | Description                       |
+| ------------ | ------------------------------------------------------------------- | --------------------------------- |
+| `outcome`    | `miss`, `hit`, `conflict`                                           | Request outcome                   |
+| `user_scope` | 8 hex chars                                                         | Anonymized user identifier        |
+| `age_bucket` | `0-1m`, `1-5m`, `5-30m`, `30m-2h`, `2h-6h`, `6h-24h`, `>24h`, `n/a` | Key age at reuse (n/a for misses) |
 
 Example output:
 
@@ -492,22 +484,22 @@ wildside_idempotency_requests_total{outcome="conflict",user_scope="e5f6a7b8",age
 
 ## File Changes Summary
 
-| File                                                  | Action | Description                                   |
-| ----------------------------------------------------- | ------ | --------------------------------------------- |
-| `backend/src/domain/ports/idempotency_metrics.rs`     | Create | Port trait, error enum, labels, NoOp adapter  |
-| `backend/src/domain/ports/mod.rs`                     | Modify | Export new port                               |
-| `backend/src/domain/route_submission/mod.rs`          | Modify | Add metrics port, helpers, recording logic    |
-| `backend/src/domain/route_submission/tests.rs`        | Modify | Add unit tests for helpers                    |
-| `backend/src/outbound/metrics/mod.rs`                 | Create | Module for metrics adapters                   |
-| `backend/src/outbound/metrics/prometheus_idempotency.rs` | Create | Prometheus adapter (feature-gated)         |
-| `backend/src/outbound/mod.rs`                         | Modify | Export metrics module                         |
-| `backend/src/server/mod.rs`                           | Modify | Wire Prometheus adapter when feature enabled  |
-| `backend/src/inbound/http/state.rs`                   | Modify | Add metrics to HttpStatePorts                 |
-| `backend/Cargo.toml`                                  | Modify | Add `prometheus`, `hex`, `sha2` dependencies  |
-| `backend/tests/idempotency_metrics_bdd.rs`            | Create | BDD test harness                              |
-| `backend/tests/features/idempotency_metrics.feature`  | Create | BDD scenarios                                 |
-| `docs/wildside-backend-architecture.md`               | Modify | Document metrics                              |
-| `docs/backend-roadmap.md`                             | Modify | Mark task complete                            |
+| File                                                     | Action | Description                                  |
+| -------------------------------------------------------- | ------ | -------------------------------------------- |
+| `backend/src/domain/ports/idempotency_metrics.rs`        | Create | Port trait, error enum, labels, NoOp adapter |
+| `backend/src/domain/ports/mod.rs`                        | Modify | Export new port                              |
+| `backend/src/domain/route_submission/mod.rs`             | Modify | Add metrics port, helpers, recording logic   |
+| `backend/src/domain/route_submission/tests.rs`           | Modify | Add unit tests for helpers                   |
+| `backend/src/outbound/metrics/mod.rs`                    | Create | Module for metrics adapters                  |
+| `backend/src/outbound/metrics/prometheus_idempotency.rs` | Create | Prometheus adapter (feature-gated)           |
+| `backend/src/outbound/mod.rs`                            | Modify | Export metrics module                        |
+| `backend/src/server/mod.rs`                              | Modify | Wire Prometheus adapter when feature enabled |
+| `backend/src/inbound/http/state.rs`                      | Modify | Add metrics to HttpStatePorts                |
+| `backend/Cargo.toml`                                     | Modify | Add `prometheus`, `hex`, `sha2` dependencies |
+| `backend/tests/idempotency_metrics_bdd.rs`               | Create | BDD test harness                             |
+| `backend/tests/features/idempotency_metrics.feature`     | Create | BDD scenarios                                |
+| `docs/wildside-backend-architecture.md`                  | Modify | Document metrics                             |
+| `docs/backend-roadmap.md`                                | Modify | Mark task complete                           |
 
 ## Concrete Steps
 

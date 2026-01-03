@@ -25,24 +25,23 @@ cluster lifecycle.
 - **Tagging.** Cluster-level tags can be supplied via the `tags` input, and
   node pool objects accept optional `tags` for cost allocation.
 - **Minimal outputs.** Only the cluster identifier and API endpoint are
-  exported by default. An `expose_kubeconfig` input gates the kubeconfig output,
-  allowing credentials to be surfaced only when explicitly requested.
+  exported by default. An `expose_kubeconfig` input gates the kubeconfig
+  output, allowing credentials to be surfaced only when explicitly requested.
 - **Testing strategy.** Terratest validates module syntax and exercises plan
-  and apply flows. The apply step is skipped when a valid
-  `DIGITALOCEAN_TOKEN` is absent, enabling local and CI execution without cloud
-  credentials.
+  and apply flows. The apply step is skipped when a valid `DIGITALOCEAN_TOKEN`
+  is absent, enabling local and CI execution without cloud credentials.
 
 ## Root configuration
 
 - **Dev cluster defaults.** A root configuration in `infra/clusters/dev`
   instantiates the module with a two-node `s-2vcpu-2gb` pool in `nyc1`.
   Provisioning is gated by a `should_create_cluster` variable to avoid
-  accidental applies. The configuration inherits the module's pinned
-  Kubernetes version (`1.33.1-do.3`) rather than forwarding its own override,
-  preventing empty values from shadowing the module default. Tooling that
-  needs a different version sets `DOKS_KUBERNETES_VERSION` when invoking the
-  module directly. The kubeconfig output is disabled by default to avoid
-  persisting credentials.
+  accidental applies. The configuration inherits the module's pinned Kubernetes
+  version (`1.33.1-do.3`) rather than forwarding its own override, preventing
+  empty values from shadowing the module default. Tooling that needs a
+  different version sets `DOKS_KUBERNETES_VERSION` when invoking the module
+  directly. The kubeconfig output is disabled by default to avoid persisting
+  credentials.
 
 ## Future work
 

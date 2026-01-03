@@ -1,13 +1,13 @@
 # Vault appliance module
 
-Provision a hardened HashiCorp Vault appliance on DigitalOcean. The module builds
-a dedicated droplet (or HA pair), attaches encrypted block storage, wraps the
-nodes behind a managed load balancer, and generates a private certificate
-authority plus recovery key material ready for bootstrap automation.
+Provision a hardened HashiCorp Vault appliance on DigitalOcean. The module
+builds a dedicated droplet (or HA pair), attaches encrypted block storage,
+wraps the nodes behind a managed load balancer, and generates a private
+certificate authority plus recovery key material ready for bootstrap automation.
 
-Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later. OpenTofu
-uses the Terraform configuration language, so the module examples retain the
-standard `terraform` block syntax.
+Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
+OpenTofu uses the Terraform configuration language, so the module examples
+retain the standard `terraform` block syntax.
 
 ## Quick start
 

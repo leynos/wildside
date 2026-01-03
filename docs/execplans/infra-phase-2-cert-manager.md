@@ -10,10 +10,10 @@ policy to follow.
 ## Purpose / Big Picture
 
 Deliver the Phase 2.3 cert-manager module so the `wildside-infra-k8s` action
-can render Flux-ready manifests into `wildside-infra` and converge TLS
-issuance on every run. Success is visible when the new OpenTofu module can
-render a `platform/cert-manager` tree containing the cert-manager HelmRelease
-and ClusterIssuers for ACME (Automated Certificate Management Environment) and
+can render Flux-ready manifests into `wildside-infra` and converge TLS issuance
+on every run. Success is visible when the new OpenTofu module can render a
+`platform/cert-manager` tree containing the cert-manager HelmRelease and
+ClusterIssuers for ACME (Automated Certificate Management Environment) and
 Vault, and when its outputs expose issuer names, secret references, and CA
 bundle material for downstream modules.
 
@@ -34,21 +34,20 @@ bundle material for downstream modules.
 ## Surprises & Discoveries
 
 - Observation: `make test` exceeded the default 300s timeout on the first run;
-  a second run completed once the Rust build cache was warm.
-  Evidence: `/tmp/test.KwRxr1` ended during compilation; `/tmp/test.Bf2V4Z`
-  succeeded.
+  a second run completed once the Rust build cache was warm. Evidence:
+  `/tmp/test.KwRxr1` ended during compilation; `/tmp/test.Bf2V4Z` succeeded.
 - Observation: `make cert-manager-test` initially failed because OpenTofu
-  formatting had not been applied to the new module.
-  Evidence: `/tmp/cert-manager-test.yuPoxd` reported `tofu fmt -check` changes,
-  resolved after `tofu fmt -recursive infra/modules/cert_manager`.
+  formatting had not been applied to the new module. Evidence:
+  `/tmp/cert-manager-test.yuPoxd` reported `tofu fmt -check` changes, resolved
+  after `tofu fmt -recursive infra/modules/cert_manager`.
 - Observation: Plan policy tests attempted to contact a stub Kubernetes API
   when no `KUBECONFIG` was supplied, and a Rego variable shadowed `data`.
   Evidence: `/tmp/cert-manager-test.SJaLvv` showed `dial tcp 127.0.0.1:443`
   errors; `issuers.rego` failed to compile until `data` was renamed.
 - Observation: Conftest policies needed combined manifest input and staging
-  warnings should not fail render checks.
-  Evidence: `/tmp/cert-manager-test.2Ms11o` and the render policy script
-  reported missing PDBs until `--combine` was used and warnings were allowed.
+  warnings should not fail render checks. Evidence:
+  `/tmp/cert-manager-test.2Ms11o` and the render policy script reported missing
+  PDBs until `--combine` was used and warnings were allowed.
 
 ## Decision Log
 
@@ -59,23 +58,21 @@ bundle material for downstream modules.
 - Decision: Default to high-availability replica counts and render
   PodDisruptionBudgets when webhook or cainjector replicas exceed one.
   Rationale: Aligns with TLS availability guidance and supports safe
-  disruptions.
-  Date/Author: 2025-12-19 (assistant).
+  disruptions. Date/Author: 2025-12-19 (assistant).
 - Decision: Use token-based Vault authentication and require a CA bundle input,
-  with an optional Secret for downstream consumption.
-  Rationale: Keeps Vault integration explicit and consistent across modules.
-  Date/Author: 2025-12-19 (assistant).
+  with an optional Secret for downstream consumption. Rationale: Keeps Vault
+  integration explicit and consistent across modules. Date/Author: 2025-12-19
+  (assistant).
 - Decision: Keep the Namecheap webhook HelmRelease optional but enforce
-  groupName/solverName alignment when present.
-  Rationale: Supports external webhook deployments while preserving DNS-01
-  correctness.
-  Date/Author: 2025-12-19 (assistant).
+  groupName/solverName alignment when present. Rationale: Supports external
+  webhook deployments while preserving DNS-01 correctness. Date/Author:
+  2025-12-19 (assistant).
 
 ## Outcomes & Retrospective
 
-The cert-manager module, tests, policies, and design documentation are
-complete and all required validation gates have passed. Apply-mode plan/policy
-checks remain conditional on setting `CERT_MANAGER_KUBECONFIG_PATH` and the
+The cert-manager module, tests, policies, and design documentation are complete
+and all required validation gates have passed. Apply-mode plan/policy checks
+remain conditional on setting `CERT_MANAGER_KUBECONFIG_PATH` and the
 Vault/Namecheap inputs so they can target a real cluster.
 
 ## Context and Orientation
@@ -118,34 +115,33 @@ Definitions used in this plan:
 First, decide and document the cert-manager module interface. Use
 `docs/cert-manager-module-design.md` to record decisions such as the chart
 version, ACME solver type (the TLS guide recommends a Namecheap DNS-01 webhook
-solver with a private chart and aligned `groupName`),
-Vault auth mode (AppRole vs token), and how the CA bundle is stored and
-referenced. Update `docs/contents.md` to include the new design document, and
-ensure the choice aligns with the TLS architecture in
-`docs/declarative-tls-guide.md`.
+solver with a private chart and aligned `groupName`), Vault auth mode (AppRole
+vs token), and how the CA bundle is stored and referenced. Update
+`docs/contents.md` to include the new design document, and ensure the choice
+aligns with the TLS architecture in `docs/declarative-tls-guide.md`.
 
 Next, scaffold `infra/modules/cert_manager` with the same structure as the
 existing modules: `main.tf`, `variables-*.tf`, `outputs.tf`, `versions.tf`, a
 `.tflint.hcl`, `README.md`, `examples/basic`, `examples/render`, `policy`, and
 `tests`. Keep files under 400 lines by splitting logic (for example, separate
-`issuers.tf` or `manifests.tf`). Ensure at least one module file starts with
-an HCL module header comment using `//!` per repository conventions.
+`issuers.tf` or `manifests.tf`). Ensure at least one module file starts with an
+HCL module header comment using `//!` per repository conventions.
 
 Implement the module so it supports both `render` and `apply` modes. Build
 `locals` that normalize input values, map defaults, merge Helm values, and
 construct manifests for HelmRepository, Namespace, HelmRelease, ClusterIssuers,
 and an optional CA bundle Secret/ConfigMap. Include optional manifests for the
-Namecheap webhook HelmRelease and the webhook/cainjector
-PodDisruptionBudgets described in the TLS guide. Render mode must return a
-`rendered_manifests` map keyed by the GitOps paths under
-`platform/cert-manager/` and `platform/sources/`.
+Namecheap webhook HelmRelease and the webhook/cainjector PodDisruptionBudgets
+described in the TLS guide. Render mode must return a `rendered_manifests` map
+keyed by the GitOps paths under `platform/cert-manager/` and
+`platform/sources/`.
 
 Follow the TLS guide for cert-manager release defaults: use a Jetstack
-`HelmRepository` with `type: oci` and
-`url: oci://quay.io/jetstack/charts`, set the cert-manager chart version to
-`v1.19.2`, enable CRD installation in `spec.install`, and default to
-high-availability replica counts for the controller, webhook, and cainjector.
-Render PodDisruptionBudgets when any of those replica counts exceed one.
+`HelmRepository` with `type: oci` and `url: oci://quay.io/jetstack/charts`, set
+the cert-manager chart version to `v1.19.2`, enable CRD installation in
+`spec.install`, and default to high-availability replica counts for the
+controller, webhook, and cainjector. Render PodDisruptionBudgets when any of
+those replica counts exceed one.
 
 Define inputs with explicit `description`, `type`, and validation blocks. The
 required inputs should include ACME email, ACME issuer names, and Vault
@@ -154,9 +150,8 @@ material). Add inputs for the DNS-01 webhook solver configuration (group name,
 solver name, and secret refs for the Namecheap API key and user), plus toggles
 for webhook deployment and PodDisruptionBudgets. Optional inputs should allow
 toggling staging/prod issuers, Vault issuer enablement, chart metadata, and
-Helm values overrides. Follow
-`docs/opentofu-coding-standards.md` (nullable handling, validations, snake
-case, and `tofu fmt`).
+Helm values overrides. Follow `docs/opentofu-coding-standards.md` (nullable
+handling, validations, snake case, and `tofu fmt`).
 
 Expose outputs that downstream modules can consume: issuer names and refs for
 ACME staging and production, issuer name/ref for Vault, secret references for
@@ -172,12 +167,11 @@ module defaults in the example variables so Terratest can override them.
 Create OPA/Conftest policies for both rendered manifests and plan output.
 Manifest policies should enforce pinned chart versions, correct sourceRef,
 namespace consistency, PDB presence when replica counts exceed one, and
-required issuer settings. Plan policies should
-inspect `kubernetes_manifest` resources for ACME and Vault issuers, asserting
-HTTPS endpoints, required email, solver configuration, Vault auth presence,
-and warnings for staging or missing CA bundle data. Add plan policy checks
-that webhook `groupName` and solver configuration are consistent when the
-webhook is enabled.
+required issuer settings. Plan policies should inspect `kubernetes_manifest`
+resources for ACME and Vault issuers, asserting HTTPS endpoints, required
+email, solver configuration, Vault auth presence, and warnings for staging or
+missing CA bundle data. Add plan policy checks that webhook `groupName` and
+solver configuration are consistent when the webhook is enabled.
 
 Implement Terratest coverage under `infra/modules/cert_manager/tests/` using
 `infra/testutil`. Add happy-path tests for render output and output wiring,
@@ -186,8 +180,8 @@ cases for validation errors, and include policy tests that validate both
 accepted and rejected payloads. Include behavioural checks that run
 `tofu plan -detailed-exitcode` to guard against destructive or drift changes.
 Add an apply-mode Terratest scenario that runs `tofu apply` in a temporary
-workspace when the required environment variables are present, ensuring a
-full create/destroy cycle without polluting the working tree.
+workspace when the required environment variables are present, ensuring a full
+create/destroy cycle without polluting the working tree.
 
 Update the Makefile to add `cert-manager-test` and `cert-manager-policy`
 targets, include them in `INFRA_TEST_TARGETS`, and add `tflint` coverage under
@@ -196,15 +190,15 @@ on the existing render-policy scripts.
 
 Finally, update `docs/ephemeral-previews-roadmap.md` to mark the cert-manager
 module entry as done, and run all required format, lint, typecheck, and test
-commands with log capture. Document any design decisions in the design
-document and update `docs/contents.md` accordingly.
+commands with log capture. Document any design decisions in the design document
+and update `docs/contents.md` accordingly.
 
 ## Concrete Steps
 
 All commands should be run from
-`/mnt/home/leynos/Projects/wildside.worktrees/infra-phase-2-cert-manager`.
-Use a 300-second timeout and capture logs with `tee` for any command with
-long output.
+`/mnt/home/leynos/Projects/wildside.worktrees/infra-phase-2-cert-manager`. Use
+a 300-second timeout and capture logs with `tee` for any command with long
+output.
 
 1. Create the module and policy scaffolding.
 
@@ -223,19 +217,28 @@ long output.
 
 4. Generate provider lock files for the module and examples.
 
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager init -input=false -no-color'
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager/examples/basic init -input=false -no-color'
-    timeout 300s bash -lc \
-      'tofu -chdir=infra/modules/cert_manager/examples/render init -input=false -no-color'
+    timeout 300s bash -lc '
+      tofu -chdir=infra/modules/cert_manager init -input=false -no-color
+    '
+    timeout 300s bash -lc '
+      tofu -chdir=infra/modules/cert_manager/examples/basic \
+        init -input=false -no-color
+    '
+    timeout 300s bash -lc '
+      tofu -chdir=infra/modules/cert_manager/examples/render \
+        init -input=false -no-color
+    '
 
 5. Add Terratest suites and initialize the Go module for tests.
 
-    timeout 300s bash -lc \
-      'cd infra/modules/cert_manager/tests && go mod init wildside/infra/modules/cert_manager/tests'
-    timeout 300s bash -lc \
-      'cd infra/modules/cert_manager/tests && go mod tidy'
+    timeout 300s bash -lc '
+      cd infra/modules/cert_manager/tests
+      go mod init wildside/infra/modules/cert_manager/tests
+    '
+    timeout 300s bash -lc '
+      cd infra/modules/cert_manager/tests
+      go mod tidy
+    '
 
 6. Add OPA policies and the render-policy script.
 

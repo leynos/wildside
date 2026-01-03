@@ -30,9 +30,10 @@ modules defined in the wildside-infra repository.
 - [x] **Define outputs**: The module outputs the cluster ID and API endpoint.
   The kubeconfig can be optionally exposed for local use.
 
-- [x] **Instantiate the module**: [`infra/clusters/dev/main.tf`](../infra/clusters/dev/main.tf)
-  uses the `doks` module to provision a "dev" cluster. Provisioning is gated
-  by setting `TF_VAR_should_create_cluster=true`.
+- [x] **Instantiate the module**:
+      [`infra/clusters/dev/main.tf`](../infra/clusters/dev/main.tf)
+  uses the `doks` module to provision a "dev" cluster. Provisioning is gated by
+  setting `TF_VAR_should_create_cluster=true`.
 
 - [ ] **Initialize and apply**: Run `tofu init` and `tofu apply` to create the
   cluster.
@@ -191,7 +192,8 @@ HashiCorp Vault instance.
     - [ ] Generate a `kustomization.yaml` referencing the base release and the
       patch file.
 
-    - [ ] Update the top-level `overlays/ephemeral/kustomization.yaml` to include
+    - [ ] Update the top-level `overlays/ephemeral/kustomization.yaml` to
+          include
       the new ephemeral environment.
 
     - [ ] Commit and push the new overlay to a branch in the `wildside-apps`

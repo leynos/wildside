@@ -70,48 +70,43 @@ Success is observable when:
 ## Decision Log
 
 - Decision: Rename `IdempotencyStore` to `IdempotencyRepository` for consistency
-  with other repository ports.
-  Rationale: The architecture document already refers to `IdempotencyRepository`
-  in the driven ports section. Aligning naming improves developer navigation and
-  matches the established pattern (`UserRepository`, `RouteRepository`, etc.).
-  Date/Author: 2025-12-28 / Claude Code.
+  with other repository ports. Rationale: The architecture document already
+  refers to `IdempotencyRepository` in the driven ports section. Aligning
+  naming improves developer navigation and matches the established pattern
+  (`UserRepository`, `RouteRepository`, etc.). Date/Author: 2025-12-28 / Claude
+  Code.
 
 - Decision: Add `MutationType` enum to scope idempotency records by mutation
-  kind.
-  Rationale: Without a type discriminator, keys could collide if different
-  mutations happen to use the same UUID. Scoping by type ensures isolation
-  between route submissions, note upserts, preference updates, and other
-  outbox-backed operations.
-  Date/Author: 2025-12-28 / Claude Code.
+  kind. Rationale: Without a type discriminator, keys could collide if
+  different mutations happen to use the same UUID. Scoping by type ensures
+  isolation between route submissions, note upserts, preference updates, and
+  other outbox-backed operations. Date/Author: 2025-12-28 / Claude Code.
 
 - Decision: Store `mutation_type` as a TEXT column with CHECK constraint rather
-  than a separate lookup table.
-  Rationale: The set of mutation types is small and stable (routes, notes,
-  progress, preferences, bundles). A CHECK constraint provides integrity without
-  join overhead. Migration path is simpler and the column is self-documenting.
-  Date/Author: 2025-12-28 / Claude Code.
+  than a separate lookup table. Rationale: The set of mutation types is small
+  and stable (routes, notes, progress, preferences, bundles). A CHECK
+  constraint provides integrity without join overhead. Migration path is
+  simpler and the column is self-documenting. Date/Author: 2025-12-28 / Claude
+  Code.
 
 - Decision: Use `IDEMPOTENCY_TTL_HOURS` environment variable for TTL
-  configuration, with 24-hour default.
-  Rationale: The existing route submission idempotency uses a 24-hour TTL via
-  `ROUTES_IDEMPOTENCY_TTL_HOURS`. A shared config simplifies operations while
-  preserving the existing behaviour. Future work can add per-type TTL overrides
-  if needed.
-  Date/Author: 2025-12-28 / Claude Code.
+  configuration, with 24-hour default. Rationale: The existing route submission
+  idempotency uses a 24-hour TTL via `ROUTES_IDEMPOTENCY_TTL_HOURS`. A shared
+  config simplifies operations while preserving the existing behaviour. Future
+  work can add per-type TTL overrides if needed. Date/Author: 2025-12-28 /
+  Claude Code.
 
 - Decision: Make `mutation_type` column NOT NULL with a default of `'routes'`
-  for backward compatibility.
-  Rationale: Existing records from route submission should continue to work
-  without migration issues; the default ensures `mutation_type` is always
-  populated, even for records created before this migration.
-  Date/Author: 2025-12-28 / Claude Code.
+  for backward compatibility. Rationale: Existing records from route submission
+  should continue to work without migration issues; the default ensures
+  `mutation_type` is always populated, even for records created before this
+  migration. Date/Author: 2025-12-28 / Claude Code.
 
 - Decision: Include `mutation_type` in the composite primary key alongside `key`
-  and `user_id`.
-  Rationale: This allows the same UUID to be used as an idempotency key across
-  different mutation types without collision. The existing composite key
-  `(key, user_id)` becomes `(key, user_id, mutation_type)`.
-  Date/Author: 2025-12-28 / Claude Code.
+  and `user_id`. Rationale: This allows the same UUID to be used as an
+  idempotency key across different mutation types without collision. The
+  existing composite key `(key, user_id)` becomes
+  `(key, user_id, mutation_type)`. Date/Author: 2025-12-28 / Claude Code.
 
 ## Outcomes & Retrospective
 
@@ -397,8 +392,7 @@ method signatures.
 
 ### 12. BDD tests
 
-Create
-`backend/tests/features/shared_idempotency_repository.feature`:
+Create `backend/tests/features/shared_idempotency_repository.feature`:
 
 ```gherkin
 Feature: Shared idempotency repository

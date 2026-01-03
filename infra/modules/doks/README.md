@@ -6,7 +6,8 @@ Requires [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later.
 
 ## Quick start
 
-Set the `DIGITALOCEAN_TOKEN` environment variable to allow provider authentication:
+Set the `DIGITALOCEAN_TOKEN` environment variable to allow provider
+authentication:
 
 ```sh
 export DIGITALOCEAN_TOKEN="<DIGITALOCEAN_TOKEN>"

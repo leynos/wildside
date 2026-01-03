@@ -8,11 +8,11 @@ be kept up to date as work proceeds.
 
 ## Purpose / big picture
 
-The `wildside-infra-k8s` action needs to thread outputs from one OpenTofu module
-into another's inputs. For example, it passes DNS zone identifiers from the
-`external_dns` module to Traefik, certificate issuer references from
-`cert_manager` to data services, and secret store references from `vault_eso` to
-workloads consuming credentials.
+The `wildside-infra-k8s` action needs to thread outputs from one OpenTofu
+module into another's inputs. For example, it passes DNS zone identifiers from
+the `external_dns` module to Traefik, certificate issuer references from
+`cert_manager` to data services, and secret store references from `vault_eso`
+to workloads consuming credentials.
 
 After this work:
 
@@ -21,7 +21,8 @@ After this work:
 - Each module's README documents its inputs, outputs, and `sync_policy_contract`
   (where applicable).
 - Documentation accuracy tests verify README contents match actual HCL code.
-- The `cnpg` and `valkey` modules have READMEs following the established pattern.
+- The `cnpg` and `valkey` modules have READMEs following the established
+  pattern.
 
 ## Validation and acceptance
 
@@ -59,26 +60,26 @@ After this work:
 
 The repository contains nine OpenTofu modules under `infra/modules/`:
 
-| Module | Purpose | Has README |
-|--------|---------|------------|
-| `doks` | DigitalOcean Kubernetes cluster | Yes |
-| `fluxcd` | FluxCD GitOps controller | Yes |
-| `traefik` | Ingress controller + ACME issuer | Yes |
-| `external_dns` | DNS automation (Cloudflare) | Yes |
-| `cert_manager` | Certificate management | Yes |
-| `vault_appliance` | Vault droplet infrastructure | Yes |
-| `vault_eso` | External Secrets Operator (ESO) | Yes |
-| `cnpg` | CloudNativePG (PostgreSQL) | **No** |
-| `valkey` | Valkey/Redis cluster | **No** |
+| Module            | Purpose                          | Has README |
+| ----------------- | -------------------------------- | ---------- |
+| `doks`            | DigitalOcean Kubernetes cluster  | Yes        |
+| `fluxcd`          | FluxCD GitOps controller         | Yes        |
+| `traefik`         | Ingress controller + ACME issuer | Yes        |
+| `external_dns`    | DNS automation (Cloudflare)      | Yes        |
+| `cert_manager`    | Certificate management           | Yes        |
+| `vault_appliance` | Vault droplet infrastructure     | Yes        |
+| `vault_eso`       | External Secrets Operator (ESO)  | Yes        |
+| `cnpg`            | CloudNativePG (PostgreSQL)       | **No**     |
+| `valkey`          | Valkey/Redis cluster             | **No**     |
 
 All modules support dual operational modes:
 
 - **`mode = "render"`** (default): Outputs `rendered_manifests` map for GitOps
 - **`mode = "apply"`**: Applies resources directly via Kubernetes/Helm providers
 
-Three modules expose a `sync_policy_contract` output for downstream consumption:
-`vault_eso`, `cnpg`, and `valkey`. This structured object provides all
-information workloads need to consume the service.
+Three modules expose a `sync_policy_contract` output for downstream
+consumption: `vault_eso`, `cnpg`, and `valkey`. This structured object provides
+all information workloads need to consume the service.
 
 ## Plan of work
 
@@ -215,21 +216,20 @@ All commands run from repository root.
       auth_secret_namespace = "external-secrets"
     }
 
-**cnpg sync_policy_contract** (lines 66–104 of
-`infra/modules/cnpg/outputs.tf`):
+**cnpg sync_policy_contract** (lines 66–104 of `infra/modules/cnpg/outputs.tf`):
 
     {
-      cluster = { name = "...", namespace = "..." }
+      cluster = { name = "…", namespace = "…" }
       endpoints = {
-        primary = { host = "...", port = 5432 }
-        replica = { host = "...", port = 5432 }
+        primary = { host = "…", port = 5432 }
+        replica = { host = "…", port = 5432 }
       }
-      database = { name = "...", owner = "..." }
+      database = { name = "…", owner = "…" }
       credentials = {
-        superuser_secret = { name = "...", namespace = "..." }
-        app_secret       = { name = "...", namespace = "..." }
+        superuser_secret = { name = "…", namespace = "…" }
+        app_secret       = { name = "…", namespace = "…" }
       }
-      backup          = { enabled = true, destination_path = "...", schedule = "..." }
+      backup          = { enabled = true, destination_path = "…", schedule = "…" }
       postgis_enabled = true
     }
 
@@ -237,21 +237,21 @@ All commands run from repository root.
 `infra/modules/valkey/outputs.tf`):
 
     {
-      cluster   = { name = "...", namespace = "..." }
+      cluster   = { name = "…", namespace = "…" }
       endpoints = {
-        primary = { host = "...", port = 6379 }
-        replica = { host = "...", port = 6379 }
+        primary = { host = "…", port = 6379 }
+        replica = { host = "…", port = 6379 }
       }
-      credentials = { secret_name = "...", secret_key = "...", namespace = "..." }
-      tls         = { enabled = true, cert_issuer = "..." }
-      persistence = { enabled = true, storage_class = "...", size = "..." }
+      credentials = { secret_name = "…", secret_key = "…", namespace = "…" }
+      tls         = { enabled = true, cert_issuer = "…" }
+      persistence = { enabled = true, storage_class = "…", size = "…" }
       replication = { nodes = 1, replicas = 0 }
     }
 
 ### Certificate issuer references
 
-**cert_manager** outputs `acme_staging_issuer_ref`, `acme_production_issuer_ref`,
-and `vault_issuer_ref` in the format:
+**cert_manager** outputs `acme_staging_issuer_ref`,
+`acme_production_issuer_ref`, and `vault_issuer_ref` in the format:
 
     { name = "letsencrypt-prod", kind = "ClusterIssuer", group = "cert-manager.io" }
 
@@ -283,7 +283,8 @@ re-run validation.
 - [x] (2025-12-30) Create documentation accuracy tests
 - [x] (2025-12-30) Create interoperability contract document
 - [x] (2025-12-30) Update `docs/contents.md`
-- [x] (2025-12-30) Run validation (`make check-fmt`, `make lint`, `make markdownlint`)
+- [x] (2025-12-30) Run validation (`make check-fmt`, `make lint`,
+      `make markdownlint`)
 - [x] (2025-12-30) Run tests (`make cnpg-test`, `make valkey-test`, `make test`)
 - [x] (2025-12-30) Update roadmap (mark task complete)
 - [x] (2025-12-30) Commit changes
@@ -292,27 +293,25 @@ re-run validation.
 
 - **Observation**: ExecPlan markdown lint (MD046) failed when using fenced code
   blocks. The execplans skill requires indented code blocks (4 spaces) rather
-  than triple-backtick fencing.
-  **Resolution**: Converted all fenced blocks to indented blocks.
+  than triple-backtick fencing. **Resolution**: Converted all fenced blocks to
+  indented blocks.
 
 - **Observation**: Initial README accuracy tests used incorrect path
   (`filepath.Join("..", "..")`) for the module directory. Tests run from the
-  `tests/` subdirectory, so the correct path is `".."`.
-  **Resolution**: Fixed all path references in both test files.
+  `tests/` subdirectory, so the correct path is `".."`. **Resolution**: Fixed
+  all path references in both test files.
 
 ## Decision log
 
 - **Decision**: Follow `vault_eso/README.md` as the primary pattern for new
-  READMEs rather than `cert_manager/README.md`.
-  **Rationale**: `vault_eso` demonstrates the `sync_policy_contract` pattern
-  which is the key interoperability mechanism for data services.
-  **Date/Author**: 2025-12-29
+  READMEs rather than `cert_manager/README.md`. **Rationale**: `vault_eso`
+  demonstrates the `sync_policy_contract` pattern which is the key
+  interoperability mechanism for data services. **Date/Author**: 2025-12-29
 
 - **Decision**: Create documentation accuracy tests in Go using the existing
-  Terratest infrastructure rather than shell scripts.
-  **Rationale**: Consistent with existing test patterns; enables structured
-  parsing and better error messages.
-  **Date/Author**: 2025-12-29
+  Terratest infrastructure rather than shell scripts. **Rationale**: Consistent
+  with existing test patterns; enables structured parsing and better error
+  messages. **Date/Author**: 2025-12-29
 
 ## Outcomes & retrospective
 

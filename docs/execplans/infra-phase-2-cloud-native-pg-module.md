@@ -45,28 +45,27 @@ Operator.
 
 - Decision: Deploy both CNPG operator AND Cluster resource in single module.
   Rationale: Simplifies consumption for wildside-infra-k8s action; operator and
-  cluster are tightly coupled and always deployed together.
-  Date/Author: 2025-12-25 / Claude.
+  cluster are tightly coupled and always deployed together. Date/Author:
+  2025-12-25 / Claude.
 
 - Decision: Use S3-compatible storage (DigitalOcean Spaces) for backups.
   Rationale: Aligns with existing DigitalOcean infrastructure; Barman object
-  store supports S3-compatible endpoints natively.
-  Date/Author: 2025-12-25 / Claude.
+  store supports S3-compatible endpoints natively. Date/Author: 2025-12-25 /
+  Claude.
 
 - Decision: Integrate with ESO via existing vault_eso ClusterSecretStore.
   Rationale: Centralizes secret management; PostgreSQL credentials can be
-  managed in Vault and synchronized via ExternalSecret resources.
-  Date/Author: 2025-12-25 / Claude.
+  managed in Vault and synchronized via ExternalSecret resources. Date/Author:
+  2025-12-25 / Claude.
 
 - Decision: Use PostGIS 16-3.4 image for spatial data support.
   Rationale: Enables geospatial queries for the Wildside platform; PostGIS is
-  the standard PostgreSQL extension for spatial data.
-  Date/Author: 2025-12-25 / Claude.
+  the standard PostgreSQL extension for spatial data. Date/Author: 2025-12-25 /
+  Claude.
 
 - Decision: Default to 3-instance HA cluster with PodDisruptionBudget.
   Rationale: Provides high availability with automatic failover; PDB ensures
-  controlled disruption during updates.
-  Date/Author: 2025-12-25 / Claude.
+  controlled disruption during updates. Date/Author: 2025-12-25 / Claude.
 
 ## Outcomes & Retrospective
 

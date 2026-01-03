@@ -496,9 +496,9 @@ features, often configured via nested blocks.
 - `import` **Block**: To bring existing, manually-created infrastructure under
   OpenTofu's management, you can use an `import` block. You specify the target
   resource address (`to`) and the resource's unique import ID (`id`). After
-  running `tofu plan -generate-config-out=generated.tf`, OpenTofu will
-  inspect the existing resource and generate a corresponding HCL configuration
-  file. This generated code serves as a starting point that can be reviewed and
+  running `tofu plan -generate-config-out=generated.tf`, OpenTofu will inspect
+  the existing resource and generate a corresponding HCL configuration file.
+  This generated code serves as a starting point that can be reviewed and
   integrated into your main configuration.3
 
 ### 2.2 variable: Parameterizing Configurations
@@ -1030,8 +1030,8 @@ of operations for creating, updating, and destroying resources.
 ### 3.4 Modularization and Code Reuse
 
 Modules are the primary mechanism for code reuse, abstraction, and organization
-in OpenTofu. A module is a self-contained collection of `.tf` files that can
-be called from other configurations.39
+in OpenTofu. A module is a self-contained collection of `.tf` files that can be
+called from other configurations.39
 
 #### The `module` Block
 
@@ -1081,9 +1081,8 @@ principles 8:
 
 5. **Follow the Standard Structure**: A reusable module should follow the
    standard file structure (`README.md`, `main.tf`, `variables.tf`,
-   `outputs.tf`, `LICENSE`) and include an `examples/` directory to
-   demonstrate usage. A well-documented `README.md` is essential for
-   usability.14
+   `outputs.tf`, `LICENSE`) and include an `examples/` directory to demonstrate
+   usage. A well-documented `README.md` is essential for usability.14
 
 ______________________________________________________________________
 

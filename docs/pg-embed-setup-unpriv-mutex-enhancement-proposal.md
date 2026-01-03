@@ -16,8 +16,8 @@ safe), leading to intermittent failures.
 This proposal adds a small, internal, mutex-backed locking mechanism for
 process-global state mutations performed by test helpers (notably
 `bootstrap_for_tests()` and `TestCluster`). The lock is held for the duration
-of the guard returned by these helpers, ensuring that tests cannot
-concurrently mutate or observe partially configured process state.
+of the guard returned by these helpers, ensuring that tests cannot concurrently
+mutate or observe partially configured process state.
 
 The intention is to make `pg-embed-setup-unpriv` safe-by-default for typical
 Rust test runners, including `cargo test`, `cargo nextest`, and doctests,
@@ -43,8 +43,8 @@ tests construct clusters at the same time, each test can:
 - observe partially applied settings,
 - restore variables while another test still needs them.
 
-The resulting failures are typically intermittent and scheduler dependent.
-They are hard to reproduce, and they often manifest as test flakiness.
+The resulting failures are typically intermittent and scheduler dependent. They
+are hard to reproduce, and they often manifest as test flakiness.
 
 ### Why this is not a user error
 

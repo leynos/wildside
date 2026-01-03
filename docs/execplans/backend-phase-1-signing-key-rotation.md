@@ -54,23 +54,21 @@ validation. Success is observable when:
 ## Decision Log
 
 - Decision: Use rolling deployment overlap rather than in-app dual-key
-  validation.
-  Rationale: The architecture document prescribes this approach. Sessions have
-  a 2-hour TTL, so the overlap window during rolling deployment allows existing
-  sessions to remain valid on old pods while new pods use the new key. This
-  avoids custom session store wrappers and keeps the implementation simple.
-  Date/Author: 2025-12-21 / Claude Code.
+  validation. Rationale: The architecture document prescribes this approach.
+  Sessions have a 2-hour TTL, so the overlap window during rolling deployment
+  allows existing sessions to remain valid on old pods while new pods use the
+  new key. This avoids custom session store wrappers and keeps the
+  implementation simple. Date/Author: 2025-12-21 / Claude Code.
 
 - Decision: Use SHA-256 fingerprint truncated to 16 hex characters.
   Rationale: Sufficient for visual distinction in logs and runbooks. Not
   security-sensitive since it's for operational identification, not
-  authentication.
-  Date/Author: 2025-12-21 / Claude Code.
+  authentication. Date/Author: 2025-12-21 / Claude Code.
 
 - Decision: Use volume-mounted secrets rather than environment variables.
   Rationale: Matches existing `SESSION_KEY_FILE` pattern and allows binary key
-  material without base64 encoding complexity.
-  Date/Author: 2025-12-21 / Claude Code.
+  material without base64 encoding complexity. Date/Author: 2025-12-21 / Claude
+  Code.
 
 ## Outcomes & Retrospective
 

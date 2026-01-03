@@ -156,8 +156,7 @@ mox.spy("aws").passthrough()
 This "record mode" is helpful for capturing real interactions and later turning
 them into mocks.
 
-After verification, spies provide assertion helpers inspired by
-`unittest.mock`:
+After verification, spies provide assertion helpers inspired by `unittest.mock`:
 
 ```python
 spy.assert_called()
@@ -175,10 +174,10 @@ restricted to spy doubles.
 the context-manager API:
 
 - `verify_on_exit` (default `True`) automatically calls `verify()` when a replay
-  phase ends inside a `with CmdMox()` block. Disable it when manual verification
-  management is required. Verification still runs if the body raises; when both
-  verification and the body fail, the verification error is suppressed so the
-  original exception surfaces.
+  phase ends inside a `with CmdMox()` block. Disable it when manual
+  verification management is required. Verification still runs if the body
+  raises; when both verification and the body fail, the verification error is
+  suppressed so the original exception surfaces.
 - `max_journal_entries` bounds the number of stored invocations (oldest entries
   are evicted FIFO when the bound is reached). The journal is exposed via
   `cmd_mox.journal`, a `collections.deque[Invocation]` recorded during replay.
@@ -192,15 +191,15 @@ cmd_mox.verify()
 assert [call.command for call in cmd_mox.journal] == ["git", "curl"]
 ```
 
-To intercept a command without configuring a double—for example, to ensure it is
-treated as unexpected—register it explicitly:
+To intercept a command without configuring a double—for example, to ensure it
+is treated as unexpected—register it explicitly:
 
 ```python
 cmd_mox.register_command("name")
 ```
 
-CmdMox will create the shim so the command is routed through the IPC server even
-without a stub, mock, or spy.
+CmdMox will create the shim so the command is routed through the IPC server
+even without a stub, mock, or spy.
 
 ## Fluent API reference
 
@@ -218,8 +217,8 @@ few common ones are:
   Note: For binary payloads, prefer `passthrough()` or encode/decode at the
   boundary (e.g., base64) so handlers exchange `str`.
 - `runs(handler)` – call a function to produce dynamic output. The handler
-  receives an `Invocation` and should return either a `(stdout, stderr,
-  exit_code)` tuple or a `Response` instance.
+  receives an `Invocation` and should return either a
+  `(stdout, stderr, exit_code)` tuple or a `Response` instance.
 - `times(count)` – expect the command exactly `count` times.
 - `times_called(count)` – alias for `times` that emphasizes spy call counts.
 - `in_order()` – enforce strict ordering with other expectations.

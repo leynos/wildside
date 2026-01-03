@@ -53,8 +53,7 @@ Out of scope:
 - **Local-first React:** render from the local copy first and treat the network
   as optional.
 - **Offline-first assets:** offline bundles are first-class entities, but tile
-  bytes are stored outside React state (Cache Storage keyed by bundle
-  metadata).
+  bytes are stored outside React state (Cache Storage keyed by bundle metadata).
 - **Dexie’s role:** Dexie is a durable storage engine for heavy/binary assets
   and an outbox, not a synchronisation worldview.
 
@@ -567,12 +566,14 @@ type OutboxItem = Readonly<
 Outbound HTTP writes include `Idempotency-Key = OutboxItem.id` so the backend
 can deduplicate retries safely.
 
-The backend implements an idempotency contract (documented for `POST /api/v1/routes`
-in `wildside-backend-architecture.md`) that applies uniformly to all
-mutation-type–scoped endpoints (routes, notes, progress, preferences, bundles):
+The backend implements an idempotency contract (documented for
+`POST /api/v1/routes` in `wildside-backend-architecture.md`) that applies
+uniformly to all mutation-type–scoped endpoints (routes, notes, progress,
+preferences, bundles):
 
 - Keys are scoped per mutation type and user.
-- Keys persist for 24 hours by default (configurable via `IDEMPOTENCY_TTL_HOURS`).
+- Keys persist for 24 hours by default (configurable via
+  `IDEMPOTENCY_TTL_HOURS`).
 - Supplying the same key with a different payload yields `409 Conflict`.
 
 All outbox-backed mutation endpoints follow this contract shape.

@@ -3,8 +3,7 @@
 ## Project architecture
 
 - [Wildside high-level design](wildside-high-level-design.md) – strategic
-  blueprint and product vision. *Audience: stakeholders and all
-  contributors.*
+  blueprint and product vision. *Audience: stakeholders and all contributors.*
 - [Repository design guide](repository-structure.md) – explains repository
   layout and request flow. *Audience: new contributors.*
 - [Wildside backend: functional design specification][backend-spec] –
@@ -38,8 +37,8 @@
   – strategies for offline-first apps using Zustand and TanStack Query.
   *Audience: frontend developers.*
 - [High-velocity, accessibility-first component testing][accessibility-testing]
-  – Vitest and Playwright strategy for accessible components.
-  *Audience: frontend developers and QA engineers.*
+  – Vitest and Playwright strategy for accessible components. *Audience:
+  frontend developers and QA engineers.*
 
 ## Rust testing practices
 
@@ -72,16 +71,15 @@
   for testing IaC modules. *Audience: infrastructure developers.*
 - [Infrastructure test dependency checklist][infra-test-deps]
   – validates CLI prerequisites before running Terraform policy suites.
-  *Audience: infrastructure developers and Continuous Integration
-  (CI) engineers.*
+  *Audience: infrastructure developers and Continuous Integration (CI)
+  engineers.*
 - [DOKS OpenTofu module design](doks-module-design.md) – design decisions for
   the DigitalOcean Kubernetes module. *Audience: infrastructure developers.*
 - [FluxCD OpenTofu module design](fluxcd-module-design.md)
   – design decisions for the GitOps control plane module. *Audience:
   infrastructure developers.*
 - [Cert-manager OpenTofu module design](cert-manager-module-design.md) – design
-  decisions for the cert-manager module. *Audience: infrastructure
-  developers.*
+  decisions for the cert-manager module. *Audience: infrastructure developers.*
 - [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
   design decisions for the Vault infrastructure module. *Audience:
   infrastructure developers.*
@@ -110,9 +108,11 @@
   `biome.json`. *Audience: contributors editing Biome settings.*
 
 [backend-spec]: wildside-backend-design.md
-[pure-react-components]: pure-accessible-and-localizable-react-components.md
+[pure-react-components]:
+  pure-accessible-and-localizable-react-components.md
 [local-first]: local-first-react.md
-[accessibility-testing]: high-velocity-accessibility-first-component-testing.md
+[accessibility-testing]:
+  high-velocity-accessibility-first-component-testing.md
 [rust-di]: reliable-testing-in-rust-via-dependency-injection.md
 [rust-doctest]: rust-doctest-dry-guide.md
 [rust-rstest]: rust-testing-with-rstest-fixtures.md
@@ -121,4 +121,5 @@
 [infra-test-deps]: infrastructure-test-dependencies.md
 [opentofu-hcl]: opentofu-hcl-syntax-guide.md
 [opentofu-testing]: opentofu-module-unit-testing-guide.md
-[complexity-guide]: complexity-antipatterns-and-refactoring-strategies.md
+[complexity-guide]:
+  complexity-antipatterns-and-refactoring-strategies.md

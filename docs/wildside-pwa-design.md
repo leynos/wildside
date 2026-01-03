@@ -120,8 +120,7 @@ This follows the guidance in
 ## Frontend module layout
 
 The mockup proved out a “feature-first” layout. Wildside should mirror that,
-with a narrow set of shared primitives and intentionally small feature
-modules.
+with a narrow set of shared primitives and intentionally small feature modules.
 
 Proposed `frontend-pwa/src` shape:
 
@@ -369,7 +368,8 @@ Update strategy should prefer correctness over “instant updates”:
 
 - Default to waiting for the next navigation before activating a new service
   worker.
-- Only use `skipWaiting()`/`clients.claim()` when there is a tested, user-visible
+- Only use `skipWaiting()`/`clients.claim()` when there is a tested,
+  user-visible
   update UX.
 
 Background sync is an optional enhancement (not a hard dependency):

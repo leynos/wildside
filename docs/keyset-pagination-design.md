@@ -3,8 +3,8 @@
 ## Overview and Goals
 
 In the Wildside backend, we need a robust **cursor-based pagination** system to
-efficiently navigate large datasets (like the user list) without the pitfalls of
-offset-based paging. The solution will be implemented as a standalone crate
+efficiently navigate large datasets (like the user list) without the pitfalls
+of offset-based paging. The solution will be implemented as a standalone crate
 (`backend/crates/pagination`) so it can be reused across endpoints. Key design
 goals include:
 
@@ -29,26 +29,27 @@ goals include:
   response to prevent expensive `COUNT(*)` queries on large tables. Clients can
   detect the end of data by the absence of a `next` link.
 
-These goals summarise the expectations captured in issue #52 requirements[^issue-52-requirements].
+These goals summarise the expectations captured in issue #52
+requirements[^issue-52-requirements].
 
 This design focuses initially on the `GET /api/users` endpoint (replacing the
-current fixed-limit list), but the crate will be generic and extensible to other
-list endpoints (e.g. POIs, routes) with minimal effort. We assume a PostgreSQL
-database with Diesel ORM (using **`diesel_async`** for async queries in
-Actix-web), and a connection pool (such as Deadpool or **bb8**) for database
+current fixed-limit list), but the crate will be generic and extensible to
+other list endpoints (e.g. POIs, routes) with minimal effort. We assume a
+PostgreSQL database with Diesel ORM (using **`diesel_async`** for async queries
+in Actix-web), and a connection pool (such as Deadpool or **bb8**) for database
 connections.
 
 ## Pagination Crate API and Types
 
-The `pagination` crate provides core types and functions for implementing cursor
-pagination. The API is designed to be generic over different data models and key
-types, while ensuring type safety and ease of integration with Diesel. Key
-components of the crate include:
+The `pagination` crate provides core types and functions for implementing
+cursor pagination. The API is designed to be generic over different data models
+and key types, while ensuring type safety and ease of integration with Diesel.
+Key components of the crate include:
 
 - **Cursor Representation:** An opaque cursor token encapsulates a position in
   the ordered dataset. Internally, we'll represent this with a `Cursor<K>`
-  struct (where `K` is a struct or tuple of key fields), plus an enumeration for
-  direction (next vs previous). For example:
+  struct (where `K` is a struct or tuple of key fields), plus an enumeration
+  for direction (next vs previous). For example:
 
 ```rust
 use serde::{Serialize, Deserialize};
@@ -69,10 +70,11 @@ struct Cursor<K> {
 ```
 
 The `key: K` holds the values of the sort key for the boundary item, e.g. for
-users it might be `(DateTime, Uuid)`. The `dir` indicates whether this cursor is
-meant as the starting point for a **next-page** (`Next`) or a **previous-page**
-(`Prev`) query. This allows using a single `cursor` query parameter for both
-directions – the server can infer how to apply the key from the cursor content.
+users it might be `(DateTime, Uuid)`. The `dir` indicates whether this cursor
+is meant as the starting point for a **next-page** (`Next`) or a
+**previous-page** (`Prev`) query. This allows using a single `cursor` query
+parameter for both directions – the server can infer how to apply the key from
+the cursor content.
 
 - **Cursor Encoding/Decoding:** We use **JSON encoding** for `Cursor<K>`
   combined with URL-safe Base64 for transport. The crate will provide helper
@@ -99,7 +101,7 @@ Example: A JSON representation might be
 `{"dir":"Next","key":{"created_at":"2025-10-10T19:17:56Z","id":"...uuid..."}}`.
 After base64url encoding, the client sees a string like
 `**eyJkaXIiOiJOZXh0Iiwia2V5Ijp7ImNyZWF0ZWRfYXQiOiIyMDI1LTEwLTEwVDE5OjE3OjU2WiIsImlkIjoi...**`
-(opaque and not easily guessable). **No signing or encryption** is applied in
+ (opaque and not easily guessable). **No signing or encryption** is applied in
 this phase (to keep things simple), but the format is designed to be wrapped or
 signed later if needed for security.
 
@@ -121,10 +123,10 @@ correspond to an existing composite index in Postgres** for efficient queries.
 Here we assume an index on `users(created_at, id)` so that queries using this
 key for pagination are index-assisted.
 
-The crate can provide a marker trait or helper for such key types (e.g., a trait
-`PaginationKey` with perhaps an associated Diesel column tuple), but it may be
-simplest to rely on explicit usage in each context. For instance, we might
-implement a conversion from a `User` model to `UserCursorKey`:
+The crate can provide a marker trait or helper for such key types (e.g., a
+trait `PaginationKey` with perhaps an associated Diesel column tuple), but it
+may be simplest to rely on explicit usage in each context. For instance, we
+might implement a conversion from a `User` model to `UserCursorKey`:
 
 ```rust
 impl From<&User> for UserCursorKey {
@@ -216,16 +218,16 @@ This struct can be used with Actix-web’s query extractor:
 `web::Query<PageParams>` in handler signatures. The `cursor` will be the opaque
 string from the client (if provided), and `limit` is the requested page size
 (we’ll apply a default and max as needed). The crate might also provide a
-default constant for `DEFAULT_PAGE_SIZE` (e.g. 20) and `MAX_PAGE_SIZE` (100), or
-enforce those limits in the handler logic.
+default constant for `DEFAULT_PAGE_SIZE` (e.g. 20) and `MAX_PAGE_SIZE` (100),
+or enforce those limits in the handler logic.
 
 ## Cursor Semantics and Structure
 
 **Ordering:** The keyset pagination relies on a **total ordering** of records.
 For `/api/users`, we use `ORDER BY created_at, id` (both ascending) as the
 stable sort. This ensures no two records share the exact same position: if two
-users have the same `created_at`, the tiebreaker `id` (e.g., a UUID or surrogate
-primary key) provides a deterministic order. The ordering must remain
+users have the same `created_at`, the tiebreaker `id` (e.g., a UUID or
+surrogate primary key) provides a deterministic order. The ordering must remain
 **consistent** for all pages of a given endpoint. We will always apply this
 ordering to the query (even for the first page) to avoid nondeterministic
 results. The crate can enforce this by providing the appropriate Diesel
@@ -247,10 +249,10 @@ composite keys, we have a couple of representation options:
   extensibility, at the cost of a slightly longer token.
 
 **Direction Encoding:** As noted, we embed a `dir` field (`"Next"` or `"Prev"`)
-in the cursor JSON to differentiate cursors for forward vs. backward navigation.
-This way, the same query parameter (`cursor`) can be used for both `next` and
-`prev` links. The server, upon decoding the cursor, will inspect `cursor.dir` to
-know how to apply the key:
+in the cursor JSON to differentiate cursors for forward vs. backward
+navigation. This way, the same query parameter (`cursor`) can be used for both
+`next` and `prev` links. The server, upon decoding the cursor, will inspect
+`cursor.dir` to know how to apply the key:
 
 - If `dir == Next`: The cursor’s key represents the **last item of the previous
   page**. The new page should start *after* this key in the sorted order.
@@ -282,8 +284,8 @@ if more users remain.
 Conversely, if a client follows a `prev` link (which might be `cursor` encoding
 `{dir: Prev, key: {...}}`), the server will interpret it as “fetch the page
 *ending just before this key*”. In practice, the query will retrieve items with
-keys < the given key (since we’re moving backwards in time) and then the results
-are presented in normal sorted order. More on this query logic below.
+keys < the given key (since we’re moving backwards in time) and then the
+results are presented in normal sorted order. More on this query logic below.
 
 **Security Considerations:** The cursor token is **opaque but not securely
 protected**. Base64 encoding the JSON hides it from casual observation, but
@@ -292,8 +294,8 @@ client could also tamper with it (e.g. alter the timestamp or ID inside). This
 is generally not harmful – at worst, the client can jump to an arbitrary
 position in the list, which is something we allow anyway via the cursor. The
 server should treat the decoded values as untrusted input (just as it would
-treat a page number or filter parameter) and use them only in the intended query
-context. We should:
+treat a page number or filter parameter) and use them only in the intended
+query context. We should:
 
 - Validate that decoded values have the expected types and ranges (the JSON
   decoding step already enforces type structure).
@@ -303,8 +305,8 @@ context. We should:
   chronology or density of records but not confidential data.
 
 - In the future, if we want to prevent clients from forging cursors (to e.g.
-  enumerate IDs out of context), we could **sign the cursor** (adding an HMAC or
-  encryption). The current design is flexible enough to add signing later
+  enumerate IDs out of context), we could **sign the cursor** (adding an HMAC
+  or encryption). The current design is flexible enough to add signing later
   without changing the API (we would simply produce a different opaque string).
 
 **Extensibility:** The cursor format (JSON inside base64) is easily extensible:
@@ -315,21 +317,22 @@ context. We should:
 - We could include metadata like the sort direction or filter context if we
   later allow clients to sort by different fields or filter results. For
   example, a cursor could include a field indicating it’s for “name ASC” vs
-  “date DESC” sort, ensuring the server applies the same context when the cursor
-  is used. This would bloat the token slightly, but keeps things consistent.
+  “date DESC” sort, ensuring the server applies the same context when the
+  cursor is used. This would bloat the token slightly, but keeps things
+  consistent.
 
 - The crate’s generic design means you can define a new key struct for each new
   use case. For instance, an endpoint listing posts might use
   `PostCursorKey { score: i32, id: Uuid }` if sorted by score, or
-  `PostCursorKey { created_at: DateTime, title: String, id: Uuid }` if sorted by
-  multiple fields. As long as the corresponding database index exists and the
-  struct implements `Serialize/Deserialize`, everything else can reuse the same
-  logic.
+  `PostCursorKey { created_at: DateTime, title: String, id: Uuid }` if sorted
+  by multiple fields. As long as the corresponding database index exists and
+  the struct implements `Serialize/Deserialize`, everything else can reuse the
+  same logic.
 
 ## Integrating Pagination in Handlers (Actix-web + Diesel)
 
-To use this in the actual Actix handlers (like for `/api/users`), we will follow
-a pattern:
+To use this in the actual Actix handlers (like for `/api/users`), we will
+follow a pattern:
 
 - **Parse Request Query:** Use `web::Query<PageParams>` to get the optional
   `cursor` and `limit`. For example:
@@ -353,9 +356,9 @@ async fn list_users(
 Here `DbPool` is our async pool (could be Deadpool or bb8 – either yields an
 `AsyncPgConnection`). We cap the page size at 100 to honour the guardrail
 described in issue #52 page limit guidance[^issue-52-limit] and to match the
-client defaults noted in
-issue #52 client expectations[^issue-52-client-defaults]. If `cursor` is
-present, we attempt to decode it into a `Cursor<UserCursorKey>`.
+client defaults noted in issue #52 client
+expectations[^issue-52-client-defaults]. If `cursor` is present, we attempt to
+decode it into a `Cursor<UserCursorKey>`.
 
 - **Build Diesel Query:** Using Diesel’s query builder, start from the base
   table and apply filters based on the cursor:
@@ -392,9 +395,9 @@ present, we attempt to decode it into a `Cursor<UserCursorKey>`.
 A few notes on this:
 
 - We use a **lexicographic filter** to implement `>` comparison on the composite
-  key. SQL allows `(created_at, id) > (c_ts, c_id)`, but Diesel doesn't directly
-  support tuple comparisons in a high-level API. Instead, we use the equivalent
-  expression:
+  key. SQL allows `(created_at, id) > (c_ts, c_id)`, but Diesel doesn't
+  directly support tuple comparisons in a high-level API. Instead, we use the
+  equivalent expression:
 
 - For `Next` (assuming ascending sort):
   `created_at > c_ts OR (created_at = c_ts AND id > c_id)`.
@@ -410,9 +413,9 @@ A few notes on this:
   `.order_by(created_at.asc()).then_order_by(id.asc())`.
 
 - If we had chosen descending (newest first), we would order by `.desc()`. But
-  since our key is defined as (created_at, id) ascending, we stick to that here.
-  The direction of navigation (`Next` vs `Prev`) is handled in the filter logic,
-  not by flipping the sort order.
+  since our key is defined as (created_at, id) ascending, we stick to that
+  here. The direction of navigation (`Next` vs `Prev`) is handled in the filter
+  logic, not by flipping the sort order.
 
 - We request `limit = page_size + 1` items. This “one extra” item is used to
   detect if there are more results beyond the current page.
@@ -502,11 +505,11 @@ Let’s clarify the logic:
   current older segment). We also consider the possibility of even older pages
   (`prev` link when going backwards): if we fetched an extra item in the
   backward query, we would know older items remain. In our logic, we used
-  `limit + 1` uniformly, so if `users_page.len() > page_size` before trimming in
-  a backward query, that would indicate a further `prev` (older) page exists. We
-  should handle that similarly by setting `prev_cursor_str` (even in backward
-  mode) using the first item of the list as boundary. (The snippet above hints
-  at this but we should add it explicitly.)
+  `limit + 1` uniformly, so if `users_page.len() > page_size` before trimming
+  in a backward query, that would indicate a further `prev` (older) page
+  exists. We should handle that similarly by setting `prev_cursor_str` (even in
+  backward mode) using the first item of the list as boundary. (The snippet
+  above hints at this but we should add it explicitly.)
 
 To summarize:
 
@@ -556,10 +559,10 @@ A few details:
   naming, or combine `req.path()` and query).
 
 - We use the raw cursor strings in the URLs as query params. They are already
-  URL-safe (base64url ensures no `+`/`/` and no padding `=`), so they should not
-  need special encoding beyond normal URL encoding. We should confirm that
-  `base64::URL_SAFE_NO_PAD` produces URL-legal characters (it does: uses `-` and
-  `_`).
+  URL-safe (base64url ensures no `+`/`/` and no padding `=`), so they should
+  not need special encoding beyond normal URL encoding. We should confirm that
+  `base64::URL_SAFE_NO_PAD` produces URL-legal characters (it does: uses `-`
+  and `_`).
 
 - **Return Response:** Finally, package the data and metadata into our
   `Paginated` struct and return as JSON:
@@ -599,8 +602,8 @@ On a subsequent page, `prev` would be a URL and `self` would include the
 
 - **Components:** Add `PaginationLinks` and a paginated response schema for each
   resource (or a generic one parameterised by item type). In our case,
-  `PaginatedUsers` is defined as above, matching the outline from
-  issue #52 link schema[^issue-52-links]. If using **utoipa**, we can implement
+  `PaginatedUsers` is defined as above, matching the outline from issue #52
+  link schema[^issue-52-links]. If using **utoipa**, we can implement
   `ToSchema` for `PaginationLinks` and `Paginated<T>` and use them in the
   endpoint documentation, for example:
 
@@ -615,9 +618,9 @@ struct PaginatedUsersResponse {
 ```
 
 We ensure the schema’s `maxItems` constraint for `data` (Max 100) is captured —
-utoipa allows using attributes like `#[schema(max_items = 100)]` on the field if
-needed, or we enforce via validation logic. The OpenAPI description should note
-that `next`/`prev` may be omitted or null if no such page.
+utoipa allows using attributes like `#[schema(max_items = 100)]` on the field
+if needed, or we enforce via validation logic. The OpenAPI description should
+note that `next`/`prev` may be omitted or null if no such page.
 
 - **Backward Compatibility:** The new response is not a plain array but an
   object. This is a breaking change for clients, but since it’s needed for
@@ -636,25 +639,25 @@ key. For example, on the `users` table:
 CREATE INDEX idx_users_created_at_id ON users (created_at, id);
 ```
 
-This index allows the query with `created_at > X OR (created_at = X AND id > Y)`
-to use an index range scan, rather than a full table scan. Similarly, that index
-covers the `ORDER BY created_at, id` so the results are already sorted from the
-index.
+This index allows the query with
+`created_at > X OR (created_at = X AND id > Y)` to use an index range scan,
+rather than a full table scan. Similarly, that index covers the
+`ORDER BY created_at, id` so the results are already sorted from the index.
 
 **Composite Filter in Diesel:** Diesel does not have built-in syntax for
 composite comparisons, but the OR condition shown above is equivalent. Another
-approach is to use Diesel’s `SqlLiteral` or custom expression to directly inject
-`(users.created_at, users.id) > ($1, $2)` if one wanted to rely on SQL tuple
-comparison. However, the OR approach is fine and portable. Diesel’s query
+approach is to use Diesel’s `SqlLiteral` or custom expression to directly
+inject `(users.created_at, users.id) > ($1, $2)` if one wanted to rely on SQL
+tuple comparison. However, the OR approach is fine and portable. Diesel’s query
 builder ensures the values are parameterized to prevent SQL injection.
 
-**Reverse Ordering for Prev Page:** In our design, we chose to keep a consistent
-ascending sort in the query and adjust the filter for prev/next. An alternative
-implementation for `Prev` could be:
+**Reverse Ordering for Prev Page:** In our design, we chose to keep a
+consistent ascending sort in the query and adjust the filter for prev/next. An
+alternative implementation for `Prev` could be:
 
 - Query in **reverse order** (descending) for a `Prev` request to fetch the
-  preceding page more directly, then reverse the results in memory. For example,
-  for a `Prev` cursor, do:
+  preceding page more directly, then reverse the results in memory. For
+  example, for a `Prev` cursor, do:
 
 ```rust
 query = query.order_by(users::created_at.desc()).then_order_by(users::id.desc())
@@ -782,19 +785,19 @@ mechanism across the Wildside API:
   the cursor, but that’s out of scope for now.)
 
 - The approach is **client-friendly**: consumers of the API simply follow `next`
-  and `prev` links, without needing to know the underlying keys or craft complex
-  queries. This mirrors the client-flow guidance in
-  issue #52 rollout notes[^issue-52-rollout].
+  and `prev` links, without needing to know the underlying keys or craft
+  complex queries. This mirrors the client-flow guidance in issue #52 rollout
+  notes[^issue-52-rollout].
 
 - We intentionally avoid exposing internal details, and the opaque cursor can be
   extended or secured in the future without breaking clients.
 
 In summary, the new `pagination` crate will provide the Wildside backend with a
-generic way to do keyset pagination. The `/api/users` endpoint will serve as the
-first implementation, returning a `PaginatedUsers` response that includes up to
-100 users per page, along with easy navigation links. This design can then be
-rolled out to other listing endpoints to improve the API’s scalability and
-usability, as highlighted in issue #52 rollout notes[^issue-52-rollout].
+generic way to do keyset pagination. The `/api/users` endpoint will serve as
+the first implementation, returning a `PaginatedUsers` response that includes
+up to 100 users per page, along with easy navigation links. This design can
+then be rolled out to other listing endpoints to improve the API’s scalability
+and usability, as highlighted in issue #52 rollout notes[^issue-52-rollout].
 
 [^issue-52-client-defaults]: [GitHub issue #52 – client defaults](https://github.com/leynos/wildside/issues/52#L70-L74)
 [^issue-52-envelope]: [GitHub issue #52 – envelope outline](https://github.com/leynos/wildside/issues/52#L34-L43)

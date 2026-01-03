@@ -1,7 +1,7 @@
 # Phase 0: Update Modules to Use Domain Ports
 
-This execution plan completes the roadmap item: "Update all modules to depend on
-the domain ports rather than reaching into `backend/src/models` or
+This execution plan completes the roadmap item: "Update all modules to depend
+on the domain ports rather than reaching into `backend/src/models` or
 framework-specific types, ensuring the dependency flow points inward."
 
 ## Summary
@@ -10,23 +10,24 @@ Two categories of hexagonal architecture violations exist:
 
 1. **TraceId crosses middleware→domain boundary**: Domain code imports `TraceId`
    from `middleware/trace.rs`
-2. **OpenAPI (OpenAPI Specification) / Utoipa framework types in domain**: Domain
+2. **OpenAPI (OpenAPI Specification) / Utoipa framework types in domain**:
+   Domain
    types derive `ToSchema` from the `utoipa` crate
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| OpenAPI schemas | Pure domain with external schemas | Domain types remain framework-agnostic; schemas defined in inbound layer |
-| tokio in domain | Acceptable | Async runtime infrastructure, not framework coupling |
-| Lint enforcement | Forbid `utoipa` in domain | Enforces hexagonal boundary going forward |
+| Decision         | Choice                            | Rationale                                                                |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------ |
+| OpenAPI schemas  | Pure domain with external schemas | Domain types remain framework-agnostic; schemas defined in inbound layer |
+| tokio in domain  | Acceptable                        | Async runtime infrastructure, not framework coupling                     |
+| Lint enforcement | Forbid `utoipa` in domain         | Enforces hexagonal boundary going forward                                |
 
----
+______________________________________________________________________
 
 ## Step 1: Relocate TraceId to Domain
 
-Move the pure `TraceId` type from `middleware/trace.rs` to domain. The type uses
-only `uuid` and `tokio::task_local!`—no Actix dependencies.
+Move the pure `TraceId` type from `middleware/trace.rs` to domain. The type
+uses only `uuid` and `tokio::task_local!`—no Actix dependencies.
 
 ### 1.1 Create domain/trace_id.rs
 
@@ -75,8 +76,8 @@ pub use domain::TraceId;
 
 ### 1.5 Update domain imports
 
-Change `use crate::middleware::trace::TraceId;` to `use crate::domain::TraceId;`
-in:
+Change `use crate::middleware::trace::TraceId;` to
+`use crate::domain::TraceId;` in:
 
 - `backend/src/domain/error.rs:3`
 - `backend/src/domain/user_events.rs:9`
@@ -89,7 +90,7 @@ in:
 make check-fmt && make lint && make test
 ```
 
----
+______________________________________________________________________
 
 ## Step 2: Extract OpenAPI Schemas to Inbound Layer
 
@@ -200,7 +201,7 @@ cargo run --bin openapi-dump > /tmp/openapi-after.json
 make check-fmt && make lint && make test
 ```
 
----
+______________________________________________________________________
 
 ## Step 3: Harden Architecture Lint
 
@@ -245,7 +246,7 @@ In `tools/architecture-lint/src/tests.rs`, add test case:
 make check-fmt && make lint && make test
 ```
 
----
+______________________________________________________________________
 
 ## Step 4: Update Roadmap
 
@@ -256,7 +257,7 @@ Mark the task complete in `docs/backend-roadmap.md`:
 + [x] Update all modules to depend on the domain ports rather than reaching
 ```
 
----
+______________________________________________________________________
 
 ## Testing Strategy
 
@@ -281,29 +282,29 @@ continue passing without modification.
 1. Verify `cargo run --bin openapi-dump` produces valid OpenAPI spec
 2. Verify all domain types still serialize/deserialize correctly
 
----
+______________________________________________________________________
 
 ## Files Modified
 
-| File | Change |
-|------|--------|
-| `backend/src/domain/trace_id.rs` | **Create**: TraceId type + task-local |
-| `backend/src/domain/mod.rs` | Add trace_id module export |
-| `backend/src/domain/error.rs` | Remove utoipa imports/derives |
-| `backend/src/domain/user.rs` | Remove utoipa imports/derives |
-| `backend/src/domain/user_events.rs` | Update TraceId import |
-| `backend/src/domain/user_onboarding.rs` | Update TraceId import |
-| `backend/src/domain/error/tests.rs` | Update TraceId import |
-| `backend/src/middleware/trace.rs` | Import TraceId from domain |
-| `backend/src/lib.rs` | Update TraceId re-export |
-| `backend/src/inbound/http/schemas.rs` | **Create**: OpenAPI schema wrappers |
-| `backend/src/inbound/http/mod.rs` | Add schemas module |
-| `backend/src/doc.rs` | Update schema references |
-| `tools/architecture-lint/src/lib.rs` | Add utoipa to forbidden crates |
-| `tools/architecture-lint/src/tests.rs` | Add utoipa violation test |
-| `docs/backend-roadmap.md` | Mark task complete |
+| File                                    | Change                                |
+| --------------------------------------- | ------------------------------------- |
+| `backend/src/domain/trace_id.rs`        | **Create**: TraceId type + task-local |
+| `backend/src/domain/mod.rs`             | Add trace_id module export            |
+| `backend/src/domain/error.rs`           | Remove utoipa imports/derives         |
+| `backend/src/domain/user.rs`            | Remove utoipa imports/derives         |
+| `backend/src/domain/user_events.rs`     | Update TraceId import                 |
+| `backend/src/domain/user_onboarding.rs` | Update TraceId import                 |
+| `backend/src/domain/error/tests.rs`     | Update TraceId import                 |
+| `backend/src/middleware/trace.rs`       | Import TraceId from domain            |
+| `backend/src/lib.rs`                    | Update TraceId re-export              |
+| `backend/src/inbound/http/schemas.rs`   | **Create**: OpenAPI schema wrappers   |
+| `backend/src/inbound/http/mod.rs`       | Add schemas module                    |
+| `backend/src/doc.rs`                    | Update schema references              |
+| `tools/architecture-lint/src/lib.rs`    | Add utoipa to forbidden crates        |
+| `tools/architecture-lint/src/tests.rs`  | Add utoipa violation test             |
+| `docs/backend-roadmap.md`               | Mark task complete                    |
 
----
+______________________________________________________________________
 
 ## Quality Gates
 

@@ -164,8 +164,8 @@ kubectl logs -n wildside <pod-name> | grep -i "session"
 
 **Symptom:** Logs show both old and new fingerprints.
 
-**Expected:** During rolling deployment, this is normal. Old pods retain the old
-fingerprint until they terminate.
+**Expected:** During rolling deployment, this is normal. Old pods retain the
+old fingerprint until they terminate.
 
 **Resolution:** Wait for rollout to complete:
 
@@ -180,8 +180,8 @@ kubectl rollout status deployment/wildside-backend -n wildside
 **Cause:** Users routed to new pods have their old sessions invalidated.
 
 **Mitigation:** This is expected behaviour with the rolling overlap approach.
-Sessions will recover after users re-authenticate. The 2-hour TTL means all
-old sessions expire naturally.
+Sessions will recover after users re-authenticate. The 2-hour TTL means all old
+sessions expire naturally.
 
 ### Secret not updating
 
@@ -204,12 +204,12 @@ kubectl delete pods -n wildside -l app.kubernetes.io/name=wildside
 
 Recommended rotation schedule:
 
-| Scenario | Frequency |
-|----------|-----------|
-| Routine rotation | Quarterly |
-| After suspected compromise | Immediately |
+| Scenario                            | Frequency       |
+| ----------------------------------- | --------------- |
+| Routine rotation                    | Quarterly       |
+| After suspected compromise          | Immediately     |
 | After personnel change (key access) | Within 24 hours |
-| After security audit finding | As recommended |
+| After security audit finding        | As recommended  |
 
 ## Related documentation
 
