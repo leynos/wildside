@@ -149,7 +149,7 @@ these updates are efficient, minimizing unnecessary computation and DOM
 manipulation. Memoization is a key technique for achieving this performance by
 caching the results of expensive operations, including component rendering.
 
-#### From ,`PureComponent`, to ,`React.memo`
+#### From `PureComponent` to `React.memo`
 
 In the era of class-based components, React provided `React.PureComponent` as a
 base class for optimization. It implemented the `shouldComponentUpdate`
@@ -298,7 +298,7 @@ clarity in a large codebase. For any given feature component, such as a
 This co-location of related files makes the component's architecture explicit
 and easy to navigate.
 
-### 2.2 Managing Complex Component State: ,`useReducer`, and State Machines
+### 2.2 Managing Complex Component State: `useReducer` and State Machines
 
 While `useState` is sufficient for simple, independent state variables, its
 limitations become apparent as component logic grows in complexity. When the
@@ -670,7 +670,7 @@ Localization (i18n) is a prime example of such a concern, and its
 implementation must also adhere to the principle of separating logic from the
 view.
 
-### 4.1 Comprehensive Localisation with `react-i18next` and `i18next-fluent`
+### 4.1 Comprehensive Localization with `react-i18next` and `i18next-fluent`
 
 To build a truly global application, components must be localizable.
 `react-i18next`, built on top of the powerful `i18next` library, remains the
