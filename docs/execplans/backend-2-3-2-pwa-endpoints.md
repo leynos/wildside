@@ -1,4 +1,4 @@
-# Phase 2.3.2: PWA Preferences and Annotations Endpoints
+# Phase 2.3.2: Progressive Web App (PWA) Preferences and Annotations Endpoints
 
 This Execution Plan (ExecPlan) is a living document. The sections `Progress`,
 `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must
@@ -116,7 +116,7 @@ Terminology:
 
 ## Plan of Work
 
-### 1. Map current surface area (Code Graph MCP + repo scan)
+### 1. Map current surface area (Code Graph Model Context Protocol (MCP) + repo scan)
 
 - Use the Code Graph MCP to locate inbound handlers, state wiring, and
   idempotency helpers (if MCP is available).
