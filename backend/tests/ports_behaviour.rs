@@ -16,8 +16,9 @@ mod pg_embed;
 mod support;
 
 use pg_embed::test_cluster;
+use support::embedded_postgres::drop_users_table;
 use support::format_postgres_error;
-use support::{drop_users_table, handle_cluster_setup_failure, migrate_schema, reset_database};
+use support::{handle_cluster_setup_failure, migrate_schema, reset_database};
 
 const CONTRACT_DB: &str = "ports_contract";
 

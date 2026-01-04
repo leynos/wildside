@@ -6,7 +6,9 @@
 use std::sync::Arc;
 
 use crate::domain::ports::{
-    LoginService, RouteSubmissionService, UserInterestsCommand, UserProfileQuery, UsersQuery,
+    LoginService, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
+    UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery, UserProfileQuery,
+    UsersQuery,
 };
 
 /// Parameter object bundling all port implementations for HTTP handlers.
@@ -16,6 +18,10 @@ pub struct HttpStatePorts {
     pub users: Arc<dyn UsersQuery>,
     pub profile: Arc<dyn UserProfileQuery>,
     pub interests: Arc<dyn UserInterestsCommand>,
+    pub preferences: Arc<dyn UserPreferencesCommand>,
+    pub preferences_query: Arc<dyn UserPreferencesQuery>,
+    pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
+    pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
     pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
@@ -26,6 +32,10 @@ pub struct HttpState {
     pub users: Arc<dyn UsersQuery>,
     pub profile: Arc<dyn UserProfileQuery>,
     pub interests: Arc<dyn UserInterestsCommand>,
+    pub preferences: Arc<dyn UserPreferencesCommand>,
+    pub preferences_query: Arc<dyn UserPreferencesQuery>,
+    pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
+    pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
     pub route_submission: Arc<dyn RouteSubmissionService>,
 }
 
@@ -36,6 +46,10 @@ impl From<HttpStatePorts> for HttpState {
             users,
             profile,
             interests,
+            preferences,
+            preferences_query,
+            route_annotations,
+            route_annotations_query,
             route_submission,
         } = ports;
         Self {
@@ -43,6 +57,10 @@ impl From<HttpStatePorts> for HttpState {
             users,
             profile,
             interests,
+            preferences,
+            preferences_query,
+            route_annotations,
+            route_annotations_query,
             route_submission,
         }
     }

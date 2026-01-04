@@ -29,6 +29,7 @@
 //! - RouteNote — user annotation on a route or POI.
 //! - RouteNoteContent — content parameters for creating route notes.
 //! - RouteProgress — progress tracking for a route walk.
+//! - RouteAnnotations — aggregated notes and progress for a route.
 
 pub mod annotations;
 pub mod auth;
@@ -37,6 +38,7 @@ pub mod idempotency;
 pub mod interest_theme;
 pub mod ports;
 pub mod preferences;
+pub mod preferences_service;
 pub mod route_submission;
 pub mod trace_id;
 pub mod user;
@@ -44,8 +46,10 @@ pub mod user_events;
 pub mod user_interests;
 pub mod user_onboarding;
 
+pub use self::annotations::service::RouteAnnotationsService;
 pub use self::annotations::{
-    RouteNote, RouteNoteBuilder, RouteNoteContent, RouteProgress, RouteProgressBuilder,
+    RouteAnnotations, RouteNote, RouteNoteBuilder, RouteNoteContent, RouteProgress,
+    RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
@@ -58,6 +62,7 @@ pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::preferences::{
     ParseUnitSystemError, UnitSystem, UserPreferences, UserPreferencesBuilder,
 };
+pub use self::preferences_service::UserPreferencesService;
 pub use self::route_submission::RouteSubmissionServiceImpl;
 pub use self::trace_id::TraceId;
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
