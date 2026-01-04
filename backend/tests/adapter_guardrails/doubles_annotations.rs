@@ -18,18 +18,60 @@ pub(crate) enum UpsertNoteCommandResponse {
     Err(Error),
 }
 
+/// Configurable success or failure outcome for progress updates.
 #[derive(Clone)]
 pub(crate) enum UpdateProgressCommandResponse {
     Ok(UpdateProgressResponse),
     Err(Error),
 }
 
+/// Configurable success or failure outcome for note deletion.
 #[derive(Clone)]
 pub(crate) enum DeleteNoteCommandResponse {
     Ok(DeleteNoteResponse),
     Err(Error),
 }
 
+trait CommandResponse {
+    type Success;
+
+    fn into_result(self) -> Result<Self::Success, Error>;
+}
+
+impl CommandResponse for UpsertNoteCommandResponse {
+    type Success = UpsertNoteResponse;
+
+    fn into_result(self) -> Result<Self::Success, Error> {
+        match self {
+            UpsertNoteCommandResponse::Ok(response) => Ok(response),
+            UpsertNoteCommandResponse::Err(error) => Err(error),
+        }
+    }
+}
+
+impl CommandResponse for UpdateProgressCommandResponse {
+    type Success = UpdateProgressResponse;
+
+    fn into_result(self) -> Result<Self::Success, Error> {
+        match self {
+            UpdateProgressCommandResponse::Ok(response) => Ok(response),
+            UpdateProgressCommandResponse::Err(error) => Err(error),
+        }
+    }
+}
+
+impl CommandResponse for DeleteNoteCommandResponse {
+    type Success = DeleteNoteResponse;
+
+    fn into_result(self) -> Result<Self::Success, Error> {
+        match self {
+            DeleteNoteCommandResponse::Ok(response) => Ok(response),
+            DeleteNoteCommandResponse::Err(error) => Err(error),
+        }
+    }
+}
+
+/// Records requests and returns the configured response for command doubles.
 #[derive(Clone)]
 struct CallRecorder<Req, RespEnum> {
     calls: Arc<Mutex<Vec<Req>>>,
@@ -38,12 +80,9 @@ struct CallRecorder<Req, RespEnum> {
 
 impl<Req, RespEnum> CallRecorder<Req, RespEnum>
 where
-    RespEnum: Clone,
+    RespEnum: Clone + CommandResponse,
 {
-    fn record_and_respond<Res, F>(&self, request: Req, match_response: F) -> Result<Res, Error>
-    where
-        F: FnOnce(RespEnum) -> Result<Res, Error>,
-    {
+    fn record_and_respond(&self, request: Req) -> Result<RespEnum::Success, Error> {
         self.calls
             .lock()
             .expect("test double calls lock")
@@ -53,7 +92,7 @@ where
             .lock()
             .expect("test double response lock")
             .clone();
-        match_response(response)
+        response.into_result()
     }
 }
 
@@ -138,30 +177,18 @@ impl RecordingRouteAnnotationsCommand {
 #[async_trait]
 impl RouteAnnotationsCommand for RecordingRouteAnnotationsCommand {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        self.upsert_recorder
-            .record_and_respond(request, |response| match response {
-                UpsertNoteCommandResponse::Ok(response) => Ok(response),
-                UpsertNoteCommandResponse::Err(error) => Err(error),
-            })
+        self.upsert_recorder.record_and_respond(request)
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        self.delete_recorder
-            .record_and_respond(request, |response| match response {
-                DeleteNoteCommandResponse::Ok(response) => Ok(response),
-                DeleteNoteCommandResponse::Err(error) => Err(error),
-            })
+        self.delete_recorder.record_and_respond(request)
     }
 
     async fn update_progress(
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        self.update_recorder
-            .record_and_respond(request, |response| match response {
-                UpdateProgressCommandResponse::Ok(response) => Ok(response),
-                UpdateProgressCommandResponse::Err(error) => Err(error),
-            })
+        self.update_recorder.record_and_respond(request)
     }
 }
 

@@ -1,6 +1,6 @@
 //! Shared BDD helpers for PWA preferences and annotations tests.
 //!
-//! These helpers centralise common request patterns and assertions to keep the
+//! These helpers centralize common request patterns and assertions to keep the
 //! step implementations concise and consistent.
 
 use actix_web::http::Method;

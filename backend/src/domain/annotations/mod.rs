@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::UserId;
 
+mod idempotency;
 mod query_impl;
 pub mod service;
 mod service_ops;

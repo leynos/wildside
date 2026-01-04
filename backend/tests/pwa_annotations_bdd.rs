@@ -43,6 +43,42 @@ const POI_ID: &str = "55555555-5555-5555-5555-555555555555";
 const STOP_ID: &str = "66666666-6666-6666-6666-666666666666";
 const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
 
+fn note_path() -> String {
+    format!("/api/v1/routes/{}/notes", ROUTE_ID)
+}
+
+fn progress_path() -> String {
+    format!("/api/v1/routes/{}/progress", ROUTE_ID)
+}
+
+fn note_payload() -> Value {
+    serde_json::json!({
+        "noteId": NOTE_ID,
+        "poiId": POI_ID,
+        "body": "New note",
+        "expectedRevision": null
+    })
+}
+
+fn progress_payload() -> Value {
+    serde_json::json!({
+        "visitedStopIds": [STOP_ID],
+        "expectedRevision": 1
+    })
+}
+
+fn perform_route_mutation(world: &WorldFixture, method: Method, path: String, payload: Value) {
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
+            method,
+            path: &path,
+            payload,
+            idempotency_key: Some(IDEMPOTENCY_KEY),
+        },
+    );
+}
+
 #[fixture]
 fn world() -> WorldFixture {
     harness::world()
@@ -126,36 +162,12 @@ fn the_client_requests_annotations_for_the_route(world: &WorldFixture) {
 
 #[when("the client upserts a note with an idempotency key")]
 fn the_client_upserts_a_note_with_an_idempotency_key(world: &WorldFixture) {
-    bdd_common::perform_mutation_request(
-        world,
-        bdd_common::MutationRequest {
-            method: Method::POST,
-            path: &format!("/api/v1/routes/{}/notes", ROUTE_ID),
-            payload: serde_json::json!({
-                "noteId": NOTE_ID,
-                "poiId": POI_ID,
-                "body": "New note",
-                "expectedRevision": null
-            }),
-            idempotency_key: Some(IDEMPOTENCY_KEY),
-        },
-    );
+    perform_route_mutation(world, Method::POST, note_path(), note_payload());
 }
 
 #[when("the client updates progress with a valid payload")]
 fn the_client_updates_progress_with_a_valid_payload(world: &WorldFixture) {
-    bdd_common::perform_mutation_request(
-        world,
-        bdd_common::MutationRequest {
-            method: Method::PUT,
-            path: &format!("/api/v1/routes/{}/progress", ROUTE_ID),
-            payload: serde_json::json!({
-                "visitedStopIds": [STOP_ID],
-                "expectedRevision": 1
-            }),
-            idempotency_key: Some(IDEMPOTENCY_KEY),
-        },
-    );
+    perform_route_mutation(world, Method::PUT, progress_path(), progress_payload());
 }
 
 #[then("the response is ok")]

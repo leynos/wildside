@@ -39,6 +39,42 @@ const INTEREST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 const SAFETY_TOGGLE_ID: &str = "7fa85f64-5717-4562-b3fc-2c963f66afa6";
 const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
 
+fn build_preferences(user_id: UserId, revision: u32) -> UserPreferences {
+    UserPreferences::builder(user_id)
+        .interest_theme_ids(vec![Uuid::parse_str(INTEREST_THEME_ID).expect("theme id")])
+        .safety_toggle_ids(vec![Uuid::parse_str(SAFETY_TOGGLE_ID).expect("safety id")])
+        .unit_system(UnitSystem::Metric)
+        .revision(revision)
+        .build()
+}
+
+fn preferences_payload(unit_system: &str, expected_revision: Option<u32>) -> Value {
+    let mut payload = serde_json::json!({
+        "interestThemeIds": [INTEREST_THEME_ID],
+        "safetyToggleIds": [SAFETY_TOGGLE_ID],
+        "unitSystem": unit_system
+    });
+
+    if let Some(expected) = expected_revision {
+        let object = payload.as_object_mut().expect("preferences payload object");
+        object.insert("expectedRevision".to_owned(), serde_json::json!(expected));
+    }
+
+    payload
+}
+
+fn perform_preferences_update(world: &WorldFixture, payload: Value, idempotency_key: Option<&str>) {
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
+            method: Method::PUT,
+            path: "/api/v1/users/me/preferences",
+            payload,
+            idempotency_key,
+        },
+    );
+}
+
 #[fixture]
 fn world() -> WorldFixture {
     harness::world()
@@ -58,12 +94,7 @@ fn the_client_has_an_authenticated_session(world: &WorldFixture) {
 fn the_preferences_query_returns_default_preferences(world: &WorldFixture) {
     let world = world.world();
     let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let preferences = UserPreferences::builder(user_id)
-        .interest_theme_ids(vec![Uuid::parse_str(INTEREST_THEME_ID).expect("theme id")])
-        .safety_toggle_ids(vec![Uuid::parse_str(SAFETY_TOGGLE_ID).expect("safety id")])
-        .unit_system(UnitSystem::Metric)
-        .revision(1)
-        .build();
+    let preferences = build_preferences(user_id, 1);
 
     world
         .borrow()
@@ -75,12 +106,7 @@ fn the_preferences_query_returns_default_preferences(world: &WorldFixture) {
 fn the_preferences_command_returns_updated_preferences(world: &WorldFixture) {
     let world = world.world();
     let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let preferences = UserPreferences::builder(user_id)
-        .interest_theme_ids(vec![Uuid::parse_str(INTEREST_THEME_ID).expect("theme id")])
-        .safety_toggle_ids(vec![Uuid::parse_str(SAFETY_TOGGLE_ID).expect("safety id")])
-        .unit_system(UnitSystem::Metric)
-        .revision(2)
-        .build();
+    let preferences = build_preferences(user_id, 2);
 
     world
         .borrow()
@@ -100,36 +126,15 @@ fn the_client_requests_preferences(world: &WorldFixture) {
 
 #[when("the client updates preferences with an invalid unit system")]
 fn the_client_updates_preferences_with_an_invalid_unit_system(world: &WorldFixture) {
-    bdd_common::perform_mutation_request(
-        world,
-        bdd_common::MutationRequest {
-            method: Method::PUT,
-            path: "/api/v1/users/me/preferences",
-            payload: serde_json::json!({
-                "interestThemeIds": [INTEREST_THEME_ID],
-                "safetyToggleIds": [SAFETY_TOGGLE_ID],
-                "unitSystem": "unknown"
-            }),
-            idempotency_key: None,
-        },
-    );
+    perform_preferences_update(world, preferences_payload("unknown", None), None);
 }
 
 #[when("the client updates preferences with an idempotency key")]
 fn the_client_updates_preferences_with_an_idempotency_key(world: &WorldFixture) {
-    bdd_common::perform_mutation_request(
+    perform_preferences_update(
         world,
-        bdd_common::MutationRequest {
-            method: Method::PUT,
-            path: "/api/v1/users/me/preferences",
-            payload: serde_json::json!({
-                "interestThemeIds": [INTEREST_THEME_ID],
-                "safetyToggleIds": [SAFETY_TOGGLE_ID],
-                "unitSystem": "metric",
-                "expectedRevision": 1
-            }),
-            idempotency_key: Some(IDEMPOTENCY_KEY),
-        },
+        preferences_payload("metric", Some(1)),
+        Some(IDEMPOTENCY_KEY),
     );
 }
 

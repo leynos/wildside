@@ -13,5 +13,6 @@ pub mod state;
 #[cfg(test)]
 pub mod test_utils;
 pub mod users;
+pub mod validation;
 
 pub use error::ApiResult;

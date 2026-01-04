@@ -4,21 +4,30 @@
 //! idempotency and optimistic concurrency semantics.
 
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 
+use super::idempotency::{
+    IdempotencyContext, IdempotentMutationParams, IdempotentMutationRequest, PayloadHashable,
+};
 use crate::domain::ports::{
     DeleteNoteRequest, DeleteNoteResponse, IdempotencyRepository, IdempotencyRepositoryError,
     RouteAnnotationRepository, RouteAnnotationRepositoryError, RouteAnnotationsCommand,
     UpdateProgressRequest, UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
 };
-use crate::domain::{
-    Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
-    MutationType, PayloadHash, UserId, canonicalize_and_hash,
-};
+use crate::domain::{Error, IdempotencyLookupResult};
+
+type CommandFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a>>;
+
+/// Bundles response handling closures to keep argument counts low.
+struct ResponseSpec<Build, Mark> {
+    build_response: Build,
+    mark_replayed: Mark,
+}
 
 /// Route annotations service implementing the driving ports.
 #[derive(Clone)]
@@ -97,17 +106,22 @@ where
             .map_err(|err| Error::internal(format!("failed to deserialize response: {err}")))
     }
 
-    fn mark_replayed<T>(mut response: T) -> T
+    fn mark_replayed<T, Mark>(mut response: T, mark_replayed: Mark) -> T
     where
-        T: HasReplayFlag,
+        Mark: Fn(&mut T),
     {
-        response.mark_replayed();
+        mark_replayed(&mut response);
         response
     }
 
-    async fn handle_duplicate_key_race<T>(&self, context: &IdempotencyContext) -> Result<T, Error>
+    async fn handle_duplicate_key_race<T, Mark>(
+        &self,
+        context: &IdempotencyContext,
+        mark_replayed: Mark,
+    ) -> Result<T, Error>
     where
-        T: DeserializeOwned + HasReplayFlag,
+        T: DeserializeOwned,
+        Mark: Fn(&mut T) + Copy,
     {
         let query = context.lookup_query();
         let retry_result = self
@@ -119,7 +133,7 @@ where
         match retry_result {
             IdempotencyLookupResult::MatchingPayload(record) => {
                 let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(Self::mark_replayed(response))
+                Ok(Self::mark_replayed(response, mark_replayed))
             }
             IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
                 "idempotency key already used with different payload",
@@ -130,13 +144,15 @@ where
         }
     }
 
-    async fn handle_idempotent<T, F, Fut>(
+    async fn handle_idempotent<T, F, Fut, Mark>(
         &self,
         context: IdempotencyContext,
         operation: F,
+        mark_replayed: Mark,
     ) -> Result<T, Error>
     where
-        T: DeserializeOwned + Serialize + HasReplayFlag,
+        T: DeserializeOwned + Serialize,
+        Mark: Fn(&mut T) + Copy,
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<T, Error>>,
     {
@@ -156,14 +172,15 @@ where
                 match self.idempotency_repo.store(&record).await {
                     Ok(()) => Ok(response),
                     Err(IdempotencyRepositoryError::DuplicateKey { .. }) => {
-                        self.handle_duplicate_key_race(&context).await
+                        self.handle_duplicate_key_race(&context, mark_replayed)
+                            .await
                     }
                     Err(err) => Err(Self::map_idempotency_error(err)),
                 }
             }
             IdempotencyLookupResult::MatchingPayload(record) => {
                 let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(Self::mark_replayed(response))
+                Ok(Self::mark_replayed(response, mark_replayed))
             }
             IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
                 "idempotency key already used with different payload",
@@ -171,14 +188,16 @@ where
         }
     }
 
-    async fn execute_idempotent_mutation<Req, Res, F, Fut>(
+    async fn execute_idempotent_mutation<Req, Res, F, Fut, Mark>(
         &self,
         params: IdempotentMutationParams<'_, Req>,
+        mark_replayed: Mark,
         operation: F,
     ) -> Result<Res, Error>
     where
         Req: PayloadHashable,
-        Res: DeserializeOwned + Serialize + HasReplayFlag,
+        Res: DeserializeOwned + Serialize,
+        Mark: Fn(&mut Res) + Copy,
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<Res, Error>>,
     {
@@ -192,92 +211,44 @@ where
             params.mutation_type,
             params.request.compute_payload_hash(),
         );
-        self.handle_idempotent(context, operation).await
-    }
-}
-
-struct IdempotentMutationParams<'a, Req> {
-    request: &'a Req,
-    user_id: &'a UserId,
-    mutation_type: MutationType,
-    idempotency_key: Option<IdempotencyKey>,
-}
-
-trait PayloadHashable {
-    fn compute_payload_hash(&self) -> PayloadHash;
-}
-
-impl PayloadHashable for UpsertNoteRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
-        canonicalize_and_hash(&json!({
-            "routeId": self.route_id,
-            "noteId": self.note_id,
-            "poiId": self.poi_id,
-            "body": self.body,
-            "expectedRevision": self.expected_revision,
-        }))
-    }
-}
-
-impl PayloadHashable for UpdateProgressRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
-        canonicalize_and_hash(&json!({
-            "routeId": self.route_id,
-            "visitedStopIds": self.visited_stop_ids,
-            "expectedRevision": self.expected_revision,
-        }))
-    }
-}
-
-impl PayloadHashable for DeleteNoteRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
-        canonicalize_and_hash(&json!({
-            "noteId": self.note_id,
-        }))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct IdempotencyContext {
-    key: IdempotencyKey,
-    user_id: UserId,
-    mutation_type: MutationType,
-    payload_hash: PayloadHash,
-}
-
-impl IdempotencyContext {
-    fn new(
-        key: IdempotencyKey,
-        user_id: UserId,
-        mutation_type: MutationType,
-        payload_hash: PayloadHash,
-    ) -> Self {
-        Self {
-            key,
-            user_id,
-            mutation_type,
-            payload_hash,
-        }
+        self.handle_idempotent(context, operation, mark_replayed)
+            .await
     }
 
-    fn lookup_query(&self) -> IdempotencyLookupQuery {
-        IdempotencyLookupQuery::new(
-            self.key.clone(),
-            self.user_id.clone(),
-            self.mutation_type,
-            self.payload_hash.clone(),
+    async fn execute_command<Req, Res, Item, Build, Op, Mark>(
+        &self,
+        request: Req,
+        operation: Op,
+        response_spec: ResponseSpec<Build, Mark>,
+    ) -> Result<Res, Error>
+    where
+        Req: IdempotentMutationRequest,
+        Res: DeserializeOwned + Serialize,
+        Op: for<'a> Fn(&'a Self, &'a Req) -> CommandFuture<'a, Item>,
+        Build: FnOnce(Item) -> Res,
+        Mark: Fn(&mut Res) + Copy,
+    {
+        let ResponseSpec {
+            build_response,
+            mark_replayed,
+        } = response_spec;
+        self.execute_idempotent_mutation(
+            IdempotentMutationParams {
+                request: &request,
+                user_id: request.user_id(),
+                mutation_type: request.mutation_type(),
+                idempotency_key: request.idempotency_key(),
+            },
+            mark_replayed,
+            || {
+                let future = operation(self, &request);
+                Box::pin(async move {
+                    let item = future.await?;
+                    Ok(build_response(item))
+                })
+            },
         )
-    }
-
-    fn record(&self, response_snapshot: serde_json::Value) -> IdempotencyRecord {
-        IdempotencyRecord {
-            key: self.key.clone(),
-            mutation_type: self.mutation_type,
-            payload_hash: self.payload_hash.clone(),
-            response_snapshot,
-            user_id: self.user_id.clone(),
-            created_at: chrono::Utc::now(),
-        }
+        .await
     }
 }
 
@@ -288,38 +259,38 @@ where
     I: IdempotencyRepository,
 {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        self.execute_idempotent_mutation(
-            IdempotentMutationParams {
-                request: &request,
-                user_id: &request.user_id,
-                mutation_type: MutationType::Notes,
-                idempotency_key: request.idempotency_key.clone(),
+        self.execute_command(
+            request,
+            |service: &Self, request: &UpsertNoteRequest| {
+                Box::pin(async move { service.perform_upsert_note(request).await })
             },
-            || async {
-                let note = self.perform_upsert_note(&request).await?;
-                Ok(UpsertNoteResponse {
+            ResponseSpec {
+                build_response: |note| UpsertNoteResponse {
                     note,
                     replayed: false,
-                })
+                },
+                mark_replayed: |response: &mut UpsertNoteResponse| {
+                    response.replayed = true;
+                },
             },
         )
         .await
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        self.execute_idempotent_mutation(
-            IdempotentMutationParams {
-                request: &request,
-                user_id: &request.user_id,
-                mutation_type: MutationType::Notes,
-                idempotency_key: request.idempotency_key.clone(),
+        self.execute_command(
+            request,
+            |service: &Self, request: &DeleteNoteRequest| {
+                Box::pin(async move { service.perform_delete_note(request).await })
             },
-            || async {
-                let deleted = self.perform_delete_note(&request).await?;
-                Ok(DeleteNoteResponse {
+            ResponseSpec {
+                build_response: |deleted| DeleteNoteResponse {
                     deleted,
                     replayed: false,
-                })
+                },
+                mark_replayed: |response: &mut DeleteNoteResponse| {
+                    response.replayed = true;
+                },
             },
         )
         .await
@@ -329,44 +300,22 @@ where
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        self.execute_idempotent_mutation(
-            IdempotentMutationParams {
-                request: &request,
-                user_id: &request.user_id,
-                mutation_type: MutationType::Progress,
-                idempotency_key: request.idempotency_key.clone(),
+        self.execute_command(
+            request,
+            |service: &Self, request: &UpdateProgressRequest| {
+                Box::pin(async move { service.perform_update_progress(request).await })
             },
-            || async {
-                let progress = self.perform_update_progress(&request).await?;
-                Ok(UpdateProgressResponse {
+            ResponseSpec {
+                build_response: |progress| UpdateProgressResponse {
                     progress,
                     replayed: false,
-                })
+                },
+                mark_replayed: |response: &mut UpdateProgressResponse| {
+                    response.replayed = true;
+                },
             },
         )
         .await
-    }
-}
-
-trait HasReplayFlag {
-    fn mark_replayed(&mut self);
-}
-
-impl HasReplayFlag for UpsertNoteResponse {
-    fn mark_replayed(&mut self) {
-        self.replayed = true;
-    }
-}
-
-impl HasReplayFlag for UpdateProgressResponse {
-    fn mark_replayed(&mut self) {
-        self.replayed = true;
-    }
-}
-
-impl HasReplayFlag for DeleteNoteResponse {
-    fn mark_replayed(&mut self) {
-        self.replayed = true;
     }
 }
 

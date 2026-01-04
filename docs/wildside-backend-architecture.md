@@ -310,7 +310,13 @@ Module boundaries are enforced by a repo-local lint that runs during
   provides safe retries for offline-first PWA scenarios.
 - **2025-12-30:** `GET /api/v1/users/me/preferences` persists default
   preferences when none exist so responses always include a revisioned payload
-  for offline caching. The endpoint is therefore a side-effecting read.
+  for offline caching. The endpoint is therefore a side-effecting read, guarded
+  by a `user_preferences.user_id` primary key to prevent concurrent inserts and
+  `Cache-Control: private, must-revalidate, no-cache` to avoid unsafe caching.
+- **2025-12-30:** Route annotations responses return the full note list because
+  note counts are expected to remain bounded by route POIs. If future work
+  introduces unbounded annotations, pagination will be added to the query port
+  and HTTP endpoint.
 
 ### Web API and WebSocket Layer (Actix Web)
 

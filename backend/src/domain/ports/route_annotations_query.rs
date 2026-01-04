@@ -13,6 +13,9 @@ use crate::domain::{Error, RouteAnnotations, UserId};
 #[async_trait]
 pub trait RouteAnnotationsQuery: Send + Sync {
     /// Fetch notes and progress for a route and user.
+    ///
+    /// Note counts are expected to remain bounded by route POIs; pagination can
+    /// be added if this assumption changes.
     async fn fetch_annotations(
         &self,
         route_id: Uuid,

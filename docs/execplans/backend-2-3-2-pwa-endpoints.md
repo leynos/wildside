@@ -62,7 +62,7 @@ Success is observable when:
   environment.
   Evidence: MCP resource discovery returned no resources.
 - Observation: Embedded PostgreSQL downloads initially hit GitHub rate limits
-  during `make test`, and TFLint plugin initialisation failed until plugins
+  during `make test`, and TFLint plugin initialization failed until plugins
   were downloaded into a workspace directory.
   Evidence: Re-running `make test` with `PG_WORKER_PATH` and `make lint` with
   `TFLINT_PLUGIN_DIR` completed successfully.
@@ -150,7 +150,7 @@ Terminology:
   `RouteAnnotationsCommand`, following the idempotency patterns in
   `RouteSubmissionServiceImpl`.
 - Ensure idempotency uses `MutationType::{Preferences, Notes, Progress}` and
-  serialises responses for replay.
+  serializes responses for replay.
 - Map repository errors (`RevisionMismatch`, `RouteNotFound`, connection and
   query errors) to appropriate `domain::Error` variants.
 - Add unit tests covering idempotency hits, conflicts, revision mismatches,

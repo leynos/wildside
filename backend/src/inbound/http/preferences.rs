@@ -7,7 +7,7 @@
 
 use std::str::FromStr;
 
-use actix_web::{HttpRequest, get, put, web};
+use actix_web::{HttpRequest, HttpResponse, get, put, web};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
@@ -20,6 +20,7 @@ use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
+use crate::inbound::http::validation::{missing_field_error, parse_uuid_list};
 
 /// Request payload for updating user preferences.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -64,38 +65,12 @@ impl From<UserPreferences> for UserPreferencesResponse {
     }
 }
 
-fn missing_field_error(field: &str) -> Error {
-    Error::invalid_request(format!("missing required field: {field}")).with_details(json!({
-        "field": field,
-        "code": "missing_field",
-    }))
-}
-
-fn invalid_uuid_error(field: &str, index: usize, value: &str) -> Error {
-    Error::invalid_request(format!("{field} must contain valid UUIDs")).with_details(json!({
-        "field": field,
-        "index": index,
-        "value": value,
-        "code": "invalid_uuid",
-    }))
-}
-
 fn invalid_unit_system_error(value: &str) -> Error {
     Error::invalid_request("unit system must be metric or imperial").with_details(json!({
         "field": "unitSystem",
         "value": value,
         "code": "invalid_unit_system",
     }))
-}
-
-fn parse_uuid_list(values: Vec<String>, field: &str) -> Result<Vec<Uuid>, Error> {
-    values
-        .into_iter()
-        .enumerate()
-        .map(|(index, value)| {
-            Uuid::parse_str(&value).map_err(|_| invalid_uuid_error(field, index, &value))
-        })
-        .collect()
 }
 
 fn parse_unit_system(value: String) -> Result<UnitSystem, Error> {
@@ -133,8 +108,14 @@ struct ParsedPreferences {
 #[utoipa::path(
     get,
     path = "/api/v1/users/me/preferences",
+    description = "Fetch preferences, creating defaults if none exist.",
     responses(
-        (status = 200, description = "User preferences", body = UserPreferencesResponse),
+        (
+            status = 200,
+            description = "User preferences",
+            headers(("Cache-Control" = String, description = "Cache control header")),
+            body = UserPreferencesResponse
+        ),
         (status = 401, description = "Unauthorised", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
@@ -145,10 +126,12 @@ struct ParsedPreferences {
 pub async fn get_preferences(
     state: web::Data<HttpState>,
     session: SessionContext,
-) -> ApiResult<web::Json<UserPreferencesResponse>> {
+) -> ApiResult<HttpResponse> {
     let user_id = session.require_user_id()?;
     let preferences = state.preferences_query.fetch_preferences(&user_id).await?;
-    Ok(web::Json(UserPreferencesResponse::from(preferences)))
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", "private, must-revalidate, no-cache"))
+        .json(UserPreferencesResponse::from(preferences)))
 }
 
 /// Update the authenticated user's preferences.

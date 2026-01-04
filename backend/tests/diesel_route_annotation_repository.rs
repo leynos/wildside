@@ -4,6 +4,7 @@
 //! using `pg-embedded-setup-unpriv`.
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 use backend::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositoryError};
@@ -130,6 +131,69 @@ where
     Ok(())
 }
 
+struct RevisionMismatchSpec<T, InitFn, UpdateFn, SaveFn> {
+    name: &'static str,
+    create_initial: InitFn,
+    create_updated: UpdateFn,
+    save: SaveFn,
+    _marker: PhantomData<T>,
+}
+
+fn save_note_future<'a>(
+    repo: &'a DieselRouteAnnotationRepository,
+    note: RouteNote,
+    expected: Option<u32>,
+) -> Pin<Box<dyn Future<Output = Result<(), RouteAnnotationRepositoryError>> + Send + 'a>> {
+    Box::pin(async move { repo.save_note(&note, expected).await })
+}
+
+fn save_progress_future<'a>(
+    repo: &'a DieselRouteAnnotationRepository,
+    progress: RouteProgress,
+    expected: Option<u32>,
+) -> Pin<Box<dyn Future<Output = Result<(), RouteAnnotationRepositoryError>> + Send + 'a>> {
+    Box::pin(async move { repo.save_progress(&progress, expected).await })
+}
+
+fn run_revision_mismatch_test<T, InitFn, UpdateFn, SaveFn>(
+    repo_context: Option<TestContext>,
+    spec: RevisionMismatchSpec<T, InitFn, UpdateFn, SaveFn>,
+) where
+    InitFn: FnOnce(&TestContext) -> T,
+    UpdateFn: FnOnce(&TestContext) -> T,
+    SaveFn: for<'a> Fn(
+        &'a DieselRouteAnnotationRepository,
+        T,
+        Option<u32>,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<(), RouteAnnotationRepositoryError>> + Send + 'a>,
+    >,
+{
+    let RevisionMismatchSpec {
+        name,
+        create_initial,
+        create_updated,
+        save,
+        _marker,
+    } = spec;
+    let Some(context) = repo_context else {
+        eprintln!("SKIP-TEST-CLUSTER: {name} skipped");
+        return;
+    };
+
+    let repository = context.repository.clone();
+    let initial = create_initial(&context);
+    let updated = create_updated(&context);
+
+    context
+        .runtime
+        .block_on(async move {
+            assert_revision_mismatch_rejected(&repository, move || initial, move || updated, save)
+                .await
+        })
+        .expect("revision mismatch test");
+}
+
 #[rstest]
 fn route_notes_round_trip(repo_context: Option<TestContext>) {
     let Some(context) = repo_context else {
@@ -176,42 +240,29 @@ fn route_notes_round_trip(repo_context: Option<TestContext>) {
 
 #[rstest]
 fn route_notes_reject_revision_mismatch(repo_context: Option<TestContext>) {
-    let Some(context) = repo_context else {
-        eprintln!("SKIP-TEST-CLUSTER: route_notes_reject_revision_mismatch skipped");
-        return;
-    };
-
-    let repository = context.repository.clone();
     let note_id = Uuid::new_v4();
-    let route_id = context.route_id;
-    let user_id = context.user_id.clone();
-
-    context
-        .runtime
-        .block_on(async {
-            assert_revision_mismatch_rejected(
-                &repository,
-                || {
-                    RouteNote::new(
-                        note_id,
-                        route_id,
-                        user_id.clone(),
-                        RouteNoteContent::new("First note"),
-                    )
-                },
-                || {
-                    RouteNote::builder(note_id, route_id, user_id.clone())
-                        .body("Updated note")
-                        .revision(2)
-                        .build()
-                },
-                |repo, note, expected| {
-                    Box::pin(async move { repo.save_note(&note, expected).await })
-                },
-            )
-            .await
-        })
-        .expect("revision mismatch test");
+    run_revision_mismatch_test(
+        repo_context,
+        RevisionMismatchSpec {
+            name: "route_notes_reject_revision_mismatch",
+            create_initial: |context: &TestContext| {
+                RouteNote::new(
+                    note_id,
+                    context.route_id,
+                    context.user_id.clone(),
+                    RouteNoteContent::new("First note"),
+                )
+            },
+            create_updated: |context: &TestContext| {
+                RouteNote::builder(note_id, context.route_id, context.user_id.clone())
+                    .body("Updated note")
+                    .revision(2)
+                    .build()
+            },
+            save: save_note_future,
+            _marker: PhantomData,
+        },
+    );
 }
 
 #[rstest]
@@ -279,37 +330,24 @@ fn route_progress_round_trip(repo_context: Option<TestContext>) {
 
 #[rstest]
 fn route_progress_rejects_revision_mismatch(repo_context: Option<TestContext>) {
-    let Some(context) = repo_context else {
-        eprintln!("SKIP-TEST-CLUSTER: route_progress_rejects_revision_mismatch skipped");
-        return;
-    };
-
-    let repository = context.repository.clone();
-    let route_id = context.route_id;
-    let user_id = context.user_id.clone();
-
-    context
-        .runtime
-        .block_on(async {
-            assert_revision_mismatch_rejected(
-                &repository,
-                || {
-                    RouteProgress::builder(route_id, user_id.clone())
-                        .visited_stop_ids(vec![Uuid::new_v4()])
-                        .revision(1)
-                        .build()
-                },
-                || {
-                    RouteProgress::builder(route_id, user_id.clone())
-                        .visited_stop_ids(vec![Uuid::new_v4()])
-                        .revision(2)
-                        .build()
-                },
-                |repo, progress, expected| {
-                    Box::pin(async move { repo.save_progress(&progress, expected).await })
-                },
-            )
-            .await
-        })
-        .expect("revision mismatch test");
+    run_revision_mismatch_test(
+        repo_context,
+        RevisionMismatchSpec {
+            name: "route_progress_rejects_revision_mismatch",
+            create_initial: |context: &TestContext| {
+                RouteProgress::builder(context.route_id, context.user_id.clone())
+                    .visited_stop_ids(vec![Uuid::new_v4()])
+                    .revision(1)
+                    .build()
+            },
+            create_updated: |context: &TestContext| {
+                RouteProgress::builder(context.route_id, context.user_id.clone())
+                    .visited_stop_ids(vec![Uuid::new_v4()])
+                    .revision(2)
+                    .build()
+            },
+            save: save_progress_future,
+            _marker: PhantomData,
+        },
+    );
 }

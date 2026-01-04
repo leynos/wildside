@@ -9,7 +9,7 @@
       "headings": false
     },
     "MD029": { "style": "ordered" },
-    "MD060": false
+    "MD060": { "style": "aligned" }
   },
   "ignores": [
     "**/.venv/**",

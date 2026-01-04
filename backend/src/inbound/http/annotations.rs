@@ -6,19 +6,23 @@
 //! PUT /api/v1/routes/{route_id}/progress
 //! ```
 
+use std::future::Future;
+
 use actix_web::{HttpRequest, get, post, put, web};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::ports::{UpdateProgressRequest, UpsertNoteRequest};
-use crate::domain::{Error, RouteAnnotations, RouteNote, RouteProgress};
+use crate::domain::ports::{
+    UpdateProgressRequest, UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
+};
+use crate::domain::{Error, IdempotencyKey, RouteAnnotations, RouteNote, RouteProgress, UserId};
 use crate::inbound::http::ApiResult;
 use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
+use crate::inbound::http::validation::{missing_field_error, parse_uuid, parse_uuid_list};
 
 #[derive(Debug, Deserialize)]
 struct RoutePath {
@@ -118,55 +122,8 @@ impl From<RouteAnnotations> for RouteAnnotationsResponse {
     }
 }
 
-fn missing_field_error(field: &str) -> Error {
-    Error::invalid_request(format!("missing required field: {field}")).with_details(json!({
-        "field": field,
-        "code": "missing_field",
-    }))
-}
-
-fn invalid_uuid_error(field: &str, value: &str) -> Error {
-    Error::invalid_request(format!("{field} must be a valid UUID")).with_details(json!({
-        "field": field,
-        "value": value,
-        "code": "invalid_uuid",
-    }))
-}
-
-fn invalid_uuid_index_error(field: &str, index: usize, value: &str) -> Error {
-    Error::invalid_request(format!("{field} must contain valid UUIDs")).with_details(json!({
-        "field": field,
-        "index": index,
-        "value": value,
-        "code": "invalid_uuid",
-    }))
-}
-
 fn parse_route_id(path: RoutePath) -> Result<Uuid, Error> {
-    Uuid::parse_str(&path.route_id).map_err(|_| invalid_uuid_error("routeId", &path.route_id))
-}
-
-fn parse_uuid(value: String, field: &str) -> Result<Uuid, Error> {
-    Uuid::parse_str(&value).map_err(|_| invalid_uuid_error(field, &value))
-}
-
-fn parse_uuid_list(values: Vec<String>, field: &str) -> Result<Vec<Uuid>, Error> {
-    values
-        .into_iter()
-        .enumerate()
-        .map(|(index, value)| {
-            Uuid::parse_str(&value).map_err(|_| invalid_uuid_index_error(field, index, &value))
-        })
-        .collect()
-}
-
-fn route_id_from_request(request: &HttpRequest) -> Result<Uuid, Error> {
-    let route_id = request
-        .match_info()
-        .get("route_id")
-        .ok_or_else(|| missing_field_error("routeId"))?
-        .to_owned();
-    parse_route_id(RoutePath { route_id })
+    parse_uuid(path.route_id, "routeId")
 }
 
 fn parse_note_request(payload: NoteRequest) -> Result<ParsedNoteRequest, Error> {
@@ -210,6 +167,92 @@ struct ParsedNoteRequest {
 struct ParsedProgressRequest {
     visited_stop_ids: Vec<Uuid>,
     expected_revision: Option<u32>,
+}
+
+struct RouteMutationContext {
+    user_id: UserId,
+    route_id: Uuid,
+    idempotency_key: Option<IdempotencyKey>,
+}
+
+struct RouteMutationSpec<Payload, Parsed, Req, DomainRes, Response, ParseFn, BuildFn, CallFn, MapFn>
+{
+    payload: web::Json<Payload>,
+    parse: ParseFn,
+    build_request: BuildFn,
+    call: CallFn,
+    map_response: MapFn,
+    _parsed: std::marker::PhantomData<(Parsed, Req, DomainRes, Response)>,
+}
+
+fn route_mutation_context(
+    session: &SessionContext,
+    request: &HttpRequest,
+    route_id: Uuid,
+) -> Result<RouteMutationContext, Error> {
+    let user_id = session.require_user_id()?;
+    let idempotency_key =
+        extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
+    Ok(RouteMutationContext {
+        user_id,
+        route_id,
+        idempotency_key,
+    })
+}
+
+fn state_from_request(request: &HttpRequest) -> Result<web::Data<HttpState>, Error> {
+    request
+        .app_data::<web::Data<HttpState>>()
+        .cloned()
+        .ok_or_else(|| Error::internal("http state missing"))
+}
+
+async fn handle_route_mutation<
+    Payload,
+    Parsed,
+    Req,
+    DomainRes,
+    Response,
+    ParseFn,
+    BuildFn,
+    CallFn,
+    MapFn,
+    Fut,
+>(
+    session: &SessionContext,
+    request: &HttpRequest,
+    route_id: Uuid,
+    spec: RouteMutationSpec<
+        Payload,
+        Parsed,
+        Req,
+        DomainRes,
+        Response,
+        ParseFn,
+        BuildFn,
+        CallFn,
+        MapFn,
+    >,
+) -> ApiResult<web::Json<Response>>
+where
+    ParseFn: FnOnce(Payload) -> Result<Parsed, Error>,
+    BuildFn: FnOnce(RouteMutationContext, Parsed) -> Req,
+    CallFn: FnOnce(Req) -> Fut,
+    MapFn: FnOnce(DomainRes) -> Response,
+    Fut: Future<Output = Result<DomainRes, Error>>,
+{
+    let RouteMutationSpec {
+        payload,
+        parse,
+        build_request,
+        call,
+        map_response,
+        _parsed,
+    } = spec;
+    let context = route_mutation_context(session, request, route_id)?;
+    let parsed = parse(payload.into_inner())?;
+    let response = call(build_request(context, parsed)).await?;
+    Ok(web::Json(map_response(response)))
 }
 
 /// Fetch notes and progress for a route.
@@ -265,31 +308,41 @@ pub async fn get_annotations(
 )]
 #[post("/routes/{route_id}/notes")]
 pub async fn upsert_note(
-    state: web::Data<HttpState>,
     session: SessionContext,
+    path: web::Path<RoutePath>,
     request: HttpRequest,
     payload: web::Json<NoteRequest>,
 ) -> ApiResult<web::Json<RouteNoteResponse>> {
-    let user_id = session.require_user_id()?;
-    let route_id = route_id_from_request(&request)?;
-    let idempotency_key =
-        extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
-    let parsed = parse_note_request(payload.into_inner())?;
-
-    let response = state
-        .route_annotations
-        .upsert_note(UpsertNoteRequest {
-            note_id: parsed.note_id,
-            route_id,
-            poi_id: parsed.poi_id,
-            user_id,
-            body: parsed.body,
-            expected_revision: parsed.expected_revision,
-            idempotency_key,
-        })
-        .await?;
-
-    Ok(web::Json(RouteNoteResponse::from(response.note)))
+    let state = state_from_request(&request)?;
+    let command = state.route_annotations.clone();
+    let route_id = parse_route_id(path.into_inner())?;
+    handle_route_mutation(
+        &session,
+        &request,
+        route_id,
+        RouteMutationSpec {
+            payload,
+            parse: parse_note_request,
+            build_request: |context: RouteMutationContext, parsed: ParsedNoteRequest| {
+                UpsertNoteRequest {
+                    note_id: parsed.note_id,
+                    route_id: context.route_id,
+                    poi_id: parsed.poi_id,
+                    user_id: context.user_id,
+                    body: parsed.body,
+                    expected_revision: parsed.expected_revision,
+                    idempotency_key: context.idempotency_key,
+                }
+            },
+            call: move |request| {
+                let command = command.clone();
+                async move { command.upsert_note(request).await }
+            },
+            map_response: |response: UpsertNoteResponse| RouteNoteResponse::from(response.note),
+            _parsed: std::marker::PhantomData,
+        },
+    )
+    .await
 }
 
 /// Update route progress for the authenticated user.
@@ -313,29 +366,41 @@ pub async fn upsert_note(
 )]
 #[put("/routes/{route_id}/progress")]
 pub async fn update_progress(
-    state: web::Data<HttpState>,
     session: SessionContext,
+    path: web::Path<RoutePath>,
     request: HttpRequest,
     payload: web::Json<ProgressRequest>,
 ) -> ApiResult<web::Json<RouteProgressResponse>> {
-    let user_id = session.require_user_id()?;
-    let route_id = route_id_from_request(&request)?;
-    let idempotency_key =
-        extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
-    let parsed = parse_progress_request(payload.into_inner())?;
-
-    let response = state
-        .route_annotations
-        .update_progress(UpdateProgressRequest {
-            route_id,
-            user_id,
-            visited_stop_ids: parsed.visited_stop_ids,
-            expected_revision: parsed.expected_revision,
-            idempotency_key,
-        })
-        .await?;
-
-    Ok(web::Json(RouteProgressResponse::from(response.progress)))
+    let state = state_from_request(&request)?;
+    let command = state.route_annotations.clone();
+    let route_id = parse_route_id(path.into_inner())?;
+    handle_route_mutation(
+        &session,
+        &request,
+        route_id,
+        RouteMutationSpec {
+            payload,
+            parse: parse_progress_request,
+            build_request: |context: RouteMutationContext, parsed: ParsedProgressRequest| {
+                UpdateProgressRequest {
+                    route_id: context.route_id,
+                    user_id: context.user_id,
+                    visited_stop_ids: parsed.visited_stop_ids,
+                    expected_revision: parsed.expected_revision,
+                    idempotency_key: context.idempotency_key,
+                }
+            },
+            call: move |request| {
+                let command = command.clone();
+                async move { command.update_progress(request).await }
+            },
+            map_response: |response: UpdateProgressResponse| {
+                RouteProgressResponse::from(response.progress)
+            },
+            _parsed: std::marker::PhantomData,
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

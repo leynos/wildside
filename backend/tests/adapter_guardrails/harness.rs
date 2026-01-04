@@ -184,6 +184,10 @@ fn create_fixture_user_id() -> UserId {
     UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id")
 }
 
+fn fixture_uuid(value: &str) -> Uuid {
+    Uuid::parse_str(value).expect("fixture uuid")
+}
+
 fn create_user_doubles(
     user_id: &UserId,
 ) -> (
@@ -223,8 +227,8 @@ fn create_preferences_doubles(
     let preferences = RecordingUserPreferencesCommand::new(UserPreferencesCommandResponse::Ok(
         UpdatePreferencesResponse {
             preferences: UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(vec![Uuid::new_v4()])
-                .safety_toggle_ids(vec![Uuid::new_v4()])
+                .interest_theme_ids(vec![fixture_uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")])
+                .safety_toggle_ids(vec![fixture_uuid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")])
                 .unit_system(UnitSystem::Metric)
                 .revision(2)
                 .build(),
@@ -233,8 +237,8 @@ fn create_preferences_doubles(
     ));
     let preferences_query = RecordingUserPreferencesQuery::new(UserPreferencesQueryResponse::Ok(
         UserPreferences::builder(user_id.clone())
-            .interest_theme_ids(vec![Uuid::new_v4()])
-            .safety_toggle_ids(vec![Uuid::new_v4()])
+            .interest_theme_ids(vec![fixture_uuid("cccccccc-cccc-cccc-cccc-cccccccccccc")])
+            .safety_toggle_ids(vec![fixture_uuid("dddddddd-dddd-dddd-dddd-dddddddddddd")])
             .unit_system(UnitSystem::Metric)
             .revision(1)
             .build(),
@@ -249,14 +253,14 @@ fn create_route_annotations_doubles(
     RecordingRouteAnnotationsCommand,
     RecordingRouteAnnotationsQuery,
 ) {
-    let route_id = Uuid::new_v4();
-    let note_id = Uuid::new_v4();
+    let route_id = fixture_uuid("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+    let note_id = fixture_uuid("ffffffff-ffff-ffff-ffff-ffffffffffff");
     let note = RouteNote::builder(note_id, route_id, user_id.clone())
         .body("First note")
         .revision(1)
         .build();
     let progress = RouteProgress::builder(route_id, user_id.clone())
-        .visited_stop_ids(vec![Uuid::new_v4()])
+        .visited_stop_ids(vec![fixture_uuid("99999999-9999-9999-9999-999999999999")])
         .revision(1)
         .build();
     let route_annotations_query =
