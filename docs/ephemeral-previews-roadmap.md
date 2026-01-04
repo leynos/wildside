@@ -86,11 +86,12 @@ repository and commits Flux-ready manifests into `wildside-infra`.
     zones, issuers, and credential handles between modules.
 
 - [ ] **Lay out the `wildside-infra` GitOps tree**: Ensure the repository hosts
-  `clusters/<cluster>/`, `modules/`, and a `platform` directory with
-  subdirectories for `sources`, `traefik`, `cert-manager`, `external-dns`,
-  `vault`, and shared data services (CloudNativePG, Redis). Each subdirectory
-  should contain the HelmReleases, Kustomizations, and supporting manifests the
-  action can render idempotently.
+  `clusters/<cluster>/`, a `modules/` directory synced from `infra/modules/`,
+  and a `platform` directory with subdirectories for `sources`, `traefik`,
+  `cert-manager`, `external-dns`, `vault`, `databases` (CloudNativePG), and
+  `redis` (Valkey). Each subdirectory should contain the HelmReleases,
+  Kustomizations, and supporting manifests rendered idempotently by the
+  workflow helper.
 
 - [ ] **Extend `wildside-infra-k8s` for fixtures**: Update the action so it
   applies the new modules, writes resulting manifests into the `platform/*`
