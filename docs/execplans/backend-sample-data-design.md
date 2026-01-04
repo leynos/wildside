@@ -51,29 +51,29 @@ Success is observable when:
   `docs/backend-sample-data-design.md` and a living ExecPlan at
   `docs/execplans/backend-sample-data-design.md`. Rationale: The design doc is
   expected to change in review, while the ExecPlan must persist to guide
-  ongoing design work. Date/Author: 2026-01-03 / Codex
+  ongoing design work. Date/Author: 2026-01-03 / Codex.
 
 - Decision: Use a dedicated `example_data_runs` marker table to guarantee
   once-only seeding per seed key. Rationale: Explicit markers are more reliable
   than counting users and support safe concurrent startup behaviour.
-  Date/Author: 2026-01-03 / Codex
+  Date/Author: 2026-01-03 / Codex.
 
 - Decision: Keep the `example-data` crate independent of backend domain types.
   Rationale: Avoid circular dependencies and keep the generator reusable by
-  adapters and tooling. Date/Author: 2026-01-03 / Codex
+  adapters and tooling. Date/Author: 2026-01-03 / Codex.
 
 - Decision: Use deterministic RNG seeding by default with environment overrides
   for demo stability. Rationale: Stable demo data improves reproducibility
-  across environments and tests. Date/Author: 2026-01-03 / Codex
+  across environments and tests. Date/Author: 2026-01-03 / Codex.
 
 - Decision: Store the seed registry in a JSON file and support multiple named
   seeds, with a CLI helper to add new seeds using `lexis` for naming.
   Rationale: JSON enables non-code updates and named seeds keep demos
-  repeatable and discoverable. Date/Author: 2026-01-03 / Codex
+  repeatable and discoverable. Date/Author: 2026-01-03 / Codex.
 
 - Decision: Use `ortho-config` to load configuration from settings files and
   environment overrides. Rationale: Configuration should be hierarchical and
-  consistent with other backend settings. Date/Author: 2026-01-03 / Codex
+  consistent with other backend settings. Date/Author: 2026-01-03 / Codex.
 
 ## Outcomes & Retrospective
 

@@ -4,8 +4,8 @@
 
 Provide a deterministic, once-only database seeding path for demonstration
 purposes. The feature introduces an `example-data` crate and a backend
-`example-data` feature that populate users and preferences from
-`docs/wildside-pwa-data-model.md` on startup so the application can be
+`example-data` feature that populates users and preferences from
+`docs/wildside-pwa-data-model.md` on startup, so the application can be
 presented with realistic, repeatable data.
 
 ## Goals
@@ -71,7 +71,7 @@ Proposed API:
   `backend/src/domain/user.rs` (`^[A-Za-z0-9_ ]+$`) and update it whenever the
   domain constraints change.
 - Use a deterministic RNG seed sourced from the named seed definition.
-- Select interest and safety IDs from the registry so the data is stable and
+- Select interest and safety IDs from the registry, so the data is stable and
   aligns with future descriptor tables.
 - Prefer metric units, but include a minority of imperial selections to
   demonstrate unit switching.
@@ -128,7 +128,7 @@ exists), the seed is skipped.
 
 The seed runner should operate within a single transaction:
 
-1. Insert `example_data_runs` row using `INSERT ... ON CONFLICT DO NOTHING`.
+1. Insert an `example_data_runs` row using `INSERT ... ON CONFLICT DO NOTHING`.
 2. If no row is inserted, log `already seeded` and return.
 3. Insert users (upsert by ID).
 4. Insert user preferences (upsert by user ID, revision set to 1).
@@ -165,7 +165,7 @@ available, the seed should log a warning and exit without error.
 The backend startup path should build a database pool from `DATABASE_URL` and
 attach it to `ServerConfig` once the persistence layer is ready. When the
 `example-data` feature is enabled, the seed runner should execute before
-starting the HTTP server so the demo data is ready for initial requests.
+starting the HTTP server, so the demo data is ready for initial requests.
 
 ## Logging and observability
 
