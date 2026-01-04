@@ -140,7 +140,7 @@ If any step fails, the transaction rolls back, leaving no partial data.
 Seeding runs only when the backend is compiled with the `example-data` feature
 and configuration enables it. Configuration is loaded with `ortho-config` so it
 can be sourced from a settings file and environment overrides. Ensure the key
-naming matches existing backend `ortho-config` conventions before finalising
+naming matches existing backend `ortho-config` conventions before finalizing
 the field names. Proposed config fields:
 
 - `example_data.enabled`: boolean toggle.
@@ -237,7 +237,7 @@ repository's default caret semantics.
 
 ## Future considerations
 
-- Store the registry in a dedicated fixtures crate if more demo datasets are
+- Store the registry in a dedicated fixture crate if more demo datasets are
   added.
 - Support multiple registry versions for large design refreshes.
 
