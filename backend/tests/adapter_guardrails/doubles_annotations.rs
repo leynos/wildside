@@ -31,13 +31,37 @@ pub(crate) enum DeleteNoteCommandResponse {
 }
 
 #[derive(Clone)]
+struct CallRecorder<Req, RespEnum> {
+    calls: Arc<Mutex<Vec<Req>>>,
+    response: Arc<Mutex<RespEnum>>,
+}
+
+impl<Req, RespEnum> CallRecorder<Req, RespEnum>
+where
+    RespEnum: Clone,
+{
+    fn record_and_respond<Res, F>(&self, request: Req, match_response: F) -> Result<Res, Error>
+    where
+        F: FnOnce(RespEnum) -> Result<Res, Error>,
+    {
+        self.calls
+            .lock()
+            .expect("test double calls lock")
+            .push(request);
+        let response = self
+            .response
+            .lock()
+            .expect("test double response lock")
+            .clone();
+        match_response(response)
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct RecordingRouteAnnotationsCommand {
-    upsert_calls: Arc<Mutex<Vec<UpsertNoteRequest>>>,
-    update_calls: Arc<Mutex<Vec<UpdateProgressRequest>>>,
-    delete_calls: Arc<Mutex<Vec<DeleteNoteRequest>>>,
-    upsert_response: Arc<Mutex<UpsertNoteCommandResponse>>,
-    update_response: Arc<Mutex<UpdateProgressCommandResponse>>,
-    delete_response: Arc<Mutex<DeleteNoteCommandResponse>>,
+    upsert_recorder: CallRecorder<UpsertNoteRequest, UpsertNoteCommandResponse>,
+    update_recorder: CallRecorder<UpdateProgressRequest, UpdateProgressCommandResponse>,
+    delete_recorder: CallRecorder<DeleteNoteRequest, DeleteNoteCommandResponse>,
 }
 
 impl RecordingRouteAnnotationsCommand {
@@ -47,31 +71,40 @@ impl RecordingRouteAnnotationsCommand {
         delete_response: DeleteNoteCommandResponse,
     ) -> Self {
         Self {
-            upsert_calls: Arc::new(Mutex::new(Vec::new())),
-            update_calls: Arc::new(Mutex::new(Vec::new())),
-            delete_calls: Arc::new(Mutex::new(Vec::new())),
-            upsert_response: Arc::new(Mutex::new(upsert_response)),
-            update_response: Arc::new(Mutex::new(update_response)),
-            delete_response: Arc::new(Mutex::new(delete_response)),
+            upsert_recorder: CallRecorder {
+                calls: Arc::new(Mutex::new(Vec::new())),
+                response: Arc::new(Mutex::new(upsert_response)),
+            },
+            update_recorder: CallRecorder {
+                calls: Arc::new(Mutex::new(Vec::new())),
+                response: Arc::new(Mutex::new(update_response)),
+            },
+            delete_recorder: CallRecorder {
+                calls: Arc::new(Mutex::new(Vec::new())),
+                response: Arc::new(Mutex::new(delete_response)),
+            },
         }
     }
 
     pub(crate) fn upsert_calls(&self) -> Vec<UpsertNoteRequest> {
-        self.upsert_calls
+        self.upsert_recorder
+            .calls
             .lock()
             .expect("notes upsert calls lock")
             .clone()
     }
 
     pub(crate) fn update_calls(&self) -> Vec<UpdateProgressRequest> {
-        self.update_calls
+        self.update_recorder
+            .calls
             .lock()
             .expect("progress update calls lock")
             .clone()
     }
 
     pub(crate) fn delete_calls(&self) -> Vec<DeleteNoteRequest> {
-        self.delete_calls
+        self.delete_recorder
+            .calls
             .lock()
             .expect("notes delete calls lock")
             .clone()
@@ -79,92 +112,56 @@ impl RecordingRouteAnnotationsCommand {
 
     pub(crate) fn set_upsert_response(&self, response: UpsertNoteCommandResponse) {
         *self
-            .upsert_response
+            .upsert_recorder
+            .response
             .lock()
             .expect("notes upsert response lock") = response;
     }
 
     pub(crate) fn set_update_response(&self, response: UpdateProgressCommandResponse) {
         *self
-            .update_response
+            .update_recorder
+            .response
             .lock()
             .expect("progress update response lock") = response;
     }
 
     pub(crate) fn set_delete_response(&self, response: DeleteNoteCommandResponse) {
         *self
-            .delete_response
+            .delete_recorder
+            .response
             .lock()
             .expect("notes delete response lock") = response;
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Keeps call-site clarity while matching the required helper signature."
-    )]
-    fn record_call_and_get_response<Req, RespEnum, Res, F>(
-        calls: &Arc<Mutex<Vec<Req>>>,
-        response: &Arc<Mutex<RespEnum>>,
-        request: Req,
-        calls_lock_msg: &str,
-        response_lock_msg: &str,
-        match_response: F,
-    ) -> Result<Res, Error>
-    where
-        RespEnum: Clone,
-        F: FnOnce(RespEnum) -> Result<Res, Error>,
-    {
-        calls.lock().expect(calls_lock_msg).push(request);
-        let response = response.lock().expect(response_lock_msg).clone();
-        match_response(response)
     }
 }
 
 #[async_trait]
 impl RouteAnnotationsCommand for RecordingRouteAnnotationsCommand {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        Self::record_call_and_get_response(
-            &self.upsert_calls,
-            &self.upsert_response,
-            request,
-            "notes upsert calls lock",
-            "notes upsert response lock",
-            |response| match response {
+        self.upsert_recorder
+            .record_and_respond(request, |response| match response {
                 UpsertNoteCommandResponse::Ok(response) => Ok(response),
                 UpsertNoteCommandResponse::Err(error) => Err(error),
-            },
-        )
+            })
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        Self::record_call_and_get_response(
-            &self.delete_calls,
-            &self.delete_response,
-            request,
-            "notes delete calls lock",
-            "notes delete response lock",
-            |response| match response {
+        self.delete_recorder
+            .record_and_respond(request, |response| match response {
                 DeleteNoteCommandResponse::Ok(response) => Ok(response),
                 DeleteNoteCommandResponse::Err(error) => Err(error),
-            },
-        )
+            })
     }
 
     async fn update_progress(
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        Self::record_call_and_get_response(
-            &self.update_calls,
-            &self.update_response,
-            request,
-            "progress update calls lock",
-            "progress update response lock",
-            |response| match response {
+        self.update_recorder
+            .record_and_respond(request, |response| match response {
                 UpdateProgressCommandResponse::Ok(response) => Ok(response),
                 UpdateProgressCommandResponse::Err(error) => Err(error),
-            },
-        )
+            })
     }
 }
 
