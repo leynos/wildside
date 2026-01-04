@@ -29,6 +29,50 @@ fn make_service_with_idempotency(
     RouteAnnotationsService::new(Arc::new(repo), Arc::new(idempotency_repo))
 }
 
+struct IdempotencyReplaySpec {
+    idempotency_key: IdempotencyKey,
+    user_id: UserId,
+    mutation_type: MutationType,
+    payload_hash: crate::domain::PayloadHash,
+}
+
+fn mock_idempotency_replay<Res>(
+    spec: IdempotencyReplaySpec,
+    response: Res,
+) -> MockIdempotencyRepository
+where
+    Res: serde::Serialize + 'static,
+{
+    let response_snapshot = serde_json::to_value(response).expect("response snapshot");
+    let expected_mutation_type = spec.mutation_type;
+    let record = IdempotencyRecord {
+        key: spec.idempotency_key.clone(),
+        mutation_type: spec.mutation_type,
+        payload_hash: spec.payload_hash.clone(),
+        response_snapshot,
+        user_id: spec.user_id.clone(),
+        created_at: Utc::now(),
+    };
+
+    let expected_key = spec.idempotency_key.clone();
+    let expected_user_id = spec.user_id.clone();
+    let expected_payload_hash = spec.payload_hash.clone();
+    let mut idempotency_repo = MockIdempotencyRepository::new();
+    idempotency_repo
+        .expect_lookup()
+        .withf(move |query: &IdempotencyLookupQuery| {
+            query.key == expected_key
+                && query.user_id == expected_user_id
+                && query.mutation_type == expected_mutation_type
+                && query.payload_hash == expected_payload_hash
+        })
+        .times(1)
+        .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
+    idempotency_repo.expect_store().times(0);
+
+    idempotency_repo
+}
+
 #[tokio::test]
 async fn upsert_note_creates_note_when_missing() {
     let mut repo = MockRouteAnnotationRepository::new();
@@ -106,39 +150,23 @@ async fn upsert_note_replays_cached_response_for_same_idempotency_key() {
         RouteNoteContent::new("cached"),
     );
     let payload_hash = request.compute_payload_hash();
-    let response_snapshot = serde_json::to_value(UpsertNoteResponse {
-        note: note.clone(),
-        replayed: false,
-    })
-    .expect("response snapshot");
-    let record = IdempotencyRecord {
-        key: idempotency_key.clone(),
-        mutation_type: MutationType::Notes,
-        payload_hash: payload_hash.clone(),
-        response_snapshot,
-        user_id: user_id.clone(),
-        created_at: Utc::now(),
-    };
 
     let mut repo = MockRouteAnnotationRepository::new();
     repo.expect_find_note_by_id().times(0);
     repo.expect_save_note().times(0);
 
-    let expected_key = idempotency_key.clone();
-    let expected_user_id = user_id.clone();
-    let expected_payload_hash = payload_hash.clone();
-    let mut idempotency_repo = MockIdempotencyRepository::new();
-    idempotency_repo
-        .expect_lookup()
-        .withf(move |query: &IdempotencyLookupQuery| {
-            query.key == expected_key
-                && query.user_id == expected_user_id
-                && query.mutation_type == MutationType::Notes
-                && query.payload_hash == expected_payload_hash
-        })
-        .times(1)
-        .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
-    idempotency_repo.expect_store().times(0);
+    let idempotency_repo = mock_idempotency_replay(
+        IdempotencyReplaySpec {
+            idempotency_key,
+            user_id,
+            mutation_type: MutationType::Notes,
+            payload_hash,
+        },
+        UpsertNoteResponse {
+            note: note.clone(),
+            replayed: false,
+        },
+    );
 
     let service = make_service_with_idempotency(repo, idempotency_repo);
     let response = service.upsert_note(request).await.expect("cached response");
@@ -221,39 +249,23 @@ async fn update_progress_replays_cached_response_for_same_idempotency_key() {
         .revision(2)
         .build();
     let payload_hash = request.compute_payload_hash();
-    let response_snapshot = serde_json::to_value(UpdateProgressResponse {
-        progress: progress.clone(),
-        replayed: false,
-    })
-    .expect("response snapshot");
-    let record = IdempotencyRecord {
-        key: idempotency_key.clone(),
-        mutation_type: MutationType::Progress,
-        payload_hash: payload_hash.clone(),
-        response_snapshot,
-        user_id: user_id.clone(),
-        created_at: Utc::now(),
-    };
 
     let mut repo = MockRouteAnnotationRepository::new();
     repo.expect_find_progress().times(0);
     repo.expect_save_progress().times(0);
 
-    let expected_key = idempotency_key.clone();
-    let expected_user_id = user_id.clone();
-    let expected_payload_hash = payload_hash.clone();
-    let mut idempotency_repo = MockIdempotencyRepository::new();
-    idempotency_repo
-        .expect_lookup()
-        .withf(move |query: &IdempotencyLookupQuery| {
-            query.key == expected_key
-                && query.user_id == expected_user_id
-                && query.mutation_type == MutationType::Progress
-                && query.payload_hash == expected_payload_hash
-        })
-        .times(1)
-        .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
-    idempotency_repo.expect_store().times(0);
+    let idempotency_repo = mock_idempotency_replay(
+        IdempotencyReplaySpec {
+            idempotency_key,
+            user_id,
+            mutation_type: MutationType::Progress,
+            payload_hash,
+        },
+        UpdateProgressResponse {
+            progress: progress.clone(),
+            replayed: false,
+        },
+    );
 
     let service = make_service_with_idempotency(repo, idempotency_repo);
     let response = service
