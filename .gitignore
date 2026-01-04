@@ -50,7 +50,7 @@ bun.lockb
 **/__pycache__/
 *.py[cod]
 .uv-cache/
-./spec/*.tmp.*
+spec/*.tmp.*
 
 # Environment
 .env

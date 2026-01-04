@@ -234,6 +234,45 @@ fn interests_request_validation_rejects_invalid_ids(
 }
 
 #[test]
+fn interests_request_validation_rejects_too_many_ids() {
+    let payload = InterestsRequest {
+        interest_theme_ids: vec![
+            "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
+            INTEREST_THEME_IDS_MAX + 1
+        ],
+    };
+
+    let err = parse_interest_theme_ids(payload).expect_err("too many ids");
+    let api_error = map_interests_request_error(err);
+
+    assert_eq!(api_error.code(), ErrorCode::InvalidRequest);
+    assert_eq!(
+        api_error.message(),
+        "interest theme ids must contain at most 100 items"
+    );
+    let details = api_error
+        .details()
+        .and_then(|value| value.as_object())
+        .expect("details present");
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("too_many_interest_theme_ids")
+    );
+    assert_eq!(
+        details.get("field").and_then(Value::as_str),
+        Some("interestThemeIds")
+    );
+    assert_eq!(
+        details.get("max").and_then(Value::as_u64),
+        Some(INTEREST_THEME_IDS_MAX as u64)
+    );
+    assert_eq!(
+        details.get("count").and_then(Value::as_u64),
+        Some((INTEREST_THEME_IDS_MAX + 1) as u64)
+    );
+}
+
+#[test]
 fn interests_request_validation_accepts_valid_ids() {
     let payload = InterestsRequest {
         interest_theme_ids: vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],

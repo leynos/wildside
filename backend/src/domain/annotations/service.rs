@@ -338,42 +338,38 @@ where
     }
 }
 
-#[async_trait]
-impl<R, I> RouteAnnotationsCommand for RouteAnnotationsService<R, I>
-where
-    R: RouteAnnotationRepository,
-    I: IdempotencyRepository,
-{
-    async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        self.execute_standard_command(
-            request,
-            Self::upsert_note_operation,
-            Self::build_upsert_response,
-        )
-        .await
-    }
-
-    async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        self.execute_standard_command(
-            request,
-            Self::delete_note_operation,
-            Self::build_delete_response,
-        )
-        .await
-    }
-
-    async fn update_progress(
-        &self,
-        request: UpdateProgressRequest,
-    ) -> Result<UpdateProgressResponse, Error> {
-        self.execute_standard_command(
-            request,
-            Self::update_progress_operation,
-            Self::build_progress_response,
-        )
-        .await
-    }
+macro_rules! impl_route_annotations_command {
+    ($($name:ident: $request:ty => $response:ty { $operation:ident, $builder:ident }),+ $(,)?) => {
+        #[async_trait]
+        impl<R, I> RouteAnnotationsCommand for RouteAnnotationsService<R, I>
+        where
+            R: RouteAnnotationRepository,
+            I: IdempotencyRepository,
+        {
+            $(
+                async fn $name(&self, request: $request) -> Result<$response, Error> {
+                    self.execute_standard_command(request, Self::$operation, Self::$builder)
+                        .await
+                }
+            )+
+        }
+    };
 }
+
+impl_route_annotations_command!(
+    upsert_note: UpsertNoteRequest => UpsertNoteResponse {
+        upsert_note_operation,
+        build_upsert_response
+    },
+    delete_note: DeleteNoteRequest => DeleteNoteResponse {
+        delete_note_operation,
+        build_delete_response
+    },
+    update_progress: UpdateProgressRequest => UpdateProgressResponse {
+        update_progress_operation,
+        build_progress_response
+    },
+);
 
 #[cfg(test)]
 #[path = "service_tests.rs"]

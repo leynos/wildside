@@ -18,6 +18,7 @@ use crate::inbound::http::state::HttpState;
 use actix_web::{HttpResponse, get, post, put, web};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use utoipa::{PartialSchema, ToSchema};
 
 /// Login request body for `POST /api/v1/login`.
 ///
@@ -38,8 +39,38 @@ pub struct InterestsRequest {
     pub interest_theme_ids: Vec<String>,
 }
 
+struct UsersListResponse;
+
+impl PartialSchema for UsersListResponse {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        let items = UserSchema::schema();
+        utoipa::openapi::schema::ArrayBuilder::new()
+            .items(items)
+            .max_items(Some(100))
+            .into()
+    }
+}
+
+impl ToSchema for UsersListResponse {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        schemas.push((UserSchema::name().into(), UserSchema::schema()));
+        <UserSchema as ToSchema>::schemas(schemas);
+    }
+}
+
+const INTEREST_THEME_IDS_MAX: usize = 100;
+
 #[derive(Debug)]
 enum InterestsRequestError {
+    TooManyInterestThemeIds {
+        length: usize,
+        max: usize,
+    },
     InvalidInterestThemeId {
         index: usize,
         value: String,
@@ -50,6 +81,13 @@ enum InterestsRequestError {
 fn parse_interest_theme_ids(
     payload: InterestsRequest,
 ) -> Result<Vec<InterestThemeId>, InterestsRequestError> {
+    if payload.interest_theme_ids.len() > INTEREST_THEME_IDS_MAX {
+        return Err(InterestsRequestError::TooManyInterestThemeIds {
+            length: payload.interest_theme_ids.len(),
+            max: INTEREST_THEME_IDS_MAX,
+        });
+    }
+
     payload
         .interest_theme_ids
         .into_iter()
@@ -116,6 +154,15 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
 
 fn map_interests_request_error(err: InterestsRequestError) -> Error {
     match err {
+        InterestsRequestError::TooManyInterestThemeIds { length, max } => {
+            Error::invalid_request("interest theme ids must contain at most 100 items")
+                .with_details(json!({
+                    "field": "interestThemeIds",
+                    "code": "too_many_interest_theme_ids",
+                    "count": length,
+                    "max": max,
+                }))
+        }
         InterestsRequestError::InvalidInterestThemeId {
             index,
             value,
@@ -154,7 +201,7 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
     get,
     path = "/api/v1/users",
     responses(
-        (status = 200, description = "Users", body = [UserSchema]),
+        (status = 200, description = "Users", body = UsersListResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
         (status = 401, description = "Unauthorised", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),

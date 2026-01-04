@@ -271,6 +271,34 @@
         ],
         "type": "object"
       },
+      "UsersListResponse": {
+        "items": {
+          "description": "OpenAPI schema for [`crate::domain::User`].\n\nApplication user with stable identifier and display name.",
+          "properties": {
+            "display_name": {
+              "description": "Display name shown to other users.\n\nSchema constraints: 3–32 characters, alphanumeric plus spaces and\nunderscores. The domain layer additionally validates that the value\nis non-empty when trimmed.",
+              "example": "Ada Lovelace",
+              "maxLength": 32,
+              "minLength": 3,
+              "pattern": "^[A-Za-z0-9_ ]+$",
+              "type": "string"
+            },
+            "id": {
+              "description": "Stable user identifier.\n\nMatches the domain `User` invariant of being a UUID.",
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "maxItems": 100,
+        "type": "array"
+      },
       "crate.domain.Error": {
         "description": "OpenAPI schema for [`crate::domain::Error`].\n\nAPI error response payload with machine-readable code and human-readable\nmessage.",
         "properties": {
@@ -717,10 +745,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/crate.domain.User"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/UsersListResponse"
                 }
               }
             },
