@@ -107,6 +107,22 @@ adapter; direct stateful logic belongs behind the ports established above.
 - [ ] 2.3.3. Add contract tests covering optimistic concurrency, idempotency
   conflicts, and deterministic responses for retried requests.
 
+### 2.4. Example data seeding
+
+- [x] 2.4.1. Draft the design and ExecPlan for example data seeding and the
+  `example-data` crate (`docs/execplans/backend-sample-data-design.md`).
+- [ ] 2.4.2. Implement the `example-data` crate using the `fake` crate with
+  deterministic generation, JSON seed registry parsing, and display-name
+  validation.
+- [ ] 2.4.3. Add the `example_data_runs` migration plus a repository helper to
+  guard seeding once per seed name.
+- [ ] 2.4.4. Deliver a seed registry CLI that uses `lexis` to generate memorable
+  seed names and updates the JSON registry safely.
+- [ ] 2.4.5. Wire startup seeding behind the `example-data` feature flag and
+  `ortho-config` settings, logging when seeding is skipped or applied.
+- [ ] 2.4.6. Add integration tests for once-only seeding and update backend
+  documentation to describe the demo data flow.
+
 ## 3. Data platform foundation
 
 Ensure schema and ingestion work expose their operations through domain ports,
