@@ -84,7 +84,7 @@ This should be reliable even when:
 Downstream consumers often implement ad hoc locking and scoping themselves.
 Common patterns include:
 
-- creating a global `Mutex<()>` to serialise cluster bootstrap,
+- creating a global `Mutex<()>` to serialize cluster bootstrap,
 - setting environment variables before constructing the cluster, and
 - restoring environment variables in `Drop`.
 
