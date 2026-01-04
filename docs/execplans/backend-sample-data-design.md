@@ -32,8 +32,10 @@ Success is observable when:
   implementation phases.
 - [x] (2026-01-03 18:40Z) Incorporate named seed registry, CLI, and
   `ortho-config` requirements into the design document.
-- [ ] Capture code review feedback on the design document and roadmap updates.
-- [ ] Apply agreed design revisions and mark design work complete.
+- [x] (2026-01-03 18:46Z) Capture code review feedback on the design document
+  and roadmap updates.
+- [x] (2026-01-03 18:46Z) Apply agreed design revisions and mark design work
+  complete.
 
 ## Surprises & Discoveries
 
@@ -75,9 +77,8 @@ Success is observable when:
 
 ## Outcomes & Retrospective
 
-Design documentation is drafted and the backend roadmap updated. Remaining work
-is to collect review feedback and revise the design document as needed. No code
-changes are part of this design activity.
+Design documentation is drafted, review feedback has been incorporated, and the
+backend roadmap updated. No code changes are part of this design activity.
 
 ## Context and Orientation
 
@@ -169,3 +170,5 @@ activity and moved the actual design content to
 
 2026-01-03: Added decisions for JSON seed registries, named seeds, CLI support,
 and `ortho-config` configuration handling.
+
+2026-01-03: Recorded review feedback integration and updated progress/outcomes.

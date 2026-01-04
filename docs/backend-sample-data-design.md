@@ -65,8 +65,11 @@ Proposed API:
 ### Generation rules
 
 - Use the `fake` crate to generate name-like tokens.
-- Enforce display name validation to match `backend/src/domain/user.rs`:
-  length 3–32 and allowed characters `A-Za-z0-9_` plus spaces.
+- Enforce display name validation to match `backend/src/domain/user.rs` by
+  reusing the same rules that `DisplayName::new` applies. If the generator
+  performs pre-validation, mirror the `display_name_regex` pattern from
+  `backend/src/domain/user.rs` (`^[A-Za-z0-9_ ]+$`) and update it whenever the
+  domain constraints change.
 - Use a deterministic RNG seed sourced from the named seed definition.
 - Select interest and safety IDs from the registry so the data is stable and
   aligns with future descriptor tables.
@@ -98,7 +101,7 @@ human-friendly.
 
 ### Seed creation CLI
 
-Provide a small CLI tool (for example a `example-data-seed` binary) that:
+Provide a small CLI tool (for example an `example-data-seed` binary) that:
 
 - Reads the registry JSON file.
 - Generates a new seed entry with a `lexis`-generated name.
@@ -136,15 +139,17 @@ If any step fails, the transaction rolls back, leaving no partial data.
 
 Seeding runs only when the backend is compiled with the `example-data` feature
 and configuration enables it. Configuration is loaded with `ortho-config` so it
-can be sourced from a settings file and environment overrides. Proposed config
-fields:
+can be sourced from a settings file and environment overrides. Ensure the key
+naming matches existing backend `ortho-config` conventions before finalising
+the field names. Proposed config fields:
 
 - `example_data.enabled`: boolean toggle.
 - `example_data.seed_name`: seed name to load from the registry.
 - `example_data.user_count`: optional override for the seed's default count.
 - `example_data.registry_path`: path to the registry JSON.
 
-Environment overrides:
+Environment overrides (subject to the same naming conventions and mapping
+rules `ortho-config` applies elsewhere):
 
 - `EXAMPLE_DATA_ENABLED`
 - `EXAMPLE_DATA_SEED_NAME`
