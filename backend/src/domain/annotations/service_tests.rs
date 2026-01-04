@@ -1,5 +1,7 @@
 //! Tests for the route annotations service.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use super::PayloadHashable;
@@ -10,7 +12,7 @@ use crate::domain::ports::{
     UpsertNoteResponse,
 };
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
+    Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
     MutationType, RouteNote, RouteNoteContent, RouteProgress, UserId,
 };
 use chrono::Utc;
@@ -29,11 +31,19 @@ fn make_service_with_idempotency(
     RouteAnnotationsService::new(Arc::new(repo), Arc::new(idempotency_repo))
 }
 
+type ServiceFuture<'a, Res> = Pin<Box<dyn Future<Output = Result<Res, Error>> + Send + 'a>>;
+
 struct IdempotencyReplaySpec {
     idempotency_key: IdempotencyKey,
     user_id: UserId,
     mutation_type: MutationType,
     payload_hash: crate::domain::PayloadHash,
+}
+
+struct ReplayRequest<Req, Res> {
+    request: Req,
+    spec: IdempotencyReplaySpec,
+    response: Res,
 }
 
 fn mock_idempotency_replay<Res>(
@@ -71,6 +81,33 @@ where
     idempotency_repo.expect_store().times(0);
 
     idempotency_repo
+}
+
+async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, AssertFn>(
+    request_spec: ReplayRequest<Req, Res>,
+    setup_repo: RepoFn,
+    call_service: CallFn,
+    assert_response: AssertFn,
+) where
+    Res: serde::Serialize + Clone + 'static,
+    RepoFn: FnOnce(&mut MockRouteAnnotationRepository),
+    CallFn: for<'a> FnOnce(
+        &'a RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
+        Req,
+    ) -> ServiceFuture<'a, Res>,
+    AssertFn: FnOnce(Res),
+{
+    let mut repo = MockRouteAnnotationRepository::new();
+    setup_repo(&mut repo);
+
+    let idempotency_repo =
+        mock_idempotency_replay(request_spec.spec, request_spec.response.clone());
+    let service = make_service_with_idempotency(repo, idempotency_repo);
+
+    let response = call_service(&service, request_spec.request)
+        .await
+        .expect("cached response");
+    assert_response(response);
 }
 
 #[tokio::test]
@@ -150,28 +187,33 @@ async fn upsert_note_replays_cached_response_for_same_idempotency_key() {
         RouteNoteContent::new("cached"),
     );
     let payload_hash = request.compute_payload_hash();
+    let response = UpsertNoteResponse {
+        note: note.clone(),
+        replayed: false,
+    };
 
-    let mut repo = MockRouteAnnotationRepository::new();
-    repo.expect_find_note_by_id().times(0);
-    repo.expect_save_note().times(0);
-
-    let idempotency_repo = mock_idempotency_replay(
-        IdempotencyReplaySpec {
-            idempotency_key,
-            user_id,
-            mutation_type: MutationType::Notes,
-            payload_hash,
+    assert_replay_for_request(
+        ReplayRequest {
+            request,
+            spec: IdempotencyReplaySpec {
+                idempotency_key,
+                user_id,
+                mutation_type: MutationType::Notes,
+                payload_hash,
+            },
+            response,
         },
-        UpsertNoteResponse {
-            note: note.clone(),
-            replayed: false,
+        |repo| {
+            repo.expect_find_note_by_id().times(0);
+            repo.expect_save_note().times(0);
         },
-    );
-
-    let service = make_service_with_idempotency(repo, idempotency_repo);
-    let response = service.upsert_note(request).await.expect("cached response");
-    assert_eq!(response.note.id, note_id);
-    assert!(response.replayed);
+        |service, request| Box::pin(async move { service.upsert_note(request).await }),
+        |response| {
+            assert_eq!(response.note.id, note_id);
+            assert!(response.replayed);
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -249,29 +291,31 @@ async fn update_progress_replays_cached_response_for_same_idempotency_key() {
         .revision(2)
         .build();
     let payload_hash = request.compute_payload_hash();
+    let response = UpdateProgressResponse {
+        progress: progress.clone(),
+        replayed: false,
+    };
 
-    let mut repo = MockRouteAnnotationRepository::new();
-    repo.expect_find_progress().times(0);
-    repo.expect_save_progress().times(0);
-
-    let idempotency_repo = mock_idempotency_replay(
-        IdempotencyReplaySpec {
-            idempotency_key,
-            user_id,
-            mutation_type: MutationType::Progress,
-            payload_hash,
+    assert_replay_for_request(
+        ReplayRequest {
+            request,
+            spec: IdempotencyReplaySpec {
+                idempotency_key,
+                user_id,
+                mutation_type: MutationType::Progress,
+                payload_hash,
+            },
+            response,
         },
-        UpdateProgressResponse {
-            progress: progress.clone(),
-            replayed: false,
+        |repo| {
+            repo.expect_find_progress().times(0);
+            repo.expect_save_progress().times(0);
         },
-    );
-
-    let service = make_service_with_idempotency(repo, idempotency_repo);
-    let response = service
-        .update_progress(request)
-        .await
-        .expect("cached response");
-    assert_eq!(response.progress.route_id, route_id);
-    assert!(response.replayed);
+        |service, request| Box::pin(async move { service.update_progress(request).await }),
+        |response| {
+            assert_eq!(response.progress.route_id, route_id);
+            assert!(response.replayed);
+        },
+    )
+    .await;
 }

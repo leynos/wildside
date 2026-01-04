@@ -26,7 +26,9 @@ use crate::inbound::http::validation::{missing_field_error, parse_uuid_list};
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesRequest {
+    #[schema(max_items = 100)]
     pub interest_theme_ids: Option<Vec<String>>,
+    #[schema(max_items = 100)]
     pub safety_toggle_ids: Option<Vec<String>>,
     pub unit_system: Option<String>,
     pub expected_revision: Option<u32>,
@@ -37,7 +39,9 @@ pub struct PreferencesRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferencesResponse {
     pub user_id: String,
+    #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+    #[schema(max_items = 100)]
     pub safety_toggle_ids: Vec<String>,
     pub unit_system: String,
     pub revision: u32,

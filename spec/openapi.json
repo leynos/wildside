@@ -8,6 +8,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 100,
             "type": "array"
           }
         },
@@ -79,6 +80,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 100,
             "type": [
               "array",
               "null"
@@ -88,6 +90,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 100,
             "type": [
               "array",
               "null"
@@ -117,6 +120,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 1000,
             "type": [
               "array",
               "null"
@@ -132,6 +136,7 @@
             "items": {
               "$ref": "#/components/schemas/RouteNoteResponse"
             },
+            "maxItems": 1000,
             "type": "array"
           },
           "progress": {
@@ -212,6 +217,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 1000,
             "type": "array"
           }
         },
@@ -230,6 +236,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 100,
             "type": "array"
           },
           "revision": {
@@ -241,6 +248,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 100,
             "type": "array"
           },
           "unitSystem": {
@@ -344,6 +352,7 @@
             "items": {
               "$ref": "#/components/schemas/crate.domain.InterestThemeId"
             },
+            "maxItems": 100,
             "type": "array"
           },
           "user_id": {

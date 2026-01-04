@@ -128,7 +128,8 @@ pub struct UserInterestsSchema {
     /// Selected interest theme identifiers.
     #[schema(
         rename = "interestThemeIds",
-        value_type = Vec<InterestThemeIdSchema>
+        value_type = Vec<InterestThemeIdSchema>,
+        max_items = 100
     )]
     interest_theme_ids: Vec<String>,
 }

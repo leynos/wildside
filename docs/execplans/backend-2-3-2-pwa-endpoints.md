@@ -79,7 +79,7 @@ Success is observable when:
   database constraint name when available.
   Rationale: Ensures missing routes surface as `RouteNotFound` even when
   PostgreSQL error messages omit table names.
-  Date/Author: 2026-01-03 03:23Z / Codex
+  Date/Author: 2026-01-03 03:23Z / Codex.
 
 ## Outcomes & Retrospective
 

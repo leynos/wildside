@@ -34,6 +34,7 @@ pub struct LoginRequest {
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InterestsRequest {
+    #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
 }
 

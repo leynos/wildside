@@ -19,7 +19,7 @@ use crate::domain::ports::{
     RouteAnnotationRepository, RouteAnnotationRepositoryError, RouteAnnotationsCommand,
     UpdateProgressRequest, UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
 };
-use crate::domain::{Error, IdempotencyLookupResult};
+use crate::domain::{Error, IdempotencyLookupResult, RouteNote, RouteProgress};
 
 type CommandFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a>>;
 
@@ -27,6 +27,28 @@ type CommandFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send
 struct ResponseSpec<Build, Mark> {
     build_response: Build,
     mark_replayed: Mark,
+}
+
+trait ReplayableResponse {
+    fn mark_replayed(&mut self);
+}
+
+impl ReplayableResponse for UpsertNoteResponse {
+    fn mark_replayed(&mut self) {
+        self.replayed = true;
+    }
+}
+
+impl ReplayableResponse for DeleteNoteResponse {
+    fn mark_replayed(&mut self) {
+        self.replayed = true;
+    }
+}
+
+impl ReplayableResponse for UpdateProgressResponse {
+    fn mark_replayed(&mut self) {
+        self.replayed = true;
+    }
 }
 
 /// Route annotations service implementing the driving ports.
@@ -250,6 +272,70 @@ where
         )
         .await
     }
+
+    fn build_upsert_response(note: RouteNote) -> UpsertNoteResponse {
+        UpsertNoteResponse {
+            note,
+            replayed: false,
+        }
+    }
+
+    fn build_delete_response(deleted: bool) -> DeleteNoteResponse {
+        DeleteNoteResponse {
+            deleted,
+            replayed: false,
+        }
+    }
+
+    fn build_progress_response(progress: RouteProgress) -> UpdateProgressResponse {
+        UpdateProgressResponse {
+            progress,
+            replayed: false,
+        }
+    }
+
+    fn upsert_note_operation<'a>(
+        service: &'a Self,
+        request: &'a UpsertNoteRequest,
+    ) -> CommandFuture<'a, RouteNote> {
+        Box::pin(async move { service.perform_upsert_note(request).await })
+    }
+
+    fn delete_note_operation<'a>(
+        service: &'a Self,
+        request: &'a DeleteNoteRequest,
+    ) -> CommandFuture<'a, bool> {
+        Box::pin(async move { service.perform_delete_note(request).await })
+    }
+
+    fn update_progress_operation<'a>(
+        service: &'a Self,
+        request: &'a UpdateProgressRequest,
+    ) -> CommandFuture<'a, RouteProgress> {
+        Box::pin(async move { service.perform_update_progress(request).await })
+    }
+
+    async fn execute_standard_command<Req, Item, Res, Op>(
+        &self,
+        request: Req,
+        operation: Op,
+        build_response: fn(Item) -> Res,
+    ) -> Result<Res, Error>
+    where
+        Req: IdempotentMutationRequest,
+        Res: ReplayableResponse + DeserializeOwned + Serialize,
+        Op: for<'a> Fn(&'a Self, &'a Req) -> CommandFuture<'a, Item>,
+    {
+        self.execute_command(
+            request,
+            operation,
+            ResponseSpec {
+                build_response,
+                mark_replayed: <Res as ReplayableResponse>::mark_replayed,
+            },
+        )
+        .await
+    }
 }
 
 #[async_trait]
@@ -259,39 +345,19 @@ where
     I: IdempotencyRepository,
 {
     async fn upsert_note(&self, request: UpsertNoteRequest) -> Result<UpsertNoteResponse, Error> {
-        self.execute_command(
+        self.execute_standard_command(
             request,
-            |service: &Self, request: &UpsertNoteRequest| {
-                Box::pin(async move { service.perform_upsert_note(request).await })
-            },
-            ResponseSpec {
-                build_response: |note| UpsertNoteResponse {
-                    note,
-                    replayed: false,
-                },
-                mark_replayed: |response: &mut UpsertNoteResponse| {
-                    response.replayed = true;
-                },
-            },
+            Self::upsert_note_operation,
+            Self::build_upsert_response,
         )
         .await
     }
 
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error> {
-        self.execute_command(
+        self.execute_standard_command(
             request,
-            |service: &Self, request: &DeleteNoteRequest| {
-                Box::pin(async move { service.perform_delete_note(request).await })
-            },
-            ResponseSpec {
-                build_response: |deleted| DeleteNoteResponse {
-                    deleted,
-                    replayed: false,
-                },
-                mark_replayed: |response: &mut DeleteNoteResponse| {
-                    response.replayed = true;
-                },
-            },
+            Self::delete_note_operation,
+            Self::build_delete_response,
         )
         .await
     }
@@ -300,20 +366,10 @@ where
         &self,
         request: UpdateProgressRequest,
     ) -> Result<UpdateProgressResponse, Error> {
-        self.execute_command(
+        self.execute_standard_command(
             request,
-            |service: &Self, request: &UpdateProgressRequest| {
-                Box::pin(async move { service.perform_update_progress(request).await })
-            },
-            ResponseSpec {
-                build_response: |progress| UpdateProgressResponse {
-                    progress,
-                    replayed: false,
-                },
-                mark_replayed: |response: &mut UpdateProgressResponse| {
-                    response.replayed = true;
-                },
-            },
+            Self::update_progress_operation,
+            Self::build_progress_response,
         )
         .await
     }
