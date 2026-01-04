@@ -249,6 +249,7 @@ markdownlint:
 	$(call exec_or_bunx,markdownlint-cli2,'**/*.md',markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION))
 
 nixie:
+    bun install
 	bun scripts/install-mermaid-browser.mjs
 	# CI currently requires --no-sandbox; remove once nixie supports
 	# environment variable control for this option
