@@ -18,7 +18,8 @@ that the `pnpm` command is available locally:
 corepack enable
 ```
 
-After enabling Corepack, install the workspace dependencies with a frozen lockfile:
+After enabling Corepack, install the workspace dependencies with a frozen
+lockfile:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -88,11 +89,11 @@ make mermaid-lint
 
 The included Helm chart surfaces several values for managing secrets:
 
-| Value | Default | Purpose |
-| ----- | ------- | ------- |
-| `existingSecretName` | `""` | Name of a Secret to source environment variables from. |
-| `secretEnvFromKeys` | `{}` | Map environment variables to keys in `existingSecretName`. |
-| `allowMissingSecret` | `true` | Permit rendering when the Secret is absent. Set to `false` to fail. |
+| Value                | Default | Purpose                                                             |
+| -------------------- | ------- | ------------------------------------------------------------------- |
+| `existingSecretName` | `""`    | Name of a Secret to source environment variables from.              |
+| `secretEnvFromKeys`  | `{}`    | Map environment variables to keys in `existingSecretName`.          |
+| `allowMissingSecret` | `true`  | Permit rendering when the Secret is absent. Set to `false` to fail. |
 
 Note: Helm client version 3.2.0 or later is required when `secretEnvFromKeys`
 is used, as the chart invokes `lookup` during template rendering.

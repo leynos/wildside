@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This guide defines house rules for writing OpenTofu HCL in this repository.
-The guidance complements the HCL syntax reference and module testing guide.
+This guide defines house rules for writing OpenTofu HCL in this repository. The
+guidance complements the HCL syntax reference and module testing guide.
 
 ## Core principles
 

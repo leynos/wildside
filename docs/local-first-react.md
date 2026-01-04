@@ -828,7 +828,7 @@ be updated optimistically (as described in the next section). When the user
 comes back online, Tanstack Query will automatically execute the queued
 mutations, synchronizing the local changes with the server.[^26]
 
----
+______________________________________________________________________
 
 ## Handling Large Offline Assets: Offline Bundles, Tiles, and "Stuff That Isn't JSON"
 
@@ -1039,7 +1039,7 @@ In practice you will also:
 - version bundles so you can invalidate old caches cleanly when the basemap
   style changes.
 
----
+______________________________________________________________________
 
 ## Durable Offline Writes: An Outbox (Because Reality Dislikes Perfect Networks)
 
@@ -1547,8 +1547,8 @@ However, some requirements change the game:
 - **Strong guarantees about convergence** (every replica ends up identical)
   without user mediation.
 
-When those show up, you should consider purpose-built local-first databases
-and sync engines:
+When those show up, you should consider purpose-built local-first databases and
+sync engines:
 
 - **RxDB:** a browser/Node database on top of IndexedDB/SQLite with
   replication and conflict handling. It can integrate with Query, but in
@@ -1557,8 +1557,7 @@ and sync engines:
   into a local replica (often with CRDT-based merge semantics). It pushes you
   towards a database-first architecture.
 - **Replicache / CRDT toolkits (Automerge, Yjs):** best suited to
-  collaborative editing. They can feel like overkill until the day they are
-  not.
+  collaborative editing. They can feel like overkill until the day they are not.
 
 These tools are excellent, but they also shift the centre of gravity: the
 database and sync engine become the main abstraction, and TanStack Query

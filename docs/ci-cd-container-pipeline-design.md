@@ -771,52 +771,40 @@ the technological and business needs of tomorrow.
 [https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)
 [^3]: Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR — GitHub
 Marketplace,
-[https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr)
-[https://github.com/marketplace/actions/push-to-ghcr](https://github.com/marketplace/actions/push-to-ghcr)
+[https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr) [https://github.com/marketplace/actions/push-to-ghcr](https://github.com/marketplace/actions/push-to-ghcr)
 [^4]: GitHub Action to build and push Docker images with Buildx,
 [https://github.com/docker/build-push-action](https://github.com/docker/build-push-action)
 [^5]: Depot - GitHub, [https://github.com/depot](https://github.com/depot)
 [^6]: GitHub Actions container builds take forever : r/rust - Reddit,
-[https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/](https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/)
-[https://docs.docker.com/build/ci/github-actions/multi-platform/](https://docs.docker.com/build/ci/github-actions/multi-platform/)
+[https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/](https://www.reddit.com/r/rust/comments/1n4s4xb/github_actions_container_builds_take_forever/) [https://docs.docker.com/build/ci/github-actions/multi-platform/](https://docs.docker.com/build/ci/github-actions/multi-platform/)
 [^7]: Pull an Image from a Private Registry | Kubernetes,
 [https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
 [^8]: What is the appropriate way to set image pull secrets for images being
 sourced from GitHub to avoid pull rate limits? Community Discussion #160722,
-[https://github.com/orgs/community/discussions/160722](https://github.com/orgs/community/discussions/160722)
-[https://www.deploykf.org/guides/platform/image-pull-secrets/](https://www.deploykf.org/guides/platform/image-pull-secrets/)
-[https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/)
+[https://github.com/orgs/community/discussions/160722](https://github.com/orgs/community/discussions/160722) [https://www.deploykf.org/guides/platform/image-pull-secrets/](https://www.deploykf.org/guides/platform/image-pull-secrets/) [https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_docker-registry/)
 [^9]: How to Use Your Private DigitalOcean Container Registry with Docker and
 Kubernetes,
 [https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/](https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/)
 [^10]: Enable Push-to-Deploy on DigitalOcean Kubernetes Using GitHub Actions,
 [https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/](https://docs.digitalocean.com/products/container-registry/how-to/enable-push-to-deploy/)
 [^11]: Blacksmith: The Fastest Way to Run GitHub Actions,
-[https://www.blacksmith.sh/](https://www.blacksmith.sh/)
-[https://www.blacksmith.sh/github-actions-cost-reduction](https://www.blacksmith.sh/github-actions-cost-reduction)
+[https://www.blacksmith.sh/](https://www.blacksmith.sh/) [https://www.blacksmith.sh/github-actions-cost-reduction](https://www.blacksmith.sh/github-actions-cost-reduction)
 [^12]: Blacksmith Pricing | Fast GitHub Actions with Up to 75% Cost Savings,
-[https://www.blacksmith.sh/pricing](https://www.blacksmith.sh/pricing)
-[https://github.com/depot/build-push-action](https://github.com/depot/build-push-action)
+[https://www.blacksmith.sh/pricing](https://www.blacksmith.sh/pricing) [https://github.com/depot/build-push-action](https://github.com/depot/build-push-action)
 [^13]: GitHub Actions | Integrations | Depot - [Depot.dev](https://depot.dev),
 [https://depot.dev/integrations/github-actions](https://depot.dev/integrations/github-actions)
 [^14]: GitHub Actions | Container Builds | Depot Documentation,
-[https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions)
-[https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview)
- [https://depot.dev/pricing](https://depot.dev/pricing)
+[https://depot.dev/docs/container-builds/reference/github-actions](https://depot.dev/docs/container-builds/reference/github-actions) [https://depot.dev/docs/container-builds/overview](https://depot.dev/docs/container-builds/overview) [https://depot.dev/pricing](https://depot.dev/pricing)
 [^15]: Designing healthy and agnostic CI/CD pipelines | avivace,
-[https://avivace.com/posts/agnostic-cicd/](https://avivace.com/posts/agnostic-cicd/)
-[https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally](https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally)
+[https://avivace.com/posts/agnostic-cicd/](https://avivace.com/posts/agnostic-cicd/) [https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally](https://stackoverflow.com/questions/59241249/how-can-i-run-github-actions-workflows-locally)
 [^16]: CICD Patterns with GitHub Actions and Docker - Hosting Data Apps -
 Analythium Solutions,
 [https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/](https://hosting.analythium.io/cicd-patterns-with-github-actions-and-docker/)
 [^17]: Becoming CI Provider Agnostic With Dagger | Arsh Sharma,
 [https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/](https://arshsharma.com/posts/2025-02-10-ci-agnostic-dagger/)
 [^18]: Evaluate expressions in workflows and actions - GitHub Docs,
-[https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions](https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions)
-[https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/](https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/)
+[https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions](https://docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions) [https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/](https://resources.github.com/learn/pathways/automation/advanced/advanced-workflow-configurations-in-github-actions/)
 [^19]: GitHub Actions: Does the IF have an ELSE? - Stack Overflow,
-[https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else](https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else)
-[https://hungvu.tech/advanced-github-actions-conditional-workflow/](https://hungvu.tech/advanced-github-actions-conditional-workflow/)
+[https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else](https://stackoverflow.com/questions/60916931/github-actions-does-the-if-have-an-else) [https://hungvu.tech/advanced-github-actions-conditional-workflow/](https://hungvu.tech/advanced-github-actions-conditional-workflow/)
 [^20]: Using jobs in a workflow - GitHub Docs,
-[https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow](https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow)
-[https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow)
+[https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow](https://docs.github.com/actions/using-jobs/using-jobs-in-a-workflow) [https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow](https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow)

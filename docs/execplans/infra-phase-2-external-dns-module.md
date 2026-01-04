@@ -15,14 +15,14 @@ Deliver a reusable OpenTofu module under `infra/modules/external_dns/` that:
 
 ## Implementation Status
 
-| Requirement              | Status      | Details                                           |
-|--------------------------|-------------|---------------------------------------------------|
-| Multi-zone providers     | ✅ Complete | Cloudflare with multiple zones via `domain_filters` |
-| Accept DNS zone mappings | ✅ Complete | `zone_id_filter` variable maps domains to zone IDs |
-| Emit managed zone IDs    | ✅ Complete | `zone_id_filter` and `managed_zones` outputs      |
-| Dual modes               | ✅ Complete | `apply` and `render` modes implemented            |
-| Terratest coverage       | ✅ Complete | Zone ID validation, output, and Helm values tests |
-| Open Policy Agent (OPA)/Conftest policies | ✅ Complete | Plan policy warns on zone-id-filter without domainFilters |
+| Requirement                               | Status       | Details                                                   |
+| ----------------------------------------- | ------------ | --------------------------------------------------------- |
+| Multi-zone providers                      | ✅ Complete  | Cloudflare with multiple zones via `domain_filters`       |
+| Accept DNS zone mappings                  | ✅ Complete  | `zone_id_filter` variable maps domains to zone IDs        |
+| Emit managed zone IDs                     | ✅ Complete  | `zone_id_filter` and `managed_zones` outputs              |
+| Dual modes                                | ✅ Complete  | `apply` and `render` modes implemented                    |
+| Terratest coverage                        | ✅ Complete  | Zone ID validation, output, and Helm values tests         |
+| Open Policy Agent (OPA)/Conftest policies | ✅ Complete  | Plan policy warns on zone-id-filter without domainFilters |
 
 ## File Structure
 
@@ -68,37 +68,37 @@ infra/modules/external_dns/
 
 Required inputs:
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `mode` | `string` | `"render"` or `"apply"` |
-| `namespace` | `string` | Namespace for ExternalDNS (default: `"external-dns"`) |
-| `domain_filters` | `list(string)` | DNS domains to manage (e.g., `["example.com"]`) |
-| `cloudflare_api_token_secret_name` | `string` | Kubernetes secret with Cloudflare API token |
-| `txt_owner_id` | `string` | Unique identifier for ownership TXT records |
+| Variable                           | Type           | Description                                           |
+| ---------------------------------- | -------------- | ----------------------------------------------------- |
+| `mode`                             | `string`       | `"render"` or `"apply"`                               |
+| `namespace`                        | `string`       | Namespace for ExternalDNS (default: `"external-dns"`) |
+| `domain_filters`                   | `list(string)` | DNS domains to manage (e.g., `["example.com"]`)       |
+| `cloudflare_api_token_secret_name` | `string`       | Kubernetes secret with Cloudflare API token           |
+| `txt_owner_id`                     | `string`       | Unique identifier for ownership TXT records           |
 
 Optional inputs:
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `create_namespace` | `bool` | `true` | Create the namespace |
-| `chart_repository` | `string` | `"https://kubernetes-sigs.github.io/external-dns/"` | Helm repo URL |
-| `chart_name` | `string` | `"external-dns"` | Helm chart name |
-| `chart_version` | `string` | `"1.16.1"` | Helm chart version |
-| `helm_release_name` | `string` | `"external-dns"` | Helm release name |
-| `helm_timeout` | `number` | `600` | Helm timeout seconds |
-| `helm_wait` | `bool` | `true` | Wait for Helm success |
-| `helm_values` | `list(string)` | `[]` | Inline YAML values |
-| `helm_values_files` | `list(string)` | `[]` | Value file paths |
-| `policy` | `string` | `"sync"` | DNS policy (`sync` or `upsert-only`) |
-| `cloudflare_proxied` | `bool` | `false` | Enable Cloudflare proxy by default |
-| `cloudflare_api_token_secret_key` | `string` | `"token"` | Key in the secret |
-| `dns_records_per_page` | `number` | `5000` | API pagination size |
-| `log_level` | `string` | `"info"` | Log level |
-| `sources` | `list(string)` | `["ingress", "service"]` | Kubernetes resource sources |
-| `crd_enabled` | `bool` | `true` | Enable DNSEndpoint CustomResourceDefinition (CRD) |
-| `flux_namespace` | `string` | `"flux-system"` | Flux namespace (render mode) |
-| `flux_helm_repository_name` | `string` | `"external-dns"` | Flux HelmRepository name |
-| `service_monitor_enabled` | `bool` | `false` | Create ServiceMonitor |
+| Variable                          | Type           | Default                                             | Description                                       |
+| --------------------------------- | -------------- | --------------------------------------------------- | ------------------------------------------------- |
+| `create_namespace`                | `bool`         | `true`                                              | Create the namespace                              |
+| `chart_repository`                | `string`       | `"https://kubernetes-sigs.github.io/external-dns/"` | Helm repo URL                                     |
+| `chart_name`                      | `string`       | `"external-dns"`                                    | Helm chart name                                   |
+| `chart_version`                   | `string`       | `"1.16.1"`                                          | Helm chart version                                |
+| `helm_release_name`               | `string`       | `"external-dns"`                                    | Helm release name                                 |
+| `helm_timeout`                    | `number`       | `600`                                               | Helm timeout seconds                              |
+| `helm_wait`                       | `bool`         | `true`                                              | Wait for Helm success                             |
+| `helm_values`                     | `list(string)` | `[]`                                                | Inline YAML values                                |
+| `helm_values_files`               | `list(string)` | `[]`                                                | Value file paths                                  |
+| `policy`                          | `string`       | `"sync"`                                            | DNS policy (`sync` or `upsert-only`)              |
+| `cloudflare_proxied`              | `bool`         | `false`                                             | Enable Cloudflare proxy by default                |
+| `cloudflare_api_token_secret_key` | `string`       | `"token"`                                           | Key in the secret                                 |
+| `dns_records_per_page`            | `number`       | `5000`                                              | API pagination size                               |
+| `log_level`                       | `string`       | `"info"`                                            | Log level                                         |
+| `sources`                         | `list(string)` | `["ingress", "service"]`                            | Kubernetes resource sources                       |
+| `crd_enabled`                     | `bool`         | `true`                                              | Enable DNSEndpoint CustomResourceDefinition (CRD) |
+| `flux_namespace`                  | `string`       | `"flux-system"`                                     | Flux namespace (render mode)                      |
+| `flux_helm_repository_name`       | `string`       | `"external-dns"`                                    | Flux HelmRepository name                          |
+| `service_monitor_enabled`         | `bool`         | `false`                                             | Create ServiceMonitor                             |
 
 All inputs must include:
 
@@ -174,12 +174,12 @@ rendered_manifests = merge(
 
 #### 1.4 `outputs.tf`
 
-| Output | Description |
-|--------|-------------|
-| `namespace` | Namespace where ExternalDNS is installed |
-| `helm_release_name` | Name of the Helm release |
-| `txt_owner_id` | Ownership ID for DNS records |
-| `domain_filters` | List of managed domains |
+| Output               | Description                                   |
+| -------------------- | --------------------------------------------- |
+| `namespace`          | Namespace where ExternalDNS is installed      |
+| `helm_release_name`  | Name of the Helm release                      |
+| `txt_owner_id`       | Ownership ID for DNS records                  |
+| `domain_filters`     | List of managed domains                       |
 | `rendered_manifests` | Map of GitOps path -> YAML (render mode only) |
 
 ### Step 2: Create Examples
@@ -223,7 +223,8 @@ Validate Terraform plan:
 
 1. **TestExternalDNSModuleValidate**: Init and validate basic example
 2. **TestExternalDNSModuleRenderOutputs**: Apply render example, verify outputs
-3. **TestExternalDNSModuleRenderPolicy**: Run conftest against rendered manifests
+3. **TestExternalDNSModuleRenderPolicy**: Run conftest against rendered
+   manifests
 4. **TestExternalDNSModuleInvalidInputs**: Table-driven validation tests
    - Invalid namespace format
    - Empty domain filters
@@ -231,7 +232,8 @@ Validate Terraform plan:
    - Blank txt_owner_id
    - Invalid chart version format
 5. **TestExternalDNSModuleNullVariableValidation**: Null input handling
-6. **TestExternalDNSModulePlanDetailedExitCode**: Detailed exit code with kubeconfig
+6. **TestExternalDNSModulePlanDetailedExitCode**: Detailed exit code with
+   kubeconfig
 7. **TestExternalDNSModulePolicy**: Conftest against plan JSON
 8. **TestExternalDNSModuleApplyIfKubeconfigPresent**: Full apply test (gated)
 
@@ -358,10 +360,12 @@ Modified files:
 1. **Module naming**: Use `external_dns` (snake_case) to match existing modules
    (`vault_appliance`).
 
-2. **Provider**: Focus on Cloudflare as primary provider per project requirements.
+2. **Provider**: Focus on Cloudflare as primary provider per project
+   requirements.
    The module structure supports future extension to other providers.
 
-3. **Mode switching**: Follow Traefik pattern with `mode = "render"` (default) and
+3. **Mode switching**: Follow Traefik pattern with `mode = "render"` (default)
+   and
    `mode = "apply"` for consistency.
 
 4. **Helm chart source**: Use official `kubernetes-sigs` chart repository for

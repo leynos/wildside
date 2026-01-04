@@ -40,7 +40,8 @@ This work must also:
 
 - [x] (2025-12-15) Confirm current module gaps vs roadmap item.
 - [x] (2025-12-15) Record design decisions and module contract in docs.
-- [x] (2025-12-15) Implement render mode outputs (HelmRelease + CRDs + kustomization).
+- [x] (2025-12-15) Implement render mode outputs (HelmRelease + CRDs +
+      kustomization).
 - [x] (2025-12-15) Add service annotations input and output contract updates.
 - [x] (2025-12-15) Extend Terratest coverage (happy/unhappy paths).
 - [x] (2025-12-15) Extend Conftest policies for rendered manifests.
@@ -52,36 +53,34 @@ This work must also:
 
 - Observation: `make lint-actions` currently validates composite actions using
   `yamllint` and `action-validator` but does not run `actionlint` against
-  workflows.
-  Evidence: `Makefile` target `lint-actions` lacks `actionlint` usage.
+  workflows. Evidence: `Makefile` target `lint-actions` lacks `actionlint`
+  usage.
 
 - Observation: The existing Traefik module is apply-to-cluster oriented
   (`helm_release` + `kubernetes_manifest`) and does not render Flux
-  `HelmRelease` YAML nor vendor Traefik CRDs.
-  Evidence: `infra/modules/traefik/main.tf` has no manifest rendering outputs.
+  `HelmRelease` YAML nor vendor Traefik CRDs. Evidence:
+  `infra/modules/traefik/main.tf` has no manifest rendering outputs.
 
 - Observation: The initial vendored CRDs file accidentally contained terminal
-  control characters, which caused YAML parsing failures in Conftest.
-  Evidence: Conftest reported `yaml: control characters are not allowed` when
-  testing rendered CRDs.
+  control characters, which caused YAML parsing failures in Conftest. Evidence:
+  Conftest reported `yaml: control characters are not allowed` when testing
+  rendered CRDs.
 
 - Observation: The previous `lint-actions` implementation attempted to store
   null-delimited `find -print0` output inside a shell variable, which drops
-  null bytes and concatenates paths.
-  Evidence: `make lint` attempted to lint a non-existent path like
+  null bytes and concatenates paths. Evidence: `make lint` attempted to lint a
+  non-existent path like
   `.github/workflows/ci.yml.github/workflows/delayed-pr-comment.yml`.
 
 - Observation: GitHub composite action inputs do not support a `secret` key,
-  but unit tests expected it.
-  Evidence: `action-validator` rejected `.github/actions/bootstrap-vault-
-  appliance/action.yml` until `secret: true` was removed and the test suite
-  updated.
+  but unit tests expected it. Evidence: `action-validator` rejected
+  `.github/actions/bootstrap-vault-appliance/action.yml` until `secret: true`
+  was removed and the test suite updated.
 
 - Observation: Terratest’s `CopyTerraformFolderToTemp` did not remove its
   temporary directories, eventually filling `/tmp` and breaking `tofu init`
-  with `no space left on device`.
-  Evidence: `/tmp` reached 100% usage and provider installs failed until
-  temporary directories were cleaned up.
+  with `no space left on device`. Evidence: `/tmp` reached 100% usage and
+  provider installs failed until temporary directories were cleaned up.
 
 ## Decision Log
 
@@ -90,13 +89,11 @@ This work must also:
   - `apply`: perform cluster changes via Helm/Kubernetes providers.
   Rationale: The roadmap item is GitOps-oriented, but retaining the option to
   do a real apply in an explicitly gated, end-to-end validation step remains
-  valuable.
-  Date/Author: 2025-12-15 / Codex.
+  valuable. Date/Author: 2025-12-15 / Codex.
 
 - Decision: Vendor Traefik CRDs into `infra/modules/traefik/crds/` pinned to
-  the module’s chart version.
-  Rationale: Deterministic, reviewable inputs; avoids network lookups at runtime
-  and keeps “render” mode offline-friendly.
+  the module’s chart version. Rationale: Deterministic, reviewable inputs;
+  avoids network lookups at runtime and keeps “render” mode offline-friendly.
   Date/Author: 2025-12-15 / Codex.
 
 - Decision: Keep existing outputs for backwards compatibility, but add new
@@ -104,20 +101,17 @@ This work must also:
   - `dashboard_hostnames` (list)
   - `default_certificate_issuer_name` (string)
   Rationale: The roadmap item asks for hostnames (plural) and explicitly names
-  the “default certificate issuer”.
-  Date/Author: 2025-12-15 / Codex.
+  the “default certificate issuer”. Date/Author: 2025-12-15 / Codex.
 
 - Decision: Extend action linting to include `actionlint` (in addition to
-  `action-validator`).
-  Rationale: Requirement from the task statement; `actionlint` validates
-  workflow YAML semantics beyond schema validation.
+  `action-validator`). Rationale: Requirement from the task statement;
+  `actionlint` validates workflow YAML semantics beyond schema validation.
   Date/Author: 2025-12-15 / Codex.
 
 - Decision: Use explicit Rego package names and run Conftest with an explicit
-  namespace.
-  Rationale: Aligns with the existing FluxCD policy conventions and ensures
-  scripts/tests always evaluate the intended policy rules.
-  Date/Author: 2025-12-15 / Codex.
+  namespace. Rationale: Aligns with the existing FluxCD policy conventions and
+  ensures scripts/tests always evaluate the intended policy rules. Date/Author:
+  2025-12-15 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -187,7 +181,8 @@ Terminology:
 
 5. Expand automated testing:
    - Terratest: assert rendered YAML contains expected keys and values.
-   - Conftest: add policies for rendered manifests (separate from plan policies).
+   - Conftest: add policies for rendered manifests (separate from plan
+     policies).
    - Optional: gated apply workflow that uses an ephemeral workspace and
      validates drift with `tofu plan -detailed-exitcode`.
 

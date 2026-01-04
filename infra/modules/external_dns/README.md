@@ -58,51 +58,51 @@ resource "local_file" "manifests" {
 
 ## Inputs
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| `namespace` | Namespace where ExternalDNS will be installed | `string` | `"external-dns"` | no |
-| `mode` | Whether to render Flux manifests (`render`) or apply resources directly (`apply`) | `string` | `"render"` | no |
-| `create_namespace` | Whether the module should create the namespace | `bool` | `true` | no |
-| `chart_repository` | Helm repository hosting the ExternalDNS chart | `string` | `"https://kubernetes-sigs.github.io/external-dns/"` | no |
-| `chart_name` | Name of the Helm chart | `string` | `"external-dns"` | no |
-| `chart_version` | ExternalDNS Helm chart version | `string` | `"1.16.1"` | no |
-| `helm_release_name` | Name assigned to the Helm release | `string` | `"external-dns"` | no |
-| `helm_wait` | Whether to wait for the release to succeed | `bool` | `true` | no |
-| `helm_timeout` | Timeout in seconds for Helm operations | `number` | `600` | no |
-| `helm_values` | Inline YAML values for the Helm release | `list(string)` | `[]` | no |
-| `helm_values_files` | Paths to YAML files with Helm values | `list(string)` | `[]` | no |
-| `domain_filters` | List of DNS domains that ExternalDNS should manage | `list(string)` | - | **yes** |
-| `txt_owner_id` | Unique identifier for ExternalDNS ownership TXT records | `string` | - | **yes** |
-| `policy` | DNS record management policy | `string` | `"sync"` | no |
-| `sources` | Kubernetes resource types to watch | `list(string)` | `["ingress", "service"]` | no |
-| `cloudflare_api_token_secret_name` | Kubernetes secret with Cloudflare token | `string` | - | **yes** |
-| `cloudflare_api_token_secret_key` | Key in the Cloudflare token secret | `string` | `"token"` | no |
-| `cloudflare_proxied` | Enable Cloudflare proxy by default | `bool` | `false` | no |
-| `dns_records_per_page` | API pagination size (reduces API calls) | `number` | `5000` | no |
-| `log_level` | Log verbosity level | `string` | `"info"` | no |
-| `crd_enabled` | Enable the DNSEndpoint CRD | `bool` | `true` | no |
-| `service_monitor_enabled` | Create ServiceMonitor for Prometheus Operator | `bool` | `false` | no |
-| `flux_namespace` | Namespace where Flux controllers run (render mode) | `string` | `"flux-system"` | no |
-| `flux_helm_repository_name` | Flux HelmRepository name (render mode) | `string` | `"external-dns"` | no |
-| `interval` | Interval between DNS synchronisation cycles | `string` | `"1m"` | no |
-| `registry_type` | Registry type for tracking DNS record ownership | `string` | `"txt"` | no |
-| `txt_prefix` | Prefix for TXT ownership records | `string` | `""` | no |
-| `txt_suffix` | Suffix for TXT ownership records | `string` | `""` | no |
-| `zone_id_filter` | Map of domain names to Cloudflare zone IDs | `map(string)` | `{}` | no |
+| Name                               | Description                                                                       | Type           | Default                                             | Required |
+| ---------------------------------- | --------------------------------------------------------------------------------- | -------------- | --------------------------------------------------- | -------- |
+| `namespace`                        | Namespace where ExternalDNS will be installed                                     | `string`       | `"external-dns"`                                    | no       |
+| `mode`                             | Whether to render Flux manifests (`render`) or apply resources directly (`apply`) | `string`       | `"render"`                                          | no       |
+| `create_namespace`                 | Whether the module should create the namespace                                    | `bool`         | `true`                                              | no       |
+| `chart_repository`                 | Helm repository hosting the ExternalDNS chart                                     | `string`       | `"https://kubernetes-sigs.github.io/external-dns/"` | no       |
+| `chart_name`                       | Name of the Helm chart                                                            | `string`       | `"external-dns"`                                    | no       |
+| `chart_version`                    | ExternalDNS Helm chart version                                                    | `string`       | `"1.16.1"`                                          | no       |
+| `helm_release_name`                | Name assigned to the Helm release                                                 | `string`       | `"external-dns"`                                    | no       |
+| `helm_wait`                        | Whether to wait for the release to succeed                                        | `bool`         | `true`                                              | no       |
+| `helm_timeout`                     | Timeout in seconds for Helm operations                                            | `number`       | `600`                                               | no       |
+| `helm_values`                      | Inline YAML values for the Helm release                                           | `list(string)` | `[]`                                                | no       |
+| `helm_values_files`                | Paths to YAML files with Helm values                                              | `list(string)` | `[]`                                                | no       |
+| `domain_filters`                   | List of DNS domains that ExternalDNS should manage                                | `list(string)` | -                                                   | **yes**  |
+| `txt_owner_id`                     | Unique identifier for ExternalDNS ownership TXT records                           | `string`       | -                                                   | **yes**  |
+| `policy`                           | DNS record management policy                                                      | `string`       | `"sync"`                                            | no       |
+| `sources`                          | Kubernetes resource types to watch                                                | `list(string)` | `["ingress", "service"]`                            | no       |
+| `cloudflare_api_token_secret_name` | Kubernetes secret with Cloudflare token                                           | `string`       | -                                                   | **yes**  |
+| `cloudflare_api_token_secret_key`  | Key in the Cloudflare token secret                                                | `string`       | `"token"`                                           | no       |
+| `cloudflare_proxied`               | Enable Cloudflare proxy by default                                                | `bool`         | `false`                                             | no       |
+| `dns_records_per_page`             | API pagination size (reduces API calls)                                           | `number`       | `5000`                                              | no       |
+| `log_level`                        | Log verbosity level                                                               | `string`       | `"info"`                                            | no       |
+| `crd_enabled`                      | Enable the DNSEndpoint CRD                                                        | `bool`         | `true`                                              | no       |
+| `service_monitor_enabled`          | Create ServiceMonitor for Prometheus Operator                                     | `bool`         | `false`                                             | no       |
+| `flux_namespace`                   | Namespace where Flux controllers run (render mode)                                | `string`       | `"flux-system"`                                     | no       |
+| `flux_helm_repository_name`        | Flux HelmRepository name (render mode)                                            | `string`       | `"external-dns"`                                    | no       |
+| `interval`                         | Interval between DNS synchronization cycles                                       | `string`       | `"1m"`                                              | no       |
+| `registry_type`                    | Registry type for tracking DNS record ownership                                   | `string`       | `"txt"`                                             | no       |
+| `txt_prefix`                       | Prefix for TXT ownership records                                                  | `string`       | `""`                                                | no       |
+| `txt_suffix`                       | Suffix for TXT ownership records                                                  | `string`       | `""`                                                | no       |
+| `zone_id_filter`                   | Map of domain names to Cloudflare zone IDs                                        | `map(string)`  | `{}`                                                | no       |
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| `namespace` | Namespace where ExternalDNS is installed |
-| `helm_release_name` | Name of the ExternalDNS Helm release |
-| `txt_owner_id` | Unique identifier for ExternalDNS ownership TXT records |
-| `domain_filters` | List of DNS domains managed by ExternalDNS |
-| `zone_id_filter` | Map of domain names to Cloudflare zone IDs |
-| `managed_zones` | Unified zone configuration: domain -> zone_id (null if not specified) |
-| `policy` | DNS record management policy |
-| `sources` | Kubernetes resource types watched by ExternalDNS |
-| `cloudflare_proxied` | Whether Cloudflare proxy is enabled by default |
+| Name                 | Description                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `namespace`          | Namespace where ExternalDNS is installed                                             |
+| `helm_release_name`  | Name of the ExternalDNS Helm release                                                 |
+| `txt_owner_id`       | Unique identifier for ExternalDNS ownership TXT records                              |
+| `domain_filters`     | List of DNS domains managed by ExternalDNS                                           |
+| `zone_id_filter`     | Map of domain names to Cloudflare zone IDs                                           |
+| `managed_zones`      | Unified zone configuration: domain -> zone_id (null if not specified)                |
+| `policy`             | DNS record management policy                                                         |
+| `sources`            | Kubernetes resource types watched by ExternalDNS                                     |
+| `cloudflare_proxied` | Whether Cloudflare proxy is enabled by default                                       |
 | `rendered_manifests` | Rendered Flux-ready manifests (map of GitOps path -> YAML content; render mode only) |
 
 ## Cloudflare API Token
@@ -148,8 +148,8 @@ module "external_dns" {
 ## Zone ID Filter (Optional)
 
 The `zone_id_filter` variable allows restricting ExternalDNS API access to
-specific Cloudflare zones. This provides defence-in-depth beyond `domain_filters`
-and enables zone ID output for downstream consumers.
+specific Cloudflare zones. This provides defence-in-depth beyond
+`domain_filters` and enables zone ID output for downstream consumers.
 
 ```hcl
 module "external_dns" {
@@ -193,13 +193,14 @@ Always use a unique `txt_owner_id` for each ExternalDNS deployment.
 
 When `mode = "apply"`, the module creates:
 
-1. **kubernetes_namespace.external_dns** - Namespace (when `create_namespace = true`)
+1. **kubernetes_namespace.external_dns** - Namespace (when
+   `create_namespace = true`)
 2. **helm_release.external_dns** - ExternalDNS Helm chart deployment
 
 ## Integration with Ingress Resources
 
-Once ExternalDNS is deployed, annotate Ingress resources to trigger
-automatic DNS record creation:
+Once ExternalDNS is deployed, annotate Ingress resources to trigger automatic
+DNS record creation:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -269,4 +270,4 @@ spec:
 If rate limit errors occur:
 
 1. Increase `dns_records_per_page` to reduce API calls
-2. Increase `interval` to reduce synchronisation frequency
+2. Increase `interval` to reduce synchronization frequency

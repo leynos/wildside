@@ -6,8 +6,7 @@ Provide an OpenTofu module that deploys cert-manager and exposes ClusterIssuer
 resources for ACME (Automated Certificate Management Environment, Let's
 Encrypt) and Vault. The module supports both render mode (Flux-ready manifests)
 and apply mode (direct Kubernetes provisioning) so the `wildside-infra-k8s`
-action can converge shared Transport Layer Security (TLS) fixtures on each
-run.
+action can converge shared Transport Layer Security (TLS) fixtures on each run.
 
 ## Goals
 
@@ -50,8 +49,8 @@ run.
 - **GitOps layout**: Render manifests into
   `platform/sources/cert-manager-repo.yaml`,
   `platform/sources/namecheap-webhook-repo.yaml` (optional), and
-  `platform/cert-manager/` (namespace, helm releases, issuers, PDBs, CA
-  bundle, kustomization).
+  `platform/cert-manager/` (namespace, helm releases, issuers, PDBs, CA bundle,
+  kustomization).
 
 ## Interfaces
 
@@ -62,8 +61,7 @@ Key inputs include:
 - `acme_email` and ACME issuer names/servers.
 - `namecheap_api_secret_name` plus optional key overrides.
 - `vault_server`, `vault_pki_path` (Vault Public Key Infrastructure signing
-  path), `vault_token_secret_name`, and
-  `vault_ca_bundle_pem`.
+  path), `vault_token_secret_name`, and `vault_ca_bundle_pem`.
 - `webhook_release_*` settings for the optional Namecheap webhook Helm release.
 - `ca_bundle_secret_*` settings for optional CA bundle Secret rendering.
 

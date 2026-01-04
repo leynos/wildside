@@ -61,17 +61,16 @@ Observable success:
   Evidence: existing pattern in `backend/tests/diesel_user_repository.rs`.
 - Observation: Actix Web (and `actix_web::rt::spawn`) uses Tokio
   `spawn_local`, which panics unless run inside a `tokio::task::LocalSet`.
-  Evidence: initial guardrail tests failed with `spawn_local called from
-  outside of a task::LocalSet or LocalRuntime`.
+  Evidence: initial guardrail tests failed with
+  `spawn_local called from outside of a task::LocalSet or LocalRuntime`.
 
 ## Decision Log
 
 - Decision: Introduce “use-case ports” (driving ports) as traits in
   `backend/src/domain/ports/` and inject them into inbound adapters via
-  `actix_web::web::Data`.
-  Rationale: Allows adapter integration tests to supply deterministic test
-  doubles and assert call boundaries without requiring outbound I/O.
-  Date/Author: 2025-12-14 / Codex CLI.
+  `actix_web::web::Data`. Rationale: Allows adapter integration tests to supply
+  deterministic test doubles and assert call boundaries without requiring
+  outbound I/O. Date/Author: 2025-12-14 / Codex CLI.
 
 ## Outcomes & Retrospective
 

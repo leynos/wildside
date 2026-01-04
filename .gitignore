@@ -84,6 +84,7 @@ coverage/
 /.serena/
 /.tmp/
 /logs_llm/
+*.swp
 
 deploy/k8s/backend/secret.env
 

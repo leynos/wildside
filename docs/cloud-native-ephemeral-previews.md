@@ -58,11 +58,12 @@ before handing control back to Flux:
   `wildside-infra` GitOps repository that FluxCD watches. Every execution
   performs the following steps idempotently:
 
-  - Ensure the repository presents the expected GitOps layout, including the
+  - Generate and enforce the full GitOps tree layout, including the
     `clusters`, `modules`, and `platform` directories with
     `platform/sources`, `platform/traefik`, `platform/cert-manager`,
-    `platform/external-dns`, and `platform/vault` subdirectories.
-  - Materialise the OpenTofu configuration for the requested cluster and
+    `platform/external-dns`, `platform/vault`, `platform/databases`, and
+    `platform/redis` subdirectories for shared data services.
+  - Materialize the OpenTofu configuration for the requested cluster and
     fixtures, applying modules safely and capturing the resulting state in Git
     so Flux can drive Helm-based platform services from the repository.
   - Commit any drift back to the repository while sourcing secrets from
@@ -427,26 +428,59 @@ the expected manifests.
 
 #### Table 1: GitOps repository structure
 
-| Repository | Path | Purpose |
-| --- | --- | --- |
-| wildside-infra | / | Defines the desired state of the cluster's shared platform infrastructure. |
-|  | `clusters/<cluster>/` | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`). |
-|  | modules/ | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`. |
-|  | platform/sources/ | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
-|  | platform/traefik/ | HelmRelease and supporting manifests for the Traefik ingress controller. |
-|  | platform/cert-manager/ | HelmRelease and issuers for cert-manager-driven TLS automation. |
-|  | platform/external-dns/ | HelmRelease and configuration for ExternalDNS. |
-|  | platform/vault/ | HelmReleases plus External Secrets Operator resources for secrets replication from Vault. |
-|  | platform/databases/ | Operators and HelmReleases for shared data services such as CloudNativePG and Redis. |
-| wildside-apps | / | Defines the desired state of the Wildside application across all environments. |
-|  | base/ | Canonical, environment-agnostic HelmRelease manifest for the Wildside application. |
-|  | overlays/production/ | Kustomize overlay with production-specific patches (hostnames, scaling, resources). |
-|  | overlays/staging/ | Kustomize overlay with staging configuration. |
-|  | overlays/ephemeral/ | Directory of dynamically generated overlays for each pull request (e.g., `pr-123/`). |
+| Repository     | Path                     | Purpose                                                                                                                                     |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| wildside-infra | `/`                      | Defines the desired state of the cluster's shared platform infrastructure.                                                                  |
+|                | `clusters/<cluster>/`    | Root directory for a cluster's Flux configuration (e.g., `clusters/dev`, `clusters/prod`).                                                  |
+|                | `modules/`               | Houses reusable OpenTofu modules (DOKS, FluxCD, External Secrets, etc.) consumed by `wildside-infra-k8s`.                                   |
+|                | `platform/sources/`      | GitRepository and HelmRepository definitions for all external sources Flux may pull from (Bitnami Helm repo, wildside-apps Git repo, etc.). |
+|                | `platform/traefik/`      | HelmRelease and supporting manifests for the Traefik ingress controller.                                                                    |
+|                | `platform/cert-manager/` | HelmRelease and issuers for cert-manager-driven TLS automation.                                                                             |
+|                | `platform/external-dns/` | HelmRelease and configuration for ExternalDNS.                                                                                              |
+|                | `platform/vault/`        | HelmReleases plus External Secrets Operator resources for secrets replication from Vault.                                                   |
+|                | `platform/databases/`    | CloudNativePG operator, clusters, and supporting manifests.                                                                                 |
+|                | `platform/redis/`        | Redis-compatible (Valkey) operator, clusters, and supporting manifests.                                                                     |
+| wildside-apps  | `/`                      | Defines the desired state of the Wildside application across all environments.                                                              |
+|                | `base/`                  | Canonical, environment-agnostic HelmRelease manifest for the Wildside application.                                                          |
+|                | `overlays/production/`   | Kustomize overlay with production-specific patches (hostnames, scaling, resources).                                                         |
+|                | `overlays/staging/`      | Kustomize overlay with staging configuration.                                                                                               |
+|                | `overlays/ephemeral/`    | Directory of dynamically generated overlays for each pull request (e.g., `pr-123/`).                                                        |
 
 This structure provides a clear separation of concerns and a logical hierarchy
 for defining the cluster's state while keeping the repositories ready for the
 idempotent actions to commit updates.[^11]
+
+#### Automating the GitOps tree layout
+
+The GitOps tree is generated, not curated manually. The `wildside-infra-k8s`
+workflow runs OpenTofu in render mode to produce the `rendered_manifests`
+output maps for each module and then invokes a small Python helper to apply
+those maps to the checked-out `wildside-infra` repository. OpenTofu remains
+responsible for infrastructure state and manifest rendering; Python is used for
+filesystem operations because it can deterministically write, normalize, and
+prune files without inflating OpenTofu state. Each platform subdirectory is
+populated with rendered HelmReleases, Kustomizations, and supporting manifests
+(namespaces, CRDs, PDBs), so the layout can be recreated idempotently on every
+run.
+
+The helper runs the following idempotent steps on every execution:
+
+- Sync `infra/modules/` into `wildside-infra/modules/` using a deterministic
+  copy, removing files not present in the source so modules stay pinned to the
+  same commit as the generated manifests.
+- Merge the `rendered_manifests` maps from the selected modules and ensure the
+  target directories exist (`clusters/<cluster>/`, `platform/sources/`,
+  `platform/traefik/`, `platform/cert-manager/`, `platform/external-dns/`,
+  `platform/vault/`, `platform/databases/` for CloudNativePG, and
+  `platform/redis/` for Redis via Valkey).
+- Write each manifest using atomic writes, normalize line endings, and ensure a
+  trailing newline, so reruns produce identical content.
+- Store the list of generated paths (for example
+  `platform/.rendered-manifests.json`) and delete any previously generated file
+  that no longer appears in the latest render output.
+
+This keeps the GitOps tree reproducible and allows the action to commit any
+drift without manual intervention.
 
 ### Declaring cluster-wide sources
 
@@ -772,24 +806,24 @@ hardened DigitalOcean Droplet rather than as an in-cluster deployment. The
 appliance is treated as first-class infrastructure with three building blocks:
 
 1. **OpenTofu module (`infra/modules/vault_appliance`)** provisions the Droplet,
-   its firewall, and attached block storage. The module outputs the floating IP,
-   private IP, rendered cloud-init template, and recovery data so downstream
-   automation can fetch them deterministically. Terraform locals drive tagging
-   so observability and backup tooling can discover the node.
+   its firewall, and attached block storage. The module outputs the floating
+   IP, private IP, rendered cloud-init template, and recovery data so
+   downstream automation can fetch them deterministically. Terraform locals
+   drive tagging so observability and backup tooling can discover the node.
 
 2. **Python bootstrap helper (`scripts/bootstrap_vault_appliance.py`)** follows
    the [scripting standards](scripting-standards.md). It uses `plumbum` to run
-  `ssh`, `vault`, and `doctl` commands, initializes Vault if required, stores
-   generated unseal keys in a secure secrets store, and enables the KV v2 engine
-   plus the AppRole required by the DOKS deployment workflow. The helper is
-   idempotent—re-running it simply verifies that the appliance state matches the
-   desired configuration.
+   `ssh`, `vault`, and `doctl` commands, initializes Vault if required, stores
+   generated unseal keys in a secure secrets store, and enables the KV v2
+   engine plus the AppRole required by the DOKS deployment workflow. The helper
+   is idempotent—re-running it simply verifies that the appliance state matches
+   the desired configuration.
 
 3. **Reusable GitHub Action (`bootstrap-vault-appliance`)** wraps the helper so
-   both the manual DOKS deploy workflow and automated preview pipelines can call
-   it. Inputs include DigitalOcean credentials, the targeted environment, and a
-   reference to where seal keys are stored (for example, 1Password or an S3
-   bucket). The action exposes outputs for the Vault address, CA bundle, and
+   both the manual DOKS deploy workflow and automated preview pipelines can
+   call it. Inputs include DigitalOcean credentials, the targeted environment,
+   and a reference to where seal keys are stored (for example, 1Password or an
+   S3 bucket). The action exposes outputs for the Vault address, CA bundle, and
    AppRole credentials that the DOKS workflow consumes.
 
 Operational safeguards include:
@@ -960,10 +994,11 @@ databases created in the cluster.
 
 ##### CloudNativePG Resource Relationships
 
-The following diagram illustrates the relationships between Kubernetes resources
-managed by the CNPG module. Namespaces contain the various resources, while the
-Cluster resource references Secrets for credentials and backup configuration.
-External Secrets Operator bridges Vault paths to Kubernetes Secrets.
+The following diagram illustrates the relationships between Kubernetes
+resources managed by the CNPG module. Namespaces contain the various resources,
+while the Cluster resource references Secrets for credentials and backup
+configuration. External Secrets Operator bridges Vault paths to Kubernetes
+Secrets.
 
 ```mermaid
 erDiagram
@@ -1414,15 +1449,16 @@ environments, from creation to destruction.
   infrastructure. It commits the infrastructure state to `wildside-infra` and
   lays out the repository with `clusters`, `modules`, and `platform`
   directories (`platform/sources`, `platform/traefik`, `platform/cert-manager`,
-  `platform/external-dns`). Credentials are obtained from Vault.
+  `platform/external-dns`, `platform/vault`, `platform/databases`, and
+  `platform/redis`). Credentials are obtained from Vault.
 
 - `wildside-app` generates the overlay for an application instance and commits
-  it to `wildside-apps` so FluxCD can reconcile the deployment. It maintains the
-  `base` and `overlays` directories (`production`, `staging`, and dynamic
+  it to `wildside-apps` so FluxCD can reconcile the deployment. It maintains
+  the `base` and `overlays` directories (`production`, `staging`, and dynamic
   `ephemeral` overlays). Secrets are likewise sourced from Vault.
 
-These actions are idempotent and can safely be run multiple times to converge on
-the specified state.
+These actions are idempotent and can safely be run multiple times to converge
+on the specified state.
 
 ### Workflow triggers and permissions
 

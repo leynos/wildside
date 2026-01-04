@@ -9,8 +9,8 @@ related automated checks pass.
 The backend must uphold the hexagonal modular monolith described in
 `docs/wildside-backend-architecture.md` from the outset of every change. Hex
 architecture is not a future refactor: every deliverable must lean on the
-domain, port, and adapter seams established in section 1. No downstream task can
-be considered done if it violates these constraints.
+domain, port, and adapter seams established in section 1. No downstream task
+can be considered done if it violates these constraints.
 
 ## 1. Hexagonal foundations
 
@@ -27,9 +27,8 @@ delivery, so future work remains inside the hexagonal boundaries.
   and `UserRepository`) with strongly typed error enums instead of
   `anyhow::Result`.
 - [x] 1.1.3. Replace direct data transfer object usage in `backend/src/api/*`
-  with domain factories (for example,
-  `RouteRequest::try_from_login_payload`) so inbound adapters never construct
-  domain structs manually.
+  with domain factories (for example, `RouteRequest::try_from_login_payload`)
+  so inbound adapters never construct domain structs manually.
 - [x] 1.1.4. Convert shared error handling in `backend/src/models/error.rs`
   into domain error types that translate to HTTP responses via adapter-level
   mapping.
@@ -38,9 +37,9 @@ delivery, so future work remains inside the hexagonal boundaries.
 
 - [x] 1.2.1. Move the current `backend/src/api` module into
   `backend/src/inbound/http`, keeping handlers thin (request parsing -> domain
-  service call -> response mapping) and ensuring handler bodies only
-  coordinate domain calls and high-level session helpers (no direct
-  framework-specific session manipulation).
+  service call -> response mapping) and ensuring handler bodies only coordinate
+  domain calls and high-level session helpers (no direct framework-specific
+  session manipulation).
 - [x] 1.2.2. Rework the WebSocket entry point in `backend/src/ws` into an
   inbound adapter (`backend/src/inbound/ws`) that consumes domain events
   instead of building messages inline.
@@ -81,8 +80,7 @@ adapter; direct stateful logic belongs behind the ports established above.
   `SESSION_COOKIE_SECURE`, and `SESSION_ALLOW_EPHEMERAL`, failing fast in
   release builds when secrets are missing or keys are too short.
 - [x] 2.1.4. Document and script the rotation procedure for session signing
-  keys, including Kubernetes secret rollout and dual validation during
-  deploys.
+  keys, including Kubernetes secret rollout and dual validation during deploys.
 
 ### 2.2. Route submission idempotency
 
@@ -90,11 +88,10 @@ adapter; direct stateful logic belongs behind the ports established above.
   PostgreSQL, rejecting conflicting payloads with `409` and replaying
   successful responses within 24 hours.
 - [x] 2.2.2. Introduce a shared `IdempotencyRepository` with configurable
-  time-to-live (TTL) and reuse it for outbox-backed mutations (notes,
-  progress, preferences, and offline bundles).
+  time-to-live (TTL) and reuse it for outbox-backed mutations (notes, progress,
+  preferences, and offline bundles).
 - [x] 2.2.3. Capture idempotency audit metrics (hits, misses, and conflicts)
-  and expose them via Prometheus with labels for user scope and key age
-  buckets.
+  and expose them via Prometheus with labels for user scope and key age buckets.
 
 ### 2.3. Progressive web app preferences and annotations
 
@@ -118,9 +115,9 @@ so persistence details stay confined to outbound adapters.
 ### 3.1. Schema baseline
 
 - [ ] 3.1.1. Deliver Diesel migrations that materialize the schema in
-  `docs/wildside-backend-architecture.md`, including catalogue, descriptor,
-  and user state tables plus GiST/GIN indices and unique constraints for
-  composite keys.
+  `docs/wildside-backend-architecture.md`, including catalogue, descriptor, and
+  user state tables plus GiST/GIN indices and unique constraints for composite
+  keys.
 - [ ] 3.1.2. Generate entity-relationship (ER) diagram snapshots from
   migrations and store them alongside documentation for traceability.
 
@@ -186,8 +183,8 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 ### 4.3. Documentation and quality gates
 
 - [ ] 4.3.1. Update the OpenAPI schema, AsyncAPI artefacts, and developer
-  guides to document the new `cursor` and `limit`
-  query parameters and response envelope.
+  guides to document the new `cursor` and `limit` query parameters and response
+  envelope.
 - [ ] 4.3.2. Add integration tests exercising forward and backward
   pagination, plus contract tests guaranteeing link generation and page-size
   guardrails.
@@ -196,8 +193,8 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 
 ## 5. Background jobs and caching
 
-Background workers and caches must interact with the domain exclusively via
-the queue, cache, and repository ports defined in section 1.
+Background workers and caches must interact with the domain exclusively via the
+queue, cache, and repository ports defined in section 1.
 
 ### 5.1. Cache adapter (Redis)
 
@@ -227,8 +224,8 @@ the queue, cache, and repository ports defined in section 1.
 ### 5.4. Caching strategy
 
 - [ ] 5.4.1. Finalize the Redis caching adapter, so requests share
-  canonicalized keys, jittered TTLs, and metrics for hit and miss ratios
-  before enabling caching in production.
+  canonicalized keys, jittered TTLs, and metrics for hit-and-miss ratios before
+  enabling caching in production.
 - [ ] 5.4.2. Implement cache invalidation hooks for schema or engine version
   upgrades, including namespace suffix rotation and eviction-safe rollouts.
 - [ ] 5.4.3. Add contract tests verifying canonicalization rules (sorted
@@ -245,8 +242,7 @@ publish events and metrics through their ports only.
   read-only credentials, and ingress routing via `/tiles` or
   `tiles.wildside.app`.
 - [ ] 6.1.2. Add the `get_route_tile` PostGIS function, JSON Web Token (JWT)
-  validation path, and Grafana dashboards covering tile latency and error
-  rates.
+  validation path, and Grafana dashboards covering tile latency and error rates.
 
 ### 6.2. Observability extensions
 
@@ -254,8 +250,8 @@ publish events and metrics through their ports only.
   and Martin, wiring alerts for latency spikes, queue backlogs, and cache
   eviction rates.
 - [ ] 6.2.2. Extend structured logging to include route identifiers, user
-  identifiers, and trace IDs across HTTP, WebSocket, and worker boundaries
-  with Loki dashboards.
+  identifiers, and trace IDs across HTTP, WebSocket, and worker boundaries with
+  Loki dashboards.
 - [ ] 6.2.3. Instrument PostHog events (`RouteGenerated`, `UserSignup`, and
   similar) with consistent payload schemas and batching policies.
 

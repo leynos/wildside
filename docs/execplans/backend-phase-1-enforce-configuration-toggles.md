@@ -44,24 +44,22 @@ predictable. Success is observable when:
 ## Surprises & Discoveries
 
 - Observation: `make nixie` required installing the Mermaid puppeteer
-  dependency via `make deps` before it would pass.
-  Evidence: `make nixie` failed before `make deps`, then passed after.
+  dependency via `make deps` before it would pass. Evidence: `make nixie`
+  failed before `make deps`, then passed after.
 - Observation: `make test` exceeded the default 300-second timeout and needed
-  a rerun with `timeout 900`.
-  Evidence: initial run exited with code 124; rerun succeeded.
+  a rerun with `timeout 900`. Evidence: initial run exited with code 124; rerun
+  succeeded.
 
 ## Decision Log
 
 - Decision: Define a local `SessionEnv` trait with a `DefaultEnv` implementation
-  for production reads, while tests supply a `MockEnv`.
-  Rationale: Keeps tests deterministic and avoids a runtime dependency on the
-  `mockable` crate by limiting it to dev-only usage.
-  Date/Author: 2025-12-20 / Codex CLI.
+  for production reads, while tests supply a `MockEnv`. Rationale: Keeps tests
+  deterministic and avoids a runtime dependency on the `mockable` crate by
+  limiting it to dev-only usage. Date/Author: 2025-12-20 / Codex CLI.
 - Decision: Move unit tests into
-  `backend/src/inbound/http/session_config/tests.rs`.
-  Rationale: Keeps the main module under the 400-line limit while preserving
-  proximity to the implementation.
-  Date/Author: 2025-12-20 / Codex CLI.
+  `backend/src/inbound/http/session_config/tests.rs`. Rationale: Keeps the main
+  module under the 400-line limit while preserving proximity to the
+  implementation. Date/Author: 2025-12-20 / Codex CLI.
 - Decision: Include `min_len` in `SessionConfigError::KeyTooShort`.
   Rationale: Provides actionable error details without additional logging.
   Date/Author: 2025-12-20 / Codex CLI.
@@ -315,9 +313,10 @@ expose the module via `backend::inbound::http`:
         EphemeralNotAllowed,
     }
 
-If `mockable` is not yet a dev-dependency, add it to `backend/Cargo.toml` with a
-caret requirement (for example `mockable = { version = "0.3", features =
-["mock"] }`) so tests can use `MockEnv`.
+If `mockable` is not yet a dev-dependency, add it to `backend/Cargo.toml` with
+a caret requirement (for example
+`mockable = { version = "0.3", features = ["mock"] }`) so tests can use
+`MockEnv`.
 
 In `backend/src/main.rs`, replace the inline parsing helpers with a call to the
 new module using `DefaultEnv` and a `BuildMode` derived from
@@ -328,7 +327,6 @@ new module using `DefaultEnv` and a `BuildMode` derived from
 This ExecPlan was updated to reflect completed implementation work, test runs,
 and the switch to `DefaultEnv` for production reads. Progress, decisions,
 artifacts, and interfaces now match the shipped code and the remaining work is
-fully complete.
-Updated the decision log and interface guidance to describe the local
-`SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable` to a
-dev-only dependency.
+fully complete. Updated the decision log and interface guidance to describe the
+local `SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable`
+to a dev-only dependency.

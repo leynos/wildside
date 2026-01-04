@@ -49,35 +49,32 @@ Observable success:
 ## Surprises & Discoveries
 
 - Observation: `rstest-bdd` matches fixtures by parameter name; using `_world`
-  in a step function caused a missing fixture error.
-  Evidence: `Missing fixture '_world'` failure in `user_session_bdd` before
-  renaming the parameter to `world`.
+  in a step function caused a missing fixture error. Evidence:
+  `Missing fixture '_world'` failure in `user_session_bdd` before renaming the
+  parameter to `world`.
 - Observation: `make lint` used the PATH-installed `redocly` binary, which
   failed due to a React version mismatch; forcing `bun x` resolved the lint.
-  Evidence: `Incompatible React versions` from `redocly` when the global
-  binary was used.
+  Evidence: `Incompatible React versions` from `redocly` when the global binary
+  was used.
 
 ## Decision Log
 
 - Decision: Introduce explicit driving ports for the authenticated user
-  profile and interest selection rather than letting handlers touch persistence
-  or shared state.
-  Rationale: Keeps inbound adapters side effect free and preserves the
-  hexagonal boundary by routing stateful behaviour through domain ports.
-  Date/Author: 2025-12-19 / Codex CLI.
+  profile and interest selection, rather than letting handlers touch persistence
+  or shared state. Rationale: Keeps inbound adapters side-effect-free and
+  preserves the hexagonal boundary by routing stateful behaviour through domain
+  ports. Date/Author: 2025-12-19 / Codex CLI.
 
 - Decision: Model interest theme identifiers as a domain newtype around a
   universally unique identifier (UUID) and validate them before reaching port
-  implementations.
-  Rationale: Validation belongs in the domain to ensure consistent behaviour
-  across adapters and future persistence layers.
+  implementations. Rationale: Validation belongs in the domain to ensure
+  consistent behaviour across adapters and future persistence layers.
   Date/Author: 2025-12-19 / Codex CLI.
 
 - Decision: Use the `world` parameter name in rstest-bdd step functions to
-  align with fixture naming rules.
-  Rationale: rstest-bdd resolves fixtures by parameter name, so `_world` would
-  look for a missing fixture.
-  Date/Author: 2025-12-19 / Codex CLI.
+  align with fixture naming rules. Rationale: rstest-bdd resolves fixtures by
+  parameter name, so `_world` would look for a missing fixture. Date/Author:
+  2025-12-19 / Codex CLI.
 
 ## Outcomes & Retrospective
 
@@ -124,8 +121,8 @@ Terminology (plain language):
 ## Plan of Work
 
 1. Confirm how `Trace` middleware and `SessionContext` currently behave by
-   locating the existing handler wiring in `backend/src/server/mod.rs` and
-   test harnesses. Note where Trace is (and is not) applied so tests can assert
+   locating the existing handler wiring in `backend/src/server/mod.rs` and test
+   harnesses. Note where Trace is (and is not) applied, so tests can assert
    trace IDs consistently.
 
 2. Define domain primitives and ports for these endpoints:
@@ -201,8 +198,8 @@ Terminology (plain language):
 
 ## Concrete Steps
 
-Run all commands from the repository root. Use a default timeout of 300
-seconds per command unless a step explicitly requires more time.
+Run all commands from the repository root. Use a default timeout of 300 seconds
+per command unless a step explicitly requires more time.
 
 1. Apply code and documentation changes.
 
@@ -301,8 +298,7 @@ Add or update the following interfaces (final state target):
           ) -> Result&lt;UserInterests, Error&gt;;
       }
 
-  Include a fixture implementation returning a deterministic
-  `UserInterests`.
+  Include a fixture implementation returning a deterministic `UserInterests`.
 
 - In `backend/src/inbound/http/users.rs`, add handlers:
 
@@ -310,18 +306,17 @@ Add or update the following interfaces (final state target):
       async fn current_user(
           state: web::Data&lt;HttpState&gt;,
           session: SessionContext,
-      ) -> ApiResult&lt;web::Json&lt;User&gt;&gt; { ... }
+      ) -> ApiResult&lt;web::Json&lt;User&gt;&gt; { … }
 
       #[put("/users/me/interests")]
       async fn update_interests(
           state: web::Data&lt;HttpState&gt;,
           session: SessionContext,
           payload: web::Json&lt;InterestsRequest&gt;,
-      ) -> ApiResult&lt;web::Json&lt;UserInterests&gt;&gt; { ... }
+      ) -> ApiResult&lt;web::Json&lt;UserInterests&gt;&gt; { … }
 
   with request data transfer objects (DTOs) that convert into domain types via
-  `TryFrom` so validation
-  errors map to `Error::invalid_request`.
+  `TryFrom` so validation errors map to `Error::invalid_request`.
 
 - In `backend/src/inbound/http/state.rs`, extend `HttpState` with the new
   ports so handlers can be wired via dependency injection.

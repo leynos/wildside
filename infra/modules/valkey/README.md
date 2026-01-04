@@ -134,92 +134,92 @@ module "valkey" {
 
 ### Core configuration
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| `mode` | Whether to render Flux manifests (`render`) or apply directly (`apply`) | `string` | `"render"` | no |
-| `namespace` | Namespace for the Valkey cluster | `string` | `"valkey"` | no |
-| `operator_namespace` | Namespace for the operator | `string` | `"valkey-system"` | no |
-| `create_namespaces` | Whether to create namespaces | `bool` | `true` | no |
-| `helm_release_name` | Name for the operator Helm release | `string` | `"valkey-operator"` | no |
-| `chart_repository` | Helm repository URL | `string` | `"oci://ghcr.io/hyperspike/helm"` | no |
-| `chart_name` | Helm chart name | `string` | `"valkey-operator"` | no |
-| `chart_version` | Helm chart version | `string` | `"0.0.60"` | no |
-| `helm_wait` | Wait for Helm release to succeed | `bool` | `true` | no |
-| `helm_timeout` | Helm operation timeout (seconds) | `number` | `600` | no |
-| `helm_values` | Inline YAML values for Helm | `list(string)` | `[]` | no |
-| `flux_namespace` | Flux controllers namespace (render mode) | `string` | `"flux-system"` | no |
-| `flux_helm_repository_name` | Flux HelmRepository name | `string` | `"valkey-operator"` | no |
-| `flux_helm_repository_interval` | HelmRepository reconciliation interval | `string` | `"24h"` | no |
-| `flux_helm_release_interval` | HelmRelease reconciliation interval | `string` | `"1h"` | no |
+| Name                            | Description                                                             | Type           | Default                           | Required |
+| ------------------------------- | ----------------------------------------------------------------------- | -------------- | --------------------------------- | :------: |
+| `mode`                          | Whether to render Flux manifests (`render`) or apply directly (`apply`) | `string`       | `"render"`                        | no       |
+| `namespace`                     | Namespace for the Valkey cluster                                        | `string`       | `"valkey"`                        | no       |
+| `operator_namespace`            | Namespace for the operator                                              | `string`       | `"valkey-system"`                 | no       |
+| `create_namespaces`             | Whether to create namespaces                                            | `bool`         | `true`                            | no       |
+| `helm_release_name`             | Name for the operator Helm release                                      | `string`       | `"valkey-operator"`               | no       |
+| `chart_repository`              | Helm repository URL                                                     | `string`       | `"oci://ghcr.io/hyperspike/helm"` | no       |
+| `chart_name`                    | Helm chart name                                                         | `string`       | `"valkey-operator"`               | no       |
+| `chart_version`                 | Helm chart version                                                      | `string`       | `"0.0.60"`                        | no       |
+| `helm_wait`                     | Wait for Helm release to succeed                                        | `bool`         | `true`                            | no       |
+| `helm_timeout`                  | Helm operation timeout (seconds)                                        | `number`       | `600`                             | no       |
+| `helm_values`                   | Inline YAML values for Helm                                             | `list(string)` | `[]`                              | no       |
+| `flux_namespace`                | Flux controllers namespace (render mode)                                | `string`       | `"flux-system"`                   | no       |
+| `flux_helm_repository_name`     | Flux HelmRepository name                                                | `string`       | `"valkey-operator"`               | no       |
+| `flux_helm_repository_interval` | HelmRepository reconciliation interval                                  | `string`       | `"24h"`                           | no       |
+| `flux_helm_release_interval`    | HelmRelease reconciliation interval                                     | `string`       | `"1h"`                            | no       |
 
 ### Cluster configuration
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| `cluster_name` | Valkey cluster resource name | `string` | `"valkey"` | no |
-| `nodes` | Number of shards (cluster nodes) | `number` | `1` | no |
-| `replicas` | Replicas per shard (0 for standalone) | `number` | `0` | no |
-| `cluster_domain` | Kubernetes cluster DNS domain | `string` | `"cluster.local"` | no |
-| `persistence_enabled` | Enable persistent storage | `bool` | `true` | no |
-| `storage_size` | PVC storage size per instance | `string` | `"1Gi"` | no |
-| `storage_class` | Kubernetes StorageClass | `string` | `"do-block-storage"` | no |
-| `image` | Custom Valkey image (blank for operator default) | `string` | `""` | no |
-| `exporter_image` | Custom Prometheus exporter image | `string` | `""` | no |
-| `resource_requests` | Pod resource requests | `object` | `{cpu="100m", memory="128Mi"}` | no |
-| `resource_limits` | Pod resource limits | `object` | `{cpu="500m", memory="512Mi"}` | no |
-| `prometheus_enabled` | Enable Prometheus metrics | `bool` | `false` | no |
-| `service_monitor_enabled` | Create ServiceMonitor resource | `bool` | `false` | no |
-| `pdb_enabled` | Create PodDisruptionBudget | `bool` | `true` | no |
-| `pdb_min_available` | Minimum available pods | `number` | `1` | no |
-| `pdb_name` | PDB resource name | `string` | `"pdb-valkey"` | no |
-| `node_selector` | Node selector for pods | `map(string)` | `{}` | no |
-| `tolerations` | Tolerations for pods | `list(object)` | `[]` | no |
+| Name                      | Description                                      | Type           | Default                        | Required |
+| ------------------------- | ------------------------------------------------ | -------------- | ------------------------------ | :------: |
+| `cluster_name`            | Valkey cluster resource name                     | `string`       | `"valkey"`                     | no       |
+| `nodes`                   | Number of shards (cluster nodes)                 | `number`       | `1`                            | no       |
+| `replicas`                | Replicas per shard (0 for standalone)            | `number`       | `0`                            | no       |
+| `cluster_domain`          | Kubernetes cluster DNS domain                    | `string`       | `"cluster.local"`              | no       |
+| `persistence_enabled`     | Enable persistent storage                        | `bool`         | `true`                         | no       |
+| `storage_size`            | PVC storage size per instance                    | `string`       | `"1Gi"`                        | no       |
+| `storage_class`           | Kubernetes StorageClass                          | `string`       | `"do-block-storage"`           | no       |
+| `image`                   | Custom Valkey image (blank for operator default) | `string`       | `""`                           | no       |
+| `exporter_image`          | Custom Prometheus exporter image                 | `string`       | `""`                           | no       |
+| `resource_requests`       | Pod resource requests                            | `object`       | `{cpu="100m", memory="128Mi"}` | no       |
+| `resource_limits`         | Pod resource limits                              | `object`       | `{cpu="500m", memory="512Mi"}` | no       |
+| `prometheus_enabled`      | Enable Prometheus metrics                        | `bool`         | `false`                        | no       |
+| `service_monitor_enabled` | Create ServiceMonitor resource                   | `bool`         | `false`                        | no       |
+| `pdb_enabled`             | Create PodDisruptionBudget                       | `bool`         | `true`                         | no       |
+| `pdb_min_available`       | Minimum available pods                           | `number`       | `1`                            | no       |
+| `pdb_name`                | PDB resource name                                | `string`       | `"pdb-valkey"`                 | no       |
+| `node_selector`           | Node selector for pods                           | `map(string)`  | `{}`                           | no       |
+| `tolerations`             | Tolerations for pods                             | `list(object)` | `[]`                           | no       |
 
 ### Credentials configuration
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| `anonymous_auth` | Allow unauthenticated access | `bool` | `false` | no |
-| `password_secret_name` | Secret containing Valkey password | `string` | `"valkey-password"` | no |
-| `password_secret_key` | Key in password Secret | `string` | `"password"` | no |
-| `password_inline` | Inline password (if ESO not used) | `string` | `""` | no |
-| `eso_enabled` | Enable ESO for password management | `bool` | `false` | no |
-| `eso_cluster_secret_store_name` | ClusterSecretStore name (from `vault_eso`) | `string` | `"vault-backend"` | no |
-| `eso_refresh_interval` | ExternalSecret refresh interval | `string` | `"1h"` | no |
-| `password_vault_path` | Vault KV path for password | `string` | `""` | no |
-| `password_vault_key` | Key in Vault secret | `string` | `"password"` | no |
+| Name                            | Description                                | Type     | Default             | Required |
+| ------------------------------- | ------------------------------------------ | -------- | ------------------- | :------: |
+| `anonymous_auth`                | Allow unauthenticated access               | `bool`   | `false`             | no       |
+| `password_secret_name`          | Secret containing Valkey password          | `string` | `"valkey-password"` | no       |
+| `password_secret_key`           | Key in password Secret                     | `string` | `"password"`        | no       |
+| `password_inline`               | Inline password (if ESO not used)          | `string` | `""`                | no       |
+| `eso_enabled`                   | Enable ESO for password management         | `bool`   | `false`             | no       |
+| `eso_cluster_secret_store_name` | ClusterSecretStore name (from `vault_eso`) | `string` | `"vault-backend"`   | no       |
+| `eso_refresh_interval`          | ExternalSecret refresh interval            | `string` | `"1h"`              | no       |
+| `password_vault_path`           | Vault KV path for password                 | `string` | `""`                | no       |
+| `password_vault_key`            | Key in Vault secret                        | `string` | `"password"`        | no       |
 
 ### TLS configuration
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| `tls_enabled` | Enable TLS for connections | `bool` | `false` | no |
-| `cert_issuer_name` | cert-manager issuer name | `string` | `""` | no |
-| `cert_issuer_type` | Issuer type (`ClusterIssuer` or `Issuer`) | `string` | `"ClusterIssuer"` | no |
-| `external_access_enabled` | Enable external access | `bool` | `false` | no |
-| `external_access_type` | External access type (`loadbalancer` or `proxy`) | `string` | `"loadbalancer"` | no |
+| Name                      | Description                                      | Type     | Default           | Required |
+| ------------------------- | ------------------------------------------------ | -------- | ----------------- | :------: |
+| `tls_enabled`             | Enable TLS for connections                       | `bool`   | `false`           | no       |
+| `cert_issuer_name`        | cert-manager issuer name                         | `string` | `""`              | no       |
+| `cert_issuer_type`        | Issuer type (`ClusterIssuer` or `Issuer`)        | `string` | `"ClusterIssuer"` | no       |
+| `external_access_enabled` | Enable external access                           | `bool`   | `false`           | no       |
+| `external_access_type`    | External access type (`loadbalancer` or `proxy`) | `string` | `"loadbalancer"`  | no       |
 
 See `variables-*.tf` files for the complete list of inputs with validation
 rules.
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| `operator_namespace` | Namespace where operator is installed |
-| `namespace` | Namespace where Valkey cluster runs |
-| `cluster_name` | Valkey cluster resource name |
-| `helm_release_name` | Operator Helm release name |
-| `primary_service_name` | Kubernetes service for primary |
-| `replica_service_name` | Kubernetes service for replicas |
-| `primary_endpoint` | Fully qualified DNS endpoint for primary |
-| `replica_endpoint` | Fully qualified DNS endpoint for replicas |
-| `port` | Valkey port number |
+| Name                      | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `operator_namespace`      | Namespace where operator is installed          |
+| `namespace`               | Namespace where Valkey cluster runs            |
+| `cluster_name`            | Valkey cluster resource name                   |
+| `helm_release_name`       | Operator Helm release name                     |
+| `primary_service_name`    | Kubernetes service for primary                 |
+| `replica_service_name`    | Kubernetes service for replicas                |
+| `primary_endpoint`        | Fully qualified DNS endpoint for primary       |
+| `replica_endpoint`        | Fully qualified DNS endpoint for replicas      |
+| `port`                    | Valkey port number                             |
 | `credentials_secret_name` | Secret containing password (null if anonymous) |
-| `credentials_secret_key` | Key in credentials Secret |
-| `tls_enabled` | Whether TLS is enabled |
-| `sync_policy_contract` | Contract for downstream workload consumption |
-| `rendered_manifests` | GitOps manifests (render mode only) |
+| `credentials_secret_key`  | Key in credentials Secret                      |
+| `tls_enabled`             | Whether TLS is enabled                         |
+| `sync_policy_contract`    | Contract for downstream workload consumption   |
+| `rendered_manifests`      | GitOps manifests (render mode only)            |
 
 ## Sync policy contract
 
@@ -263,8 +263,9 @@ workloads:
 }
 ```
 
-Applications reference this contract to obtain connection details and credential
-secret names without coupling to the module's internal implementation.
+Applications reference this contract to obtain connection details and
+credential secret names without coupling to the module's internal
+implementation.
 
 ## Integration with cert_manager module
 

@@ -10,12 +10,12 @@ policy to follow.
 ## Purpose / Big Picture
 
 Deliver the Phase 2.3 Vault + External Secrets Operator (ESO) module so the
-`wildside-infra-k8s` action can render Flux-ready manifests into `wildside-infra`
-and converge secrets synchronization on every run. Success is visible when the
-new OpenTofu module can render a `platform/vault` tree containing the ESO
-HelmRelease, ClusterSecretStore resources connected to the existing Vault
-appliance, and when its outputs expose secret store names and sync policy
-contracts for downstream workloads.
+`wildside-infra-k8s` action can render Flux-ready manifests into
+`wildside-infra` and converge secrets synchronization on every run. Success is
+visible when the new OpenTofu module can render a `platform/vault` tree
+containing the ESO HelmRelease, ClusterSecretStore resources connected to the
+existing Vault appliance, and when its outputs expose secret store names and
+sync policy contracts for downstream workloads.
 
 The module connects Kubernetes workloads to the external Vault appliance
 provisioned by the `vault_appliance` OpenTofu module and initialized by the
@@ -45,30 +45,25 @@ Kubernetes cluster via ESO.
 
 - Decision: (Pending) Use AppRole authentication (a Vault authentication method
   for machine-to-machine access) for ESO to connect to the external Vault
-  appliance.
-  Rationale: The `bootstrap-vault-appliance` action already provisions an
-  AppRole with `doks-deployer` identity; ESO can consume the role_id and
-  secret_id to authenticate.
-  Date/Author: Pending.
+  appliance. Rationale: The `bootstrap-vault-appliance` action already
+  provisions an AppRole with `doks-deployer` identity; ESO can consume the
+  role_id and secret_id to authenticate. Date/Author: Pending.
 
 - Decision: (Pending) Pin External Secrets Operator chart version.
   Rationale: Ensures reproducible deployments and prevents unexpected breaking
-  changes.
-  Date/Author: Pending.
+  changes. Date/Author: Pending.
 
 - Decision: (Pending) Provide ClusterSecretStore resources (cluster-scoped ESO
   resources for external secret provider connections) for both the KV v2
   (Vault's versioned key-value secrets engine) and optional PKI (public key
-  infrastructure) engine.
-  Rationale: Supports common secret consumption patterns (credentials and
-  certificates) from the existing Vault infrastructure.
-  Date/Author: Pending.
+  infrastructure) engine. Rationale: Supports common secret consumption
+  patterns (credentials and certificates) from the existing Vault
+  infrastructure. Date/Author: Pending.
 
 - Decision: (Pending) Optionally deploy Vault Agent Injector for sidecar
-  injection patterns.
-  Rationale: Provides an alternative secret delivery mechanism for workloads
-  that require file-based secrets or dynamic credential rotation.
-  Date/Author: Pending.
+  injection patterns. Rationale: Provides an alternative secret delivery
+  mechanism for workloads that require file-based secrets or dynamic credential
+  rotation. Date/Author: Pending.
 
 ## Outcomes & Retrospective
 
@@ -234,8 +229,8 @@ Expose outputs that downstream modules can consume (the sync policy contract):
 - `rendered_manifests` — map for render mode.
 
 The sync policy contract object should bundle the secret store references and
-mount paths, so workloads can construct ExternalSecret resources without knowing
-the underlying Vault configuration.
+mount paths, so workloads can construct ExternalSecret resources without
+knowing the underlying Vault configuration.
 
 ### Phase 6: Examples
 
@@ -245,8 +240,8 @@ Add examples mirroring existing modules:
   `kubeconfig_path` validation. Demonstrate full connectivity to a Vault
   instance with AppRole credentials.
 - **Render-mode example** (`examples/render/`): Only depend on module inputs and
-  export `rendered_manifests`. Duplicate module defaults in example variables so
-  Terratest can override them.
+  export `rendered_manifests`. Duplicate module defaults in example variables
+  so Terratest can override them.
 
 ### Phase 7: OPA/Conftest Policies
 
@@ -298,8 +293,8 @@ render-policy scripts.
 
 ### Phase 10: Documentation and Roadmap
 
-Update `docs/ephemeral-previews-roadmap.md` to mark the Vault + ESO module entry
-as done. Record any design decisions in the design document and update
+Update `docs/ephemeral-previews-roadmap.md` to mark the Vault + ESO module
+entry as done. Record any design decisions in the design document and update
 `docs/contents.md` accordingly.
 
 ## Concrete Steps
@@ -454,8 +449,8 @@ temporary directories, delete them and rerun the script.
 
 ## Artifacts and Notes
 
-Expected `rendered_manifests` keys for render mode include (names may vary based
-on decisions recorded in the design doc):
+Expected `rendered_manifests` keys for render mode include (names may vary
+based on decisions recorded in the design doc):
 
 - `platform/sources/external-secrets-repo.yaml`
 - `platform/vault/namespace.yaml`

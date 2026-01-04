@@ -59,28 +59,28 @@ module "vault_eso" {
 
 ## Inputs
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| `vault_address` | HTTPS endpoint of the external Vault appliance | `string` | n/a | yes |
-| `vault_ca_bundle_pem` | PEM-encoded Certificate Authority (CA) certificate for Vault TLS | `string` | n/a | yes |
-| `approle_role_id` | AppRole role_id for ESO authentication | `string` | n/a | yes |
-| `approle_secret_id` | AppRole secret_id for ESO authentication | `string` | n/a | yes |
-| `mode` | `render` for GitOps manifests, `apply` for direct deployment | `string` | `"render"` | no |
-| `namespace` | Namespace for ESO installation | `string` | `"external-secrets"` | no |
-| `chart_version` | ESO Helm chart version | `string` | `"1.1.1"` | no |
-| `kv_mount_path` | Key-value (KV) v2 mount path in Vault | `string` | `"secret"` | no |
+| Name                  | Description                                                      | Type     | Default              | Required |
+| --------------------- | ---------------------------------------------------------------- | -------- | -------------------- | :------: |
+| `vault_address`       | HTTPS endpoint of the external Vault appliance                   | `string` | n/a                  | yes      |
+| `vault_ca_bundle_pem` | PEM-encoded Certificate Authority (CA) certificate for Vault TLS | `string` | n/a                  | yes      |
+| `approle_role_id`     | AppRole role_id for ESO authentication                           | `string` | n/a                  | yes      |
+| `approle_secret_id`   | AppRole secret_id for ESO authentication                         | `string` | n/a                  | yes      |
+| `mode`                | `render` for GitOps manifests, `apply` for direct deployment     | `string` | `"render"`           | no       |
+| `namespace`           | Namespace for ESO installation                                   | `string` | `"external-secrets"` | no       |
+| `chart_version`       | ESO Helm chart version                                           | `string` | `"1.1.1"`            | no       |
+| `kv_mount_path`       | Key-value (KV) v2 mount path in Vault                            | `string` | `"secret"`           | no       |
 
 See `variables-*.tf` files for the complete list of inputs.
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| `namespace` | Namespace where ESO is installed |
-| `cluster_secret_store_kv_name` | Name of the KV ClusterSecretStore |
-| `cluster_secret_store_kv_ref` | Reference object for the KV store |
-| `sync_policy_contract` | Contract for downstream workload consumption |
-| `rendered_manifests` | GitOps manifests (render mode only) |
+| Name                           | Description                                  |
+| ------------------------------ | -------------------------------------------- |
+| `namespace`                    | Namespace where ESO is installed             |
+| `cluster_secret_store_kv_name` | Name of the KV ClusterSecretStore            |
+| `cluster_secret_store_kv_ref`  | Reference object for the KV store            |
+| `sync_policy_contract`         | Contract for downstream workload consumption |
+| `rendered_manifests`           | GitOps manifests (render mode only)          |
 
 ## Sync Policy Contract
 

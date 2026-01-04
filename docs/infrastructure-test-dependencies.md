@@ -13,8 +13,8 @@ The target executes `scripts/check_test_dependencies.py` and fails early when
 required tools are missing or below the minimum supported version. Operators
 should run it locally before `make doks-test`, `make fluxcd-test`,
 `make vault-appliance-test`, or `make dev-cluster-test` to confirm that the
-environment is ready. Continuous Integration (CI) pipelines should add the
-same step before invoking the infrastructure test matrix.
+environment is ready. Continuous Integration (CI) pipelines should add the same
+step before invoking the infrastructure test matrix.
 
 ## Required binaries
 
@@ -24,10 +24,10 @@ Regenerate the table below with:
 ./scripts/check_test_dependencies.py --emit-markdown
 ```
 
-| Tool | Minimum version | Purpose |
-| ---- | ---------------- | ------- |
-| `tofu` | 1.7.0 | OpenTofu CLI for Terraform plan execution |
-| `conftest` | 0.45.0 (OPA >= 0.59.0) | Policy testing via Open Policy Agent |
+| Tool       | Minimum version        | Purpose                                   |
+| ---------- | ---------------------- | ----------------------------------------- |
+| `tofu`     | 1.7.0                  | OpenTofu CLI for Terraform plan execution |
+| `conftest` | 0.45.0 (OPA >= 0.59.0) | Policy testing via Open Policy Agent      |
 
 The policy suites use Rego v1 syntax (via `import rego.v1`). Ensure that the
 installed `conftest` binary embeds an Open Policy Agent (OPA) release that

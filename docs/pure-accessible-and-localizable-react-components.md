@@ -784,20 +784,20 @@ Locale metadata now travels with the source by way of
 `getLocaleDirection` and `isRtlLocale`. After `i18nReady` resolves, the app
 updates `document.documentElement.lang` and `.dir`, mirrors the direction onto
 `body`, and stores it in `data-direction` attributes, so CSS can branch without
-extra JavaScript. Language changes propagate through `i18n.on("languageChanged")`,
-so Suspense can keep waiting for `.ftl` bundles whilst the DOM attributes stay in
-sync.
+extra JavaScript. Language changes propagate through
+`i18n.on("languageChanged")`, so Suspense can keep waiting for `.ftl` bundles
+whilst the DOM attributes stay in sync.
 
 CSS favours logical properties (`padding-inline`, `inset-inline`,
 `border-inline`) and `[dir="rtl"]` attribute hooks for cases where flexbox
 alignment must flip, such as the floating global-controls drawer or toast
-stacks. Components that need overlapping effects (for example, the walk-complete
-avatar cluster) rely on logical margins, so the overlap stays pointed towards the
-interior regardless of writing mode. MapLibre also loads the published RTL text
-plugin via `setRTLTextPlugin` during lazy import, so Arabic and Hebrew labels
-render with proper glyph shaping.
+stacks. Components that need overlapping effects (for example, the
+walk-complete avatar cluster) rely on logical margins, so the overlap stays
+pointed towards the interior regardless of writing mode. MapLibre also loads
+the published RTL text plugin via `setRTLTextPlugin` during lazy import, so
+Arabic and Hebrew labels render with proper glyph shaping.
 
-#### The ,`useTranslation`, Hook and ,`<Trans>`, Component
+#### The `useTranslation` Hook and `<Trans>` Component
 
 The `useTranslation` hook still returns the familiar `t` helper; the difference
 is that it now resolves Fluent messages while honouring namespaces.[^41][^50]
@@ -814,10 +814,10 @@ const { t } = useTranslation('userProfile');
 Interpolated variables must line up with the Fluent placeholders (`{$name}`)
 and plural selectors just need a `count` (or similar) argument:
 `t('user-settings-unsaved-count', { count: dirtyFields })`. Because Fluent does
-not use braces for JSX, developers should continue to reach for `<Trans>` when a
-sentence needs a React component (for example, a link) embedded inside it; the
-component injects the React nodes while the Fluent string keeps the prose,
-yielding truly localisable markup without unsafe HTML.[^45]
+not use braces for JSX, developers should continue to reach for `<Trans>` when
+a sentence needs a React component (for example, a link) embedded inside it;
+the component injects the React nodes while the Fluent string keeps the prose,
+yielding truly localizable markup without unsafe HTML.[^45]
 
 The following table compares leading React i18n libraries, justifying the
 selection of `react-i18next` for its comprehensive feature set and robust
@@ -1030,8 +1030,7 @@ but also adaptable and maintainable for the future.
    [https://www.radix-ui.com/primitives/docs/overview/introduction](https://www.radix-ui.com/primitives/docs/overview/introduction)
 [^3]: daisyUI v5 - What's New? - ThemeSelection, accessed on 17 August 2025,
    [https://themeselection.com/daisyui-v5-whats-new/](https://themeselection.com/daisyui-v5-whats-new/)
-[^4]: daisyUI — Tailwind CSS Components ( version 5 update is here ), accessed on
-   17 August 2025, [https://daisyui.com/](https://daisyui.com/)
+[^4]: daisyUI — Tailwind CSS Components (version 5 update is here), accessed on 17 August 2025, [https://daisyui.com/](https://daisyui.com/)
 [^6]: TanStack React Query: Crash Course - DEV Community, accessed on 17 August
    2025,
    [https://dev.to/pedrotech/tanstack-react-query-crash-course-4ggp](https://dev.to/pedrotech/tanstack-react-query-crash-course-4ggp)
@@ -1058,9 +1057,7 @@ but also adaptable and maintainable for the future.
 [^21]: useState vs useReducer - reactjs - Stack Overflow, accessed on 17 August
     2025,
     [https://stackoverflow.com/questions/54646553/usestate-vs-usereducer](https://stackoverflow.com/questions/54646553/usestate-vs-usereducer)
-[^22]: Choosing between useReducer and useState in React - Saeloun Blog, accessed
-    on 17 August 2025,
-    [https://blog.saeloun.com/2023/03/30/when-to-use-usestate-vs-usereducer/](https://blog.saeloun.com/2023/03/30/when-to-use-usestate-vs-usereducer/)
+[^22]: Choosing between useReducer and useState in React – Saeloun Blog, accessed on 17 August 2025, [https://blog.saeloun.com/2023/03/30/when-to-use-usestate-vs-usereducer/](https://blog.saeloun.com/2023/03/30/when-to-use-usestate-vs-usereducer/)
 [^24]: useState vs useReducer vs XState - Part 1: Modals | Stately, accessed on
     17 August 2025,
     [https://stately.ai/blog/2021-07-28-usestate-vs-usereducer-vs-xstate-part-1-modals](https://stately.ai/blog/2021-07-28-usestate-vs-usereducer-vs-xstate-part-1-modals)
@@ -1074,22 +1071,16 @@ but also adaptable and maintainable for the future.
 [^38]: Responsive design - Core concepts - Tailwind CSS, accessed on 17 August
     2025,
     [https://tailwindcss.com/docs/responsive-design](https://tailwindcss.com/docs/responsive-design)
-[^41]: A Guide to React Localization with i18next - Phrase, accessed on 17 August
-    2025,
-    [https://phrase.com/blog/posts/localizing-react-apps-with-i18next/](https://phrase.com/blog/posts/localizing-react-apps-with-i18next/)
+[^41]: A Guide to React Localization with i18next – Phrase, accessed on 17 August 2025, [https://phrase.com/blog/posts/localizing-react-apps-with-i18next/](https://phrase.com/blog/posts/localizing-react-apps-with-i18next/)
 [^45]: React i18n: A Step-by-Step Guide to React-Internationalization - Creole
     Studios, accessed on 17 August 2025,
     [https://www.creolestudios.com/react-i18next-simplifying-internationalization-in-react/](https://www.creolestudios.com/react-i18next-simplifying-internationalization-in-react/)
 [^46]: Quick start - react-i18next documentation, accessed on 17 August 2025,
     [https://react.i18next.com/guides/quick-start](https://react.i18next.com/guides/quick-start)
-[^50]: useTranslation (hook) — react-i18next documentation, accessed on 17 August
-    2025,
-    [https://react.i18next.com/latest/usetranslation-hook](https://react.i18next.com/latest/usetranslation-hook)
+[^50]: useTranslation (hook) — react-i18next documentation, accessed on 17 August 2025, [https://react.i18next.com/latest/usetranslation-hook](https://react.i18next.com/latest/usetranslation-hook)
 [^51]: react-i18next — repository and documentation, accessed on 17 August 2025,
     [https://github.com/i18next/react-i18next](https://github.com/i18next/react-i18next)
-[^52]: Complete Guide — React Internationalization (i18n) with i18next — YouTube,
-    accessed on 17 August 2025,
-    [https://www.youtube.com/watch?v=LFaFPORPmeo](https://www.youtube.com/watch?v=LFaFPORPmeo)
+[^52]: Complete Guide — React Internationalization (i18n) with i18next — YouTube, accessed on 17 August 2025, [https://www.youtube.com/watch?v=LFaFPORPmeo](https://www.youtube.com/watch?v=LFaFPORPmeo)
 [^53]: i18next-fluent — README, accessed on 12 November 2025,
     [https://github.com/i18next/i18next-fluent](https://github.com/i18next/i18next-fluent)
 [^54]: i18next-fluent-backend — README, accessed on 12 November 2025,

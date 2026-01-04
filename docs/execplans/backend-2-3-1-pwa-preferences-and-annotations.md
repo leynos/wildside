@@ -229,8 +229,8 @@ pub struct RevisionMismatchError {
 ### 6. Create `UserPreferencesRepository` port
 
 See `backend/src/domain/ports/user_preferences_repository.rs` for full
-implementation with `define_port_error!` macro, `MockUserPreferencesRepository`,
-and fixture implementation.
+implementation with `define_port_error!` macro,
+`MockUserPreferencesRepository`, and fixture implementation.
 
 ### 7. Create `RouteAnnotationRepository` port
 
@@ -401,7 +401,8 @@ Acceptance criteria:
 4. **Database migrations created**: Tables with revision columns and FK
    constraints.
 
-5. **Testing complete**: Unit and BDD tests pass with `pg-embedded-setup-unpriv`.
+5. **Testing complete**: Unit and BDD tests pass with
+   `pg-embedded-setup-unpriv`.
 
 6. **Documentation and quality**: Architecture doc updated, roadmap marked,
    quality gates pass.

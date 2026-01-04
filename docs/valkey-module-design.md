@@ -7,10 +7,10 @@ Wildside ephemeral preview infrastructure.
 ## Overview
 
 The Valkey module deploys a Valkey cluster using the
-[Hyperspike Valkey operator](https://github.com/hyperspike/valkey-operator).
-It follows the dual-mode architecture established by other infrastructure
-modules, supporting both `render` mode for GitOps workflows and `apply` mode
-for direct Kubernetes deployment.
+[Hyperspike Valkey operator](https://github.com/hyperspike/valkey-operator). It
+follows the dual-mode architecture established by other infrastructure modules,
+supporting both `render` mode for GitOps workflows and `apply` mode for direct
+Kubernetes deployment.
 
 ## Sync Policy Contract
 
@@ -62,9 +62,9 @@ erDiagram
 ```
 
 *Figure 1: Entity-relationship diagram of the sync policy contract structure.
-The contract always includes endpoints, TLS configuration, persistence settings,
-and replication topology. Credentials are optional when anonymous authentication
-is enabled.*
+The contract always includes endpoints, TLS configuration, persistence
+settings, and replication topology. Credentials are optional when anonymous
+authentication is enabled.*
 
 ## Resource Creation Flow
 

@@ -317,17 +317,17 @@ module "valkey" {
 
 ## Module reference summary
 
-| Module | Key outputs | Consumed by |
-|--------|-------------|-------------|
-| `doks` | `cluster_id`, `endpoint`, `kubeconfig` | `fluxcd` |
-| `fluxcd` | `namespace`, `source_controller_ready` | Platform services |
-| `external_dns` | `managed_zones`, `domain_filters` | `traefik` |
-| `cert_manager` | `*_issuer_ref`, `*_issuer_name` | `traefik`, `cnpg`, `valkey` |
-| `traefik` | `cluster_issuer_ref`, `ingress_class_name` | Applications |
-| `vault_appliance` | `vault_address`, `ca_bundle_pem` | `vault_eso` |
-| `vault_eso` | `sync_policy_contract`, `cluster_secret_store_kv_*` | `cnpg`, `valkey`, applications |
-| `cnpg` | `sync_policy_contract`, `*_endpoint` | Applications |
-| `valkey` | `sync_policy_contract`, `*_endpoint` | Applications |
+| Module            | Key outputs                                         | Consumed by                    |
+| ----------------- | --------------------------------------------------- | ------------------------------ |
+| `doks`            | `cluster_id`, `endpoint`, `kubeconfig`              | `fluxcd`                       |
+| `fluxcd`          | `namespace`, `source_controller_ready`              | Platform services              |
+| `external_dns`    | `managed_zones`, `domain_filters`                   | `traefik`                      |
+| `cert_manager`    | `*_issuer_ref`, `*_issuer_name`                     | `traefik`, `cnpg`, `valkey`    |
+| `traefik`         | `cluster_issuer_ref`, `ingress_class_name`          | Applications                   |
+| `vault_appliance` | `vault_address`, `ca_bundle_pem`                    | `vault_eso`                    |
+| `vault_eso`       | `sync_policy_contract`, `cluster_secret_store_kv_*` | `cnpg`, `valkey`, applications |
+| `cnpg`            | `sync_policy_contract`, `*_endpoint`                | Applications                   |
+| `valkey`          | `sync_policy_contract`, `*_endpoint`                | Applications                   |
 
 ## Testing interoperability
 

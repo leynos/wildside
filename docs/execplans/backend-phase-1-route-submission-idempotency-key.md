@@ -65,48 +65,42 @@ Success is observable when:
 ## Decision Log
 
 - Decision: Use SHA-256 hash of canonicalized JSON payload for conflict
-  detection.
-  Rationale: Canonicalized JSON (sorted keys, deterministic formatting) ensures
-  semantically identical payloads produce the same hash regardless of
-  whitespace or key ordering differences. SHA-256 provides collision resistance
-  sufficient for this use case.
-  Date/Author: 2025-12-23 / Claude Code.
+  detection. Rationale: Canonicalized JSON (sorted keys, deterministic
+  formatting) ensures semantically identical payloads produce the same hash
+  regardless of whitespace or key ordering differences. SHA-256 provides
+  collision resistance sufficient for this use case. Date/Author: 2025-12-23 /
+  Claude Code.
 
 - Decision: Store idempotency records in PostgreSQL rather than Redis.
   Rationale: The roadmap explicitly requires PostgreSQL persistence, so keys
   survive server restarts. Redis would be faster but would not meet the
   durability requirement without additional complexity. PostgreSQL with index
-  on key provides adequate performance for expected load.
-  Date/Author: 2025-12-23 / Claude Code.
+  on key provides adequate performance for expected load. Date/Author:
+  2025-12-23 / Claude Code.
 
 - Decision: Make `Idempotency-Key` header optional; requests without it proceed
-  normally without idempotency tracking.
-  Rationale: Backwards compatibility with existing clients. Clients that want
-  idempotency opt in by providing the header.
-  Date/Author: 2025-12-23 / Claude Code.
+  normally without idempotency tracking. Rationale: Backwards compatibility
+  with existing clients. Clients that want idempotency opt in by providing the
+  header. Date/Author: 2025-12-23 / Claude Code.
 
 - Decision: Use UUID v4 format for idempotency keys with server-side
-  validation.
-  Rationale: UUIDs provide sufficient entropy and are a common pattern for
-  idempotency keys. Rejecting malformed keys early prevents storage of invalid
-  data.
-  Date/Author: 2025-12-23 / Claude Code.
+  validation. Rationale: UUIDs provide sufficient entropy and are a common
+  pattern for idempotency keys. Rejecting malformed keys early prevents storage
+  of invalid data. Date/Author: 2025-12-23 / Claude Code.
 
 - Decision: Create a driving port (`RouteSubmissionService`) rather than
-  embedding idempotency logic directly in the HTTP handler.
-  Rationale: Keeps the handler thin per hexagonal architecture. The service
-  coordinates cache lookup, idempotency checking, and queue dispatch. This
-  matches the pattern described in the architecture document for
-  `POST /api/v1/routes`.
+  embedding idempotency logic directly in the HTTP handler. Rationale: Keeps
+  the handler thin per hexagonal architecture. The service coordinates cache
+  lookup, idempotency checking, and queue dispatch. This matches the pattern
+  described in the architecture document for `POST /api/v1/routes`.
   Date/Author: 2025-12-23 / Claude Code.
 
 - Decision: TTL enforcement via background cleanup job triggered by application
-  startup or scheduled task, not per-query filtering.
-  Rationale: Per-query `WHERE created_at > NOW() - interval` adds complexity
-  to every lookup. A periodic cleanup (hourly or on startup) removes stale
-  records while keeping lookups simple. Expired records that slip through are
-  harmless—they just get cleaned up on the next sweep.
-  Date/Author: 2025-12-23 / Claude Code.
+  startup or scheduled task — not per-query filtering. Rationale: Per-query
+  `WHERE created_at > NOW() - interval` adds complexity to every lookup. A
+  periodic cleanup (hourly or on startup) removes stale records while keeping
+  lookups simple. Expired records that slip through are harmless—they just get
+  cleaned up on the next sweep. Date/Author: 2025-12-23 / Claude Code.
 
 ## Outcomes & Retrospective
 
