@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euxo pipefail
           bun install --global @mermaid-js/mermaid-cli@11.9.0
-          bun x @puppeteer/browsers browsers install chrome-headless-shell
+          # bun x @puppeteer/browsers browsers install chrome-headless-shell
           mmdc --version
 
       - name: Debug Bun and Mermaid
