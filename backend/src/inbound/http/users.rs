@@ -35,10 +35,12 @@ pub struct LoginRequest {
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InterestsRequest {
+    // Keep in sync with INTEREST_THEME_IDS_MAX.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
 }
 
+// Must match the #[schema(max_items = 100)] on InterestsRequest::interest_theme_ids.
 const INTEREST_THEME_IDS_MAX: usize = 100;
 const USERS_LIST_MAX: usize = 100;
 
