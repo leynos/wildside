@@ -40,8 +40,13 @@ pub struct InterestsRequest {
     pub interest_theme_ids: Vec<String>,
 }
 
-// This constant must match the #[schema(max_items = 100)] on InterestsRequest::interest_theme_ids.
+// This constant must match the #[schema(max_items = 100)] on
+// InterestsRequest::interest_theme_ids.
+/// Maximum interest theme IDs per user; prevents payload bloat and ensures
+/// reasonable UI rendering.
 const INTEREST_THEME_IDS_MAX: usize = 100;
+/// Maximum users returned by the list_users endpoint; limits response size for
+/// PWA clients.
 const USERS_LIST_MAX: usize = 100;
 
 // OpenAPI helper: UsersListResponse exists to provide PartialSchema and ToSchema
