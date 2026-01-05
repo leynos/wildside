@@ -307,7 +307,7 @@
             "example": "Something went wrong",
             "type": "string"
           },
-          "trace_id": {
+          "traceId": {
             "description": "Correlation identifier for tracing this error across systems.",
             "example": "01HZY8B2W6X5Y7Z9ABCD1234",
             "type": [
@@ -344,7 +344,7 @@
       "crate.domain.User": {
         "description": "OpenAPI schema for [`crate::domain::User`].\n\nApplication user with stable identifier and display name.",
         "properties": {
-          "display_name": {
+          "displayName": {
             "description": "Display name shown to other users.\n\nSchema constraints: 3–32 characters, alphanumeric plus spaces and\nunderscores. The domain layer additionally validates that the value\nis non-empty when trimmed.",
             "example": "Ada Lovelace",
             "maxLength": 32,
@@ -361,7 +361,7 @@
         },
         "required": [
           "id",
-          "display_name"
+          "displayName"
         ],
         "type": "object"
       },
@@ -616,6 +616,16 @@
             },
             "description": "Unauthorised"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -625,6 +635,16 @@
               }
             },
             "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Internal server error"
           },
           "503": {
             "content": {
@@ -717,6 +737,16 @@
             },
             "description": "Unauthorised"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -726,6 +756,16 @@
               }
             },
             "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Internal server error"
           },
           "503": {
             "content": {
@@ -815,6 +855,11 @@
             "description": "Internal server error"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "List known users.",
         "tags": [
           "users"
@@ -856,6 +901,11 @@
             "description": "Internal server error"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Fetch the authenticated user's profile.",
         "tags": [
           "users"
@@ -917,6 +967,11 @@
             "description": "Internal server error"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Update the authenticated user's interest theme selections.",
         "tags": [
           "users"
@@ -967,6 +1022,11 @@
             "description": "Internal server error"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Fetch the authenticated user's preferences.",
         "tags": [
           "users"
@@ -1051,6 +1111,11 @@
             "description": "Service unavailable"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Update the authenticated user's preferences.",
         "tags": [
           "users"

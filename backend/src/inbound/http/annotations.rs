@@ -217,7 +217,9 @@ route_mutation_handler!(
             (status = 200, description = "Upserted note", body = RouteNoteResponse),
             (status = 400, description = "Invalid request", body = ErrorSchema),
             (status = 401, description = "Unauthorised", body = ErrorSchema),
+            (status = 404, description = "Not found", body = ErrorSchema),
             (status = 409, description = "Conflict", body = ErrorSchema),
+            (status = 500, description = "Internal server error", body = ErrorSchema),
             (status = 503, description = "Service unavailable", body = ErrorSchema)
         ),
         tags = ["routes"],
@@ -256,7 +258,9 @@ route_mutation_handler!(
             (status = 200, description = "Updated progress", body = RouteProgressResponse),
             (status = 400, description = "Invalid request", body = ErrorSchema),
             (status = 401, description = "Unauthorised", body = ErrorSchema),
+            (status = 404, description = "Not found", body = ErrorSchema),
             (status = 409, description = "Conflict", body = ErrorSchema),
+            (status = 500, description = "Internal server error", body = ErrorSchema),
             (status = 503, description = "Service unavailable", body = ErrorSchema)
         ),
         tags = ["routes"],

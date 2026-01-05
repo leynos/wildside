@@ -210,7 +210,8 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "listUsers"
+    operation_id = "listUsers",
+    security(("SessionCookie" = []))
 )]
 #[get("/users")]
 pub async fn list_users(
@@ -232,7 +233,8 @@ pub async fn list_users(
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "currentUser"
+    operation_id = "currentUser",
+    security(("SessionCookie" = []))
 )]
 #[get("/users/me")]
 pub async fn current_user(
@@ -256,7 +258,8 @@ pub async fn current_user(
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "updateUserInterests"
+    operation_id = "updateUserInterests",
+    security(("SessionCookie" = []))
 )]
 #[put("/users/me/interests")]
 pub async fn update_interests(

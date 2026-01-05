@@ -56,7 +56,7 @@ pub struct ErrorSchema {
     #[schema(example = "Something went wrong")]
     message: String,
     /// Correlation identifier for tracing this error across systems.
-    #[schema(example = "01HZY8B2W6X5Y7Z9ABCD1234")]
+    #[schema(rename = "traceId", example = "01HZY8B2W6X5Y7Z9ABCD1234")]
     trace_id: Option<String>,
     /// Supplementary error details for clients.
     details: Option<serde_json::Value>,
@@ -87,6 +87,7 @@ pub struct UserSchema {
     /// underscores. The domain layer additionally validates that the value
     /// is non-empty when trimmed.
     #[schema(
+        rename = "displayName",
         value_type = String,
         min_length = 3,
         max_length = 32,
@@ -167,8 +168,8 @@ mod tests {
             "schema should contain message field"
         );
         assert!(
-            schema_json.contains("trace_id"),
-            "schema should contain trace_id field"
+            schema_json.contains("traceId"),
+            "schema should contain traceId field"
         );
     }
 
@@ -179,8 +180,8 @@ mod tests {
         // utoipa replaces :: with . in schema names
         assert_eq!(name, "crate.domain.User");
         assert!(
-            schema_json.contains("display_name"),
-            "schema should contain display_name field"
+            schema_json.contains("displayName"),
+            "schema should contain displayName field"
         );
     }
 

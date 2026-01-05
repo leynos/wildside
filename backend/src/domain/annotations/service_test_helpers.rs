@@ -1,14 +1,13 @@
 //! Helper types and functions for route annotation service tests.
 
-use super::{
-    RouteAnnotationsService, ServiceFuture, call_delete_note, call_update_progress,
-    call_upsert_note, make_service_with_idempotency,
-};
+use std::future::Future;
+
+use super::{RouteAnnotationsService, make_service_with_idempotency};
 use crate::domain::annotations::idempotency::PayloadHashable;
 use crate::domain::ports::{
     DeleteNoteRequest, DeleteNoteResponse, MockIdempotencyRepository,
-    MockRouteAnnotationRepository, UpdateProgressRequest, UpdateProgressResponse,
-    UpsertNoteRequest, UpsertNoteResponse,
+    MockRouteAnnotationRepository, RouteAnnotationsCommand, UpdateProgressRequest,
+    UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
 };
 use crate::domain::{
     IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
@@ -87,7 +86,7 @@ impl ReplayCase {
                 repo.expect_find_note_by_id().times(0);
                 repo.expect_save_note().times(0);
             },
-            call_upsert_note,
+            |service, request| async move { service.upsert_note(request).await },
             |response| {
                 assert_eq!(response.note.id, note_id);
                 assert!(response.replayed);
@@ -133,7 +132,7 @@ impl ReplayCase {
                 repo.expect_find_progress().times(0);
                 repo.expect_save_progress().times(0);
             },
-            call_update_progress,
+            |service, request| async move { service.update_progress(request).await },
             |response| {
                 assert_eq!(response.progress.route_id, route_id);
                 assert!(response.replayed);
@@ -172,7 +171,7 @@ impl ReplayCase {
                 repo.expect_find_note_by_id().times(0);
                 repo.expect_delete_note().times(0);
             },
-            call_delete_note,
+            |service, request| async move { service.delete_note(request).await },
             |response| {
                 assert!(response.deleted);
                 assert!(response.replayed);
@@ -219,7 +218,7 @@ where
     idempotency_repo
 }
 
-pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, AssertFn>(
+pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, CallFut, AssertFn>(
     request_spec: ReplayRequest<Req, Res>,
     setup_repo: RepoFn,
     call_service: CallFn,
@@ -227,10 +226,11 @@ pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, AssertFn
 ) where
     Res: serde::Serialize + Clone + 'static,
     RepoFn: FnOnce(&mut MockRouteAnnotationRepository),
-    CallFn: for<'a> FnOnce(
-        &'a RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
+    CallFn: FnOnce(
+        RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
         Req,
-    ) -> ServiceFuture<'a, Res>,
+    ) -> CallFut,
+    CallFut: Future<Output = Result<Res, crate::domain::Error>>,
     AssertFn: FnOnce(Res),
 {
     let mut repo = MockRouteAnnotationRepository::new();
@@ -240,7 +240,7 @@ pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, AssertFn
         mock_idempotency_replay(request_spec.spec, request_spec.response.clone());
     let service = make_service_with_idempotency(repo, idempotency_repo);
 
-    let response = call_service(&service, request_spec.request)
+    let response = call_service(service, request_spec.request)
         .await
         .expect("cached response");
     assert_response(response);

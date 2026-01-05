@@ -124,7 +124,8 @@ struct ParsedPreferences {
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "getUserPreferences"
+    operation_id = "getUserPreferences",
+    security(("SessionCookie" = []))
 )]
 #[get("/users/me/preferences")]
 pub async fn get_preferences(
@@ -154,7 +155,8 @@ pub async fn get_preferences(
         ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
     ),
     tags = ["users"],
-    operation_id = "updateUserPreferences"
+    operation_id = "updateUserPreferences",
+    security(("SessionCookie" = []))
 )]
 #[put("/users/me/preferences")]
 pub async fn update_preferences(

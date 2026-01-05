@@ -1,16 +1,14 @@
 //! Tests for the route annotations service.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use super::RouteAnnotationsService;
 use crate::domain::ports::{
-    DeleteNoteRequest, DeleteNoteResponse, FixtureIdempotencyRepository, MockIdempotencyRepository,
+    DeleteNoteRequest, FixtureIdempotencyRepository, MockIdempotencyRepository,
     MockRouteAnnotationRepository, RouteAnnotationsCommand, UpdateProgressRequest,
-    UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
+    UpsertNoteRequest,
 };
-use crate::domain::{Error, RouteNote, RouteNoteContent, RouteProgress, UserId};
+use crate::domain::{RouteNote, RouteNoteContent, RouteProgress, UserId};
 use uuid::Uuid;
 
 #[path = "service_test_helpers.rs"]
@@ -29,29 +27,6 @@ fn make_service_with_idempotency(
     idempotency_repo: MockIdempotencyRepository,
 ) -> RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository> {
     RouteAnnotationsService::new(Arc::new(repo), Arc::new(idempotency_repo))
-}
-
-type ServiceFuture<'a, Res> = Pin<Box<dyn Future<Output = Result<Res, Error>> + Send + 'a>>;
-
-fn call_upsert_note<'a>(
-    service: &'a RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
-    request: UpsertNoteRequest,
-) -> ServiceFuture<'a, UpsertNoteResponse> {
-    Box::pin(async move { service.upsert_note(request).await })
-}
-
-fn call_update_progress<'a>(
-    service: &'a RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
-    request: UpdateProgressRequest,
-) -> ServiceFuture<'a, UpdateProgressResponse> {
-    Box::pin(async move { service.update_progress(request).await })
-}
-
-fn call_delete_note<'a>(
-    service: &'a RouteAnnotationsService<MockRouteAnnotationRepository, MockIdempotencyRepository>,
-    request: DeleteNoteRequest,
-) -> ServiceFuture<'a, DeleteNoteResponse> {
-    Box::pin(async move { service.delete_note(request).await })
 }
 
 #[tokio::test]

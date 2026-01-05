@@ -55,7 +55,7 @@ const USER_INTERESTS_SCHEMA_NAME: &str = "crate.domain.UserInterests";
 /// Navigate into a User property's object schema and invoke a closure.
 ///
 /// This helper reduces boilerplate when asserting constraints on User schema
-/// properties (e.g., `id`, `display_name`). It handles the traversal from the
+/// properties (e.g., `id`, `displayName`). It handles the traversal from the
 /// OpenAPI document root down to a specific property's object schema.
 ///
 /// # Parameters
@@ -75,7 +75,7 @@ const USER_INTERESTS_SCHEMA_NAME: &str = "crate.domain.UserInterests";
 /// # Example
 ///
 /// ```ignore
-/// with_user_property_object_schema(world, "display_name", |obj| {
+/// with_user_property_object_schema(world, "displayName", |obj| {
 ///     assert_eq!(obj.min_length, Some(3));
 /// });
 /// ```
@@ -190,29 +190,29 @@ fn user_id_has_uuid_format(world: &Mutex<OpenApiWorld>) {
     });
 }
 
-#[then("the User display_name field has length constraints")]
+#[then("the User displayName field has length constraints")]
 fn user_display_name_has_length_constraints(world: &Mutex<OpenApiWorld>) {
-    with_user_property_object_schema(world, "display_name", |display_name_obj| {
+    with_user_property_object_schema(world, "displayName", |display_name_obj| {
         assert_eq!(
             display_name_obj.min_length,
             Some(3),
-            "User.display_name should have min_length=3"
+            "User.displayName should have min_length=3"
         );
         assert_eq!(
             display_name_obj.max_length,
             Some(32),
-            "User.display_name should have max_length=32"
+            "User.displayName should have max_length=32"
         );
     });
 }
 
-#[then("the User display_name field has pattern constraint")]
+#[then("the User displayName field has pattern constraint")]
 fn user_display_name_has_pattern_constraint(world: &Mutex<OpenApiWorld>) {
-    with_user_property_object_schema(world, "display_name", |display_name_obj| {
+    with_user_property_object_schema(world, "displayName", |display_name_obj| {
         assert_eq!(
             display_name_obj.pattern.as_deref(),
             Some("^[A-Za-z0-9_ ]+$"),
-            "User.display_name should have pattern constraint"
+            "User.displayName should have pattern constraint"
         );
     });
 }

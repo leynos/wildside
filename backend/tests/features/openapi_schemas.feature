@@ -37,5 +37,5 @@ Feature: OpenAPI schema wrappers
     Given the OpenAPI document is generated
     When the document is inspected
     Then the User id field has uuid format
-    And the User display_name field has length constraints
-    And the User display_name field has pattern constraint
+    And the User displayName field has length constraints
+    And the User displayName field has pattern constraint
