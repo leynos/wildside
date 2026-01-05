@@ -1,6 +1,12 @@
-//! Route annotations DTOs and parsing helpers.
+//! HTTP request and response DTOs for route annotations (notes and progress).
+//! Defines request types like `NoteRequest` and `ProgressRequest` alongside
+//! response payloads such as `RouteNoteResponse`, `RouteProgressResponse`, and
+//! `RouteAnnotationsResponse`.
+//! Includes parsing helpers that validate payloads, convert UUID strings into
+//! domain types, and bridge the inbound HTTP adapter to domain models.
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -146,6 +152,18 @@ pub(super) fn parse_progress_request(
     let visited_stop_ids = payload
         .visited_stop_ids
         .ok_or_else(|| missing_field_error("visitedStopIds"))?;
+
+    if visited_stop_ids.len() > 1_000 {
+        return Err(
+            Error::invalid_request("visited stop ids must contain at most 1000 items")
+                .with_details(json!({
+                    "field": "visitedStopIds",
+                    "code": "too_many_items",
+                    "count": visited_stop_ids.len(),
+                    "max": 1000,
+                })),
+        );
+    }
 
     Ok(ParsedProgressRequest {
         visited_stop_ids: parse_uuid_list(visited_stop_ids, "visitedStopIds")?,

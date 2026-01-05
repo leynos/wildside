@@ -267,9 +267,11 @@
             "type": "string"
           },
           "updatedAt": {
+            "format": "date-time",
             "type": "string"
           },
           "userId": {
+            "format": "uuid",
             "type": "string"
           }
         },
@@ -477,6 +479,7 @@
             "name": "route_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -554,6 +557,7 @@
             "name": "route_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           },
@@ -563,6 +567,7 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
+              "format": "uuid",
               "type": [
                 "string",
                 "null"
@@ -653,6 +658,7 @@
             "name": "route_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           },
@@ -662,6 +668,7 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
+              "format": "uuid",
               "type": [
                 "string",
                 "null"
@@ -974,6 +981,7 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
+              "format": "uuid",
               "type": [
                 "string",
                 "null"
