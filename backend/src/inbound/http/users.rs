@@ -35,15 +35,20 @@ pub struct LoginRequest {
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InterestsRequest {
-    // Keep in sync with INTEREST_THEME_IDS_MAX.
+    // The #[schema(max_items = 100)] must equal INTEREST_THEME_IDS_MAX.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
 }
 
-// Must match the #[schema(max_items = 100)] on InterestsRequest::interest_theme_ids.
+// This constant must match the #[schema(max_items = 100)] on InterestsRequest::interest_theme_ids.
 const INTEREST_THEME_IDS_MAX: usize = 100;
 const USERS_LIST_MAX: usize = 100;
 
+// OpenAPI helper: UsersListResponse exists to provide PartialSchema and ToSchema
+// impls that describe a bounded array response and register UserSchema for
+// OpenAPI generation.
+/// Schema token for utoipa representing an array of `UserSchema` with a max
+/// items constraint.
 struct UsersListResponse;
 
 impl PartialSchema for UsersListResponse {
