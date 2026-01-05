@@ -77,146 +77,145 @@ enum ReplayCase {
 impl ReplayCase {
     async fn assert_replay(self) {
         match self {
-            ReplayCase::Note => assert_note_replay().await,
-            ReplayCase::Progress => assert_progress_replay().await,
-            ReplayCase::Delete => assert_delete_replay().await,
+            ReplayCase::Note => Self::assert_note_replay().await,
+            ReplayCase::Progress => Self::assert_progress_replay().await,
+            ReplayCase::Delete => Self::assert_delete_replay().await,
         }
     }
-}
+    async fn assert_note_replay() {
+        let user_id = UserId::random();
+        let idempotency_key = IdempotencyKey::random();
+        let route_id = Uuid::new_v4();
+        let note_id = Uuid::new_v4();
+        let request = UpsertNoteRequest {
+            note_id,
+            route_id,
+            poi_id: None,
+            user_id: user_id.clone(),
+            body: "cached".to_owned(),
+            expected_revision: Some(1),
+            idempotency_key: Some(idempotency_key.clone()),
+        };
+        let note = RouteNote::new(
+            note_id,
+            route_id,
+            user_id.clone(),
+            RouteNoteContent::new("cached"),
+        );
+        let payload_hash = request.compute_payload_hash();
+        let response = UpsertNoteResponse {
+            note: note.clone(),
+            replayed: false,
+        };
 
-async fn assert_note_replay() {
-    let user_id = UserId::random();
-    let idempotency_key = IdempotencyKey::random();
-    let route_id = Uuid::new_v4();
-    let note_id = Uuid::new_v4();
-    let request = UpsertNoteRequest {
-        note_id,
-        route_id,
-        poi_id: None,
-        user_id: user_id.clone(),
-        body: "cached".to_owned(),
-        expected_revision: Some(1),
-        idempotency_key: Some(idempotency_key.clone()),
-    };
-    let note = RouteNote::new(
-        note_id,
-        route_id,
-        user_id.clone(),
-        RouteNoteContent::new("cached"),
-    );
-    let payload_hash = request.compute_payload_hash();
-    let response = UpsertNoteResponse {
-        note: note.clone(),
-        replayed: false,
-    };
-
-    assert_replay_for_request(
-        ReplayRequest {
-            request,
-            spec: IdempotencyReplaySpec {
-                idempotency_key,
-                user_id,
-                mutation_type: MutationType::Notes,
-                payload_hash,
+        assert_replay_for_request(
+            ReplayRequest {
+                request,
+                spec: IdempotencyReplaySpec {
+                    idempotency_key,
+                    user_id,
+                    mutation_type: MutationType::Notes,
+                    payload_hash,
+                },
+                response,
             },
-            response,
-        },
-        |repo| {
-            repo.expect_find_note_by_id().times(0);
-            repo.expect_save_note().times(0);
-        },
-        call_upsert_note,
-        |response| {
-            assert_eq!(response.note.id, note_id);
-            assert!(response.replayed);
-        },
-    )
-    .await;
-}
-
-async fn assert_progress_replay() {
-    let route_id = Uuid::new_v4();
-    let user_id = UserId::random();
-    let idempotency_key = IdempotencyKey::random();
-    let visited_stop_ids = vec![Uuid::new_v4()];
-    let request = UpdateProgressRequest {
-        route_id,
-        user_id: user_id.clone(),
-        visited_stop_ids: visited_stop_ids.clone(),
-        expected_revision: Some(1),
-        idempotency_key: Some(idempotency_key.clone()),
-    };
-    let progress = RouteProgress::builder(route_id, user_id.clone())
-        .visited_stop_ids(visited_stop_ids)
-        .revision(2)
-        .build();
-    let payload_hash = request.compute_payload_hash();
-    let response = UpdateProgressResponse {
-        progress: progress.clone(),
-        replayed: false,
-    };
-
-    assert_replay_for_request(
-        ReplayRequest {
-            request,
-            spec: IdempotencyReplaySpec {
-                idempotency_key,
-                user_id,
-                mutation_type: MutationType::Progress,
-                payload_hash,
+            |repo| {
+                repo.expect_find_note_by_id().times(0);
+                repo.expect_save_note().times(0);
             },
-            response,
-        },
-        |repo| {
-            repo.expect_find_progress().times(0);
-            repo.expect_save_progress().times(0);
-        },
-        call_update_progress,
-        |response| {
-            assert_eq!(response.progress.route_id, route_id);
-            assert!(response.replayed);
-        },
-    )
-    .await;
-}
-
-async fn assert_delete_replay() {
-    let user_id = UserId::random();
-    let idempotency_key = IdempotencyKey::random();
-    let note_id = Uuid::new_v4();
-    let request = DeleteNoteRequest {
-        note_id,
-        user_id: user_id.clone(),
-        idempotency_key: Some(idempotency_key.clone()),
-    };
-    let payload_hash = request.compute_payload_hash();
-    let response = DeleteNoteResponse {
-        deleted: true,
-        replayed: false,
-    };
-
-    assert_replay_for_request(
-        ReplayRequest {
-            request,
-            spec: IdempotencyReplaySpec {
-                idempotency_key,
-                user_id,
-                mutation_type: MutationType::Notes,
-                payload_hash,
+            call_upsert_note,
+            |response| {
+                assert_eq!(response.note.id, note_id);
+                assert!(response.replayed);
             },
-            response,
-        },
-        |repo| {
-            repo.expect_find_note_by_id().times(0);
-            repo.expect_delete_note().times(0);
-        },
-        call_delete_note,
-        |response| {
-            assert!(response.deleted);
-            assert!(response.replayed);
-        },
-    )
-    .await;
+        )
+        .await;
+    }
+
+    async fn assert_progress_replay() {
+        let route_id = Uuid::new_v4();
+        let user_id = UserId::random();
+        let idempotency_key = IdempotencyKey::random();
+        let visited_stop_ids = vec![Uuid::new_v4()];
+        let request = UpdateProgressRequest {
+            route_id,
+            user_id: user_id.clone(),
+            visited_stop_ids: visited_stop_ids.clone(),
+            expected_revision: Some(1),
+            idempotency_key: Some(idempotency_key.clone()),
+        };
+        let progress = RouteProgress::builder(route_id, user_id.clone())
+            .visited_stop_ids(visited_stop_ids)
+            .revision(2)
+            .build();
+        let payload_hash = request.compute_payload_hash();
+        let response = UpdateProgressResponse {
+            progress: progress.clone(),
+            replayed: false,
+        };
+
+        assert_replay_for_request(
+            ReplayRequest {
+                request,
+                spec: IdempotencyReplaySpec {
+                    idempotency_key,
+                    user_id,
+                    mutation_type: MutationType::Progress,
+                    payload_hash,
+                },
+                response,
+            },
+            |repo| {
+                repo.expect_find_progress().times(0);
+                repo.expect_save_progress().times(0);
+            },
+            call_update_progress,
+            |response| {
+                assert_eq!(response.progress.route_id, route_id);
+                assert!(response.replayed);
+            },
+        )
+        .await;
+    }
+
+    async fn assert_delete_replay() {
+        let user_id = UserId::random();
+        let idempotency_key = IdempotencyKey::random();
+        let note_id = Uuid::new_v4();
+        let request = DeleteNoteRequest {
+            note_id,
+            user_id: user_id.clone(),
+            idempotency_key: Some(idempotency_key.clone()),
+        };
+        let payload_hash = request.compute_payload_hash();
+        let response = DeleteNoteResponse {
+            deleted: true,
+            replayed: false,
+        };
+
+        assert_replay_for_request(
+            ReplayRequest {
+                request,
+                spec: IdempotencyReplaySpec {
+                    idempotency_key,
+                    user_id,
+                    mutation_type: MutationType::Notes,
+                    payload_hash,
+                },
+                response,
+            },
+            |repo| {
+                repo.expect_find_note_by_id().times(0);
+                repo.expect_delete_note().times(0);
+            },
+            call_delete_note,
+            |response| {
+                assert!(response.deleted);
+                assert!(response.replayed);
+            },
+        )
+        .await;
+    }
 }
 
 fn mock_idempotency_replay<Res>(
