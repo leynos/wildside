@@ -24,11 +24,19 @@ use backend::doc::ApiDoc;
 #[cfg(feature = "metrics")]
 use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::ports::{
-    FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-    FixtureUserProfileQuery, FixtureUsersQuery, RouteSubmissionService,
+    FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+    FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
+    FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
+    RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService, UserPreferencesCommand,
+    UserPreferencesQuery,
 };
-use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
+use backend::domain::{
+    RouteAnnotationsService, RouteSubmissionServiceImpl, UserOnboardingService,
+    UserPreferencesService,
+};
+use backend::inbound::http::annotations::{get_annotations, update_progress, upsert_note};
 use backend::inbound::http::health::{HealthState, live, ready};
+use backend::inbound::http::preferences::{get_preferences, update_preferences};
 use backend::inbound::http::routes::submit_route;
 use backend::inbound::http::state::{HttpState, HttpStatePorts};
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
@@ -37,6 +45,9 @@ use backend::inbound::ws::state::WsState;
 #[cfg(feature = "metrics")]
 use backend::outbound::metrics::PrometheusIdempotencyMetrics;
 use backend::outbound::persistence::DieselIdempotencyRepository;
+use backend::outbound::persistence::{
+    DieselRouteAnnotationRepository, DieselUserPreferencesRepository,
+};
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]
@@ -110,6 +121,52 @@ fn build_route_submission_service(
     }
 }
 
+fn build_user_preferences_services(
+    config: &ServerConfig,
+) -> (
+    Arc<dyn UserPreferencesCommand>,
+    Arc<dyn UserPreferencesQuery>,
+) {
+    match &config.db_pool {
+        Some(pool) => {
+            let preferences_repo = Arc::new(DieselUserPreferencesRepository::new(pool.clone()));
+            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+            let service = Arc::new(UserPreferencesService::new(
+                preferences_repo,
+                idempotency_repo,
+            ));
+            (service.clone(), service)
+        }
+        None => (
+            Arc::new(FixtureUserPreferencesCommand),
+            Arc::new(FixtureUserPreferencesQuery),
+        ),
+    }
+}
+
+fn build_route_annotations_services(
+    config: &ServerConfig,
+) -> (
+    Arc<dyn RouteAnnotationsCommand>,
+    Arc<dyn RouteAnnotationsQuery>,
+) {
+    match &config.db_pool {
+        Some(pool) => {
+            let annotations_repo = Arc::new(DieselRouteAnnotationRepository::new(pool.clone()));
+            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+            let service = Arc::new(RouteAnnotationsService::new(
+                annotations_repo,
+                idempotency_repo,
+            ));
+            (service.clone(), service)
+        }
+        None => (
+            Arc::new(FixtureRouteAnnotationsCommand),
+            Arc::new(FixtureRouteAnnotationsQuery),
+        ),
+    }
+}
+
 #[derive(Clone)]
 struct AppDependencies {
     health_state: web::Data<HealthState>,
@@ -158,6 +215,11 @@ fn build_app(
         .service(list_users)
         .service(current_user)
         .service(update_interests)
+        .service(get_preferences)
+        .service(update_preferences)
+        .service(get_annotations)
+        .service(upsert_note)
+        .service(update_progress)
         .service(submit_route);
 
     let app = App::new()
@@ -198,12 +260,18 @@ pub fn create_server(
     // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
     // to real DB-backed implementations once their adapters are ready.
     let route_submission = build_route_submission_service(&config)?;
+    let (preferences, preferences_query) = build_user_preferences_services(&config);
+    let (route_annotations, route_annotations_query) = build_route_annotations_services(&config);
 
     let http_state = web::Data::new(HttpState::new(HttpStatePorts {
         login: Arc::new(FixtureLoginService),
         users: Arc::new(FixtureUsersQuery),
         profile: Arc::new(FixtureUserProfileQuery),
         interests: Arc::new(FixtureUserInterestsCommand),
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
         route_submission,
     }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));

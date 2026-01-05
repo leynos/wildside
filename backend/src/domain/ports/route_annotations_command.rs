@@ -6,12 +6,14 @@
 //! idempotency and optimistic concurrency.
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{Error, IdempotencyKey, RouteNote, RouteProgress, UserId};
 
 /// Request to upsert a route note.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpsertNoteRequest {
     /// The note's unique identifier (client-generated).
     pub note_id: Uuid,
@@ -33,7 +35,8 @@ pub struct UpsertNoteRequest {
 }
 
 /// Response from upserting a note.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpsertNoteResponse {
     /// The created or updated note.
     pub note: RouteNote,
@@ -42,7 +45,8 @@ pub struct UpsertNoteResponse {
 }
 
 /// Request to delete a route note.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteNoteRequest {
     /// The note's unique identifier.
     pub note_id: Uuid,
@@ -53,7 +57,8 @@ pub struct DeleteNoteRequest {
 }
 
 /// Response from deleting a note.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteNoteResponse {
     /// Whether the note was actually deleted (false if it didn't exist).
     pub deleted: bool,
@@ -62,7 +67,8 @@ pub struct DeleteNoteResponse {
 }
 
 /// Request to update route progress.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProgressRequest {
     /// The route being tracked.
     pub route_id: Uuid,
@@ -80,7 +86,8 @@ pub struct UpdateProgressRequest {
 }
 
 /// Response from updating progress.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProgressResponse {
     /// The updated progress record.
     pub progress: RouteProgress,

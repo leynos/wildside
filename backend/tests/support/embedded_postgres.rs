@@ -68,6 +68,7 @@ pub fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
 ///
 /// Uses CASCADE to also drop tables that have foreign key dependencies on users
 /// (e.g., routes, user_preferences, route_notes, route_progress).
+// Only select integration suites exercise user table loss scenarios.
 pub fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
     let mut client = Client::connect(url, NoTls)
         .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
@@ -75,4 +76,14 @@ pub fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
         .batch_execute("DROP TABLE IF EXISTS users CASCADE;")
         .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drop_users_table_is_linked() {
+        let _ = drop_users_table as fn(&str) -> Result<(), UserPersistenceError>;
+    }
 }

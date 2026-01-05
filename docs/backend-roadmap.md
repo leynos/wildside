@@ -99,7 +99,7 @@ adapter; direct stateful logic belongs behind the ports established above.
   `RouteProgress`, plus ports `UserPreferencesRepository`,
   `RouteAnnotationRepository`, and driving commands that enforce revision
   checks.
-- [ ] 2.3.2. Implement `GET/PUT /api/v1/users/me/preferences`,
+- [x] 2.3.2. Implement `GET/PUT /api/v1/users/me/preferences`,
   `GET /api/v1/routes/{route_id}/annotations`,
   `POST /api/v1/routes/{route_id}/notes`, and
   `PUT /api/v1/routes/{route_id}/progress` with idempotency headers and

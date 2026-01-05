@@ -18,6 +18,7 @@ use crate::inbound::http::state::HttpState;
 use actix_web::{HttpResponse, get, post, put, web};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use utoipa::{PartialSchema, ToSchema};
 
 /// Login request body for `POST /api/v1/login`.
 ///
@@ -34,11 +35,55 @@ pub struct LoginRequest {
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InterestsRequest {
+    // The #[schema(max_items = 100)] must equal INTEREST_THEME_IDS_MAX.
+    #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+}
+
+// This constant must match the #[schema(max_items = 100)] on
+// InterestsRequest::interest_theme_ids.
+/// Maximum interest theme IDs per user; prevents payload bloat and ensures
+/// reasonable UI rendering.
+const INTEREST_THEME_IDS_MAX: usize = 100;
+/// Maximum users returned by the list_users endpoint; limits response size for
+/// PWA clients.
+const USERS_LIST_MAX: usize = 100;
+
+// OpenAPI helper: UsersListResponse exists to provide PartialSchema and ToSchema
+// impls that describe a bounded array response and register UserSchema for
+// OpenAPI generation.
+/// Schema token for utoipa representing an array of `UserSchema` with a max
+/// items constraint.
+struct UsersListResponse;
+
+impl PartialSchema for UsersListResponse {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::schema::ArrayBuilder::new()
+            .items(utoipa::openapi::RefOr::Ref(
+                utoipa::openapi::Ref::from_schema_name(UserSchema::name()),
+            ))
+            .max_items(Some(USERS_LIST_MAX))
+            .into()
+    }
+}
+
+impl ToSchema for UsersListResponse {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        <UserSchema as ToSchema>::schemas(schemas);
+    }
 }
 
 #[derive(Debug)]
 enum InterestsRequestError {
+    TooManyInterestThemeIds {
+        length: usize,
+        max: usize,
+    },
     InvalidInterestThemeId {
         index: usize,
         value: String,
@@ -49,6 +94,13 @@ enum InterestsRequestError {
 fn parse_interest_theme_ids(
     payload: InterestsRequest,
 ) -> Result<Vec<InterestThemeId>, InterestsRequestError> {
+    if payload.interest_theme_ids.len() > INTEREST_THEME_IDS_MAX {
+        return Err(InterestsRequestError::TooManyInterestThemeIds {
+            length: payload.interest_theme_ids.len(),
+            max: INTEREST_THEME_IDS_MAX,
+        });
+    }
+
     payload
         .interest_theme_ids
         .into_iter()
@@ -115,6 +167,15 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
 
 fn map_interests_request_error(err: InterestsRequestError) -> Error {
     match err {
+        InterestsRequestError::TooManyInterestThemeIds { length, max } => Error::invalid_request(
+            format!("interest theme ids must contain at most {max} items"),
+        )
+        .with_details(json!({
+            "field": "interestThemeIds",
+            "code": "too_many_interest_theme_ids",
+            "count": length,
+            "max": max,
+        })),
         InterestsRequestError::InvalidInterestThemeId {
             index,
             value,
@@ -153,7 +214,7 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
     get,
     path = "/api/v1/users",
     responses(
-        (status = 200, description = "Users", body = [UserSchema]),
+        (status = 200, description = "Users", body = UsersListResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
         (status = 401, description = "Unauthorised", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),
@@ -161,7 +222,8 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "listUsers"
+    operation_id = "listUsers",
+    security(("SessionCookie" = []))
 )]
 #[get("/users")]
 pub async fn list_users(
@@ -183,7 +245,8 @@ pub async fn list_users(
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "currentUser"
+    operation_id = "currentUser",
+    security(("SessionCookie" = []))
 )]
 #[get("/users/me")]
 pub async fn current_user(
@@ -207,7 +270,8 @@ pub async fn current_user(
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
-    operation_id = "updateUserInterests"
+    operation_id = "updateUserInterests",
+    security(("SessionCookie" = []))
 )]
 #[put("/users/me/interests")]
 pub async fn update_interests(
@@ -226,243 +290,4 @@ pub async fn update_interests(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::ErrorCode;
-    use crate::domain::ports::{
-        FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-        FixtureUserProfileQuery, FixtureUsersQuery,
-    };
-    use crate::inbound::http::state::HttpStatePorts;
-    use actix_web::{App, test as actix_test, web};
-    use rstest::rstest;
-    use serde_json::Value;
-    use std::sync::Arc;
-
-    #[derive(Debug)]
-    struct ValidationExpectation<'a> {
-        message: &'a str,
-        field: &'a str,
-        code: &'a str,
-        top_code: &'a str,
-    }
-
-    async fn assert_login_validation_error(
-        username: &str,
-        password: &str,
-        expected: ValidationExpectation<'_>,
-    ) {
-        let app = actix_test::init_service(test_app()).await;
-
-        let request = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: username.into(),
-                password: password.into(),
-            })
-            .to_request();
-
-        let response = actix_test::call_service(&app, request).await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
-        let body = actix_test::read_body(response).await;
-        let value: Value = serde_json::from_slice(&body).expect("error payload");
-        assert_eq!(
-            value.get("message").and_then(Value::as_str),
-            Some(expected.message)
-        );
-        assert_eq!(
-            value.get("code").and_then(Value::as_str),
-            Some(expected.top_code)
-        );
-        let details = value
-            .get("details")
-            .and_then(|v| v.as_object())
-            .expect("details present");
-        assert_eq!(
-            details.get("field").and_then(Value::as_str),
-            Some(expected.field)
-        );
-        assert_eq!(
-            details.get("code").and_then(Value::as_str),
-            Some(expected.code)
-        );
-    }
-
-    fn test_app() -> App<
-        impl actix_web::dev::ServiceFactory<
-            actix_web::dev::ServiceRequest,
-            Config = (),
-            Response = actix_web::dev::ServiceResponse,
-            Error = actix_web::Error,
-            InitError = (),
-        >,
-    > {
-        let state = HttpState::new(HttpStatePorts {
-            login: Arc::new(FixtureLoginService),
-            users: Arc::new(FixtureUsersQuery),
-            profile: Arc::new(FixtureUserProfileQuery),
-            interests: Arc::new(FixtureUserInterestsCommand),
-            route_submission: Arc::new(FixtureRouteSubmissionService),
-        });
-        App::new()
-            .app_data(web::Data::new(state))
-            .wrap(crate::inbound::http::test_utils::test_session_middleware())
-            .service(
-                web::scope("/api/v1")
-                    .service(login)
-                    .service(list_users)
-                    .service(current_user)
-                    .service(update_interests),
-            )
-    }
-
-    #[rstest]
-    #[case(
-        "   ",
-        "password",
-        ValidationExpectation {
-            message: "username must not be empty",
-            field: "username",
-            code: "empty_username",
-            top_code: "invalid_request",
-        }
-    )]
-    #[case(
-        "admin",
-        "",
-        ValidationExpectation {
-            message: "password must not be empty",
-            field: "password",
-            code: "empty_password",
-            top_code: "invalid_request",
-        }
-    )]
-    #[actix_web::test]
-    async fn login_rejects_invalid_credentials(
-        #[case] username: &str,
-        #[case] password: &str,
-        #[case] expected: ValidationExpectation<'_>,
-    ) {
-        assert_login_validation_error(username, password, expected).await;
-    }
-
-    #[actix_web::test]
-    async fn login_rejects_wrong_credentials_with_unauthorised_status() {
-        let app = actix_test::init_service(test_app()).await;
-        let request = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "admin".into(),
-                password: "wrong-password".into(),
-            })
-            .to_request();
-
-        let response = actix_test::call_service(&app, request).await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
-        let body = actix_test::read_body(response).await;
-        let value: Value = serde_json::from_slice(&body).expect("error payload");
-        assert_eq!(
-            value.get("message").and_then(Value::as_str),
-            Some("invalid credentials")
-        );
-        assert_eq!(
-            value.get("code").and_then(Value::as_str),
-            Some("unauthorized")
-        );
-    }
-
-    #[actix_web::test]
-    async fn list_users_returns_camel_case_json() {
-        let app = actix_test::init_service(test_app()).await;
-
-        let login_req = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "admin".into(),
-                password: "password".into(),
-            })
-            .to_request();
-        let login_res = actix_test::call_service(&app, login_req).await;
-        assert!(login_res.status().is_success());
-        let cookie = login_res
-            .response()
-            .cookies()
-            .find(|c| c.name() == "session")
-            .expect("session cookie");
-
-        let users_req = actix_test::TestRequest::get()
-            .uri("/api/v1/users")
-            .cookie(cookie)
-            .to_request();
-        let users_res = actix_test::call_service(&app, users_req).await;
-        assert!(users_res.status().is_success());
-        let body = actix_test::read_body(users_res).await;
-        let value: Value = serde_json::from_slice(&body).expect("response JSON");
-        let first = &value.as_array().expect("array")[0];
-        assert_eq!(
-            first.get("displayName").and_then(Value::as_str),
-            Some("Ada Lovelace")
-        );
-        assert!(first.get("display_name").is_none());
-    }
-
-    #[actix_web::test]
-    async fn list_users_rejects_without_session() {
-        let app = actix_test::init_service(test_app()).await;
-        let response = actix_test::call_service(
-            &app,
-            actix_test::TestRequest::get()
-                .uri("/api/v1/users")
-                .to_request(),
-        )
-        .await;
-        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
-    }
-
-    #[rstest]
-    #[case("", "empty_interest_theme_id", "interest theme id must not be empty")]
-    #[case(
-        "not-a-uuid",
-        "invalid_interest_theme_id",
-        "interest theme id must be a valid UUID"
-    )]
-    fn interests_request_validation_rejects_invalid_ids(
-        #[case] value: &str,
-        #[case] expected_code: &str,
-        #[case] expected_message: &str,
-    ) {
-        let payload = InterestsRequest {
-            interest_theme_ids: vec![value.to_owned()],
-        };
-
-        let err = parse_interest_theme_ids(payload).expect_err("invalid interest theme id");
-        let api_error = map_interests_request_error(err);
-
-        assert_eq!(api_error.code(), ErrorCode::InvalidRequest);
-        assert_eq!(api_error.message(), expected_message);
-        let details = api_error
-            .details()
-            .and_then(|value| value.as_object())
-            .expect("details present");
-        assert_eq!(
-            details.get("code").and_then(Value::as_str),
-            Some(expected_code)
-        );
-        assert_eq!(
-            details.get("field").and_then(Value::as_str),
-            Some("interestThemeIds")
-        );
-        assert_eq!(details.get("index").and_then(Value::as_u64), Some(0));
-    }
-
-    #[test]
-    fn interests_request_validation_accepts_valid_ids() {
-        let payload = InterestsRequest {
-            interest_theme_ids: vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],
-        };
-
-        let parsed = parse_interest_theme_ids(payload).expect("valid interest theme ids");
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].as_ref(), "3fa85f64-5717-4562-b3fc-2c963f66afa6");
-    }
-}
+mod tests;

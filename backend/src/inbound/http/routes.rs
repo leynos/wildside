@@ -6,18 +6,15 @@
 //!
 //! Supports idempotent request submission via the `Idempotency-Key` header.
 
-use actix_web::http::header::HeaderMap;
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::Error;
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
-use crate::domain::{Error, IdempotencyKey, IdempotencyKeyValidationError};
 use crate::inbound::http::ApiResult;
+use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-
-/// HTTP header name for idempotency keys.
-pub const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
 /// Route generation request body.
 ///
@@ -43,33 +40,6 @@ pub struct RouteResponse {
     pub request_id: String,
     /// Status of the submission.
     pub status: String,
-}
-
-/// Extract the idempotency key from request headers.
-fn extract_idempotency_key(
-    headers: &HeaderMap,
-) -> Result<Option<IdempotencyKey>, IdempotencyKeyValidationError> {
-    let Some(header_value) = headers.get(IDEMPOTENCY_KEY_HEADER) else {
-        return Ok(None);
-    };
-
-    let key_str = header_value
-        .to_str()
-        .map_err(|_| IdempotencyKeyValidationError::InvalidKey)?;
-
-    IdempotencyKey::new(key_str).map(Some)
-}
-
-/// Map idempotency key validation errors to domain errors.
-fn map_idempotency_key_error(err: IdempotencyKeyValidationError) -> Error {
-    match err {
-        IdempotencyKeyValidationError::EmptyKey => {
-            Error::invalid_request("idempotency-key header must not be empty")
-        }
-        IdempotencyKeyValidationError::InvalidKey => {
-            Error::invalid_request("idempotency-key header must be a valid uuid")
-        }
-    }
 }
 
 /// Submit a route generation request.
@@ -148,9 +118,11 @@ pub async fn submit_route(
 mod tests {
     use super::*;
     use crate::domain::ports::{
-        FixtureLoginService, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
-        FixtureUserProfileQuery, FixtureUsersQuery,
+        FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+        FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
+        FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
     };
+    use crate::inbound::http::idempotency::IDEMPOTENCY_KEY_HEADER;
     use crate::inbound::http::state::HttpStatePorts;
     use crate::inbound::http::users::LoginRequest;
     use actix_web::http::StatusCode;
@@ -173,6 +145,10 @@ mod tests {
             users: Arc::new(FixtureUsersQuery),
             profile: Arc::new(FixtureUserProfileQuery),
             interests: Arc::new(FixtureUserInterestsCommand),
+            preferences: Arc::new(FixtureUserPreferencesCommand),
+            preferences_query: Arc::new(FixtureUserPreferencesQuery),
+            route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
+            route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
             route_submission: Arc::new(FixtureRouteSubmissionService),
         });
         App::new()

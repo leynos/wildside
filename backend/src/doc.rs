@@ -59,8 +59,13 @@ impl Modify for SecurityAddon {
         crate::inbound::http::users::login,
         crate::inbound::http::users::current_user,
         crate::inbound::http::users::update_interests,
+        crate::inbound::http::preferences::get_preferences,
+        crate::inbound::http::preferences::update_preferences,
         crate::inbound::http::health::ready,
         crate::inbound::http::health::live,
+        crate::inbound::http::annotations::get_annotations,
+        crate::inbound::http::annotations::upsert_note,
+        crate::inbound::http::annotations::update_progress,
     ),
     components(schemas(
         UserSchema,
@@ -71,6 +76,7 @@ impl Modify for SecurityAddon {
     )),
     tags(
         (name = "users", description = "Operations related to users"),
+        (name = "routes", description = "Operations related to routes"),
         (name = "health", description = "Endpoints for health checks")
     )
 )]
@@ -156,7 +162,7 @@ mod tests {
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
 
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
-        assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "display_name");
+        assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "displayName");
     }
 
     #[test]
@@ -187,24 +193,24 @@ mod tests {
 
         let display_name_prop = obj
             .properties
-            .get("display_name")
-            .expect("display_name property exists");
-        let display_name_obj = unwrap_object_schema(display_name_prop, "display_name");
+            .get("displayName")
+            .expect("displayName property exists");
+        let display_name_obj = unwrap_object_schema(display_name_prop, "displayName");
 
         assert_eq!(
             display_name_obj.min_length,
             Some(3),
-            "display_name should have min_length=3"
+            "displayName should have min_length=3"
         );
         assert_eq!(
             display_name_obj.max_length,
             Some(32),
-            "display_name should have max_length=32"
+            "displayName should have max_length=32"
         );
         assert_eq!(
             display_name_obj.pattern.as_deref(),
             Some("^[A-Za-z0-9_ ]+$"),
-            "display_name should have pattern constraint"
+            "displayName should have pattern constraint"
         );
     }
 }

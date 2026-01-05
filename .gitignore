@@ -41,6 +41,7 @@ override.tf.json
 .terraformrc
 terraform.rc
 .tflint.d/
+.tflint/
 
 # Misc
 .DS_Store
@@ -49,6 +50,7 @@ bun.lockb
 **/__pycache__/
 *.py[cod]
 .uv-cache/
+spec/*.tmp.*
 
 # Environment
 .env
