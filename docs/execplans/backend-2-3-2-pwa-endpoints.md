@@ -16,7 +16,7 @@ Implement the HTTP endpoints required for PWA preferences and annotations:
 All endpoints must go through the inbound HTTP adapter and call domain
 services (driving ports). Idempotent mutations use the existing
 `Idempotency-Key` contract and the shared `IdempotencyRepository`. Error
-responses must reuse the existing domain `Error` envelope so clients always see
+responses must reuse the existing domain `Error` envelope, so clients always see
 consistent payloads.
 
 This is **step 2.3.2** from the backend roadmap. Contract tests for
@@ -39,8 +39,8 @@ Success is observable when:
 
 - [x] (2026-01-03 03:10Z) Draft ExecPlan for PWA preferences and annotations
   endpoints.
-- [x] (2026-01-03 03:12Z) Attempt to use Code Graph MCP to map inbound
-  handlers, ports, and adapters touched by this change.
+- [x] (2026-01-03 03:12Z) Attempt to use Code Graph Model Context Protocol
+  (MCP) to map inbound handlers, ports, and adapters touched by this change.
 - [x] (2026-01-03 03:13Z) Confirm API payload shapes from
   `docs/wildside-pwa-data-model.md` and
   `docs/wildside-backend-architecture.md`.
@@ -178,7 +178,7 @@ Terminology:
 
 ### 7. OpenAPI schema updates
 
-- Add schema wrappers to `backend/src/inbound/http/schemas.rs` for:
+- Add schema wrappers in `backend/src/inbound/http/schemas.rs` for
   `UserPreferences`, `RouteNote`, `RouteProgress`, and the annotations response
   envelope.
 - Register paths and schemas in `backend/src/doc.rs`.
@@ -283,8 +283,8 @@ Acceptance criteria:
   response replay.
 - Conflicting payloads return `409 Conflict`; matching payloads replay the
   stored response.
-- If a command fails, fix the issue and re-run only the failed command, then
-  repeat the relevant quality gate(s).
+- If a command fails, resolve the issue and re-run only the failed command,
+  then repeat the relevant quality gate(s).
 
 ## Files to Create/Modify
 

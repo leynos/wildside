@@ -120,6 +120,7 @@ pub struct InterestThemeIdSchema(pub String);
 pub struct UserInterestsSchema {
     /// Stable user identifier.
     #[schema(
+        rename = "userId",
         value_type = String,
         format = "uuid",
         example = "11111111-1111-1111-1111-111111111111"

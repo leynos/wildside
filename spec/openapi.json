@@ -51,12 +51,14 @@
             ]
           },
           "noteId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
             ]
           },
           "poiId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -118,15 +120,16 @@
           },
           "visitedStopIds": {
             "items": {
+              "format": "uuid",
               "type": "string"
             },
             "maxItems": 1000,
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           }
         },
+        "required": [
+          "visitedStopIds"
+        ],
         "type": "object"
       },
       "RouteAnnotationsResponse": {
@@ -150,6 +153,7 @@
             ]
           },
           "routeId": {
+            "format": "uuid",
             "type": "string"
           }
         },
@@ -166,12 +170,15 @@
             "type": "string"
           },
           "createdAt": {
+            "format": "date-time",
             "type": "string"
           },
           "id": {
+            "format": "uuid",
             "type": "string"
           },
           "poiId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -183,9 +190,11 @@
             "type": "integer"
           },
           "routeId": {
+            "format": "uuid",
             "type": "string"
           },
           "updatedAt": {
+            "format": "date-time",
             "type": "string"
           }
         },
@@ -208,13 +217,16 @@
             "type": "integer"
           },
           "routeId": {
+            "format": "uuid",
             "type": "string"
           },
           "updatedAt": {
+            "format": "date-time",
             "type": "string"
           },
           "visitedStopIds": {
             "items": {
+              "format": "uuid",
               "type": "string"
             },
             "maxItems": 1000,
@@ -273,28 +285,7 @@
       },
       "UsersListResponse": {
         "items": {
-          "description": "OpenAPI schema for [`crate::domain::User`].\n\nApplication user with stable identifier and display name.",
-          "properties": {
-            "display_name": {
-              "description": "Display name shown to other users.\n\nSchema constraints: 3–32 characters, alphanumeric plus spaces and\nunderscores. The domain layer additionally validates that the value\nis non-empty when trimmed.",
-              "example": "Ada Lovelace",
-              "maxLength": 32,
-              "minLength": 3,
-              "pattern": "^[A-Za-z0-9_ ]+$",
-              "type": "string"
-            },
-            "id": {
-              "description": "Stable user identifier.\n\nMatches the domain `User` invariant of being a UUID.",
-              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "display_name"
-          ],
-          "type": "object"
+          "$ref": "#/components/schemas/crate.domain.User"
         },
         "maxItems": 100,
         "type": "array"
@@ -383,7 +374,7 @@
             "maxItems": 100,
             "type": "array"
           },
-          "user_id": {
+          "userId": {
             "description": "Stable user identifier.",
             "example": "11111111-1111-1111-1111-111111111111",
             "format": "uuid",
@@ -391,7 +382,7 @@
           }
         },
         "required": [
-          "user_id",
+          "userId",
           "interestThemeIds"
         ],
         "type": "object"
@@ -542,6 +533,11 @@
             "description": "Internal server error"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Fetch notes and progress for a route.",
         "tags": [
           "routes"
@@ -636,6 +632,11 @@
             "description": "Service unavailable"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Create or update a note for the route.",
         "tags": [
           "routes"
@@ -730,6 +731,11 @@
             "description": "Service unavailable"
           }
         },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
         "summary": "Update route progress for the authenticated user.",
         "tags": [
           "routes"

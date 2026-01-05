@@ -39,14 +39,18 @@ pub struct InterestsRequest {
     pub interest_theme_ids: Vec<String>,
 }
 
+const INTEREST_THEME_IDS_MAX: usize = 100;
+const USERS_LIST_MAX: usize = 100;
+
 struct UsersListResponse;
 
 impl PartialSchema for UsersListResponse {
     fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-        let items = UserSchema::schema();
         utoipa::openapi::schema::ArrayBuilder::new()
-            .items(items)
-            .max_items(Some(100))
+            .items(utoipa::openapi::RefOr::Ref(
+                utoipa::openapi::Ref::from_schema_name(UserSchema::name()),
+            ))
+            .max_items(Some(USERS_LIST_MAX))
             .into()
     }
 }
@@ -58,12 +62,9 @@ impl ToSchema for UsersListResponse {
             utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
         )>,
     ) {
-        schemas.push((UserSchema::name().into(), UserSchema::schema()));
         <UserSchema as ToSchema>::schemas(schemas);
     }
 }
-
-const INTEREST_THEME_IDS_MAX: usize = 100;
 
 #[derive(Debug)]
 enum InterestsRequestError {
@@ -154,15 +155,15 @@ fn map_login_validation_error(err: LoginValidationError) -> Error {
 
 fn map_interests_request_error(err: InterestsRequestError) -> Error {
     match err {
-        InterestsRequestError::TooManyInterestThemeIds { length, max } => {
-            Error::invalid_request("interest theme ids must contain at most 100 items")
-                .with_details(json!({
-                    "field": "interestThemeIds",
-                    "code": "too_many_interest_theme_ids",
-                    "count": length,
-                    "max": max,
-                }))
-        }
+        InterestsRequestError::TooManyInterestThemeIds { length, max } => Error::invalid_request(
+            format!("interest theme ids must contain at most {max} items"),
+        )
+        .with_details(json!({
+            "field": "interestThemeIds",
+            "code": "too_many_interest_theme_ids",
+            "count": length,
+            "max": max,
+        })),
         InterestsRequestError::InvalidInterestThemeId {
             index,
             value,

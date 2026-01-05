@@ -185,7 +185,8 @@ macro_rules! route_mutation_handler {
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["routes"],
-    operation_id = "getRouteAnnotations"
+    operation_id = "getRouteAnnotations",
+    security(("SessionCookie" = []))
 )]
 #[get("/routes/{route_id}/annotations")]
 pub async fn get_annotations(
@@ -220,7 +221,8 @@ route_mutation_handler!(
             (status = 503, description = "Service unavailable", body = ErrorSchema)
         ),
         tags = ["routes"],
-        operation_id = "upsertRouteNote"
+        operation_id = "upsertRouteNote",
+        security(("SessionCookie" = []))
     )]
     #[post("/routes/{route_id}/notes")]
     upsert_note,
@@ -258,7 +260,8 @@ route_mutation_handler!(
             (status = 503, description = "Service unavailable", body = ErrorSchema)
         ),
         tags = ["routes"],
-        operation_id = "updateRouteProgress"
+        operation_id = "updateRouteProgress",
+        security(("SessionCookie" = []))
     )]
     #[put("/routes/{route_id}/progress")]
     update_progress,

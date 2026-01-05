@@ -16,7 +16,9 @@ pub(super) struct RoutePath {
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NoteRequest {
+    #[schema(format = "uuid")]
     pub note_id: Option<String>,
+    #[schema(format = "uuid")]
     pub poi_id: Option<String>,
     pub body: Option<String>,
     pub expected_revision: Option<u32>,
@@ -26,7 +28,7 @@ pub struct NoteRequest {
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgressRequest {
-    #[schema(max_items = 1_000)]
+    #[schema(max_items = 1_000, value_type = Vec<Uuid>)]
     pub visited_stop_ids: Option<Vec<String>>,
     pub expected_revision: Option<u32>,
 }
@@ -35,11 +37,16 @@ pub struct ProgressRequest {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteNoteResponse {
+    #[schema(format = "uuid")]
     pub id: String,
+    #[schema(format = "uuid")]
     pub route_id: String,
+    #[schema(format = "uuid")]
     pub poi_id: Option<String>,
     pub body: String,
+    #[schema(format = "date-time")]
     pub created_at: String,
+    #[schema(format = "date-time")]
     pub updated_at: String,
     pub revision: u32,
 }
@@ -48,9 +55,11 @@ pub struct RouteNoteResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteProgressResponse {
+    #[schema(format = "uuid")]
     pub route_id: String,
-    #[schema(max_items = 1_000)]
+    #[schema(max_items = 1_000, value_type = Vec<Uuid>)]
     pub visited_stop_ids: Vec<String>,
+    #[schema(format = "date-time")]
     pub updated_at: String,
     pub revision: u32,
 }
@@ -59,6 +68,7 @@ pub struct RouteProgressResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteAnnotationsResponse {
+    #[schema(format = "uuid")]
     pub route_id: String,
     #[schema(max_items = 1_000)]
     pub notes: Vec<RouteNoteResponse>,
