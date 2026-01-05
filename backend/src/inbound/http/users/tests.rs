@@ -94,6 +94,30 @@ fn test_app() -> App<
         )
 }
 
+async fn login_and_get_cookie(
+    app: &impl actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+) -> actix_web::cookie::Cookie<'static> {
+    let login_req = actix_test::TestRequest::post()
+        .uri("/api/v1/login")
+        .set_json(&LoginRequest {
+            username: "admin".into(),
+            password: "password".into(),
+        })
+        .to_request();
+    let login_res = actix_test::call_service(app, login_req).await;
+    assert!(login_res.status().is_success());
+    login_res
+        .response()
+        .cookies()
+        .find(|c| c.name() == "session")
+        .expect("session cookie")
+        .into_owned()
+}
+
 #[rstest]
 #[case(
     "   ",
@@ -152,21 +176,7 @@ async fn login_rejects_wrong_credentials_with_unauthorised_status() {
 #[actix_web::test]
 async fn list_users_returns_camel_case_json() {
     let app = actix_test::init_service(test_app()).await;
-
-    let login_req = actix_test::TestRequest::post()
-        .uri("/api/v1/login")
-        .set_json(&LoginRequest {
-            username: "admin".into(),
-            password: "password".into(),
-        })
-        .to_request();
-    let login_res = actix_test::call_service(&app, login_req).await;
-    assert!(login_res.status().is_success());
-    let cookie = login_res
-        .response()
-        .cookies()
-        .find(|c| c.name() == "session")
-        .expect("session cookie");
+    let cookie = login_and_get_cookie(&app).await;
 
     let users_req = actix_test::TestRequest::get()
         .uri("/api/v1/users")
@@ -195,6 +205,57 @@ async fn list_users_rejects_without_session() {
     )
     .await;
     assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn update_interests_rejects_too_many_ids() {
+    let app = actix_test::init_service(test_app()).await;
+    let cookie = login_and_get_cookie(&app).await;
+    let payload = InterestsRequest {
+        interest_theme_ids: vec![
+            "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
+            INTEREST_THEME_IDS_MAX + 1
+        ],
+    };
+
+    let request = actix_test::TestRequest::put()
+        .uri("/api/v1/users/me/interests")
+        .cookie(cookie)
+        .set_json(payload)
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+
+    assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    let body = actix_test::read_body(response).await;
+    let value: Value = serde_json::from_slice(&body).expect("error payload");
+    assert_eq!(
+        value.get("message").and_then(Value::as_str),
+        Some("interest theme ids must contain at most 100 items")
+    );
+    assert_eq!(
+        value.get("code").and_then(Value::as_str),
+        Some("invalid_request")
+    );
+    let details = value
+        .get("details")
+        .and_then(|val| val.as_object())
+        .expect("details present");
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("too_many_interest_theme_ids")
+    );
+    assert_eq!(
+        details.get("field").and_then(Value::as_str),
+        Some("interestThemeIds")
+    );
+    assert_eq!(
+        details.get("max").and_then(Value::as_u64),
+        Some(INTEREST_THEME_IDS_MAX as u64)
+    );
+    assert_eq!(
+        details.get("count").and_then(Value::as_u64),
+        Some((INTEREST_THEME_IDS_MAX + 1) as u64)
+    );
 }
 
 #[rstest]
