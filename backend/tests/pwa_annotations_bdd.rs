@@ -43,6 +43,94 @@ const POI_ID: &str = "55555555-5555-5555-5555-555555555555";
 const STOP_ID: &str = "66666666-6666-6666-6666-666666666666";
 const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
 
+// -- Test helpers --
+
+fn revision_mismatch_error(expected: u32, actual: u32) -> Error {
+    Error::conflict("revision mismatch").with_details(serde_json::json!({
+        "expectedRevision": expected,
+        "actualRevision": actual
+    }))
+}
+
+fn idempotency_conflict_error() -> Error {
+    Error::conflict("idempotency key already used with different payload")
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Test helper parameters are tightly coupled; a struct would add indirection without benefit."
+)]
+fn build_test_note(
+    note_id: &str,
+    route_id: &str,
+    poi_id: &str,
+    body: &str,
+    revision: u32,
+) -> RouteNote {
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(route_id).expect("route id");
+    let note_id = Uuid::parse_str(note_id).expect("note id");
+    let poi_id = Uuid::parse_str(poi_id).expect("poi id");
+    RouteNote::builder(note_id, route_id, user_id)
+        .poi_id(poi_id)
+        .body(body)
+        .revision(revision)
+        .build()
+}
+
+fn build_test_progress(route_id: &str, stop_ids: Vec<&str>, revision: u32) -> RouteProgress {
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(route_id).expect("route id");
+    let stop_ids: Vec<Uuid> = stop_ids
+        .iter()
+        .map(|id| Uuid::parse_str(id).expect("stop id"))
+        .collect();
+    RouteProgress::builder(route_id, user_id)
+        .visited_stop_ids(stop_ids)
+        .revision(revision)
+        .build()
+}
+
+fn set_note_upsert_response(world: &WorldFixture, note: RouteNote, replayed: bool) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
+            note,
+            replayed,
+        }));
+}
+
+fn set_note_error_response(world: &WorldFixture, error: Error) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+}
+
+fn set_progress_update_response(world: &WorldFixture, progress: RouteProgress, replayed: bool) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
+            progress,
+            replayed,
+        }));
+}
+
+fn set_progress_error_response(world: &WorldFixture, error: Error) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Err(error));
+}
+
+// -- Path and payload helpers --
+
 fn note_path() -> String {
     format!("/api/v1/routes/{}/notes", ROUTE_ID)
 }
@@ -124,37 +212,13 @@ fn the_annotations_query_returns_a_note_and_progress(world: &WorldFixture) {
 
 #[given("the annotations command returns an upserted note")]
 fn the_annotations_command_returns_an_upserted_note(world: &WorldFixture) {
-    let world = world.world();
-    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
-    let note_id = Uuid::parse_str(NOTE_ID).expect("note id");
-    let poi_id = Uuid::parse_str(POI_ID).expect("poi id");
-    let note = RouteNote::builder(note_id, route_id, user_id)
-        .poi_id(poi_id)
-        .body("Upserted note")
-        .revision(1)
-        .build();
-
-    world
-        .borrow()
-        .route_annotations
-        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
-            note,
-            replayed: false,
-        }));
+    let note = build_test_note(NOTE_ID, ROUTE_ID, POI_ID, "Upserted note", 1);
+    set_note_upsert_response(world, note, false);
 }
 
 #[given("the progress update is configured to conflict")]
 fn the_progress_update_is_configured_to_conflict(world: &WorldFixture) {
-    let world = world.world();
-    let error = Error::conflict("revision mismatch").with_details(serde_json::json!({
-        "expectedRevision": 1,
-        "actualRevision": 2
-    }));
-    world
-        .borrow()
-        .route_annotations
-        .set_update_response(UpdateProgressCommandResponse::Err(error));
+    set_progress_error_response(world, revision_mismatch_error(1, 2));
 }
 
 #[when("the client requests annotations for the route")]
@@ -232,77 +296,29 @@ fn the_note_command_captures_the_idempotency_key(world: &WorldFixture) {
 
 #[given("the note command returns a revision mismatch")]
 fn the_note_command_returns_a_revision_mismatch(world: &WorldFixture) {
-    let world = world.world();
-    let error = Error::conflict("revision mismatch").with_details(serde_json::json!({
-        "expectedRevision": 1,
-        "actualRevision": 2
-    }));
-    world
-        .borrow()
-        .route_annotations
-        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+    set_note_error_response(world, revision_mismatch_error(1, 2));
 }
 
 #[given("the note command returns an idempotency conflict")]
 fn the_note_command_returns_an_idempotency_conflict(world: &WorldFixture) {
-    let world = world.world();
-    let error = Error::conflict("idempotency key already used with different payload");
-    world
-        .borrow()
-        .route_annotations
-        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+    set_note_error_response(world, idempotency_conflict_error());
 }
 
 #[given("the note command returns a replayed response")]
 fn the_note_command_returns_a_replayed_response(world: &WorldFixture) {
-    let world = world.world();
-    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
-    let note_id = Uuid::parse_str(NOTE_ID).expect("note id");
-    let poi_id = Uuid::parse_str(POI_ID).expect("poi id");
-    let note = RouteNote::builder(note_id, route_id, user_id)
-        .poi_id(poi_id)
-        .body("Replayed note")
-        .revision(1)
-        .build();
-
-    world
-        .borrow()
-        .route_annotations
-        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
-            note,
-            replayed: true,
-        }));
+    let note = build_test_note(NOTE_ID, ROUTE_ID, POI_ID, "Replayed note", 1);
+    set_note_upsert_response(world, note, true);
 }
 
 #[given("the progress command returns an idempotency conflict")]
 fn the_progress_command_returns_an_idempotency_conflict(world: &WorldFixture) {
-    let world = world.world();
-    let error = Error::conflict("idempotency key already used with different payload");
-    world
-        .borrow()
-        .route_annotations
-        .set_update_response(UpdateProgressCommandResponse::Err(error));
+    set_progress_error_response(world, idempotency_conflict_error());
 }
 
 #[given("the progress command returns a replayed response")]
 fn the_progress_command_returns_a_replayed_response(world: &WorldFixture) {
-    let world = world.world();
-    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
-    let stop_id = Uuid::parse_str(STOP_ID).expect("stop id");
-    let progress = RouteProgress::builder(route_id, user_id)
-        .visited_stop_ids(vec![stop_id])
-        .revision(1)
-        .build();
-
-    world
-        .borrow()
-        .route_annotations
-        .set_update_response(UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
-            progress,
-            replayed: true,
-        }));
+    let progress = build_test_progress(ROUTE_ID, vec![STOP_ID], 1);
+    set_progress_update_response(world, progress, true);
 }
 
 fn note_payload_with_revision(expected_revision: u32) -> Value {
