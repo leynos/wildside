@@ -25,3 +25,25 @@ Feature: PWA preferences endpoints
     Then the response is ok
     And the preferences response includes revision 2
     And the preferences command captures the idempotency key
+
+  Scenario: Preferences update rejects stale revision
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the preferences command returns a revision mismatch
+    When the client updates preferences with expected revision 1
+    Then the response is a conflict error with revision details
+
+  Scenario: Preferences update rejects idempotency conflict
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the preferences command returns an idempotency conflict
+    When the client updates preferences with an idempotency key
+    Then the response is a conflict error with idempotency message
+
+  Scenario: Preferences update replays cached response
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the preferences command returns a replayed response
+    When the client updates preferences with an idempotency key
+    Then the response is ok
+    And the preferences response includes replayed true

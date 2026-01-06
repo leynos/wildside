@@ -104,7 +104,7 @@ adapter; direct stateful logic belongs behind the ports established above.
   `POST /api/v1/routes/{route_id}/notes`, and
   `PUT /api/v1/routes/{route_id}/progress` with idempotency headers and
   consistent error envelopes.
-- [ ] 2.3.3. Add contract tests covering optimistic concurrency, idempotency
+- [x] 2.3.3. Add contract tests covering optimistic concurrency, idempotency
   conflicts, and deterministic responses for retried requests.
 
 ## 3. Data platform foundation

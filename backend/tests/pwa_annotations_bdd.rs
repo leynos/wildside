@@ -25,7 +25,7 @@ mod pwa_http;
 mod ws_support;
 
 use actix_web::http::Method;
-use backend::domain::ports::UpsertNoteResponse;
+use backend::domain::ports::{UpdateProgressResponse, UpsertNoteResponse};
 use backend::domain::{Error, RouteAnnotations, RouteNote, RouteProgress, UserId};
 use doubles::{
     RouteAnnotationsQueryResponse, UpdateProgressCommandResponse, UpsertNoteCommandResponse,
@@ -147,12 +147,14 @@ fn the_annotations_command_returns_an_upserted_note(world: &WorldFixture) {
 #[given("the progress update is configured to conflict")]
 fn the_progress_update_is_configured_to_conflict(world: &WorldFixture) {
     let world = world.world();
+    let error = Error::conflict("revision mismatch").with_details(serde_json::json!({
+        "expectedRevision": 1,
+        "actualRevision": 2
+    }));
     world
         .borrow()
         .route_annotations
-        .set_update_response(UpdateProgressCommandResponse::Err(Error::conflict(
-            "revision mismatch",
-        )));
+        .set_update_response(UpdateProgressCommandResponse::Err(error));
 }
 
 #[when("the client requests annotations for the route")]
@@ -228,13 +230,157 @@ fn the_note_command_captures_the_idempotency_key(world: &WorldFixture) {
     );
 }
 
-#[then("the response is a conflict error")]
-fn the_response_is_a_conflict_error(world: &WorldFixture) {
+#[given("the note command returns a revision mismatch")]
+fn the_note_command_returns_a_revision_mismatch(world: &WorldFixture) {
+    let world = world.world();
+    let error = Error::conflict("revision mismatch").with_details(serde_json::json!({
+        "expectedRevision": 1,
+        "actualRevision": 2
+    }));
+    world
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+}
+
+#[given("the note command returns an idempotency conflict")]
+fn the_note_command_returns_an_idempotency_conflict(world: &WorldFixture) {
+    let world = world.world();
+    let error = Error::conflict("idempotency key already used with different payload");
+    world
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+}
+
+#[given("the note command returns a replayed response")]
+fn the_note_command_returns_a_replayed_response(world: &WorldFixture) {
+    let world = world.world();
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
+    let note_id = Uuid::parse_str(NOTE_ID).expect("note id");
+    let poi_id = Uuid::parse_str(POI_ID).expect("poi id");
+    let note = RouteNote::builder(note_id, route_id, user_id)
+        .poi_id(poi_id)
+        .body("Replayed note")
+        .revision(1)
+        .build();
+
+    world
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
+            note,
+            replayed: true,
+        }));
+}
+
+#[given("the progress command returns an idempotency conflict")]
+fn the_progress_command_returns_an_idempotency_conflict(world: &WorldFixture) {
+    let world = world.world();
+    let error = Error::conflict("idempotency key already used with different payload");
+    world
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Err(error));
+}
+
+#[given("the progress command returns a replayed response")]
+fn the_progress_command_returns_a_replayed_response(world: &WorldFixture) {
+    let world = world.world();
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
+    let stop_id = Uuid::parse_str(STOP_ID).expect("stop id");
+    let progress = RouteProgress::builder(route_id, user_id)
+        .visited_stop_ids(vec![stop_id])
+        .revision(1)
+        .build();
+
+    world
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
+            progress,
+            replayed: true,
+        }));
+}
+
+fn note_payload_with_revision(expected_revision: u32) -> Value {
+    serde_json::json!({
+        "noteId": NOTE_ID,
+        "poiId": POI_ID,
+        "body": "Updated note",
+        "expectedRevision": expected_revision
+    })
+}
+
+#[when("the client upserts a note with expected revision 1")]
+fn the_client_upserts_a_note_with_expected_revision_1(world: &WorldFixture) {
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
+            method: Method::POST,
+            path: &note_path(),
+            payload: note_payload_with_revision(1),
+            idempotency_key: None,
+        },
+    );
+}
+
+#[when("the client updates progress with an idempotency key")]
+fn the_client_updates_progress_with_an_idempotency_key(world: &WorldFixture) {
+    perform_route_mutation(world, Method::PUT, progress_path(), progress_payload());
+}
+
+#[then("the response is a conflict error with revision details")]
+fn the_response_is_a_conflict_error_with_revision_details(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(409));
     let body = ctx.last_body.as_ref().expect("response body");
     assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
+    let details = body.get("details").expect("details should be present");
+    assert!(
+        details.get("expectedRevision").is_some(),
+        "expectedRevision should be present in details"
+    );
+    assert!(
+        details.get("actualRevision").is_some(),
+        "actualRevision should be present in details"
+    );
+}
+
+#[then("the response is a conflict error with idempotency message")]
+fn the_response_is_a_conflict_error_with_idempotency_message(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(409));
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
+    let message = body
+        .get("message")
+        .and_then(Value::as_str)
+        .expect("message");
+    assert!(
+        message.contains("idempotency"),
+        "message should mention idempotency"
+    );
+}
+
+#[then("the note response includes replayed true")]
+fn the_note_response_includes_replayed_true(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
+}
+
+#[then("the progress response includes replayed true")]
+fn the_progress_response_includes_replayed_true(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
 }
 
 #[scenario(path = "tests/features/pwa_annotations.feature")]
