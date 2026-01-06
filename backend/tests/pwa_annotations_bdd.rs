@@ -56,25 +56,56 @@ fn idempotency_conflict_error() -> Error {
     Error::conflict("idempotency key already used with different payload")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Test helper parameters are tightly coupled; a struct would add indirection without benefit."
-)]
-fn build_test_note(
-    note_id: &str,
-    route_id: &str,
-    poi_id: &str,
-    body: &str,
+/// Parameters for building a test note.
+struct TestNoteParams<'a> {
+    note_id: &'a str,
+    route_id: &'a str,
+    poi_id: &'a str,
+    body: &'a str,
     revision: u32,
-) -> RouteNote {
+}
+
+#[expect(dead_code, reason = "Builder methods for test extensibility.")]
+impl<'a> TestNoteParams<'a> {
+    /// Creates parameters with default IDs and the given body and revision.
+    fn new(body: &'a str, revision: u32) -> Self {
+        Self {
+            note_id: NOTE_ID,
+            route_id: ROUTE_ID,
+            poi_id: POI_ID,
+            body,
+            revision,
+        }
+    }
+
+    /// Overrides the note ID.
+    fn with_note_id(mut self, note_id: &'a str) -> Self {
+        self.note_id = note_id;
+        self
+    }
+
+    /// Overrides the route ID.
+    fn with_route_id(mut self, route_id: &'a str) -> Self {
+        self.route_id = route_id;
+        self
+    }
+
+    /// Overrides the POI ID.
+    fn with_poi_id(mut self, poi_id: &'a str) -> Self {
+        self.poi_id = poi_id;
+        self
+    }
+}
+
+fn build_test_note(params: TestNoteParams) -> RouteNote {
     let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let route_id = Uuid::parse_str(route_id).expect("route id");
-    let note_id = Uuid::parse_str(note_id).expect("note id");
-    let poi_id = Uuid::parse_str(poi_id).expect("poi id");
+    let route_id = Uuid::parse_str(params.route_id).expect("route id");
+    let note_id = Uuid::parse_str(params.note_id).expect("note id");
+    let poi_id = Uuid::parse_str(params.poi_id).expect("poi id");
     RouteNote::builder(note_id, route_id, user_id)
         .poi_id(poi_id)
-        .body(body)
-        .revision(revision)
+        .body(params.body)
+        .revision(params.revision)
         .build()
 }
 
@@ -212,7 +243,7 @@ fn the_annotations_query_returns_a_note_and_progress(world: &WorldFixture) {
 
 #[given("the annotations command returns an upserted note")]
 fn the_annotations_command_returns_an_upserted_note(world: &WorldFixture) {
-    let note = build_test_note(NOTE_ID, ROUTE_ID, POI_ID, "Upserted note", 1);
+    let note = build_test_note(TestNoteParams::new("Upserted note", 1));
     set_note_upsert_response(world, note, false);
 }
 
@@ -306,7 +337,7 @@ fn the_note_command_returns_an_idempotency_conflict(world: &WorldFixture) {
 
 #[given("the note command returns a replayed response")]
 fn the_note_command_returns_a_replayed_response(world: &WorldFixture) {
-    let note = build_test_note(NOTE_ID, ROUTE_ID, POI_ID, "Replayed note", 1);
+    let note = build_test_note(TestNoteParams::new("Replayed note", 1));
     set_note_upsert_response(world, note, true);
 }
 
