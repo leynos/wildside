@@ -5,9 +5,13 @@ edition = "2024"
 publish = false
 
 [dependencies]
+camino = "1"
+cap-std = "3"
 syn = { version = "2", features = ["full", "visit"] }
 
 [dev-dependencies]
+camino = "1"
+cap-std = "3"
 rstest = "0.26"
 rstest-bdd = "0.1.0"
 rstest-bdd-macros = "0.1.0"
