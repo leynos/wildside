@@ -317,6 +317,12 @@ Module boundaries are enforced by a repo-local lint that runs during
   note counts are expected to remain bounded by route POIs. If future work
   introduces unbounded annotations, pagination will be added to the query port
   and HTTP endpoint.
+- **2026-01-05:** Add contract tests for PWA endpoint guarantees (optimistic
+  concurrency, idempotency conflicts, deterministic replay). BDD scenarios
+  exercise the HTTP adapter layer with test doubles for fast, deterministic
+  validation. Repository-level tests with embedded PostgreSQL validate SQL-level
+  revision semantics. This layered approach ensures clients can safely implement
+  offline-first retry patterns while avoiding redundant test coverage.
 
 ### Web API and WebSocket Layer (Actix Web)
 
