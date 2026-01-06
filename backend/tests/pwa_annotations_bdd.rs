@@ -43,19 +43,6 @@ const POI_ID: &str = "55555555-5555-5555-5555-555555555555";
 const STOP_ID: &str = "66666666-6666-6666-6666-666666666666";
 const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
 
-// -- Test helpers --
-
-fn revision_mismatch_error(expected: u32, actual: u32) -> Error {
-    Error::conflict("revision mismatch").with_details(serde_json::json!({
-        "expectedRevision": expected,
-        "actualRevision": actual
-    }))
-}
-
-fn idempotency_conflict_error() -> Error {
-    Error::conflict("idempotency key already used with different payload")
-}
-
 /// Parameters for building a test note.
 struct TestNoteParams<'a> {
     note_id: &'a str,
@@ -249,7 +236,7 @@ fn the_annotations_command_returns_an_upserted_note(world: &WorldFixture) {
 
 #[given("the progress update is configured to conflict")]
 fn the_progress_update_is_configured_to_conflict(world: &WorldFixture) {
-    set_progress_error_response(world, revision_mismatch_error(1, 2));
+    set_progress_error_response(world, bdd_common::revision_mismatch_error(1, 2));
 }
 
 #[when("the client requests annotations for the route")]
@@ -327,12 +314,12 @@ fn the_note_command_captures_the_idempotency_key(world: &WorldFixture) {
 
 #[given("the note command returns a revision mismatch")]
 fn the_note_command_returns_a_revision_mismatch(world: &WorldFixture) {
-    set_note_error_response(world, revision_mismatch_error(1, 2));
+    set_note_error_response(world, bdd_common::revision_mismatch_error(1, 2));
 }
 
 #[given("the note command returns an idempotency conflict")]
 fn the_note_command_returns_an_idempotency_conflict(world: &WorldFixture) {
-    set_note_error_response(world, idempotency_conflict_error());
+    set_note_error_response(world, bdd_common::idempotency_conflict_error());
 }
 
 #[given("the note command returns a replayed response")]
@@ -343,7 +330,7 @@ fn the_note_command_returns_a_replayed_response(world: &WorldFixture) {
 
 #[given("the progress command returns an idempotency conflict")]
 fn the_progress_command_returns_an_idempotency_conflict(world: &WorldFixture) {
-    set_progress_error_response(world, idempotency_conflict_error());
+    set_progress_error_response(world, bdd_common::idempotency_conflict_error());
 }
 
 #[given("the progress command returns a replayed response")]
@@ -381,53 +368,22 @@ fn the_client_updates_progress_with_an_idempotency_key(world: &WorldFixture) {
 
 #[then("the response is a conflict error with revision details")]
 fn the_response_is_a_conflict_error_with_revision_details(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.last_status, Some(409));
-    let body = ctx.last_body.as_ref().expect("response body");
-    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
-    let details = body.get("details").expect("details should be present");
-    assert!(
-        details.get("expectedRevision").is_some(),
-        "expectedRevision should be present in details"
-    );
-    assert!(
-        details.get("actualRevision").is_some(),
-        "actualRevision should be present in details"
-    );
+    bdd_common::assert_conflict_with_revision_details(world);
 }
 
 #[then("the response is a conflict error with idempotency message")]
 fn the_response_is_a_conflict_error_with_idempotency_message(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.last_status, Some(409));
-    let body = ctx.last_body.as_ref().expect("response body");
-    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
-    let message = body
-        .get("message")
-        .and_then(Value::as_str)
-        .expect("message");
-    assert!(
-        message.contains("idempotency"),
-        "message should mention idempotency"
-    );
+    bdd_common::assert_conflict_with_idempotency_message(world);
 }
 
 #[then("the note response includes replayed true")]
 fn the_note_response_includes_replayed_true(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    let body = ctx.last_body.as_ref().expect("response body");
-    assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
+    bdd_common::assert_response_replayed(world);
 }
 
 #[then("the progress response includes replayed true")]
 fn the_progress_response_includes_replayed_true(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    let body = ctx.last_body.as_ref().expect("response body");
-    assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
+    bdd_common::assert_response_replayed(world);
 }
 
 #[scenario(path = "tests/features/pwa_annotations.feature")]

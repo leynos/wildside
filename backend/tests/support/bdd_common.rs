@@ -4,10 +4,26 @@
 //! step implementations concise and consistent.
 
 use actix_web::http::Method;
+use backend::domain::Error;
 use serde_json::Value;
 
 use crate::harness::{AdapterWorld, WorldFixture};
 use crate::pwa_http::{JsonRequest, login_and_store_cookie, perform_json_request};
+
+// -- Test error constructors --
+
+/// Creates a revision mismatch conflict error with structured details.
+pub(super) fn revision_mismatch_error(expected: u32, actual: u32) -> Error {
+    Error::conflict("revision mismatch").with_details(serde_json::json!({
+        "expectedRevision": expected,
+        "actualRevision": actual
+    }))
+}
+
+/// Creates an idempotency conflict error.
+pub(super) fn idempotency_conflict_error() -> Error {
+    Error::conflict("idempotency key already used with different payload")
+}
 
 /// Confirm the server is running for the scenario.
 pub(super) fn setup_server(world: &WorldFixture) {
@@ -77,4 +93,49 @@ pub(super) fn assert_idempotency_key_captured<F>(
     let ctx = ctx.borrow();
     let idempotency_key = get_idempotency_key(&ctx).expect("idempotency key");
     assert_eq!(idempotency_key, expected_key);
+}
+
+// -- Conflict response assertions --
+
+/// Assert the response is a 409 conflict with revision mismatch details.
+pub(super) fn assert_conflict_with_revision_details(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(409));
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
+    let details = body.get("details").expect("details should be present");
+    assert!(
+        details.get("expectedRevision").is_some(),
+        "expectedRevision should be present in details"
+    );
+    assert!(
+        details.get("actualRevision").is_some(),
+        "actualRevision should be present in details"
+    );
+}
+
+/// Assert the response is a 409 conflict with idempotency message.
+pub(super) fn assert_conflict_with_idempotency_message(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(409));
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
+    let message = body
+        .get("message")
+        .and_then(Value::as_str)
+        .expect("message");
+    assert!(
+        message.contains("idempotency"),
+        "message should mention idempotency"
+    );
+}
+
+/// Assert the response body includes `replayed: true`.
+pub(super) fn assert_response_replayed(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
 }
