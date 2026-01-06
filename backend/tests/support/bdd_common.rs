@@ -36,6 +36,12 @@ pub(super) fn setup_authenticated_session(world: &WorldFixture) {
     login_and_store_cookie(&shared_world);
 }
 
+/// Perform an authenticated JSON request using the stored session cookie.
+fn perform_authenticated_json_request(world: &WorldFixture, request: JsonRequest<'_>) {
+    let shared_world = world.world();
+    perform_json_request(&shared_world, request);
+}
+
 /// Assert the last response returned HTTP 200.
 pub(super) fn assert_response_ok(world: &WorldFixture) {
     let ctx = world.world();
@@ -45,9 +51,8 @@ pub(super) fn assert_response_ok(world: &WorldFixture) {
 
 /// Perform a GET request with the stored session cookie.
 pub(super) fn perform_get_request(world: &WorldFixture, path: &str) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
+    perform_authenticated_json_request(
+        world,
         JsonRequest {
             include_cookie: true,
             method: Method::GET,
@@ -68,9 +73,8 @@ pub(super) struct MutationRequest<'a> {
 
 /// Perform a mutation request with optional idempotency key.
 pub(super) fn perform_mutation_request(world: &WorldFixture, request: MutationRequest<'_>) {
-    let shared_world = world.world();
-    perform_json_request(
-        &shared_world,
+    perform_authenticated_json_request(
+        world,
         JsonRequest {
             include_cookie: true,
             method: request.method,
