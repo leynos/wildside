@@ -124,7 +124,7 @@ Known uncertainties that might affect the plan:
     while repository tests with embedded PostgreSQL validate the SQL-level
     revision checking. This layered approach provides comprehensive coverage
     without redundancy.
-  - Date/Author: 2026-01-05 / Assistant
+  - Date/Author: 2026-01-05 / Assistant.
 
 - **Decision**: Group tests by contract guarantee (concurrency, conflicts,
   replay) rather than by endpoint.
@@ -247,7 +247,7 @@ Add scenarios to the existing feature files for revision mismatch handling:
    database has revision 2. Expect HTTP 409 with conflict details.
 
 2. **Note revision mismatch**: Client sends `expectedRevision: 1` for note
-   update but database has revision 2. Expect HTTP 409.
+  update, but database has revision 2. Expect HTTP 409.
 
 3. **Progress revision mismatch**: Extend existing conflict scenario to verify
    the response body contains `expectedRevision` and `actualRevision` fields.

@@ -80,11 +80,7 @@ fn find_workspace_root(start: &Path) -> Option<PathBuf> {
 }
 
 fn cargo_toml_declares_workspace(dir: &Path) -> bool {
-    let Ok(dir_handle) = Dir::open_ambient_dir(dir, ambient_authority()) else {
-        return false;
-    };
-    dir_handle
-        .read_to_string("Cargo.toml")
+    std::fs::read_to_string(dir.join("Cargo.toml"))
         .ok()
         .is_some_and(|contents| contents.contains("[workspace]"))
 }
