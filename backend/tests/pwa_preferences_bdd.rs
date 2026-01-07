@@ -249,20 +249,11 @@ fn the_client_updates_preferences_with_expected_revision_1(world: &WorldFixture)
     perform_preferences_update(world, preferences_payload("metric", Some(1)), None);
 }
 
-#[then("the response is a conflict error with revision details")]
-fn the_response_is_a_conflict_error_with_revision_details(world: &WorldFixture) {
-    bdd_common::assert_conflict_with_revision_details(world);
-}
-
-#[then("the response is a conflict error with idempotency message")]
-fn the_response_is_a_conflict_error_with_idempotency_message(world: &WorldFixture) {
-    bdd_common::assert_conflict_with_idempotency_message(world);
-}
-
-#[then("the preferences response includes replayed true")]
-fn the_preferences_response_includes_replayed_true(world: &WorldFixture) {
-    bdd_common::assert_response_replayed(world);
-}
+common_conflict_response_steps!();
+replayed_response_step!(
+    the_preferences_response_includes_replayed_true,
+    "the preferences response includes replayed true"
+);
 
 #[scenario(path = "tests/features/pwa_preferences.feature")]
 fn pwa_preferences(world: WorldFixture) {

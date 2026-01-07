@@ -109,17 +109,20 @@ pub(super) struct MutationRequest<'a> {
     pub(super) idempotency_key: Option<&'a str>,
 }
 
-/// Perform a mutation request with optional idempotency key.
-pub(super) fn perform_mutation_request(world: &WorldFixture, request: MutationRequest<'_>) {
-    perform_request_with_cookie(
-        world,
-        RequestSpec::mutation(
+impl<'a> From<MutationRequest<'a>> for RequestSpec<'a> {
+    fn from(request: MutationRequest<'a>) -> Self {
+        Self::mutation(
             request.method,
             request.path,
             request.payload,
             request.idempotency_key,
-        ),
-    );
+        )
+    }
+}
+
+/// Perform a mutation request with optional idempotency key.
+pub(super) fn perform_mutation_request(world: &WorldFixture, request: MutationRequest<'_>) {
+    perform_request_with_cookie(world, request.into());
 }
 
 /// Assert that the captured idempotency key matches the expected value.
@@ -179,4 +182,31 @@ pub(super) fn assert_response_replayed(world: &WorldFixture) {
     let ctx = ctx.borrow();
     let body = ctx.last_body.as_ref().expect("response body");
     assert_eq!(body.get("replayed").and_then(Value::as_bool), Some(true));
+}
+
+/// Declare shared conflict response step definitions.
+#[macro_export]
+macro_rules! common_conflict_response_steps {
+    () => {
+        #[then("the response is a conflict error with revision details")]
+        fn the_response_is_a_conflict_error_with_revision_details(world: &WorldFixture) {
+            bdd_common::assert_conflict_with_revision_details(world);
+        }
+
+        #[then("the response is a conflict error with idempotency message")]
+        fn the_response_is_a_conflict_error_with_idempotency_message(world: &WorldFixture) {
+            bdd_common::assert_conflict_with_idempotency_message(world);
+        }
+    };
+}
+
+/// Declare a replayed response step definition with a custom name and text.
+#[macro_export]
+macro_rules! replayed_response_step {
+    ($fn_name:ident, $step:literal) => {
+        #[then($step)]
+        fn $fn_name(world: &WorldFixture) {
+            bdd_common::assert_response_replayed(world);
+        }
+    };
 }

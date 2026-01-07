@@ -366,25 +366,15 @@ fn the_client_updates_progress_with_an_idempotency_key(world: &WorldFixture) {
     perform_route_mutation(world, Method::PUT, progress_path(), progress_payload());
 }
 
-#[then("the response is a conflict error with revision details")]
-fn the_response_is_a_conflict_error_with_revision_details(world: &WorldFixture) {
-    bdd_common::assert_conflict_with_revision_details(world);
-}
-
-#[then("the response is a conflict error with idempotency message")]
-fn the_response_is_a_conflict_error_with_idempotency_message(world: &WorldFixture) {
-    bdd_common::assert_conflict_with_idempotency_message(world);
-}
-
-#[then("the note response includes replayed true")]
-fn the_note_response_includes_replayed_true(world: &WorldFixture) {
-    bdd_common::assert_response_replayed(world);
-}
-
-#[then("the progress response includes replayed true")]
-fn the_progress_response_includes_replayed_true(world: &WorldFixture) {
-    bdd_common::assert_response_replayed(world);
-}
+common_conflict_response_steps!();
+replayed_response_step!(
+    the_note_response_includes_replayed_true,
+    "the note response includes replayed true"
+);
+replayed_response_step!(
+    the_progress_response_includes_replayed_true,
+    "the progress response includes replayed true"
+);
 
 #[scenario(path = "tests/features/pwa_annotations.feature")]
 fn pwa_annotations(world: WorldFixture) {
