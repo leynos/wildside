@@ -78,7 +78,8 @@ produces identical output across runs.
 
 - Observation: Workspace lints disallow `clippy::expect_used` even in test code
   Evidence: 31 clippy errors for `expect()` calls in BDD test file
-  Impact: Added module-level `#![expect(clippy::expect_used)]` attribute to test file
+  Impact: Added module-level `#![expect(clippy::expect_used)]` attribute to
+  test file
 
 - Observation: `fake` crate names often contain hyphens and apostrophes
   Evidence: Generated names like "O'Brien" and "Mary-Jane"
