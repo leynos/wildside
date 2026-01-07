@@ -1,17 +1,33 @@
 //! CLI entry point for the repo-local architecture lint.
+//!
+//! The main function establishes the capability boundary: it discovers the
+//! workspace root using ambient filesystem access, then opens a capability
+//! handle to the `backend/` directory which is passed to the lint library.
 
 use std::fmt;
-use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use architecture_lint::cargo_toml_declares_workspace;
+use cap_std::ambient_authority;
+use cap_std::fs::Dir;
+
 fn main() -> ExitCode {
-    let backend_dir = match repo_root() {
+    let backend_path = match repo_root() {
         Ok(root) => root.join("backend"),
         Err(err) => {
             let _ = writeln!(io::stderr().lock(), "{err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let backend_dir = match Dir::open_ambient_dir(&backend_path, ambient_authority()) {
+        Ok(dir) => dir,
+        Err(err) => {
+            let _ = writeln!(
+                io::stderr().lock(),
+                "failed to open backend directory: {err}"
+            );
             return ExitCode::FAILURE;
         }
     };
@@ -55,17 +71,11 @@ fn repo_root() -> Result<PathBuf, RepoRootError> {
 fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     let mut current = Some(start);
     while let Some(dir) = current {
-        let manifest = dir.join("Cargo.toml");
-        if manifest.is_file() && cargo_toml_declares_workspace(&manifest) {
+        let cargo_toml = dir.join("Cargo.toml");
+        if cargo_toml.is_file() && cargo_toml_declares_workspace(dir) {
             return Some(dir.to_path_buf());
         }
         current = dir.parent();
     }
     None
-}
-
-fn cargo_toml_declares_workspace(path: &Path) -> bool {
-    fs::read_to_string(path)
-        .ok()
-        .is_some_and(|contents| contents.contains("[workspace]"))
 }

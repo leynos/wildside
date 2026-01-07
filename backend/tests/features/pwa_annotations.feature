@@ -25,4 +25,41 @@ Feature: PWA annotations endpoints
     And the client has an authenticated session
     And the progress update is configured to conflict
     When the client updates progress with a valid payload
-    Then the response is a conflict error
+    Then the response is a conflict error with revision details
+
+  Scenario: Note upsert rejects stale revision
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the note command returns a revision mismatch
+    When the client upserts a note with expected revision 1
+    Then the response is a conflict error with revision details
+
+  Scenario: Note upsert rejects idempotency conflict
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the note command returns an idempotency conflict
+    When the client upserts a note with an idempotency key
+    Then the response is a conflict error with idempotency message
+
+  Scenario: Note upsert replays cached response
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the note command returns a replayed response
+    When the client upserts a note with an idempotency key
+    Then the response is ok
+    And the note response includes replayed true
+
+  Scenario: Progress update rejects idempotency conflict
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the progress command returns an idempotency conflict
+    When the client updates progress with an idempotency key
+    Then the response is a conflict error with idempotency message
+
+  Scenario: Progress update replays cached response
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the progress command returns a replayed response
+    When the client updates progress with an idempotency key
+    Then the response is ok
+    And the progress response includes replayed true

@@ -14,9 +14,11 @@
 
 use std::collections::BTreeSet;
 use std::fmt;
-use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::fs::Dir;
 
 use syn::visit::Visit;
 
@@ -24,14 +26,14 @@ use syn::visit::Visit;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {
     /// File path relative to `backend/src`.
-    pub file: PathBuf,
+    pub file: Utf8PathBuf,
     /// Human-readable description of the violated rule.
     pub message: String,
 }
 
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.file.display(), self.message)
+        write!(f, "{}: {}", self.file, self.message)
     }
 }
 
@@ -41,7 +43,7 @@ pub enum ArchitectureLintError {
     /// Filesystem traversal or reading failed.
     Io(io::Error),
     /// Rust source parsing failed.
-    Parse { file: PathBuf, message: String },
+    Parse { file: Utf8PathBuf, message: String },
     /// One or more boundary violations were found.
     Violations(Vec<Violation>),
 }
@@ -52,8 +54,7 @@ impl fmt::Display for ArchitectureLintError {
             Self::Io(err) => write!(f, "I/O error while linting architecture: {err}"),
             Self::Parse { file, message } => write!(
                 f,
-                "Failed to parse Rust source while linting architecture ({}): {message}",
-                file.display()
+                "Failed to parse Rust source while linting architecture ({file}): {message}",
             ),
             Self::Violations(violations) => {
                 writeln!(f, "Architecture boundary violations:")?;
@@ -81,11 +82,18 @@ impl From<io::Error> for ArchitectureLintError {
     }
 }
 
+pub fn cargo_toml_declares_workspace(dir: &Path) -> bool {
+    std::fs::read_to_string(dir.join("Cargo.toml"))
+        .ok()
+        .is_some_and(|contents| contents.contains("[workspace]"))
+}
+
 /// Lint the backend crate sources on disk.
 ///
-/// `backend_dir` must be the `backend/` directory at the repository root.
-pub fn lint_backend_sources(backend_dir: &Path) -> Result<(), ArchitectureLintError> {
-    let src_dir = backend_dir.join("src");
+/// `backend_dir` must be a capability handle to the `backend/` directory at
+/// the repository root.
+pub fn lint_backend_sources(backend_dir: &Dir) -> Result<(), ArchitectureLintError> {
+    let src_dir = backend_dir.open_dir("src")?;
     let sources = collect_lint_sources(&src_dir)?;
     lint_sources(&sources)
 }
@@ -120,7 +128,7 @@ pub fn lint_sources(sources: &[LintSource]) -> Result<(), ArchitectureLintError>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LintSource {
     /// Path relative to `backend/src`.
-    pub file: PathBuf,
+    pub file: Utf8PathBuf,
     pub contents: String,
 }
 
@@ -133,13 +141,9 @@ enum ModuleLayer {
 }
 
 impl ModuleLayer {
-    fn infer_from_path(relative_path: &Path) -> Option<Self> {
-        let first = relative_path
-            .components()
-            .next()?
-            .as_os_str()
-            .to_string_lossy();
-        match first.as_ref() {
+    fn infer_from_path(relative_path: &Utf8Path) -> Option<Self> {
+        let first = relative_path.components().next()?.as_str();
+        match first {
             "domain" => Some(Self::Domain),
             "inbound" => Some(Self::Inbound),
             "outbound" => Some(Self::Outbound),
@@ -190,7 +194,7 @@ impl ModuleLayer {
     }
 }
 
-fn lint_parsed_source(file: &Path, layer: ModuleLayer, parsed: &syn::File) -> Vec<Violation> {
+fn lint_parsed_source(file: &Utf8Path, layer: ModuleLayer, parsed: &syn::File) -> Vec<Violation> {
     let forbidden_modules = layer.forbidden_module_roots();
     let forbidden_crates = layer.forbidden_crate_roots();
     let layer_name = layer_name(layer);
@@ -333,43 +337,43 @@ impl<'ast> Visit<'ast> for PathCollector {
     }
 }
 
-fn collect_lint_sources(src_dir: &Path) -> Result<Vec<LintSource>, ArchitectureLintError> {
+fn collect_lint_sources(src_dir: &Dir) -> Result<Vec<LintSource>, ArchitectureLintError> {
     let mut sources = Vec::new();
     for layer_dir in ["domain", "inbound", "outbound"] {
-        let dir = src_dir.join(layer_dir);
-        if !dir.exists() {
+        let Ok(dir) = src_dir.open_dir(layer_dir) else {
             continue;
-        }
-        collect_sources_under(src_dir, &dir, &mut sources)?;
+        };
+        let prefix = Utf8PathBuf::from(layer_dir);
+        collect_sources_under(&dir, &prefix, &mut sources)?;
     }
     Ok(sources)
 }
 
 fn collect_sources_under(
-    src_root: &Path,
-    current: &Path,
+    current: &Dir,
+    prefix: &Utf8Path,
     sources: &mut Vec<LintSource>,
 ) -> Result<(), ArchitectureLintError> {
-    for entry in fs::read_dir(current)? {
+    for entry in current.entries()? {
         let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_sources_under(src_root, &path, sources)?;
+        let name = entry.file_name();
+        let name_str = name
+            .to_str()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "non-UTF8 filename"))?;
+        let relative = prefix.join(name_str);
+
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            let subdir = current.open_dir(name_str)?;
+            collect_sources_under(&subdir, &relative, sources)?;
             continue;
         }
 
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+        if !name_str.ends_with(".rs") {
             continue;
         }
 
-        let relative = path
-            .strip_prefix(src_root)
-            .map_err(|err| ArchitectureLintError::Parse {
-                file: path.clone(),
-                message: err.to_string(),
-            })?
-            .to_path_buf();
-        let contents = fs::read_to_string(&path)?;
+        let contents = current.read_to_string(name_str)?;
         sources.push(LintSource {
             file: relative,
             contents,

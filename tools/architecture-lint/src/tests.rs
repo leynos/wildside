@@ -1,7 +1,6 @@
 //! Unit tests for the architecture lint.
 
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use rstest::fixture;
 use rstest::rstest;
 
@@ -13,7 +12,7 @@ struct LintSingle;
 impl LintSingle {
     fn lint(self, file: &str, contents: &str) -> Result<(), ArchitectureLintError> {
         lint_sources(&[LintSource {
-            file: PathBuf::from(file),
+            file: Utf8PathBuf::from(file),
             contents: contents.to_owned(),
         }])
     }

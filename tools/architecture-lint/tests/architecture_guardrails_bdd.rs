@@ -1,8 +1,10 @@
 //! Behaviour tests for the architecture guardrails.
 
-use std::fs;
-use std::path::PathBuf;
 use std::sync::Mutex;
+
+use camino::Utf8PathBuf;
+use cap_std::ambient_authority;
+use cap_std::fs::Dir;
 
 use architecture_lint::{ArchitectureLintError, LintSource, Violation};
 use rstest::fixture;
@@ -23,7 +25,7 @@ fn world() -> Mutex<LintWorld> {
 fn add_source(world: &Mutex<LintWorld>, file: &str, contents: &str) {
     let mut world = world.lock().expect("world lock");
     world.sources.push(LintSource {
-        file: PathBuf::from(file),
+        file: Utf8PathBuf::from(file),
         contents: contents.to_owned(),
     })
 }
@@ -119,14 +121,23 @@ fn run_architecture_lint(world: &Mutex<LintWorld>) {
     };
 
     let temp_dir = TempDir::new().expect("tempdir");
-    let backend_dir = temp_dir.path().join("backend");
-    let src_dir = backend_dir.join("src");
+    let temp_handle =
+        Dir::open_ambient_dir(temp_dir.path(), ambient_authority()).expect("open temp dir");
+    temp_handle
+        .create_dir_all("backend/src")
+        .expect("create src dir");
+    let backend_dir = temp_handle.open_dir("backend").expect("open backend dir");
+    let src_dir = backend_dir.open_dir("src").expect("open src dir");
+
     for source in &sources {
-        let path = src_dir.join(&source.file);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create parent directories");
+        if let Some(parent) = source.file.parent() {
+            src_dir
+                .create_dir_all(parent)
+                .expect("create parent directories");
         }
-        fs::write(&path, &source.contents).expect("write source file");
+        src_dir
+            .write(source.file.as_str(), &source.contents)
+            .expect("write source file");
     }
 
     let result = architecture_lint::lint_backend_sources(&backend_dir);
@@ -146,7 +157,7 @@ fn assert_violation_in_file_contains(
     expected_file: &str,
     expected_substring: &str,
 ) {
-    let expected_file = PathBuf::from(expected_file);
+    let expected_file = Utf8PathBuf::from(expected_file);
     let violations = violations(world);
     assert!(
         violations.iter().any(|violation| {

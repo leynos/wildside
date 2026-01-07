@@ -25,7 +25,7 @@ mod pwa_http;
 mod ws_support;
 
 use actix_web::http::Method;
-use backend::domain::ports::UpsertNoteResponse;
+use backend::domain::ports::{UpdateProgressResponse, UpsertNoteResponse};
 use backend::domain::{Error, RouteAnnotations, RouteNote, RouteProgress, UserId};
 use doubles::{
     RouteAnnotationsQueryResponse, UpdateProgressCommandResponse, UpsertNoteCommandResponse,
@@ -42,6 +42,112 @@ const NOTE_ID: &str = "44444444-4444-4444-4444-444444444444";
 const POI_ID: &str = "55555555-5555-5555-5555-555555555555";
 const STOP_ID: &str = "66666666-6666-6666-6666-666666666666";
 const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
+
+/// Parameters for building a test note.
+struct TestNoteParams<'a> {
+    note_id: &'a str,
+    route_id: &'a str,
+    poi_id: &'a str,
+    body: &'a str,
+    revision: u32,
+}
+
+#[expect(dead_code, reason = "Builder methods for test extensibility.")]
+impl<'a> TestNoteParams<'a> {
+    /// Creates parameters with default IDs and the given body and revision.
+    fn new(body: &'a str, revision: u32) -> Self {
+        Self {
+            note_id: NOTE_ID,
+            route_id: ROUTE_ID,
+            poi_id: POI_ID,
+            body,
+            revision,
+        }
+    }
+
+    /// Overrides the note ID.
+    fn with_note_id(mut self, note_id: &'a str) -> Self {
+        self.note_id = note_id;
+        self
+    }
+
+    /// Overrides the route ID.
+    fn with_route_id(mut self, route_id: &'a str) -> Self {
+        self.route_id = route_id;
+        self
+    }
+
+    /// Overrides the POI ID.
+    fn with_poi_id(mut self, poi_id: &'a str) -> Self {
+        self.poi_id = poi_id;
+        self
+    }
+}
+
+fn build_test_note(params: TestNoteParams) -> RouteNote {
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(params.route_id).expect("route id");
+    let note_id = Uuid::parse_str(params.note_id).expect("note id");
+    let poi_id = Uuid::parse_str(params.poi_id).expect("poi id");
+    RouteNote::builder(note_id, route_id, user_id)
+        .poi_id(poi_id)
+        .body(params.body)
+        .revision(params.revision)
+        .build()
+}
+
+fn build_test_progress(route_id: &str, stop_ids: Vec<&str>, revision: u32) -> RouteProgress {
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let route_id = Uuid::parse_str(route_id).expect("route id");
+    let stop_ids: Vec<Uuid> = stop_ids
+        .iter()
+        .map(|id| Uuid::parse_str(id).expect("stop id"))
+        .collect();
+    RouteProgress::builder(route_id, user_id)
+        .visited_stop_ids(stop_ids)
+        .revision(revision)
+        .build()
+}
+
+fn set_note_upsert_response(world: &WorldFixture, note: RouteNote, replayed: bool) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
+            note,
+            replayed,
+        }));
+}
+
+fn set_note_error_response(world: &WorldFixture, error: Error) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_upsert_response(UpsertNoteCommandResponse::Err(error));
+}
+
+fn set_progress_update_response(world: &WorldFixture, progress: RouteProgress, replayed: bool) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
+            progress,
+            replayed,
+        }));
+}
+
+fn set_progress_error_response(world: &WorldFixture, error: Error) {
+    world
+        .world()
+        .borrow()
+        .route_annotations
+        .set_update_response(UpdateProgressCommandResponse::Err(error));
+}
+
+// -- Path and payload helpers --
 
 fn note_path() -> String {
     format!("/api/v1/routes/{}/notes", ROUTE_ID)
@@ -124,35 +230,13 @@ fn the_annotations_query_returns_a_note_and_progress(world: &WorldFixture) {
 
 #[given("the annotations command returns an upserted note")]
 fn the_annotations_command_returns_an_upserted_note(world: &WorldFixture) {
-    let world = world.world();
-    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
-    let route_id = Uuid::parse_str(ROUTE_ID).expect("route id");
-    let note_id = Uuid::parse_str(NOTE_ID).expect("note id");
-    let poi_id = Uuid::parse_str(POI_ID).expect("poi id");
-    let note = RouteNote::builder(note_id, route_id, user_id)
-        .poi_id(poi_id)
-        .body("Upserted note")
-        .revision(1)
-        .build();
-
-    world
-        .borrow()
-        .route_annotations
-        .set_upsert_response(UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
-            note,
-            replayed: false,
-        }));
+    let note = build_test_note(TestNoteParams::new("Upserted note", 1));
+    set_note_upsert_response(world, note, false);
 }
 
 #[given("the progress update is configured to conflict")]
 fn the_progress_update_is_configured_to_conflict(world: &WorldFixture) {
-    let world = world.world();
-    world
-        .borrow()
-        .route_annotations
-        .set_update_response(UpdateProgressCommandResponse::Err(Error::conflict(
-            "revision mismatch",
-        )));
+    set_progress_error_response(world, bdd_common::revision_mismatch_error(1, 2));
 }
 
 #[when("the client requests annotations for the route")]
@@ -228,14 +312,69 @@ fn the_note_command_captures_the_idempotency_key(world: &WorldFixture) {
     );
 }
 
-#[then("the response is a conflict error")]
-fn the_response_is_a_conflict_error(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.last_status, Some(409));
-    let body = ctx.last_body.as_ref().expect("response body");
-    assert_eq!(body.get("code").and_then(Value::as_str), Some("conflict"));
+#[given("the note command returns a revision mismatch")]
+fn the_note_command_returns_a_revision_mismatch(world: &WorldFixture) {
+    set_note_error_response(world, bdd_common::revision_mismatch_error(1, 2));
 }
+
+#[given("the note command returns an idempotency conflict")]
+fn the_note_command_returns_an_idempotency_conflict(world: &WorldFixture) {
+    set_note_error_response(world, bdd_common::idempotency_conflict_error());
+}
+
+#[given("the note command returns a replayed response")]
+fn the_note_command_returns_a_replayed_response(world: &WorldFixture) {
+    let note = build_test_note(TestNoteParams::new("Replayed note", 1));
+    set_note_upsert_response(world, note, true);
+}
+
+#[given("the progress command returns an idempotency conflict")]
+fn the_progress_command_returns_an_idempotency_conflict(world: &WorldFixture) {
+    set_progress_error_response(world, bdd_common::idempotency_conflict_error());
+}
+
+#[given("the progress command returns a replayed response")]
+fn the_progress_command_returns_a_replayed_response(world: &WorldFixture) {
+    let progress = build_test_progress(ROUTE_ID, vec![STOP_ID], 1);
+    set_progress_update_response(world, progress, true);
+}
+
+fn note_payload_with_revision(expected_revision: u32) -> Value {
+    serde_json::json!({
+        "noteId": NOTE_ID,
+        "poiId": POI_ID,
+        "body": "Updated note",
+        "expectedRevision": expected_revision
+    })
+}
+
+#[when("the client upserts a note with expected revision 1")]
+fn the_client_upserts_a_note_with_expected_revision_1(world: &WorldFixture) {
+    bdd_common::perform_mutation_request(
+        world,
+        bdd_common::MutationRequest {
+            method: Method::POST,
+            path: &note_path(),
+            payload: note_payload_with_revision(1),
+            idempotency_key: None,
+        },
+    );
+}
+
+#[when("the client updates progress with an idempotency key")]
+fn the_client_updates_progress_with_an_idempotency_key(world: &WorldFixture) {
+    perform_route_mutation(world, Method::PUT, progress_path(), progress_payload());
+}
+
+common_conflict_response_steps!();
+replayed_response_step!(
+    the_note_response_includes_replayed_true,
+    "the note response includes replayed true"
+);
+replayed_response_step!(
+    the_progress_response_includes_replayed_true,
+    "the progress response includes replayed true"
+);
 
 #[scenario(path = "tests/features/pwa_annotations.feature")]
 fn pwa_annotations(world: WorldFixture) {

@@ -205,6 +205,56 @@ fn the_response_is_a_bad_request_with_unit_system_details(world: &WorldFixture) 
     );
 }
 
+#[given("the preferences command returns a revision mismatch")]
+fn the_preferences_command_returns_a_revision_mismatch(world: &WorldFixture) {
+    world
+        .world()
+        .borrow()
+        .preferences
+        .set_response(UserPreferencesCommandResponse::Err(
+            bdd_common::revision_mismatch_error(1, 2),
+        ));
+}
+
+#[given("the preferences command returns an idempotency conflict")]
+fn the_preferences_command_returns_an_idempotency_conflict(world: &WorldFixture) {
+    world
+        .world()
+        .borrow()
+        .preferences
+        .set_response(UserPreferencesCommandResponse::Err(
+            bdd_common::idempotency_conflict_error(),
+        ));
+}
+
+#[given("the preferences command returns a replayed response")]
+fn the_preferences_command_returns_a_replayed_response(world: &WorldFixture) {
+    let world = world.world();
+    let user_id = UserId::new(AUTH_USER_ID).expect("user id");
+    let preferences = build_preferences(user_id, 2);
+
+    world
+        .borrow()
+        .preferences
+        .set_response(UserPreferencesCommandResponse::Ok(
+            UpdatePreferencesResponse {
+                preferences,
+                replayed: true,
+            },
+        ));
+}
+
+#[when("the client updates preferences with expected revision 1")]
+fn the_client_updates_preferences_with_expected_revision_1(world: &WorldFixture) {
+    perform_preferences_update(world, preferences_payload("metric", Some(1)), None);
+}
+
+common_conflict_response_steps!();
+replayed_response_step!(
+    the_preferences_response_includes_replayed_true,
+    "the preferences response includes replayed true"
+);
+
 #[scenario(path = "tests/features/pwa_preferences.feature")]
 fn pwa_preferences(world: WorldFixture) {
     let _ = world;
