@@ -9,6 +9,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use architecture_lint::cargo_toml_declares_workspace;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
@@ -77,10 +78,4 @@ fn find_workspace_root(start: &Path) -> Option<PathBuf> {
         current = dir.parent();
     }
     None
-}
-
-fn cargo_toml_declares_workspace(dir: &Path) -> bool {
-    std::fs::read_to_string(dir.join("Cargo.toml"))
-        .ok()
-        .is_some_and(|contents| contents.contains("[workspace]"))
 }

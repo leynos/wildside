@@ -131,7 +131,7 @@ Known uncertainties that might affect the plan:
   - Rationale: The contract guarantees apply uniformly across preferences,
     notes, and progress endpoints. Grouping by guarantee makes the test suite
     easier to navigate and ensures consistent coverage.
-  - Date/Author: 2026-01-05 / Assistant
+- Date/Author: 2026-01-05 / Assistant.
 
 ## Outcomes & Retrospective
 
