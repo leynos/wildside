@@ -111,7 +111,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 
 - [x] 2.4.1. Draft the design and ExecPlan for example data seeding and the
   `example-data` crate (`docs/execplans/backend-sample-data-design.md`).
-- [ ] 2.4.2. Implement the `example-data` crate using the `fake` crate with
+- [x] 2.4.2. Implement the `example-data` crate using the `fake` crate with
   deterministic generation, JSON seed registry parsing, and display-name
   validation.
 - [ ] 2.4.3. Add the `example_data_runs` migration plus a repository helper to
