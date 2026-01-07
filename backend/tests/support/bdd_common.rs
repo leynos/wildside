@@ -42,6 +42,53 @@ fn perform_authenticated_json_request(world: &WorldFixture, request: JsonRequest
     perform_json_request(&shared_world, request);
 }
 
+/// Request metadata for authenticated JSON requests.
+struct RequestSpec<'a> {
+    method: Method,
+    path: &'a str,
+    payload: Option<Value>,
+    idempotency_key: Option<&'a str>,
+}
+
+impl<'a> RequestSpec<'a> {
+    fn get(path: &'a str) -> Self {
+        Self {
+            method: Method::GET,
+            path,
+            payload: None,
+            idempotency_key: None,
+        }
+    }
+
+    fn mutation(
+        method: Method,
+        path: &'a str,
+        payload: Value,
+        idempotency_key: Option<&'a str>,
+    ) -> Self {
+        Self {
+            method,
+            path,
+            payload: Some(payload),
+            idempotency_key,
+        }
+    }
+}
+
+/// Perform an authenticated request with a consistent cookie policy.
+fn perform_request_with_cookie(world: &WorldFixture, request: RequestSpec<'_>) {
+    perform_authenticated_json_request(
+        world,
+        JsonRequest {
+            include_cookie: true,
+            method: request.method,
+            path: request.path,
+            payload: request.payload,
+            idempotency_key: request.idempotency_key,
+        },
+    );
+}
+
 /// Assert the last response returned HTTP 200.
 pub(super) fn assert_response_ok(world: &WorldFixture) {
     let ctx = world.world();
@@ -51,16 +98,7 @@ pub(super) fn assert_response_ok(world: &WorldFixture) {
 
 /// Perform a GET request with the stored session cookie.
 pub(super) fn perform_get_request(world: &WorldFixture, path: &str) {
-    perform_authenticated_json_request(
-        world,
-        JsonRequest {
-            include_cookie: true,
-            method: Method::GET,
-            path,
-            payload: None,
-            idempotency_key: None,
-        },
-    );
+    perform_request_with_cookie(world, RequestSpec::get(path));
 }
 
 /// Perform a mutation request with optional idempotency key.
@@ -73,15 +111,14 @@ pub(super) struct MutationRequest<'a> {
 
 /// Perform a mutation request with optional idempotency key.
 pub(super) fn perform_mutation_request(world: &WorldFixture, request: MutationRequest<'_>) {
-    perform_authenticated_json_request(
+    perform_request_with_cookie(
         world,
-        JsonRequest {
-            include_cookie: true,
-            method: request.method,
-            path: request.path,
-            payload: Some(request.payload),
-            idempotency_key: request.idempotency_key,
-        },
+        RequestSpec::mutation(
+            request.method,
+            request.path,
+            request.payload,
+            request.idempotency_key,
+        ),
     );
 }
 
