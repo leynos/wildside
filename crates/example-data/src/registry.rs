@@ -288,43 +288,22 @@ mod tests {
         assert!(matches!(result, Err(RegistryError::ParseError { .. })));
     }
 
-    #[test]
-    fn rejects_unsupported_version() {
-        let json = r#"{"version": 99, "interestThemeIds": [], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#;
+    #[rstest]
+    #[case::unsupported_version(
+        r#"{"version": 99, "interestThemeIds": [], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
+        RegistryError::UnsupportedVersion { expected: 1, actual: 99 }
+    )]
+    #[case::invalid_interest_theme_uuid(
+        r#"{"version": 1, "interestThemeIds": ["not-a-uuid"], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
+        RegistryError::InvalidInterestThemeId { index: 0, value: "not-a-uuid".to_owned() }
+    )]
+    #[case::invalid_safety_toggle_uuid(
+        r#"{"version": 1, "interestThemeIds": [], "safetyToggleIds": ["bad"], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
+        RegistryError::InvalidSafetyToggleId { index: 0, value: "bad".to_owned() }
+    )]
+    fn rejects_invalid_registry(#[case] json: &str, #[case] expected: RegistryError) {
         let result = SeedRegistry::from_json(json);
-        assert_eq!(
-            result,
-            Err(RegistryError::UnsupportedVersion {
-                expected: 1,
-                actual: 99
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_invalid_interest_theme_uuid() {
-        let json = r#"{"version": 1, "interestThemeIds": ["not-a-uuid"], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#;
-        let result = SeedRegistry::from_json(json);
-        assert_eq!(
-            result,
-            Err(RegistryError::InvalidInterestThemeId {
-                index: 0,
-                value: "not-a-uuid".to_owned()
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_invalid_safety_toggle_uuid() {
-        let json = r#"{"version": 1, "interestThemeIds": [], "safetyToggleIds": ["bad"], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#;
-        let result = SeedRegistry::from_json(json);
-        assert_eq!(
-            result,
-            Err(RegistryError::InvalidSafetyToggleId {
-                index: 0,
-                value: "bad".to_owned()
-            })
-        );
+        assert_eq!(result, Err(expected));
     }
 
     #[test]

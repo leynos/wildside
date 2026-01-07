@@ -93,6 +93,8 @@ pub enum GenerationError {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -127,28 +129,20 @@ mod tests {
         );
     }
 
-    #[test]
-    fn registry_error_invalid_interest_theme_formats_correctly() {
-        let err = RegistryError::InvalidInterestThemeId {
-            index: 2,
-            value: "not-a-uuid".to_owned(),
-        };
-        assert_eq!(
-            err.to_string(),
-            "invalid interest theme UUID at index 2: not-a-uuid"
-        );
-    }
-
-    #[test]
-    fn registry_error_invalid_safety_toggle_formats_correctly() {
-        let err = RegistryError::InvalidSafetyToggleId {
-            index: 0,
-            value: "bad".to_owned(),
-        };
-        assert_eq!(
-            err.to_string(),
-            "invalid safety toggle UUID at index 0: bad"
-        );
+    #[rstest]
+    #[case::interest_theme(
+        RegistryError::InvalidInterestThemeId { index: 2, value: "not-a-uuid".to_owned() },
+        "invalid interest theme UUID at index 2: not-a-uuid"
+    )]
+    #[case::safety_toggle(
+        RegistryError::InvalidSafetyToggleId { index: 0, value: "bad".to_owned() },
+        "invalid safety toggle UUID at index 0: bad"
+    )]
+    fn registry_error_invalid_id_formats_correctly(
+        #[case] err: RegistryError,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(err.to_string(), expected);
     }
 
     #[test]

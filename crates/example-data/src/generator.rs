@@ -209,6 +209,24 @@ mod tests {
 
     use super::*;
 
+    /// Generates users from the named seed and asserts a predicate holds for all users.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the seed is not found, generation fails, or the predicate
+    /// returns `false` for any user.
+    fn assert_all_users<F>(registry: &SeedRegistry, seed_name: &str, predicate: F)
+    where
+        F: Fn(&ExampleUserSeed) -> bool,
+    {
+        let seed_def = registry.find_seed(seed_name).expect("seed should be found");
+        let users = generate_example_users(registry, seed_def).expect("generation should succeed");
+
+        for user in &users {
+            assert!(predicate(user), "Predicate failed for user: {user:?}");
+        }
+    }
+
     const TEST_REGISTRY_JSON: &str = r#"{
         "version": 1,
         "interestThemeIds": [
@@ -263,52 +281,33 @@ mod tests {
 
     #[rstest]
     fn all_display_names_are_valid(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
-        for user in &users {
-            assert!(
-                is_valid_display_name(&user.display_name),
-                "Invalid display name: {}",
-                user.display_name
-            );
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            is_valid_display_name(&user.display_name)
+        });
     }
 
     #[rstest]
     fn interest_themes_are_subset_of_registry(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
         let registry_ids: std::collections::HashSet<_> =
             test_registry.interest_theme_ids().iter().collect();
 
-        for user in &users {
-            for id in &user.interest_theme_ids {
-                assert!(
-                    registry_ids.contains(id),
-                    "Interest theme {id} not in registry"
-                );
-            }
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            user.interest_theme_ids
+                .iter()
+                .all(|id| registry_ids.contains(id))
+        });
     }
 
     #[rstest]
     fn safety_toggles_are_subset_of_registry(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
         let registry_ids: std::collections::HashSet<_> =
             test_registry.safety_toggle_ids().iter().collect();
 
-        for user in &users {
-            for id in &user.safety_toggle_ids {
-                assert!(
-                    registry_ids.contains(id),
-                    "Safety toggle {id} not in registry"
-                );
-            }
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            user.safety_toggle_ids
+                .iter()
+                .all(|id| registry_ids.contains(id))
+        });
     }
 
     #[rstest]
@@ -348,43 +347,23 @@ mod tests {
 
     #[rstest]
     fn users_have_at_least_one_interest_theme(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
-        for user in &users {
-            assert!(
-                !user.interest_theme_ids.is_empty(),
-                "User should have at least one interest theme"
-            );
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            !user.interest_theme_ids.is_empty()
+        });
     }
 
     #[rstest]
     fn users_have_at_most_max_interest_themes(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
-        for user in &users {
-            assert!(
-                user.interest_theme_ids.len() <= MAX_INTEREST_THEMES,
-                "User has too many interest themes: {}",
-                user.interest_theme_ids.len()
-            );
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            user.interest_theme_ids.len() <= MAX_INTEREST_THEMES
+        });
     }
 
     #[rstest]
     fn users_have_at_most_max_safety_toggles(test_registry: SeedRegistry) {
-        let seed_def = test_registry.find_seed("test-seed").expect("seed found");
-        let users = generate_example_users(&test_registry, seed_def).expect("generated");
-
-        for user in &users {
-            assert!(
-                user.safety_toggle_ids.len() <= MAX_SAFETY_TOGGLES,
-                "User has too many safety toggles: {}",
-                user.safety_toggle_ids.len()
-            );
-        }
+        assert_all_users(&test_registry, "test-seed", |user| {
+            user.safety_toggle_ids.len() <= MAX_SAFETY_TOGGLES
+        });
     }
 
     #[test]

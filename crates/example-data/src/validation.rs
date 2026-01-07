@@ -62,6 +62,17 @@ pub fn is_valid_display_name(name: &str) -> bool {
     display_name_regex().is_match(name)
 }
 
+/// Returns `true` if the character is allowed in a display name.
+///
+/// Allowed characters are:
+/// - ASCII alphanumeric characters (A-Z, a-z, 0-9)
+/// - Spaces
+/// - Underscores
+#[must_use]
+const fn is_valid_display_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == ' ' || c == '_'
+}
+
 /// Sanitises a raw name by replacing invalid characters with underscores.
 ///
 /// This function transforms a name that may contain invalid characters into
@@ -71,7 +82,7 @@ pub fn is_valid_display_name(name: &str) -> bool {
 pub(crate) fn sanitise_display_name(name: &str) -> String {
     name.chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == ' ' || c == '_' {
+            if is_valid_display_name_char(c) {
                 c
             } else {
                 '_'
