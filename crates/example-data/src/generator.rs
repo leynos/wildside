@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::error::GenerationError;
 use crate::registry::{SeedDefinition, SeedRegistry};
 use crate::seed::{ExampleUserSeed, UnitSystemSeed};
-use crate::validation::{DISPLAY_NAME_MAX, is_valid_display_name, sanitise_display_name};
+use crate::validation::{DISPLAY_NAME_MAX, is_valid_display_name, sanitize_display_name};
 
 /// Maximum number of attempts to generate a valid display name.
 const MAX_NAME_ATTEMPTS: usize = 100;
@@ -144,7 +144,7 @@ fn generate_single_user(
 ///
 /// Retries up to `MAX_NAME_ATTEMPTS` times if the generated name fails
 /// validation. Names are constructed as first name followed by last name,
-/// sanitised to remove invalid characters, and truncated if they exceed
+/// sanitized to remove invalid characters, and truncated if they exceed
 /// the maximum length.
 fn generate_display_name(rng: &mut ChaCha8Rng) -> Result<String, GenerationError> {
     for _ in 0..MAX_NAME_ATTEMPTS {
@@ -154,11 +154,11 @@ fn generate_display_name(rng: &mut ChaCha8Rng) -> Result<String, GenerationError
         // Combine with space
         let candidate = format!("{first} {last}");
 
-        // Sanitise invalid characters
-        let sanitised = sanitise_display_name(&candidate);
+        // Sanitize invalid characters
+        let sanitized = sanitize_display_name(&candidate);
 
         // Truncate if too long (preserving whole characters)
-        let truncated: String = sanitised.chars().take(DISPLAY_NAME_MAX).collect();
+        let truncated: String = sanitized.chars().take(DISPLAY_NAME_MAX).collect();
 
         if is_valid_display_name(&truncated) {
             return Ok(truncated);

@@ -1339,7 +1339,6 @@ dependencies = [
  "fake",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
- "regex",
  "rstest 0.26.1",
  "rstest-bdd 0.3.2",
  "rstest-bdd-macros 0.3.2",

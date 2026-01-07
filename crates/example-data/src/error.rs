@@ -85,10 +85,6 @@ pub enum GenerationError {
     /// The registry contains no interest theme IDs for selection.
     #[error("registry contains no interest theme IDs for selection")]
     NoInterestThemes,
-
-    /// The registry contains no safety toggle IDs for selection.
-    #[error("registry contains no safety toggle IDs for selection")]
-    NoSafetyToggles,
 }
 
 #[cfg(test)]
@@ -174,15 +170,6 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "registry contains no interest theme IDs for selection"
-        );
-    }
-
-    #[test]
-    fn generation_error_no_toggles_formats_correctly() {
-        let err = GenerationError::NoSafetyToggles;
-        assert_eq!(
-            err.to_string(),
-            "registry contains no safety toggle IDs for selection"
         );
     }
 }

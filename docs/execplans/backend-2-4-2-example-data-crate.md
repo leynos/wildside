@@ -1,6 +1,7 @@
 # Implement the example-data crate
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
+This Execution Plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
@@ -48,7 +49,7 @@ produces identical output across runs.
 - Risk: `fake` crate names may contain invalid characters (hyphens, apostrophes)
   Severity: medium
   Likelihood: high
-  Mitigation: sanitise generated names by replacing invalid chars with
+  Mitigation: sanitize generated names by replacing invalid chars with
   underscores; retry loop with max attempts.
 
 - Risk: Workspace lint strictness may reject idiomatic `fake` crate usage
@@ -83,7 +84,8 @@ produces identical output across runs.
 
 - Observation: `fake` crate names often contain hyphens and apostrophes
   Evidence: Generated names like "O'Brien" and "Mary-Jane"
-  Impact: Implemented `sanitise_name()` function to replace invalid chars with spaces
+  Impact: Implemented `sanitize_name()` function to replace invalid chars with
+  spaces
 
 ## Decision Log
 
@@ -121,7 +123,7 @@ produces identical output across runs.
 
 1. Rust 2024 edition keyword changes require attention when using `rand` crate
 2. Workspace-level strict lints require explicit opt-out in test files
-3. Name generation with `fake` crate requires sanitisation layer
+3. Name generation with `fake` crate requires sanitization layer
 4. rstest-bdd v0.3.2 works well for Gherkin-style behavioural tests
 
 ## Context and Orientation
@@ -141,7 +143,8 @@ Key files:
 The crate exports:
 
 - `SeedRegistry` - Parsed JSON registry with seeds and descriptor IDs
-- `SeedDefinition` - Named seed with RNG value and user count
+- `SeedDefinition` - Named seed with random number generator (RNG) value and
+  user count
 - `ExampleUserSeed` - Generated user record
 - `UnitSystemSeed` - Metric/Imperial enum
 - `generate_example_users()` - Main generation function
@@ -186,7 +189,8 @@ Cargo.toml dependencies:
 
 Create `src/error.rs` with semantic error enums:
 
-- `RegistryError` - IO, parse, version, UUID validation, empty seeds, not found
+- `RegistryError` - Input/output (I/O), parse, version, Universally Unique
+  Identifier (UUID) validation, empty seeds, not found
 - `GenerationError` - Display name generation failure, missing themes/toggles
 
 ### Phase 3: Validation Module
@@ -229,7 +233,7 @@ Create `src/generator.rs`:
   GenerationError>`
 - Use `ChaCha8Rng::seed_from_u64(seed_def.seed())` for determinism
 - Generate display names with `fake::faker::name::raw::{FirstName, LastName}`
-- Sanitise names: replace invalid chars with underscore, truncate to max length
+- Sanitize names: replace invalid chars with underscore, truncate to max length
 - Retry loop (max 100 attempts) for valid name generation
 - Select 1-3 interest themes, 0-2 safety toggles from registry
 - 90% metric, 10% imperial distribution

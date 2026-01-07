@@ -10,10 +10,7 @@
 //! - Minimum length: 3 characters
 //! - Maximum length: 32 characters
 //! - Allowed characters: letters (A-Z, a-z), digits (0-9), spaces, underscores
-
-use std::sync::OnceLock;
-
-use regex::Regex;
+//! - Must not be whitespace-only
 
 /// Minimum allowed length for a display name.
 pub const DISPLAY_NAME_MIN: usize = 3;
@@ -21,27 +18,12 @@ pub const DISPLAY_NAME_MIN: usize = 3;
 /// Maximum allowed length for a display name.
 pub const DISPLAY_NAME_MAX: usize = 32;
 
-/// Static storage for the compiled display name regex.
-static DISPLAY_NAME_RE: OnceLock<Regex> = OnceLock::new();
-
-/// Returns the compiled display name validation regex.
-///
-/// The regex matches strings containing only alphanumeric characters, spaces,
-/// and underscores. Length constraints are enforced separately.
-fn display_name_regex() -> &'static Regex {
-    DISPLAY_NAME_RE.get_or_init(|| {
-        // Length is enforced separately; this regex constrains allowed characters.
-        let pattern = "^[A-Za-z0-9_ ]+$";
-        Regex::new(pattern)
-            .unwrap_or_else(|error| panic!("display name regex failed to compile: {error}"))
-    })
-}
-
 /// Validates a display name against backend constraints.
 ///
 /// Returns `true` if the name satisfies all validation rules:
 /// - Length between [`DISPLAY_NAME_MIN`] and [`DISPLAY_NAME_MAX`] characters
 /// - Contains only alphanumeric characters, spaces, and underscores
+/// - Is not whitespace-only
 ///
 /// # Examples
 ///
@@ -52,6 +34,7 @@ fn display_name_regex() -> &'static Regex {
 /// assert!(is_valid_display_name("user_123"));
 /// assert!(!is_valid_display_name("ab"));           // Too short
 /// assert!(!is_valid_display_name("O'Brien"));      // Invalid character
+/// assert!(!is_valid_display_name("   "));          // Whitespace-only
 /// ```
 #[must_use]
 pub fn is_valid_display_name(name: &str) -> bool {
@@ -59,7 +42,11 @@ pub fn is_valid_display_name(name: &str) -> bool {
     if !(DISPLAY_NAME_MIN..=DISPLAY_NAME_MAX).contains(&length) {
         return false;
     }
-    display_name_regex().is_match(name)
+    // Reject whitespace-only names (mirrors backend's trim().is_empty() check)
+    if name.trim().is_empty() {
+        return false;
+    }
+    name.chars().all(is_valid_display_name_char)
 }
 
 /// Returns `true` if the character is allowed in a display name.
@@ -73,13 +60,13 @@ const fn is_valid_display_name_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == ' ' || c == '_'
 }
 
-/// Sanitises a raw name by replacing invalid characters with underscores.
+/// Sanitizes a raw name by replacing invalid characters with underscores.
 ///
 /// This function transforms a name that may contain invalid characters into
 /// one that matches the display name pattern. It does not enforce length
 /// constraints.
 #[must_use]
-pub(crate) fn sanitise_display_name(name: &str) -> String {
+pub(crate) fn sanitize_display_name(name: &str) -> String {
     name.chars()
         .map(|c| {
             if is_valid_display_name_char(c) {
@@ -117,6 +104,8 @@ mod tests {
     #[case("Marie-Claire", false)] // Hyphen
     #[case("user@email", false)] // At sign
     #[case("hello!", false)] // Exclamation
+    #[case("   ", false)] // Whitespace-only (3 spaces)
+    #[case("     ", false)] // Whitespace-only (5 spaces)
     fn invalid_display_names(#[case] name: &str, #[case] expected: bool) {
         assert_eq!(is_valid_display_name(name), expected);
     }
@@ -140,22 +129,22 @@ mod tests {
     }
 
     #[test]
-    fn sanitise_replaces_apostrophes() {
-        assert_eq!(sanitise_display_name("O'Brien"), "O_Brien");
+    fn sanitize_replaces_apostrophes() {
+        assert_eq!(sanitize_display_name("O'Brien"), "O_Brien");
     }
 
     #[test]
-    fn sanitise_replaces_hyphens() {
-        assert_eq!(sanitise_display_name("Marie-Claire"), "Marie_Claire");
+    fn sanitize_replaces_hyphens() {
+        assert_eq!(sanitize_display_name("Marie-Claire"), "Marie_Claire");
     }
 
     #[test]
-    fn sanitise_preserves_valid_characters() {
-        assert_eq!(sanitise_display_name("Ada Lovelace"), "Ada Lovelace");
+    fn sanitize_preserves_valid_characters() {
+        assert_eq!(sanitize_display_name("Ada Lovelace"), "Ada Lovelace");
     }
 
     #[test]
-    fn sanitise_handles_multiple_invalid_chars() {
-        assert_eq!(sanitise_display_name("a-b'c@d!e"), "a_b_c_d_e");
+    fn sanitize_handles_multiple_invalid_chars() {
+        assert_eq!(sanitize_display_name("a-b'c@d!e"), "a_b_c_d_e");
     }
 }
