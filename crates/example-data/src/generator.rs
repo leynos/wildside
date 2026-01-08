@@ -102,7 +102,7 @@ fn generate_single_user(
     registry: &SeedRegistry,
 ) -> Result<ExampleUserSeed, GenerationError> {
     // Generate deterministic UUID from RNG
-    let id = Uuid::from_u128(rng.r#gen());
+    let id = Uuid::from_u128(rng.random());
 
     // Generate valid display name
     let display_name = generate_display_name(rng)?;
@@ -124,12 +124,12 @@ fn generate_single_user(
     );
 
     // Select unit system (~90% metric, ~10% imperial)
-    let unit_system = if rng.gen_ratio(METRIC_PROBABILITY_NUMERATOR, METRIC_PROBABILITY_DENOMINATOR)
-    {
-        UnitSystemSeed::Metric
-    } else {
-        UnitSystemSeed::Imperial
-    };
+    let unit_system =
+        if rng.random_ratio(METRIC_PROBABILITY_NUMERATOR, METRIC_PROBABILITY_DENOMINATOR) {
+            UnitSystemSeed::Metric
+        } else {
+            UnitSystemSeed::Imperial
+        };
 
     Ok(ExampleUserSeed {
         id,
@@ -193,7 +193,7 @@ fn select_subset(
     let count = if clamped_min == clamped_max {
         clamped_min
     } else {
-        rng.gen_range(clamped_min..=clamped_max)
+        rng.random_range(clamped_min..=clamped_max)
     };
 
     // Shuffle and take the first `count` elements

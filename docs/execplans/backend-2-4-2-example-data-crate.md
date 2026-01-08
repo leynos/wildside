@@ -75,7 +75,8 @@ produces identical output across runs.
 
 - Observation: Rust 2024 edition reserves `gen` as a keyword
   Evidence: Compilation error: "expected identifier, found reserved keyword `gen`"
-  Impact: Required using `r#gen()` raw identifier syntax when calling `rand::Rng::gen()`
+  Impact: Resolved by upgrading to rand 0.9 which renamed methods: `gen()` →
+  `random()`, `gen_ratio()` → `random_ratio()`, `gen_range()` → `random_range()`
 
 - Observation: Workspace lints disallow `clippy::expect_used` even in test code
   Evidence: 31 clippy errors for `expect()` calls in BDD test file
@@ -168,13 +169,12 @@ Cargo.toml dependencies:
     edition = "2024"
 
     [dependencies]
-    fake = "2.10.0"
-    rand = "0.8.5"
-    rand_chacha = "0.3"
-    regex = "1"
+    fake = "4.4"
+    rand = "0.9"
+    rand_chacha = "0.9"
     serde = { version = "1", features = ["derive"] }
     serde_json = "1"
-    thiserror = "2.0.17"
+    thiserror = "2"
     uuid = { version = "1", features = ["serde", "v4"] }
 
     [dev-dependencies]
@@ -345,16 +345,21 @@ deferred to 2.4.3).
 
 Key code patterns to follow:
 
-Display name validation (mirror from backend/src/domain/user.rs:167-174):
+Display name validation (mirrors backend/src/domain/user.rs constraints):
 
-    static DISPLAY_NAME_RE: OnceLock<Regex> = OnceLock::new();
+    const fn is_valid_display_name_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == ' ' || c == '_'
+    }
 
-    fn display_name_regex() -> &'static Regex {
-        DISPLAY_NAME_RE.get_or_init(|| {
-            let pattern = "^[A-Za-z0-9_ ]+$";
-            Regex::new(pattern)
-                .unwrap_or_else(|e| panic!("display name regex failed: {e}"))
-        })
+    pub fn is_valid_display_name(name: &str) -> bool {
+        let length = name.chars().count();
+        if !(DISPLAY_NAME_MIN..=DISPLAY_NAME_MAX).contains(&length) {
+            return false;
+        }
+        if name.trim().is_empty() {
+            return false;
+        }
+        name.chars().all(is_valid_display_name_char)
     }
 
 BDD scenario definition (pattern from backend/tests/pwa_preferences_bdd.rs):
@@ -411,11 +416,10 @@ In `crates/example-data/src/lib.rs`, export:
 
 ### Dependencies
 
-    fake = "2.10.0"        # Name generation
-    rand = "0.8.5"         # RNG traits
-    rand_chacha = "0.3"    # Deterministic RNG
-    regex = "1"            # Display name validation
+    fake = "4.4"           # Name generation
+    rand = "0.9"           # RNG traits
+    rand_chacha = "0.9"    # Deterministic RNG
     serde = "1"            # JSON serialization
     serde_json = "1"       # JSON parsing
-    thiserror = "2.0.17"   # Error derivation
+    thiserror = "2"        # Error derivation
     uuid = "1"             # User/theme/toggle IDs

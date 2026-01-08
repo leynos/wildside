@@ -6,12 +6,12 @@ description = "Deterministic example user data generation for demonstration purp
 license = "MIT"
 
 [dependencies]
-fake = "2.10.0"
-rand = "0.8.5"
-rand_chacha = "0.3"
+fake = "4.4"
+rand = "0.9"
+rand_chacha = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "2.0.17"
+thiserror = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
