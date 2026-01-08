@@ -26,7 +26,7 @@ produces identical output across runs.
 - The crate must NOT depend on backend domain types (avoids circular
   dependencies).
 - Display name validation must mirror `backend/src/domain/user.rs` exactly:
-  3-32 characters, pattern `^[A-Za-z0-9_ ]+$`.
+  3–32 characters, pattern `^[A-Za-z0-9_ ]+$`.
 - All workspace lints must be satisfied: no `unsafe`, no `unwrap`/`expect`, no
   indexing/slicing, full documentation.
 - The crate location must be `crates/example-data/` (autodiscovered via
@@ -67,7 +67,8 @@ produces identical output across runs.
 - [x] (2026-01-07) Phase 6: Deterministic user generation
 - [x] (2026-01-07) Phase 7: Create seed registry JSON fixture
 - [x] (2026-01-07) Phase 8: Unit tests with rstest
-- [x] (2026-01-07) Phase 9: Behavioural tests with rstest-bdd v0.3.2
+- [x] (2026-01-07) Phase 9: Behaviour-Driven Development (BDD) tests with
+  rstest-bdd v0.3.2
 - [x] (2026-01-07) Phase 10: Documentation and quality gates
 - [x] (2026-01-07) Phase 11: Update roadmap to mark 2.4.2 as done
 
@@ -112,7 +113,7 @@ produces identical output across runs.
 - 60 unit tests + 7 BDD tests + 5 doctests all passing
 - Full quality gates passing: `make check-fmt && make lint && make test`
 - Deterministic generation verified: same seed produces identical output
-- Display name validation mirrors backend exactly (3-32 chars, `^[A-Za-z0-9_ ]+$`)
+- Display name validation mirrors backend exactly (3–32 chars, `^[A-Za-z0-9_ ]+$`)
 
 ### Metrics
 

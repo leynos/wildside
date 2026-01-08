@@ -93,80 +93,49 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn registry_error_io_formats_correctly() {
-        let err = RegistryError::IoError {
+    #[rstest]
+    #[case::io_error(
+        RegistryError::IoError {
             path: PathBuf::from("/tmp/seeds.json"),
             message: "file not found".to_owned(),
-        };
-        assert_eq!(
-            err.to_string(),
-            "failed to read registry file at '/tmp/seeds.json': file not found"
-        );
-    }
-
-    #[test]
-    fn registry_error_parse_formats_correctly() {
-        let err = RegistryError::ParseError {
-            message: "unexpected token".to_owned(),
-        };
-        assert_eq!(err.to_string(), "invalid registry JSON: unexpected token");
-    }
-
-    #[test]
-    fn registry_error_version_formats_correctly() {
-        let err = RegistryError::UnsupportedVersion {
-            expected: 1,
-            actual: 2,
-        };
-        assert_eq!(
-            err.to_string(),
-            "unsupported registry version: expected 1, found 2"
-        );
-    }
-
-    #[rstest]
-    #[case::interest_theme(
+        },
+        "failed to read registry file at '/tmp/seeds.json': file not found"
+    )]
+    #[case::parse_error(
+        RegistryError::ParseError { message: "unexpected token".to_owned() },
+        "invalid registry JSON: unexpected token"
+    )]
+    #[case::unsupported_version(
+        RegistryError::UnsupportedVersion { expected: 1, actual: 2 },
+        "unsupported registry version: expected 1, found 2"
+    )]
+    #[case::invalid_interest_theme_id(
         RegistryError::InvalidInterestThemeId { index: 2, value: "not-a-uuid".to_owned() },
         "invalid interest theme UUID at index 2: not-a-uuid"
     )]
-    #[case::safety_toggle(
+    #[case::invalid_safety_toggle_id(
         RegistryError::InvalidSafetyToggleId { index: 0, value: "bad".to_owned() },
         "invalid safety toggle UUID at index 0: bad"
     )]
-    fn registry_error_invalid_id_formats_correctly(
-        #[case] err: RegistryError,
-        #[case] expected: &str,
-    ) {
+    #[case::empty_seeds(RegistryError::EmptySeeds, "registry contains no seed definitions")]
+    #[case::empty_interest_themes(
+        RegistryError::EmptyInterestThemes,
+        "registry contains no interest theme IDs"
+    )]
+    #[case::seed_not_found(
+        RegistryError::SeedNotFound { name: "mossy-owl".to_owned() },
+        "seed 'mossy-owl' not found in registry"
+    )]
+    fn registry_error_formats_correctly(#[case] err: RegistryError, #[case] expected: &str) {
         assert_eq!(err.to_string(), expected);
     }
 
-    #[test]
-    fn registry_error_empty_seeds_formats_correctly() {
-        let err = RegistryError::EmptySeeds;
-        assert_eq!(err.to_string(), "registry contains no seed definitions");
-    }
-
-    #[test]
-    fn registry_error_empty_interest_themes_formats_correctly() {
-        let err = RegistryError::EmptyInterestThemes;
-        assert_eq!(err.to_string(), "registry contains no interest theme IDs");
-    }
-
-    #[test]
-    fn registry_error_seed_not_found_formats_correctly() {
-        let err = RegistryError::SeedNotFound {
-            name: "mossy-owl".to_owned(),
-        };
-        assert_eq!(err.to_string(), "seed 'mossy-owl' not found in registry");
-    }
-
-    #[test]
-    fn generation_error_display_name_formats_correctly() {
-        let err = GenerationError::DisplayNameGenerationFailed { max_attempts: 100 };
-        assert_eq!(
-            err.to_string(),
-            "failed to generate valid display name after 100 attempts"
-        );
+    #[rstest]
+    #[case::display_name_failed(
+        GenerationError::DisplayNameGenerationFailed { max_attempts: 100 },
+        "failed to generate valid display name after 100 attempts"
+    )]
+    fn generation_error_formats_correctly(#[case] err: GenerationError, #[case] expected: &str) {
+        assert_eq!(err.to_string(), expected);
     }
 }

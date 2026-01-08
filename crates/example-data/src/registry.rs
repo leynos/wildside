@@ -280,19 +280,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn rejects_malformed_json() {
-        let result = SeedRegistry::from_json("not valid json");
-        assert!(matches!(result, Err(RegistryError::ParseError { .. })));
-    }
-
-    #[test]
-    fn rejects_missing_version() {
-        let json = r#"{"interestThemeIds": [], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#;
+    /// Tests that use pattern matching for parse errors (message content varies).
+    #[rstest]
+    #[case::malformed_json("not valid json")]
+    #[case::missing_version(
+        r#"{"interestThemeIds": [], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#
+    )]
+    fn rejects_json_with_parse_error(#[case] json: &str) {
         let result = SeedRegistry::from_json(json);
         assert!(matches!(result, Err(RegistryError::ParseError { .. })));
     }
 
+    /// Tests that check exact error variants.
     #[rstest]
     #[case::unsupported_version(
         r#"{"version": 99, "interestThemeIds": [], "safetyToggleIds": [], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
@@ -306,18 +305,13 @@ mod tests {
         r#"{"version": 1, "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"], "safetyToggleIds": ["bad"], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
         RegistryError::InvalidSafetyToggleId { index: 0, value: "bad".to_owned() }
     )]
+    #[case::empty_seeds(
+        r#"{"version": 1, "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"], "safetyToggleIds": [], "seeds": []}"#,
+        RegistryError::EmptySeeds
+    )]
     fn rejects_invalid_registry(#[case] json: &str, #[case] expected: RegistryError) {
         let result = SeedRegistry::from_json(json);
         assert_eq!(result, Err(expected));
-    }
-
-    #[test]
-    fn rejects_empty_seeds_array() {
-        // Include at least one interest theme to test EmptySeeds specifically
-        // (EmptyInterestThemes is checked before EmptySeeds)
-        let json = r#"{"version": 1, "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"], "safetyToggleIds": [], "seeds": []}"#;
-        let result = SeedRegistry::from_json(json);
-        assert_eq!(result, Err(RegistryError::EmptySeeds));
     }
 
     #[rstest]
