@@ -137,9 +137,11 @@ fn malformed_json(world: &World) {
 
 #[given("registry JSON with empty seeds array")]
 fn registry_json_with_empty_seeds_array(world: &World) {
+    // Include at least one interest theme to ensure we test EmptySeeds specifically
+    // (EmptyInterestThemes is checked before EmptySeeds)
     let json = r#"{
         "version": 1,
-        "interestThemeIds": [],
+        "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
         "safetyToggleIds": [],
         "seeds": []
     }"#;

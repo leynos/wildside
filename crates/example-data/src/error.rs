@@ -61,6 +61,10 @@ pub enum RegistryError {
     #[error("registry contains no seed definitions")]
     EmptySeeds,
 
+    /// The registry contains no interest theme IDs.
+    #[error("registry contains no interest theme IDs")]
+    EmptyInterestThemes,
+
     /// The requested seed name was not found in the registry.
     #[error("seed '{name}' not found in registry")]
     SeedNotFound {
@@ -72,7 +76,7 @@ pub enum RegistryError {
 /// Errors that can occur during user generation.
 ///
 /// These errors indicate failures in the generation process itself, such as
-/// inability to produce valid display names or missing registry data.
+/// inability to produce valid display names.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum GenerationError {
     /// Failed to generate a valid display name after maximum retries.
@@ -81,10 +85,6 @@ pub enum GenerationError {
         /// Number of attempts made before giving up.
         max_attempts: usize,
     },
-
-    /// The registry contains no interest theme IDs for selection.
-    #[error("registry contains no interest theme IDs for selection")]
-    NoInterestThemes,
 }
 
 #[cfg(test)]
@@ -148,6 +148,12 @@ mod tests {
     }
 
     #[test]
+    fn registry_error_empty_interest_themes_formats_correctly() {
+        let err = RegistryError::EmptyInterestThemes;
+        assert_eq!(err.to_string(), "registry contains no interest theme IDs");
+    }
+
+    #[test]
     fn registry_error_seed_not_found_formats_correctly() {
         let err = RegistryError::SeedNotFound {
             name: "mossy-owl".to_owned(),
@@ -161,15 +167,6 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "failed to generate valid display name after 100 attempts"
-        );
-    }
-
-    #[test]
-    fn generation_error_no_themes_formats_correctly() {
-        let err = GenerationError::NoInterestThemes;
-        assert_eq!(
-            err.to_string(),
-            "registry contains no interest theme IDs for selection"
         );
     }
 }

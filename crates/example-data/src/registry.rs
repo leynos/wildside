@@ -97,6 +97,11 @@ impl SeedRegistry {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        // Require at least one interest theme for user generation
+        if interest_theme_ids.is_empty() {
+            return Err(RegistryError::EmptyInterestThemes);
+        }
+
         // Validate and parse safety toggle IDs
         let safety_toggle_ids = raw
             .safety_toggle_ids
@@ -298,7 +303,7 @@ mod tests {
         RegistryError::InvalidInterestThemeId { index: 0, value: "not-a-uuid".to_owned() }
     )]
     #[case::invalid_safety_toggle_uuid(
-        r#"{"version": 1, "interestThemeIds": [], "safetyToggleIds": ["bad"], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
+        r#"{"version": 1, "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"], "safetyToggleIds": ["bad"], "seeds": [{"name": "a", "seed": 1, "userCount": 1}]}"#,
         RegistryError::InvalidSafetyToggleId { index: 0, value: "bad".to_owned() }
     )]
     fn rejects_invalid_registry(#[case] json: &str, #[case] expected: RegistryError) {
@@ -308,7 +313,9 @@ mod tests {
 
     #[test]
     fn rejects_empty_seeds_array() {
-        let json = r#"{"version": 1, "interestThemeIds": [], "safetyToggleIds": [], "seeds": []}"#;
+        // Include at least one interest theme to test EmptySeeds specifically
+        // (EmptyInterestThemes is checked before EmptySeeds)
+        let json = r#"{"version": 1, "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"], "safetyToggleIds": [], "seeds": []}"#;
         let result = SeedRegistry::from_json(json);
         assert_eq!(result, Err(RegistryError::EmptySeeds));
     }

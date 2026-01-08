@@ -80,11 +80,6 @@ pub fn generate_example_users(
     registry: &SeedRegistry,
     seed_def: &SeedDefinition,
 ) -> Result<Vec<ExampleUserSeed>, GenerationError> {
-    // Require at least one interest theme
-    if registry.interest_theme_ids().is_empty() {
-        return Err(GenerationError::NoInterestThemes);
-    }
-
     let mut rng = ChaCha8Rng::seed_from_u64(seed_def.seed());
     let mut users = Vec::with_capacity(seed_def.user_count());
 
@@ -331,18 +326,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_registry_without_interest_themes() {
+    fn rejects_registry_without_interest_themes_at_parse_time() {
+        use crate::error::RegistryError;
+
         let json = r#"{
             "version": 1,
             "interestThemeIds": [],
             "safetyToggleIds": [],
             "seeds": [{"name": "test", "seed": 1, "userCount": 1}]
         }"#;
-        let registry = SeedRegistry::from_json(json).expect("valid registry");
-        let seed_def = registry.find_seed("test").expect("seed found");
-
-        let result = generate_example_users(&registry, seed_def);
-        assert_eq!(result, Err(GenerationError::NoInterestThemes));
+        let result = SeedRegistry::from_json(json);
+        assert_eq!(result, Err(RegistryError::EmptyInterestThemes));
     }
 
     #[rstest]
