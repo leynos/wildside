@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "backend",
+    "crates/example-data",
     "tools/architecture-lint",
 ]
 resolver = "2"
