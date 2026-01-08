@@ -27,8 +27,9 @@ produces identical output across runs.
   dependencies).
 - Display name validation must mirror `backend/src/domain/user.rs` exactly:
   3–32 characters, pattern `^[A-Za-z0-9_ ]+$`.
-- All workspace lints must be satisfied: no `unsafe`, no `unwrap`/`expect`, no
-  indexing/slicing, full documentation.
+- All workspace lints must be satisfied: no `unsafe`, no `unwrap`/`expect` in
+  non-test code (tests may use a module-level lint exception; see Surprises &
+  Discoveries), no indexing/slicing, full documentation.
 - The crate location must be `crates/example-data/` (autodiscovered via
   workspace glob).
 - JSON registry path: `backend/fixtures/example-data/seeds.json`.
@@ -136,20 +137,20 @@ coupling to the backend domain.
 
 Key files:
 
-- `docs/backend-sample-data-design.md` - Authoritative design specification
-- `backend/src/domain/user.rs` - Display name validation to mirror (lines
-  161-174)
-- `Cargo.toml` - Workspace configuration with strict lints
-- `backend/tests/pwa_preferences_bdd.rs` - BDD test pattern to follow
+- `docs/backend-sample-data-design.md` – Authoritative design specification
+- `backend/src/domain/user.rs` – Display name validation to mirror (lines
+  161–174)
+- `Cargo.toml` – Workspace configuration with strict lints
+- `backend/tests/pwa_preferences_bdd.rs` – BDD test pattern to follow
 
 The crate exports:
 
-- `SeedRegistry` - Parsed JSON registry with seeds and descriptor IDs
-- `SeedDefinition` - Named seed with random number generator (RNG) value and
+- `SeedRegistry` – Parsed JSON registry with seeds and descriptor IDs
+- `SeedDefinition` – Named seed with random number generator (RNG) value and
   user count
-- `ExampleUserSeed` - Generated user record
-- `UnitSystemSeed` - Metric/Imperial enum
-- `generate_example_users()` - Main generation function
+- `ExampleUserSeed` – Generated user record
+- `UnitSystemSeed` – Metric/Imperial enum
+- `generate_example_users()` – Main generation function
 
 ## Plan of Work
 
@@ -190,9 +191,9 @@ Cargo.toml dependencies:
 
 Create `src/error.rs` with semantic error enums:
 
-- `RegistryError` - Input/output (I/O), parse, version, Universally Unique
+- `RegistryError` – Input/output (I/O), parse, version, Universally Unique
   Identifier (UUID) validation, empty seeds, not found
-- `GenerationError` - Display name generation failure, missing themes/toggles
+- `GenerationError` – Display name generation failure, missing themes/toggles
 
 ### Phase 3: Validation Module
 
@@ -263,10 +264,10 @@ Create `backend/fixtures/example-data/seeds.json`:
 
 Create `src/tests/` with rstest fixtures:
 
-- `validation_tests.rs` - Length bounds, character validation, edge cases
-- `registry_tests.rs` - Valid parsing, invalid JSON, missing fields, UUID
+- `validation_tests.rs` – Length bounds, character validation, edge cases
+- `registry_tests.rs` – Valid parsing, invalid JSON, missing fields, UUID
   validation
-- `generator_tests.rs` - Determinism, count, name validity, ID subset,
+- `generator_tests.rs` – Determinism, count, name validity, ID subset,
   distribution
 
 ### Phase 9: Behavioural Tests
