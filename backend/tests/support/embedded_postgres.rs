@@ -8,6 +8,7 @@
 //! - Schema setup runs embedded Diesel migrations so test schemas do not drift.
 //! - Table teardown helpers provide a standard way to simulate schema loss.
 
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use backend::domain::ports::UserPersistenceError;
@@ -28,8 +29,12 @@ static TEMPLATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 const TEMPLATE_NAME_PREFIX: &str = "backend_template";
 
+fn migrations_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
+}
+
 fn template_database_name() -> Result<String, UserPersistenceError> {
-    let hash = hash_directory("migrations")
+    let hash = hash_directory(migrations_dir())
         .map_err(|err| UserPersistenceError::query(format!("hash migrations: {err}")))?;
     let short_hash = hash.get(..8).unwrap_or(&hash);
     Ok(format!("{TEMPLATE_NAME_PREFIX}_{short_hash}"))

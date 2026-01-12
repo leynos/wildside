@@ -37,9 +37,9 @@ started per test process, and each test receives a temporary database cloned
 from a migration-backed template. This keeps per-test setup fast while
 preserving database-level isolation.
 
-If you need full cluster-level isolation (for example, to change server-wide
-settings), switch the test to the per-test `TestCluster` helper instead of the
-shared cluster path.
+If full cluster-level isolation is required (for example, to change
+server-wide settings), switch the test to the per-test `TestCluster` helper
+instead of the shared cluster path.
 
 To force the template to rebuild locally, delete the workspace cache under
 `target/pg-embed/shared-*` and re-run the relevant tests.

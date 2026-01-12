@@ -50,9 +50,9 @@ core bootstrap flow.
    user. Ownership fix-ups occur on every call so running the tool twice
    remains idempotent.
 
-4. Pass the resulting paths and credentials to your tests. If you use
-   `postgresql_embedded` directly after the setup step, it can reuse the staged
-   binaries and data directory without needing `root`.
+4. Pass the resulting paths and credentials to the tests. If
+   `postgresql_embedded` is used directly after the setup step, it can reuse
+   the staged binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -226,8 +226,8 @@ overhead from seconds to milliseconds.
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When you need to persist those values beyond the guard
-you can call `metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When persistence beyond the guard is required, call
+`metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
@@ -379,7 +379,7 @@ let template_name = format!("template_{}", &hash[..8]);
 # }
 ```
 
-If you already track a migration version, include it in the template name
+If a migration version is already tracked, include it in the template name
 instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
 template invalidation explicit without hashing the migration directory.
 
@@ -453,8 +453,9 @@ using connection pools, drain the pool first.
 
 ### Automatic cleanup with TemporaryDatabase
 
-The `TemporaryDatabase` guard provides RAII cleanup semantics. When the guard
-goes out of scope, the database is automatically dropped:
+The `TemporaryDatabase` guard provides Resource Acquisition Is Initialization
+(RAII) cleanup semantics. When the guard goes out of scope, the database is
+automatically dropped:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::TestCluster;
@@ -538,19 +539,19 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
-  distribution) if you are running the CLI. The library helper sets `TZ`
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the
+  distribution) when running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
   valid timezone database.
 
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment if you see
-  `invalid value for parameter "TimeZone": "UTC"`.
+  `tzdata` package. Install it inside the execution environment when
+  `invalid value for parameter "TimeZone": "UTC"` appears.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
-  hit rate limits in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable when
+  rate limits appear in CI.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,
   `bootstrap_privileges::bootstrap_as_root`) do not trip the underlying Clap
@@ -562,5 +563,5 @@ still running as `root`, follow these steps:
 
 ## Further reading
 
-- `README.md` – overview, configuration reference, and troubleshooting tips.
-- `docs/developers-guide.md` – contributor notes and internal testing context.
+- `README.md` — overview, configuration reference, and troubleshooting tips.
+- `docs/developers-guide.md` — contributor notes and internal testing context.

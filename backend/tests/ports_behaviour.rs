@@ -235,3 +235,44 @@ fn user_repository_reports_errors_when_schema_missing(
     the_repository_upserts_the_user(repo_world.clone(), sample_user);
     persistence_fails_with_a_query_error(repo_world);
 }
+
+#[test]
+fn template_databases_isolate_contract_runs() {
+    let context_one = match init_repo_context() {
+        Ok(context) => context,
+        Err(reason) => {
+            handle_cluster_setup_failure::<()>(reason);
+            return;
+        }
+    };
+    let context_two = match init_repo_context() {
+        Ok(context) => context,
+        Err(reason) => {
+            handle_cluster_setup_failure::<()>(reason);
+            return;
+        }
+    };
+
+    let user = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Isolation User")
+        .expect("isolation user is valid");
+
+    let repo_one = context_one.repository.clone();
+    block_on(async {
+        repo_one
+            .upsert(&user)
+            .await
+            .expect("first contract write succeeds");
+    });
+
+    let repo_two = context_two.repository.clone();
+    let fetched = block_on(async {
+        repo_two
+            .find_by_id(user.id())
+            .await
+            .expect("second contract read succeeds")
+    });
+    assert!(
+        fetched.is_none(),
+        "second contract should not observe writes"
+    );
+}

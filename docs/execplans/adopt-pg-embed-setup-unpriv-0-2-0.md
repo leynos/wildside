@@ -54,7 +54,7 @@ seeing no functional differences, only faster setup.
       Severity: low
       Likelihood: medium
       Mitigation: Use `ensure_template_exists` with its built-in locking and
-      keep template creation centralised in one helper.
+      keep template creation centralized in one helper.
 
     - Risk: v0.2.0 changes default behaviour (paths, env handling) causing
       unexpected failures in CI.
@@ -114,7 +114,7 @@ seeing no functional differences, only faster setup.
 
     - Decision: Increase the slow-timeout for pg-embedded test binaries to
       120s in nextest.
-      Rationale: Serialised integration suites can exceed 60s without failure.
+      Rationale: Serialized integration suites can exceed 60s without failure.
       Date/Author: 2026-01-12 (assistant).
 
     - Decision: Use cmd-mox from PyPI (v0.2.0) instead of a git SHA.
