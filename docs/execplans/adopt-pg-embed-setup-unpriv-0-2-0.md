@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETED
 
 No PLANS.md found in this repository.
 
@@ -69,17 +69,32 @@ seeing no functional differences, only faster setup.
     - [x] (2026-01-12 00:25Z) Received approval; begin implementation.
     - [x] (2026-01-12 00:27Z) Updated user guide for v0.2.0 note.
     - [x] (2026-01-12 00:40Z) Commit docs updates before code changes.
-    - [ ] Update Cargo dependency to v0.2.0 and refresh lockfile.
-    - [ ] Add shared cluster and template database helpers for tests.
-    - [ ] Migrate integration tests to template-backed databases where safe.
-    - [ ] Update documentation that references the old per-test bootstrap.
-    - [ ] Run quality gates and commit.
+    - [x] (2026-01-12 01:05Z) Update Cargo dependency to v0.2.0 and refresh lockfile.
+    - [x] (2026-01-12 01:25Z) Add shared cluster and template database helpers for tests.
+    - [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed databases where safe.
+    - [x] (2026-01-12 01:55Z) Update documentation that references the old per-test bootstrap.
+    - [x] (2026-01-12 03:05Z) Group embedded Postgres tests and extend their
+      nextest timeout to reduce flaky slow-suite timeouts.
+    - [x] (2026-01-12 03:40Z) Swap cmd-mox source to PyPI release for
+      scripts-test stability.
+    - [x] (2026-01-12 10:30Z) Run quality gates and commit.
 
 ## Surprises & Discoveries
 
-    - Observation: None yet.
-      Evidence: N/A.
-      Impact: No impact yet.
+    - Observation: Embedded Postgres suites intermittently exceeded the 60s
+      nextest slow-timeout when run serially.
+      Evidence: `make test` timed out on repository integration tests.
+      Impact: Added a 120s timeout override for pg-embedded test binaries.
+
+    - Observation: The git-pinned cmd-mox helper failed under pytest with a
+      `platform.system` AttributeError from generated stubs.
+      Evidence: `make scripts-test` failed in vault bootstrap tests.
+      Impact: Switched to the latest PyPI cmd-mox release.
+
+    - Observation: One `make test` run failed with a transient embedded
+      Postgres setup timeout (`deadline has elapsed`).
+      Evidence: `backend::ports_behaviour` setup failed before tests ran.
+      Impact: Re-ran `make test`, which completed successfully.
 
 ## Decision Log
 
@@ -93,9 +108,30 @@ seeing no functional differences, only faster setup.
       Rationale: Requested by the user before implementation proceeds.
       Date/Author: 2026-01-12 (assistant).
 
+    - Decision: Pause for approval after exceeding the file-change tolerance.
+      Rationale: Changes now span 10 files, above the plan's 8-file limit.
+      Date/Author: 2026-01-12 (assistant).
+
+    - Decision: Increase the slow-timeout for pg-embedded test binaries to
+      120s in nextest.
+      Rationale: Serialised integration suites can exceed 60s without failure.
+      Date/Author: 2026-01-12 (assistant).
+
+    - Decision: Use cmd-mox from PyPI (v0.2.0) instead of a git SHA.
+      Rationale: PyPI release avoids stub failures seen in scripts-test.
+      Date/Author: 2026-01-12 (assistant).
+
 ## Outcomes & Retrospective
 
-Pending. Update after implementation and validation.
+    - Outcome: Adopted pg-embed-setup-unpriv v0.2.0 with shared cluster and
+      template-backed databases for integration tests, preserving behaviour
+      while reducing migration overhead.
+    - Outcome: Stabilised embedded Postgres suites with a longer nextest
+      timeout override and switched scripts-test to the PyPI cmd-mox release.
+    - Validation: `make fmt`, `make lint`, `make test`, `make check-fmt`
+      (logs in `tmp/pg-embed-setup-unpriv-0-2-0-*.log`).
+    - Follow-up: Monitor CI runtimes and flaky rates for pg-embedded suites; if
+      needed, revisit template initialisation or timeout thresholds.
 
 ## Context and Orientation
 
@@ -252,3 +288,7 @@ record approval and the user-guide update, and the decision log now
 captures the doc-first commit requirement.
 Revision on 2026-01-12: Concrete Steps command blocks indented to satisfy
 markdownlint, and the docs-commit progress item timestamped.
+Revision on 2026-01-12: Progress updated for dependency and test changes,
+and the Decision Log now records the file-count tolerance escalation.
+Revision on 2026-01-12: Updated the testing guide to describe the shared
+cluster and template database strategy.

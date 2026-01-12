@@ -175,7 +175,7 @@ scripts-test:
 		--with plumbum \
 		--with cyclopts \
 		--with pyyaml \
-		--with "cmd-mox@git+https://github.com/leynos/cmd-mox@28acd288975f15e4c360d62e431950820dbcb27a" \
+		--with "cmd-mox==0.2.0" \
 		pytest scripts/tests
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types

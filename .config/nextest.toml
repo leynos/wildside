@@ -1,6 +1,6 @@
 # .config/nextest.toml
 [profile.default]
-# Kill any test once it crosses 60s.
+# Kill any test once it crosses 60s, unless overridden for slower suites.
 slow-timeout = { period = "60s", terminate-after = 1, grace-period = "5s" }
 
 # Put a hard ceiling on the whole run.
@@ -14,5 +14,6 @@ global-timeout = "10m"
 max-threads = 1
 
 [[profile.default.overrides]]
-filter = "binary(diesel_user_repository) | binary(ports_behaviour)"
+filter = "binary(diesel_user_repository) | binary(diesel_user_preferences_repository) | binary(diesel_route_annotation_repository) | binary(ports_behaviour)"
 test-group = "pg-embedded"
+slow-timeout = { period = "120s", terminate-after = 1, grace-period = "5s" }

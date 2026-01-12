@@ -11,7 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use color_eyre::eyre::{Context, Report, Result, eyre};
-use pg_embedded_setup_unpriv::worker::WorkerPayload;
+use pg_embedded_setup_unpriv::worker::{PlainSecret, WorkerPayload};
 use postgresql_embedded::PostgreSQL;
 use tokio::runtime::Builder;
 
@@ -74,11 +74,11 @@ fn execute(operation: Operation, payload: WorkerPayload) -> Result<()> {
     Ok(())
 }
 
-fn apply_environment(env: Vec<(String, Option<String>)>) {
+fn apply_environment(env: Vec<(String, Option<PlainSecret>)>) {
     for (key, value) in env {
         // SAFETY: Called before spawning any threads, so no data races possible.
         match value {
-            Some(val) => unsafe { env::set_var(&key, val) },
+            Some(val) => unsafe { env::set_var(&key, val.expose()) },
             None => unsafe { env::remove_var(&key) },
         }
     }
