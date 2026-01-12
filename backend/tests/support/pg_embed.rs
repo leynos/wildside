@@ -6,7 +6,7 @@
 //! override these paths.
 //!
 //! This module scopes `PG_RUNTIME_DIR` and `PG_DATA_DIR` overrides to the
-//! bootstrap call and serialises environment mutation to avoid global
+//! bootstrap call and serializes environment mutation to avoid global
 //! environment races across parallel tests.
 //!
 //! When either `PG_RUNTIME_DIR` or `PG_DATA_DIR` is missing, this module sets

@@ -43,7 +43,7 @@ core bootstrap flow.
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initialises the
+   cache, 0700 for the runtime and data directories), and initializes the
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
    worker helper so the privileged operations run entirely under the sandbox
