@@ -43,95 +43,95 @@ seeing no functional differences, only faster setup.
 
 ## Risks
 
-    - Risk: Shared cluster reuse could leak data between tests.
-      Severity: medium
-      Likelihood: medium
-      Mitigation: Use template clones or temporary databases per test with
-      unique names and RAII cleanup; keep cluster-level isolation tests on the
-      per-test cluster path.
+- Risk: Shared cluster reuse could leak data between tests.
+  Severity: medium
+  Likelihood: medium
+  Mitigation: Use template clones or temporary databases per test with
+  unique names and RAII cleanup; keep cluster-level isolation tests on the
+  per-test cluster path.
 
-    - Risk: Template creation could race under parallel tests.
-      Severity: low
-      Likelihood: medium
-      Mitigation: Use `ensure_template_exists` with its built-in locking and
-      keep template creation centralized in one helper.
+- Risk: Template creation could race under parallel tests.
+  Severity: low
+  Likelihood: medium
+  Mitigation: Use `ensure_template_exists` with its built-in locking and
+  keep template creation centralized in one helper.
 
-    - Risk: v0.2.0 changes default behaviour (paths, env handling) causing
-      unexpected failures in CI.
-      Severity: medium
-      Likelihood: low
-      Mitigation: Keep the existing environment scoping in
-      `backend/tests/support/pg_embed.rs` and validate with full test runs.
+- Risk: v0.2.0 changes default behaviour (paths, env handling) causing
+  unexpected failures in CI.
+  Severity: medium
+  Likelihood: low
+  Mitigation: Keep the existing environment scoping in
+  `backend/tests/support/pg_embed.rs` and validate with full test runs.
 
 ## Progress
 
-    - [x] (2026-01-12 00:00Z) Drafted ExecPlan from updated user guide.
-    - [x] (2026-01-12 00:25Z) Received approval; begin implementation.
-    - [x] (2026-01-12 00:27Z) Updated user guide for v0.2.0 note.
-    - [x] (2026-01-12 00:40Z) Commit docs updates before code changes.
-    - [x] (2026-01-12 01:05Z) Update Cargo dependency to v0.2.0 and refresh lockfile.
-    - [x] (2026-01-12 01:25Z) Add shared cluster and template database helpers for tests.
-    - [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed databases where safe.
-    - [x] (2026-01-12 01:55Z) Update documentation that references the old per-test bootstrap.
-    - [x] (2026-01-12 03:05Z) Group embedded Postgres tests and extend their
-      nextest timeout to reduce flaky slow-suite timeouts.
-    - [x] (2026-01-12 03:40Z) Swap cmd-mox source to PyPI release for
-      scripts-test stability.
-    - [x] (2026-01-12 10:30Z) Run quality gates and commit.
+- [x] (2026-01-12 00:00Z) Drafted ExecPlan from updated user guide.
+- [x] (2026-01-12 00:25Z) Received approval; begin implementation.
+- [x] (2026-01-12 00:27Z) Updated user guide for v0.2.0 note.
+- [x] (2026-01-12 00:40Z) Commit docs updates before code changes.
+- [x] (2026-01-12 01:05Z) Update Cargo dependency to v0.2.0 and refresh lockfile.
+- [x] (2026-01-12 01:25Z) Add shared cluster and template database helpers for tests.
+- [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed databases where safe.
+- [x] (2026-01-12 01:55Z) Update documentation that references the old per-test bootstrap.
+- [x] (2026-01-12 03:05Z) Group embedded Postgres tests and extend their
+  nextest timeout to reduce flaky slow-suite timeouts.
+- [x] (2026-01-12 03:40Z) Swap cmd-mox source to PyPI release for
+  scripts-test stability.
+- [x] (2026-01-12 10:30Z) Run quality gates and commit.
 
 ## Surprises & Discoveries
 
-    - Observation: Embedded Postgres suites intermittently exceeded the 60s
-      nextest slow-timeout when run serially.
-      Evidence: `make test` timed out on repository integration tests.
-      Impact: Added a 120s timeout override for pg-embedded test binaries.
+- Observation: Embedded Postgres suites intermittently exceeded the 60s
+  nextest slow-timeout when run serially.
+  Evidence: `make test` timed out on repository integration tests.
+  Impact: Added a 120s timeout override for pg-embedded test binaries.
 
-    - Observation: The git-pinned cmd-mox helper failed under pytest with a
-      `platform.system` AttributeError from generated stubs.
-      Evidence: `make scripts-test` failed in vault bootstrap tests.
-      Impact: Switched to the latest PyPI cmd-mox release.
+- Observation: The git-pinned cmd-mox helper failed under pytest with a
+  `platform.system` AttributeError from generated stubs.
+  Evidence: `make scripts-test` failed in vault bootstrap tests.
+  Impact: Switched to the latest PyPI cmd-mox release.
 
-    - Observation: One `make test` run failed with a transient embedded
-      Postgres setup timeout (`deadline has elapsed`).
-      Evidence: `backend::ports_behaviour` setup failed before tests ran.
-      Impact: Re-ran `make test`, which completed successfully.
+- Observation: One `make test` run failed with a transient embedded
+  Postgres setup timeout (`deadline has elapsed`).
+  Evidence: `backend::ports_behaviour` setup failed before tests ran.
+  Impact: Re-ran `make test`, which completed successfully.
 
 ## Decision Log
 
-    - Decision: Prefer shared cluster plus template clones for tests that only
-      need database-level isolation; keep per-test clusters for tests that need
-      cluster-level changes.
-      Rationale: This balances speed improvements with predictable isolation.
-      Date/Author: 2026-01-12 (assistant).
+- Decision: Prefer shared cluster plus template clones for tests that only
+  need database-level isolation; keep per-test clusters for tests that need
+  cluster-level changes.
+  Rationale: This balances speed improvements with predictable isolation.
+  Date/Author: 2026-01-12 (assistant).
 
-    - Decision: Commit documentation updates before code changes.
-      Rationale: Requested by the user before implementation proceeds.
-      Date/Author: 2026-01-12 (assistant).
+- Decision: Commit documentation updates before code changes.
+  Rationale: Requested by the user before implementation proceeds.
+  Date/Author: 2026-01-12 (assistant).
 
-    - Decision: Pause for approval after exceeding the file-change tolerance.
-      Rationale: Changes now span 10 files, above the plan's 8-file limit.
-      Date/Author: 2026-01-12 (assistant).
+- Decision: Pause for approval after exceeding the file-change tolerance.
+  Rationale: Changes now span 10 files, above the plan's 8-file limit.
+  Date/Author: 2026-01-12 (assistant).
 
-    - Decision: Increase the slow-timeout for pg-embedded test binaries to
-      120s in nextest.
-      Rationale: Serialized integration suites can exceed 60s without failure.
-      Date/Author: 2026-01-12 (assistant).
+- Decision: Increase the slow-timeout for pg-embedded test binaries to
+  120s in nextest.
+  Rationale: Serialized integration suites can exceed 60s without failure.
+  Date/Author: 2026-01-12 (assistant).
 
-    - Decision: Use cmd-mox from PyPI (v0.2.0) instead of a git SHA.
-      Rationale: PyPI release avoids stub failures seen in scripts-test.
-      Date/Author: 2026-01-12 (assistant).
+- Decision: Use cmd-mox from PyPI (v0.2.0) instead of a git SHA.
+  Rationale: PyPI release avoids stub failures seen in scripts-test.
+  Date/Author: 2026-01-12 (assistant).
 
 ## Outcomes & Retrospective
 
-    - Outcome: Adopted pg-embed-setup-unpriv v0.2.0 with shared cluster and
-      template-backed databases for integration tests, preserving behaviour
-      while reducing migration overhead.
-    - Outcome: Stabilised embedded Postgres suites with a longer nextest
-      timeout override and switched scripts-test to the PyPI cmd-mox release.
-    - Validation: `make fmt`, `make lint`, `make test`, `make check-fmt`
-      (logs in `tmp/pg-embed-setup-unpriv-0-2-0-*.log`).
-    - Follow-up: Monitor CI runtimes and flaky rates for pg-embedded suites; if
-      needed, revisit template initialisation or timeout thresholds.
+- Outcome: Adopted pg-embed-setup-unpriv v0.2.0 with shared cluster and
+  template-backed databases for integration tests, preserving behaviour
+  while reducing migration overhead.
+- Outcome: Stabilised embedded Postgres suites with a longer nextest
+  timeout override and switched scripts-test to the PyPI cmd-mox release.
+- Validation: `make fmt`, `make lint`, `make test`, `make check-fmt`
+  (logs in `tmp/pg-embed-setup-unpriv-0-2-0-*.log`).
+- Follow-up: Monitor CI runtimes and flaky rates for pg-embedded suites; if
+  needed, revisit template initialisation or timeout thresholds.
 
 ## Context and Orientation
 
@@ -196,39 +196,51 @@ Run commands from the repository root.
 
 1. Inspect current usage and baseline:
 
-        rg "pg_embedded_setup_unpriv" backend/tests
+   ```bash
+   rg "pg_embedded_setup_unpriv" backend/tests
+   ```
 
 2. Update the dependency and lockfile:
 
-        rg "pg-embed-setup-unpriv" backend/Cargo.toml
-        # edit backend/Cargo.toml to version 0.2.0
-        cargo update -p pg-embed-setup-unpriv --precise 0.2.0
+   ```bash
+   rg "pg-embed-setup-unpriv" backend/Cargo.toml
+   # edit backend/Cargo.toml to version 0.2.0
+   cargo update -p pg-embed-setup-unpriv --precise 0.2.0
+   ```
 
 3. Implement shared cluster and template helpers:
 
-        # edit backend/tests/support/pg_embed.rs
-        # edit backend/tests/support/embedded_postgres.rs
-        # update affected test files to use the new helpers
+   ```bash
+   # edit backend/tests/support/pg_embed.rs
+   # edit backend/tests/support/embedded_postgres.rs
+   # update affected test files to use the new helpers
+   ```
 
 4. Update docs that mention test bootstrap strategy:
 
-        rg "pg-embed-setup-unpriv" docs
-        # edit relevant docs files to reference template workflow
+   ```bash
+   rg "pg-embed-setup-unpriv" docs
+   # edit relevant docs files to reference template workflow
+   ```
 
 5. Run formatting, lint, tests, and format check with logs:
 
-        make fmt | tee /tmp/pg-embed-setup-unpriv-0-2-0-fmt.log
-        make lint | tee /tmp/pg-embed-setup-unpriv-0-2-0-lint.log
-        make test | tee /tmp/pg-embed-setup-unpriv-0-2-0-test.log
-        make check-fmt | tee /tmp/pg-embed-setup-unpriv-0-2-0-check-fmt.log
+   ```bash
+   make fmt | tee /tmp/pg-embed-setup-unpriv-0-2-0-fmt.log
+   make lint | tee /tmp/pg-embed-setup-unpriv-0-2-0-lint.log
+   make test | tee /tmp/pg-embed-setup-unpriv-0-2-0-test.log
+   make check-fmt | tee /tmp/pg-embed-setup-unpriv-0-2-0-check-fmt.log
+   ```
 
 6. Review changes and commit:
 
-        git status -sb
-        git add backend/Cargo.toml Cargo.lock backend/tests/support \
-        backend/tests docs
-        git commit -m "Adopt pg-embed-setup-unpriv 0.2.0" \
-        -m "Upgrade pg-embed-setup-unpriv to v0.2.0 and update integration test bootstrap."
+   ```bash
+   git status -sb
+   git add backend/Cargo.toml Cargo.lock backend/tests/support \
+       backend/tests docs
+   git commit -m "Adopt pg-embed-setup-unpriv 0.2.0" \
+       -m "Upgrade pg-embed-setup-unpriv to v0.2.0 and update integration test bootstrap."
+   ```
 
 Expected signals:
 

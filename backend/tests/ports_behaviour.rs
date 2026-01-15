@@ -99,12 +99,22 @@ struct RepoContext {
 
 type SharedContext = Arc<Mutex<RepoContext>>;
 
-fn init_repo_context() -> Result<RepoContext, String> {
-    let cluster = shared_cluster()?;
-    let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
+#[fixture]
+fn repo_context() -> Option<RepoContext> {
+    let cluster = match shared_cluster() {
+        Ok(c) => c,
+        Err(reason) => return handle_cluster_setup_failure(reason),
+    };
+    let temp_db = match provision_template_database(cluster) {
+        Ok(db) => db,
+        Err(err) => return handle_cluster_setup_failure(err),
+    };
     let database_url = temp_db.url().to_string();
-    let repository = PgUserRepository::connect(&database_url).map_err(|err| err.to_string())?;
-    Ok(RepoContext {
+    let repository = match PgUserRepository::connect(&database_url) {
+        Ok(r) => r,
+        Err(err) => return handle_cluster_setup_failure(err.to_string()),
+    };
+    Some(RepoContext {
         repository,
         database_url,
         last_write_error: None,
@@ -115,22 +125,9 @@ fn init_repo_context() -> Result<RepoContext, String> {
     })
 }
 
-fn init_repo_context_or_skip() -> Option<RepoContext> {
-    match init_repo_context() {
-        Ok(context) => Some(context),
-        Err(reason) => {
-            handle_cluster_setup_failure::<()>(reason);
-            None
-        }
-    }
-}
-
 #[fixture]
-fn repo_world() -> Option<SharedContext> {
-    match init_repo_context() {
-        Ok(context) => Some(Arc::new(Mutex::new(context))),
-        Err(reason) => handle_cluster_setup_failure(reason),
-    }
+fn repo_world(repo_context: Option<RepoContext>) -> Option<SharedContext> {
+    repo_context.map(|ctx| Arc::new(Mutex::new(ctx)))
 }
 
 #[given("a postgres-backed user repository")]
@@ -246,12 +243,15 @@ fn user_repository_reports_errors_when_schema_missing(
     persistence_fails_with_a_query_error(repo_world);
 }
 
-#[test]
-fn template_databases_isolate_contract_runs() {
-    let Some(context_one) = init_repo_context_or_skip() else {
+#[rstest]
+fn template_databases_isolate_contract_runs(
+    #[from(repo_context)] context_one: Option<RepoContext>,
+    #[from(repo_context)] context_two: Option<RepoContext>,
+) {
+    let Some(context_one) = context_one else {
         return;
     };
-    let Some(context_two) = init_repo_context_or_skip() else {
+    let Some(context_two) = context_two else {
         return;
     };
 
