@@ -27,6 +27,6 @@
     "prepack": "pnpm run build"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.18.0"
   }
 }
