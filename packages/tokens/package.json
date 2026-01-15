@@ -19,7 +19,7 @@
   },
   "contrastThreshold": 4.5,
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.18.0"
   },
   "exports": {
     "./utils/tokens.js": {
