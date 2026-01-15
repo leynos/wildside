@@ -71,7 +71,8 @@ seeing no functional differences, only faster setup.
 - [x] (2026-01-12 00:40Z) Commit docs updates before code changes.
 - [x] (2026-01-12 01:05Z) Update Cargo dependency to v0.2.0 and refresh lockfile.
 - [x] (2026-01-12 01:25Z) Add shared cluster and template database helpers for tests.
-- [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed databases where safe.
+- [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed
+  databases where safe.
 - [x] (2026-01-12 01:55Z) Update documentation that references the old per-test bootstrap.
 - [x] (2026-01-12 03:05Z) Group embedded Postgres tests and extend their
   nextest timeout to reduce flaky slow-suite timeouts.
@@ -126,12 +127,12 @@ seeing no functional differences, only faster setup.
 - Outcome: Adopted pg-embed-setup-unpriv v0.2.0 with shared cluster and
   template-backed databases for integration tests, preserving behaviour
   while reducing migration overhead.
-- Outcome: Stabilised embedded Postgres suites with a longer nextest
+- Outcome: Stabilized embedded Postgres suites with a longer nextest
   timeout override and switched scripts-test to the PyPI cmd-mox release.
 - Validation: `make fmt`, `make lint`, `make test`, `make check-fmt`
   (logs in `tmp/pg-embed-setup-unpriv-0-2-0-*.log`).
 - Follow-up: Monitor CI runtimes and flaky rates for pg-embedded suites; if
-  needed, revisit template initialisation or timeout thresholds.
+  needed, revisit template initialization or timeout thresholds.
 
 ## Context and Orientation
 
