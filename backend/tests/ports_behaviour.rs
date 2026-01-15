@@ -115,6 +115,16 @@ fn init_repo_context() -> Result<RepoContext, String> {
     })
 }
 
+fn init_repo_context_or_skip() -> Option<RepoContext> {
+    match init_repo_context() {
+        Ok(context) => Some(context),
+        Err(reason) => {
+            handle_cluster_setup_failure::<()>(reason);
+            None
+        }
+    }
+}
+
 #[fixture]
 fn repo_world() -> Option<SharedContext> {
     match init_repo_context() {
@@ -238,19 +248,11 @@ fn user_repository_reports_errors_when_schema_missing(
 
 #[test]
 fn template_databases_isolate_contract_runs() {
-    let context_one = match init_repo_context() {
-        Ok(context) => context,
-        Err(reason) => {
-            handle_cluster_setup_failure::<()>(reason);
-            return;
-        }
+    let Some(context_one) = init_repo_context_or_skip() else {
+        return;
     };
-    let context_two = match init_repo_context() {
-        Ok(context) => context,
-        Err(reason) => {
-            handle_cluster_setup_failure::<()>(reason);
-            return;
-        }
+    let Some(context_two) = init_repo_context_or_skip() else {
+        return;
     };
 
     let user = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Isolation User")
