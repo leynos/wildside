@@ -69,8 +69,8 @@ def _parse_bool(value: str | None, default: bool = True) -> bool:
     return value.lower() in ("true", "1", "yes")
 
 
-def resolve_render_inputs() -> RenderInputs:
-    """Resolve rendering inputs from environment."""
+def _resolve_core_config() -> tuple[str, str, str, str]:
+    """Resolve core configuration: cluster_name, domain, acme_email, cloudflare secret."""
     cluster_name = resolve_input(
         None, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
@@ -85,16 +85,32 @@ def resolve_render_inputs() -> RenderInputs:
             default="cloudflare-api-token",
         ),
     )
+    return (
+        str(cluster_name),
+        str(domain),
+        str(acme_email),
+        str(cloudflare_api_token_secret_name),
+    )
 
-    # Vault configuration
+
+def _resolve_vault_config() -> tuple[str | None, str | None, str | None, str | None]:
+    """Resolve Vault configuration: address, role_id, secret_id, ca_certificate."""
     vault_address = resolve_input(None, InputResolution(env_key="VAULT_ADDRESS"))
     vault_role_id = resolve_input(None, InputResolution(env_key="VAULT_ROLE_ID"))
     vault_secret_id = resolve_input(None, InputResolution(env_key="VAULT_SECRET_ID"))
     vault_ca_certificate = resolve_input(
         None, InputResolution(env_key="VAULT_CA_CERTIFICATE")
     )
+    return (
+        str(vault_address) if vault_address else None,
+        str(vault_role_id) if vault_role_id else None,
+        str(vault_secret_id) if vault_secret_id else None,
+        str(vault_ca_certificate) if vault_ca_certificate else None,
+    )
 
-    # Feature flags
+
+def _resolve_feature_flags() -> tuple[bool, bool, bool, bool, bool]:
+    """Resolve feature flags: traefik, cert_manager, external_dns, vault_eso, cnpg."""
     enable_traefik_raw = resolve_input(
         None, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
     )
@@ -110,8 +126,17 @@ def resolve_render_inputs() -> RenderInputs:
     enable_cnpg_raw = resolve_input(
         None, InputResolution(env_key="ENABLE_CNPG", default="true")
     )
+    return (
+        _parse_bool(str(enable_traefik_raw)),
+        _parse_bool(str(enable_cert_manager_raw)),
+        _parse_bool(str(enable_external_dns_raw)),
+        _parse_bool(str(enable_vault_eso_raw)),
+        _parse_bool(str(enable_cnpg_raw)),
+    )
 
-    # Paths
+
+def _resolve_paths() -> tuple[Path, Path, Path]:
+    """Resolve paths: runner_temp, output_dir, github_env."""
     runner_temp_raw = resolve_input(
         None,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
@@ -132,38 +157,37 @@ def resolve_render_inputs() -> RenderInputs:
             as_path=True,
         ),
     )
+    return (
+        runner_temp_raw if isinstance(runner_temp_raw, Path) else Path(str(runner_temp_raw)),
+        output_dir_raw if isinstance(output_dir_raw, Path) else Path(str(output_dir_raw)),
+        github_env_raw if isinstance(github_env_raw, Path) else Path(str(github_env_raw)),
+    )
+
+
+def resolve_render_inputs() -> RenderInputs:
+    """Resolve rendering inputs from environment."""
+    cluster_name, domain, acme_email, cloudflare_secret = _resolve_core_config()
+    vault_address, vault_role_id, vault_secret_id, vault_ca_cert = _resolve_vault_config()
+    traefik, cert_manager, external_dns, vault_eso, cnpg = _resolve_feature_flags()
+    runner_temp, output_dir, github_env = _resolve_paths()
 
     return RenderInputs(
-        cluster_name=str(cluster_name),
-        domain=str(domain),
-        acme_email=str(acme_email),
-        cloudflare_api_token_secret_name=str(cloudflare_api_token_secret_name),
-        vault_address=str(vault_address) if vault_address else None,
-        vault_role_id=str(vault_role_id) if vault_role_id else None,
-        vault_secret_id=str(vault_secret_id) if vault_secret_id else None,
-        vault_ca_certificate=str(vault_ca_certificate)
-        if vault_ca_certificate
-        else None,
-        enable_traefik=_parse_bool(str(enable_traefik_raw)),
-        enable_cert_manager=_parse_bool(str(enable_cert_manager_raw)),
-        enable_external_dns=_parse_bool(str(enable_external_dns_raw)),
-        enable_vault_eso=_parse_bool(str(enable_vault_eso_raw)),
-        enable_cnpg=_parse_bool(str(enable_cnpg_raw)),
-        runner_temp=(
-            runner_temp_raw
-            if isinstance(runner_temp_raw, Path)
-            else Path(str(runner_temp_raw))
-        ),
-        output_dir=(
-            output_dir_raw
-            if isinstance(output_dir_raw, Path)
-            else Path(str(output_dir_raw))
-        ),
-        github_env=(
-            github_env_raw
-            if isinstance(github_env_raw, Path)
-            else Path(str(github_env_raw))
-        ),
+        cluster_name=cluster_name,
+        domain=domain,
+        acme_email=acme_email,
+        cloudflare_api_token_secret_name=cloudflare_secret,
+        vault_address=vault_address,
+        vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id,
+        vault_ca_certificate=vault_ca_cert,
+        enable_traefik=traefik,
+        enable_cert_manager=cert_manager,
+        enable_external_dns=external_dns,
+        enable_vault_eso=vault_eso,
+        enable_cnpg=cnpg,
+        runner_temp=runner_temp,
+        output_dir=output_dir,
+        github_env=github_env,
     )
 
 
