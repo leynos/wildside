@@ -118,12 +118,13 @@ Thresholds that trigger escalation when breached:
 
 ## Progress
 
-- [ ] (Pending) Draft the initial ExecPlan and record design decisions.
-- [ ] (Pending) Configure the OpenTofu backend (DigitalOcean Spaces) for state
+- [x] (2026-01-16) Draft the initial ExecPlan and record design decisions.
+- [x] (2026-01-16) Configure the OpenTofu backend (DigitalOcean Spaces) for state
   management.
-- [ ] (Pending) Create the cluster_provision OpenTofu configuration for doks
+- [x] (2026-01-16) Create the cluster provisioning OpenTofu configuration for doks
   module invocation.
-- [ ] (Pending) Create the platform_render OpenTofu orchestration module.
+- [x] (2026-01-16) Create the platform_render OpenTofu orchestration module.
+  Note: Valkey excluded due to provider version incompatibility.
 - [ ] (Pending) Implement Python helper scripts (prepare, provision, render,
   commit, publish).
 - [ ] (Pending) Create the composite action definition (action.yml).
@@ -140,11 +141,25 @@ Thresholds that trigger escalation when breached:
 
 ## Surprises & Discoveries
 
-(To be updated as work proceeds.)
+- Observation: The valkey module uses different provider versions (helm ~> 3.1.1,
+  kubernetes ~> 3.0.1) than other platform modules (~> 2.13.0 and ~> 2.25.0).
+  Evidence: tofu init failed with "no available releases match the given
+  constraints" when attempting to include valkey in platform_render.
+  Impact: Valkey is temporarily excluded from platform_render until provider
+  versions are unified across all modules. A future task should upgrade all
+  modules to helm 3.x and kubernetes 3.x.
 
 ## Decision Log
 
-(To be updated as work proceeds. Initial anticipated decisions below.)
+- Decision: Exclude valkey from platform_render module until provider versions
+  are unified.
+  Rationale: The valkey module requires helm ~> 3.1.1 and kubernetes ~> 3.0.1,
+  while other modules use ~> 2.13.0 and ~> 2.25.0 respectively. OpenTofu cannot
+  resolve conflicting provider versions. Upgrading all modules to 3.x would
+  require testing and potential code changes across the codebase.
+  Date/Author: 2026-01-16 / Claude.
+
+Initial anticipated decisions below:
 
 - Decision: (Pending) Use composite action pattern with Python scripts.
   Rationale: Matches the established `bootstrap-vault-appliance` pattern;

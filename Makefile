@@ -153,6 +153,7 @@ lint-infra:
 	cd infra/modules/cert_manager && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_eso && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/valkey && tflint --init && tflint --config .tflint.hcl
+	cd infra/modules/platform_render && tflint --init && tflint --config .tflint.hcl
 	mkdir -p .uv-cache
 	UV_CACHE_DIR=$(CURDIR)/.uv-cache uvx checkov -d infra
 
