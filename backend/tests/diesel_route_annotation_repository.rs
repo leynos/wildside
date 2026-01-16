@@ -10,7 +10,7 @@ use std::pin::Pin;
 use backend::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositoryError};
 use backend::domain::{RouteNote, RouteNoteContent, RouteProgress, UserId};
 use backend::outbound::persistence::{DbPool, DieselRouteAnnotationRepository, PoolConfig};
-use pg_embedded_setup_unpriv::TestCluster;
+use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
@@ -21,19 +21,15 @@ mod pg_embed;
 
 mod support;
 
-use pg_embed::test_cluster;
-use support::{
-    format_postgres_error, handle_cluster_setup_failure, migrate_schema, reset_database,
-};
-
-const TEST_DB: &str = "diesel_route_annotation_repo_test";
+use pg_embed::shared_cluster;
+use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
-    _cluster: TestCluster,
     repository: DieselRouteAnnotationRepository,
     user_id: UserId,
     route_id: Uuid,
+    _database: TemporaryDatabase,
 }
 
 fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
@@ -63,10 +59,9 @@ fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<()
 
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = test_cluster()?;
-    reset_database(&cluster, TEST_DB).map_err(|err| err.to_string())?;
-    let database_url = cluster.connection().database_url(TEST_DB);
-    migrate_schema(&database_url).map_err(|err| err.to_string())?;
+    let cluster = shared_cluster()?;
+    let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
+    let database_url = temp_db.url().to_string();
 
     let user_id = UserId::random();
     let route_id = Uuid::new_v4();
@@ -83,10 +78,10 @@ fn setup_context() -> Result<TestContext, String> {
 
     Ok(TestContext {
         runtime,
-        _cluster: cluster,
         repository,
         user_id,
         route_id,
+        _database: temp_db,
     })
 }
 

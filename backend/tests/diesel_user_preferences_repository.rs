@@ -6,7 +6,7 @@
 use backend::domain::ports::{UserPreferencesRepository, UserPreferencesRepositoryError};
 use backend::domain::{UnitSystem, UserId, UserPreferences};
 use backend::outbound::persistence::{DbPool, DieselUserPreferencesRepository, PoolConfig};
-use pg_embedded_setup_unpriv::TestCluster;
+use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
@@ -17,18 +17,14 @@ mod pg_embed;
 
 mod support;
 
-use pg_embed::test_cluster;
-use support::{
-    format_postgres_error, handle_cluster_setup_failure, migrate_schema, reset_database,
-};
-
-const TEST_DB: &str = "diesel_user_preferences_repo_test";
+use pg_embed::shared_cluster;
+use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
-    _cluster: TestCluster,
     repository: DieselUserPreferencesRepository,
     user_id: UserId,
+    _database: TemporaryDatabase,
 }
 
 fn seed_user(url: &str, user_id: &UserId) -> Result<(), String> {
@@ -46,10 +42,9 @@ fn seed_user(url: &str, user_id: &UserId) -> Result<(), String> {
 
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = test_cluster()?;
-    reset_database(&cluster, TEST_DB).map_err(|err| err.to_string())?;
-    let database_url = cluster.connection().database_url(TEST_DB);
-    migrate_schema(&database_url).map_err(|err| err.to_string())?;
+    let cluster = shared_cluster()?;
+    let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
+    let database_url = temp_db.url().to_string();
 
     let user_id = UserId::random();
     seed_user(&database_url, &user_id)?;
@@ -65,9 +60,9 @@ fn setup_context() -> Result<TestContext, String> {
 
     Ok(TestContext {
         runtime,
-        _cluster: cluster,
         repository,
         user_id,
+        _database: temp_db,
     })
 }
 

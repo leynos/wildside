@@ -43,4 +43,4 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
 }
 
 pub use cluster_skip::handle_cluster_setup_failure;
-pub use embedded_postgres::{migrate_schema, reset_database};
+pub use embedded_postgres::provision_template_database;

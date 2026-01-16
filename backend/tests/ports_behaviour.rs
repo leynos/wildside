@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
 use futures::executor::block_on;
-use pg_embedded_setup_unpriv::TestCluster;
+use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
@@ -15,12 +15,10 @@ mod pg_embed;
 
 mod support;
 
-use pg_embed::test_cluster;
+use pg_embed::shared_cluster;
 use support::embedded_postgres::drop_users_table;
 use support::format_postgres_error;
-use support::{handle_cluster_setup_failure, migrate_schema, reset_database};
-
-const CONTRACT_DB: &str = "ports_contract";
+use support::{handle_cluster_setup_failure, provision_template_database};
 
 #[fixture]
 fn sample_id() -> String {
@@ -90,40 +88,46 @@ impl UserRepository for PgUserRepository {
 }
 
 struct RepoContext {
-    _cluster: TestCluster,
     repository: PgUserRepository,
     database_url: String,
     last_write_error: Option<UserPersistenceError>,
     last_fetch_value: Option<Option<User>>,
     last_fetch_error: Option<UserPersistenceError>,
     persisted_user: Option<User>,
+    _database: TemporaryDatabase,
 }
 
 type SharedContext = Arc<Mutex<RepoContext>>;
 
-fn init_repo_context() -> Result<RepoContext, String> {
-    let cluster = test_cluster()?;
-    reset_database(&cluster, CONTRACT_DB).map_err(|err| err.to_string())?;
-    let database_url = cluster.connection().database_url(CONTRACT_DB);
-    migrate_schema(&database_url).map_err(|err| err.to_string())?;
-    let repository = PgUserRepository::connect(&database_url).map_err(|err| err.to_string())?;
-    Ok(RepoContext {
-        _cluster: cluster,
+#[fixture]
+fn repo_context() -> Option<RepoContext> {
+    let cluster = match shared_cluster() {
+        Ok(c) => c,
+        Err(reason) => return handle_cluster_setup_failure(reason),
+    };
+    let temp_db = match provision_template_database(cluster) {
+        Ok(db) => db,
+        Err(err) => return handle_cluster_setup_failure(err),
+    };
+    let database_url = temp_db.url().to_string();
+    let repository = match PgUserRepository::connect(&database_url) {
+        Ok(r) => r,
+        Err(err) => return handle_cluster_setup_failure(err.to_string()),
+    };
+    Some(RepoContext {
         repository,
         database_url,
         last_write_error: None,
         last_fetch_value: None,
         last_fetch_error: None,
         persisted_user: None,
+        _database: temp_db,
     })
 }
 
 #[fixture]
-fn repo_world() -> Option<SharedContext> {
-    match init_repo_context() {
-        Ok(context) => Some(Arc::new(Mutex::new(context))),
-        Err(reason) => handle_cluster_setup_failure(reason),
-    }
+fn repo_world(repo_context: Option<RepoContext>) -> Option<SharedContext> {
+    repo_context.map(|ctx| Arc::new(Mutex::new(ctx)))
 }
 
 #[given("a postgres-backed user repository")]
@@ -237,4 +241,40 @@ fn user_repository_reports_errors_when_schema_missing(
     the_users_table_is_dropped(repo_world.clone());
     the_repository_upserts_the_user(repo_world.clone(), sample_user);
     persistence_fails_with_a_query_error(repo_world);
+}
+
+#[rstest]
+fn template_databases_isolate_contract_runs(
+    #[from(repo_context)] context_one: Option<RepoContext>,
+    #[from(repo_context)] context_two: Option<RepoContext>,
+) {
+    let Some(context_one) = context_one else {
+        return;
+    };
+    let Some(context_two) = context_two else {
+        return;
+    };
+
+    let user = User::try_from_strings("22222222-2222-2222-2222-222222222222", "Isolation User")
+        .expect("isolation user is valid");
+
+    let repo_one = context_one.repository.clone();
+    block_on(async {
+        repo_one
+            .upsert(&user)
+            .await
+            .expect("first contract write succeeds");
+    });
+
+    let repo_two = context_two.repository.clone();
+    let fetched = block_on(async {
+        repo_two
+            .find_by_id(user.id())
+            .await
+            .expect("second contract read succeeds")
+    });
+    assert!(
+        fetched.is_none(),
+        "second contract should not observe writes"
+    );
 }

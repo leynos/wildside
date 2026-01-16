@@ -1,13 +1,16 @@
-# pg-embed-setup-unpriv user's guide
+# pg_embedded_setup_unpriv user guide
 
-The `pg-embed-setup-unpriv` crate prepares a PostgreSQL installation and data
-directory regardless of whether it starts with `root` privileges. The crate
-ships a small CLI binary named `pg_embedded_setup_unpriv` for this setup work.
-When the process runs as `root` it stages directories for `nobody` and
-delegates PostgreSQL lifecycle commands to the worker helper, which executes as
-the sandbox user. Unprivileged invocations keep the current identity and
-provision directories with the caller’s UID. This guide explains how to
-configure the crate and integrate it into automated test flows.
+The `pg_embedded_setup_unpriv` binary prepares a PostgreSQL installation and
+data directory regardless of whether it starts with `root` privileges. When the
+process runs as `root` it stages directories for `nobody` and delegates
+PostgreSQL lifecycle commands to the worker helper, which executes as the
+sandbox user. Unprivileged invocations keep the current identity and provision
+directories with the caller’s UID. This guide explains how to configure the
+tool and integrate it into automated test flows.
+
+Version 0.2.0 introduces template database helpers and shared cluster support
+for persistent test sessions, reducing per-test overhead without changing the
+core bootstrap flow.
 
 ## Prerequisites
 
@@ -40,26 +43,16 @@ configure the crate and integrate it into automated test flows.
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initialises the
+   cache, 0700 for the runtime and data directories), and initializes the
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
-   worker helper, so the privileged operations run entirely under the sandbox
-   user. Ownership fix-ups occur on every call, so running the tool twice
+   worker helper so the privileged operations run entirely under the sandbox
+   user. Ownership fix-ups occur on every call so running the tool twice
    remains idempotent.
 
-4. Pass the resulting paths and credentials to your tests. If you use
-   `postgresql_embedded` directly after the setup step, it can reuse the staged
-   binaries and data directory without needing `root`.
-
- `make test` honours a `PG_WORKER_PATH` variable that mirrors the
- `PG_EMBEDDED_WORKER` environment variable used by the helper. Override it to a
- user-writable path when running locally without elevated permissions:
-
-   ```bash
-   PG_WORKER_PATH=/tmp/pg_worker make test
-   ```
-
- The default remains `/var/tmp/pg_worker` to preserve CI behaviour.
+4. Pass the resulting paths and credentials to the tests. If
+   `postgresql_embedded` is used directly after the setup step, it can reuse
+   the staged binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -118,8 +111,28 @@ fn exercise_cluster() -> BootstrapResult<()> {
 
 The guard keeps `PGPASSFILE`, `TZ`, `TZDIR`, and the XDG directories populated
 for the duration of its lifetime, making synchronous tests usable without extra
-setup. Unit and behavioural tests assert that `postmaster.pid` disappears after
-drop, demonstrating that no orphaned processes remain.
+setup.
+
+## Observability
+
+Set `RUST_LOG=pg_embed::observability=info` to emit tracing spans that describe
+privilege drops, directory ownership or permission updates, scoped environment
+application, and the `postgresql_embedded` setup/start/stop lifecycle. The log
+target keeps sensitive values redacted: environment changes are rendered as
+`KEY=set` or `KEY=unset`, and PostgreSQL settings avoid echoing passwords.
+Enable `RUST_LOG=pg_embed::observability=debug` to surface a sanitized snapshot
+of the prepared settings, including the version requirement, host and port,
+installation and data directories, and the `.pgpass` location. Passwords log as
+`<redacted>` and configuration entries are reduced to their keys, so secrets
+stay out of the debug stream, even when bootstrap fails early. Subscribers that
+record span enter/exit events, for example via `FmtSpan::ENTER|CLOSE`, can
+reconstruct the lifecycle flow without needing additional instrumentation in
+downstream crates.
+
+Environment change summaries are truncated once they exceed roughly 512
+characters, while the change count is always recorded. Lifecycle failures now
+emit at `error` level, so log streams can distinguish genuine errors from the
+normal informational lifecycle noise.
 
 ### Using the `rstest` fixture
 
@@ -139,8 +152,8 @@ fn runs_migrations(test_cluster: TestCluster) {
 }
 ```
 
-The fixture integrates with `rstest-bdd` v0.2.0 so behaviour tests can remain
-declarative as well:
+The fixture integrates with `rstest-bdd`, a Behaviour-Driven Development (BDD)
+crate, so behaviour tests can remain declarative as well:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{test_support::test_cluster, TestCluster};
@@ -157,18 +170,68 @@ If PostgreSQL cannot start, the fixture panics with a
 tests fail immediately, while behaviour tests can convert known transient
 conditions into soft skips via the shared `skip_message` helper.
 
+### Shared cluster fixture for fast test isolation
+
+When test execution time is critical, use the `shared_test_cluster` fixture
+instead of `test_cluster`. The shared fixture initializes a single `PostgreSQL`
+cluster on first access and reuses it across all tests in the same binary,
+eliminating per-test bootstrap overhead.
+
+```rust,no_run
+use pg_embedded_setup_unpriv::{test_support::shared_test_cluster, TestCluster};
+use rstest::rstest;
+
+#[rstest]
+fn uses_shared_cluster(shared_test_cluster: &'static TestCluster) {
+    // Create a per-test database for isolation
+    shared_test_cluster.create_database("my_test_db").unwrap();
+
+    // Run tests against the database
+    let url = shared_test_cluster.connection().database_url("my_test_db");
+    assert!(url.contains("my_test_db"));
+
+    // Clean up (optional - the database is dropped when the cluster shuts down)
+    shared_test_cluster.drop_database("my_test_db").unwrap();
+}
+```
+
+For programmatic access without `rstest`, use `shared_cluster()` directly:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::test_support::shared_cluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = shared_cluster()?;
+
+// Multiple calls return the same instance
+let cluster2 = shared_cluster()?;
+assert!(std::ptr::eq(cluster, cluster2));
+# Ok(())
+# }
+```
+
+**When to use each fixture:**
+
+| Fixture               | Use case                                          |
+| --------------------- | ------------------------------------------------- |
+| `test_cluster`        | Tests that modify cluster-level settings or state |
+| `shared_test_cluster` | Tests that only need database-level isolation     |
+
+The shared cluster is particularly effective when combined with template
+databases (see "Database lifecycle management" below) to reduce per-test
+overhead from seconds to milliseconds.
+
 ### Connection helpers and Diesel integration
 
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When you need to persist those values beyond the guard
-you can call `metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When persistence beyond the guard is required, call
+`metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
-optional for consumers, while `make test` already enables `--all-features` so
-the helper is exercised by the smoke tests.
+optional for consumers.
 
 ```rust,no_run
 use diesel::prelude::*;
@@ -197,9 +260,253 @@ assert!(url.starts_with("postgresql://"));
 # }
 ```
 
+### Database lifecycle management
+
+`TestClusterConnection` provides methods for programmatically creating and
+dropping databases on the running cluster. These are useful for test isolation
+patterns where each test creates its own database to avoid cross-test
+interference.
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+let conn = cluster.connection();
+
+// Create a new database
+conn.create_database("my_test_db")?;
+
+// Check if a database exists
+assert!(conn.database_exists("my_test_db")?);
+assert!(conn.database_exists("postgres")?); // Built-in database
+
+// Drop the database when done
+conn.drop_database("my_test_db")?;
+assert!(!conn.database_exists("my_test_db")?);
+# Ok(())
+# }
+```
+
+The `TestCluster` type also exposes convenience wrappers that delegate to the
+connection methods:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+
+// These delegate to cluster.connection().create_database(...) etc.
+cluster.create_database("my_test_db")?;
+assert!(cluster.database_exists("my_test_db")?);
+cluster.drop_database("my_test_db")?;
+# Ok(())
+# }
+```
+
+All methods connect to the `postgres` database as the superuser to execute the
+Data Definition Language (DDL) statements. Errors are returned when:
+
+- Creating a database that already exists
+- Dropping a database that does not exist
+- Dropping a database with active connections
+- Connection to the cluster fails
+
+### Template databases for fast test isolation
+
+PostgreSQL's `CREATE DATABASE … TEMPLATE` mechanism clones an existing database
+via a filesystem-level copy, completing in milliseconds regardless of schema
+complexity. This is significantly faster than running migrations on each test
+database.
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+
+// Create a template database and apply migrations
+cluster.create_database("my_template")?;
+// ... run migrations on my_template ...
+
+// Clone the template for each test (milliseconds vs seconds)
+cluster.create_database_from_template("test_db_1", "my_template")?;
+cluster.create_database_from_template("test_db_2", "my_template")?;
+# Ok(())
+# }
+```
+
+Template helpers live on `TestClusterConnection` and are also exposed on
+`TestCluster` for convenience. Use unique database names (for example,
+`format!("test_{}", uuid::Uuid::new_v4())`) to avoid collisions under parallel
+execution.
+
+The `ensure_template_exists` method provides concurrency-safe template creation
+with per-template locking to prevent race conditions when multiple tests try to
+initialize the same template simultaneously:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+
+// Only creates and migrates if the template doesn't exist
+cluster.ensure_template_exists("migrated_template", |db_name| {
+    // Run migrations on the newly created database
+    // e.g., diesel::migration::run(&mut conn)?;
+    Ok(())
+})?;
+
+// Clone for the test
+cluster.create_database_from_template("test_db", "migrated_template")?;
+# Ok(())
+# }
+```
+
+For versioned template names that automatically invalidate when migrations
+change, use the `hash_directory` helper to generate a content-based hash:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::test_support::hash_directory;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let hash = hash_directory("migrations")?;
+let template_name = format!("template_{}", &hash[..8]);
+// Template name changes when any migration file changes
+# Ok(())
+# }
+```
+
+If a migration version is already tracked, include it in the template name
+instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
+template invalidation explicit without hashing the migration directory.
+
+### Performance comparison
+
+The following table compares test isolation approaches:
+
+| Approach                       | Bootstrap | Per-test overhead | Isolation |
+| ------------------------------ | --------- | ----------------- | --------- |
+| Per-test `TestCluster`         | Per test  | 20–30 seconds     | Full      |
+| Shared cluster, fresh database | Once      | 1–5 seconds       | Database  |
+| Shared cluster, template clone | Once      | 10–50 ms          | Database  |
+
+**When to use each approach:**
+
+- **Per-test cluster (`test_cluster` fixture):** Use when tests modify
+  cluster-level settings, require specific PostgreSQL versions, or need
+  complete isolation from other tests.
+- **Shared cluster with fresh databases:** Use when tests need database-level
+  isolation but can share the same cluster. Suitable when migration overhead is
+  acceptable.
+- **Shared cluster with template cloning (`shared_test_cluster` fixture):** Use
+  for maximum performance when tests only need database-level isolation.
+  Requires upfront template creation, but reduces per-test overhead by orders
+  of magnitude.
+
+### Database cleanup strategies
+
+When using a shared cluster, databases created during tests persist until
+explicitly dropped or the cluster shuts down. Consider these strategies:
+
+**Explicit cleanup:** Drop databases after each test to reclaim disk space and
+prevent name collisions:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+let db_name = format!("test_{}", uuid::Uuid::new_v4());
+cluster.create_database_from_template(&db_name, "my_template")?;
+
+// ... run test ...
+
+cluster.drop_database(&db_name)?; // Explicit cleanup
+# Ok(())
+# }
+```
+
+**Cluster teardown cleanup:** Let the shared cluster drop all databases when
+the test binary exits. This is simpler but uses more disk space during the test
+run:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::test_support::shared_cluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = shared_cluster()?;
+let db_name = format!("test_{}", uuid::Uuid::new_v4());
+cluster.create_database_from_template(&db_name, "my_template")?;
+
+// ... run test ...
+// Database dropped automatically when cluster shuts down
+# Ok(())
+# }
+```
+
+**Active connection handling:** Dropping a database with active connections
+fails. Ensure all connections are closed before calling `drop_database`. If
+using connection pools, drain the pool first.
+
+### Automatic cleanup with TemporaryDatabase
+
+The `TemporaryDatabase` guard provides Resource Acquisition Is Initialization
+(RAII) cleanup semantics. When the guard goes out of scope, the database is
+automatically dropped:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+
+// Create a temporary database with automatic cleanup
+let temp_db = cluster.temporary_database("my_test_db")?;
+
+// Use the database
+let url = temp_db.url();
+// ... run queries ...
+
+// Database is dropped automatically when temp_db goes out of scope
+drop(temp_db);
+# Ok(())
+# }
+```
+
+For template-based workflows, use `temporary_database_from_template`:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::TestCluster;
+
+# fn main() -> pg_embedded_setup_unpriv::BootstrapResult<()> {
+let cluster = TestCluster::new()?;
+
+// Ensure the template exists
+cluster.ensure_template_exists("migrated_template", |_| Ok(()))?;
+
+// Create a temporary database from the template
+let temp_db = cluster.temporary_database_from_template("test_db", "migrated_template")?;
+
+// Database is automatically dropped when temp_db goes out of scope
+# Ok(())
+# }
+```
+
+**Drop behaviour:**
+
+- `drop_database()` — Explicitly drop the database, failing if connections
+  exist. Consumes the guard.
+- `force_drop()` — Terminate active connections before dropping. Useful when
+  connection pools haven't been drained.
+- Implicit drop (guard goes out of scope) — Best-effort drop with a warning
+  logged on failure.
+
 ## Privilege detection and idempotence
 
-- `pg-embed-setup-unpriv` detects its effective user ID at runtime. Root
+- `pg_embedded_setup_unpriv` detects its effective user ID at runtime. Root
   processes follow the privileged branch and complete all filesystem work as
   `nobody`; non-root invocations leave permissions untouched and keep the
   caller’s UID on the runtime directories.
@@ -212,21 +519,18 @@ assert!(url.starts_with("postgresql://"));
   because it holds the PostgreSQL socket, `postmaster.pid`, and `.pgpass`, so
   leaking read or execute access would expose credentials or let other users
   interfere with the helper’s cluster lifecycle.
-- Behavioural tests driven by `rstest-bdd` exercise both branches to guard
-  against regressions in privilege detection or ownership management.
 
 ## Integrating with root-only test agents
 
 When authoring end-to-end tests that exercise PostgreSQL while the harness is
 still running as `root`, follow these steps:
 
-- Invoke `pg_embedded_setup_unpriv` (from the `pg-embed-setup-unpriv` crate)
-  before handing control to less-privileged workers. This prepares file
-  ownership, caches the binaries, and records the superuser password in a
-  location accessible to `nobody`.
-- Export the `PG_EMBEDDED_WORKER` environment variable with the absolute path to
-  the `pg_worker` helper binary. The library invokes this helper when it needs
-  to execute PostgreSQL lifecycle commands as `nobody`.
+- Invoke `pg_embedded_setup_unpriv` before handing control to less-privileged
+  workers. This prepares file ownership, caches the binaries, and records the
+  superuser password in a location accessible to `nobody`.
+- Export the `PG_EMBEDDED_WORKER` environment variable with the absolute path
+  to the `pg_worker` helper binary. The library invokes this helper when it
+  needs to execute PostgreSQL lifecycle commands as `nobody`.
 - Keep the test process running as `root`; the helper binary demotes itself
   before calling into `postgresql_embedded` so the main process never changes
   UID mid-test.
@@ -235,19 +539,19 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
-  distribution) if you are running the CLI. The library helper sets `TZ`
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the
+  distribution) when running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
   valid timezone database.
 
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment if you see
-  `invalid value for parameter "TimeZone": "UTC"`.
+  `tzdata` package. Install it inside the execution environment when
+  `invalid value for parameter "TimeZone": "UTC"` appears.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
-  hit rate limits in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable when
+  rate limits appear in CI.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,
   `bootstrap_privileges::bootstrap_as_root`) do not trip the underlying Clap
@@ -259,6 +563,5 @@ still running as `root`, follow these steps:
 
 ## Further reading
 
-- `README.md` – overview, configuration reference, and troubleshooting tips.
-- `tests/e2e_postgresql_embedded_diesel.rs` – example of combining the helper
-  with Diesel-based integration tests while running under `root`.
+- `README.md` — overview, configuration reference, and troubleshooting tips.
+- `docs/developers-guide.md` — contributor notes and internal testing context.

@@ -8,51 +8,77 @@
 //! - Schema setup runs embedded Diesel migrations so test schemas do not drift.
 //! - Table teardown helpers provide a standard way to simulate schema loss.
 
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
 use backend::domain::ports::UserPersistenceError;
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use pg_embedded_setup_unpriv::TestCluster;
+use pg_embedded_setup_unpriv::test_support::hash_directory;
+use pg_embedded_setup_unpriv::{TemporaryDatabase, TestCluster};
 use postgres::{Client, NoTls};
+use uuid::Uuid;
 
 use super::format_postgres_error;
 
 /// Embedded migrations from the backend/migrations directory.
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-fn validate_pg_identifier(name: &str) -> Result<(), UserPersistenceError> {
-    let is_valid = !name.is_empty()
-        && name
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
+static TEMPLATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-    if is_valid {
-        Ok(())
-    } else {
-        Err(UserPersistenceError::query(format!(
-            "invalid database identifier: {name}"
-        )))
-    }
+const TEMPLATE_NAME_PREFIX: &str = "backend_template";
+
+fn migrations_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
 }
 
-/// Drops and recreates a database within the embedded cluster.
-pub fn reset_database(cluster: &TestCluster, db_name: &str) -> Result<(), UserPersistenceError> {
-    validate_pg_identifier(db_name)?;
+fn template_database_name() -> Result<String, UserPersistenceError> {
+    let hash = hash_directory(migrations_dir())
+        .map_err(|err| UserPersistenceError::query(format!("hash migrations: {err}")))?;
+    let short_hash = hash.get(..8).unwrap_or(&hash);
+    Ok(format!("{TEMPLATE_NAME_PREFIX}_{short_hash}"))
+}
 
-    let admin_url = cluster.connection().database_url("postgres");
-    let mut client = Client::connect(&admin_url, NoTls)
-        .map_err(|err| UserPersistenceError::connection(format_postgres_error(&err)))?;
+fn new_test_database_name() -> String {
+    format!("test_{}", Uuid::new_v4())
+}
 
-    // `DROP DATABASE` requires that no active sessions exist for `db_name`.
-    // This helper assumes tests drop any connections to the database before
-    // attempting a reset.
-    client
-        .batch_execute(&format!("DROP DATABASE IF EXISTS \"{db_name}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    client
-        .batch_execute(&format!("CREATE DATABASE \"{db_name}\";"))
-        .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
-    Ok(())
+/// Creates or reuses a template database with the latest migrations applied.
+fn ensure_template_database(cluster: &TestCluster) -> Result<String, UserPersistenceError> {
+    let template_name = template_database_name()?;
+    let _lock = TEMPLATE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+
+    let exists = cluster
+        .database_exists(template_name.as_str())
+        .map_err(|err| UserPersistenceError::query(format!("template check: {err:?}")))?;
+
+    if !exists {
+        cluster
+            .create_database(template_name.as_str())
+            .map_err(|err| UserPersistenceError::query(format!("create template: {err:?}")))?;
+
+        let url = cluster.connection().database_url(&template_name);
+        migrate_schema(&url)?;
+    }
+
+    Ok(template_name)
+}
+
+/// Provisions a temporary database cloned from the migration template.
+pub fn provision_template_database(
+    cluster: &TestCluster,
+) -> Result<TemporaryDatabase, UserPersistenceError> {
+    let template_name = ensure_template_database(cluster)?;
+    let db_name = new_test_database_name();
+    cluster
+        .temporary_database_from_template(db_name.as_str(), template_name.as_str())
+        .map_err(|err| {
+            UserPersistenceError::query(format!("create database from template: {err:?}"))
+        })
 }
 
 /// Runs all pending Diesel migrations against the test database.

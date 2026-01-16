@@ -29,6 +29,21 @@ write access.
   consistent between the helper and the test runner while preserving the
   default CI path.
 
+## Embedded Postgres test strategy
+
+Backend integration tests use the shared cluster helpers from
+`pg-embed-setup-unpriv` v0.2.0. A single embedded PostgreSQL instance is
+started per test process, and each test receives a temporary database cloned
+from a migration-backed template. This keeps per-test setup fast while
+preserving database-level isolation.
+
+If full cluster-level isolation is required (for example, to change
+server-wide settings), switch the test to the per-test `TestCluster` helper
+instead of the shared cluster path.
+
+To force the template to rebuild locally, delete the workspace cache under
+`target/pg-embed/shared-*` and re-run the relevant tests.
+
 ## Troubleshooting
 
 - Permission denied during `prepare-pg-worker`: re-run with `PG_WORKER_PATH` as
