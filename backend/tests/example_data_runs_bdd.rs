@@ -87,9 +87,12 @@ impl ExampleDataRunsWorld {
         self.setup_error.borrow().is_some()
     }
 
-    fn record_seed(&self, seed_key: &str) {
+    fn execute_async<T>(
+        &self,
+        operation: impl FnOnce(&Runtime, &DieselExampleDataRunsRepository) -> T,
+    ) -> Option<T> {
         if self.is_skipped() {
-            return;
+            return None;
         }
 
         let runtime = self.runtime.borrow();
@@ -97,22 +100,23 @@ impl ExampleDataRunsWorld {
         let repo = self.repository.borrow();
         let repo = repo.as_ref().expect("repository");
 
-        let result = runtime.block_on(async { repo.try_record_seed(seed_key, 12, 2026).await });
-        *self.last_record_result.borrow_mut() = Some(result);
+        Some(operation(runtime, repo))
+    }
+
+    fn record_seed(&self, seed_key: &str) {
+        if let Some(result) = self.execute_async(|runtime, repo| {
+            runtime.block_on(async { repo.try_record_seed(seed_key, 12, 2026).await })
+        }) {
+            *self.last_record_result.borrow_mut() = Some(result);
+        }
     }
 
     fn check_seed_exists(&self, seed_key: &str) {
-        if self.is_skipped() {
-            return;
+        if let Some(result) = self.execute_async(|runtime, repo| {
+            runtime.block_on(async { repo.is_seeded(seed_key).await })
+        }) {
+            *self.last_is_seeded_result.borrow_mut() = Some(result);
         }
-
-        let runtime = self.runtime.borrow();
-        let runtime = runtime.as_ref().expect("runtime");
-        let repo = self.repository.borrow();
-        let repo = repo.as_ref().expect("repository");
-
-        let result = runtime.block_on(async { repo.is_seeded(seed_key).await });
-        *self.last_is_seeded_result.borrow_mut() = Some(result);
     }
 
     fn assert_is_seeded_result(&self, expected: bool) {
