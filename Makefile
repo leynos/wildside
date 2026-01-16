@@ -47,7 +47,7 @@ GO_TEST_ENV := GOPATH=$(GO_CACHE_ROOT) GOMODCACHE=$(GO_CACHE_ROOT)/pkg/mod GOCAC
         check-fmt check-test-deps markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
 	        lint-asyncapi lint-openapi lint-makefile lint-actions lint-infra conftest tofu doks-test doks-policy fluxcd-test fluxcd-policy \
 	        vault-appliance-test vault-appliance-policy dev-cluster-test workspace-sync scripts-test traefik-test traefik-policy traefik-e2e lint-architecture \
-	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy cnpg-test cnpg-policy valkey-test valkey-policy
+	        external-dns-test external-dns-policy vault-eso-test vault-eso-policy cnpg-test cnpg-policy valkey-test valkey-policy platform-render-test
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -646,3 +646,8 @@ valkey-test: ## Run Valkey module Terratest suite
 valkey-policy: ## Run Valkey render policy checks
 	@echo "Running Valkey render policy checks..."
 	./scripts/valkey-render-policy.sh
+
+.PHONY: platform-render-test
+platform-render-test: ## Run platform_render module Terratest suite
+	@echo "Running platform_render module tests..."
+	cd infra/modules/platform_render/tests && $(GO_TEST_ENV) go test -v -timeout 30m ./...
