@@ -145,6 +145,7 @@ lint-infra:
 	$(call ensure_tool,uvx)
 	cd infra/modules/doks && tflint --init && tflint --config .tflint.hcl
 	cd infra/clusters/dev && tflint --init && tflint --config .tflint.hcl
+	cd infra/clusters/wildside-infra-k8s && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/fluxcd && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/vault_appliance && tflint --init && tflint --config .tflint.hcl
 	cd infra/modules/traefik && tflint --init && tflint --config .tflint.hcl
