@@ -114,6 +114,26 @@ impl ExampleDataRunsWorld {
         let result = runtime.block_on(async { repo.is_seeded(seed_key).await });
         *self.last_is_seeded_result.borrow_mut() = Some(result);
     }
+
+    fn assert_is_seeded_result(&self, expected: bool) {
+        if self.is_skipped() {
+            eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+            return;
+        }
+
+        let result = self.last_is_seeded_result.borrow();
+        let result = result.as_ref().expect("is_seeded result should be set");
+
+        match (result, expected) {
+            (Ok(actual), expected) if *actual == expected => {}
+            (Ok(actual), expected) => {
+                panic!("expected is_seeded={expected}, got {actual}")
+            }
+            (Err(err), expected) => {
+                panic!("expected is_seeded={expected}, got error: {err}")
+            }
+        }
+    }
 }
 
 #[fixture]
@@ -183,36 +203,12 @@ fn the_result_is(world: &ExampleDataRunsWorld, expected: String) {
 
 #[then("the existence check returns true")]
 fn the_existence_check_returns_true(world: &ExampleDataRunsWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
-        return;
-    }
-
-    let result = world.last_is_seeded_result.borrow();
-    let result = result.as_ref().expect("is_seeded result should be set");
-
-    match result {
-        Ok(true) => {}
-        Ok(false) => panic!("expected is_seeded=true, got false"),
-        Err(err) => panic!("expected is_seeded=true, got error: {err}"),
-    }
+    world.assert_is_seeded_result(true);
 }
 
 #[then("the existence check returns false")]
 fn the_existence_check_returns_false(world: &ExampleDataRunsWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
-        return;
-    }
-
-    let result = world.last_is_seeded_result.borrow();
-    let result = result.as_ref().expect("is_seeded result should be set");
-
-    match result {
-        Ok(false) => {}
-        Ok(true) => panic!("expected is_seeded=false, got true"),
-        Err(err) => panic!("expected is_seeded=false, got error: {err}"),
-    }
+    world.assert_is_seeded_result(false);
 }
 
 // -----------------------------------------------------------------------------
