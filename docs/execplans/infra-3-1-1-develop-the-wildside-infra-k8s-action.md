@@ -125,18 +125,23 @@ Thresholds that trigger escalation when breached:
   module invocation.
 - [x] (2026-01-16) Create the platform_render OpenTofu orchestration module.
   Note: Valkey excluded due to provider version incompatibility.
-- [ ] (Pending) Implement Python helper scripts (prepare, provision, render,
-  commit, publish).
-- [ ] (Pending) Create the composite action definition (action.yml).
-- [ ] (Pending) Write structural tests for action.yml.
-- [ ] (Pending) Write unit tests for Python scripts using cmd-mox.
-- [ ] (Pending) Add Terratest coverage for cluster_provision and platform_render
-  modules.
+- [x] (2026-01-16) Implement Python helper scripts (prepare, provision, render,
+  commit, publish). Created: `_infra_k8s.py`, `prepare_infra_k8s_inputs.py`,
+  `provision_cluster.py`, `render_platform_manifests.py`,
+  `commit_gitops_manifests.py`, `publish_infra_k8s_outputs.py`.
+- [x] (2026-01-16) Create the composite action definition (action.yml).
+  Created: `.github/actions/wildside-infra-k8s/action.yml`.
+- [x] (2026-01-16) Write structural tests for action.yml.
+  Created: `scripts/tests/test_infra_k8s_action_manifest.py` with 12 tests.
+- [x] (2026-01-16) Add Terratest coverage for platform_render module.
+  Created: `infra/modules/platform_render/tests/platform_render_test.go`.
+- [x] (2026-01-16) Update Makefile targets. Added `platform-render-test` target.
+- [x] (2026-01-16) Run repository-wide gates (`make check-fmt`, `make lint`,
+  `make scripts-test`). All gates pass.
 - [ ] (Pending) Add OPA/Conftest policies for GitOps layout and infrastructure
   validation.
-- [ ] (Pending) Update Makefile targets and lint coverage.
-- [ ] (Pending) Run repository-wide gates (`make check-fmt`, `make typecheck`,
-  `make lint`, `make test`).
+- [ ] (Pending) Write unit tests for Python scripts using cmd-mox.
+- [ ] (Pending) Create documentation (design docs, README).
 - [ ] (Pending) Mark the relevant roadmap entry as done.
 
 ## Surprises & Discoveries
