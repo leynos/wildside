@@ -550,6 +550,11 @@ data without rewriting view components.
   Scopes keys by `MutationType` enum so the same client-generated UUID can be
   reused across different mutation types without collision. TTL is configurable
   via `IDEMPOTENCY_TTL_HOURS` environment variable (defaults to 24 hours).
+- `ExampleDataRunsRepository` (write): records which example data seeds have
+  been applied using `INSERT ... ON CONFLICT DO NOTHING` semantics. Guards
+  against duplicate seeding on concurrent startups or restarts. Returns
+  `SeedingResult::Applied` or `SeedingResult::AlreadySeeded` to distinguish
+  between new and previously applied seeds.
 
 #### Driving ports (services and queries)
 
