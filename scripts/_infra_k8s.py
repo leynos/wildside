@@ -126,6 +126,8 @@ def run_tofu(
     cmd = ["tofu", *args]
     merged_env = {**os.environ, **(env or {})}
 
+    # Security: list-based invocation without shell=True is safe from injection.
+    # Arguments come from typed wrapper functions with Path/dataclass inputs.
     result = subprocess.run(
         cmd,
         cwd=cwd,
