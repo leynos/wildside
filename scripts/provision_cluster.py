@@ -243,6 +243,20 @@ def provision_cluster(
     return True, outputs
 
 
+def _extract_output_value(outputs: dict[str, object], key: str) -> str | None:
+    """Extract a value from OpenTofu outputs, handling both direct and wrapped formats.
+
+    OpenTofu outputs may be returned as direct values or as dicts with a "value" key.
+    This helper normalises both formats to a string, or returns None if the key is absent.
+    """
+    if key not in outputs:
+        return None
+    output = outputs[key]
+    if isinstance(output, dict) and "value" in output:
+        return str(output["value"])
+    return str(output)
+
+
 def export_cluster_outputs(
     inputs: ProvisionInputs,
     outputs: dict[str, object],
@@ -250,31 +264,15 @@ def export_cluster_outputs(
     """Export cluster outputs to GITHUB_ENV."""
     env_vars: dict[str, str] = {}
 
-    # Extract cluster_id
-    if "cluster_id" in outputs:
-        cluster_id = outputs["cluster_id"]
-        if isinstance(cluster_id, dict) and "value" in cluster_id:
-            env_vars["CLUSTER_ID"] = str(cluster_id["value"])
-        else:
-            env_vars["CLUSTER_ID"] = str(cluster_id)
+    if cluster_id := _extract_output_value(outputs, "cluster_id"):
+        env_vars["CLUSTER_ID"] = cluster_id
 
-    # Extract endpoint
-    if "endpoint" in outputs:
-        endpoint = outputs["endpoint"]
-        if isinstance(endpoint, dict) and "value" in endpoint:
-            env_vars["CLUSTER_ENDPOINT"] = str(endpoint["value"])
-        else:
-            env_vars["CLUSTER_ENDPOINT"] = str(endpoint)
+    if endpoint := _extract_output_value(outputs, "endpoint"):
+        env_vars["CLUSTER_ENDPOINT"] = endpoint
 
-    # Extract kubeconfig (sensitive)
-    if "kubeconfig" in outputs:
-        kubeconfig = outputs["kubeconfig"]
-        if isinstance(kubeconfig, dict) and "value" in kubeconfig:
-            kubeconfig_value = str(kubeconfig["value"])
-        else:
-            kubeconfig_value = str(kubeconfig)
-        mask_secret(kubeconfig_value)
-        env_vars["KUBECONFIG_RAW"] = kubeconfig_value
+    if kubeconfig := _extract_output_value(outputs, "kubeconfig"):
+        mask_secret(kubeconfig)
+        env_vars["KUBECONFIG_RAW"] = kubeconfig
 
     if env_vars:
         append_github_env(inputs.github_env, env_vars)
