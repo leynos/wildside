@@ -47,7 +47,8 @@ seeing no functional differences, only faster setup.
   Severity: medium
   Likelihood: medium
   Mitigation: Use template clones or temporary databases per test with
-  unique names and RAII cleanup; keep cluster-level isolation tests on the
+  unique names and Resource Acquisition Is Initialization (RAII) cleanup;
+  keep cluster-level isolation tests on the
   per-test cluster path.
 
 - Risk: Template creation could race under parallel tests.
@@ -152,7 +153,8 @@ than applying migrations each time. Persistent sessions refer to reusing a
 single running PostgreSQL cluster across tests (a shared cluster) instead of
 starting a fresh cluster per test.
 
-The updated user guide at `docs/pg-embed-setup-unpriv-users-guide.md` describes
+The updated user guide at
+`docs/pg-embed-setup-unpriv-users-guide.md` describes
 API helpers such as `shared_cluster`, `shared_test_cluster`,
 `create_database_from_template`, `ensure_template_exists`, and
 `temporary_database_from_template`. This plan uses those APIs as the new
