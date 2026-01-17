@@ -219,6 +219,46 @@ def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
     return variables
 
 
+def _run_tofu_init(module_path: Path) -> None:
+    """Run tofu init and raise on failure."""
+    print("\n--- Running tofu init ---")
+    result = run_tofu(["init", "-input=false"], module_path)
+    if not result.success:
+        print(f"error: tofu init failed: {result.stderr}", file=sys.stderr)
+        raise RuntimeError("tofu init failed")
+    print(result.stdout)
+
+
+def _run_tofu_apply(module_path: Path, var_file: Path) -> None:
+    """Run tofu apply and raise on failure."""
+    print("\n--- Running tofu apply ---")
+    result = run_tofu(
+        ["apply", "-auto-approve", "-input=false", f"-var-file={var_file}"],
+        module_path,
+    )
+    if not result.success:
+        print(f"error: tofu apply failed: {result.stderr}", file=sys.stderr)
+        raise RuntimeError("tofu apply failed")
+    print(result.stdout)
+
+
+def _extract_rendered_manifests(outputs: dict[str, object]) -> dict[str, str]:
+    """Extract rendered manifests from OpenTofu outputs.
+
+    Handles both direct output format and wrapped format where the value
+    is nested under a "value" key.
+    """
+    if "rendered_manifests" not in outputs:
+        return {}
+    manifests_raw = outputs["rendered_manifests"]
+    if not isinstance(manifests_raw, dict):
+        return {}
+    # Handle nested output structure
+    if "value" in manifests_raw:
+        manifests_raw = manifests_raw["value"]
+    return {str(path): str(content) for path, content in manifests_raw.items()}
+
+
 def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[str, str]:
     """Run OpenTofu to render platform manifests.
 
@@ -239,42 +279,12 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     print(f"  vault-eso: {inputs.enable_vault_eso}")
     print(f"  CNPG: {inputs.enable_cnpg}")
 
-    # Initialise the module
-    print("\n--- Running tofu init ---")
-    init_result = run_tofu(["init", "-input=false"], PLATFORM_RENDER_PATH)
-    if not init_result.success:
-        print(f"error: tofu init failed: {init_result.stderr}", file=sys.stderr)
-        raise RuntimeError("tofu init failed")
+    _run_tofu_init(PLATFORM_RENDER_PATH)
+    _run_tofu_apply(PLATFORM_RENDER_PATH, var_file)
 
-    print(init_result.stdout)
-
-    # Run apply to render manifests
-    print("\n--- Running tofu apply ---")
-    apply_result = run_tofu(
-        ["apply", "-auto-approve", "-input=false", f"-var-file={var_file}"],
-        PLATFORM_RENDER_PATH,
-    )
-    if not apply_result.success:
-        print(f"error: tofu apply failed: {apply_result.stderr}", file=sys.stderr)
-        raise RuntimeError("tofu apply failed")
-
-    print(apply_result.stdout)
-
-    # Extract rendered_manifests output
     print("\n--- Extracting rendered manifests ---")
     outputs = tofu_output(PLATFORM_RENDER_PATH)
-
-    rendered_manifests: dict[str, str] = {}
-    if "rendered_manifests" in outputs:
-        manifests_raw = outputs["rendered_manifests"]
-        if isinstance(manifests_raw, dict):
-            # Handle nested output structure
-            if "value" in manifests_raw:
-                manifests_raw = manifests_raw["value"]
-            for path, content in manifests_raw.items():
-                rendered_manifests[str(path)] = str(content)
-
-    return rendered_manifests
+    return _extract_rendered_manifests(outputs)
 
 
 @app.command()
