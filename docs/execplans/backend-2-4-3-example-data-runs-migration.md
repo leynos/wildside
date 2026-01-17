@@ -140,6 +140,7 @@ Implementation completed successfully. All deliverables met:
 pass.
 
 **Lessons learned**:
+
 - The existing test infrastructure (pg-embedded-setup-unpriv) works well for
   new repository tests; copying established patterns reduces friction.
 - BDD tests in this repo use rstest-bdd v0.2.0 syntax; verify dependency
@@ -154,6 +155,7 @@ isolated from infrastructure concerns through ports (traits) and adapters
 (implementations).
 
 Key paths:
+
 - Domain ports: `backend/src/domain/ports/`
 - Persistence adapters: `backend/src/outbound/persistence/`
 - Migrations: `backend/migrations/`
@@ -166,6 +168,7 @@ generation but does not persist data. This task adds the persistence layer for
 tracking which seeds have been applied.
 
 Related documents:
+
 - `docs/backend-sample-data-design.md` - Design specification
 - `docs/wildside-backend-architecture.md` - Architecture reference
 - `docs/pg-embedded-setup-unpriv-users-guide.md` - Testing with embedded Postgres
@@ -178,6 +181,7 @@ Create `backend/migrations/2026-01-16-000000_create_example_data_runs/` with
 `up.sql` and `down.sql`.
 
 The table schema (from design doc):
+
 - `seed_key TEXT PRIMARY KEY` - The seed name, unique identifier
 - `seeded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - When seeding occurred
 - `user_count INTEGER NOT NULL` - Number of users created
@@ -201,6 +205,7 @@ In `backend/src/outbound/persistence/schema.rs`, add:
 Update `allow_tables_to_appear_in_same_query!` macro to include the new table.
 
 In `backend/src/outbound/persistence/models.rs`, add:
+
 - `ExampleDataRunRow` - Queryable struct for SELECT
 - `NewExampleDataRunRow` - Insertable struct for INSERT
 
@@ -262,6 +267,7 @@ Export from `backend/src/outbound/persistence/mod.rs`.
 ### Stage E: Add unit tests for error mapping
 
 In the adapter module, add `#[cfg(test)]` block with rstest tests:
+
 - `pool_error_maps_to_connection_error`
 - `diesel_error_maps_to_query_error`
 
@@ -272,6 +278,7 @@ Follow the pattern in `diesel_user_repository.rs`.
 Create `backend/tests/diesel_example_data_runs_repository.rs`:
 
 Use the established pattern from `diesel_user_repository.rs`:
+
 - `TestContext` with runtime, repository, database
 - `diesel_world` fixture with `pg-embed-setup-unpriv`
 - Test cases:
@@ -324,7 +331,7 @@ Update `docs/backend-roadmap.md` to mark task 2.4.3 as complete:
 All commands run from repository root:
 `/data/leynos/Projects/wildside.worktrees/backend-2-4-3-example-data-runs-migration`
 
-### Stage A: Create migration
+### Stage A: Migration commands
 
     mkdir -p backend/migrations/2026-01-16-000000_create_example_data_runs
 
@@ -355,6 +362,7 @@ Create/edit files as described in Plan of Work.
 ## Validation and Acceptance
 
 Quality criteria:
+
 - Tests: All existing tests pass; new tests for the repository pass
 - Lint/typecheck: `make lint` succeeds with no warnings
 - Formatting: `make check-fmt` succeeds
@@ -364,11 +372,13 @@ Quality method:
     make check-fmt && make lint && make test
 
 Expected output includes:
+
 - No formatting errors
 - No clippy warnings
 - All tests pass (current count ~450 + new tests)
 
 New tests should be visible in output:
+
 - `diesel_example_data_runs_repository::try_record_seed_returns_applied_on_first_insert`
 - `diesel_example_data_runs_repository::try_record_seed_returns_already_seeded_on_duplicate`
 - `diesel_example_data_runs_repository::is_seeded_returns_false_for_unknown_seed`
@@ -379,6 +389,7 @@ New tests should be visible in output:
 
 All changes are additive (new files, new table). If implementation fails
 partway:
+
 - Migration can be reverted with `diesel migration revert`
 - New source files can be deleted
 - Git can restore to clean state
@@ -416,6 +427,7 @@ Example port trait signature:
 ## Interfaces and Dependencies
 
 New files to create:
+
 - `backend/migrations/2026-01-16-000000_create_example_data_runs/up.sql`
 - `backend/migrations/2026-01-16-000000_create_example_data_runs/down.sql`
 - `backend/src/domain/ports/example_data_runs_repository.rs`
@@ -425,6 +437,7 @@ New files to create:
 - `backend/tests/features/example_data_runs.feature`
 
 Files to modify:
+
 - `backend/src/domain/ports/mod.rs` (add export)
 - `backend/src/outbound/persistence/mod.rs` (add export)
 - `backend/src/outbound/persistence/schema.rs` (add table definition)
@@ -433,6 +446,7 @@ Files to modify:
 - `docs/backend-roadmap.md` (mark task complete)
 
 Dependencies (all existing in workspace):
+
 - `diesel` - ORM and query builder
 - `diesel-async` - Async Diesel support
 - `async-trait` - Async trait support
