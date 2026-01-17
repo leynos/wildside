@@ -15,7 +15,6 @@ if str(REPO_ROOT) not in sys.path:
 from scripts._infra_k8s import TofuResult  # noqa: E402
 from scripts.provision_cluster import (  # noqa: E402
     ProvisionInputs,
-    RawProvisionInputs,
     build_backend_config,
     build_tfvars,
     export_cluster_outputs,
@@ -77,7 +76,7 @@ def test_resolve_provision_inputs_cli_override(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
 
-    inputs = resolve_provision_inputs(RawProvisionInputs(cluster_name="cli-name"))
+    inputs = resolve_provision_inputs(cluster_name="cli-name")
     assert inputs.cluster_name == "cli-name"
 
 
