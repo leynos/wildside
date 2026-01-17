@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -84,9 +84,36 @@ class RawProvisionInputs:
 
 
 def resolve_provision_inputs(
-    raw: RawProvisionInputs,
+    *,
+    cluster_name: str | None = None,
+    environment: str | None = None,
+    region: str | None = None,
+    kubernetes_version: str | None = None,
+    node_pools: str | None = None,
+    spaces_bucket: str | None = None,
+    spaces_region: str | None = None,
+    spaces_access_key: str | None = None,
+    spaces_secret_key: str | None = None,
+    runner_temp: Path | None = None,
+    github_env: Path | None = None,
+    dry_run: str | None = None,
 ) -> ProvisionInputs:
     """Resolve provisioning inputs from environment."""
+    raw = RawProvisionInputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        spaces_bucket=spaces_bucket,
+        spaces_region=spaces_region,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
+
     def to_path(value: Path | str) -> Path:
         return value if isinstance(value, Path) else Path(str(value))
 
@@ -318,8 +345,8 @@ def main(
     prepare_infra_k8s_inputs.py), configures the OpenTofu backend, runs
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
-    # Resolve inputs from environment (CLI args override)
-    raw_inputs = RawProvisionInputs(
+    # Resolve inputs from environment (CLI args override via resolve_input)
+    inputs = resolve_provision_inputs(
         cluster_name=cluster_name,
         environment=environment,
         region=region,
@@ -333,7 +360,6 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
-    inputs = resolve_provision_inputs(raw_inputs)
 
     # Build configurations
     backend_config = build_backend_config(inputs)
