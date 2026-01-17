@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -287,6 +287,40 @@ def export_cluster_outputs(
         print(f"Exported {len(env_vars)} variables to GITHUB_ENV")
 
 
+def _build_cli_overrides(
+    cluster_name: str | None,
+    environment: str | None,
+    region: str | None,
+    kubernetes_version: str | None,
+    node_pools: str | None,
+    spaces_bucket: str | None,
+    spaces_region: str | None,
+    spaces_access_key: str | None,
+    spaces_secret_key: str | None,
+    runner_temp: Path | None,
+    github_env: Path | None,
+    dry_run: str | None,
+) -> dict[str, object]:
+    """Build dictionary of CLI parameter overrides, excluding None values."""
+    raw_overrides: dict[str, object | None] = {
+        "cluster_name": cluster_name,
+        "environment": environment,
+        "region": region,
+        "kubernetes_version": kubernetes_version,
+        "node_pools": node_pools,
+        "spaces_bucket": spaces_bucket,
+        "spaces_region": spaces_region,
+        "spaces_access_key": spaces_access_key,
+        "spaces_secret_key": spaces_secret_key,
+        "runner_temp": runner_temp,
+        "github_env": github_env,
+    }
+    overrides = {key: value for key, value in raw_overrides.items() if value is not None}
+    if dry_run is not None:
+        overrides["dry_run"] = parse_bool(dry_run, default=False)
+    return overrides
+
+
 @app.command()
 def main(
     cluster_name: str | None = Parameter(),
@@ -309,7 +343,8 @@ def main(
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
     # Resolve inputs from environment (CLI args override)
-    inputs = resolve_provision_inputs(
+    inputs = resolve_provision_inputs()
+    overrides = _build_cli_overrides(
         cluster_name=cluster_name,
         environment=environment,
         region=region,
@@ -323,6 +358,8 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
+    if overrides:
+        inputs = replace(inputs, **overrides)
 
     # Build configurations
     backend_config = build_backend_config(inputs)
