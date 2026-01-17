@@ -88,9 +88,10 @@ seeding behaviour.
 
 ## Surprises & Discoveries
 
-- Observation: Backend uses rstest-bdd v0.2.0, not v0.3.2 as stated in the task
-  Evidence: Cargo.toml shows `rstest_bdd_macros = "0.2.0"`
-  Impact: Used v0.2.0 patterns for BDD tests; no issues encountered.
+- Observation: Backend initially used rstest-bdd v0.2.0, not v0.3.2 as stated
+  Evidence: Cargo.toml showed `rstest_bdd_macros = "0.2.0"`
+  Impact: Initial implementation used v0.2.0 patterns; later upgraded to v0.3.2
+  with `Slot<T>`, `ScenarioState` derive, and explicit scenario name bindings.
 
 - Observation: Type inference issues with `handle_cluster_setup_failure` in BDD tests
   Evidence: Compiler error `cannot infer type of the type parameter T`
@@ -185,7 +186,7 @@ The table schema (from design doc):
 - `seed_key TEXT PRIMARY KEY` - The seed name, unique identifier
 - `seeded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - When seeding occurred
 - `user_count INTEGER NOT NULL` - Number of users created
-- `seed BIGINT NOT NULL` - The RNG seed value used
+- `seed BIGINT NOT NULL` - The random number generator (RNG) seed value used
 
 No foreign keys, triggers, or indices required (simple marker table).
 
@@ -287,7 +288,7 @@ Use the established pattern from `diesel_user_repository.rs`:
   - `is_seeded_returns_false_for_unknown_seed`
   - `is_seeded_returns_true_after_recording`
 
-### Stage G: Add BDD behavioural tests
+### Stage G: Add behaviour-driven development (BDD) behavioural tests
 
 Create `backend/tests/example_data_runs_bdd.rs` and
 `backend/tests/features/example_data_runs.feature`:
@@ -447,7 +448,7 @@ Files to modify:
 
 Dependencies (all existing in workspace):
 
-- `diesel` - ORM and query builder
+- `diesel` - Object–relational mapping (ORM) and query builder
 - `diesel-async` - Async Diesel support
 - `async-trait` - Async trait support
 - `rstest` - Test fixtures

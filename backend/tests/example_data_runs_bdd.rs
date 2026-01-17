@@ -1,16 +1,17 @@
-//! Behaviour tests for example data seeding guard.
+//! Behaviour-driven development (BDD) tests for example data seeding guard.
 //!
 //! These scenarios validate that the repository correctly guards against
 //! duplicate seeding, allowing exactly-once semantics even under concurrent
 //! startup attempts.
 
-use std::cell::RefCell;
+use std::sync::Arc;
 
 use backend::domain::ports::{ExampleDataRunsError, ExampleDataRunsRepository, SeedingResult};
 use backend::outbound::persistence::{DbPool, DieselExampleDataRunsRepository, PoolConfig};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
-use rstest_bdd_macros::{given, scenario, then, when};
+use rstest_bdd::Slot;
+use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tokio::runtime::Runtime;
 
 #[path = "support/pg_embed.rs"]
@@ -25,27 +26,29 @@ use support::{handle_cluster_setup_failure, provision_template_database};
 // Test World
 // -----------------------------------------------------------------------------
 
+/// Wrapper for non-Clone types to enable storage in `Slot`.
+#[derive(Clone)]
+struct RuntimeHandle(Arc<Runtime>);
+
+/// Wrapper for the temporary database to enable storage in `Slot`.
+///
+/// The inner field is never read directly; it exists to keep the temporary
+/// database alive for the duration of the test.
+#[derive(Clone)]
+struct DatabaseHandle(#[expect(dead_code)] Arc<TemporaryDatabase>);
+
+/// Test world holding repository and test results.
+#[derive(Default, ScenarioState)]
 struct ExampleDataRunsWorld {
-    runtime: RefCell<Option<Runtime>>,
-    repository: RefCell<Option<DieselExampleDataRunsRepository>>,
-    last_record_result: RefCell<Option<Result<SeedingResult, ExampleDataRunsError>>>,
-    last_is_seeded_result: RefCell<Option<Result<bool, ExampleDataRunsError>>>,
-    _database: RefCell<Option<TemporaryDatabase>>,
-    setup_error: RefCell<Option<String>>,
+    runtime: Slot<RuntimeHandle>,
+    repository: Slot<DieselExampleDataRunsRepository>,
+    last_record_result: Slot<Result<SeedingResult, ExampleDataRunsError>>,
+    last_is_seeded_result: Slot<Result<bool, ExampleDataRunsError>>,
+    _database: Slot<DatabaseHandle>,
+    setup_error: Slot<String>,
 }
 
 impl ExampleDataRunsWorld {
-    fn new() -> Self {
-        Self {
-            runtime: RefCell::new(None),
-            repository: RefCell::new(None),
-            last_record_result: RefCell::new(None),
-            last_is_seeded_result: RefCell::new(None),
-            _database: RefCell::new(None),
-            setup_error: RefCell::new(None),
-        }
-    }
-
     fn setup_fresh_database(&self) {
         let runtime = Runtime::new().expect("create runtime");
 
@@ -53,7 +56,7 @@ impl ExampleDataRunsWorld {
             Ok(c) => c,
             Err(reason) => {
                 let _: Option<()> = handle_cluster_setup_failure(reason.clone());
-                *self.setup_error.borrow_mut() = Some(reason);
+                self.setup_error.set(reason);
                 return;
             }
         };
@@ -62,7 +65,7 @@ impl ExampleDataRunsWorld {
             Ok(db) => db,
             Err(err) => {
                 let _: Option<()> = handle_cluster_setup_failure(err.to_string());
-                *self.setup_error.borrow_mut() = Some(err.to_string());
+                self.setup_error.set(err.to_string());
                 return;
             }
         };
@@ -78,13 +81,13 @@ impl ExampleDataRunsWorld {
 
         let repository = DieselExampleDataRunsRepository::new(pool);
 
-        *self.runtime.borrow_mut() = Some(runtime);
-        *self.repository.borrow_mut() = Some(repository);
-        *self._database.borrow_mut() = Some(temp_db);
+        self.runtime.set(RuntimeHandle(Arc::new(runtime)));
+        self.repository.set(repository);
+        self._database.set(DatabaseHandle(Arc::new(temp_db)));
     }
 
     fn is_skipped(&self) -> bool {
-        self.setup_error.borrow().is_some()
+        self.setup_error.get().is_some()
     }
 
     fn execute_async<T>(
@@ -95,19 +98,17 @@ impl ExampleDataRunsWorld {
             return None;
         }
 
-        let runtime = self.runtime.borrow();
-        let runtime = runtime.as_ref().expect("runtime");
-        let repo = self.repository.borrow();
-        let repo = repo.as_ref().expect("repository");
+        let runtime_handle = self.runtime.get().expect("runtime");
+        let repo = self.repository.get().expect("repository");
 
-        Some(operation(runtime, repo))
+        Some(operation(&runtime_handle.0, &repo))
     }
 
     fn record_seed(&self, seed_key: &str) {
         if let Some(result) = self.execute_async(|runtime, repo| {
             runtime.block_on(async { repo.try_record_seed(seed_key, 12, 2026).await })
         }) {
-            *self.last_record_result.borrow_mut() = Some(result);
+            self.last_record_result.set(result);
         }
     }
 
@@ -115,7 +116,7 @@ impl ExampleDataRunsWorld {
         if let Some(result) = self.execute_async(|runtime, repo| {
             runtime.block_on(async { repo.is_seeded(seed_key).await })
         }) {
-            *self.last_is_seeded_result.borrow_mut() = Some(result);
+            self.last_is_seeded_result.set(result);
         }
     }
 
@@ -125,10 +126,12 @@ impl ExampleDataRunsWorld {
             return;
         }
 
-        let result = self.last_is_seeded_result.borrow();
-        let result = result.as_ref().expect("is_seeded result should be set");
+        let result = self
+            .last_is_seeded_result
+            .get()
+            .expect("is_seeded result should be set");
 
-        match (result, expected) {
+        match (&result, expected) {
             (Ok(actual), expected) if *actual == expected => {}
             (Ok(actual), expected) => {
                 panic!("expected is_seeded={expected}, got {actual}")
@@ -142,7 +145,7 @@ impl ExampleDataRunsWorld {
 
 #[fixture]
 fn world() -> ExampleDataRunsWorld {
-    ExampleDataRunsWorld::new()
+    ExampleDataRunsWorld::default()
 }
 
 // -----------------------------------------------------------------------------
@@ -187,8 +190,10 @@ fn the_result_is(world: &ExampleDataRunsWorld, expected: String) {
         return;
     }
 
-    let result = world.last_record_result.borrow();
-    let result = result.as_ref().expect("record result should be set");
+    let result = world
+        .last_record_result
+        .get()
+        .expect("record result should be set");
 
     match expected.as_str() {
         "\"applied\"" => match result {
@@ -216,10 +221,45 @@ fn the_existence_check_returns_false(world: &ExampleDataRunsWorld) {
 }
 
 // -----------------------------------------------------------------------------
-// Scenario Binding
+// Scenario Bindings
 // -----------------------------------------------------------------------------
 
-#[scenario(path = "tests/features/example_data_runs.feature")]
-fn example_data_runs_scenarios(world: ExampleDataRunsWorld) {
-    drop(world);
+#[scenario(
+    path = "tests/features/example_data_runs.feature",
+    name = "First seed attempt succeeds"
+)]
+fn first_seed_attempt_succeeds(world: ExampleDataRunsWorld) {
+    let _ = world;
+}
+
+#[scenario(
+    path = "tests/features/example_data_runs.feature",
+    name = "Duplicate seed attempt is detected"
+)]
+fn duplicate_seed_attempt_is_detected(world: ExampleDataRunsWorld) {
+    let _ = world;
+}
+
+#[scenario(
+    path = "tests/features/example_data_runs.feature",
+    name = "Different seeds are independent"
+)]
+fn different_seeds_are_independent(world: ExampleDataRunsWorld) {
+    let _ = world;
+}
+
+#[scenario(
+    path = "tests/features/example_data_runs.feature",
+    name = "Query returns false for unknown seeds"
+)]
+fn query_returns_false_for_unknown_seeds(world: ExampleDataRunsWorld) {
+    let _ = world;
+}
+
+#[scenario(
+    path = "tests/features/example_data_runs.feature",
+    name = "Query returns true for recorded seeds"
+)]
+fn query_returns_true_for_recorded_seeds(world: ExampleDataRunsWorld) {
+    let _ = world;
 }

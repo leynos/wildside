@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{ExampleDataRunsError, ExampleDataRunsRepository, SeedingResult};
 use backend::outbound::persistence::{DbPool, DieselExampleDataRunsRepository, PoolConfig};
+use futures::future::join_all;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
@@ -311,4 +312,106 @@ fn is_seeded_returns_true_after_recording(diesel_world: Option<SharedContext>) {
     // Now seeded
     the_repository_checks_if_seed_exists(world.clone());
     is_seeded_returns_true(world);
+}
+
+/// Verify that concurrent calls to `try_record_seed` for the same seed key
+/// still respect once-only semantics: exactly one caller applies the seed,
+/// the rest observe it as already seeded.
+#[rstest]
+fn concurrent_calls_for_same_seed_are_once_only(diesel_world: Option<SharedContext>) {
+    let Some(world) = diesel_world else {
+        eprintln!("SKIP-TEST-CLUSTER: concurrent_calls_for_same_seed_are_once_only skipped");
+        return;
+    };
+
+    const CONCURRENT_SEED_KEY: &str = "concurrent-seed";
+    const CONCURRENT_CALLS: usize = 10;
+
+    let ctx = world.lock().expect("context lock");
+    let repository = ctx.repository.clone();
+    let handle = ctx.runtime.handle().clone();
+    drop(ctx);
+
+    let results: Vec<Result<SeedingResult, ExampleDataRunsError>> = handle.block_on(async {
+        let futures = (0..CONCURRENT_CALLS).map(|_| {
+            let repo = repository.clone();
+            async move { repo.try_record_seed(CONCURRENT_SEED_KEY, 10, 42).await }
+        });
+        join_all(futures).await
+    });
+
+    let applied_count = results
+        .iter()
+        .filter(|r| matches!(r, Ok(SeedingResult::Applied)))
+        .count();
+    let already_seeded_count = results
+        .iter()
+        .filter(|r| matches!(r, Ok(SeedingResult::AlreadySeeded)))
+        .count();
+    let error_count = results.iter().filter(|r| r.is_err()).count();
+
+    assert_eq!(
+        error_count, 0,
+        "all concurrent calls should succeed without errors"
+    );
+    assert_eq!(
+        applied_count, 1,
+        "exactly one concurrent caller should apply the seed"
+    );
+    assert_eq!(
+        already_seeded_count,
+        CONCURRENT_CALLS - 1,
+        "all other concurrent callers should see the seed as already applied"
+    );
+}
+
+/// Verify that recording the same seed_key with different metadata values
+/// still returns AlreadySeeded and does not update the original record.
+#[rstest]
+fn same_seed_key_with_different_metadata_returns_already_seeded(
+    diesel_world: Option<SharedContext>,
+) {
+    let Some(world) = diesel_world else {
+        eprintln!(
+            "SKIP-TEST-CLUSTER: same_seed_key_with_different_metadata_returns_already_seeded skipped"
+        );
+        return;
+    };
+
+    const METADATA_TEST_KEY: &str = "metadata-test-seed";
+    const ORIGINAL_USER_COUNT: i32 = 100;
+    const ORIGINAL_SEED_VALUE: i64 = 9999;
+    const DIFFERENT_USER_COUNT: i32 = 200;
+    const DIFFERENT_SEED_VALUE: i64 = 1111;
+
+    let ctx = world.lock().expect("context lock");
+    let repository = ctx.repository.clone();
+    let handle = ctx.runtime.handle().clone();
+    drop(ctx);
+
+    // First insert with original metadata
+    let first_result = handle.block_on(async {
+        repository
+            .try_record_seed(METADATA_TEST_KEY, ORIGINAL_USER_COUNT, ORIGINAL_SEED_VALUE)
+            .await
+    });
+    assert!(
+        matches!(first_result, Ok(SeedingResult::Applied)),
+        "first insert should succeed"
+    );
+
+    // Second insert with different metadata - should return AlreadySeeded
+    let second_result = handle.block_on(async {
+        repository
+            .try_record_seed(
+                METADATA_TEST_KEY,
+                DIFFERENT_USER_COUNT,
+                DIFFERENT_SEED_VALUE,
+            )
+            .await
+    });
+    assert!(
+        matches!(second_result, Ok(SeedingResult::AlreadySeeded)),
+        "second insert with different metadata should return AlreadySeeded, got: {second_result:?}"
+    );
 }

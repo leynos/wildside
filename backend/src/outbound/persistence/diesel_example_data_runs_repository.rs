@@ -59,46 +59,22 @@ fn map_pool_error(error: PoolError) -> ExampleDataRunsError {
 }
 
 /// Map Diesel errors to domain persistence errors.
+///
+/// Only special-cases `NotFound` (for stable diagnostics) and `ClosedConnection`
+/// (for connection vs query distinction). All other errors map to Query variant.
 fn map_diesel_error(error: diesel::result::Error) -> ExampleDataRunsError {
     use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
-    match &error {
-        DieselError::DatabaseError(kind, info) => {
-            debug!(?kind, message = info.message(), "diesel operation failed");
-        }
-        _ => debug!(
-            error_type = %std::any::type_name_of_val(&error),
-            "diesel operation failed"
-        ),
-    }
+    debug!(?error, "diesel operation failed");
 
     match error {
         DieselError::NotFound => ExampleDataRunsError::query("record not found"),
-        DieselError::QueryBuilderError(_) => ExampleDataRunsError::query("database query error"),
-        DieselError::DatabaseError(kind, _) => match kind {
-            DatabaseErrorKind::UniqueViolation => {
-                ExampleDataRunsError::query("unique constraint violation")
-            }
-            DatabaseErrorKind::ForeignKeyViolation => {
-                ExampleDataRunsError::query("foreign key violation")
-            }
-            DatabaseErrorKind::NotNullViolation => {
-                ExampleDataRunsError::query("not null violation")
-            }
-            DatabaseErrorKind::CheckViolation => {
-                ExampleDataRunsError::query("check constraint violation")
-            }
-            DatabaseErrorKind::SerializationFailure => {
-                ExampleDataRunsError::query("serialization failure")
-            }
-            DatabaseErrorKind::ReadOnlyTransaction => {
-                ExampleDataRunsError::query("read-only transaction")
-            }
-            DatabaseErrorKind::ClosedConnection => {
-                ExampleDataRunsError::connection("database connection error")
-            }
-            _ => ExampleDataRunsError::query("database error"),
-        },
+        DieselError::DatabaseError(DatabaseErrorKind::ClosedConnection, info) => {
+            ExampleDataRunsError::connection(info.message().to_owned())
+        }
+        DieselError::DatabaseError(_, info) => {
+            ExampleDataRunsError::query(info.message().to_owned())
+        }
         _ => ExampleDataRunsError::query("database error"),
     }
 }
