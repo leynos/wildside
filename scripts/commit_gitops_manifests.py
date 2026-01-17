@@ -23,7 +23,7 @@ from pathlib import Path
 
 from cyclopts import App, Parameter
 from scripts._input_resolution import InputResolution, resolve_input
-from scripts._infra_k8s import append_github_env, mask_secret
+from scripts._infra_k8s import append_github_env, mask_secret, parse_bool
 
 app = App(help="Commit rendered manifests to the GitOps repository.")
 
@@ -49,31 +49,34 @@ class GitOpsInputs:
     dry_run: bool
 
 
-def _parse_bool(value: str | None, default: bool = False) -> bool:
-    """Parse a boolean string value."""
-    if value is None:
-        return default
-    return value.lower() in ("true", "1", "yes")
-
-
-def resolve_gitops_inputs() -> GitOpsInputs:
+def resolve_gitops_inputs(
+    *,
+    gitops_repository: str | None = None,
+    gitops_branch: str | None = None,
+    gitops_token: str | None = None,
+    cluster_name: str | None = None,
+    render_output_dir: Path | None = None,
+    runner_temp: Path | None = None,
+    github_env: Path | None = None,
+    dry_run: str | None = None,
+) -> GitOpsInputs:
     """Resolve GitOps inputs from environment."""
     gitops_repository = resolve_input(
-        None, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
+        gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
     )
     gitops_branch = resolve_input(
-        None, InputResolution(env_key="GITOPS_BRANCH", default="main")
+        gitops_branch, InputResolution(env_key="GITOPS_BRANCH", default="main")
     )
     gitops_token = resolve_input(
-        None, InputResolution(env_key="GITOPS_TOKEN", required=True)
+        gitops_token, InputResolution(env_key="GITOPS_TOKEN", required=True)
     )
 
     cluster_name = resolve_input(
-        None, InputResolution(env_key="CLUSTER_NAME", required=True)
+        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
 
     render_output_dir_raw = resolve_input(
-        None,
+        render_output_dir,
         InputResolution(
             env_key="RENDER_OUTPUT_DIR",
             default=Path("/tmp/rendered-manifests"),
@@ -81,11 +84,11 @@ def resolve_gitops_inputs() -> GitOpsInputs:
         ),
     )
     runner_temp_raw = resolve_input(
-        None,
+        runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     github_env_raw = resolve_input(
-        None,
+        github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
@@ -93,7 +96,7 @@ def resolve_gitops_inputs() -> GitOpsInputs:
         ),
     )
     dry_run_raw = resolve_input(
-        None, InputResolution(env_key="DRY_RUN", default="false")
+        dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
 
     return GitOpsInputs(
@@ -116,7 +119,7 @@ def resolve_gitops_inputs() -> GitOpsInputs:
             if isinstance(github_env_raw, Path)
             else Path(str(github_env_raw))
         ),
-        dry_run=_parse_bool(str(dry_run_raw) if dry_run_raw else None),
+        dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )
 
 
@@ -142,19 +145,33 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
     return result.stdout.strip()
 
 
+def _git_auth_env(token: str, base_dir: Path) -> dict[str, str]:
+    askpass_path = base_dir / "git-askpass.sh"
+    askpass_path.write_text(
+        "#!/bin/sh\nprintf '%s' \"${GITOPS_TOKEN}\"\n",
+        encoding="utf-8",
+    )
+    askpass_path.chmod(0o700)
+    return {
+        **os.environ,
+        "GIT_ASKPASS": str(askpass_path),
+        "GIT_TERMINAL_PROMPT": "0",
+        "GITOPS_TOKEN": token,
+    }
+
+
 def clone_repository(
     inputs: GitOpsInputs,
     clone_dir: Path,
+    auth_env: dict[str, str],
 ) -> None:
     """Clone the GitOps repository."""
-    # Build authenticated URL
-    # Format: https://x-access-token:TOKEN@github.com/owner/repo.git
-    repo_url = f"https://x-access-token:{inputs.gitops_token}@github.com/{inputs.gitops_repository}.git"
+    repo_url = f"https://x-access-token@github.com/{inputs.gitops_repository}.git"
 
     print(f"Cloning {inputs.gitops_repository}@{inputs.gitops_branch}...")
 
     # Clone with depth 1 for efficiency
-    subprocess.run(
+    result = subprocess.run(
         [
             "git",
             "clone",
@@ -165,10 +182,15 @@ def clone_repository(
             repo_url,
             str(clone_dir),
         ],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
+        env=auth_env,
     )
+    if result.returncode != 0:
+        stderr = result.stderr.replace(inputs.gitops_token, "***")
+        msg = f"git clone failed: {stderr}".strip()
+        raise RuntimeError(msg)
 
 
 def sync_manifests(
@@ -200,6 +222,7 @@ def sync_manifests(
 def commit_and_push(
     inputs: GitOpsInputs,
     clone_dir: Path,
+    auth_env: dict[str, str],
 ) -> str | None:
     """Commit and push changes to the GitOps repository.
 
@@ -237,7 +260,7 @@ def commit_and_push(
 
     # Push changes
     print(f"Pushing commit {commit_sha}...")
-    run_git(["push", "origin", inputs.gitops_branch], clone_dir)
+    run_git(["push", "origin", inputs.gitops_branch], clone_dir, env=auth_env)
 
     return commit_sha
 
@@ -259,7 +282,16 @@ def main(
     to the appropriate cluster directory, and commits/pushes changes.
     """
     # Resolve inputs from environment
-    inputs = resolve_gitops_inputs()
+    inputs = resolve_gitops_inputs(
+        gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch,
+        gitops_token=gitops_token,
+        cluster_name=cluster_name,
+        render_output_dir=render_output_dir,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
 
     # Mask sensitive values
     mask_secret(inputs.gitops_token)
@@ -277,8 +309,10 @@ def main(
     clone_dir.mkdir(parents=True)
 
     try:
+        auth_env = _git_auth_env(inputs.gitops_token, inputs.runner_temp)
+
         # Clone the repository
-        clone_repository(inputs, clone_dir)
+        clone_repository(inputs, clone_dir, auth_env)
 
         # Sync manifests
         count = sync_manifests(inputs, clone_dir)
@@ -289,7 +323,7 @@ def main(
             return 0
 
         # Commit and push
-        commit_sha = commit_and_push(inputs, clone_dir)
+        commit_sha = commit_and_push(inputs, clone_dir, auth_env)
 
         # Export commit SHA to GITHUB_ENV
         if commit_sha:

@@ -21,6 +21,8 @@ from pathlib import Path
 from cyclopts import App, Parameter
 from scripts._input_resolution import InputResolution, resolve_input
 from scripts._infra_k8s import (
+    append_github_env,
+    parse_bool,
     run_tofu,
     tofu_output,
     write_manifests,
@@ -62,87 +64,79 @@ class RenderInputs:
     github_env: Path
 
 
-def _parse_bool(value: str | None, default: bool = True) -> bool:
-    """Parse a boolean string value."""
-    if value is None:
-        return default
-    return value.lower() in ("true", "1", "yes")
-
-
-def _resolve_core_config() -> tuple[str, str, str, str]:
-    """Resolve core configuration: cluster_name, domain, acme_email, cloudflare secret."""
-    cluster_name = resolve_input(
-        None, InputResolution(env_key="CLUSTER_NAME", required=True)
+def resolve_render_inputs(
+    *,
+    cluster_name: str | None = None,
+    domain: str | None = None,
+    acme_email: str | None = None,
+    cloudflare_api_token_secret_name: str | None = None,
+    vault_address: str | None = None,
+    vault_role_id: str | None = None,
+    vault_secret_id: str | None = None,
+    vault_ca_certificate: str | None = None,
+    enable_traefik: str | None = None,
+    enable_cert_manager: str | None = None,
+    enable_external_dns: str | None = None,
+    enable_vault_eso: str | None = None,
+    enable_cnpg: str | None = None,
+    runner_temp: Path | None = None,
+    output_dir: Path | None = None,
+    github_env: Path | None = None,
+) -> RenderInputs:
+    """Resolve rendering inputs from environment."""
+    cluster_name_raw = resolve_input(
+        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
-    domain = resolve_input(None, InputResolution(env_key="DOMAIN", required=True))
-    acme_email = resolve_input(
-        None, InputResolution(env_key="ACME_EMAIL", required=True)
+    domain_raw = resolve_input(
+        domain, InputResolution(env_key="DOMAIN", required=True)
     )
-    cloudflare_api_token_secret_name = resolve_input(
-        None,
+    acme_email_raw = resolve_input(
+        acme_email, InputResolution(env_key="ACME_EMAIL", required=True)
+    )
+    cloudflare_secret_raw = resolve_input(
+        cloudflare_api_token_secret_name,
         InputResolution(
             env_key="CLOUDFLARE_API_TOKEN_SECRET_NAME",
             default="cloudflare-api-token",
         ),
     )
-    return (
-        str(cluster_name),
-        str(domain),
-        str(acme_email),
-        str(cloudflare_api_token_secret_name),
+
+    vault_address_raw = resolve_input(
+        vault_address, InputResolution(env_key="VAULT_ADDRESS")
+    )
+    vault_role_id_raw = resolve_input(
+        vault_role_id, InputResolution(env_key="VAULT_ROLE_ID")
+    )
+    vault_secret_id_raw = resolve_input(
+        vault_secret_id, InputResolution(env_key="VAULT_SECRET_ID")
+    )
+    vault_ca_cert_raw = resolve_input(
+        vault_ca_certificate, InputResolution(env_key="VAULT_CA_CERTIFICATE")
     )
 
-
-def _resolve_vault_config() -> tuple[str | None, str | None, str | None, str | None]:
-    """Resolve Vault configuration: address, role_id, secret_id, ca_certificate."""
-    vault_address = resolve_input(None, InputResolution(env_key="VAULT_ADDRESS"))
-    vault_role_id = resolve_input(None, InputResolution(env_key="VAULT_ROLE_ID"))
-    vault_secret_id = resolve_input(None, InputResolution(env_key="VAULT_SECRET_ID"))
-    vault_ca_certificate = resolve_input(
-        None, InputResolution(env_key="VAULT_CA_CERTIFICATE")
+    traefik_raw = resolve_input(
+        enable_traefik, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
     )
-    return (
-        str(vault_address) if vault_address else None,
-        str(vault_role_id) if vault_role_id else None,
-        str(vault_secret_id) if vault_secret_id else None,
-        str(vault_ca_certificate) if vault_ca_certificate else None,
+    cert_manager_raw = resolve_input(
+        enable_cert_manager, InputResolution(env_key="ENABLE_CERT_MANAGER", default="true")
     )
-
-
-def _resolve_feature_flags() -> tuple[bool, bool, bool, bool, bool]:
-    """Resolve feature flags: traefik, cert_manager, external_dns, vault_eso, cnpg."""
-    enable_traefik_raw = resolve_input(
-        None, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
+    external_dns_raw = resolve_input(
+        enable_external_dns,
+        InputResolution(env_key="ENABLE_EXTERNAL_DNS", default="true"),
     )
-    enable_cert_manager_raw = resolve_input(
-        None, InputResolution(env_key="ENABLE_CERT_MANAGER", default="true")
+    vault_eso_raw = resolve_input(
+        enable_vault_eso, InputResolution(env_key="ENABLE_VAULT_ESO", default="true")
     )
-    enable_external_dns_raw = resolve_input(
-        None, InputResolution(env_key="ENABLE_EXTERNAL_DNS", default="true")
-    )
-    enable_vault_eso_raw = resolve_input(
-        None, InputResolution(env_key="ENABLE_VAULT_ESO", default="true")
-    )
-    enable_cnpg_raw = resolve_input(
-        None, InputResolution(env_key="ENABLE_CNPG", default="true")
-    )
-    return (
-        _parse_bool(str(enable_traefik_raw)),
-        _parse_bool(str(enable_cert_manager_raw)),
-        _parse_bool(str(enable_external_dns_raw)),
-        _parse_bool(str(enable_vault_eso_raw)),
-        _parse_bool(str(enable_cnpg_raw)),
+    cnpg_raw = resolve_input(
+        enable_cnpg, InputResolution(env_key="ENABLE_CNPG", default="true")
     )
 
-
-def _resolve_paths() -> tuple[Path, Path, Path]:
-    """Resolve paths: runner_temp, output_dir, github_env."""
     runner_temp_raw = resolve_input(
-        None,
+        runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     output_dir_raw = resolve_input(
-        None,
+        output_dir,
         InputResolution(
             env_key="RENDER_OUTPUT_DIR",
             default=Path("/tmp/rendered-manifests"),
@@ -150,44 +144,41 @@ def _resolve_paths() -> tuple[Path, Path, Path]:
         ),
     )
     github_env_raw = resolve_input(
-        None,
+        github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
             as_path=True,
         ),
     )
-    return (
-        runner_temp_raw if isinstance(runner_temp_raw, Path) else Path(str(runner_temp_raw)),
-        output_dir_raw if isinstance(output_dir_raw, Path) else Path(str(output_dir_raw)),
-        github_env_raw if isinstance(github_env_raw, Path) else Path(str(github_env_raw)),
-    )
-
-
-def resolve_render_inputs() -> RenderInputs:
-    """Resolve rendering inputs from environment."""
-    cluster_name, domain, acme_email, cloudflare_secret = _resolve_core_config()
-    vault_address, vault_role_id, vault_secret_id, vault_ca_cert = _resolve_vault_config()
-    traefik, cert_manager, external_dns, vault_eso, cnpg = _resolve_feature_flags()
-    runner_temp, output_dir, github_env = _resolve_paths()
 
     return RenderInputs(
-        cluster_name=cluster_name,
-        domain=domain,
-        acme_email=acme_email,
-        cloudflare_api_token_secret_name=cloudflare_secret,
-        vault_address=vault_address,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-        vault_ca_certificate=vault_ca_cert,
-        enable_traefik=traefik,
-        enable_cert_manager=cert_manager,
-        enable_external_dns=external_dns,
-        enable_vault_eso=vault_eso,
-        enable_cnpg=cnpg,
-        runner_temp=runner_temp,
-        output_dir=output_dir,
-        github_env=github_env,
+        cluster_name=str(cluster_name_raw),
+        domain=str(domain_raw),
+        acme_email=str(acme_email_raw),
+        cloudflare_api_token_secret_name=str(cloudflare_secret_raw),
+        vault_address=str(vault_address_raw) if vault_address_raw else None,
+        vault_role_id=str(vault_role_id_raw) if vault_role_id_raw else None,
+        vault_secret_id=str(vault_secret_id_raw) if vault_secret_id_raw else None,
+        vault_ca_certificate=str(vault_ca_cert_raw) if vault_ca_cert_raw else None,
+        enable_traefik=parse_bool(str(traefik_raw)),
+        enable_cert_manager=parse_bool(str(cert_manager_raw)),
+        enable_external_dns=parse_bool(str(external_dns_raw)),
+        enable_vault_eso=parse_bool(str(vault_eso_raw)),
+        enable_cnpg=parse_bool(str(cnpg_raw)),
+        runner_temp=(
+            runner_temp_raw
+            if isinstance(runner_temp_raw, Path)
+            else Path(str(runner_temp_raw))
+        ),
+        output_dir=(
+            output_dir_raw
+            if isinstance(output_dir_raw, Path)
+            else Path(str(output_dir_raw))
+        ),
+        github_env=(
+            github_env_raw if isinstance(github_env_raw, Path) else Path(str(github_env_raw))
+        ),
     )
 
 
@@ -219,7 +210,7 @@ def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
     return variables
 
 
-def _run_tofu_command(command_name: str, args: list[str], module_path: Path) -> None:
+def _run_tofu_or_raise(command_name: str, args: list[str], module_path: Path) -> None:
     """Run an OpenTofu command and raise on failure.
 
     Parameters
@@ -237,20 +228,6 @@ def _run_tofu_command(command_name: str, args: list[str], module_path: Path) -> 
         print(f"error: tofu {command_name} failed: {result.stderr}", file=sys.stderr)
         raise RuntimeError(f"tofu {command_name} failed")
     print(result.stdout)
-
-
-def _run_tofu_init(module_path: Path) -> None:
-    """Run tofu init and raise on failure."""
-    _run_tofu_command("init", ["init", "-input=false"], module_path)
-
-
-def _run_tofu_apply(module_path: Path, var_file: Path) -> None:
-    """Run tofu apply and raise on failure."""
-    _run_tofu_command(
-        "apply",
-        ["apply", "-auto-approve", "-input=false", f"-var-file={var_file}"],
-        module_path,
-    )
 
 
 def _extract_rendered_manifests(outputs: dict[str, object]) -> dict[str, str]:
@@ -290,8 +267,12 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     print(f"  vault-eso: {inputs.enable_vault_eso}")
     print(f"  CNPG: {inputs.enable_cnpg}")
 
-    _run_tofu_init(PLATFORM_RENDER_PATH)
-    _run_tofu_apply(PLATFORM_RENDER_PATH, var_file)
+    _run_tofu_or_raise("init", ["init", "-input=false"], PLATFORM_RENDER_PATH)
+    _run_tofu_or_raise(
+        "apply",
+        ["apply", "-auto-approve", "-input=false", f"-var-file={var_file}"],
+        PLATFORM_RENDER_PATH,
+    )
 
     print("\n--- Extracting rendered manifests ---")
     outputs = tofu_output(PLATFORM_RENDER_PATH)
@@ -324,7 +305,24 @@ def main(
     writes the rendered manifests to the output directory.
     """
     # Resolve inputs from environment
-    inputs = resolve_render_inputs()
+    inputs = resolve_render_inputs(
+        cluster_name=cluster_name,
+        domain=domain,
+        acme_email=acme_email,
+        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
+        vault_address=vault_address,
+        vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id,
+        vault_ca_certificate=vault_ca_certificate,
+        enable_traefik=enable_traefik,
+        enable_cert_manager=enable_cert_manager,
+        enable_external_dns=enable_external_dns,
+        enable_vault_eso=enable_vault_eso,
+        enable_cnpg=enable_cnpg,
+        runner_temp=runner_temp,
+        output_dir=output_dir,
+        github_env=github_env,
+    )
 
     # Build tfvars
     tfvars = build_render_tfvars(inputs)
@@ -342,9 +340,6 @@ def main(
         count = write_manifests(inputs.output_dir, manifests)
 
         print(f"\nRendered {count} manifests successfully.")
-
-        # Export count to GITHUB_ENV
-        from scripts._infra_k8s import append_github_env
 
         append_github_env(
             inputs.github_env,

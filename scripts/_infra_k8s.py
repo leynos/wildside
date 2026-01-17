@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from collections import abc as cabc
 
@@ -24,47 +24,6 @@ class SpacesBackendConfig:
     access_key: str
     secret_key: str
     state_key: str
-
-
-@dataclass(frozen=True, slots=True)
-class ClusterConfig:
-    """Configuration for a Kubernetes cluster."""
-
-    name: str
-    region: str
-    environment: str
-    kubernetes_version: str | None = None
-    node_pools: list[dict[str, object]] | None = None
-    tags: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True, slots=True)
-class PlatformConfig:
-    """Configuration for platform module rendering."""
-
-    cluster_name: str
-    domain: str
-    acme_email: str
-    cloudflare_api_token_secret_name: str
-    enable_traefik: bool = True
-    enable_cert_manager: bool = True
-    enable_external_dns: bool = True
-    enable_vault_eso: bool = True
-    enable_cnpg: bool = True
-    vault_address: str | None = None
-    vault_ca_bundle_pem: str | None = None
-    vault_approle_role_id: str | None = None
-    vault_approle_secret_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class GitOpsConfig:
-    """Configuration for GitOps repository operations."""
-
-    repository: str
-    branch: str
-    token: str
-    base_path: str = "."
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,12 +42,57 @@ def mask_secret(value: str, stream: cabc.Callable[[str], None] = print) -> None:
         stream(f"::add-mask::{value}")
 
 
+def parse_bool(value: str | None, default: bool = True) -> bool:
+    """Parse a boolean string value."""
+    if value is None:
+        return default
+    return value.strip().lower() in ("true", "1", "yes")
+
+
+def parse_node_pools(value: str | None) -> list[dict[str, object]] | None:
+    """Parse node pools JSON string."""
+    if value is None or not value.strip():
+        return None
+    try:
+        pools = json.loads(value)
+        if not isinstance(pools, list):
+            msg = "node_pools must be a JSON array"
+            raise ValueError(msg)
+        return pools
+    except json.JSONDecodeError as exc:
+        msg = f"Invalid JSON in node_pools: {exc}"
+        raise ValueError(msg) from exc
+
+
+def _choose_multiline_delimiter(value: str, base: str = "EOF") -> str:
+    delimiter = base
+    counter = 0
+    while delimiter in value:
+        counter += 1
+        delimiter = f"{base}_{counter}"
+    return delimiter
+
+
+def _write_github_multiline(
+    handle: cabc.Callable[[str], None],
+    key: str,
+    value: str,
+) -> None:
+    delimiter = _choose_multiline_delimiter(value)
+    handle(f"{key}<<{delimiter}\n")
+    handle(f"{value}\n")
+    handle(f"{delimiter}\n")
+
+
 def append_github_env(env_file: Path, variables: dict[str, str]) -> None:
     """Append environment variables to GITHUB_ENV file."""
     env_file.parent.mkdir(parents=True, exist_ok=True)
     with env_file.open("a", encoding="utf-8") as handle:
         for key, value in variables.items():
-            handle.write(f"{key}={value}\n")
+            if "\n" in value or "\r" in value:
+                _write_github_multiline(handle.write, key, value)
+            else:
+                handle.write(f"{key}={value}\n")
 
 
 def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
@@ -96,7 +100,20 @@ def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with output_file.open("a", encoding="utf-8") as handle:
         for key, value in outputs.items():
-            handle.write(f"{key}={value}\n")
+            if "\n" in value or "\r" in value:
+                _write_github_multiline(handle.write, key, value)
+            else:
+                handle.write(f"{key}={value}\n")
+
+
+def _validate_command_args(args: list[str]) -> None:
+    for arg in args:
+        if not isinstance(arg, str):
+            msg = f"OpenTofu argument must be a string, got {type(arg).__name__}"
+            raise TypeError(msg)
+        if "\x00" in arg or "\n" in arg or "\r" in arg:
+            msg = "OpenTofu argument contains an invalid control character"
+            raise ValueError(msg)
 
 
 def run_tofu(
@@ -127,7 +144,8 @@ def run_tofu(
     merged_env = {**os.environ, **(env or {})}
 
     # Security: list-based invocation without shell=True is safe from injection.
-    # Arguments come from typed wrapper functions with Path/dataclass inputs.
+    # Validate arguments to avoid unexpected control characters.
+    _validate_command_args(cmd)
     result = subprocess.run(
         cmd,
         cwd=cwd,

@@ -24,6 +24,8 @@ from scripts._infra_k8s import (
     SpacesBackendConfig,
     append_github_env,
     mask_secret,
+    parse_bool,
+    parse_node_pools,
     tofu_apply,
     tofu_init,
     tofu_output,
@@ -47,7 +49,7 @@ class ProvisionInputs:
     environment: str
     region: str
     kubernetes_version: str | None
-    node_pools: str | None
+    node_pools: list[dict[str, object]] | None
 
     # Backend configuration
     spaces_bucket: str
@@ -61,48 +63,55 @@ class ProvisionInputs:
     dry_run: bool
 
 
-def _parse_bool(value: str | None, default: bool = False) -> bool:
-    """Parse a boolean string value."""
-    if value is None:
-        return default
-    return value.lower() in ("true", "1", "yes")
-
-
-def resolve_provision_inputs() -> ProvisionInputs:
+def resolve_provision_inputs(
+    *,
+    cluster_name: str | None = None,
+    environment: str | None = None,
+    region: str | None = None,
+    kubernetes_version: str | None = None,
+    node_pools: str | None = None,
+    spaces_bucket: str | None = None,
+    spaces_region: str | None = None,
+    spaces_access_key: str | None = None,
+    spaces_secret_key: str | None = None,
+    runner_temp: Path | None = None,
+    github_env: Path | None = None,
+    dry_run: str | None = None,
+) -> ProvisionInputs:
     """Resolve provisioning inputs from environment."""
     cluster_name = resolve_input(
-        None, InputResolution(env_key="CLUSTER_NAME", required=True)
+        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
     environment = resolve_input(
-        None, InputResolution(env_key="ENVIRONMENT", required=True)
+        environment, InputResolution(env_key="ENVIRONMENT", required=True)
     )
-    region = resolve_input(None, InputResolution(env_key="REGION", required=True))
+    region = resolve_input(region, InputResolution(env_key="REGION", required=True))
     kubernetes_version = resolve_input(
-        None, InputResolution(env_key="KUBERNETES_VERSION")
+        kubernetes_version, InputResolution(env_key="KUBERNETES_VERSION")
     )
-    node_pools = resolve_input(None, InputResolution(env_key="NODE_POOLS"))
+    node_pools = resolve_input(node_pools, InputResolution(env_key="NODE_POOLS"))
 
     # Backend configuration from Spaces
     spaces_bucket = resolve_input(
-        None,
+        spaces_bucket,
         InputResolution(env_key="SPACES_BUCKET", default="wildside-tofu-state"),
     )
     spaces_region = resolve_input(
-        None, InputResolution(env_key="SPACES_REGION", default="lon1")
+        spaces_region, InputResolution(env_key="SPACES_REGION", default="lon1")
     )
     spaces_access_key = resolve_input(
-        None, InputResolution(env_key="SPACES_ACCESS_KEY", required=True)
+        spaces_access_key, InputResolution(env_key="SPACES_ACCESS_KEY", required=True)
     )
     spaces_secret_key = resolve_input(
-        None, InputResolution(env_key="SPACES_SECRET_KEY", required=True)
+        spaces_secret_key, InputResolution(env_key="SPACES_SECRET_KEY", required=True)
     )
 
     runner_temp_raw = resolve_input(
-        None,
+        runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     github_env_raw = resolve_input(
-        None,
+        github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
@@ -110,7 +119,7 @@ def resolve_provision_inputs() -> ProvisionInputs:
         ),
     )
     dry_run_raw = resolve_input(
-        None, InputResolution(env_key="DRY_RUN", default="false")
+        dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
 
     return ProvisionInputs(
@@ -118,7 +127,7 @@ def resolve_provision_inputs() -> ProvisionInputs:
         environment=str(environment),
         region=str(region),
         kubernetes_version=str(kubernetes_version) if kubernetes_version else None,
-        node_pools=str(node_pools) if node_pools else None,
+        node_pools=parse_node_pools(str(node_pools) if node_pools else None),
         spaces_bucket=str(spaces_bucket),
         spaces_region=str(spaces_region),
         spaces_access_key=str(spaces_access_key),
@@ -133,7 +142,7 @@ def resolve_provision_inputs() -> ProvisionInputs:
             if isinstance(github_env_raw, Path)
             else Path(str(github_env_raw))
         ),
-        dry_run=_parse_bool(str(dry_run_raw) if dry_run_raw else None),
+        dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )
 
 
@@ -164,13 +173,7 @@ def build_tfvars(inputs: ProvisionInputs) -> dict[str, object]:
         variables["kubernetes_version"] = inputs.kubernetes_version
 
     if inputs.node_pools:
-        # Node pools should be passed as JSON, parse and include
-        import json
-
-        try:
-            variables["node_pools"] = json.loads(inputs.node_pools)
-        except json.JSONDecodeError:
-            print(f"warning: invalid node_pools JSON, ignoring: {inputs.node_pools}")
+        variables["node_pools"] = inputs.node_pools
 
     return variables
 
@@ -301,24 +304,20 @@ def main(
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
     # Resolve inputs from environment (CLI args override)
-    inputs = resolve_provision_inputs()
-
-    # Override with CLI args if provided
-    if cluster_name is not None:
-        inputs = ProvisionInputs(
-            cluster_name=cluster_name,
-            environment=inputs.environment,
-            region=inputs.region,
-            kubernetes_version=inputs.kubernetes_version,
-            node_pools=inputs.node_pools,
-            spaces_bucket=inputs.spaces_bucket,
-            spaces_region=inputs.spaces_region,
-            spaces_access_key=inputs.spaces_access_key,
-            spaces_secret_key=inputs.spaces_secret_key,
-            runner_temp=inputs.runner_temp,
-            github_env=inputs.github_env,
-            dry_run=inputs.dry_run,
-        )
+    inputs = resolve_provision_inputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        spaces_bucket=spaces_bucket,
+        spaces_region=spaces_region,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
 
     # Build configurations
     backend_config = build_backend_config(inputs)
