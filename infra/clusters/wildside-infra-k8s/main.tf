@@ -37,7 +37,7 @@ locals {
   # FluxCD configuration normalisation
   flux_config = {
     install         = var.flux_install
-    kubeconfig_path = trimspace(coalesce(var.flux_kubeconfig_path, " "))
+    kubeconfig_path = trimspace(coalesce(var.flux_kubeconfig_path, " ")) # Coalesce null to blank so trimspace yields "" for flux_using_kubeconfig.
     namespace       = trimspace(var.flux_namespace)
     git_repository = {
       url         = var.flux_git_repository_url == null ? null : trimspace(var.flux_git_repository_url)

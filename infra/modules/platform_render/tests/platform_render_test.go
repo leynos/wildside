@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -71,14 +72,7 @@ func TestPlatformRenderModuleRendersManifests(t *testing.T) {
 	enabledModulesRaw := terraform.OutputList(t, opts, "enabled_modules")
 	expectedModules := []string{"traefik", "cert_manager", "external_dns", "vault_eso", "cnpg"}
 	for _, mod := range expectedModules {
-		found := false
-		for _, enabled := range enabledModulesRaw {
-			if enabled == mod {
-				found = true
-				break
-			}
-		}
-		require.True(t, found, "expected %s to be in enabled_modules", mod)
+		require.True(t, slices.Contains(enabledModulesRaw, mod), "expected %s to be in enabled_modules", mod)
 	}
 }
 
@@ -227,8 +221,22 @@ func TestPlatformRenderModuleManifestPathsContainExpectedKeys(t *testing.T) {
 	for _, mod := range expectedModules {
 		count, exists := countsRaw[mod]
 		require.True(t, exists, "expected manifest_counts_by_module to contain %s", mod)
-		// The count should be a number > 0
-		countStr := strings.TrimSpace(count.(string))
+		countStr, ok := count.(string)
+		if !ok {
+			switch typed := count.(type) {
+			case float64:
+				countStr = strconv.FormatInt(int64(typed), 10)
+				ok = true
+			case int:
+				countStr = strconv.Itoa(typed)
+				ok = true
+			case int64:
+				countStr = strconv.FormatInt(typed, 10)
+				ok = true
+			}
+		}
+		require.True(t, ok, "expected manifest_counts_by_module[%s] to be a string", mod)
+		countStr = strings.TrimSpace(countStr)
 		require.NotEqual(t, "0", countStr, "expected %s to contribute manifests", mod)
 	}
 }

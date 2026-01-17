@@ -24,7 +24,13 @@ def test_resolve_output_values(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLUSTER_ID", "abc")
     monkeypatch.setenv("CLUSTER_ENDPOINT", "https://kube")
 
-    values = resolve_output_values()
+    values = resolve_output_values(
+        cluster_name=None,
+        cluster_id=None,
+        cluster_endpoint=None,
+        gitops_commit_sha=None,
+        rendered_manifest_count=None,
+    )
     assert values.cluster_name == "preview"
     assert values.cluster_id == "abc"
     assert values.cluster_endpoint == "https://kube"

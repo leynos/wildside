@@ -3,17 +3,17 @@ terraform {
   required_providers {
     digitalocean = {
       source  = "opentofu/digitalocean"
-      version = "~> 2.66.0"
+      version = "~> 2.9.0"
     }
 
     kubernetes = {
       source  = "opentofu/kubernetes"
-      version = "~> 2.25.0"
+      version = "~> 3.0.1"
     }
 
     helm = {
       source  = "opentofu/helm"
-      version = "~> 2.13.0"
+      version = "~> 3.1.1"
     }
   }
 }

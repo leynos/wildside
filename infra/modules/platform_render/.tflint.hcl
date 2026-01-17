@@ -7,7 +7,7 @@ config {
 # Built-in Terraform language ruleset (bundled)
 plugin "terraform" {
   enabled = true
-  version = "0.10.0"
+  version = "0.14.1"
   source  = "github.com/terraform-linters/tflint-ruleset-terraform"
   preset  = "recommended"
 }

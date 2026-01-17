@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
@@ -13,8 +13,9 @@ ACTION_PATH = (
 )
 
 
-def _load_action() -> dict[str, Any]:
-    return yaml.safe_load(ACTION_PATH.read_text(encoding="utf-8"))
+def _load_action() -> dict[str, object]:
+    result = yaml.safe_load(ACTION_PATH.read_text(encoding="utf-8"))
+    return cast(dict[str, object], result)
 
 
 def test_required_inputs_are_marked_as_required() -> None:
@@ -181,7 +182,9 @@ def test_commit_step_is_conditional_on_dry_run() -> None:
     commit = next(step for step in steps if step["id"] == "commit")
 
     assert "uv run scripts/commit_gitops_manifests.py" in commit["run"]
-    assert commit.get("if") == "${{ inputs.dry_run != 'true' }}", (
+    assert commit.get("if") == (
+        '${{ !contains(fromJSON(\'["true","1","yes"]\'), toLower(inputs.dry_run)) }}'
+    ), (
         "Commit step should be conditional on dry_run input"
     )
 

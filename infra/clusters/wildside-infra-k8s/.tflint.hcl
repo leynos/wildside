@@ -7,12 +7,12 @@ config {
 # Built-in Terraform language ruleset (bundled)
 plugin "terraform" {
   enabled = true
-  version = "0.10.0"
+  version = "0.14.1"
   source  = "github.com/terraform-linters/tflint-ruleset-terraform"
   preset  = "recommended"
 }
 
-# Your Terraform-language rules (these are fine)
+# Configure Terraform-language rules for tflint
 rule "terraform_documented_variables" { enabled = true }
 rule "terraform_documented_outputs"   { enabled = true }
 rule "terraform_typed_variables"      { enabled = true }
