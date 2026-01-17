@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -28,16 +29,18 @@ def _make_inputs(tmp_path: Path, **overrides: object) -> ProvisionInputs:
         "environment": "preview",
         "region": "nyc1",
         "kubernetes_version": "1.33.1-do.3",
-        "node_pools": [
-            {
-                "name": "default",
-                "size": "s-2vcpu-2gb",
-                "node_count": 2,
-                "auto_scale": False,
-                "min_nodes": 2,
-                "max_nodes": 2,
-            }
-        ],
+        "node_pools": json.dumps(
+            [
+                {
+                    "name": "default",
+                    "size": "s-2vcpu-2gb",
+                    "node_count": 2,
+                    "auto_scale": False,
+                    "min_nodes": 2,
+                    "max_nodes": 2,
+                }
+            ]
+        ),
         "spaces_bucket": "wildside-tofu-state",
         "spaces_region": "nyc3",
         "spaces_access_key": "access",

@@ -312,7 +312,7 @@ def prepare_inputs(inputs: ResolvedInputs, mask: Mask = print) -> None:
 
     if inputs.kubernetes_version:
         env_vars["KUBERNETES_VERSION"] = inputs.kubernetes_version
-    if inputs.node_pools:
+    if inputs.node_pools is not None:
         env_vars["NODE_POOLS"] = json.dumps(inputs.node_pools)
     if inputs.vault_ca_certificate:
         env_vars["VAULT_CA_CERTIFICATE"] = inputs.vault_ca_certificate

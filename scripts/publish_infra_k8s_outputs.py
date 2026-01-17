@@ -35,16 +35,25 @@ class OutputValues:
     rendered_manifest_count: str | None
 
 
-def resolve_output_values() -> OutputValues:
+def resolve_output_values(
+    *,
+    cluster_name: str | None,
+    cluster_id: str | None,
+    cluster_endpoint: str | None,
+    gitops_commit_sha: str | None,
+    rendered_manifest_count: str | None,
+) -> OutputValues:
     """Resolve output values from environment."""
-    cluster_name = resolve_input(None, InputResolution(env_key="CLUSTER_NAME"))
-    cluster_id = resolve_input(None, InputResolution(env_key="CLUSTER_ID"))
-    cluster_endpoint = resolve_input(None, InputResolution(env_key="CLUSTER_ENDPOINT"))
+    cluster_name = resolve_input(cluster_name, InputResolution(env_key="CLUSTER_NAME"))
+    cluster_id = resolve_input(cluster_id, InputResolution(env_key="CLUSTER_ID"))
+    cluster_endpoint = resolve_input(
+        cluster_endpoint, InputResolution(env_key="CLUSTER_ENDPOINT")
+    )
     gitops_commit_sha = resolve_input(
-        None, InputResolution(env_key="GITOPS_COMMIT_SHA")
+        gitops_commit_sha, InputResolution(env_key="GITOPS_COMMIT_SHA")
     )
     rendered_manifest_count = resolve_input(
-        None, InputResolution(env_key="RENDERED_MANIFEST_COUNT")
+        rendered_manifest_count, InputResolution(env_key="RENDERED_MANIFEST_COUNT")
     )
 
     return OutputValues(
@@ -121,12 +130,10 @@ def main(
     # Resolve GITHUB_OUTPUT path
     github_output_raw = resolve_input(
         github_output,
-        InputResolution(
-            env_key="GITHUB_OUTPUT",
-            default=Path("/tmp/github-output-undefined"),
-            as_path=True,
-        ),
+        InputResolution(env_key="GITHUB_OUTPUT", as_path=True),
     )
+    if not github_output_raw:
+        raise SystemExit("GITHUB_OUTPUT or --github-output must be provided")
     github_output_path = (
         github_output_raw
         if isinstance(github_output_raw, Path)
@@ -134,7 +141,13 @@ def main(
     )
 
     # Resolve output values from environment
-    values = resolve_output_values()
+    values = resolve_output_values(
+        cluster_name=cluster_name,
+        cluster_id=cluster_id,
+        cluster_endpoint=cluster_endpoint,
+        gitops_commit_sha=gitops_commit_sha,
+        rendered_manifest_count=rendered_manifest_count,
+    )
 
     # Perform final secret masking
     final_secret_masking()

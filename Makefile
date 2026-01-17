@@ -238,6 +238,7 @@ INFRA_TEST_TARGETS := \
         cert-manager-policy \
         vault-eso-test \
         vault-eso-policy \
+        platform-render-test \
         cnpg-test \
         cnpg-policy \
         valkey-test \

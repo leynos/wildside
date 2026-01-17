@@ -187,7 +187,7 @@ Initial anticipated decisions below:
 
 - Decision: (Pending) Create a platform_render OpenTofu module to orchestrate
   all platform modules in render mode.
-  Rationale: Centralises module wiring logic; enables validation of merged
+  Rationale: Centralizes module wiring logic; enables validation of merged
   outputs before committing to GitOps.
   Date/Author: Pending.
 

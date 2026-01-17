@@ -35,6 +35,10 @@ PLATFORM_RENDER_PATH = REPO_ROOT / "infra" / "modules" / "platform_render"
 app = App(help="Render platform manifests via OpenTofu.")
 
 
+def _parse_bool(value: str | None, *, default: bool = True) -> bool:
+    return parse_bool(value, default=default)
+
+
 @dataclass(frozen=True, slots=True)
 class RenderInputs:
     """Inputs for platform manifest rendering."""
@@ -131,6 +135,8 @@ def resolve_render_inputs(
         enable_cnpg, InputResolution(env_key="ENABLE_CNPG", default="true")
     )
 
+    # /tmp fallbacks are intentional for local development and CI without runner
+    # env vars, and are safe for ephemeral output locations.
     runner_temp_raw = resolve_input(
         runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
@@ -161,11 +167,11 @@ def resolve_render_inputs(
         vault_role_id=str(vault_role_id_raw) if vault_role_id_raw else None,
         vault_secret_id=str(vault_secret_id_raw) if vault_secret_id_raw else None,
         vault_ca_certificate=str(vault_ca_cert_raw) if vault_ca_cert_raw else None,
-        enable_traefik=parse_bool(str(traefik_raw)),
-        enable_cert_manager=parse_bool(str(cert_manager_raw)),
-        enable_external_dns=parse_bool(str(external_dns_raw)),
-        enable_vault_eso=parse_bool(str(vault_eso_raw)),
-        enable_cnpg=parse_bool(str(cnpg_raw)),
+        enable_traefik=_parse_bool(str(traefik_raw)),
+        enable_cert_manager=_parse_bool(str(cert_manager_raw)),
+        enable_external_dns=_parse_bool(str(external_dns_raw)),
+        enable_vault_eso=_parse_bool(str(vault_eso_raw)),
+        enable_cnpg=_parse_bool(str(cnpg_raw)),
         runner_temp=(
             runner_temp_raw
             if isinstance(runner_temp_raw, Path)
@@ -225,8 +231,9 @@ def _run_tofu_or_raise(command_name: str, args: list[str], module_path: Path) ->
     print(f"\n--- Running tofu {command_name} ---")
     result = run_tofu(args, module_path)
     if not result.success:
-        print(f"error: tofu {command_name} failed: {result.stderr}", file=sys.stderr)
-        raise RuntimeError(f"tofu {command_name} failed")
+        err_msg = f"tofu {command_name} failed: {result.stderr}"
+        print(f"error: {err_msg}", file=sys.stderr)
+        raise RuntimeError(err_msg)
     print(result.stdout)
 
 
@@ -333,27 +340,26 @@ def main(
 
         if not manifests:
             print("warning: no manifests rendered")
-            return 0
+            count = 0
+        else:
+            # Write manifests to output directory
+            print(f"\n--- Writing {len(manifests)} manifests to {inputs.output_dir} ---")
+            count = write_manifests(inputs.output_dir, manifests)
 
-        # Write manifests to output directory
-        print(f"\n--- Writing {len(manifests)} manifests to {inputs.output_dir} ---")
-        count = write_manifests(inputs.output_dir, manifests)
+            print(f"\nRendered {count} manifests successfully.")
 
-        print(f"\nRendered {count} manifests successfully.")
-
-        append_github_env(
-            inputs.github_env,
-            {
-                "RENDERED_MANIFEST_COUNT": str(count),
-                "RENDER_OUTPUT_DIR": str(inputs.output_dir),
-            },
-        )
-
-        return 0
-
+            append_github_env(
+                inputs.github_env,
+                {
+                    "RENDERED_MANIFEST_COUNT": str(count),
+                    "RENDER_OUTPUT_DIR": str(inputs.output_dir),
+                },
+            )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    else:
+        return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

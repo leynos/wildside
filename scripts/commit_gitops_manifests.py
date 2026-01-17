@@ -166,7 +166,9 @@ def clone_repository(
     auth_env: dict[str, str],
 ) -> None:
     """Clone the GitOps repository."""
+    mask_secret(inputs.gitops_token)
     repo_url = f"https://x-access-token@github.com/{inputs.gitops_repository}.git"
+    masked_repo_url = f"https://x-access-token:***@github.com/{inputs.gitops_repository}.git"
 
     print(f"Cloning {inputs.gitops_repository}@{inputs.gitops_branch}...")
 
@@ -189,7 +191,7 @@ def clone_repository(
     )
     if result.returncode != 0:
         stderr = result.stderr.replace(inputs.gitops_token, "***")
-        msg = f"git clone failed: {stderr}".strip()
+        msg = f"git clone failed for {masked_repo_url}: {stderr}".strip()
         raise RuntimeError(msg)
 
 
@@ -279,7 +281,9 @@ def commit_and_push(
 
     return commit_sha
 
-
+# The CLI parameters in main are declared to satisfy cyclopts/typer and default
+# to Parameter() values; resolve_gitops_inputs() handles the actual resolution
+# and prevents ARG001/B008 false positives for the main entrypoint.
 @app.command()
 def main(
     gitops_repository: str | None = Parameter(),
@@ -333,12 +337,20 @@ def main(
         count = sync_manifests(inputs, clone_dir)
         print(f"Synced {count} manifest files")
 
+        commit_sha = None
+        if count > 0:
+            # Commit and push
+            commit_sha = commit_and_push(inputs, clone_dir, auth_env)
+    except subprocess.CalledProcessError as exc:
+        print(f"error: git command failed: {exc}", file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    else:
         if count == 0:
             print("No manifests to commit")
             return 0
-
-        # Commit and push
-        commit_sha = commit_and_push(inputs, clone_dir, auth_env)
 
         # Export commit SHA to GITHUB_ENV
         if commit_sha:
@@ -350,13 +362,6 @@ def main(
 
         print("\nGitOps commit complete.")
         return 0
-
-    except subprocess.CalledProcessError as exc:
-        print(f"error: git command failed: {exc}", file=sys.stderr)
-        return 1
-    except RuntimeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

@@ -146,7 +146,13 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     append_github_env(gitops_inputs.github_env, {"GITOPS_COMMIT_SHA": "sha"})
     _apply_env_file(monkeypatch, env_file)
 
-    values = resolve_output_values()
+    values = resolve_output_values(
+        cluster_name=None,
+        cluster_id=None,
+        cluster_endpoint=None,
+        gitops_commit_sha=None,
+        rendered_manifest_count=None,
+    )
     publish_outputs(values, output_file)
 
     output_lines = output_file.read_text(encoding="utf-8")

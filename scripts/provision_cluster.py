@@ -14,8 +14,10 @@ This script:
 
 from __future__ import annotations
 
+import json
+import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -25,7 +27,6 @@ from scripts._infra_k8s import (
     append_github_env,
     mask_secret,
     parse_bool,
-    parse_node_pools,
     tofu_apply,
     tofu_init,
     tofu_output,
@@ -38,6 +39,7 @@ CLUSTER_MODULE_PATH = REPO_ROOT / "infra" / "clusters" / "wildside-infra-k8s"
 BACKEND_CONFIG_PATH = REPO_ROOT / "infra" / "backend-config" / "spaces.tfbackend"
 
 app = App(help="Provision Kubernetes cluster via OpenTofu.")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +51,7 @@ class ProvisionInputs:
     environment: str
     region: str
     kubernetes_version: str | None
-    node_pools: list[dict[str, object]] | None
+    node_pools: str | None
 
     # Backend configuration
     spaces_bucket: str
@@ -79,6 +81,9 @@ def resolve_provision_inputs(
     dry_run: str | None = None,
 ) -> ProvisionInputs:
     """Resolve provisioning inputs from environment."""
+    def to_path(value: Path | str) -> Path:
+        return value if isinstance(value, Path) else Path(str(value))
+
     cluster_name = resolve_input(
         cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
@@ -127,21 +132,13 @@ def resolve_provision_inputs(
         environment=str(environment),
         region=str(region),
         kubernetes_version=str(kubernetes_version) if kubernetes_version else None,
-        node_pools=parse_node_pools(str(node_pools) if node_pools else None),
+        node_pools=str(node_pools) if node_pools else None,
         spaces_bucket=str(spaces_bucket),
         spaces_region=str(spaces_region),
         spaces_access_key=str(spaces_access_key),
         spaces_secret_key=str(spaces_secret_key),
-        runner_temp=(
-            runner_temp_raw
-            if isinstance(runner_temp_raw, Path)
-            else Path(str(runner_temp_raw))
-        ),
-        github_env=(
-            github_env_raw
-            if isinstance(github_env_raw, Path)
-            else Path(str(github_env_raw))
-        ),
+        runner_temp=to_path(runner_temp_raw),
+        github_env=to_path(github_env_raw),
         dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )
 
@@ -173,7 +170,12 @@ def build_tfvars(inputs: ProvisionInputs) -> dict[str, object]:
         variables["kubernetes_version"] = inputs.kubernetes_version
 
     if inputs.node_pools:
-        variables["node_pools"] = inputs.node_pools
+        try:
+            node_pools = json.loads(inputs.node_pools)
+        except json.JSONDecodeError:
+            logger.warning("Invalid node_pools JSON ignored: %s", inputs.node_pools)
+        else:
+            variables["node_pools"] = node_pools
 
     return variables
 
@@ -304,20 +306,34 @@ def main(
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
     # Resolve inputs from environment (CLI args override)
-    inputs = resolve_provision_inputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        spaces_bucket=spaces_bucket,
-        spaces_region=spaces_region,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
-    )
+    inputs = resolve_provision_inputs()
+    overrides: dict[str, object] = {}
+    if cluster_name is not None:
+        overrides["cluster_name"] = cluster_name
+    if environment is not None:
+        overrides["environment"] = environment
+    if region is not None:
+        overrides["region"] = region
+    if kubernetes_version is not None:
+        overrides["kubernetes_version"] = kubernetes_version
+    if node_pools is not None:
+        overrides["node_pools"] = node_pools
+    if spaces_bucket is not None:
+        overrides["spaces_bucket"] = spaces_bucket
+    if spaces_region is not None:
+        overrides["spaces_region"] = spaces_region
+    if spaces_access_key is not None:
+        overrides["spaces_access_key"] = spaces_access_key
+    if spaces_secret_key is not None:
+        overrides["spaces_secret_key"] = spaces_secret_key
+    if runner_temp is not None:
+        overrides["runner_temp"] = runner_temp
+    if github_env is not None:
+        overrides["github_env"] = github_env
+    if dry_run is not None:
+        overrides["dry_run"] = parse_bool(dry_run, default=False)
+    if overrides:
+        inputs = replace(inputs, **overrides)
 
     # Build configurations
     backend_config = build_backend_config(inputs)

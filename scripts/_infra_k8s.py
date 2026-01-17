@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -187,6 +188,8 @@ def tofu_init(
     args = [
         "init",
         f"-backend-config={backend_config_file}",
+        f"-backend-config=region={backend_config.region}",
+        f"-backend-config=endpoint={backend_config.endpoint}",
         f"-backend-config=access_key={backend_config.access_key}",
         f"-backend-config=secret_key={backend_config.secret_key}",
         f"-backend-config=key={backend_config.state_key}",
@@ -328,8 +331,6 @@ def validate_cluster_name(name: str) -> str:
     ValueError
         If the name is invalid.
     """
-    import re
-
     name = name.strip().lower()
     if not name:
         msg = "cluster_name must not be blank"

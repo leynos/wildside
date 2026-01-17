@@ -80,10 +80,7 @@ module "platform" {
   vault_approle_role_id   = var.vault_approle_role_id
   vault_approle_secret_id = var.vault_approle_secret_id
 
-  # Enable platform modules
-  # Note: valkey is disabled by default due to provider version incompatibility.
-  # The valkey module requires helm ~> 3.1.1 while other modules use ~> 2.13.0.
-  # A future upgrade will unify provider versions across all modules.
+  # Enable platform modules (valkey stays disabled by default in this example).
   traefik_enabled      = true
   cert_manager_enabled = true
   external_dns_enabled = true

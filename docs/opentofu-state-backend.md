@@ -31,9 +31,9 @@ The backend is configured in `infra/backend-config/spaces.tfbackend`:
 Sensitive values (access key, secret key, and state key) are passed at runtime
 to avoid storing credentials in version control.
 
-## Initialisation
+## Initialization
 
-To initialise a configuration with the Spaces backend:
+To initialize a configuration with the Spaces backend:
 
     export SPACES_ACCESS_KEY="your-access-key"
     export SPACES_SECRET_KEY="your-secret-key"
@@ -100,9 +100,9 @@ If state is completely lost:
 
 To migrate state between backends:
 
-1. Initialise with the old backend: `tofu init`.
+1. Initialize with the old backend: `tofu init`.
 2. Create a state backup: `tofu state pull > backup.tfstate`.
-3. Reinitialise with the new backend: `tofu init -migrate-state`.
+3. Reinitialize with the new backend: `tofu init -migrate-state`.
 4. Verify the migration: `tofu plan`.
 
 ## Security Considerations
