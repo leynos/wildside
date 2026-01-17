@@ -120,139 +120,114 @@ fn diesel_world() -> Option<SharedContext> {
 }
 
 // -----------------------------------------------------------------------------
+// BDD Helper Functions
+// -----------------------------------------------------------------------------
+
+fn record_seed(world: &SharedContext, seed_key: &str, user_count: i32, seed_value: i64) {
+    with_context_async(
+        world,
+        |_| (seed_key, user_count, seed_value),
+        |repo, (key, count, seed)| async move { repo.try_record_seed(key, count, seed).await },
+        |ctx, result| {
+            ctx.last_record_result = Some(result);
+        },
+    );
+}
+
+fn check_is_seeded(world: &SharedContext, seed_key: &str) {
+    with_context_async(
+        world,
+        |_| seed_key,
+        |repo, key| async move { repo.is_seeded(key).await },
+        |ctx, result| {
+            ctx.last_is_seeded_result = Some(result);
+        },
+    );
+}
+
+fn assert_seeding_result(world: &SharedContext, expected: SeedingResult) {
+    let ctx = world.lock().expect("context lock");
+    let result = ctx
+        .last_record_result
+        .as_ref()
+        .expect("record was executed");
+    match result {
+        Ok(actual) if *actual == expected => {}
+        Ok(actual) => panic!("expected {expected:?}, got {actual:?}"),
+        Err(err) => panic!("expected {expected:?}, got error: {err}"),
+    }
+}
+
+fn assert_is_seeded(world: &SharedContext, expected: bool) {
+    let ctx = world.lock().expect("context lock");
+    let result = ctx
+        .last_is_seeded_result
+        .as_ref()
+        .expect("is_seeded was executed");
+    match result {
+        Ok(actual) if *actual == expected => {}
+        Ok(actual) => panic!("expected is_seeded={expected}, got {actual}"),
+        Err(err) => panic!("expected is_seeded={expected}, got error: {err}"),
+    }
+}
+
+// -----------------------------------------------------------------------------
 // BDD Step Definitions
 // -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed example data runs repository")]
 fn a_diesel_backed_example_data_runs_repository(world: SharedContext) {
-    // Context already initialised with repository.
     let _ = world;
 }
 
 #[when("the repository records a seed")]
 fn the_repository_records_a_seed(world: SharedContext) {
-    with_context_async(
-        &world,
-        |_| (TEST_SEED_KEY, TEST_USER_COUNT, TEST_SEED_VALUE),
-        |repo, (seed_key, user_count, seed)| async move {
-            repo.try_record_seed(seed_key, user_count, seed).await
-        },
-        |ctx, result| {
-            ctx.last_record_result = Some(result);
-        },
-    );
+    record_seed(&world, TEST_SEED_KEY, TEST_USER_COUNT, TEST_SEED_VALUE);
 }
 
 #[when("the repository records the same seed again")]
 fn the_repository_records_the_same_seed_again(world: SharedContext) {
-    with_context_async(
-        &world,
-        |_| (TEST_SEED_KEY, TEST_USER_COUNT, TEST_SEED_VALUE),
-        |repo, (seed_key, user_count, seed)| async move {
-            repo.try_record_seed(seed_key, user_count, seed).await
-        },
-        |ctx, result| {
-            ctx.last_record_result = Some(result);
-        },
-    );
+    record_seed(&world, TEST_SEED_KEY, TEST_USER_COUNT, TEST_SEED_VALUE);
 }
 
 #[when("the repository records a different seed")]
 fn the_repository_records_a_different_seed(world: SharedContext) {
-    with_context_async(
+    record_seed(
         &world,
-        |_| (SECOND_SEED_KEY, SECOND_USER_COUNT, SECOND_SEED_VALUE),
-        |repo, (seed_key, user_count, seed)| async move {
-            repo.try_record_seed(seed_key, user_count, seed).await
-        },
-        |ctx, result| {
-            ctx.last_record_result = Some(result);
-        },
+        SECOND_SEED_KEY,
+        SECOND_USER_COUNT,
+        SECOND_SEED_VALUE,
     );
 }
 
 #[when("the repository checks if seed exists")]
 fn the_repository_checks_if_seed_exists(world: SharedContext) {
-    with_context_async(
-        &world,
-        |_| TEST_SEED_KEY,
-        |repo, seed_key| async move { repo.is_seeded(seed_key).await },
-        |ctx, result| {
-            ctx.last_is_seeded_result = Some(result);
-        },
-    );
+    check_is_seeded(&world, TEST_SEED_KEY);
 }
 
 #[when("the repository checks if unknown seed exists")]
 fn the_repository_checks_if_unknown_seed_exists(world: SharedContext) {
-    with_context_async(
-        &world,
-        |_| "nonexistent-seed",
-        |repo, seed_key| async move { repo.is_seeded(seed_key).await },
-        |ctx, result| {
-            ctx.last_is_seeded_result = Some(result);
-        },
-    );
+    check_is_seeded(&world, "nonexistent-seed");
 }
 
 #[then("the result is applied")]
 fn the_result_is_applied(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_record_result
-        .as_ref()
-        .expect("record was executed");
-    match result {
-        Ok(SeedingResult::Applied) => {}
-        Ok(SeedingResult::AlreadySeeded) => {
-            panic!("expected Applied, got AlreadySeeded")
-        }
-        Err(err) => panic!("expected Applied, got error: {err}"),
-    }
+    assert_seeding_result(&world, SeedingResult::Applied);
 }
 
 #[then("the result is already seeded")]
 fn the_result_is_already_seeded(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_record_result
-        .as_ref()
-        .expect("record was executed");
-    match result {
-        Ok(SeedingResult::AlreadySeeded) => {}
-        Ok(SeedingResult::Applied) => {
-            panic!("expected AlreadySeeded, got Applied")
-        }
-        Err(err) => panic!("expected AlreadySeeded, got error: {err}"),
-    }
+    assert_seeding_result(&world, SeedingResult::AlreadySeeded);
 }
 
 #[then("is seeded returns true")]
 fn is_seeded_returns_true(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_is_seeded_result
-        .as_ref()
-        .expect("is_seeded was executed");
-    match result {
-        Ok(true) => {}
-        Ok(false) => panic!("expected is_seeded=true, got false"),
-        Err(err) => panic!("expected is_seeded=true, got error: {err}"),
-    }
+    assert_is_seeded(&world, true);
 }
 
 #[then("is seeded returns false")]
 fn is_seeded_returns_false(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_is_seeded_result
-        .as_ref()
-        .expect("is_seeded was executed");
-    match result {
-        Ok(false) => {}
-        Ok(true) => panic!("expected is_seeded=false, got true"),
-        Err(err) => panic!("expected is_seeded=false, got error: {err}"),
-    }
+    assert_is_seeded(&world, false);
 }
 
 // -----------------------------------------------------------------------------
