@@ -3,13 +3,22 @@
 # requires-python = ">=3.13"
 # dependencies = ["cyclopts>=2.9"]
 # ///
-"""Provision Kubernetes cluster via OpenTofu.
+"""Provision a Kubernetes cluster via OpenTofu.
 
-This script:
-- configures the OpenTofu backend with Spaces credentials;
-- runs tofu init, plan, and apply for cluster provisioning;
-- extracts cluster outputs (ID, endpoint, kubeconfig); and
-- exports cluster metadata to $GITHUB_ENV.
+Configure the OpenTofu backend, run plan/apply for the cluster module, and
+export key outputs to the GitHub Actions environment file.
+
+Examples
+--------
+Run the provisioning workflow with required environment variables:
+
+>>> export CLUSTER_NAME="preview-1"
+>>> export ENVIRONMENT="preview"
+>>> export REGION="nyc3"
+>>> export SPACES_ACCESS_KEY="access-key"
+>>> export SPACES_SECRET_KEY="secret-key"
+>>> export GITHUB_ENV="/tmp/github-env"
+>>> python scripts/provision_cluster.py --region nyc3
 """
 
 from __future__ import annotations
@@ -98,7 +107,49 @@ def resolve_provision_inputs(
     github_env: Path | None = None,
     dry_run: str | None = None,
 ) -> ProvisionInputs:
-    """Resolve provisioning inputs from environment."""
+    """Resolve provisioning inputs from CLI and environment.
+
+    Normalize CLI values with environment fallbacks so the provisioning
+    workflow operates on a consistent set of validated inputs.
+
+    Parameters
+    ----------
+    cluster_name : str | None
+        Cluster name override for ``CLUSTER_NAME``.
+    environment : str | None
+        Environment override for ``ENVIRONMENT``.
+    region : str | None
+        Region override for ``REGION``.
+    kubernetes_version : str | None
+        Kubernetes version override for ``KUBERNETES_VERSION``.
+    node_pools : str | None
+        JSON-encoded node pool configuration override for ``NODE_POOLS``.
+    spaces_bucket : str | None
+        Spaces bucket override for ``SPACES_BUCKET``.
+    spaces_region : str | None
+        Spaces region override for ``SPACES_REGION``.
+    spaces_access_key : str | None
+        Spaces access key override for ``SPACES_ACCESS_KEY``.
+    spaces_secret_key : str | None
+        Spaces secret key override for ``SPACES_SECRET_KEY``.
+    runner_temp : Path | None
+        Runner temp directory override for ``RUNNER_TEMP``.
+    github_env : Path | None
+        Output file override for ``GITHUB_ENV``.
+    dry_run : str | None
+        Dry-run flag override for ``DRY_RUN``.
+
+    Returns
+    -------
+    ProvisionInputs
+        Normalized provisioning inputs ready for use.
+
+    Examples
+    --------
+    Resolve inputs with a CLI override:
+
+    >>> resolve_provision_inputs(cluster_name="preview-1")
+    """
     raw = RawProvisionInputs(
         cluster_name=cluster_name,
         environment=environment,
@@ -184,7 +235,18 @@ def resolve_provision_inputs(
 
 
 def build_backend_config(inputs: ProvisionInputs) -> SpacesBackendConfig:
-    """Build backend configuration for Spaces state storage."""
+    """Build the OpenTofu backend configuration for Spaces state storage.
+
+    Parameters
+    ----------
+    inputs : ProvisionInputs
+        Normalized provisioning inputs.
+
+    Returns
+    -------
+    SpacesBackendConfig
+        Backend configuration derived from the inputs.
+    """
     endpoint = f"https://{inputs.spaces_region}.digitaloceanspaces.com"
     state_key = f"clusters/{inputs.cluster_name}/terraform.tfstate"
 
@@ -199,7 +261,18 @@ def build_backend_config(inputs: ProvisionInputs) -> SpacesBackendConfig:
 
 
 def build_tfvars(inputs: ProvisionInputs) -> dict[str, object]:
-    """Build tfvars for cluster provisioning."""
+    """Build OpenTofu variables for cluster provisioning.
+
+    Parameters
+    ----------
+    inputs : ProvisionInputs
+        Normalized provisioning inputs.
+
+    Returns
+    -------
+    dict[str, object]
+        Mapping of OpenTofu variables to render into tfvars.
+    """
     variables: dict[str, object] = {
         "cluster_name": inputs.cluster_name,
         "environment": inputs.environment,
@@ -227,7 +300,27 @@ def provision_cluster(
 ) -> tuple[bool, dict[str, object]]:
     """Run OpenTofu init, plan, and apply for cluster provisioning.
 
-    Returns a tuple of (success, outputs).
+    Parameters
+    ----------
+    inputs : ProvisionInputs
+        Normalized provisioning inputs.
+    backend_config : SpacesBackendConfig
+        Backend configuration for state storage.
+    tfvars : dict[str, object]
+        OpenTofu variables for the cluster module.
+
+    Returns
+    -------
+    tuple[bool, dict[str, object]]
+        Success flag and outputs from ``tofu output`` if successful.
+
+    Examples
+    --------
+    Provision using a prepared backend configuration:
+
+    >>> backend = build_backend_config(inputs)
+    >>> tfvars = build_tfvars(inputs)
+    >>> provision_cluster(inputs, backend, tfvars)
     """
     work_dir = inputs.runner_temp / "provision-cluster"
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -306,7 +399,20 @@ def export_cluster_outputs(
     inputs: ProvisionInputs,
     outputs: dict[str, object],
 ) -> None:
-    """Export cluster outputs to GITHUB_ENV."""
+    """Export cluster outputs to the GitHub Actions environment file.
+
+    Parameters
+    ----------
+    inputs : ProvisionInputs
+        Normalized provisioning inputs.
+    outputs : dict[str, object]
+        OpenTofu outputs for the cluster module.
+
+    Returns
+    -------
+    None
+        This function writes to ``GITHUB_ENV`` and returns nothing.
+    """
     env_vars: dict[str, str] = {}
 
     if cluster_id := _extract_output_value(outputs, "cluster_id"):
@@ -339,11 +445,49 @@ def main(
     github_env: Path | None = Parameter(),
     dry_run: str | None = Parameter(),
 ) -> int:
-    """Provision Kubernetes cluster via OpenTofu.
+    """Provision a Kubernetes cluster via OpenTofu.
 
-    This command resolves inputs from environment variables (set by
-    prepare_infra_k8s_inputs.py), configures the OpenTofu backend, runs
-    init/plan/apply, and exports cluster outputs to GITHUB_ENV.
+    Resolve inputs from CLI and environment variables, configure backend state
+    for Spaces, and apply the cluster module before exporting outputs to
+    ``GITHUB_ENV``.
+
+    Parameters
+    ----------
+    cluster_name : str | None
+        Cluster name override for ``CLUSTER_NAME``.
+    environment : str | None
+        Environment override for ``ENVIRONMENT``.
+    region : str | None
+        Region override for ``REGION``.
+    kubernetes_version : str | None
+        Kubernetes version override for ``KUBERNETES_VERSION``.
+    node_pools : str | None
+        JSON-encoded node pool configuration override for ``NODE_POOLS``.
+    spaces_bucket : str | None
+        Spaces bucket override for ``SPACES_BUCKET``.
+    spaces_region : str | None
+        Spaces region override for ``SPACES_REGION``.
+    spaces_access_key : str | None
+        Spaces access key override for ``SPACES_ACCESS_KEY``.
+    spaces_secret_key : str | None
+        Spaces secret key override for ``SPACES_SECRET_KEY``.
+    runner_temp : Path | None
+        Runner temp directory override for ``RUNNER_TEMP``.
+    github_env : Path | None
+        Output file override for ``GITHUB_ENV``.
+    dry_run : str | None
+        Dry-run flag override for ``DRY_RUN``.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for failure).
+
+    Examples
+    --------
+    Run with CLI overrides:
+
+    >>> python scripts/provision_cluster.py --region nyc3 --dry-run true
     """
     # Resolve inputs from environment (CLI args override via resolve_input)
     inputs = resolve_provision_inputs(
