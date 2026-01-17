@@ -92,21 +92,7 @@ class RawProvisionInputs:
     dry_run: str | None = None
 
 
-def resolve_provision_inputs(
-    *,
-    cluster_name: str | None = None,
-    environment: str | None = None,
-    region: str | None = None,
-    kubernetes_version: str | None = None,
-    node_pools: str | None = None,
-    spaces_bucket: str | None = None,
-    spaces_region: str | None = None,
-    spaces_access_key: str | None = None,
-    spaces_secret_key: str | None = None,
-    runner_temp: Path | None = None,
-    github_env: Path | None = None,
-    dry_run: str | None = None,
-) -> ProvisionInputs:
+def resolve_provision_inputs(raw: RawProvisionInputs) -> ProvisionInputs:
     """Resolve provisioning inputs from CLI and environment.
 
     Normalize CLI values with environment fallbacks so the provisioning
@@ -114,30 +100,8 @@ def resolve_provision_inputs(
 
     Parameters
     ----------
-    cluster_name : str | None
-        Cluster name override for ``CLUSTER_NAME``.
-    environment : str | None
-        Environment override for ``ENVIRONMENT``.
-    region : str | None
-        Region override for ``REGION``.
-    kubernetes_version : str | None
-        Kubernetes version override for ``KUBERNETES_VERSION``.
-    node_pools : str | None
-        JSON-encoded node pool configuration override for ``NODE_POOLS``.
-    spaces_bucket : str | None
-        Spaces bucket override for ``SPACES_BUCKET``.
-    spaces_region : str | None
-        Spaces region override for ``SPACES_REGION``.
-    spaces_access_key : str | None
-        Spaces access key override for ``SPACES_ACCESS_KEY``.
-    spaces_secret_key : str | None
-        Spaces secret key override for ``SPACES_SECRET_KEY``.
-    runner_temp : Path | None
-        Runner temp directory override for ``RUNNER_TEMP``.
-    github_env : Path | None
-        Output file override for ``GITHUB_ENV``.
-    dry_run : str | None
-        Dry-run flag override for ``DRY_RUN``.
+    raw : RawProvisionInputs
+        Raw CLI or default inputs before environment resolution.
 
     Returns
     -------
@@ -148,27 +112,16 @@ def resolve_provision_inputs(
     --------
     Resolve inputs with a CLI override:
 
-    >>> resolve_provision_inputs(cluster_name="preview-1")
+    >>> resolve_provision_inputs(RawProvisionInputs(cluster_name="preview-1"))
     """
-    raw = RawProvisionInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        spaces_bucket=spaces_bucket,
-        spaces_region=spaces_region,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
-    )
 
     def to_path(value: Path | str) -> Path:
         return value if isinstance(value, Path) else Path(str(value))
 
-    def _resolved(value: str | Path | None, resolution: InputResolution) -> str | Path:
+    def _resolved(
+        value: str | Path | None,
+        resolution: InputResolution,
+    ) -> str | Path | None:
         if value is not None:
             return value
         return resolve_input(None, resolution)
@@ -494,7 +447,7 @@ def main(
     >>> python scripts/provision_cluster.py --region nyc3 --dry-run true
     """
     # Resolve inputs from environment (CLI args override via resolve_input)
-    inputs = resolve_provision_inputs(
+    raw_inputs = RawProvisionInputs(
         cluster_name=cluster_name,
         environment=environment,
         region=region,
@@ -508,6 +461,7 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
+    inputs = resolve_provision_inputs(raw_inputs)
 
     # Build configurations
     backend_config = build_backend_config(inputs)
