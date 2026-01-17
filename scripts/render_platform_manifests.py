@@ -219,27 +219,38 @@ def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
     return variables
 
 
+def _run_tofu_command(command_name: str, args: list[str], module_path: Path) -> None:
+    """Run an OpenTofu command and raise on failure.
+
+    Parameters
+    ----------
+    command_name : str
+        Human-readable name for error messages (e.g., "init", "apply").
+    args : list[str]
+        Command arguments to pass to run_tofu.
+    module_path : Path
+        Working directory for the command.
+    """
+    print(f"\n--- Running tofu {command_name} ---")
+    result = run_tofu(args, module_path)
+    if not result.success:
+        print(f"error: tofu {command_name} failed: {result.stderr}", file=sys.stderr)
+        raise RuntimeError(f"tofu {command_name} failed")
+    print(result.stdout)
+
+
 def _run_tofu_init(module_path: Path) -> None:
     """Run tofu init and raise on failure."""
-    print("\n--- Running tofu init ---")
-    result = run_tofu(["init", "-input=false"], module_path)
-    if not result.success:
-        print(f"error: tofu init failed: {result.stderr}", file=sys.stderr)
-        raise RuntimeError("tofu init failed")
-    print(result.stdout)
+    _run_tofu_command("init", ["init", "-input=false"], module_path)
 
 
 def _run_tofu_apply(module_path: Path, var_file: Path) -> None:
     """Run tofu apply and raise on failure."""
-    print("\n--- Running tofu apply ---")
-    result = run_tofu(
+    _run_tofu_command(
+        "apply",
         ["apply", "-auto-approve", "-input=false", f"-var-file={var_file}"],
         module_path,
     )
-    if not result.success:
-        print(f"error: tofu apply failed: {result.stderr}", file=sys.stderr)
-        raise RuntimeError("tofu apply failed")
-    print(result.stdout)
 
 
 def _extract_rendered_manifests(outputs: dict[str, object]) -> dict[str, str]:
