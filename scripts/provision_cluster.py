@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -84,38 +84,43 @@ def resolve_provision_inputs(
     def to_path(value: Path | str) -> Path:
         return value if isinstance(value, Path) else Path(str(value))
 
-    cluster_name = resolve_input(
+    def _resolved(value: str | Path | None, resolution: InputResolution) -> str | Path:
+        if value is not None:
+            return value
+        return resolve_input(None, resolution)
+
+    cluster_name = _resolved(
         cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
-    environment = resolve_input(
+    environment = _resolved(
         environment, InputResolution(env_key="ENVIRONMENT", required=True)
     )
-    region = resolve_input(region, InputResolution(env_key="REGION", required=True))
-    kubernetes_version = resolve_input(
+    region = _resolved(region, InputResolution(env_key="REGION", required=True))
+    kubernetes_version = _resolved(
         kubernetes_version, InputResolution(env_key="KUBERNETES_VERSION")
     )
-    node_pools = resolve_input(node_pools, InputResolution(env_key="NODE_POOLS"))
+    node_pools = _resolved(node_pools, InputResolution(env_key="NODE_POOLS"))
 
     # Backend configuration from Spaces
-    spaces_bucket = resolve_input(
+    spaces_bucket = _resolved(
         spaces_bucket,
         InputResolution(env_key="SPACES_BUCKET", default="wildside-tofu-state"),
     )
-    spaces_region = resolve_input(
+    spaces_region = _resolved(
         spaces_region, InputResolution(env_key="SPACES_REGION", default="lon1")
     )
-    spaces_access_key = resolve_input(
+    spaces_access_key = _resolved(
         spaces_access_key, InputResolution(env_key="SPACES_ACCESS_KEY", required=True)
     )
-    spaces_secret_key = resolve_input(
+    spaces_secret_key = _resolved(
         spaces_secret_key, InputResolution(env_key="SPACES_SECRET_KEY", required=True)
     )
 
-    runner_temp_raw = resolve_input(
+    runner_temp_raw = _resolved(
         runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
-    github_env_raw = resolve_input(
+    github_env_raw = _resolved(
         github_env,
         InputResolution(
             env_key="GITHUB_ENV",
@@ -123,9 +128,7 @@ def resolve_provision_inputs(
             as_path=True,
         ),
     )
-    dry_run_raw = resolve_input(
-        dry_run, InputResolution(env_key="DRY_RUN", default="false")
-    )
+    dry_run_raw = _resolved(dry_run, InputResolution(env_key="DRY_RUN", default="false"))
 
     return ProvisionInputs(
         cluster_name=str(cluster_name),
@@ -306,34 +309,20 @@ def main(
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
     # Resolve inputs from environment (CLI args override)
-    inputs = resolve_provision_inputs()
-    overrides: dict[str, object] = {}
-    if cluster_name is not None:
-        overrides["cluster_name"] = cluster_name
-    if environment is not None:
-        overrides["environment"] = environment
-    if region is not None:
-        overrides["region"] = region
-    if kubernetes_version is not None:
-        overrides["kubernetes_version"] = kubernetes_version
-    if node_pools is not None:
-        overrides["node_pools"] = node_pools
-    if spaces_bucket is not None:
-        overrides["spaces_bucket"] = spaces_bucket
-    if spaces_region is not None:
-        overrides["spaces_region"] = spaces_region
-    if spaces_access_key is not None:
-        overrides["spaces_access_key"] = spaces_access_key
-    if spaces_secret_key is not None:
-        overrides["spaces_secret_key"] = spaces_secret_key
-    if runner_temp is not None:
-        overrides["runner_temp"] = runner_temp
-    if github_env is not None:
-        overrides["github_env"] = github_env
-    if dry_run is not None:
-        overrides["dry_run"] = parse_bool(dry_run, default=False)
-    if overrides:
-        inputs = replace(inputs, **overrides)
+    inputs = resolve_provision_inputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        spaces_bucket=spaces_bucket,
+        spaces_region=spaces_region,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
 
     # Build configurations
     backend_config = build_backend_config(inputs)

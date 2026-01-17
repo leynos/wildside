@@ -68,26 +68,13 @@ class RenderInputs:
     github_env: Path
 
 
-def resolve_render_inputs(
-    *,
-    cluster_name: str | None = None,
-    domain: str | None = None,
-    acme_email: str | None = None,
-    cloudflare_api_token_secret_name: str | None = None,
-    vault_address: str | None = None,
-    vault_role_id: str | None = None,
-    vault_secret_id: str | None = None,
-    vault_ca_certificate: str | None = None,
-    enable_traefik: str | None = None,
-    enable_cert_manager: str | None = None,
-    enable_external_dns: str | None = None,
-    enable_vault_eso: str | None = None,
-    enable_cnpg: str | None = None,
-    runner_temp: Path | None = None,
-    output_dir: Path | None = None,
-    github_env: Path | None = None,
-) -> RenderInputs:
-    """Resolve rendering inputs from environment."""
+def _resolve_core_config(
+    cluster_name: str | None,
+    domain: str | None,
+    acme_email: str | None,
+    cloudflare_api_token_secret_name: str | None,
+) -> tuple[str, str, str, str]:
+    """Resolve core platform configuration inputs."""
     cluster_name_raw = resolve_input(
         cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
@@ -104,7 +91,16 @@ def resolve_render_inputs(
             default="cloudflare-api-token",
         ),
     )
+    return cluster_name_raw, domain_raw, acme_email_raw, cloudflare_secret_raw
 
+
+def _resolve_vault_config(
+    vault_address: str | None,
+    vault_role_id: str | None,
+    vault_secret_id: str | None,
+    vault_ca_certificate: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Resolve vault-related inputs."""
     vault_address_raw = resolve_input(
         vault_address, InputResolution(env_key="VAULT_ADDRESS")
     )
@@ -117,7 +113,17 @@ def resolve_render_inputs(
     vault_ca_cert_raw = resolve_input(
         vault_ca_certificate, InputResolution(env_key="VAULT_CA_CERTIFICATE")
     )
+    return vault_address_raw, vault_role_id_raw, vault_secret_id_raw, vault_ca_cert_raw
 
+
+def _resolve_feature_flags(
+    enable_traefik: str | None,
+    enable_cert_manager: str | None,
+    enable_external_dns: str | None,
+    enable_vault_eso: str | None,
+    enable_cnpg: str | None,
+) -> tuple[str, str, str, str, str]:
+    """Resolve feature flag inputs."""
     traefik_raw = resolve_input(
         enable_traefik, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
     )
@@ -134,7 +140,15 @@ def resolve_render_inputs(
     cnpg_raw = resolve_input(
         enable_cnpg, InputResolution(env_key="ENABLE_CNPG", default="true")
     )
+    return traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw
 
+
+def _resolve_paths(
+    runner_temp: Path | None,
+    output_dir: Path | None,
+    github_env: Path | None,
+) -> tuple[Path, Path, Path]:
+    """Resolve path inputs for temporary output locations."""
     # /tmp fallbacks are intentional for local development and CI without runner
     # env vars, and are safe for ephemeral output locations.
     runner_temp_raw = resolve_input(
@@ -157,6 +171,69 @@ def resolve_render_inputs(
             as_path=True,
         ),
     )
+    return (
+        runner_temp_raw if isinstance(runner_temp_raw, Path) else Path(str(runner_temp_raw)),
+        output_dir_raw if isinstance(output_dir_raw, Path) else Path(str(output_dir_raw)),
+        github_env_raw if isinstance(github_env_raw, Path) else Path(str(github_env_raw)),
+    )
+
+
+def resolve_render_inputs(
+    *,
+    cluster_name: str | None = None,
+    domain: str | None = None,
+    acme_email: str | None = None,
+    cloudflare_api_token_secret_name: str | None = None,
+    vault_address: str | None = None,
+    vault_role_id: str | None = None,
+    vault_secret_id: str | None = None,
+    vault_ca_certificate: str | None = None,
+    enable_traefik: str | None = None,
+    enable_cert_manager: str | None = None,
+    enable_external_dns: str | None = None,
+    enable_vault_eso: str | None = None,
+    enable_cnpg: str | None = None,
+    runner_temp: Path | None = None,
+    output_dir: Path | None = None,
+    github_env: Path | None = None,
+) -> RenderInputs:
+    """Resolve rendering inputs from environment."""
+    (
+        cluster_name_raw,
+        domain_raw,
+        acme_email_raw,
+        cloudflare_secret_raw,
+    ) = _resolve_core_config(
+        cluster_name,
+        domain,
+        acme_email,
+        cloudflare_api_token_secret_name,
+    )
+    (
+        vault_address_raw,
+        vault_role_id_raw,
+        vault_secret_id_raw,
+        vault_ca_cert_raw,
+    ) = _resolve_vault_config(
+        vault_address,
+        vault_role_id,
+        vault_secret_id,
+        vault_ca_certificate,
+    )
+    traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw = (
+        _resolve_feature_flags(
+            enable_traefik,
+            enable_cert_manager,
+            enable_external_dns,
+            enable_vault_eso,
+            enable_cnpg,
+        )
+    )
+    runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(
+        runner_temp,
+        output_dir,
+        github_env,
+    )
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),
@@ -172,19 +249,9 @@ def resolve_render_inputs(
         enable_external_dns=_parse_bool(str(external_dns_raw)),
         enable_vault_eso=_parse_bool(str(vault_eso_raw)),
         enable_cnpg=_parse_bool(str(cnpg_raw)),
-        runner_temp=(
-            runner_temp_raw
-            if isinstance(runner_temp_raw, Path)
-            else Path(str(runner_temp_raw))
-        ),
-        output_dir=(
-            output_dir_raw
-            if isinstance(output_dir_raw, Path)
-            else Path(str(output_dir_raw))
-        ),
-        github_env=(
-            github_env_raw if isinstance(github_env_raw, Path) else Path(str(github_env_raw))
-        ),
+        runner_temp=runner_temp_raw,
+        output_dir=output_dir_raw,
+        github_env=github_env_raw,
     )
 
 
