@@ -201,8 +201,9 @@ def sync_manifests(
 
     Returns the number of files synced.
     """
-    cluster_dir = clone_dir / "clusters" / inputs.cluster_name
-    cluster_dir.mkdir(parents=True, exist_ok=True)
+    cluster_root = clone_dir / "clusters"
+    cluster_dir = cluster_root / inputs.cluster_name
+    _reset_cluster_dir(cluster_root, cluster_dir)
 
     count = 0
 
@@ -217,6 +218,20 @@ def sync_manifests(
                 count += 1
 
     return count
+
+
+def _reset_cluster_dir(cluster_root: Path, cluster_dir: Path) -> None:
+    """Ensure the cluster directory is empty and safe to reuse."""
+    cluster_root_resolved = cluster_root.resolve()
+    cluster_dir_resolved = cluster_dir.resolve()
+
+    if not cluster_dir_resolved.is_relative_to(cluster_root_resolved):
+        msg = f"Refusing to reset cluster dir outside {cluster_root_resolved}"
+        raise RuntimeError(msg)
+
+    if cluster_dir.exists():
+        shutil.rmtree(cluster_dir)
+    cluster_dir.mkdir(parents=True, exist_ok=True)
 
 
 def commit_and_push(

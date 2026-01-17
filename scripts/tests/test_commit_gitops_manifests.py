@@ -97,6 +97,26 @@ def test_sync_manifests_copies_files(tmp_path: Path) -> None:
     assert dest.read_text(encoding="utf-8") == "apiVersion: v1"
 
 
+def test_sync_manifests_removes_stale_files(tmp_path: Path) -> None:
+    inputs = _make_inputs(tmp_path)
+    inputs.render_output_dir.mkdir(parents=True)
+    (inputs.render_output_dir / "platform").mkdir()
+    (inputs.render_output_dir / "platform" / "manifest.yaml").write_text(
+        "apiVersion: v1",
+        encoding="utf-8",
+    )
+
+    clone_dir = tmp_path / "clone"
+    cluster_dir = clone_dir / "clusters" / inputs.cluster_name / "old"
+    cluster_dir.mkdir(parents=True)
+    stale_manifest = cluster_dir / "stale.yaml"
+    stale_manifest.write_text("stale", encoding="utf-8")
+
+    sync_manifests(inputs, clone_dir)
+
+    assert not stale_manifest.exists()
+
+
 def test_commit_and_push_no_changes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     inputs = _make_inputs(tmp_path)
     clone_dir = tmp_path / "clone"
