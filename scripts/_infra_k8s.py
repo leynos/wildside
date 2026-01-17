@@ -112,7 +112,7 @@ def _validate_command_args(args: list[str]) -> None:
         if not isinstance(arg, str):
             msg = f"OpenTofu argument must be a string, got {type(arg).__name__}"
             raise TypeError(msg)
-        if "\x00" in arg or "\n" in arg or "\r" in arg:
+        if any(char in arg for char in ("\x00", "\n", "\r")):
             msg = "OpenTofu argument contains an invalid control character"
             raise ValueError(msg)
 
