@@ -17,6 +17,7 @@ from scripts._infra_k8s import (  # noqa: E402
     write_manifests,
 )
 from scripts.commit_gitops_manifests import (  # noqa: E402
+    RawGitOpsInputs,
     resolve_gitops_inputs,
     sync_manifests,
 )
@@ -139,7 +140,7 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     )
     _apply_env_file(monkeypatch, env_file)
 
-    gitops_inputs = resolve_gitops_inputs()
+    gitops_inputs = resolve_gitops_inputs(RawGitOpsInputs())
     clone_dir = gitops_inputs.runner_temp / "gitops-clone"
     clone_dir.mkdir(parents=True, exist_ok=True)
     sync_manifests(gitops_inputs, clone_dir)

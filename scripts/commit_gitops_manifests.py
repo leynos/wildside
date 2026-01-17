@@ -49,34 +49,38 @@ class GitOpsInputs:
     dry_run: bool
 
 
-def resolve_gitops_inputs(
-    *,
-    gitops_repository: str | None = None,
-    gitops_branch: str | None = None,
-    gitops_token: str | None = None,
-    cluster_name: str | None = None,
-    render_output_dir: Path | None = None,
-    runner_temp: Path | None = None,
-    github_env: Path | None = None,
-    dry_run: str | None = None,
-) -> GitOpsInputs:
+@dataclass(frozen=True, slots=True)
+class RawGitOpsInputs:
+    """Raw GitOps inputs from CLI or defaults."""
+
+    gitops_repository: str | None = None
+    gitops_branch: str | None = None
+    gitops_token: str | None = None
+    cluster_name: str | None = None
+    render_output_dir: Path | None = None
+    runner_temp: Path | None = None
+    github_env: Path | None = None
+    dry_run: str | None = None
+
+
+def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
     """Resolve GitOps inputs from environment."""
     gitops_repository = resolve_input(
-        gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
+        raw.gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
     )
     gitops_branch = resolve_input(
-        gitops_branch, InputResolution(env_key="GITOPS_BRANCH", default="main")
+        raw.gitops_branch, InputResolution(env_key="GITOPS_BRANCH", default="main")
     )
     gitops_token = resolve_input(
-        gitops_token, InputResolution(env_key="GITOPS_TOKEN", required=True)
+        raw.gitops_token, InputResolution(env_key="GITOPS_TOKEN", required=True)
     )
 
     cluster_name = resolve_input(
-        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
+        raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
 
     render_output_dir_raw = resolve_input(
-        render_output_dir,
+        raw.render_output_dir,
         InputResolution(
             env_key="RENDER_OUTPUT_DIR",
             default=Path("/tmp/rendered-manifests"),
@@ -84,11 +88,11 @@ def resolve_gitops_inputs(
         ),
     )
     runner_temp_raw = resolve_input(
-        runner_temp,
+        raw.runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     github_env_raw = resolve_input(
-        github_env,
+        raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
@@ -96,7 +100,7 @@ def resolve_gitops_inputs(
         ),
     )
     dry_run_raw = resolve_input(
-        dry_run, InputResolution(env_key="DRY_RUN", default="false")
+        raw.dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
 
     return GitOpsInputs(
@@ -300,8 +304,7 @@ def main(
     This command clones the GitOps repository, copies rendered manifests
     to the appropriate cluster directory, and commits/pushes changes.
     """
-    # Resolve inputs from environment
-    inputs = resolve_gitops_inputs(
+    raw_inputs = RawGitOpsInputs(
         gitops_repository=gitops_repository,
         gitops_branch=gitops_branch,
         gitops_token=gitops_token,
@@ -311,6 +314,8 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
+    # Resolve inputs from environment
+    inputs = resolve_gitops_inputs(raw_inputs)
 
     # Mask sensitive values
     mask_secret(inputs.gitops_token)
