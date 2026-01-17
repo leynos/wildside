@@ -27,6 +27,7 @@ from scripts.prepare_infra_k8s_inputs import (  # noqa: E402
     prepare_inputs,
 )
 from scripts.provision_cluster import (  # noqa: E402
+    RawProvisionInputs,
     build_backend_config,
     build_tfvars as build_cluster_tfvars,
     export_cluster_outputs,
@@ -108,7 +109,7 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
         lambda *_args, **_kwargs: {"cluster_id": "abc", "endpoint": "https://kube"},
     )
 
-    provision_inputs = resolve_provision_inputs()
+    provision_inputs = resolve_provision_inputs(RawProvisionInputs())
     backend_config = build_backend_config(provision_inputs)
     cluster_tfvars = build_cluster_tfvars(provision_inputs)
     success, outputs = provision_cluster(provision_inputs, backend_config, cluster_tfvars)

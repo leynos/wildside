@@ -65,20 +65,26 @@ class ProvisionInputs:
     dry_run: bool
 
 
+@dataclass(frozen=True, slots=True)
+class RawProvisionInputs:
+    """Raw provisioning inputs from CLI or defaults."""
+
+    cluster_name: str | None = None
+    environment: str | None = None
+    region: str | None = None
+    kubernetes_version: str | None = None
+    node_pools: str | None = None
+    spaces_bucket: str | None = None
+    spaces_region: str | None = None
+    spaces_access_key: str | None = None
+    spaces_secret_key: str | None = None
+    runner_temp: Path | None = None
+    github_env: Path | None = None
+    dry_run: str | None = None
+
+
 def resolve_provision_inputs(
-    *,
-    cluster_name: str | None = None,
-    environment: str | None = None,
-    region: str | None = None,
-    kubernetes_version: str | None = None,
-    node_pools: str | None = None,
-    spaces_bucket: str | None = None,
-    spaces_region: str | None = None,
-    spaces_access_key: str | None = None,
-    spaces_secret_key: str | None = None,
-    runner_temp: Path | None = None,
-    github_env: Path | None = None,
-    dry_run: str | None = None,
+    raw: RawProvisionInputs,
 ) -> ProvisionInputs:
     """Resolve provisioning inputs from environment."""
     def to_path(value: Path | str) -> Path:
@@ -90,45 +96,49 @@ def resolve_provision_inputs(
         return resolve_input(None, resolution)
 
     cluster_name = _resolved(
-        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
+        raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
     environment = _resolved(
-        environment, InputResolution(env_key="ENVIRONMENT", required=True)
+        raw.environment, InputResolution(env_key="ENVIRONMENT", required=True)
     )
-    region = _resolved(region, InputResolution(env_key="REGION", required=True))
+    region = _resolved(raw.region, InputResolution(env_key="REGION", required=True))
     kubernetes_version = _resolved(
-        kubernetes_version, InputResolution(env_key="KUBERNETES_VERSION")
+        raw.kubernetes_version, InputResolution(env_key="KUBERNETES_VERSION")
     )
-    node_pools = _resolved(node_pools, InputResolution(env_key="NODE_POOLS"))
+    node_pools = _resolved(raw.node_pools, InputResolution(env_key="NODE_POOLS"))
 
     # Backend configuration from Spaces
     spaces_bucket = _resolved(
-        spaces_bucket,
+        raw.spaces_bucket,
         InputResolution(env_key="SPACES_BUCKET", default="wildside-tofu-state"),
     )
     spaces_region = _resolved(
-        spaces_region, InputResolution(env_key="SPACES_REGION", default="lon1")
+        raw.spaces_region, InputResolution(env_key="SPACES_REGION", default="lon1")
     )
     spaces_access_key = _resolved(
-        spaces_access_key, InputResolution(env_key="SPACES_ACCESS_KEY", required=True)
+        raw.spaces_access_key,
+        InputResolution(env_key="SPACES_ACCESS_KEY", required=True),
     )
     spaces_secret_key = _resolved(
-        spaces_secret_key, InputResolution(env_key="SPACES_SECRET_KEY", required=True)
+        raw.spaces_secret_key,
+        InputResolution(env_key="SPACES_SECRET_KEY", required=True),
     )
 
     runner_temp_raw = _resolved(
-        runner_temp,
+        raw.runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     github_env_raw = _resolved(
-        github_env,
+        raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
             as_path=True,
         ),
     )
-    dry_run_raw = _resolved(dry_run, InputResolution(env_key="DRY_RUN", default="false"))
+    dry_run_raw = _resolved(
+        raw.dry_run, InputResolution(env_key="DRY_RUN", default="false")
+    )
 
     return ProvisionInputs(
         cluster_name=str(cluster_name),
@@ -287,40 +297,6 @@ def export_cluster_outputs(
         print(f"Exported {len(env_vars)} variables to GITHUB_ENV")
 
 
-def _build_cli_overrides(
-    cluster_name: str | None,
-    environment: str | None,
-    region: str | None,
-    kubernetes_version: str | None,
-    node_pools: str | None,
-    spaces_bucket: str | None,
-    spaces_region: str | None,
-    spaces_access_key: str | None,
-    spaces_secret_key: str | None,
-    runner_temp: Path | None,
-    github_env: Path | None,
-    dry_run: str | None,
-) -> dict[str, object]:
-    """Build dictionary of CLI parameter overrides, excluding None values."""
-    raw_overrides: dict[str, object | None] = {
-        "cluster_name": cluster_name,
-        "environment": environment,
-        "region": region,
-        "kubernetes_version": kubernetes_version,
-        "node_pools": node_pools,
-        "spaces_bucket": spaces_bucket,
-        "spaces_region": spaces_region,
-        "spaces_access_key": spaces_access_key,
-        "spaces_secret_key": spaces_secret_key,
-        "runner_temp": runner_temp,
-        "github_env": github_env,
-    }
-    overrides = {key: value for key, value in raw_overrides.items() if value is not None}
-    if dry_run is not None:
-        overrides["dry_run"] = parse_bool(dry_run, default=False)
-    return overrides
-
-
 @app.command()
 def main(
     cluster_name: str | None = Parameter(),
@@ -343,8 +319,7 @@ def main(
     init/plan/apply, and exports cluster outputs to GITHUB_ENV.
     """
     # Resolve inputs from environment (CLI args override)
-    inputs = resolve_provision_inputs()
-    overrides = _build_cli_overrides(
+    raw_inputs = RawProvisionInputs(
         cluster_name=cluster_name,
         environment=environment,
         region=region,
@@ -358,8 +333,7 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
-    if overrides:
-        inputs = replace(inputs, **overrides)
+    inputs = resolve_provision_inputs(raw_inputs)
 
     # Build configurations
     backend_config = build_backend_config(inputs)
