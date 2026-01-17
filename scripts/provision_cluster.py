@@ -178,21 +178,7 @@ def _resolve_execution_config(
     )
 
 
-def resolve_provision_inputs(
-    *,
-    cluster_name: str | None = None,
-    environment: str | None = None,
-    region: str | None = None,
-    kubernetes_version: str | None = None,
-    node_pools: str | None = None,
-    spaces_bucket: str | None = None,
-    spaces_region: str | None = None,
-    spaces_access_key: str | None = None,
-    spaces_secret_key: str | None = None,
-    runner_temp: Path | None = None,
-    github_env: Path | None = None,
-    dry_run: str | None = None,
-) -> ProvisionInputs:
+def resolve_provision_inputs(raw: RawProvisionInputs) -> ProvisionInputs:
     """Resolve provisioning inputs from CLI and environment.
 
     Normalize CLI values with environment fallbacks so the provisioning
@@ -234,22 +220,8 @@ def resolve_provision_inputs(
     --------
     Resolve inputs with a CLI override:
 
-    >>> resolve_provision_inputs(cluster_name="preview-1")
+    >>> resolve_provision_inputs(RawProvisionInputs(cluster_name="preview-1"))
     """
-    raw = RawProvisionInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        spaces_bucket=spaces_bucket,
-        spaces_region=spaces_region,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
-    )
 
     def to_path(value: Path | str) -> Path:
         return value if isinstance(value, Path) else Path(str(value))
@@ -549,7 +521,7 @@ def main(
     >>> python scripts/provision_cluster.py --region nyc3 --dry-run true
     """
     # Resolve inputs from environment (CLI args override via resolve_input)
-    inputs = resolve_provision_inputs(
+    raw_inputs = RawProvisionInputs(
         cluster_name=cluster_name,
         environment=environment,
         region=region,
@@ -563,6 +535,7 @@ def main(
         github_env=github_env,
         dry_run=dry_run,
     )
+    inputs = resolve_provision_inputs(raw_inputs)
 
     # Build configurations
     backend_config = build_backend_config(inputs)
