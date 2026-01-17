@@ -1,7 +1,7 @@
 Feature: Example data seeding guard
   The backend tracks which example data seeds have been applied to prevent
   duplicate seeding on concurrent startups or restarts. The repository uses
-  INSERT ... ON CONFLICT DO NOTHING semantics for exactly-once guarantees.
+  idempotent semantics to ensure each seed is applied at most once.
 
   Scenario: First seed attempt succeeds
     Given a fresh database

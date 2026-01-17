@@ -144,8 +144,8 @@ pass.
 
 - The existing test infrastructure (pg-embedded-setup-unpriv) works well for
   new repository tests; copying established patterns reduces friction.
-- BDD tests in this repo use rstest-bdd v0.2.0 syntax; verify dependency
-  versions before starting implementation.
+- Migrated from rstest-bdd v0.2.0 to v0.3.2 during implementation; always
+  verify dependency versions match documentation before starting work.
 - Generic helper functions like `handle_cluster_setup_failure<T>` may need
   explicit type annotations when result is discarded.
 

@@ -15,7 +15,22 @@ define_port_error! {
         Connection { message: String } => "example data runs connection failed: {message}",
         /// Query or mutation failed during execution.
         Query { message: String } => "example data runs query failed: {message}",
+        /// Seed value exceeds the representable range (i64::MAX).
+        SeedOverflow { seed: u64 } => "seed value {seed} exceeds maximum representable value",
     }
+}
+
+/// Convert a u64 seed value to i64, returning an error if it overflows.
+///
+/// The database stores seed values as BIGINT (i64). This function performs
+/// a checked conversion from u64 (as used by `SeedDefinition::seed()`) to
+/// i64, rejecting values above `i64::MAX` with a clear domain error.
+///
+/// # Errors
+///
+/// Returns `ExampleDataRunsError::SeedOverflow` if `seed > i64::MAX`.
+pub fn try_seed_to_i64(seed: u64) -> Result<i64, ExampleDataRunsError> {
+    i64::try_from(seed).map_err(|_| ExampleDataRunsError::seed_overflow(seed))
 }
 
 /// Result of attempting to record a seed run.
@@ -118,5 +133,31 @@ mod tests {
         let repo = FixtureExampleDataRunsRepository;
         let result = repo.is_seeded("test-seed").await;
         assert!(matches!(result, Ok(false)));
+    }
+
+    #[rstest]
+    fn try_seed_to_i64_converts_valid_values() {
+        assert_eq!(try_seed_to_i64(0).unwrap(), 0);
+        assert_eq!(try_seed_to_i64(42).unwrap(), 42);
+        assert_eq!(try_seed_to_i64(i64::MAX as u64).unwrap(), i64::MAX);
+    }
+
+    #[rstest]
+    fn try_seed_to_i64_rejects_overflow() {
+        let overflow_seed = (i64::MAX as u64) + 1;
+        let result = try_seed_to_i64(overflow_seed);
+        assert!(matches!(
+            result,
+            Err(ExampleDataRunsError::SeedOverflow { seed }) if seed == overflow_seed
+        ));
+    }
+
+    #[rstest]
+    fn try_seed_to_i64_rejects_max_u64() {
+        let result = try_seed_to_i64(u64::MAX);
+        assert!(matches!(
+            result,
+            Err(ExampleDataRunsError::SeedOverflow { seed }) if seed == u64::MAX
+        ));
     }
 }
