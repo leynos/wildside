@@ -202,6 +202,10 @@ def resolve_provision_inputs(
         InputResolution(env_key="SPACES_SECRET_KEY", required=True),
     )
 
+    # RUNNER_TEMP/GITHUB_ENV/DRY_RUN InputResolution defaults (Path("/tmp"),
+    # Path("/tmp/github-env-undefined"), and "false") are intentional
+    # local-dev/test fallbacks to avoid hard failures when those env keys are
+    # absent; production usage should set the env_key values explicitly.
     runner_temp_raw = _resolved(
         raw.runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
