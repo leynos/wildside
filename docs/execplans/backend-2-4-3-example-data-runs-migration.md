@@ -107,13 +107,13 @@ seeding behaviour.
 - Decision: Use `seed_key TEXT PRIMARY KEY` rather than a composite key
   Rationale: The design document specifies seed_key as the sole identifier;
   each seed name is unique and sufficient for once-only guard.
-  Date/Author: 2026-01-16 / Plan author
+  Date/Author: 2026-01-16 / Plan author.
 
 - Decision: Return `SeedingResult` enum from repository method
   Rationale: The caller needs to distinguish between "seed applied" and "seed
   already exists" without treating the latter as an error. An enum is cleaner
   than Option or bool.
-  Date/Author: 2026-01-16 / Plan author
+  Date/Author: 2026-01-16 / Plan author.
 
 ## Outcomes & Retrospective
 
@@ -395,8 +395,11 @@ partway:
 - New source files can be deleted
 - Git can restore to clean state
 
-The migration itself is idempotent: running it twice has no effect after the
-first application (table already exists).
+Note: The raw `CREATE TABLE` statement is not inherently idempotent (it would
+fail if the table already exists). Idempotence is provided by Diesel's migration
+tracking, which prevents reapplication of previously applied migrations. To make
+the SQL itself idempotent, use `CREATE TABLE IF NOT EXISTS` in future
+migrations.
 
 ## Artifacts and Notes
 

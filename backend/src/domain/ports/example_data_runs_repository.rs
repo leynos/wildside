@@ -29,6 +29,19 @@ define_port_error! {
 /// # Errors
 ///
 /// Returns `ExampleDataRunsError::SeedOverflow` if `seed > i64::MAX`.
+///
+/// # Examples
+///
+/// ```
+/// use backend::domain::ports::{try_seed_to_i64, ExampleDataRunsError};
+///
+/// // Successful conversion
+/// assert_eq!(try_seed_to_i64(42).unwrap(), 42);
+///
+/// // Overflow error for values exceeding i64::MAX
+/// let result = try_seed_to_i64(u64::MAX);
+/// assert!(matches!(result, Err(ExampleDataRunsError::SeedOverflow { .. })));
+/// ```
 pub fn try_seed_to_i64(seed: u64) -> Result<i64, ExampleDataRunsError> {
     i64::try_from(seed).map_err(|_| ExampleDataRunsError::seed_overflow(seed))
 }
@@ -137,9 +150,12 @@ mod tests {
 
     #[rstest]
     fn try_seed_to_i64_converts_valid_values() {
-        assert_eq!(try_seed_to_i64(0).unwrap(), 0);
-        assert_eq!(try_seed_to_i64(42).unwrap(), 42);
-        assert_eq!(try_seed_to_i64(i64::MAX as u64).unwrap(), i64::MAX);
+        assert_eq!(try_seed_to_i64(0).expect("convert 0 to i64"), 0);
+        assert_eq!(try_seed_to_i64(42).expect("convert 42 to i64"), 42);
+        assert_eq!(
+            try_seed_to_i64(i64::MAX as u64).expect("convert i64::MAX to i64"),
+            i64::MAX
+        );
     }
 
     #[rstest]
