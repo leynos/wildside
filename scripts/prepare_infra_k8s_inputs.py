@@ -98,8 +98,10 @@ class ResolvedInputs:
     github_env: Path
 
 
-def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
-    """Resolve CLI and environment inputs to their canonical types."""
+def _resolve_cluster_config(
+    raw: RawInputs,
+) -> tuple[str, str, str, str | None, str | None]:
+    """Resolve cluster configuration inputs."""
     cluster_name = resolve_input(
         raw.cluster_name,
         InputResolution(env_key="INPUT_CLUSTER_NAME", required=True),
@@ -120,7 +122,17 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.node_pools,
         InputResolution(env_key="INPUT_NODE_POOLS"),
     )
+    return (
+        cluster_name,
+        environment,
+        region,
+        kubernetes_version,
+        node_pools_raw,
+    )
 
+
+def _resolve_domain_config(raw: RawInputs) -> tuple[str, str]:
+    """Resolve domain configuration inputs."""
     domain = resolve_input(
         raw.domain,
         InputResolution(env_key="INPUT_DOMAIN", required=True),
@@ -129,7 +141,11 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.acme_email,
         InputResolution(env_key="INPUT_ACME_EMAIL", required=True),
     )
+    return domain, acme_email
 
+
+def _resolve_gitops_config(raw: RawInputs) -> tuple[str, str, str]:
+    """Resolve GitOps configuration inputs."""
     gitops_repository = resolve_input(
         raw.gitops_repository,
         InputResolution(env_key="INPUT_GITOPS_REPOSITORY", required=True),
@@ -142,7 +158,11 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.gitops_token,
         InputResolution(env_key="INPUT_GITOPS_TOKEN", required=True),
     )
+    return gitops_repository, gitops_branch, gitops_token
 
+
+def _resolve_vault_config(raw: RawInputs) -> tuple[str, str, str, str | None]:
+    """Resolve vault configuration inputs."""
     vault_address = resolve_input(
         raw.vault_address,
         InputResolution(env_key="INPUT_VAULT_ADDRESS", required=True),
@@ -159,7 +179,11 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.vault_ca_certificate,
         InputResolution(env_key="INPUT_VAULT_CA_CERTIFICATE"),
     )
+    return vault_address, vault_role_id, vault_secret_id, vault_ca_certificate
 
+
+def _resolve_cloud_credentials(raw: RawInputs) -> tuple[str, str, str]:
+    """Resolve cloud credential inputs."""
     digitalocean_token = resolve_input(
         raw.digitalocean_token,
         InputResolution(env_key="INPUT_DIGITALOCEAN_TOKEN", required=True),
@@ -172,7 +196,13 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.spaces_secret_key,
         InputResolution(env_key="INPUT_SPACES_SECRET_KEY", required=True),
     )
+    return digitalocean_token, spaces_access_key, spaces_secret_key
 
+
+def _resolve_feature_flags(
+    raw: RawInputs,
+) -> tuple[str, str, str, str, str, str]:
+    """Resolve feature flag inputs."""
     cloudflare_api_token_secret_name = resolve_input(
         raw.cloudflare_api_token_secret_name,
         InputResolution(
@@ -200,7 +230,18 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         raw.enable_cnpg,
         InputResolution(env_key="INPUT_ENABLE_CNPG", default="true"),
     )
+    return (
+        cloudflare_api_token_secret_name,
+        enable_traefik,
+        enable_cert_manager,
+        enable_external_dns,
+        enable_vault_eso,
+        enable_cnpg,
+    )
 
+
+def _resolve_execution_config(raw: RawInputs) -> tuple[str, Path, Path]:
+    """Resolve execution configuration inputs."""
     dry_run = resolve_input(
         raw.dry_run,
         InputResolution(env_key="INPUT_DRY_RUN", default="false"),
@@ -221,6 +262,40 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
             as_path=True,
         ),
     )
+    return dry_run, runner_temp, github_env
+
+
+def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
+    """Resolve CLI and environment inputs to their canonical types."""
+    (
+        cluster_name,
+        environment,
+        region,
+        kubernetes_version,
+        node_pools_raw,
+    ) = _resolve_cluster_config(raw)
+    domain, acme_email = _resolve_domain_config(raw)
+    gitops_repository, gitops_branch, gitops_token = _resolve_gitops_config(raw)
+    (
+        vault_address,
+        vault_role_id,
+        vault_secret_id,
+        vault_ca_certificate,
+    ) = _resolve_vault_config(raw)
+    (
+        digitalocean_token,
+        spaces_access_key,
+        spaces_secret_key,
+    ) = _resolve_cloud_credentials(raw)
+    (
+        cloudflare_api_token_secret_name,
+        enable_traefik,
+        enable_cert_manager,
+        enable_external_dns,
+        enable_vault_eso,
+        enable_cnpg,
+    ) = _resolve_feature_flags(raw)
+    dry_run, runner_temp, github_env = _resolve_execution_config(raw)
 
     # Validate cluster name format
     validated_cluster_name = validate_cluster_name(str(cluster_name))
