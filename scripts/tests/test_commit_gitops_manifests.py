@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.commit_gitops_manifests import (  # noqa: E402
     GitOpsInputs,
+    RawGitOpsInputs,
     _git_auth_env,
     clone_repository,
     commit_and_push,
@@ -43,7 +44,7 @@ def test_resolve_gitops_inputs_cli_override(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
 
-    inputs = resolve_gitops_inputs(gitops_repository="cli")
+    inputs = resolve_gitops_inputs(RawGitOpsInputs(gitops_repository="cli"))
     assert inputs.gitops_repository == "cli"
 
 
