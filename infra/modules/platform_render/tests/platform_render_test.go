@@ -1,7 +1,11 @@
 package tests
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -99,6 +103,22 @@ func TestPlatformRenderModuleFeatureFlagsDisableModules(t *testing.T) {
 	require.NotContains(t, enabledModulesRaw, "external_dns")
 	require.NotContains(t, enabledModulesRaw, "vault_eso")
 	require.NotContains(t, enabledModulesRaw, "cnpg")
+}
+
+func TestPlatformRenderModuleVaultOptionalWhenEsoDisabled(t *testing.T) {
+	t.Parallel()
+
+	vars := testVars(t)
+	vars["vault_eso_enabled"] = false
+	delete(vars, "vault_address")
+	delete(vars, "vault_approle_role_id")
+	delete(vars, "vault_approle_secret_id")
+
+	_, opts := setup(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	enabledModules := terraform.OutputList(t, opts, "enabled_modules")
+	require.NotContains(t, enabledModules, "vault_eso")
 }
 
 func TestPlatformRenderModuleOutputsTraefikIngressClassName(t *testing.T) {
@@ -210,5 +230,55 @@ func TestPlatformRenderModuleManifestPathsContainExpectedKeys(t *testing.T) {
 		// The count should be a number > 0
 		countStr := strings.TrimSpace(count.(string))
 		require.NotEqual(t, "0", countStr, "expected %s to contribute manifests", mod)
+	}
+}
+
+func TestPlatformRenderModuleManifestCountMatchesSum(t *testing.T) {
+	t.Parallel()
+
+	vars := testVars(t)
+	_, opts := setup(t, vars)
+	terraform.InitAndApply(t, opts)
+
+	countsRaw := terraform.OutputMapOfObjects(t, opts, "manifest_counts_by_module")
+	totalStr := terraform.Output(t, opts, "manifest_count")
+	total, err := strconv.Atoi(strings.TrimSpace(totalStr))
+	require.NoError(t, err, "expected manifest_count to be an integer")
+
+	sum := 0
+	for _, value := range countsRaw {
+		countStr := strings.TrimSpace(value.(string))
+		count, err := strconv.Atoi(countStr)
+		require.NoError(t, err, "expected manifest count to be an integer")
+		sum += count
+	}
+	require.Equal(t, sum, total, "manifest_count should equal sum of module counts")
+}
+
+func TestPlatformRenderModuleOutputPolicy(t *testing.T) {
+	t.Parallel()
+	requireBinary(t, "conftest", "conftest not found; skipping policy test")
+
+	_, opts := setup(t, testVars(t))
+	terraform.InitAndApply(t, opts)
+
+	outputJSON, err := terraform.RunTerraformCommandE(t, opts, "output", "-json")
+	require.NoError(t, err)
+
+	outputPath := filepath.Join(opts.TerraformDir, "outputs.json")
+	require.NoError(t, os.WriteFile(outputPath, []byte(outputJSON), 0600))
+	t.Cleanup(func() { _ = os.Remove(outputPath) })
+
+	policyPath := filepath.Join(opts.TerraformDir, "..", "..", "policy", "outputs")
+	cmd := exec.Command("conftest", "test", outputPath, "--policy", policyPath, "--namespace", "platform_render.policy.outputs")
+	cmd.Env = testutil.TerraformEnv(t, nil)
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "conftest failed: %s", string(out))
+}
+
+func requireBinary(t *testing.T, name string, skipMessage string) {
+	t.Helper()
+	if _, err := exec.LookPath(name); err != nil {
+		t.Skip(skipMessage)
 	}
 }

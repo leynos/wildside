@@ -14,8 +14,8 @@ policy to follow.
 Deliver the `wildside-infra-k8s` GitHub Action (Phase 3.1 of the ephemeral
 previews roadmap) so that Kubernetes clusters and shared fixtures can be
 assembled from the OpenTofu modules in the Wildside repository and persisted in
-the `wildside-infra` GitOps repository for FluxCD to reconcile. Success is
-visible when:
+the `wildside-infra` GitOps repository for Flux Continuous Delivery (FluxCD)
+to reconcile. Success is visible when:
 
 1. The action can be invoked with cluster identifiers, Vault credentials, and
    GitOps repository details.
@@ -27,8 +27,9 @@ visible when:
    expected GitOps layout (`clusters/<cluster>/`, `modules/`, `platform/*`).
 5. Re-running the action is idempotent—it provisions or updates the cluster and
    reconciles the GitOps repository without duplicating resources.
-6. OpenTofu state is persisted to a backend (e.g., DigitalOcean Spaces or S3) so
-   that subsequent runs can detect and reconcile drift.
+6. OpenTofu state is persisted to a backend (e.g., DigitalOcean Spaces or
+   Amazon Simple Storage Service (S3)) so that subsequent runs can detect and
+   reconcile drift.
 7. All tests pass: `make check-fmt`, `make typecheck`, `make lint`, `make test`.
 
 ## Constraints
@@ -92,8 +93,8 @@ Thresholds that trigger escalation when breached:
   credentials.
   Severity: low
   Likelihood: high
-  Mitigation: Provide mock modes for CI; run full E2E tests only in protected
-  environments with explicit opt-in.
+  Mitigation: Provide mock modes for continuous integration (CI); run full E2E
+  tests only in protected environments with explicit opt-in.
 
 - Risk: Cluster provisioning may fail due to DigitalOcean API rate limits or
   resource quota exhaustion.
@@ -119,10 +120,10 @@ Thresholds that trigger escalation when breached:
 ## Progress
 
 - [x] (2026-01-16) Draft the initial ExecPlan and record design decisions.
-- [x] (2026-01-16) Configure the OpenTofu backend (DigitalOcean Spaces) for state
-  management.
-- [x] (2026-01-16) Create the cluster provisioning OpenTofu configuration for doks
-  module invocation.
+- [x] (2026-01-16) Configure the OpenTofu backend (DigitalOcean Spaces) for
+  state management.
+- [x] (2026-01-16) Create the cluster provisioning OpenTofu configuration for
+  doks module invocation.
 - [x] (2026-01-16) Create the platform_render OpenTofu orchestration module.
   Note: Valkey excluded due to provider version incompatibility.
 - [x] (2026-01-16) Implement Python helper scripts (prepare, provision, render,
@@ -138,16 +139,17 @@ Thresholds that trigger escalation when breached:
 - [x] (2026-01-16) Update Makefile targets. Added `platform-render-test` target.
 - [x] (2026-01-16) Run repository-wide gates (`make check-fmt`, `make lint`,
   `make scripts-test`). All gates pass.
-- [ ] (Pending) Add OPA/Conftest policies for GitOps layout and infrastructure
-  validation.
+- [ ] (Pending) Add Open Policy Agent (OPA)/Conftest policies for GitOps
+  layout and infrastructure validation.
 - [ ] (Pending) Write unit tests for Python scripts using cmd-mox.
 - [ ] (Pending) Create documentation (design docs, README).
 - [ ] (Pending) Mark the relevant roadmap entry as done.
 
 ## Surprises & Discoveries
 
-- Observation: The valkey module uses different provider versions (helm ~> 3.1.1,
-  kubernetes ~> 3.0.1) than other platform modules (~> 2.13.0 and ~> 2.25.0).
+- Observation: The valkey module uses different provider versions (helm
+  ~> 3.1.1, kubernetes ~> 3.0.1) than other platform modules (~> 2.13.0 and
+  ~> 2.25.0).
   Evidence: tofu init failed with "no available releases match the given
   constraints" when attempting to include valkey in platform_render.
   Impact: Valkey is temporarily excluded from platform_render until provider
@@ -241,7 +243,8 @@ Key paths and references:
 - `docs/ephemeral-previews-roadmap.md` — roadmap entry to mark as done.
 - `docs/local-validation-of-github-actions-with-act-and-pytest.md` — guidance
   for action testing.
-- `docs/opentofu-coding-standards.md` — HCL coding rules.
+- `docs/opentofu-coding-standards.md` — HashiCorp Configuration Language (HCL)
+  coding rules.
 - `docs/opentofu-module-unit-testing-guide.md` — testing approach.
 
 Definitions used in this plan:

@@ -225,16 +225,17 @@ def test_scripts_use_secret_masking() -> None:
     """Verify helper scripts use secret masking."""
     scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
 
-    # Check that prepare script uses mask_secret
-    prepare_script = scripts_dir / "prepare_infra_k8s_inputs.py"
-    prepare_content = prepare_script.read_text(encoding="utf-8")
-    assert "mask_secret" in prepare_content, (
-        "prepare_infra_k8s_inputs.py should use mask_secret"
-    )
+    scripts = {
+        "prepare_infra_k8s_inputs.py": (
+            "prepare_infra_k8s_inputs.py should use mask_secret"
+        ),
+        "provision_cluster.py": "provision_cluster.py should use mask_secret",
+        "commit_gitops_manifests.py": "commit_gitops_manifests.py should use mask_secret",
+        "publish_infra_k8s_outputs.py": (
+            "publish_infra_k8s_outputs.py should use mask_secret"
+        ),
+    }
 
-    # Check that publish script uses mask_secret
-    publish_script = scripts_dir / "publish_infra_k8s_outputs.py"
-    publish_content = publish_script.read_text(encoding="utf-8")
-    assert "mask_secret" in publish_content, (
-        "publish_infra_k8s_outputs.py should use mask_secret"
-    )
+    for script_name, error_message in scripts.items():
+        content = (scripts_dir / script_name).read_text(encoding="utf-8")
+        assert "mask_secret" in content, error_message

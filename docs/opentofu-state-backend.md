@@ -5,10 +5,11 @@ configurations in the Wildside infrastructure.
 
 ## Overview
 
-OpenTofu state is stored in DigitalOcean Spaces, an S3-compatible object storage
-service. This provides:
+OpenTofu state is stored in DigitalOcean Spaces, an Amazon Simple Storage
+Service (S3)-compatible object storage service. This provides:
 
-- **Persistence**: State survives beyond individual CI runs.
+- **Persistence**: State survives beyond individual continuous integration (CI)
+  runs.
 - **Consistency**: Multiple runs converge on the same state.
 - **Versioning**: Object versioning enables state recovery.
 - **Isolation**: Workspaces separate state for different clusters.
