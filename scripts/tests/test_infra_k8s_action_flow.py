@@ -11,33 +11,33 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts._infra_k8s import (  # noqa: E402
+from scripts._infra_k8s import (
     TofuResult,
     append_github_env,
     write_manifests,
 )
-from scripts.commit_gitops_manifests import (  # noqa: E402
+from scripts.commit_gitops_manifests import (
     RawGitOpsInputs,
     resolve_gitops_inputs,
     sync_manifests,
 )
-from scripts.prepare_infra_k8s_inputs import (  # noqa: E402
+from scripts.prepare_infra_k8s_inputs import (
     RawInputs,
     _resolve_all_inputs,
     prepare_inputs,
 )
-from scripts.provision_cluster import (  # noqa: E402
+from scripts.provision_cluster import (
     build_backend_config,
     build_tfvars as build_cluster_tfvars,
     export_cluster_outputs,
     provision_cluster,
     resolve_provision_inputs,
 )
-from scripts.publish_infra_k8s_outputs import (  # noqa: E402
+from scripts.publish_infra_k8s_outputs import (
     publish_outputs,
     resolve_output_values,
 )
-from scripts.render_platform_manifests import (  # noqa: E402
+from scripts.render_platform_manifests import (
     build_render_tfvars,
     render_manifests,
     resolve_render_inputs,
