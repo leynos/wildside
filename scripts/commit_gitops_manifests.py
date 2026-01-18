@@ -5,11 +5,13 @@
 # ///
 """Commit rendered manifests to the GitOps repository.
 
-This script:
-- clones the wildside-infra GitOps repository;
-- copies rendered manifests to the appropriate paths;
-- commits and pushes changes if there are differences; and
-- exports the commit SHA to $GITHUB_ENV.
+This script clones the GitOps repository, replaces the cluster manifest
+directory with rendered output, commits and pushes changes, and exports
+the commit SHA to ``GITHUB_ENV``.
+
+Examples
+--------
+>>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
 """
 
 from __future__ import annotations
@@ -18,10 +20,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from contextlib import contextmanager
-from collections.abc import Iterator
 
 from cyclopts import App, Parameter
 from scripts._input_resolution import InputResolution, resolve_input
@@ -39,9 +42,41 @@ GITHUB_ENV_PARAM = Parameter()
 DRY_RUN_PARAM = Parameter()
 
 
+class GitOpsError(Exception):
+    """Base error for GitOps manifest operations."""
+
+
+class GitCommandError(GitOpsError):
+    """Raised when a git command fails."""
+
+
+class GitCloneError(GitOpsError):
+    """Raised when cloning the GitOps repository fails."""
+
+
+class GitValidationError(GitOpsError):
+    """Raised when GitOps paths are unsafe or invalid."""
+
+
+class GitSyncError(GitOpsError):
+    """Raised when syncing manifests fails."""
+
+
 @dataclass(frozen=True, slots=True)
 class GitOpsInputs:
-    """Inputs for GitOps commit."""
+    """Inputs for GitOps commit.
+
+    Attributes
+    ----------
+    gitops_repository, gitops_branch, gitops_token : str
+        GitOps repository configuration values.
+    cluster_name : str
+        Cluster name used for manifest paths.
+    render_output_dir, runner_temp, github_env : Path
+        Paths for rendered manifests, working directories, and GITHUB_ENV.
+    dry_run : bool
+        Whether to skip the git push step.
+    """
 
     # GitOps configuration
     gitops_repository: str
@@ -62,7 +97,19 @@ class GitOpsInputs:
 
 @dataclass(frozen=True, slots=True)
 class RawGitOpsInputs:
-    """Raw GitOps inputs from CLI or defaults."""
+    """Raw GitOps inputs from CLI or defaults.
+
+    Attributes
+    ----------
+    gitops_repository, gitops_branch, gitops_token : str | None
+        Raw GitOps repository inputs.
+    cluster_name : str | None
+        Raw cluster name input.
+    render_output_dir, runner_temp, github_env : Path | None
+        Raw path overrides.
+    dry_run : str | None
+        Raw dry-run flag.
+    """
 
     gitops_repository: str | None = None
     gitops_branch: str | None = None
@@ -78,12 +125,27 @@ def _to_path(value: Path | str | None) -> Path:
     """Coerce a string or Path to Path."""
     if value is None:
         msg = "Path value must not be None"
-        raise ValueError(msg)
-    return value if isinstance(value, Path) else Path(str(value))
+        raise GitValidationError(msg)
+    return value if isinstance(value, Path) else Path(value)
 
 
 def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
-    """Resolve GitOps inputs from environment."""
+    """Resolve GitOps inputs from environment.
+
+    Parameters
+    ----------
+    raw : RawGitOpsInputs
+        Raw inputs from CLI or defaults.
+
+    Returns
+    -------
+    GitOpsInputs
+        Normalized inputs for GitOps operations.
+
+    Examples
+    --------
+    >>> resolve_gitops_inputs(RawGitOpsInputs())
+    """
     gitops_repository = resolve_input(
         raw.gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
     )
@@ -137,7 +199,24 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
 def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> str:
     """Run a git command and return stdout.
 
-    Raises RuntimeError on failure.
+    Parameters
+    ----------
+    args : list[str]
+        Git arguments (without the ``git`` prefix).
+    cwd : Path
+        Directory to run the command in.
+    env : dict[str, str] | None, optional
+        Environment overrides for the command.
+
+    Returns
+    -------
+    str
+        Stdout from the git command.
+
+    Raises
+    ------
+    GitCommandError
+        Raised when the git command fails.
     """
     merged_env = {**os.environ, **(env or {})}
     result = subprocess.run(
@@ -151,7 +230,7 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
 
     if result.returncode != 0:
         msg = f"git {' '.join(args)} failed: {result.stderr}"
-        raise RuntimeError(msg)
+        raise GitCommandError(msg)
 
     return result.stdout.strip()
 
@@ -159,11 +238,16 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
 @contextmanager
 def _git_auth_env(token: str, base_dir: Path) -> Iterator[dict[str, str]]:
     """Build environment for Git askpass authentication."""
-    askpass_path = base_dir / "git-askpass.sh"
-    askpass_path.write_text(
-        "#!/bin/sh\nprintf '%s' \"${GITOPS_TOKEN}\"\n",
+    base_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        delete=False,
+        prefix="git-askpass-",
+        dir=base_dir,
         encoding="utf-8",
-    )
+    ) as handle:
+        handle.write("#!/bin/sh\nprintf '%s' \"${GITOPS_TOKEN}\"\n")
+        askpass_path = Path(handle.name)
     askpass_path.chmod(0o700)
     env = {
         **os.environ,
@@ -174,8 +258,7 @@ def _git_auth_env(token: str, base_dir: Path) -> Iterator[dict[str, str]]:
     try:
         yield env
     finally:
-        if askpass_path.exists():
-            askpass_path.unlink()
+        askpass_path.unlink(missing_ok=True)
 
 
 def clone_repository(
@@ -183,7 +266,22 @@ def clone_repository(
     clone_dir: Path,
     auth_env: dict[str, str],
 ) -> None:
-    """Clone the GitOps repository."""
+    """Clone the GitOps repository.
+
+    Parameters
+    ----------
+    inputs : GitOpsInputs
+        Normalized GitOps inputs.
+    clone_dir : Path
+        Directory for the clone.
+    auth_env : dict[str, str]
+        Environment containing Git authentication configuration.
+
+    Raises
+    ------
+    GitCloneError
+        Raised when the clone fails.
+    """
     mask_secret(inputs.gitops_token)
     repo_url = f"https://x-access-token@github.com/{inputs.gitops_repository}.git"
     masked_repo_url = f"https://x-access-token:***@github.com/{inputs.gitops_repository}.git"
@@ -210,7 +308,7 @@ def clone_repository(
     if result.returncode != 0:
         stderr = result.stderr.replace(inputs.gitops_token, "***")
         msg = f"git clone failed for {masked_repo_url}: {stderr}".strip()
-        raise RuntimeError(msg)
+        raise GitCloneError(msg)
 
 
 def sync_manifests(
@@ -219,7 +317,17 @@ def sync_manifests(
 ) -> int:
     """Sync rendered manifests to the GitOps repository.
 
-    Returns the number of files synced.
+    Parameters
+    ----------
+    inputs : GitOpsInputs
+        Normalized GitOps inputs.
+    clone_dir : Path
+        Path to the cloned repository.
+
+    Returns
+    -------
+    int
+        Number of files synced.
     """
     cluster_root = clone_dir / "clusters"
     cluster_dir = cluster_root / inputs.cluster_name
@@ -248,13 +356,13 @@ def _reset_cluster_dir(cluster_root: Path, cluster_dir: Path) -> None:
 
     if cluster_root.is_symlink():
         msg = f"Refusing to reset symlinked cluster root {cluster_root}"
-        raise RuntimeError(msg)
+        raise GitValidationError(msg)
     if not cluster_root_resolved.is_relative_to(clone_dir_resolved):
         msg = f"Refusing to reset cluster root outside {clone_dir_resolved}"
-        raise RuntimeError(msg)
+        raise GitValidationError(msg)
     if not cluster_dir_resolved.is_relative_to(cluster_root_resolved):
         msg = f"Refusing to reset cluster dir outside {cluster_root_resolved}"
-        raise RuntimeError(msg)
+        raise GitValidationError(msg)
 
     if cluster_dir.exists():
         shutil.rmtree(cluster_dir)
@@ -268,7 +376,19 @@ def commit_and_push(
 ) -> str | None:
     """Commit and push changes to the GitOps repository.
 
-    Returns the commit SHA if changes were pushed, None otherwise.
+    Parameters
+    ----------
+    inputs : GitOpsInputs
+        Normalized GitOps inputs.
+    clone_dir : Path
+        Path to the cloned repository.
+    auth_env : dict[str, str]
+        Environment containing Git authentication configuration.
+
+    Returns
+    -------
+    str | None
+        Commit SHA if changes were pushed, otherwise ``None``.
     """
     # Configure git user for the commit
     run_git(["config", "user.name", "wildside-infra-k8s-action"], clone_dir)
@@ -306,6 +426,7 @@ def commit_and_push(
 
     return commit_sha
 
+
 # CLI parameters are declared for cyclopts but resolved via resolve_gitops_inputs().
 # This keeps defaults centralized while preventing ARG001/B008 false positives.
 @app.command()
@@ -321,8 +442,25 @@ def main(
 ) -> int:
     """Commit rendered manifests to the GitOps repository.
 
-    This command clones the GitOps repository, copies rendered manifests
-    to the appropriate cluster directory, and commits/pushes changes.
+    Parameters
+    ----------
+    gitops_repository, gitops_branch, gitops_token : str | None
+        CLI overrides for GitOps repository configuration.
+    cluster_name : str | None
+        Cluster name override for the destination directory.
+    render_output_dir, runner_temp, github_env : Path | None
+        Path overrides for rendered manifests, scratch space, and GITHUB_ENV.
+    dry_run : str | None
+        Dry-run override to skip pushes.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+
+    Examples
+    --------
+    >>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
     """
     raw_inputs = RawGitOpsInputs(
         gitops_repository=gitops_repository,
@@ -365,10 +503,7 @@ def main(
             if count > 0:
                 # Commit and push
                 commit_sha = commit_and_push(inputs, clone_dir, auth_env)
-    except subprocess.CalledProcessError as exc:
-        print(f"error: git command failed: {exc}", file=sys.stderr)
-        return 1
-    except RuntimeError as exc:
+    except GitOpsError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     else:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from scripts._input_resolution import InputResolution, resolve_input
 from scripts._infra_k8s import parse_bool
@@ -87,6 +88,32 @@ class RawRenderInputs:
     runner_temp: Path | None = None
     output_dir: Path | None = None
     github_env: Path | None = None
+
+
+def _ensure_vault_inputs(
+    enabled: bool,
+    vault_address: str | None,
+    vault_role_id: str | None,
+    vault_secret_id: str | None,
+) -> None:
+    """Validate Vault inputs when Vault ESO is enabled."""
+    if not enabled:
+        return
+    missing = [
+        name
+        for name, value in {
+            "VAULT_ADDRESS": vault_address,
+            "VAULT_ROLE_ID": vault_role_id,
+            "VAULT_SECRET_ID": vault_secret_id,
+        }.items()
+        if not value
+    ]
+    if missing:
+        msg = (
+            "Missing Vault inputs for ENABLE_VAULT_ESO: "
+            f"{', '.join(missing)}"
+        )
+        raise ValueError(msg)
 
 
 def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
@@ -174,7 +201,11 @@ def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
             as_path=True,
         ),
     )
-    return runner_temp_raw, output_dir_raw, github_env_raw
+    return (
+        cast(Path, runner_temp_raw),
+        cast(Path, output_dir_raw),
+        cast(Path, github_env_raw),
+    )
 
 
 def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
@@ -197,14 +228,12 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
     runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(raw)
 
     vault_eso_enabled = parse_bool(str(vault_eso_raw))
-    if vault_eso_enabled and not (
-        vault_address_raw and vault_role_id_raw and vault_secret_id_raw
-    ):
-        msg = (
-            "VAULT_ADDRESS, VAULT_ROLE_ID, and VAULT_SECRET_ID are required "
-            "when ENABLE_VAULT_ESO is true"
-        )
-        raise ValueError(msg)
+    _ensure_vault_inputs(
+        vault_eso_enabled,
+        vault_address_raw,
+        vault_role_id_raw,
+        vault_secret_id_raw,
+    )
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),

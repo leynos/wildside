@@ -31,7 +31,6 @@ from scripts._prepare_infra_k8s_inputs import (
 __all__ = [
     "RawInputs",
     "ResolvedInputs",
-    "_resolve_all_inputs",
     "prepare_inputs",
 ]
 
@@ -63,12 +62,6 @@ ENABLE_CNPG_PARAM = Parameter()
 DRY_RUN_PARAM = Parameter()
 RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
-
-
-def _build_raw_inputs_from_cli(values: dict[str, object]) -> RawInputs:
-    """Build RawInputs from CLI parameter values."""
-    field_names = RawInputs.__dataclass_fields__.keys()
-    return RawInputs(**{name: values.get(name) for name in field_names})
 
 
 @app.command()
@@ -132,7 +125,34 @@ def main(
     --------
     >>> python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
     """
-    raw = _build_raw_inputs_from_cli(locals())
+    raw = RawInputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        domain=domain,
+        acme_email=acme_email,
+        gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch,
+        gitops_token=gitops_token,
+        vault_address=vault_address,
+        vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id,
+        vault_ca_certificate=vault_ca_certificate,
+        digitalocean_token=digitalocean_token,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
+        enable_traefik=enable_traefik,
+        enable_cert_manager=enable_cert_manager,
+        enable_external_dns=enable_external_dns,
+        enable_vault_eso=enable_vault_eso,
+        enable_cnpg=enable_cnpg,
+        dry_run=dry_run,
+        runner_temp=runner_temp,
+        github_env=github_env,
+    )
     inputs = _resolve_all_inputs(raw)
     prepare_inputs(inputs)
 

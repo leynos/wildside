@@ -1,4 +1,16 @@
-"""Run OpenTofu for cluster provisioning and export outputs."""
+"""Run OpenTofu for cluster provisioning and export outputs.
+
+This module orchestrates OpenTofu init/plan/apply and exports the resulting
+cluster outputs to ``GITHUB_ENV`` for downstream GitHub Actions steps.
+
+Examples
+--------
+Provision a cluster with prepared inputs:
+
+>>> backend = build_backend_config(inputs)
+>>> tfvars = build_tfvars(inputs)
+>>> provision_cluster(inputs, backend, tfvars)
+"""
 
 from __future__ import annotations
 
@@ -122,13 +134,13 @@ def _extract_output_value(outputs: dict[str, object], key: str) -> str | None:
     if output is None:
         return None
     if isinstance(output, dict) and "value" in output:
-        value = output["value"]
-        if value is None:
+        output = output["value"]
+        if output is None:
             return None
-        value_str = str(value)
-        if not value_str:
+        value = str(output)
+        if not value:
             return None
-        return value_str
+        return value
     value = str(output)
     if not value:
         return None

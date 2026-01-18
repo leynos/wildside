@@ -149,7 +149,7 @@ def _resolve_vault_config(
 
 def _resolve_cloud_credentials(
     raw: RawInputs,
-) -> tuple[str | Path | None, str | Path | None, str | Path | None]:
+) -> tuple[str | None, str | None, str | None]:
     """Resolve cloud credential inputs."""
     digitalocean_token = resolve_input(
         raw.digitalocean_token,
@@ -278,7 +278,7 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         domain=str(domain),
         acme_email=str(acme_email),
         gitops_repository=str(gitops_repository),
-        gitops_branch=str(gitops_branch) if gitops_branch else "main",
+        gitops_branch=str(gitops_branch),
         gitops_token=str(gitops_token),
         vault_address=str(vault_address) if vault_address else None,
         vault_role_id=str(vault_role_id) if vault_role_id else None,

@@ -11,7 +11,23 @@ from scripts._infra_k8s import SpacesBackendConfig, parse_bool, parse_node_pools
 
 @dataclass(frozen=True, slots=True)
 class ProvisionInputs:
-    """Inputs for cluster provisioning."""
+    """Inputs for cluster provisioning.
+
+    Attributes
+    ----------
+    cluster_name, environment, region : str
+        Core cluster identifiers.
+    kubernetes_version : str | None
+        Optional Kubernetes version override.
+    node_pools : str | None
+        Node pools JSON payload.
+    spaces_bucket, spaces_region, spaces_access_key, spaces_secret_key : str
+        Spaces backend configuration values.
+    runner_temp, github_env : Path
+        Paths for working directories and GITHUB_ENV.
+    dry_run : bool
+        Whether to skip apply.
+    """
 
     # Cluster configuration
     cluster_name: str
@@ -34,7 +50,19 @@ class ProvisionInputs:
 
 @dataclass(frozen=True, slots=True)
 class RawProvisionInputs:
-    """Raw provisioning inputs from CLI or defaults."""
+    """Raw provisioning inputs from CLI or defaults.
+
+    Attributes
+    ----------
+    cluster_name, environment, region, kubernetes_version, node_pools : str | None
+        Raw cluster configuration values.
+    spaces_bucket, spaces_region, spaces_access_key, spaces_secret_key : str | None
+        Raw Spaces backend values.
+    runner_temp, github_env : Path | None
+        Raw path overrides.
+    dry_run : str | None
+        Raw dry-run flag.
+    """
 
     cluster_name: str | None = None
     environment: str | None = None
@@ -62,7 +90,7 @@ def _with_override(
 
 def _to_path(value: Path | str) -> Path:
     """Normalize string and Path values into Path instances."""
-    return value if isinstance(value, Path) else Path(str(value))
+    return value if isinstance(value, Path) else Path(value)
 
 
 def _resolve_cluster_inputs(
@@ -139,6 +167,8 @@ def _resolve_execution_config(
     dry_run_raw = _with_override(
         raw.dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
+    assert runner_temp_raw is not None
+    assert github_env_raw is not None
     return (
         _to_path(runner_temp_raw),
         _to_path(github_env_raw),

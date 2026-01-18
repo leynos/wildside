@@ -51,6 +51,7 @@ RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 DRY_RUN_PARAM = Parameter()
 
+
 def _provision_and_export(inputs: ProvisionInputs) -> int:
     backend_config = build_backend_config(inputs)
     tfvars = build_tfvars(inputs)
@@ -69,6 +70,37 @@ def _provision_and_export(inputs: ProvisionInputs) -> int:
     return 0
 
 
+def _build_raw_inputs_from_cli(
+    cluster_name: str | None,
+    environment: str | None,
+    region: str | None,
+    kubernetes_version: str | None,
+    node_pools: str | None,
+    spaces_bucket: str | None,
+    spaces_region: str | None,
+    spaces_access_key: str | None,
+    spaces_secret_key: str | None,
+    runner_temp: Path | None,
+    github_env: Path | None,
+    dry_run: str | None,
+) -> RawProvisionInputs:
+    """Build raw provisioning inputs from CLI arguments."""
+    return RawProvisionInputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        spaces_bucket=spaces_bucket,
+        spaces_region=spaces_region,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
+
+
 @app.command()
 def main(
     cluster_name: str | None = CLUSTER_NAME_PARAM,
@@ -85,19 +117,19 @@ def main(
     dry_run: str | None = DRY_RUN_PARAM,
 ) -> int:
     """Provision a Kubernetes cluster via OpenTofu."""
-    raw_inputs = RawProvisionInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        spaces_bucket=spaces_bucket,
-        spaces_region=spaces_region,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
+    raw_inputs = _build_raw_inputs_from_cli(
+        cluster_name,
+        environment,
+        region,
+        kubernetes_version,
+        node_pools,
+        spaces_bucket,
+        spaces_region,
+        spaces_access_key,
+        spaces_secret_key,
+        runner_temp,
+        github_env,
+        dry_run,
     )
     inputs = resolve_provision_inputs(raw_inputs)
     return _provision_and_export(inputs)
