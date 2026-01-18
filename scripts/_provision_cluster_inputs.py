@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,12 +55,9 @@ def _with_override(
     resolution: InputResolution,
 ) -> str | Path | None:
     """Return the CLI override when present, otherwise resolve from environment."""
-    resolver: Callable[[str | Path | None, InputResolution], str | Path | None] = (
-        resolve_input
-    )
     if value is not None:
         return value
-    return resolver(None, resolution)
+    return resolve_input(None, resolution)
 
 
 def _to_path(value: Path | str) -> Path:

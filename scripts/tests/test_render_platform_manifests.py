@@ -23,6 +23,7 @@ def test_resolve_render_inputs_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setenv("DOMAIN", "example.test")
     monkeypatch.setenv("ACME_EMAIL", "admin@example.test")
     monkeypatch.setenv("ENABLE_TRAEFIK", "false")
+    monkeypatch.setenv("ENABLE_VAULT_ESO", "false")
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
     monkeypatch.setenv("RENDER_OUTPUT_DIR", str(tmp_path / "render"))
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
@@ -36,6 +37,7 @@ def test_resolve_render_inputs_cli_override(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("CLUSTER_NAME", "env")
     monkeypatch.setenv("DOMAIN", "example.test")
     monkeypatch.setenv("ACME_EMAIL", "admin@example.test")
+    monkeypatch.setenv("ENABLE_VAULT_ESO", "false")
 
     inputs = resolve_render_inputs(RawRenderInputs(cluster_name="cli"))
     assert inputs.cluster_name == "cli", "CLI override should win"
@@ -49,7 +51,7 @@ def test_build_render_tfvars_skips_vault_when_disabled(tmp_path: Path) -> None:
         cloudflare_api_token_secret_name=_dummy_secret_name(),
         vault_address="https://vault.example",
         vault_role_id="role",
-        vault_secret_id="secret",
+        vault_secret_id=_dummy_vault_secret(),
         vault_ca_certificate="cert",
         enable_traefik=True,
         enable_cert_manager=True,
@@ -123,3 +125,7 @@ def test_render_manifests_runs_tofu(
 
 def _dummy_secret_name() -> str:
     return f"cloudflare-secret-{secrets.token_hex(4)}"
+
+
+def _dummy_vault_secret() -> str:
+    return f"vault-secret-{secrets.token_hex(6)}"

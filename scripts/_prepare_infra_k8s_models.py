@@ -67,32 +67,32 @@ class RawInputs:
     ... )
     """
 
-    cluster_name: str | None
-    environment: str | None
-    region: str | None
-    kubernetes_version: str | None
-    node_pools: str | None
-    domain: str | None
-    acme_email: str | None
-    gitops_repository: str | None
-    gitops_branch: str | None
-    gitops_token: str | None
-    vault_address: str | None
-    vault_role_id: str | None
-    vault_secret_id: str | None
-    vault_ca_certificate: str | None
-    digitalocean_token: str | None
-    spaces_access_key: str | None
-    spaces_secret_key: str | None
-    cloudflare_api_token_secret_name: str | None
-    enable_traefik: str | None
-    enable_cert_manager: str | None
-    enable_external_dns: str | None
-    enable_vault_eso: str | None
-    enable_cnpg: str | None
-    dry_run: str | None
-    runner_temp: Path | None
-    github_env: Path | None
+    cluster_name: str | None = None
+    environment: str | None = None
+    region: str | None = None
+    kubernetes_version: str | None = None
+    node_pools: str | None = None
+    domain: str | None = None
+    acme_email: str | None = None
+    gitops_repository: str | None = None
+    gitops_branch: str | None = None
+    gitops_token: str | None = None
+    vault_address: str | None = None
+    vault_role_id: str | None = None
+    vault_secret_id: str | None = None
+    vault_ca_certificate: str | None = None
+    digitalocean_token: str | None = None
+    spaces_access_key: str | None = None
+    spaces_secret_key: str | None = None
+    cloudflare_api_token_secret_name: str | None = None
+    enable_traefik: str | None = None
+    enable_cert_manager: str | None = None
+    enable_external_dns: str | None = None
+    enable_vault_eso: str | None = None
+    enable_cnpg: str | None = None
+    dry_run: str | None = None
+    runner_temp: Path | None = None
+    github_env: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +111,8 @@ class ResolvedInputs:
         Domain configuration values.
     gitops_repository, gitops_branch, gitops_token : str
         GitOps configuration values.
-    vault_address, vault_role_id, vault_secret_id : str
-        Vault configuration values.
+    vault_address, vault_role_id, vault_secret_id : str | None
+        Vault configuration values (optional when Vault ESO is disabled).
     vault_ca_certificate : str | None
         Optional Vault CA bundle.
     digitalocean_token, spaces_access_key, spaces_secret_key : str
@@ -170,9 +170,9 @@ class ResolvedInputs:
     gitops_repository: str
     gitops_branch: str
     gitops_token: str
-    vault_address: str
-    vault_role_id: str
-    vault_secret_id: str
+    vault_address: str | None
+    vault_role_id: str | None
+    vault_secret_id: str | None
     vault_ca_certificate: str | None
     digitalocean_token: str
     spaces_access_key: str

@@ -65,6 +65,12 @@ RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 
 
+def _build_raw_inputs_from_cli(values: dict[str, object]) -> RawInputs:
+    """Build RawInputs from CLI parameter values."""
+    field_names = RawInputs.__dataclass_fields__.keys()
+    return RawInputs(**{name: values.get(name) for name in field_names})
+
+
 @app.command()
 def main(
     cluster_name: str | None = CLUSTER_NAME_PARAM,
@@ -98,58 +104,24 @@ def main(
 
     Parameters
     ----------
-    cluster_name : str | None
-        Cluster name override for ``INPUT_CLUSTER_NAME``.
-    environment : str | None
-        Environment override for ``INPUT_ENVIRONMENT``.
-    region : str | None
-        Region override for ``INPUT_REGION``.
-    kubernetes_version : str | None
-        Kubernetes version override for ``INPUT_KUBERNETES_VERSION``.
-    node_pools : str | None
-        JSON node pools override for ``INPUT_NODE_POOLS``.
-    domain : str | None
-        Domain override for ``INPUT_DOMAIN``.
-    acme_email : str | None
-        ACME email override for ``INPUT_ACME_EMAIL``.
-    gitops_repository : str | None
-        GitOps repository override for ``INPUT_GITOPS_REPOSITORY``.
-    gitops_branch : str | None
-        GitOps branch override for ``INPUT_GITOPS_BRANCH``.
-    gitops_token : str | None
-        GitOps token override for ``INPUT_GITOPS_TOKEN``.
-    vault_address : str | None
-        Vault address override for ``INPUT_VAULT_ADDRESS``.
-    vault_role_id : str | None
-        Vault role ID override for ``INPUT_VAULT_ROLE_ID``.
-    vault_secret_id : str | None
-        Vault secret ID override for ``INPUT_VAULT_SECRET_ID``.
-    vault_ca_certificate : str | None
-        Vault CA certificate override for ``INPUT_VAULT_CA_CERTIFICATE``.
-    digitalocean_token : str | None
-        DigitalOcean token override for ``INPUT_DIGITALOCEAN_TOKEN``.
-    spaces_access_key : str | None
-        Spaces access key override for ``INPUT_SPACES_ACCESS_KEY``.
-    spaces_secret_key : str | None
-        Spaces secret key override for ``INPUT_SPACES_SECRET_KEY``.
+    cluster_name, environment, region, kubernetes_version, node_pools : str | None
+        CLI overrides for the cluster ``INPUT_*`` values.
+    domain, acme_email : str | None
+        CLI overrides for ``INPUT_DOMAIN`` and ``INPUT_ACME_EMAIL``.
+    gitops_repository, gitops_branch, gitops_token : str | None
+        CLI overrides for the GitOps ``INPUT_*`` values.
+    vault_address, vault_role_id, vault_secret_id, vault_ca_certificate : str | None
+        CLI overrides for Vault ``INPUT_*`` values.
+    digitalocean_token, spaces_access_key, spaces_secret_key : str | None
+        CLI overrides for cloud credential ``INPUT_*`` values.
     cloudflare_api_token_secret_name : str | None
-        Cloudflare token secret name override for ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
-    enable_traefik : str | None
-        Traefik flag override for ``INPUT_ENABLE_TRAEFIK``.
-    enable_cert_manager : str | None
-        cert-manager flag override for ``INPUT_ENABLE_CERT_MANAGER``.
-    enable_external_dns : str | None
-        external-dns flag override for ``INPUT_ENABLE_EXTERNAL_DNS``.
-    enable_vault_eso : str | None
-        Vault ESO flag override for ``INPUT_ENABLE_VAULT_ESO``.
-    enable_cnpg : str | None
-        CNPG flag override for ``INPUT_ENABLE_CNPG``.
-    dry_run : str | None
-        Dry-run flag override for ``INPUT_DRY_RUN``.
-    runner_temp : Path | None
-        Runner temp override for ``RUNNER_TEMP``.
-    github_env : Path | None
-        GITHUB_ENV override path.
+        CLI override for ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
+    enable_traefik, enable_cert_manager, enable_external_dns : str | None
+        CLI overrides for platform enablement flags.
+    enable_vault_eso, enable_cnpg, dry_run : str | None
+        CLI overrides for remaining feature flags.
+    runner_temp, github_env : Path | None
+        Path overrides for ``RUNNER_TEMP`` and ``GITHUB_ENV``.
 
     Returns
     -------
@@ -160,36 +132,7 @@ def main(
     --------
     >>> python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
     """
-
-    raw = RawInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        domain=domain,
-        acme_email=acme_email,
-        gitops_repository=gitops_repository,
-        gitops_branch=gitops_branch,
-        gitops_token=gitops_token,
-        vault_address=vault_address,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-        vault_ca_certificate=vault_ca_certificate,
-        digitalocean_token=digitalocean_token,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
-        enable_traefik=enable_traefik,
-        enable_cert_manager=enable_cert_manager,
-        enable_external_dns=enable_external_dns,
-        enable_vault_eso=enable_vault_eso,
-        enable_cnpg=enable_cnpg,
-        dry_run=dry_run,
-        runner_temp=runner_temp,
-        github_env=github_env,
-    )
-
+    raw = _build_raw_inputs_from_cli(locals())
     inputs = _resolve_all_inputs(raw)
     prepare_inputs(inputs)
 

@@ -76,6 +76,9 @@ class RawGitOpsInputs:
 
 def _to_path(value: Path | str | None) -> Path:
     """Coerce a string or Path to Path."""
+    if value is None:
+        msg = "Path value must not be None"
+        raise ValueError(msg)
     return value if isinstance(value, Path) else Path(str(value))
 
 

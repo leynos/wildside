@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,21 @@ from scripts._infra_k8s import parse_bool
 
 @dataclass(frozen=True, slots=True)
 class RenderInputs:
-    """Inputs for platform manifest rendering."""
+    """Inputs for platform manifest rendering.
+
+    Attributes
+    ----------
+    cluster_name, domain, acme_email, cloudflare_api_token_secret_name : str
+        Core platform configuration values.
+    vault_address, vault_role_id, vault_secret_id, vault_ca_certificate : str | None
+        Vault configuration values.
+    enable_traefik, enable_cert_manager, enable_external_dns : bool
+        Feature flags for platform components.
+    enable_vault_eso, enable_cnpg : bool
+        Feature flags for Vault ESO and CNPG.
+    runner_temp, output_dir, github_env : Path
+        Paths for runtime artifacts and exports.
+    """
 
     # Core configuration
     cluster_name: str
@@ -40,7 +55,21 @@ class RenderInputs:
 
 @dataclass(frozen=True, slots=True)
 class RawRenderInputs:
-    """Raw render inputs from CLI or defaults."""
+    """Raw render inputs from CLI or defaults.
+
+    Attributes
+    ----------
+    cluster_name, domain, acme_email, cloudflare_api_token_secret_name : str | None
+        Raw core configuration values.
+    vault_address, vault_role_id, vault_secret_id, vault_ca_certificate : str | None
+        Raw Vault configuration values.
+    enable_traefik, enable_cert_manager, enable_external_dns : str | None
+        Raw feature flag values.
+    enable_vault_eso, enable_cnpg : str | None
+        Raw Vault ESO and CNPG flags.
+    runner_temp, output_dir, github_env : Path | None
+        Raw path overrides.
+    """
 
     cluster_name: str | None = None
     domain: str | None = None
@@ -121,18 +150,19 @@ def _resolve_feature_flags(raw: RawRenderInputs) -> tuple[str, str, str, str, st
 
 def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
     """Resolve path inputs for rendering."""
-    # RUNNER_TEMP/RENDER_OUTPUT_DIR/GITHUB_ENV defaults use /tmp as a safe
-    # fallback for local development and CI, avoiding hard failures when the
-    # env_key values are not provided.
+    # RUNNER_TEMP/RENDER_OUTPUT_DIR/GITHUB_ENV defaults use the system temp
+    # directory as a safe fallback for local development and CI, avoiding hard
+    # failures when the env_key values are not provided.
+    temp_root = Path(tempfile.gettempdir())
     runner_temp_raw = resolve_input(
         raw.runner_temp,
-        InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
+        InputResolution(env_key="RUNNER_TEMP", default=temp_root, as_path=True),
     )
     output_dir_raw = resolve_input(
         raw.output_dir,
         InputResolution(
             env_key="RENDER_OUTPUT_DIR",
-            default=Path("/tmp/rendered-manifests"),
+            default=temp_root / "rendered-manifests",
             as_path=True,
         ),
     )
@@ -140,7 +170,7 @@ def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
         raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
-            default=Path("/tmp/github-env-undefined"),
+            default=temp_root / "github-env-undefined",
             as_path=True,
         ),
     )
@@ -155,16 +185,26 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
         acme_email_raw,
         cloudflare_secret_raw,
     ) = _resolve_core_config(raw)
+    traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw = (
+        _resolve_feature_flags(raw)
+    )
     (
         vault_address_raw,
         vault_role_id_raw,
         vault_secret_id_raw,
         vault_ca_cert_raw,
     ) = _resolve_vault_config(raw)
-    traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw = (
-        _resolve_feature_flags(raw)
-    )
     runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(raw)
+
+    vault_eso_enabled = parse_bool(str(vault_eso_raw))
+    if vault_eso_enabled and not (
+        vault_address_raw and vault_role_id_raw and vault_secret_id_raw
+    ):
+        msg = (
+            "VAULT_ADDRESS, VAULT_ROLE_ID, and VAULT_SECRET_ID are required "
+            "when ENABLE_VAULT_ESO is true"
+        )
+        raise ValueError(msg)
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),
@@ -178,7 +218,7 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
         enable_traefik=parse_bool(str(traefik_raw)),
         enable_cert_manager=parse_bool(str(cert_manager_raw)),
         enable_external_dns=parse_bool(str(external_dns_raw)),
-        enable_vault_eso=parse_bool(str(vault_eso_raw)),
+        enable_vault_eso=vault_eso_enabled,
         enable_cnpg=parse_bool(str(cnpg_raw)),
         runner_temp=runner_temp_raw,
         output_dir=output_dir_raw,

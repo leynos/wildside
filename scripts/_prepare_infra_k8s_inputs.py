@@ -122,19 +122,23 @@ def _resolve_gitops_config(raw: RawInputs) -> tuple[str, str, str]:
     return gitops_repository, gitops_branch, gitops_token
 
 
-def _resolve_vault_config(raw: RawInputs) -> tuple[str, str, str, str | None]:
+def _resolve_vault_config(
+    raw: RawInputs,
+    *,
+    vault_required: bool,
+) -> tuple[str | None, str | None, str | None, str | None]:
     """Resolve vault configuration inputs."""
     vault_address = resolve_input(
         raw.vault_address,
-        InputResolution(env_key="INPUT_VAULT_ADDRESS", required=True),
+        InputResolution(env_key="INPUT_VAULT_ADDRESS", required=vault_required),
     )
     vault_role_id = resolve_input(
         raw.vault_role_id,
-        InputResolution(env_key="INPUT_VAULT_ROLE_ID", required=True),
+        InputResolution(env_key="INPUT_VAULT_ROLE_ID", required=vault_required),
     )
     vault_secret_id = resolve_input(
         raw.vault_secret_id,
-        InputResolution(env_key="INPUT_VAULT_SECRET_ID", required=True),
+        InputResolution(env_key="INPUT_VAULT_SECRET_ID", required=vault_required),
     )
     vault_ca_certificate = resolve_input(
         raw.vault_ca_certificate,
@@ -240,12 +244,6 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
     domain, acme_email = _resolve_domain_config(raw)
     gitops_repository, gitops_branch, gitops_token = _resolve_gitops_config(raw)
     (
-        vault_address,
-        vault_role_id,
-        vault_secret_id,
-        vault_ca_certificate,
-    ) = _resolve_vault_config(raw)
-    (
         digitalocean_token,
         spaces_access_key,
         spaces_secret_key,
@@ -259,6 +257,14 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         enable_cnpg,
     ) = _resolve_feature_flags(raw)
     dry_run, runner_temp, github_env = _resolve_execution_config(raw)
+
+    vault_eso_enabled = parse_bool(str(enable_vault_eso) if enable_vault_eso else None)
+    (
+        vault_address,
+        vault_role_id,
+        vault_secret_id,
+        vault_ca_certificate,
+    ) = _resolve_vault_config(raw, vault_required=vault_eso_enabled)
 
     # Validate cluster name format
     validated_cluster_name = validate_cluster_name(str(cluster_name))
@@ -274,9 +280,9 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         gitops_repository=str(gitops_repository),
         gitops_branch=str(gitops_branch) if gitops_branch else "main",
         gitops_token=str(gitops_token),
-        vault_address=str(vault_address),
-        vault_role_id=str(vault_role_id),
-        vault_secret_id=str(vault_secret_id),
+        vault_address=str(vault_address) if vault_address else None,
+        vault_role_id=str(vault_role_id) if vault_role_id else None,
+        vault_secret_id=str(vault_secret_id) if vault_secret_id else None,
         vault_ca_certificate=str(vault_ca_certificate) if vault_ca_certificate else None,
         digitalocean_token=str(digitalocean_token),
         spaces_access_key=str(spaces_access_key),
@@ -291,12 +297,68 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         enable_external_dns=parse_bool(
             str(enable_external_dns) if enable_external_dns else None
         ),
-        enable_vault_eso=parse_bool(str(enable_vault_eso) if enable_vault_eso else None),
+        enable_vault_eso=vault_eso_enabled,
         enable_cnpg=parse_bool(str(enable_cnpg) if enable_cnpg else None),
         dry_run=parse_bool(str(dry_run) if dry_run else None, default=False),
         runner_temp=runner_temp,
         github_env=github_env,
     )
+
+
+def _mask_inputs(inputs: ResolvedInputs, mask: Mask) -> None:
+    """Mask sensitive inputs before exporting."""
+    mask(inputs.gitops_token)
+    mask(inputs.digitalocean_token)
+    mask(inputs.spaces_access_key)
+    mask(inputs.spaces_secret_key)
+
+    if inputs.vault_role_id:
+        mask(inputs.vault_role_id)
+    if inputs.vault_secret_id:
+        mask(inputs.vault_secret_id)
+    if inputs.vault_ca_certificate:
+        mask(inputs.vault_ca_certificate)
+
+
+def _build_env_vars(inputs: ResolvedInputs) -> dict[str, str]:
+    """Build GITHUB_ENV variables from resolved inputs."""
+    env_vars = {
+        "CLUSTER_NAME": inputs.cluster_name,
+        "ENVIRONMENT": inputs.environment,
+        "REGION": inputs.region,
+        "DOMAIN": inputs.domain,
+        "ACME_EMAIL": inputs.acme_email,
+        "GITOPS_REPOSITORY": inputs.gitops_repository,
+        "GITOPS_BRANCH": inputs.gitops_branch,
+        "GITOPS_TOKEN": inputs.gitops_token,
+        "DIGITALOCEAN_TOKEN": inputs.digitalocean_token,
+        "SPACES_ACCESS_KEY": inputs.spaces_access_key,
+        "SPACES_SECRET_KEY": inputs.spaces_secret_key,
+        "CLOUDFLARE_API_TOKEN_SECRET_NAME": inputs.cloudflare_api_token_secret_name,
+        "ENABLE_TRAEFIK": str(inputs.enable_traefik).lower(),
+        "ENABLE_CERT_MANAGER": str(inputs.enable_cert_manager).lower(),
+        "ENABLE_EXTERNAL_DNS": str(inputs.enable_external_dns).lower(),
+        "ENABLE_VAULT_ESO": str(inputs.enable_vault_eso).lower(),
+        "ENABLE_CNPG": str(inputs.enable_cnpg).lower(),
+        "DRY_RUN": str(inputs.dry_run).lower(),
+        "RUNNER_TEMP": str(inputs.runner_temp),
+        "GITHUB_ENV": str(inputs.github_env),
+    }
+
+    if inputs.node_pools is not None:
+        env_vars["NODE_POOLS"] = json.dumps(inputs.node_pools)
+    if inputs.kubernetes_version:
+        env_vars["KUBERNETES_VERSION"] = inputs.kubernetes_version
+    if inputs.vault_address:
+        env_vars["VAULT_ADDRESS"] = inputs.vault_address
+    if inputs.vault_role_id:
+        env_vars["VAULT_ROLE_ID"] = inputs.vault_role_id
+    if inputs.vault_secret_id:
+        env_vars["VAULT_SECRET_ID"] = inputs.vault_secret_id
+    if inputs.vault_ca_certificate:
+        env_vars["VAULT_CA_CERTIFICATE"] = inputs.vault_ca_certificate
+
+    return env_vars
 
 
 def prepare_inputs(inputs: ResolvedInputs, mask: Mask = mask_secret) -> None:
@@ -320,75 +382,21 @@ def prepare_inputs(inputs: ResolvedInputs, mask: Mask = mask_secret) -> None:
     ...     cluster_name="preview-1",
     ...     environment="preview",
     ...     region="nyc1",
-    ...     kubernetes_version=None,
-    ...     node_pools=None,
     ...     domain="example.test",
     ...     acme_email="admin@example.test",
     ...     gitops_repository="wildside/wildside-infra",
-    ...     gitops_branch="main",
     ...     gitops_token="token",
     ...     vault_address="https://vault.example.test:8200",
     ...     vault_role_id="role",
     ...     vault_secret_id="secret",
-    ...     vault_ca_certificate=None,
     ...     digitalocean_token="do-token",
     ...     spaces_access_key="access",
     ...     spaces_secret_key="secret",
-    ...     cloudflare_api_token_secret_name="cloudflare-api-token",
-    ...     enable_traefik="true",
-    ...     enable_cert_manager="true",
-    ...     enable_external_dns="true",
-    ...     enable_vault_eso="true",
-    ...     enable_cnpg="true",
-    ...     dry_run="false",
     ...     runner_temp=Path("/tmp"),
     ...     github_env=Path("/tmp/github-env"),
     ... )
     >>> prepare_inputs(_resolve_all_inputs(raw))
     """
-    # Mask secrets early
-    mask(inputs.gitops_token)
-    mask(inputs.vault_role_id)
-    mask(inputs.vault_secret_id)
-    mask(inputs.digitalocean_token)
-    mask(inputs.spaces_access_key)
-    mask(inputs.spaces_secret_key)
-
-    # Prepare environment variables for downstream steps
-    env_vars = {
-        "CLUSTER_NAME": inputs.cluster_name,
-        "ENVIRONMENT": inputs.environment,
-        "REGION": inputs.region,
-        "DOMAIN": inputs.domain,
-        "ACME_EMAIL": inputs.acme_email,
-        "GITOPS_REPOSITORY": inputs.gitops_repository,
-        "GITOPS_BRANCH": inputs.gitops_branch,
-        "GITOPS_TOKEN": inputs.gitops_token,
-        "VAULT_ADDRESS": inputs.vault_address,
-        "VAULT_ROLE_ID": inputs.vault_role_id,
-        "VAULT_SECRET_ID": inputs.vault_secret_id,
-        "DIGITALOCEAN_TOKEN": inputs.digitalocean_token,
-        "SPACES_ACCESS_KEY": inputs.spaces_access_key,
-        "SPACES_SECRET_KEY": inputs.spaces_secret_key,
-        "CLOUDFLARE_API_TOKEN_SECRET_NAME": inputs.cloudflare_api_token_secret_name,
-        "ENABLE_TRAEFIK": str(inputs.enable_traefik).lower(),
-        "ENABLE_CERT_MANAGER": str(inputs.enable_cert_manager).lower(),
-        "ENABLE_EXTERNAL_DNS": str(inputs.enable_external_dns).lower(),
-        "ENABLE_VAULT_ESO": str(inputs.enable_vault_eso).lower(),
-        "ENABLE_CNPG": str(inputs.enable_cnpg).lower(),
-        "DRY_RUN": str(inputs.dry_run).lower(),
-        "RUNNER_TEMP": str(inputs.runner_temp),
-        "GITHUB_ENV": str(inputs.github_env),
-    }
-
-    if inputs.node_pools is not None:
-        env_vars["NODE_POOLS"] = json.dumps(inputs.node_pools)
-
-    if inputs.kubernetes_version:
-        env_vars["KUBERNETES_VERSION"] = inputs.kubernetes_version
-
-    if inputs.vault_ca_certificate:
-        mask(inputs.vault_ca_certificate)
-        env_vars["VAULT_CA_CERTIFICATE"] = inputs.vault_ca_certificate
-
+    _mask_inputs(inputs, mask)
+    env_vars = _build_env_vars(inputs)
     append_github_env(inputs.github_env, env_vars)
