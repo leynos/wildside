@@ -544,8 +544,8 @@ dependencies = [
  "prometheus",
  "regex",
  "rstest 0.26.1",
- "rstest-bdd 0.2.0",
- "rstest-bdd-macros 0.2.0",
+ "rstest-bdd 0.3.2",
+ "rstest-bdd-macros 0.3.2",
  "serde",
  "serde_json",
  "sha2",
@@ -3686,30 +3686,6 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fcefde6aee6db6d70c149d48e17111e9e088a1ff71da92234e986a23fb4c134"
-dependencies = [
- "ctor",
- "derive_more 0.99.20",
- "fluent",
- "gherkin",
- "hashbrown 0.16.0",
- "i18n-embed",
- "inventory",
- "log",
- "once_cell",
- "regex",
- "rstest-bdd-patterns 0.2.0",
- "rust-embed",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "unic-langid",
-]
-
-[[package]]
-name = "rstest-bdd"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7451d147800bd8b0b8621116a2c553b13408f2b7914a5b818eccaa37240ed9a"
@@ -3756,29 +3732,6 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225ddea765e1f1b6491aef744475f5feaea2b4070c29fea0482155b643c09ee0"
-dependencies = [
- "camino",
- "cap-std",
- "cfg-if",
- "convert_case 0.6.0",
- "gherkin",
- "newt-hype",
- "once_cell",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "regex",
- "rstest-bdd-patterns 0.2.0",
- "syn 2.0.104",
- "walkdir",
-]
-
-[[package]]
-name = "rstest-bdd-macros"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c58aca0e441b276f7e52a6fe1b9bb8c341004110f610e7dfda112578c0c18837"
@@ -3805,16 +3758,6 @@ name = "rstest-bdd-patterns"
 version = "0.1.0-alpha4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77e86cae3abdbeecef13e120bdedaa6d96e9d3fee9b83efa58b86fc250fdf32f"
-dependencies = [
- "regex",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "rstest-bdd-patterns"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da2291923de0d5f83564b4e6c193c67722129180983f0b3f424dc7e0580c0c0"
 dependencies = [
  "regex",
  "thiserror 1.0.69",

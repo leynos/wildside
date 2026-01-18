@@ -114,7 +114,7 @@ adapter; direct stateful logic belongs behind the ports established above.
 - [x] 2.4.2. Implement the `example-data` crate using the `fake` crate with
   deterministic generation, JSON seed registry parsing, and display-name
   validation.
-- [ ] 2.4.3. Add the `example_data_runs` migration plus a repository helper to
+- [x] 2.4.3. Add the `example_data_runs` migration plus a repository helper to
   guard seeding once per seed name.
 - [ ] 2.4.4. Deliver a seed registry CLI that uses `lexis` to generate memorable
   seed names and updates the JSON registry safely.

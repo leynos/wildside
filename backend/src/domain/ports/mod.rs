@@ -4,6 +4,7 @@ mod macros;
 pub(crate) use macros::define_port_error;
 
 mod cache_key;
+mod example_data_runs_repository;
 mod idempotency_metrics;
 mod idempotency_repository;
 mod login_service;
@@ -25,6 +26,10 @@ mod user_repository;
 mod users_query;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
+pub use example_data_runs_repository::{
+    ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,
+    SeedingResult, try_seed_to_i64,
+};
 pub use idempotency_metrics::{
     IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyMetricsError, NoOpIdempotencyMetrics,
 };

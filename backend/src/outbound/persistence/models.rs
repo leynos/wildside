@@ -15,7 +15,8 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::schema::{
-    idempotency_keys, route_notes, route_progress, routes, user_preferences, users,
+    example_data_runs, idempotency_keys, route_notes, route_progress, routes, user_preferences,
+    users,
 };
 
 /// Row struct for reading from the users table.
@@ -226,4 +227,35 @@ pub(crate) struct RouteProgressUpdate<'a> {
     pub visited_stop_ids: &'a [Uuid],
     pub revision: i32,
     pub updated_at: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
+// Example data runs models
+// ---------------------------------------------------------------------------
+
+/// Row struct for reading from the example_data_runs table.
+///
+/// Tracks which example data seeds have been applied to prevent duplicate
+/// seeding on subsequent startups.
+#[expect(
+    dead_code,
+    reason = "will be used when seed audit/query functionality is added"
+)]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = example_data_runs)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub(crate) struct ExampleDataRunRow {
+    pub seed_key: String,
+    pub seeded_at: DateTime<Utc>,
+    pub user_count: i32,
+    pub seed: i64,
+}
+
+/// Insertable struct for recording a new example data seed run.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = example_data_runs)]
+pub(crate) struct NewExampleDataRunRow<'a> {
+    pub seed_key: &'a str,
+    pub user_count: i32,
+    pub seed: i64,
 }

@@ -28,6 +28,7 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
+mod diesel_example_data_runs_repository;
 pub(crate) mod diesel_helpers;
 mod diesel_idempotency_repository;
 mod diesel_route_annotation_repository;
@@ -37,6 +38,7 @@ mod models;
 mod pool;
 mod schema;
 
+pub use diesel_example_data_runs_repository::DieselExampleDataRunsRepository;
 pub use diesel_idempotency_repository::DieselIdempotencyRepository;
 pub use diesel_route_annotation_repository::DieselRouteAnnotationRepository;
 pub use diesel_user_preferences_repository::DieselUserPreferencesRepository;

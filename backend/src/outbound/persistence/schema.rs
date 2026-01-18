@@ -178,7 +178,31 @@ diesel::joinable!(route_notes -> users (user_id));
 diesel::joinable!(route_progress -> routes (route_id));
 diesel::joinable!(route_progress -> users (user_id));
 
+// -----------------------------------------------------------------------------
+// example_data_runs table
+// -----------------------------------------------------------------------------
+//
+// Tracks applied example data seeds to prevent duplicate seeding. Used by the
+// example-data feature to ensure once-only seeding on startup.
+//
+// Columns:
+//
+// - seed_key: Primary key (seed name, e.g., "mossy-owl")
+// - seeded_at: Timestamp when seeding was performed
+// - user_count: Number of users created by this seed
+// - seed: The RNG seed value used for deterministic generation
+
+diesel::table! {
+    example_data_runs (seed_key) {
+        seed_key -> Text,
+        seeded_at -> Timestamptz,
+        user_count -> Int4,
+        seed -> Int8,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
+    example_data_runs,
     idempotency_keys,
     route_notes,
     route_progress,
