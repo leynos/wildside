@@ -90,30 +90,18 @@ class RawRenderInputs:
     github_env: Path | None = None
 
 
-def _ensure_vault_inputs(
-    enabled: bool,
-    vault_address: str | None,
-    vault_role_id: str | None,
-    vault_secret_id: str | None,
-) -> None:
-    """Validate Vault inputs when Vault ESO is enabled."""
-    if not enabled:
-        return
-    missing = [
-        name
-        for name, value in {
-            "VAULT_ADDRESS": vault_address,
-            "VAULT_ROLE_ID": vault_role_id,
-            "VAULT_SECRET_ID": vault_secret_id,
-        }.items()
-        if not value
-    ]
-    if missing:
-        msg = (
-            "Missing Vault inputs for ENABLE_VAULT_ESO: "
-            f"{', '.join(missing)}"
-        )
-        raise ValueError(msg)
+def _missing_vault_auth_fields(
+    address: str | None,
+    role_id: str | None,
+    secret_id: str | None,
+) -> list[str]:
+    """Return the list of required Vault ESO auth env keys that are unset."""
+    required = (
+        ("VAULT_ADDRESS", address),
+        ("VAULT_ROLE_ID", role_id),
+        ("VAULT_SECRET_ID", secret_id),
+    )
+    return [name for name, value in required if not value]
 
 
 def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
@@ -228,12 +216,16 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
     runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(raw)
 
     vault_eso_enabled = parse_bool(str(vault_eso_raw))
-    _ensure_vault_inputs(
-        vault_eso_enabled,
+    missing = _missing_vault_auth_fields(
         vault_address_raw,
         vault_role_id_raw,
         vault_secret_id_raw,
     )
+    if vault_eso_enabled and missing:
+        raise ValueError(
+            "ENABLE_VAULT_ESO=true requires "
+            f"{', '.join(missing)} to be set."
+        )
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),
