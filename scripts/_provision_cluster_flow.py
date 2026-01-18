@@ -125,8 +125,14 @@ def _extract_output_value(outputs: dict[str, object], key: str) -> str | None:
         value = output["value"]
         if value is None:
             return None
-        return str(value)
-    return str(output)
+        value_str = str(value)
+        if not value_str:
+            return None
+        return value_str
+    value = str(output)
+    if not value:
+        return None
+    return value
 
 
 def export_cluster_outputs(
