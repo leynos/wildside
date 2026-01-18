@@ -9,7 +9,7 @@ Status: DRAFT
 No `PLANS.md` file exists in this repository, so there is no additional plan
 policy to follow.
 
-## Purpose / Big Picture
+## Purpose / big picture
 
 Deliver the `wildside-infra-k8s` GitHub Action (Phase 3.1 of the ephemeral
 previews roadmap) so that Kubernetes clusters and shared fixtures can be
@@ -19,8 +19,9 @@ to reconcile. Success is visible when:
 
 1. The action can be invoked with cluster identifiers, Vault credentials, and
    GitOps repository details.
-2. The action provisions the DigitalOcean Kubernetes cluster via the doks module
-   (apply mode) if it does not exist, or validates the existing cluster.
+2. The action provisions the DigitalOcean Kubernetes Service (DOKS) cluster via
+   the DOKS module (apply mode) if it does not exist, or validates the existing
+   cluster.
 3. The action renders Flux-ready manifests from all platform modules (traefik,
    cert-manager, external-dns, vault-eso, cnpg, valkey) in render mode.
 4. The action commits the rendered manifests to `wildside-infra` with the
@@ -42,7 +43,7 @@ Hard invariants that must hold throughout implementation:
   be masked via `::add-mask::`.
 - The action must be idempotent; re-runs must not create duplicate commits or
   infrastructure resources.
-- The doks module is invoked in apply mode to provision/update the cluster;
+- The DOKS module is invoked in apply mode to provision/update the cluster;
   platform modules are invoked in render mode for GitOps commit.
 - OpenTofu state must be persisted to a remote backend (DigitalOcean Spaces or
   compatible S3) to enable drift detection and multi-run consistency.
@@ -53,7 +54,7 @@ Hard invariants that must hold throughout implementation:
 - Destructive changes (cluster deletion, node pool removal) require explicit
   confirmation or must be prevented by default.
 
-## Tolerances (Exception Triggers)
+## Tolerances (exception triggers)
 
 Thresholds that trigger escalation when breached:
 
@@ -89,7 +90,7 @@ Thresholds that trigger escalation when breached:
   Mitigation: Document that the action should run serially per branch; consider
   adding a lock mechanism or retry logic in future iterations.
 
-- Risk: End-to-end tests require real Vault, DigitalOcean, and GitOps
+- Risk: End-to-end (E2E) tests require real Vault, DigitalOcean, and GitOps
   credentials.
   Severity: low
   Likelihood: high
@@ -123,7 +124,7 @@ Thresholds that trigger escalation when breached:
 - [x] (2026-01-16) Configure the OpenTofu backend (DigitalOcean Spaces) for
   state management.
 - [x] (2026-01-16) Create the cluster provisioning OpenTofu configuration for
-  doks module invocation.
+  DOKS module invocation.
 - [x] (2026-01-16) Create the platform_render OpenTofu orchestration module.
   Note: Valkey excluded due to provider version incompatibility.
 - [x] (2026-01-16) Implement Python helper scripts (prepare, provision, render,
@@ -145,7 +146,7 @@ Thresholds that trigger escalation when breached:
 - [ ] (Pending) Create documentation (design docs, README).
 - [ ] (Pending) Mark the relevant roadmap entry as done.
 
-## Surprises & Discoveries
+## Surprises & discoveries
 
 - Observation: The valkey module uses different provider versions (helm
   ~> 3.1.1, kubernetes ~> 3.0.1) than other platform modules (~> 2.13.0 and
@@ -156,7 +157,7 @@ Thresholds that trigger escalation when breached:
   versions are unified across all modules. A future task should upgrade all
   modules to helm 3.x and kubernetes 3.x.
 
-## Decision Log
+## Decision log
 
 - Decision: Exclude valkey from platform_render module until provider versions
   are unified.
@@ -178,7 +179,7 @@ Initial anticipated decisions below:
   supports versioning and state locking via DynamoDB-compatible API.
   Date/Author: Pending.
 
-- Decision: (Pending) Provision clusters via doks module in apply mode before
+- Decision: (Pending) Provision clusters via the DOKS module in apply mode before
   rendering platform fixtures.
   Rationale: Ensures the cluster exists and is healthy before attempting to
   configure platform services; enables retrieval of kubeconfig for subsequent
@@ -213,11 +214,11 @@ Initial anticipated decisions below:
   development; avoids exposing credentials in action outputs.
   Date/Author: Pending.
 
-## Outcomes & Retrospective
+## Outcomes & retrospective
 
 (To be completed when work is finished.)
 
-## Context and Orientation
+## Context and orientation
 
 The `wildside-infra-k8s` action is part of Phase 3.1 of the ephemeral previews
 roadmap. It consumes the OpenTofu modules created in Phase 2.3 (traefik,
@@ -282,9 +283,9 @@ Files to create:
 ### Phase 2: Cluster Provisioning Configuration
 
 Create `infra/clusters/wildside-infra-k8s/` as the OpenTofu root configuration
-that provisions clusters via the doks module:
+that provisions clusters via the DOKS module:
 
-1. Define the root configuration that invokes the doks module.
+1. Define the root configuration that invokes the DOKS module.
 2. Add the fluxcd module to bootstrap FluxCD on the provisioned cluster.
 3. Configure backend to use workspace-per-cluster isolation.
 4. Add outputs for cluster ID, API endpoint, and kubeconfig retrieval.
@@ -724,7 +725,7 @@ The work is complete when all of the following are true:
    configuration template.
 
 5. Cluster provisioning:
-   - The doks module can be invoked to create/update clusters.
+   - The DOKS module can be invoked to create/update clusters.
    - `prevent_destroy` lifecycle rule is enforced on cluster resources.
    - `allow_destroy` input overrides the protection when explicitly set.
    - Kubeconfig is stored in Vault after provisioning.
