@@ -8,6 +8,10 @@ resource "digitalocean_kubernetes_cluster" "this" {
   version = coalesce(var.kubernetes_version, local.default_kubernetes_version)
   tags    = var.tags
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   dynamic "node_pool" {
     for_each = var.node_pools
     content {
