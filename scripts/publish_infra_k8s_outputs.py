@@ -23,6 +23,13 @@ from scripts._infra_k8s import append_github_output, mask_secret
 
 app = App(help="Publish wildside-infra-k8s action outputs.")
 
+CLUSTER_NAME_PARAM = Parameter()
+CLUSTER_ID_PARAM = Parameter()
+CLUSTER_ENDPOINT_PARAM = Parameter()
+GITOPS_COMMIT_SHA_PARAM = Parameter()
+RENDERED_MANIFEST_COUNT_PARAM = Parameter()
+GITHUB_OUTPUT_PARAM = Parameter()
+
 
 @dataclass(frozen=True, slots=True)
 class OutputValues:
@@ -35,25 +42,32 @@ class OutputValues:
     rendered_manifest_count: str | None
 
 
-def resolve_output_values(
-    *,
-    cluster_name: str | None,
-    cluster_id: str | None,
-    cluster_endpoint: str | None,
-    gitops_commit_sha: str | None,
-    rendered_manifest_count: str | None,
-) -> OutputValues:
+@dataclass(frozen=True, slots=True)
+class RawOutputValues:
+    """Raw output values from CLI or defaults."""
+
+    cluster_name: str | None = None
+    cluster_id: str | None = None
+    cluster_endpoint: str | None = None
+    gitops_commit_sha: str | None = None
+    rendered_manifest_count: str | None = None
+
+
+def resolve_output_values(raw: RawOutputValues) -> OutputValues:
     """Resolve output values from environment."""
-    cluster_name = resolve_input(cluster_name, InputResolution(env_key="CLUSTER_NAME"))
-    cluster_id = resolve_input(cluster_id, InputResolution(env_key="CLUSTER_ID"))
+    cluster_name = resolve_input(
+        raw.cluster_name, InputResolution(env_key="CLUSTER_NAME")
+    )
+    cluster_id = resolve_input(raw.cluster_id, InputResolution(env_key="CLUSTER_ID"))
     cluster_endpoint = resolve_input(
-        cluster_endpoint, InputResolution(env_key="CLUSTER_ENDPOINT")
+        raw.cluster_endpoint, InputResolution(env_key="CLUSTER_ENDPOINT")
     )
     gitops_commit_sha = resolve_input(
-        gitops_commit_sha, InputResolution(env_key="GITOPS_COMMIT_SHA")
+        raw.gitops_commit_sha, InputResolution(env_key="GITOPS_COMMIT_SHA")
     )
     rendered_manifest_count = resolve_input(
-        rendered_manifest_count, InputResolution(env_key="RENDERED_MANIFEST_COUNT")
+        raw.rendered_manifest_count,
+        InputResolution(env_key="RENDERED_MANIFEST_COUNT"),
     )
 
     return OutputValues(
@@ -115,12 +129,12 @@ def final_secret_masking() -> None:
 
 @app.command()
 def main(
-    cluster_name: str | None = Parameter(),
-    cluster_id: str | None = Parameter(),
-    cluster_endpoint: str | None = Parameter(),
-    gitops_commit_sha: str | None = Parameter(),
-    rendered_manifest_count: str | None = Parameter(),
-    github_output: Path | None = Parameter(),
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    cluster_id: str | None = CLUSTER_ID_PARAM,
+    cluster_endpoint: str | None = CLUSTER_ENDPOINT_PARAM,
+    gitops_commit_sha: str | None = GITOPS_COMMIT_SHA_PARAM,
+    rendered_manifest_count: str | None = RENDERED_MANIFEST_COUNT_PARAM,
+    github_output: Path | None = GITHUB_OUTPUT_PARAM,
 ) -> int:
     """Publish outputs for the wildside-infra-k8s action.
 
@@ -133,7 +147,8 @@ def main(
         InputResolution(env_key="GITHUB_OUTPUT", as_path=True),
     )
     if not github_output_raw:
-        raise SystemExit("GITHUB_OUTPUT or --github-output must be provided")
+        msg = "GITHUB_OUTPUT or --github-output must be provided"
+        raise SystemExit(msg)
     github_output_path = (
         github_output_raw
         if isinstance(github_output_raw, Path)
@@ -141,13 +156,14 @@ def main(
     )
 
     # Resolve output values from environment
-    values = resolve_output_values(
+    raw_values = RawOutputValues(
         cluster_name=cluster_name,
         cluster_id=cluster_id,
         cluster_endpoint=cluster_endpoint,
         gitops_commit_sha=gitops_commit_sha,
         rendered_manifest_count=rendered_manifest_count,
     )
+    values = resolve_output_values(raw_values)
 
     # Perform final secret masking
     final_secret_masking()

@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts._infra_k8s import (  # noqa: E402
+from scripts._infra_k8s import (
     TofuResult,
     append_github_env,
     append_github_output,
@@ -94,7 +88,7 @@ def test_validate_cluster_name_normalises() -> None:
 
 @pytest.mark.parametrize("value", ["", "Invalid_Name", "-bad", "bad-"])
 def test_validate_cluster_name_rejects_invalid(value: str) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cluster_name"):
         validate_cluster_name(value)
 
 
@@ -106,7 +100,7 @@ class _StubResult:
 
 
 def test_run_tofu_invokes_subprocess(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    captured: dict[str, Any] = {}
+    captured: dict[str, object] = {}
 
     def fake_run(cmd: list[str], **kwargs: object) -> _StubResult:  # type: ignore[override]
         captured["cmd"] = cmd
@@ -128,9 +122,14 @@ def test_run_tofu_rejects_invalid_args(tmp_path: Path) -> None:
 
 def test_tofu_output_raises_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def fake_run(*_args: object, **_kwargs: object) -> TofuResult:
-        return TofuResult(False, "", "boom", 1)
+        return TofuResult(success=False, stdout="", stderr="boom", return_code=1)
 
     monkeypatch.setattr("scripts._infra_k8s.run_tofu", fake_run)
 
     with pytest.raises(RuntimeError, match="tofu output failed"):
         tofu_output(tmp_path)
+
+
+def test_write_manifests_rejects_path_traversal(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Refusing to write manifest"):
+        write_manifests(tmp_path, {"../escape.yaml": "apiVersion: v1"})

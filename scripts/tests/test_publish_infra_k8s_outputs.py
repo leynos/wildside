@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts.publish_infra_k8s_outputs import (  # noqa: E402
+from scripts.publish_infra_k8s_outputs import (
     OutputValues,
+    RawOutputValues,
     final_secret_masking,
     publish_outputs,
     resolve_output_values,
@@ -24,13 +20,7 @@ def test_resolve_output_values(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLUSTER_ID", "abc")
     monkeypatch.setenv("CLUSTER_ENDPOINT", "https://kube")
 
-    values = resolve_output_values(
-        cluster_name=None,
-        cluster_id=None,
-        cluster_endpoint=None,
-        gitops_commit_sha=None,
-        rendered_manifest_count=None,
-    )
+    values = resolve_output_values(RawOutputValues())
     assert values.cluster_name == "preview"
     assert values.cluster_id == "abc"
     assert values.cluster_endpoint == "https://kube"

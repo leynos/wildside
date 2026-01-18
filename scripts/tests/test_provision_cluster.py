@@ -8,13 +8,12 @@ from pathlib import Path
 import pytest
 
 from scripts._infra_k8s import TofuResult
-from scripts.provision_cluster import (
+from scripts._provision_cluster_flow import export_cluster_outputs, provision_cluster
+from scripts._provision_cluster_inputs import (
     ProvisionInputs,
     RawProvisionInputs,
     build_backend_config,
     build_tfvars,
-    export_cluster_outputs,
-    provision_cluster,
     resolve_provision_inputs,
 )
 
@@ -97,9 +96,9 @@ def test_provision_cluster_dry_run_skips_apply(
         calls.append("apply")
         return TofuResult(success=True, stdout="", stderr="", return_code=0)
 
-    monkeypatch.setattr("scripts.provision_cluster.tofu_init", fake_init)
-    monkeypatch.setattr("scripts.provision_cluster.tofu_plan", fake_plan)
-    monkeypatch.setattr("scripts.provision_cluster.tofu_apply", fake_apply)
+    monkeypatch.setattr("scripts._provision_cluster_flow.tofu_init", fake_init)
+    monkeypatch.setattr("scripts._provision_cluster_flow.tofu_plan", fake_plan)
+    monkeypatch.setattr("scripts._provision_cluster_flow.tofu_apply", fake_apply)
 
     success, outputs = provision_cluster(inputs, backend, tfvars)
     assert success is True
@@ -116,7 +115,7 @@ def test_provision_cluster_apply_success(
     tfvars = build_tfvars(inputs)
 
     monkeypatch.setattr(
-        "scripts.provision_cluster.tofu_init",
+        "scripts._provision_cluster_flow.tofu_init",
         lambda *_args, **_kwargs: TofuResult(
             success=True,
             stdout="",
@@ -125,7 +124,7 @@ def test_provision_cluster_apply_success(
         ),
     )
     monkeypatch.setattr(
-        "scripts.provision_cluster.tofu_plan",
+        "scripts._provision_cluster_flow.tofu_plan",
         lambda *_args, **_kwargs: TofuResult(
             success=True,
             stdout="",
@@ -134,7 +133,7 @@ def test_provision_cluster_apply_success(
         ),
     )
     monkeypatch.setattr(
-        "scripts.provision_cluster.tofu_apply",
+        "scripts._provision_cluster_flow.tofu_apply",
         lambda *_args, **_kwargs: TofuResult(
             success=True,
             stdout="",
@@ -143,7 +142,7 @@ def test_provision_cluster_apply_success(
         ),
     )
     monkeypatch.setattr(
-        "scripts.provision_cluster.tofu_output",
+        "scripts._provision_cluster_flow.tofu_output",
         lambda *_args, **_kwargs: {"cluster_id": {"value": "abc"}},
     )
 
@@ -160,7 +159,7 @@ def test_export_cluster_outputs_writes_kubeconfig(
     env_file = inputs.github_env
     masked: list[str] = []
 
-    monkeypatch.setattr("scripts.provision_cluster.mask_secret", masked.append)
+    monkeypatch.setattr("scripts._provision_cluster_flow.mask_secret", masked.append)
 
     export_cluster_outputs(
         inputs,
