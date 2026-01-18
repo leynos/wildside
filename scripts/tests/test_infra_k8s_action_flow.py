@@ -41,13 +41,24 @@ from scripts.render_platform_manifests import (
 
 
 def _apply_env_file(monkeypatch: pytest.MonkeyPatch, env_path: Path) -> None:
-    for line in env_path.read_text(encoding="utf-8").splitlines():
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         if "<<" in line:
-            continue
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        monkeypatch.setenv(key, value)
+            key, marker = line.split("<<", 1)
+            key = key.strip()
+            marker = marker.strip()
+            index += 1
+            value_lines: list[str] = []
+            while index < len(lines) and lines[index] != marker:
+                value_lines.append(lines[index])
+                index += 1
+            monkeypatch.setenv(key, "\n".join(value_lines))
+        elif "=" in line:
+            key, value = line.split("=", 1)
+            monkeypatch.setenv(key, value)
+        index += 1
 
 
 def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
