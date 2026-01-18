@@ -55,22 +55,39 @@ class RawProvisionInputs:
     dry_run: str | None = None
 
 
+def _with_override(
+    value: str | Path | None,
+    resolution: InputResolution,
+) -> str | Path | None:
+    """Return the CLI override when present, otherwise resolve from environment."""
+    resolver: Callable[[str | Path | None, InputResolution], str | Path | None] = (
+        resolve_input
+    )
+    if value is not None:
+        return value
+    return resolver(None, resolution)
+
+
+def _to_path(value: Path | str) -> Path:
+    """Normalize string and Path values into Path instances."""
+    return value if isinstance(value, Path) else Path(str(value))
+
+
 def _resolve_cluster_inputs(
     raw: RawProvisionInputs,
-    _resolved: Callable[[str | Path | None, InputResolution], str | Path | None],
 ) -> tuple[str, str, str, str | None, str | None]:
     """Resolve cluster configuration inputs."""
-    cluster_name = _resolved(
+    cluster_name = _with_override(
         raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
-    environment = _resolved(
+    environment = _with_override(
         raw.environment, InputResolution(env_key="ENVIRONMENT", required=True)
     )
-    region = _resolved(raw.region, InputResolution(env_key="REGION", required=True))
-    kubernetes_version = _resolved(
+    region = _with_override(raw.region, InputResolution(env_key="REGION", required=True))
+    kubernetes_version = _with_override(
         raw.kubernetes_version, InputResolution(env_key="KUBERNETES_VERSION")
     )
-    node_pools = _resolved(raw.node_pools, InputResolution(env_key="NODE_POOLS"))
+    node_pools = _with_override(raw.node_pools, InputResolution(env_key="NODE_POOLS"))
     return (
         str(cluster_name),
         str(environment),
@@ -82,21 +99,20 @@ def _resolve_cluster_inputs(
 
 def _resolve_spaces_config(
     raw: RawProvisionInputs,
-    _resolved: Callable[[str | Path | None, InputResolution], str | Path | None],
 ) -> tuple[str, str, str, str]:
     """Resolve Spaces backend configuration inputs."""
-    spaces_bucket = _resolved(
+    spaces_bucket = _with_override(
         raw.spaces_bucket,
         InputResolution(env_key="SPACES_BUCKET", default="wildside-tofu-state"),
     )
-    spaces_region = _resolved(
+    spaces_region = _with_override(
         raw.spaces_region, InputResolution(env_key="SPACES_REGION", default="lon1")
     )
-    spaces_access_key = _resolved(
+    spaces_access_key = _with_override(
         raw.spaces_access_key,
         InputResolution(env_key="SPACES_ACCESS_KEY", required=True),
     )
-    spaces_secret_key = _resolved(
+    spaces_secret_key = _with_override(
         raw.spaces_secret_key,
         InputResolution(env_key="SPACES_SECRET_KEY", required=True),
     )
@@ -110,19 +126,17 @@ def _resolve_spaces_config(
 
 def _resolve_execution_config(
     raw: RawProvisionInputs,
-    _resolved: Callable[[str | Path | None, InputResolution], str | Path | None],
-    to_path: Callable[[Path | str], Path],
 ) -> tuple[Path, Path, bool]:
     """Resolve execution configuration inputs."""
     # RUNNER_TEMP/GITHUB_ENV/DRY_RUN InputResolution defaults (Path("/tmp"),
     # Path("/tmp/github-env-undefined"), and "false") are intentional
     # local-dev/test fallbacks to avoid hard failures when those env keys are
     # absent; production usage should set the env_key values explicitly.
-    runner_temp_raw = _resolved(
+    runner_temp_raw = _with_override(
         raw.runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
-    github_env_raw = _resolved(
+    github_env_raw = _with_override(
         raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
@@ -130,49 +144,18 @@ def _resolve_execution_config(
             as_path=True,
         ),
     )
-    dry_run_raw = _resolved(
+    dry_run_raw = _with_override(
         raw.dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
     return (
-        to_path(runner_temp_raw),
-        to_path(github_env_raw),
+        _to_path(runner_temp_raw),
+        _to_path(github_env_raw),
         parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )
 
 
 def resolve_provision_inputs(raw: RawProvisionInputs) -> ProvisionInputs:
-    """Resolve provisioning inputs from CLI and environment.
-
-    Normalize CLI values with environment fallbacks so the provisioning
-    workflow operates on a consistent set of validated inputs.
-
-    Parameters
-    ----------
-    raw : RawProvisionInputs
-        Raw provisioning inputs sourced from CLI arguments or defaults.
-
-    Returns
-    -------
-    ProvisionInputs
-        Normalized provisioning inputs ready for use.
-
-    Examples
-    --------
-    Resolve inputs with a CLI override:
-
-    >>> resolve_provision_inputs(RawProvisionInputs(cluster_name="preview-1"))
-    """
-
-    def to_path(value: Path | str | None) -> Path:
-        return value if isinstance(value, Path) else Path(str(value))
-
-    def _resolved(
-        value: str | Path | None,
-        resolution: InputResolution,
-    ) -> str | Path | None:
-        if value is not None:
-            return value
-        return resolve_input(None, resolution)
+    """Resolve provisioning inputs from CLI overrides with environment fallbacks."""
 
     (
         cluster_name,
@@ -180,14 +163,14 @@ def resolve_provision_inputs(raw: RawProvisionInputs) -> ProvisionInputs:
         region,
         kubernetes_version,
         node_pools,
-    ) = _resolve_cluster_inputs(raw, _resolved)
+    ) = _resolve_cluster_inputs(raw)
     (
         spaces_bucket,
         spaces_region,
         spaces_access_key,
         spaces_secret_key,
-    ) = _resolve_spaces_config(raw, _resolved)
-    runner_temp, github_env, dry_run = _resolve_execution_config(raw, _resolved, to_path)
+    ) = _resolve_spaces_config(raw)
+    runner_temp, github_env, dry_run = _resolve_execution_config(raw)
 
     return ProvisionInputs(
         cluster_name=cluster_name,
