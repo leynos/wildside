@@ -12,7 +12,7 @@ plugin "terraform" {
   preset  = "recommended"
 }
 
-# Your Terraform-language rules (these are fine)
+# Configure Terraform-language rules for tflint
 rule "terraform_documented_variables" { enabled = true }
 rule "terraform_documented_outputs"   { enabled = true }
 rule "terraform_typed_variables"      { enabled = true }

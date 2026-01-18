@@ -26,18 +26,20 @@ provider "digitalocean" {
 locals {
   cluster_name_normalised = trimspace(var.cluster_name)
   region_normalised       = trimspace(var.region)
-  tags_normalised         = distinct([for t in var.tags : trimspace(t)])
+  tags_normalised         = distinct(compact([for t in var.tags : trimspace(t)]))
 
   node_pools_normalised = [
     for np in var.node_pools : merge(np, {
-      tags = try(distinct([for t in np.tags : trimspace(t)]), null)
+      tags = try(distinct(compact([for t in np.tags : trimspace(t)])), null)
     })
   ]
 
   # FluxCD configuration normalisation
   flux_config = {
     install         = var.flux_install
-    kubeconfig_path = trimspace(coalesce(var.flux_kubeconfig_path, " ")) # Coalesce null to blank so trimspace yields "" for flux_using_kubeconfig.
+    # Coalesce null to blank so trimspace yields "" for local.flux_config.kubeconfig_path,
+    # which flux_using_kubeconfig relies on.
+    kubeconfig_path = trimspace(coalesce(var.flux_kubeconfig_path, " "))
     namespace       = trimspace(var.flux_namespace)
     git_repository = {
       url         = var.flux_git_repository_url == null ? null : trimspace(var.flux_git_repository_url)
