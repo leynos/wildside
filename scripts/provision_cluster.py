@@ -51,6 +51,19 @@ BACKEND_CONFIG_PATH = REPO_ROOT / "infra" / "backend-config" / "spaces.tfbackend
 app = App(help="Provision Kubernetes cluster via OpenTofu.")
 logger = logging.getLogger(__name__)
 
+CLUSTER_NAME_PARAM = Parameter()
+ENVIRONMENT_PARAM = Parameter()
+REGION_PARAM = Parameter()
+KUBERNETES_VERSION_PARAM = Parameter()
+NODE_POOLS_PARAM = Parameter()
+SPACES_BUCKET_PARAM = Parameter()
+SPACES_REGION_PARAM = Parameter()
+SPACES_ACCESS_KEY_PARAM = Parameter()
+SPACES_SECRET_KEY_PARAM = Parameter()
+RUNNER_TEMP_PARAM = Parameter()
+GITHUB_ENV_PARAM = Parameter()
+DRY_RUN_PARAM = Parameter()
+
 
 @dataclass(frozen=True, slots=True)
 class ProvisionInputs:
@@ -463,18 +476,18 @@ def export_cluster_outputs(
 
 @app.command()
 def main(
-    cluster_name: str | None = Parameter(),
-    environment: str | None = Parameter(),
-    region: str | None = Parameter(),
-    kubernetes_version: str | None = Parameter(),
-    node_pools: str | None = Parameter(),
-    spaces_bucket: str | None = Parameter(),
-    spaces_region: str | None = Parameter(),
-    spaces_access_key: str | None = Parameter(),
-    spaces_secret_key: str | None = Parameter(),
-    runner_temp: Path | None = Parameter(),
-    github_env: Path | None = Parameter(),
-    dry_run: str | None = Parameter(),
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    environment: str | None = ENVIRONMENT_PARAM,
+    region: str | None = REGION_PARAM,
+    kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
+    node_pools: str | None = NODE_POOLS_PARAM,
+    spaces_bucket: str | None = SPACES_BUCKET_PARAM,
+    spaces_region: str | None = SPACES_REGION_PARAM,
+    spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
+    spaces_secret_key: str | None = SPACES_SECRET_KEY_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM,
+    github_env: Path | None = GITHUB_ENV_PARAM,
+    dry_run: str | None = DRY_RUN_PARAM,
 ) -> int:
     """Provision a Kubernetes cluster via OpenTofu.
 
