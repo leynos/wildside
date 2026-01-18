@@ -432,6 +432,49 @@ def commit_and_push(
 
 # CLI parameters are declared for cyclopts but resolved via resolve_gitops_inputs().
 # This keeps defaults centralized while preventing ARG001/B008 false positives.
+def _build_raw_inputs_from_cli(
+    gitops_repository: str | None,
+    gitops_branch: str | None,
+    gitops_token: str | None,
+    cluster_name: str | None,
+    render_output_dir: Path | None,
+    runner_temp: Path | None,
+    github_env: Path | None,
+    dry_run: str | None,
+) -> RawGitOpsInputs:
+    """Build raw GitOps inputs from CLI arguments."""
+    return RawGitOpsInputs(
+        gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch,
+        gitops_token=gitops_token,
+        cluster_name=cluster_name,
+        render_output_dir=render_output_dir,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
+    )
+
+
+def _run_gitops_flow(inputs: GitOpsInputs) -> tuple[int, str | None]:
+    """Clone, sync, and commit GitOps manifests."""
+    with tempfile.TemporaryDirectory(dir=inputs.runner_temp) as tmp_dir:
+        base_dir = Path(tmp_dir)
+        clone_dir = base_dir / "repo"
+        with _git_auth_env(inputs.gitops_token, base_dir) as auth_env:
+            clone_repository(inputs, clone_dir, auth_env)
+            synced = sync_manifests(inputs, clone_dir)
+            commit_sha = None
+            if synced > 0:
+                commit_sha = commit_and_push(inputs, clone_dir, auth_env)
+    return synced, commit_sha
+
+
+def _export_commit_sha(github_env: Path, commit_sha: str | None) -> None:
+    """Export the GitOps commit SHA to GITHUB_ENV when available."""
+    if commit_sha:
+        append_github_env(github_env, {"GITOPS_COMMIT_SHA": commit_sha})
+
+
 @app.command()
 def main(
     gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
@@ -465,15 +508,15 @@ def main(
     --------
     >>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
     """
-    raw_inputs = RawGitOpsInputs(
-        gitops_repository=gitops_repository,
-        gitops_branch=gitops_branch,
-        gitops_token=gitops_token,
-        cluster_name=cluster_name,
-        render_output_dir=render_output_dir,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
+    raw_inputs = _build_raw_inputs_from_cli(
+        gitops_repository,
+        gitops_branch,
+        gitops_token,
+        cluster_name,
+        render_output_dir,
+        runner_temp,
+        github_env,
+        dry_run,
     )
     # Resolve inputs from environment
     inputs = resolve_gitops_inputs(raw_inputs)
@@ -487,39 +530,20 @@ def main(
     print(f"  Source: {inputs.render_output_dir}")
     print(f"  Dry run: {inputs.dry_run}")
 
-    # Create clone directory
-    clone_dir = inputs.runner_temp / "gitops-clone"
-    if clone_dir.exists():
-        shutil.rmtree(clone_dir)
-    clone_dir.mkdir(parents=True)
-
     try:
-        with _git_auth_env(inputs.gitops_token, inputs.runner_temp) as auth_env:
-            # Clone the repository
-            clone_repository(inputs, clone_dir, auth_env)
-
-            # Sync manifests
-            count = sync_manifests(inputs, clone_dir)
-            print(f"Synced {count} manifest files")
-
-            commit_sha = None
-            if count > 0:
-                # Commit and push
-                commit_sha = commit_and_push(inputs, clone_dir, auth_env)
+        synced, commit_sha = _run_gitops_flow(inputs)
+        print(f"Synced {synced} manifest files")
     except GitOpsError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     else:
-        if count == 0:
+        if synced == 0:
             print("No manifests to commit")
             return 0
 
         # Export commit SHA to GITHUB_ENV
+        _export_commit_sha(inputs.github_env, commit_sha)
         if commit_sha:
-            append_github_env(
-                inputs.github_env,
-                {"GITOPS_COMMIT_SHA": commit_sha},
-            )
             print(f"\nCommit SHA: {commit_sha}")
 
         print("\nGitOps commit complete.")
