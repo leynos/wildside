@@ -160,6 +160,9 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
         raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
 
+    # resolve_input + InputResolution defaults for render_output_dir_raw,
+    # runner_temp_raw, and github_env_raw are intentional local-dev/CI fallbacks
+    # when GitHub Actions runner env keys are absent.
     render_output_dir_raw = resolve_input(
         raw.render_output_dir,
         InputResolution(

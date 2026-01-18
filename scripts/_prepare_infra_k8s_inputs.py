@@ -287,9 +287,7 @@ def _resolve_all_inputs(raw: RawInputs) -> ResolvedInputs:
         digitalocean_token=str(digitalocean_token),
         spaces_access_key=str(spaces_access_key),
         spaces_secret_key=str(spaces_secret_key),
-        cloudflare_api_token_secret_name=str(cloudflare_api_token_secret_name)
-        if cloudflare_api_token_secret_name
-        else "cloudflare-api-token",
+        cloudflare_api_token_secret_name=str(cloudflare_api_token_secret_name),
         enable_traefik=parse_bool(str(enable_traefik) if enable_traefik else None),
         enable_cert_manager=parse_bool(
             str(enable_cert_manager) if enable_cert_manager else None

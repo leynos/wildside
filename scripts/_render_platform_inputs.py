@@ -1,4 +1,19 @@
-"""Resolve inputs and tfvars for platform manifest rendering."""
+"""Resolve platform render inputs and build OpenTofu tfvars.
+
+This module resolves environment and CLI inputs into structured configuration
+for platform manifest rendering and produces the OpenTofu variables needed to
+render the platform modules. It assumes inputs are prepared via the action
+input preparation step.
+
+Usage:
+    python scripts/render_platform_manifests.py
+
+Examples:
+    >>> raw = RawRenderInputs(cluster_name="preview-1", domain="example.test")
+    >>> inputs = resolve_render_inputs(raw)
+    >>> build_render_tfvars(inputs)["cluster_name"]
+    'preview-1'
+"""
 
 from __future__ import annotations
 
@@ -91,6 +106,7 @@ class RawRenderInputs:
 
 
 def _missing_vault_auth_fields(
+    *,
     address: str | None,
     role_id: str | None,
     secret_id: str | None,
@@ -190,14 +206,30 @@ def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
         ),
     )
     return (
-        cast(Path, runner_temp_raw),
-        cast(Path, output_dir_raw),
-        cast(Path, github_env_raw),
+        cast("Path", runner_temp_raw),
+        cast("Path", output_dir_raw),
+        cast("Path", github_env_raw),
     )
 
 
 def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
-    """Resolve rendering inputs from environment."""
+    """Resolve rendering inputs from raw CLI or environment values.
+
+    Parameters
+    ----------
+    raw : RawRenderInputs
+        Raw inputs from CLI overrides or environment.
+
+    Returns
+    -------
+    RenderInputs
+        Normalized inputs for platform manifest rendering.
+
+    Examples
+    --------
+    >>> resolve_render_inputs(RawRenderInputs(cluster_name="preview-1", domain="example.test"))
+    RenderInputs(...)
+    """
     (
         cluster_name_raw,
         domain_raw,
@@ -217,9 +249,9 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
 
     vault_eso_enabled = parse_bool(str(vault_eso_raw))
     missing = _missing_vault_auth_fields(
-        vault_address_raw,
-        vault_role_id_raw,
-        vault_secret_id_raw,
+        address=vault_address_raw,
+        role_id=vault_role_id_raw,
+        secret_id=vault_secret_id_raw,
     )
     if vault_eso_enabled and missing:
         raise ValueError(
@@ -248,7 +280,23 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
 
 
 def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
-    """Build tfvars for platform rendering."""
+    """Build OpenTofu variables for platform rendering.
+
+    Parameters
+    ----------
+    inputs : RenderInputs
+        Normalized render inputs.
+
+    Returns
+    -------
+    dict[str, object]
+        OpenTofu variables for the platform render module.
+
+    Examples
+    --------
+    >>> build_render_tfvars(RenderInputs(...))["cluster_name"]
+    'preview-1'
+    """
     variables: dict[str, object] = {
         "cluster_name": inputs.cluster_name,
         "domain": inputs.domain,
