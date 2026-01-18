@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 import pytest
@@ -21,9 +22,9 @@ def test_resolve_output_values(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLUSTER_ENDPOINT", "https://kube")
 
     values = resolve_output_values(RawOutputValues())
-    assert values.cluster_name == "preview"
-    assert values.cluster_id == "abc"
-    assert values.cluster_endpoint == "https://kube"
+    assert values.cluster_name == "preview", "Cluster name should resolve"
+    assert values.cluster_id == "abc", "Cluster ID should resolve"
+    assert values.cluster_endpoint == "https://kube", "Endpoint should resolve"
 
 
 def test_publish_outputs_writes_file(tmp_path: Path) -> None:
@@ -39,16 +40,21 @@ def test_publish_outputs_writes_file(tmp_path: Path) -> None:
     publish_outputs(values, output_file)
 
     content = output_file.read_text(encoding="utf-8")
-    assert "cluster_name=preview" in content
-    assert "gitops_commit_sha=sha" in content
-    assert "rendered_manifest_count=3" in content
+    assert "cluster_name=preview" in content, "Cluster name should be published"
+    assert "gitops_commit_sha=sha" in content, "Commit SHA should be published"
+    assert "rendered_manifest_count=3" in content, "Render count should be published"
 
 
 def test_final_secret_masking(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GITOPS_TOKEN", "token")
+    token = _dummy_token()
+    monkeypatch.setenv("GITOPS_TOKEN", token)
     masked: list[str] = []
     monkeypatch.setattr("scripts.publish_infra_k8s_outputs.mask_secret", masked.append)
 
     final_secret_masking()
 
-    assert "token" in masked
+    assert token in masked, "Token should be masked"
+
+
+def _dummy_token() -> str:
+    return f"token-{secrets.token_hex(8)}"

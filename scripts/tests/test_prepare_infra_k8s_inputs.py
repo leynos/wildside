@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,8 @@ from scripts.prepare_infra_k8s_inputs import (
 
 
 def _base_env(tmp_path: Path) -> dict[str, str]:
+    token = _dummy_token()
+    do_token = _dummy_token()
     return {
         "INPUT_CLUSTER_NAME": "Preview-1",
         "INPUT_ENVIRONMENT": "preview",
@@ -22,16 +25,20 @@ def _base_env(tmp_path: Path) -> dict[str, str]:
         "INPUT_DOMAIN": "example.test",
         "INPUT_ACME_EMAIL": "admin@example.test",
         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
-        "INPUT_GITOPS_TOKEN": "git-token",
+        "INPUT_GITOPS_TOKEN": token,
         "INPUT_VAULT_ADDRESS": "https://vault.example.test:8200",
         "INPUT_VAULT_ROLE_ID": "role-id",
         "INPUT_VAULT_SECRET_ID": "secret-id",
-        "INPUT_DIGITALOCEAN_TOKEN": "do-token",
+        "INPUT_DIGITALOCEAN_TOKEN": do_token,
         "INPUT_SPACES_ACCESS_KEY": "spaces-key",
         "INPUT_SPACES_SECRET_KEY": "spaces-secret",
         "RUNNER_TEMP": str(tmp_path / "runner"),
         "GITHUB_ENV": str(tmp_path / "env"),
     }
+
+
+def _dummy_token() -> str:
+    return f"token-{secrets.token_hex(8)}"
 
 
 def test_resolve_all_inputs_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -60,11 +67,11 @@ def test_resolve_all_inputs_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path
     raw_values = dict.fromkeys(RawInputs.__annotations__, None)
     inputs = _resolve_all_inputs(RawInputs(**raw_values))
 
-    assert inputs.cluster_name == "preview-1"
-    assert inputs.enable_traefik is False
-    assert inputs.dry_run is True
-    assert inputs.node_pools is not None
-    assert inputs.node_pools[0]["name"] == "default"
+    assert inputs.cluster_name == "preview-1", "Cluster name should normalize"
+    assert inputs.enable_traefik is False, "Traefik flag should parse to False"
+    assert inputs.dry_run is True, "Dry run flag should parse to True"
+    assert inputs.node_pools is not None, "Node pools should be parsed"
+    assert inputs.node_pools[0]["name"] == "default", "Expected default pool name"
 
 
 def test_resolve_all_inputs_rejects_invalid_cluster(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -73,14 +80,16 @@ def test_resolve_all_inputs_rejects_invalid_cluster(monkeypatch: pytest.MonkeyPa
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
+    raw_values = dict.fromkeys(RawInputs.__annotations__, None)
     with pytest.raises(ValueError, match="cluster_name"):
-        raw_values = dict.fromkeys(RawInputs.__annotations__, None)
         _resolve_all_inputs(RawInputs(**raw_values))
 
 
 def test_prepare_inputs_masks_and_exports(tmp_path: Path) -> None:
     env_file = tmp_path / "env"
     masks: list[str] = []
+    gitops_token = _dummy_token()
+    do_token = _dummy_token()
 
     inputs = _resolve_all_inputs(
         RawInputs(
@@ -93,12 +102,12 @@ def test_prepare_inputs_masks_and_exports(tmp_path: Path) -> None:
             acme_email="admin@example.test",
             gitops_repository="wildside/wildside-infra",
             gitops_branch="main",
-            gitops_token="git-token",
+            gitops_token=gitops_token,
             vault_address="https://vault.example.test:8200",
             vault_role_id="role-id",
             vault_secret_id="secret-id",
             vault_ca_certificate="CERT\nLINE",
-            digitalocean_token="do-token",
+            digitalocean_token=do_token,
             spaces_access_key="spaces-key",
             spaces_secret_key="spaces-secret",
             cloudflare_api_token_secret_name="cloudflare-api-token",
@@ -116,9 +125,9 @@ def test_prepare_inputs_masks_and_exports(tmp_path: Path) -> None:
     prepare_inputs(inputs, mask=masks.append)
 
     env_content = env_file.read_text(encoding="utf-8")
-    assert "CLUSTER_NAME=preview-2" in env_content
-    assert "VAULT_CA_CERTIFICATE<<" in env_content
+    assert "CLUSTER_NAME=preview-2" in env_content, "Cluster name should export"
+    assert "VAULT_CA_CERTIFICATE<<" in env_content, "Vault CA should export multiline"
 
-    assert "::add-mask::git-token" in masks
-    assert "::add-mask::do-token" in masks
-    assert "::add-mask::CERT\nLINE" in masks
+    assert "CERT\nLINE" in masks, "Vault CA should be masked"
+    assert gitops_token in masks, "GitOps token should be masked"
+    assert do_token in masks, "DigitalOcean token should be masked"

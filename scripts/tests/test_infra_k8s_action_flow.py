@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,6 +83,7 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
     global _ENV_SETTER
     _ENV_SETTER = monkeypatch.setenv
 
+    token = _dummy_token()
     env_vars = {
         "INPUT_CLUSTER_NAME": "preview-1",
         "INPUT_ENVIRONMENT": "preview",
@@ -90,11 +92,11 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
         "INPUT_ACME_EMAIL": "admin@example.test",
         "INPUT_NODE_POOLS": "[]",
         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
-        "INPUT_GITOPS_TOKEN": "token",
+        "INPUT_GITOPS_TOKEN": token,
         "INPUT_VAULT_ADDRESS": "https://vault.example.test:8200",
         "INPUT_VAULT_ROLE_ID": "role",
         "INPUT_VAULT_SECRET_ID": "secret",
-        "INPUT_DIGITALOCEAN_TOKEN": "do-token",
+        "INPUT_DIGITALOCEAN_TOKEN": _dummy_token(),
         "INPUT_SPACES_ACCESS_KEY": "access",
         "INPUT_SPACES_SECRET_KEY": "secret",
         "INPUT_DRY_RUN": "true",
@@ -109,7 +111,7 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
 
 def _call_cli(main_func: Callable[..., object]) -> None:
     """Call a CLI entrypoint with explicit None overrides."""
-    params = {name: None for name in inspect.signature(main_func).parameters}
+    params = dict.fromkeys(inspect.signature(main_func).parameters, None)
     main_func(**params)
 
 
@@ -200,10 +202,16 @@ def _run_full_flow(paths: FlowPaths) -> dict[str, str]:
 
 def _assert_published(outputs: dict[str, str]) -> None:
     """Assert the action publishes the expected outputs."""
-    assert outputs["CLUSTER_NAME"] == "preview-1"
-    assert "RENDERED_MANIFEST_COUNT" in outputs
+    assert outputs["CLUSTER_NAME"] == "preview-1", "Cluster name should be published"
+    assert (
+        "RENDERED_MANIFEST_COUNT" in outputs
+    ), "Rendered manifest count should be published"
     if commit_sha := outputs.get("GITOPS_COMMIT_SHA"):
-        assert commit_sha
+        assert commit_sha, "Commit SHA should be non-empty when present"
+
+
+def _dummy_token() -> str:
+    return f"token-{secrets.token_hex(8)}"
 
 
 def test_action_flow_happy_path(

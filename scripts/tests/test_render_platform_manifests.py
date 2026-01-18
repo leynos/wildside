@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 import pytest
@@ -27,8 +28,8 @@ def test_resolve_render_inputs_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
 
     inputs = resolve_render_inputs(RawRenderInputs())
-    assert inputs.cluster_name == "preview"
-    assert inputs.enable_traefik is False
+    assert inputs.cluster_name == "preview", "Cluster name should resolve"
+    assert inputs.enable_traefik is False, "Traefik flag should parse to False"
 
 
 def test_resolve_render_inputs_cli_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,7 +38,7 @@ def test_resolve_render_inputs_cli_override(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("ACME_EMAIL", "admin@example.test")
 
     inputs = resolve_render_inputs(RawRenderInputs(cluster_name="cli"))
-    assert inputs.cluster_name == "cli"
+    assert inputs.cluster_name == "cli", "CLI override should win"
 
 
 def test_build_render_tfvars_skips_vault_when_disabled(tmp_path: Path) -> None:
@@ -45,7 +46,7 @@ def test_build_render_tfvars_skips_vault_when_disabled(tmp_path: Path) -> None:
         cluster_name="preview",
         domain="example.test",
         acme_email="admin@example.test",
-        cloudflare_api_token_secret_name="cloudflare-api-token",
+        cloudflare_api_token_secret_name=_dummy_secret_name(),
         vault_address="https://vault.example",
         vault_role_id="role",
         vault_secret_id="secret",
@@ -61,8 +62,8 @@ def test_build_render_tfvars_skips_vault_when_disabled(tmp_path: Path) -> None:
     )
 
     tfvars = build_render_tfvars(inputs)
-    assert "vault_address" not in tfvars
-    assert tfvars["vault_eso_enabled"] is False
+    assert "vault_address" not in tfvars, "Vault settings should be skipped"
+    assert tfvars["vault_eso_enabled"] is False, "Vault ESO should remain disabled"
 
 
 def test_extract_rendered_manifests_handles_wrapped_value() -> None:
@@ -72,7 +73,9 @@ def test_extract_rendered_manifests_handles_wrapped_value() -> None:
         }
     }
     manifests = _extract_rendered_manifests(outputs)
-    assert manifests == {"platform/traefik.yaml": "apiVersion: v1"}
+    assert (
+        manifests == {"platform/traefik.yaml": "apiVersion: v1"}
+    ), "Wrapped manifests should be unwrapped"
 
 
 def test_render_manifests_runs_tofu(
@@ -83,7 +86,7 @@ def test_render_manifests_runs_tofu(
         cluster_name="preview",
         domain="example.test",
         acme_email="admin@example.test",
-        cloudflare_api_token_secret_name="cloudflare-api-token",
+        cloudflare_api_token_secret_name=_dummy_secret_name(),
         vault_address=None,
         vault_role_id=None,
         vault_secret_id=None,
@@ -114,5 +117,9 @@ def test_render_manifests_runs_tofu(
     )
 
     manifests = render_manifests(inputs, tfvars)
-    assert "platform/traefik.yaml" in manifests
-    assert len(calls) == 2
+    assert "platform/traefik.yaml" in manifests, "Manifest path should be present"
+    assert len(calls) == 2, "Expected init and apply calls"
+
+
+def _dummy_secret_name() -> str:
+    return f"cloudflare-secret-{secrets.token_hex(4)}"
