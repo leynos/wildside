@@ -81,7 +81,7 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     for key, value in inputs.items():
         monkeypatch.setenv(key, value)
 
-    raw_values = {field: None for field in RawInputs.__annotations__}
+    raw_values = dict.fromkeys(RawInputs.__annotations__, None)
     raw_values["node_pools"] = "[]"
     inputs_resolved = _resolve_all_inputs(RawInputs(**raw_values))
     prepare_inputs(inputs_resolved)
@@ -89,15 +89,30 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_init",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_plan",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_apply",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_output",
@@ -114,7 +129,12 @@ def test_action_flow_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
     monkeypatch.setattr(
         "scripts.render_platform_manifests.run_tofu",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.render_platform_manifests.tofu_output",
