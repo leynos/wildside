@@ -87,15 +87,15 @@ def test_provision_cluster_dry_run_skips_apply(
 
     def fake_init(*_args: object, **_kwargs: object) -> TofuResult:
         calls.append("init")
-        return TofuResult(True, "", "", 0)
+        return TofuResult(success=True, stdout="", stderr="", return_code=0)
 
     def fake_plan(*_args: object, **_kwargs: object) -> TofuResult:
         calls.append("plan")
-        return TofuResult(True, "", "", 0)
+        return TofuResult(success=True, stdout="", stderr="", return_code=0)
 
     def fake_apply(*_args: object, **_kwargs: object) -> TofuResult:
         calls.append("apply")
-        return TofuResult(True, "", "", 0)
+        return TofuResult(success=True, stdout="", stderr="", return_code=0)
 
     monkeypatch.setattr("scripts.provision_cluster.tofu_init", fake_init)
     monkeypatch.setattr("scripts.provision_cluster.tofu_plan", fake_plan)
@@ -117,15 +117,30 @@ def test_provision_cluster_apply_success(
 
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_init",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_plan",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_apply",
-        lambda *_args, **_kwargs: TofuResult(True, "", "", 0),
+        lambda *_args, **_kwargs: TofuResult(
+            success=True,
+            stdout="",
+            stderr="",
+            return_code=0,
+        ),
     )
     monkeypatch.setattr(
         "scripts.provision_cluster.tofu_output",
