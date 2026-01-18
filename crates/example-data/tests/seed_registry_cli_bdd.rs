@@ -1,0 +1,247 @@
+//! Behavioural tests for the seed registry CLI.
+//!
+//! These scenarios validate that the CLI updates seed registries safely and
+//! reports failures for invalid inputs.
+
+#![expect(
+    clippy::expect_used,
+    reason = "test code uses expect for clear failure messages"
+)]
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use base_d::{WordDictionary, word, wordlists};
+use example_data::SeedRegistry;
+use example_data::seed_registry_cli::{ParseOutcome, apply_update, parse_args, success_message};
+use rstest::fixture;
+use rstest_bdd::Slot;
+use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+
+const VALID_REGISTRY_JSON: &str = r#"{
+    "version": 1,
+    "interestThemeIds": [
+        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "4fa85f64-5717-4562-b3fc-2c963f66afa7"
+    ],
+    "safetyToggleIds": [
+        "7fa85f64-5717-4562-b3fc-2c963f66afa6"
+    ],
+    "seeds": [
+        {"name": "mossy-owl", "seed": 2026, "userCount": 12}
+    ]
+}"#;
+
+#[derive(Default, ScenarioState)]
+struct World {
+    registry_path: Slot<PathBuf>,
+    command_result: Slot<CommandResult>,
+    seed_value: Slot<u64>,
+}
+
+#[derive(Debug, Clone)]
+struct CommandResult {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
+
+#[fixture]
+fn world() -> World {
+    World::default()
+}
+
+#[given("a seed registry file")]
+fn a_seed_registry_file(world: &World) {
+    let path = write_registry(VALID_REGISTRY_JSON);
+    world.registry_path.set(path);
+}
+
+#[given("a seed registry file with seed named \"{name}\"")]
+fn a_seed_registry_file_with_seed_named(world: &World, name: String) {
+    let json = registry_json_with_seed(&name);
+    let path = write_registry(&json);
+    world.registry_path.set(path);
+}
+
+#[given("an invalid seed registry file")]
+fn an_invalid_seed_registry_file(world: &World) {
+    let path = write_registry("not json");
+    world.registry_path.set(path);
+}
+
+#[when("the seed registry CLI adds a seed with seed {seed:u64}")]
+fn the_seed_registry_cli_adds_a_seed_with_seed(world: &World, seed: u64) {
+    world.seed_value.set(seed);
+    let path = registry_path(world);
+    let result = run_cli(&path, &["--seed", &seed.to_string()]);
+    world.command_result.set(result);
+}
+
+#[when("the seed registry CLI adds a seed named \"{name}\"")]
+fn the_seed_registry_cli_adds_a_seed_named(world: &World, name: String) {
+    let path = registry_path(world);
+    let result = run_cli(&path, &["--name", &name]);
+    world.command_result.set(result);
+}
+
+#[then("the registry contains the generated seed name")]
+fn the_registry_contains_the_generated_seed_name(world: &World) {
+    let path = registry_path(world);
+    let seed = world.seed_value.get().expect("seed should be set");
+    let expected = seed_name_from_value(seed);
+    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+
+    assert!(registry.find_seed(&expected).is_ok());
+}
+
+#[then("the registry contains seed named \"{name}\"")]
+fn the_registry_contains_seed_named(world: &World, name: String) {
+    let path = registry_path(world);
+    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+
+    assert!(registry.find_seed(&name).is_ok());
+}
+
+#[then("the CLI reports success")]
+fn the_cli_reports_success(world: &World) {
+    let result = world.command_result.get().expect("command result set");
+
+    assert!(result.success, "stderr was: {}", result.stderr);
+    assert!(result.stdout.contains("Added seed"));
+}
+
+#[then("the CLI reports a duplicate seed error")]
+fn the_cli_reports_a_duplicate_seed_error(world: &World) {
+    let result = world.command_result.get().expect("command result set");
+
+    assert!(!result.success);
+    assert!(!result.stderr.is_empty(), "stderr was empty");
+}
+
+#[then("the registry remains unchanged")]
+fn the_registry_remains_unchanged(world: &World) {
+    let path = registry_path(world);
+    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+
+    assert_eq!(registry.seeds().len(), 1);
+    assert!(registry.find_seed("mossy-owl").is_ok());
+}
+
+#[then("the CLI reports a registry parse error")]
+fn the_cli_reports_a_registry_parse_error(world: &World) {
+    let result = world.command_result.get().expect("command result set");
+
+    assert!(!result.success);
+    assert!(result.stderr.contains("invalid registry JSON"));
+}
+
+#[scenario(path = "tests/features/seed_registry_cli.feature", index = 0)]
+fn add_seed_with_generated_name(world: World) {
+    let _ = world;
+}
+
+#[scenario(path = "tests/features/seed_registry_cli.feature", index = 1)]
+fn add_seed_with_explicit_name(world: World) {
+    let _ = world;
+}
+
+#[scenario(path = "tests/features/seed_registry_cli.feature", index = 2)]
+fn reject_duplicate_seed_name(world: World) {
+    let _ = world;
+}
+
+#[scenario(path = "tests/features/seed_registry_cli.feature", index = 3)]
+fn reject_invalid_registry_json(world: World) {
+    let _ = world;
+}
+
+fn registry_path(world: &World) -> PathBuf {
+    world
+        .registry_path
+        .get()
+        .expect("registry path should be set")
+        .clone()
+}
+
+fn run_cli(registry_path: &Path, extra_args: &[&str]) -> CommandResult {
+    let mut args = vec!["--registry".to_owned(), registry_path.display().to_string()];
+    args.extend(extra_args.iter().map(std::string::ToString::to_string));
+
+    let parse_result = match parse_args(args.into_iter()) {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            return CommandResult {
+                success: false,
+                stdout: String::new(),
+                stderr: err.to_string(),
+            };
+        }
+    };
+
+    let ParseOutcome::Options(options) = parse_result else {
+        return CommandResult {
+            success: false,
+            stdout: String::new(),
+            stderr: "unexpected help output".to_owned(),
+        };
+    };
+
+    match apply_update(&options) {
+        Ok(update) => CommandResult {
+            success: true,
+            stdout: success_message(&update, options.registry_path()),
+            stderr: String::new(),
+        },
+        Err(err) => CommandResult {
+            success: false,
+            stdout: String::new(),
+            stderr: err.to_string(),
+        },
+    }
+}
+
+fn seed_name_from_value(seed: u64) -> String {
+    let dictionary = eff_long_dictionary();
+    let seed_str = seed.to_string();
+    word::encode(seed_str.as_bytes(), &dictionary)
+}
+
+fn eff_long_dictionary() -> WordDictionary {
+    WordDictionary::builder()
+        .words_from_str(wordlists::EFF_LONG)
+        .delimiter("-")
+        .case_sensitive(false)
+        .build()
+        .expect("EFF long word list should be valid")
+}
+
+fn write_registry(contents: &str) -> PathBuf {
+    let path = temp_registry_path();
+    fs::write(&path, contents).expect("write registry file");
+    path
+}
+
+fn registry_json_with_seed(name: &str) -> String {
+    format!(
+        r#"{{
+    "version": 1,
+    "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+    "safetyToggleIds": ["7fa85f64-5717-4562-b3fc-2c963f66afa6"],
+    "seeds": [{{"name": "{name}", "seed": 2026, "userCount": 12}}]
+}}"#
+    )
+}
+
+fn temp_registry_path() -> PathBuf {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir()
+        .join("example-data-cli-tests")
+        .join(format!("seed-registry-{suffix}"));
+    fs::create_dir_all(&dir).expect("create temp dir");
+    dir.join("seeds.json")
+}

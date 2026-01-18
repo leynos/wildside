@@ -93,18 +93,19 @@ Example structure:
       ]
     }
 
-### Named seeds and lexis
+### Named seeds and base-d
 
-Each seed entry has a memorable name. The CLI tool uses the `lexis` crate to
-suggest names when creating a new seed, keeping the identifiers stable and
-human-friendly.
+Each seed entry has a memorable name. The CLI tool uses `base-d` with the
+`eff_long` word list to generate hyphen-joined passphrase names when creating
+new seeds, keeping identifiers stable and human-friendly while avoiding
+licence concerns.
 
 ### Seed creation CLI
 
 Provide a small CLI tool (for example an `example-data-seed` binary) that:
 
 - Reads the registry JSON file.
-- Generates a new seed entry with a `lexis`-generated name.
+- Generates a new seed entry with a `base-d` `eff_long`-generated name.
 - Accepts optional overrides for `seed`, `userCount`, or `name`.
 - Writes the updated registry back to disk.
 
@@ -202,14 +203,14 @@ environments.
 
 ### CLI tests
 
-- Adding a seed updates the registry file with a unique `lexis` name.
+- Adding a seed updates the registry file with a unique `base-d` name.
 - Existing seeds remain stable after update.
 
 ## Dependencies
 
 - `fake = "2.10.0"` for name generation.
 - `rand = "0.8.5"` for deterministic RNG.
-- `lexis = "<latest stable>"` for memorable seed naming.
+- `base-d = "3.0.30"` for memorable seed naming with the `eff_long` list.
 - `ortho-config = "<latest stable>"` for hierarchical configuration.
 - Existing workspace `uuid` and `chrono` versions.
 

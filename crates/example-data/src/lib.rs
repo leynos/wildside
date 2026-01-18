@@ -36,6 +36,7 @@ mod error;
 mod generator;
 mod registry;
 mod seed;
+pub mod seed_registry_cli;
 mod validation;
 
 pub use error::{GenerationError, RegistryError};

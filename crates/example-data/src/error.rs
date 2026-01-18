@@ -30,6 +30,22 @@ pub enum RegistryError {
         message: String,
     },
 
+    /// The registry could not be serialised to JSON.
+    #[error("failed to serialise registry JSON: {message}")]
+    SerialisationError {
+        /// Description of the serialisation error.
+        message: String,
+    },
+
+    /// The registry file could not be written.
+    #[error("failed to write registry file at '{path}': {message}")]
+    WriteError {
+        /// Path to the registry file.
+        path: PathBuf,
+        /// Description of the write error.
+        message: String,
+    },
+
     /// The registry version is not supported.
     #[error("unsupported registry version: expected {expected}, found {actual}")]
     UnsupportedVersion {
@@ -71,6 +87,13 @@ pub enum RegistryError {
         /// The seed name that was not found.
         name: String,
     },
+
+    /// The registry already contains a seed with the requested name.
+    #[error("seed '{name}' already exists in registry")]
+    DuplicateSeedName {
+        /// The seed name that already exists.
+        name: String,
+    },
 }
 
 /// Errors that can occur during user generation.
@@ -105,6 +128,17 @@ mod tests {
         RegistryError::ParseError { message: "unexpected token".to_owned() },
         "invalid registry JSON: unexpected token"
     )]
+    #[case::serialisation_error(
+        RegistryError::SerialisationError { message: "boom".to_owned() },
+        "failed to serialise registry JSON: boom"
+    )]
+    #[case::write_error(
+        RegistryError::WriteError {
+            path: PathBuf::from("/tmp/seeds.json"),
+            message: "permission denied".to_owned(),
+        },
+        "failed to write registry file at '/tmp/seeds.json': permission denied"
+    )]
     #[case::unsupported_version(
         RegistryError::UnsupportedVersion { expected: 1, actual: 2 },
         "unsupported registry version: expected 1, found 2"
@@ -125,6 +159,10 @@ mod tests {
     #[case::seed_not_found(
         RegistryError::SeedNotFound { name: "mossy-owl".to_owned() },
         "seed 'mossy-owl' not found in registry"
+    )]
+    #[case::duplicate_seed(
+        RegistryError::DuplicateSeedName { name: "mossy-owl".to_owned() },
+        "seed 'mossy-owl' already exists in registry"
     )]
     fn registry_error_formats_correctly(#[case] err: RegistryError, #[case] expected: &str) {
         assert_eq!(err.to_string(), expected);

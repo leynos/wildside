@@ -323,6 +323,10 @@ Module boundaries are enforced by a repo-local lint that runs during
   validation. Repository-level tests with embedded PostgreSQL validate SQL-level
   revision semantics. This layered approach ensures clients can safely implement
   offline-first retry patterns while avoiding redundant test coverage.
+- **2026-01-18:** Use `base-d` with the `eff_long` word list to generate
+  hyphen-joined seed names for the seed registry CLI, replacing `lexis` to
+  avoid licence concerns. The CLI writes registry updates atomically via a
+  temporary file and rename to prevent partial writes.
 
 ### Web API and WebSocket Layer (Actix Web)
 
