@@ -88,10 +88,12 @@ seeding behaviour.
 
 ## Surprises & Discoveries
 
-- Observation: Backend initially used rstest-bdd v0.2.0, not v0.3.2 as stated
+- Observation: Backend initially used rstest-bdd v0.2.0, not v0.3.2 as
+  stated
   Evidence: Cargo.toml showed `rstest_bdd_macros = "0.2.0"`
-  Impact: Initial implementation used v0.2.0 patterns; later upgraded to v0.3.2
-  with `Slot<T>`, `ScenarioState` derive, and explicit scenario name bindings.
+  Impact: Initial implementation used v0.2.0 patterns; later upgraded to
+  v0.3.2 with `Slot<T>`, `ScenarioState` derive, and explicit scenario name
+  bindings.
 
 - Observation: Type inference issues with `handle_cluster_setup_failure`
   in BDD tests
