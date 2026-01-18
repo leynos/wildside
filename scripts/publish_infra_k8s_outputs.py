@@ -5,10 +5,12 @@
 # ///
 """Publish outputs for the wildside-infra-k8s GitHub Action.
 
-This script:
-- reads computed values from environment variables;
-- writes outputs to $GITHUB_OUTPUT; and
-- performs a final secret masking pass.
+This script resolves action outputs from environment variables, writes them to
+``GITHUB_OUTPUT``, and performs a final secret masking pass.
+
+Examples
+--------
+>>> python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
 """
 
 from __future__ import annotations
@@ -33,7 +35,21 @@ GITHUB_OUTPUT_PARAM = Parameter()
 
 @dataclass(frozen=True, slots=True)
 class OutputValues:
-    """Values to publish as action outputs."""
+    """Values to publish as action outputs.
+
+    Attributes
+    ----------
+    cluster_name : str | None
+        Cluster name output value.
+    cluster_id : str | None
+        Cluster ID output value.
+    cluster_endpoint : str | None
+        Cluster API endpoint output value.
+    gitops_commit_sha : str | None
+        GitOps commit SHA output value.
+    rendered_manifest_count : str | None
+        Count of rendered manifests.
+    """
 
     cluster_name: str | None
     cluster_id: str | None
@@ -44,7 +60,21 @@ class OutputValues:
 
 @dataclass(frozen=True, slots=True)
 class RawOutputValues:
-    """Raw output values from CLI or defaults."""
+    """Raw output values from CLI or defaults.
+
+    Attributes
+    ----------
+    cluster_name : str | None
+        Cluster name override for ``CLUSTER_NAME``.
+    cluster_id : str | None
+        Cluster ID override for ``CLUSTER_ID``.
+    cluster_endpoint : str | None
+        Cluster endpoint override for ``CLUSTER_ENDPOINT``.
+    gitops_commit_sha : str | None
+        GitOps commit SHA override for ``GITOPS_COMMIT_SHA``.
+    rendered_manifest_count : str | None
+        Rendered manifest count override for ``RENDERED_MANIFEST_COUNT``.
+    """
 
     cluster_name: str | None = None
     cluster_id: str | None = None
@@ -54,7 +84,22 @@ class RawOutputValues:
 
 
 def resolve_output_values(raw: RawOutputValues) -> OutputValues:
-    """Resolve output values from environment."""
+    """Resolve output values from environment.
+
+    Parameters
+    ----------
+    raw : RawOutputValues
+        Raw output values from CLI or defaults.
+
+    Returns
+    -------
+    OutputValues
+        Normalized output values.
+
+    Examples
+    --------
+    >>> resolve_output_values(RawOutputValues())
+    """
     cluster_name = resolve_input(
         raw.cluster_name, InputResolution(env_key="CLUSTER_NAME")
     )
@@ -82,23 +127,35 @@ def resolve_output_values(raw: RawOutputValues) -> OutputValues:
 
 
 def publish_outputs(values: OutputValues, github_output: Path) -> None:
-    """Write outputs to GITHUB_OUTPUT file."""
-    outputs: dict[str, str] = {}
+    """Write outputs to GITHUB_OUTPUT file.
 
-    if values.cluster_name:
-        outputs["cluster_name"] = values.cluster_name
+    Parameters
+    ----------
+    values : OutputValues
+        Output values to publish.
+    github_output : Path
+        Path to the GITHUB_OUTPUT file.
 
-    if values.cluster_id:
-        outputs["cluster_id"] = values.cluster_id
+    Returns
+    -------
+    None
+        Values are written to ``GITHUB_OUTPUT``.
 
-    if values.cluster_endpoint:
-        outputs["cluster_endpoint"] = values.cluster_endpoint
-
-    if values.gitops_commit_sha:
-        outputs["gitops_commit_sha"] = values.gitops_commit_sha
-
-    if values.rendered_manifest_count:
-        outputs["rendered_manifest_count"] = values.rendered_manifest_count
+    Examples
+    --------
+    >>> publish_outputs(OutputValues(None, None, None, None, None), Path(\"/tmp/out\"))
+    """
+    outputs = {
+        key: value
+        for key, value in {
+            "cluster_name": values.cluster_name,
+            "cluster_id": values.cluster_id,
+            "cluster_endpoint": values.cluster_endpoint,
+            "gitops_commit_sha": values.gitops_commit_sha,
+            "rendered_manifest_count": values.rendered_manifest_count,
+        }.items()
+        if value
+    }
 
     if outputs:
         append_github_output(github_output, outputs)
@@ -107,21 +164,21 @@ def publish_outputs(values: OutputValues, github_output: Path) -> None:
             print(f"  {key}: {value}")
 
 
+SENSITIVE_KEYS: tuple[str, ...] = (
+    "GITOPS_TOKEN",
+    "VAULT_ROLE_ID",
+    "VAULT_SECRET_ID",
+    "DIGITALOCEAN_TOKEN",
+    "SPACES_ACCESS_KEY",
+    "SPACES_SECRET_KEY",
+    "KUBECONFIG_RAW",
+    "VAULT_CA_CERTIFICATE",
+)
+
+
 def final_secret_masking() -> None:
     """Perform final pass to ensure sensitive values are masked."""
-    # List of environment variables that should be masked if present
-    sensitive_keys = [
-        "GITOPS_TOKEN",
-        "VAULT_ROLE_ID",
-        "VAULT_SECRET_ID",
-        "DIGITALOCEAN_TOKEN",
-        "SPACES_ACCESS_KEY",
-        "SPACES_SECRET_KEY",
-        "KUBECONFIG_RAW",
-        "VAULT_CA_CERTIFICATE",
-    ]
-
-    for key in sensitive_keys:
+    for key in SENSITIVE_KEYS:
         value = os.environ.get(key)
         if value:
             mask_secret(value)
@@ -138,8 +195,29 @@ def main(
 ) -> int:
     """Publish outputs for the wildside-infra-k8s action.
 
-    This command reads computed values from environment variables and
-    writes them to GITHUB_OUTPUT for use by subsequent workflow steps.
+    Parameters
+    ----------
+    cluster_name : str | None
+        Cluster name override for ``CLUSTER_NAME``.
+    cluster_id : str | None
+        Cluster ID override for ``CLUSTER_ID``.
+    cluster_endpoint : str | None
+        Cluster endpoint override for ``CLUSTER_ENDPOINT``.
+    gitops_commit_sha : str | None
+        GitOps commit SHA override for ``GITOPS_COMMIT_SHA``.
+    rendered_manifest_count : str | None
+        Rendered manifest count override for ``RENDERED_MANIFEST_COUNT``.
+    github_output : Path | None
+        Output file override for ``GITHUB_OUTPUT``.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success).
+
+    Examples
+    --------
+    >>> python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
     """
     # Resolve GITHUB_OUTPUT path
     github_output_raw = resolve_input(

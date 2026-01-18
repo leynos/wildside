@@ -22,26 +22,28 @@ from scripts._infra_k8s import (
 
 
 def test_parse_bool_defaults() -> None:
-    assert parse_bool(None) is True
-    assert parse_bool(None, default=False) is False
+    assert parse_bool(None) is True, "Default should be True when value is None"
+    assert (
+        parse_bool(None, default=False) is False
+    ), "Default override should be honored"
 
 
 def test_parse_bool_truthy_and_falsey() -> None:
-    assert parse_bool("true") is True
-    assert parse_bool("YES") is True
-    assert parse_bool("1") is True
-    assert parse_bool("false") is False
-    assert parse_bool("0") is False
+    assert parse_bool("true") is True, "true should parse to True"
+    assert parse_bool("YES") is True, "YES should parse to True"
+    assert parse_bool("1") is True, "1 should parse to True"
+    assert parse_bool("false") is False, "false should parse to False"
+    assert parse_bool("0") is False, "0 should parse to False"
 
 
 def test_parse_node_pools_valid() -> None:
     pools = parse_node_pools('[{"name": "default"}]')
-    assert isinstance(pools, list)
-    assert pools[0]["name"] == "default"
+    assert isinstance(pools, list), "Expected list of node pools"
+    assert pools[0]["name"] == "default", "Expected default pool name"
 
 
 def test_parse_node_pools_rejects_non_list() -> None:
-    with pytest.raises(ValueError, match="node_pools must be a JSON array"):
+    with pytest.raises(TypeError, match="node_pools must be a JSON array"):
         parse_node_pools('{"name": "default"}')
 
 
@@ -49,41 +51,47 @@ def test_append_github_env_supports_multiline(tmp_path: Path) -> None:
     env_file = tmp_path / "env"
     append_github_env(env_file, {"KUBECONFIG_RAW": "line1\nline2"})
     content = env_file.read_text(encoding="utf-8")
-    assert content.startswith("KUBECONFIG_RAW<<")
-    assert "line1\nline2" in content
+    assert content.startswith("KUBECONFIG_RAW<<"), "Expected heredoc header"
+    assert "line1\nline2" in content, "Expected multiline content"
 
 
 def test_append_github_env_single_line(tmp_path: Path) -> None:
     env_file = tmp_path / "env"
     append_github_env(env_file, {"CLUSTER_NAME": "preview-1"})
-    assert env_file.read_text(encoding="utf-8") == "CLUSTER_NAME=preview-1\n"
+    assert (
+        env_file.read_text(encoding="utf-8") == "CLUSTER_NAME=preview-1\n"
+    ), "Single-line env should be written directly"
 
 
 def test_append_github_output_supports_multiline(tmp_path: Path) -> None:
     output_file = tmp_path / "out"
     append_github_output(output_file, {"kubeconfig": "line1\nline2"})
     content = output_file.read_text(encoding="utf-8")
-    assert content.startswith("kubeconfig<<")
-    assert "line1\nline2" in content
+    assert content.startswith("kubeconfig<<"), "Expected heredoc header"
+    assert "line1\nline2" in content, "Expected multiline content"
 
 
 def test_write_tfvars_and_manifests(tmp_path: Path) -> None:
     tfvars_path = tmp_path / "vars" / "vars.tfvars.json"
     write_tfvars(tfvars_path, {"cluster_name": "preview"})
     data = json.loads(tfvars_path.read_text(encoding="utf-8"))
-    assert data == {"cluster_name": "preview"}
+    assert data == {"cluster_name": "preview"}, "tfvars should round trip"
 
     count = write_manifests(
         tmp_path / "out",
         {"platform/traefik.yaml": "apiVersion: v1"},
     )
-    assert count == 1
+    assert count == 1, "Expected one manifest to be written"
     manifest_path = tmp_path / "out" / "platform" / "traefik.yaml"
-    assert manifest_path.read_text(encoding="utf-8") == "apiVersion: v1"
+    assert (
+        manifest_path.read_text(encoding="utf-8") == "apiVersion: v1"
+    ), "Manifest content should match"
 
 
 def test_validate_cluster_name_normalises() -> None:
-    assert validate_cluster_name(" Preview-1 ") == "preview-1"
+    assert (
+        validate_cluster_name(" Preview-1 ") == "preview-1"
+    ), "Cluster name should be normalized"
 
 
 @pytest.mark.parametrize("value", ["", "Invalid_Name", "-bad", "bad-"])
@@ -110,9 +118,9 @@ def test_run_tofu_invokes_subprocess(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr("scripts._infra_k8s.subprocess.run", fake_run)
 
     result = run_tofu(["plan", "-input=false"], tmp_path)
-    assert isinstance(result, TofuResult)
-    assert captured["cmd"][0] == "tofu"
-    assert captured["cwd"] == tmp_path
+    assert isinstance(result, TofuResult), "Expected TofuResult return"
+    assert captured["cmd"][0] == "tofu", "Expected tofu command prefix"
+    assert captured["cwd"] == tmp_path, "Expected cwd to be passed"
 
 
 def test_run_tofu_rejects_invalid_args(tmp_path: Path) -> None:

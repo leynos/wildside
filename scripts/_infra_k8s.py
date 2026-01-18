@@ -43,7 +43,7 @@ def mask_secret(value: str, stream: cabc.Callable[[str], None] = print) -> None:
         stream(f"::add-mask::{value}")
 
 
-def parse_bool(value: str | None, default: bool = True) -> bool:
+def parse_bool(value: str | None, *, default: bool = True) -> bool:
     """Parse a boolean string value."""
     if value is None:
         return default
@@ -56,13 +56,14 @@ def parse_node_pools(value: str | None) -> list[dict[str, object]] | None:
         return None
     try:
         pools = json.loads(value)
-        if not isinstance(pools, list):
-            msg = "node_pools must be a JSON array"
-            raise ValueError(msg)
-        return pools
     except json.JSONDecodeError as exc:
         msg = f"Invalid JSON in node_pools: {exc}"
         raise ValueError(msg) from exc
+    else:
+        if not isinstance(pools, list):
+            msg = "node_pools must be a JSON array"
+            raise TypeError(msg)
+        return pools
 
 
 def _choose_multiline_delimiter(value: str, base: str = "EOF") -> str:
@@ -121,6 +122,7 @@ def run_tofu(
     args: list[str],
     cwd: Path,
     env: cabc.Mapping[str, str] | None = None,
+    *,
     capture_output: bool = True,
 ) -> TofuResult:
     """Execute an OpenTofu command and return the result.
@@ -222,6 +224,7 @@ def tofu_plan(cwd: Path, var_file: Path | None = None) -> TofuResult:
 def tofu_apply(
     cwd: Path,
     var_file: Path | None = None,
+    *,
     auto_approve: bool = True,
 ) -> TofuResult:
     """Run OpenTofu apply.

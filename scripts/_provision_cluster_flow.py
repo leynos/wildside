@@ -119,8 +119,13 @@ def _extract_output_value(outputs: dict[str, object], key: str) -> str | None:
     if key not in outputs:
         return None
     output = outputs[key]
+    if output is None:
+        return None
     if isinstance(output, dict) and "value" in output:
-        return str(output["value"])
+        value = output["value"]
+        if value is None:
+            return None
+        return str(value)
     return str(output)
 
 

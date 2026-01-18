@@ -20,6 +20,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
 
 from cyclopts import App, Parameter
 from scripts._input_resolution import InputResolution, resolve_input
@@ -151,7 +153,8 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
     return result.stdout.strip()
 
 
-def _git_auth_env(token: str, base_dir: Path) -> dict[str, str]:
+@contextmanager
+def _git_auth_env(token: str, base_dir: Path) -> Iterator[dict[str, str]]:
     """Build environment for Git askpass authentication."""
     askpass_path = base_dir / "git-askpass.sh"
     askpass_path.write_text(
@@ -159,12 +162,17 @@ def _git_auth_env(token: str, base_dir: Path) -> dict[str, str]:
         encoding="utf-8",
     )
     askpass_path.chmod(0o700)
-    return {
+    env = {
         **os.environ,
         "GIT_ASKPASS": str(askpass_path),
         "GIT_TERMINAL_PROMPT": "0",
         "GITOPS_TOKEN": token,
     }
+    try:
+        yield env
+    finally:
+        if askpass_path.exists():
+            askpass_path.unlink()
 
 
 def clone_repository(
@@ -232,8 +240,15 @@ def sync_manifests(
 def _reset_cluster_dir(cluster_root: Path, cluster_dir: Path) -> None:
     """Ensure the cluster directory is empty and safe to reuse."""
     cluster_root_resolved = cluster_root.resolve()
+    clone_dir_resolved = cluster_root.parent.resolve()
     cluster_dir_resolved = cluster_dir.resolve()
 
+    if cluster_root.is_symlink():
+        msg = f"Refusing to reset symlinked cluster root {cluster_root}"
+        raise RuntimeError(msg)
+    if not cluster_root_resolved.is_relative_to(clone_dir_resolved):
+        msg = f"Refusing to reset cluster root outside {clone_dir_resolved}"
+        raise RuntimeError(msg)
     if not cluster_dir_resolved.is_relative_to(cluster_root_resolved):
         msg = f"Refusing to reset cluster dir outside {cluster_root_resolved}"
         raise RuntimeError(msg)
@@ -335,19 +350,18 @@ def main(
     clone_dir.mkdir(parents=True)
 
     try:
-        auth_env = _git_auth_env(inputs.gitops_token, inputs.runner_temp)
+        with _git_auth_env(inputs.gitops_token, inputs.runner_temp) as auth_env:
+            # Clone the repository
+            clone_repository(inputs, clone_dir, auth_env)
 
-        # Clone the repository
-        clone_repository(inputs, clone_dir, auth_env)
+            # Sync manifests
+            count = sync_manifests(inputs, clone_dir)
+            print(f"Synced {count} manifest files")
 
-        # Sync manifests
-        count = sync_manifests(inputs, clone_dir)
-        print(f"Synced {count} manifest files")
-
-        commit_sha = None
-        if count > 0:
-            # Commit and push
-            commit_sha = commit_and_push(inputs, clone_dir, auth_env)
+            commit_sha = None
+            if count > 0:
+                # Commit and push
+                commit_sha = commit_and_push(inputs, clone_dir, auth_env)
     except subprocess.CalledProcessError as exc:
         print(f"error: git command failed: {exc}", file=sys.stderr)
         return 1

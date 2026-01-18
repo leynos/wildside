@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import json
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from scripts._input_resolution import InputResolution, resolve_input
-from scripts._infra_k8s import SpacesBackendConfig, parse_bool
-
-logger = logging.getLogger(__name__)
+from scripts._infra_k8s import SpacesBackendConfig, parse_bool, parse_node_pools
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,12 +232,9 @@ def build_tfvars(inputs: ProvisionInputs) -> dict[str, object]:
     if inputs.kubernetes_version:
         variables["kubernetes_version"] = inputs.kubernetes_version
 
-    if inputs.node_pools:
-        try:
-            node_pools = json.loads(inputs.node_pools)
-        except json.JSONDecodeError:
-            logger.warning("Invalid node_pools JSON ignored: %s", inputs.node_pools)
-        else:
+    if inputs.node_pools is not None:
+        node_pools = parse_node_pools(inputs.node_pools)
+        if node_pools is not None:
             variables["node_pools"] = node_pools
 
     return variables
