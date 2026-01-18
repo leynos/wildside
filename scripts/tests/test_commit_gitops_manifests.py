@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts.commit_gitops_manifests import (  # noqa: E402
+from scripts.commit_gitops_manifests import (
     GitOpsInputs,
     RawGitOpsInputs,
     _git_auth_env,
@@ -148,7 +143,9 @@ def test_commit_and_push_dry_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 
     calls: list[list[str]] = []
 
-    def fake_run_git(args: list[str], _cwd: Path, env: dict[str, str] | None = None) -> str:
+    def fake_run_git(
+        args: list[str], _cwd: Path, _env: dict[str, str] | None = None
+    ) -> str:
         calls.append(args)
         if args[:2] == ["rev-parse", "HEAD"]:
             return "abc123"

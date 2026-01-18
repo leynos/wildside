@@ -248,7 +248,7 @@ def tofu_apply(
     return run_tofu(args, cwd)
 
 
-def tofu_output(cwd: Path, name: str | None = None) -> dict[str, object]:
+def tofu_output(cwd: Path, name: str | None = None) -> object:
     """Retrieve OpenTofu outputs as JSON.
 
     Parameters
@@ -260,8 +260,8 @@ def tofu_output(cwd: Path, name: str | None = None) -> dict[str, object]:
 
     Returns
     -------
-    dict[str, object]
-        Parsed JSON output. If name is specified, returns the value directly.
+    object
+        Parsed JSON output. If name is specified, returns the raw value.
     """
     args = ["output", "-json"]
     if name:
@@ -305,8 +305,16 @@ def write_manifests(output_dir: Path, manifests: dict[str, str]) -> int:
         Number of manifests written.
     """
     count = 0
+    output_root = output_dir.resolve()
     for rel_path, content in manifests.items():
-        dest = output_dir / rel_path
+        rel = Path(rel_path)
+        if rel.is_absolute() or ".." in rel.parts:
+            msg = f"Refusing to write manifest outside {output_dir}"
+            raise ValueError(msg)
+        dest = output_dir / rel
+        if not dest.resolve().is_relative_to(output_root):
+            msg = f"Refusing to write manifest outside {output_dir}"
+            raise ValueError(msg)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content, encoding="utf-8")
         count += 1

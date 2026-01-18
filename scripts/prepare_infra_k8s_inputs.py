@@ -33,6 +33,33 @@ type Mask = Callable[[str], None]
 
 app = App(help="Prepare wildside-infra-k8s action inputs.")
 
+CLUSTER_NAME_PARAM = Parameter()
+ENVIRONMENT_PARAM = Parameter()
+REGION_PARAM = Parameter()
+KUBERNETES_VERSION_PARAM = Parameter()
+NODE_POOLS_PARAM = Parameter()
+DOMAIN_PARAM = Parameter()
+ACME_EMAIL_PARAM = Parameter()
+GITOPS_REPOSITORY_PARAM = Parameter()
+GITOPS_BRANCH_PARAM = Parameter()
+GITOPS_TOKEN_PARAM = Parameter()
+VAULT_ADDRESS_PARAM = Parameter()
+VAULT_ROLE_ID_PARAM = Parameter()
+VAULT_SECRET_ID_PARAM = Parameter()
+VAULT_CA_CERTIFICATE_PARAM = Parameter()
+DIGITALOCEAN_TOKEN_PARAM = Parameter()
+SPACES_ACCESS_KEY_PARAM = Parameter()
+SPACES_SECRET_KEY_PARAM = Parameter()
+CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM = Parameter()
+ENABLE_TRAEFIK_PARAM = Parameter()
+ENABLE_CERT_MANAGER_PARAM = Parameter()
+ENABLE_EXTERNAL_DNS_PARAM = Parameter()
+ENABLE_VAULT_ESO_PARAM = Parameter()
+ENABLE_CNPG_PARAM = Parameter()
+DRY_RUN_PARAM = Parameter()
+RUNNER_TEMP_PARAM = Parameter()
+GITHUB_ENV_PARAM = Parameter()
+
 
 @dataclass(frozen=True, slots=True)
 class RawInputs:
@@ -397,32 +424,32 @@ def prepare_inputs(inputs: ResolvedInputs, mask: Mask = print) -> None:
 
 @app.command()
 def main(
-    cluster_name: str | None = Parameter(),
-    environment: str | None = Parameter(),
-    region: str | None = Parameter(),
-    kubernetes_version: str | None = Parameter(),
-    node_pools: str | None = Parameter(),
-    domain: str | None = Parameter(),
-    acme_email: str | None = Parameter(),
-    gitops_repository: str | None = Parameter(),
-    gitops_branch: str | None = Parameter(),
-    gitops_token: str | None = Parameter(),
-    vault_address: str | None = Parameter(),
-    vault_role_id: str | None = Parameter(),
-    vault_secret_id: str | None = Parameter(),
-    vault_ca_certificate: str | None = Parameter(),
-    digitalocean_token: str | None = Parameter(),
-    spaces_access_key: str | None = Parameter(),
-    spaces_secret_key: str | None = Parameter(),
-    cloudflare_api_token_secret_name: str | None = Parameter(),
-    enable_traefik: str | None = Parameter(),
-    enable_cert_manager: str | None = Parameter(),
-    enable_external_dns: str | None = Parameter(),
-    enable_vault_eso: str | None = Parameter(),
-    enable_cnpg: str | None = Parameter(),
-    dry_run: str | None = Parameter(),
-    runner_temp: Path | None = Parameter(),
-    github_env: Path | None = Parameter(),
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    environment: str | None = ENVIRONMENT_PARAM,
+    region: str | None = REGION_PARAM,
+    kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
+    node_pools: str | None = NODE_POOLS_PARAM,
+    domain: str | None = DOMAIN_PARAM,
+    acme_email: str | None = ACME_EMAIL_PARAM,
+    gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
+    gitops_branch: str | None = GITOPS_BRANCH_PARAM,
+    gitops_token: str | None = GITOPS_TOKEN_PARAM,
+    vault_address: str | None = VAULT_ADDRESS_PARAM,
+    vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
+    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM,
+    vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
+    digitalocean_token: str | None = DIGITALOCEAN_TOKEN_PARAM,
+    spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
+    spaces_secret_key: str | None = SPACES_SECRET_KEY_PARAM,
+    cloudflare_api_token_secret_name: str | None = CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM,
+    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM,
+    enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
+    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM,
+    enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
+    enable_cnpg: str | None = ENABLE_CNPG_PARAM,
+    dry_run: str | None = DRY_RUN_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM,
+    github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> None:
     """Prepare inputs for the wildside-infra-k8s action.
 

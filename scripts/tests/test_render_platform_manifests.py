@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts._infra_k8s import TofuResult  # noqa: E402
-from scripts.render_platform_manifests import (  # noqa: E402
+from scripts._infra_k8s import TofuResult
+from scripts.render_platform_manifests import (
+    RawRenderInputs,
     RenderInputs,
     _extract_rendered_manifests,
     build_render_tfvars,
@@ -30,7 +26,7 @@ def test_resolve_render_inputs_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setenv("RENDER_OUTPUT_DIR", str(tmp_path / "render"))
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
 
-    inputs = resolve_render_inputs()
+    inputs = resolve_render_inputs(RawRenderInputs())
     assert inputs.cluster_name == "preview"
     assert inputs.enable_traefik is False
 
@@ -40,7 +36,7 @@ def test_resolve_render_inputs_cli_override(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("DOMAIN", "example.test")
     monkeypatch.setenv("ACME_EMAIL", "admin@example.test")
 
-    inputs = resolve_render_inputs(cluster_name="cli")
+    inputs = resolve_render_inputs(RawRenderInputs(cluster_name="cli"))
     assert inputs.cluster_name == "cli"
 
 
@@ -107,7 +103,7 @@ def test_render_manifests_runs_tofu(
 
     def fake_run_tofu(args: list[str], _cwd: Path) -> TofuResult:
         calls.append(args)
-        return TofuResult(True, "", "", 0)
+        return TofuResult(success=True, stdout="", stderr="", return_code=0)
 
     monkeypatch.setattr("scripts.render_platform_manifests.run_tofu", fake_run_tofu)
     monkeypatch.setattr(

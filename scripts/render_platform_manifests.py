@@ -34,6 +34,23 @@ PLATFORM_RENDER_PATH = REPO_ROOT / "infra" / "modules" / "platform_render"
 
 app = App(help="Render platform manifests via OpenTofu.")
 
+CLUSTER_NAME_PARAM = Parameter()
+DOMAIN_PARAM = Parameter()
+ACME_EMAIL_PARAM = Parameter()
+CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM = Parameter()
+VAULT_ADDRESS_PARAM = Parameter()
+VAULT_ROLE_ID_PARAM = Parameter()
+VAULT_SECRET_ID_PARAM = Parameter()
+VAULT_CA_CERTIFICATE_PARAM = Parameter()
+ENABLE_TRAEFIK_PARAM = Parameter()
+ENABLE_CERT_MANAGER_PARAM = Parameter()
+ENABLE_EXTERNAL_DNS_PARAM = Parameter()
+ENABLE_VAULT_ESO_PARAM = Parameter()
+ENABLE_CNPG_PARAM = Parameter()
+RUNNER_TEMP_PARAM = Parameter()
+OUTPUT_DIR_PARAM = Parameter()
+GITHUB_ENV_PARAM = Parameter()
+
 
 def _parse_bool(value: str | None, *, default: bool = True) -> bool:
     return parse_bool(value, default=default)
@@ -68,24 +85,41 @@ class RenderInputs:
     github_env: Path
 
 
-def _resolve_core_config(
-    cluster_name: str | None,
-    domain: str | None,
-    acme_email: str | None,
-    cloudflare_api_token_secret_name: str | None,
-) -> tuple[str, str, str, str]:
+@dataclass(frozen=True, slots=True)
+class RawRenderInputs:
+    """Raw render inputs from CLI or defaults."""
+
+    cluster_name: str | None = None
+    domain: str | None = None
+    acme_email: str | None = None
+    cloudflare_api_token_secret_name: str | None = None
+    vault_address: str | None = None
+    vault_role_id: str | None = None
+    vault_secret_id: str | None = None
+    vault_ca_certificate: str | None = None
+    enable_traefik: str | None = None
+    enable_cert_manager: str | None = None
+    enable_external_dns: str | None = None
+    enable_vault_eso: str | None = None
+    enable_cnpg: str | None = None
+    runner_temp: Path | None = None
+    output_dir: Path | None = None
+    github_env: Path | None = None
+
+
+def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
     """Resolve core platform configuration inputs."""
     cluster_name_raw = resolve_input(
-        cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
+        raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
     domain_raw = resolve_input(
-        domain, InputResolution(env_key="DOMAIN", required=True)
+        raw.domain, InputResolution(env_key="DOMAIN", required=True)
     )
     acme_email_raw = resolve_input(
-        acme_email, InputResolution(env_key="ACME_EMAIL", required=True)
+        raw.acme_email, InputResolution(env_key="ACME_EMAIL", required=True)
     )
     cloudflare_secret_raw = resolve_input(
-        cloudflare_api_token_secret_name,
+        raw.cloudflare_api_token_secret_name,
         InputResolution(
             env_key="CLOUDFLARE_API_TOKEN_SECRET_NAME",
             default="cloudflare-api-token",
@@ -95,68 +129,56 @@ def _resolve_core_config(
 
 
 def _resolve_vault_config(
-    vault_address: str | None,
-    vault_role_id: str | None,
-    vault_secret_id: str | None,
-    vault_ca_certificate: str | None,
+    raw: RawRenderInputs,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Resolve vault-related inputs."""
     vault_address_raw = resolve_input(
-        vault_address, InputResolution(env_key="VAULT_ADDRESS")
+        raw.vault_address, InputResolution(env_key="VAULT_ADDRESS")
     )
     vault_role_id_raw = resolve_input(
-        vault_role_id, InputResolution(env_key="VAULT_ROLE_ID")
+        raw.vault_role_id, InputResolution(env_key="VAULT_ROLE_ID")
     )
     vault_secret_id_raw = resolve_input(
-        vault_secret_id, InputResolution(env_key="VAULT_SECRET_ID")
+        raw.vault_secret_id, InputResolution(env_key="VAULT_SECRET_ID")
     )
     vault_ca_cert_raw = resolve_input(
-        vault_ca_certificate, InputResolution(env_key="VAULT_CA_CERTIFICATE")
+        raw.vault_ca_certificate, InputResolution(env_key="VAULT_CA_CERTIFICATE")
     )
     return vault_address_raw, vault_role_id_raw, vault_secret_id_raw, vault_ca_cert_raw
 
 
-def _resolve_feature_flags(
-    enable_traefik: str | None,
-    enable_cert_manager: str | None,
-    enable_external_dns: str | None,
-    enable_vault_eso: str | None,
-    enable_cnpg: str | None,
-) -> tuple[str, str, str, str, str]:
+def _resolve_feature_flags(raw: RawRenderInputs) -> tuple[str, str, str, str, str]:
     """Resolve feature flag inputs."""
     traefik_raw = resolve_input(
-        enable_traefik, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
+        raw.enable_traefik, InputResolution(env_key="ENABLE_TRAEFIK", default="true")
     )
     cert_manager_raw = resolve_input(
-        enable_cert_manager, InputResolution(env_key="ENABLE_CERT_MANAGER", default="true")
+        raw.enable_cert_manager,
+        InputResolution(env_key="ENABLE_CERT_MANAGER", default="true"),
     )
     external_dns_raw = resolve_input(
-        enable_external_dns,
+        raw.enable_external_dns,
         InputResolution(env_key="ENABLE_EXTERNAL_DNS", default="true"),
     )
     vault_eso_raw = resolve_input(
-        enable_vault_eso, InputResolution(env_key="ENABLE_VAULT_ESO", default="true")
+        raw.enable_vault_eso, InputResolution(env_key="ENABLE_VAULT_ESO", default="true")
     )
     cnpg_raw = resolve_input(
-        enable_cnpg, InputResolution(env_key="ENABLE_CNPG", default="true")
+        raw.enable_cnpg, InputResolution(env_key="ENABLE_CNPG", default="true")
     )
     return traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw
 
 
-def _resolve_paths(
-    runner_temp: Path | None,
-    output_dir: Path | None,
-    github_env: Path | None,
-) -> tuple[Path, Path, Path]:
+def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
     """Resolve path inputs for temporary output locations."""
     # /tmp fallbacks are intentional for local development and CI without runner
     # env vars, and are safe for ephemeral output locations.
     runner_temp_raw = resolve_input(
-        runner_temp,
+        raw.runner_temp,
         InputResolution(env_key="RUNNER_TEMP", default=Path("/tmp"), as_path=True),
     )
     output_dir_raw = resolve_input(
-        output_dir,
+        raw.output_dir,
         InputResolution(
             env_key="RENDER_OUTPUT_DIR",
             default=Path("/tmp/rendered-manifests"),
@@ -164,7 +186,7 @@ def _resolve_paths(
         ),
     )
     github_env_raw = resolve_input(
-        github_env,
+        raw.github_env,
         InputResolution(
             env_key="GITHUB_ENV",
             default=Path("/tmp/github-env-undefined"),
@@ -178,62 +200,24 @@ def _resolve_paths(
     )
 
 
-def resolve_render_inputs(
-    *,
-    cluster_name: str | None = None,
-    domain: str | None = None,
-    acme_email: str | None = None,
-    cloudflare_api_token_secret_name: str | None = None,
-    vault_address: str | None = None,
-    vault_role_id: str | None = None,
-    vault_secret_id: str | None = None,
-    vault_ca_certificate: str | None = None,
-    enable_traefik: str | None = None,
-    enable_cert_manager: str | None = None,
-    enable_external_dns: str | None = None,
-    enable_vault_eso: str | None = None,
-    enable_cnpg: str | None = None,
-    runner_temp: Path | None = None,
-    output_dir: Path | None = None,
-    github_env: Path | None = None,
-) -> RenderInputs:
+def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
     """Resolve rendering inputs from environment."""
     (
         cluster_name_raw,
         domain_raw,
         acme_email_raw,
         cloudflare_secret_raw,
-    ) = _resolve_core_config(
-        cluster_name,
-        domain,
-        acme_email,
-        cloudflare_api_token_secret_name,
-    )
+    ) = _resolve_core_config(raw)
     (
         vault_address_raw,
         vault_role_id_raw,
         vault_secret_id_raw,
         vault_ca_cert_raw,
-    ) = _resolve_vault_config(
-        vault_address,
-        vault_role_id,
-        vault_secret_id,
-        vault_ca_certificate,
-    )
+    ) = _resolve_vault_config(raw)
     traefik_raw, cert_manager_raw, external_dns_raw, vault_eso_raw, cnpg_raw = (
-        _resolve_feature_flags(
-            enable_traefik,
-            enable_cert_manager,
-            enable_external_dns,
-            enable_vault_eso,
-            enable_cnpg,
-        )
+        _resolve_feature_flags(raw)
     )
-    runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(
-        runner_temp,
-        output_dir,
-        github_env,
-    )
+    runner_temp_raw, output_dir_raw, github_env_raw = _resolve_paths(raw)
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),
@@ -349,28 +333,31 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     )
 
     print("\n--- Extracting rendered manifests ---")
-    outputs = tofu_output(PLATFORM_RENDER_PATH)
-    return _extract_rendered_manifests(outputs)
+    outputs_raw = tofu_output(PLATFORM_RENDER_PATH)
+    if not isinstance(outputs_raw, dict):
+        msg = "tofu output returned unexpected data"
+        raise RuntimeError(msg)
+    return _extract_rendered_manifests(outputs_raw)
 
 
 @app.command()
 def main(
-    cluster_name: str | None = Parameter(),
-    domain: str | None = Parameter(),
-    acme_email: str | None = Parameter(),
-    cloudflare_api_token_secret_name: str | None = Parameter(),
-    vault_address: str | None = Parameter(),
-    vault_role_id: str | None = Parameter(),
-    vault_secret_id: str | None = Parameter(),
-    vault_ca_certificate: str | None = Parameter(),
-    enable_traefik: str | None = Parameter(),
-    enable_cert_manager: str | None = Parameter(),
-    enable_external_dns: str | None = Parameter(),
-    enable_vault_eso: str | None = Parameter(),
-    enable_cnpg: str | None = Parameter(),
-    runner_temp: Path | None = Parameter(),
-    output_dir: Path | None = Parameter(),
-    github_env: Path | None = Parameter(),
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    domain: str | None = DOMAIN_PARAM,
+    acme_email: str | None = ACME_EMAIL_PARAM,
+    cloudflare_api_token_secret_name: str | None = CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM,
+    vault_address: str | None = VAULT_ADDRESS_PARAM,
+    vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
+    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM,
+    vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
+    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM,
+    enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
+    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM,
+    enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
+    enable_cnpg: str | None = ENABLE_CNPG_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM,
+    output_dir: Path | None = OUTPUT_DIR_PARAM,
+    github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
     """Render platform manifests via OpenTofu.
 
@@ -379,7 +366,7 @@ def main(
     writes the rendered manifests to the output directory.
     """
     # Resolve inputs from environment
-    inputs = resolve_render_inputs(
+    raw_inputs = RawRenderInputs(
         cluster_name=cluster_name,
         domain=domain,
         acme_email=acme_email,
@@ -397,6 +384,7 @@ def main(
         output_dir=output_dir,
         github_env=github_env,
     )
+    inputs = resolve_render_inputs(raw_inputs)
 
     # Build tfvars
     tfvars = build_render_tfvars(inputs)
@@ -415,13 +403,13 @@ def main(
 
             print(f"\nRendered {count} manifests successfully.")
 
-            append_github_env(
-                inputs.github_env,
-                {
-                    "RENDERED_MANIFEST_COUNT": str(count),
-                    "RENDER_OUTPUT_DIR": str(inputs.output_dir),
-                },
-            )
+        append_github_env(
+            inputs.github_env,
+            {
+                "RENDERED_MANIFEST_COUNT": str(count),
+                "RENDER_OUTPUT_DIR": str(inputs.output_dir),
+            },
+        )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

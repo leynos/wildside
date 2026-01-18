@@ -27,6 +27,15 @@ from scripts._infra_k8s import append_github_env, mask_secret, parse_bool
 
 app = App(help="Commit rendered manifests to the GitOps repository.")
 
+GITOPS_REPOSITORY_PARAM = Parameter()
+GITOPS_BRANCH_PARAM = Parameter()
+GITOPS_TOKEN_PARAM = Parameter()
+CLUSTER_NAME_PARAM = Parameter()
+RENDER_OUTPUT_DIR_PARAM = Parameter()
+RUNNER_TEMP_PARAM = Parameter()
+GITHUB_ENV_PARAM = Parameter()
+DRY_RUN_PARAM = Parameter()
+
 
 @dataclass(frozen=True, slots=True)
 class GitOpsInputs:
@@ -61,6 +70,11 @@ class RawGitOpsInputs:
     runner_temp: Path | None = None
     github_env: Path | None = None
     dry_run: str | None = None
+
+
+def _to_path(value: Path | str | None) -> Path:
+    """Coerce a string or Path to Path."""
+    return value if isinstance(value, Path) else Path(str(value))
 
 
 def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
@@ -108,21 +122,9 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
         gitops_branch=str(gitops_branch),
         gitops_token=str(gitops_token),
         cluster_name=str(cluster_name),
-        render_output_dir=(
-            render_output_dir_raw
-            if isinstance(render_output_dir_raw, Path)
-            else Path(str(render_output_dir_raw))
-        ),
-        runner_temp=(
-            runner_temp_raw
-            if isinstance(runner_temp_raw, Path)
-            else Path(str(runner_temp_raw))
-        ),
-        github_env=(
-            github_env_raw
-            if isinstance(github_env_raw, Path)
-            else Path(str(github_env_raw))
-        ),
+        render_output_dir=_to_path(render_output_dir_raw),
+        runner_temp=_to_path(runner_temp_raw),
+        github_env=_to_path(github_env_raw),
         dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )
 
@@ -150,6 +152,7 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
 
 
 def _git_auth_env(token: str, base_dir: Path) -> dict[str, str]:
+    """Build environment for Git askpass authentication."""
     askpass_path = base_dir / "git-askpass.sh"
     askpass_path.write_text(
         "#!/bin/sh\nprintf '%s' \"${GITOPS_TOKEN}\"\n",
@@ -285,19 +288,18 @@ def commit_and_push(
 
     return commit_sha
 
-# The CLI parameters in main are declared to satisfy cyclopts/typer and default
-# to Parameter() values; resolve_gitops_inputs() handles the actual resolution
-# and prevents ARG001/B008 false positives for the main entrypoint.
+# CLI parameters are declared for cyclopts but resolved via resolve_gitops_inputs().
+# This keeps defaults centralized while preventing ARG001/B008 false positives.
 @app.command()
 def main(
-    gitops_repository: str | None = Parameter(),
-    gitops_branch: str | None = Parameter(),
-    gitops_token: str | None = Parameter(),
-    cluster_name: str | None = Parameter(),
-    render_output_dir: Path | None = Parameter(),
-    runner_temp: Path | None = Parameter(),
-    github_env: Path | None = Parameter(),
-    dry_run: str | None = Parameter(),
+    gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
+    gitops_branch: str | None = GITOPS_BRANCH_PARAM,
+    gitops_token: str | None = GITOPS_TOKEN_PARAM,
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    render_output_dir: Path | None = RENDER_OUTPUT_DIR_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM,
+    github_env: Path | None = GITHUB_ENV_PARAM,
+    dry_run: str | None = DRY_RUN_PARAM,
 ) -> int:
     """Commit rendered manifests to the GitOps repository.
 

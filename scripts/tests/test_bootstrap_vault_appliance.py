@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,17 +11,13 @@ import pytest
 from cmd_mox import CmdMox, Response
 from plumbum import local
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts._vault_bootstrap import bootstrap  # imported after sys.path mutation
-from scripts._vault_state import (  # imported after sys.path mutation
+from scripts._vault_bootstrap import bootstrap
+from scripts._vault_state import (
     VaultBootstrapConfig,
     VaultBootstrapError,
     VaultBootstrapState,
 )
-from scripts.bootstrap_vault_appliance import (  # imported after sys.path mutation
+from scripts.bootstrap_vault_appliance import (
     AppRoleConfig,
     BootstrapInputs,
     ConnectionConfig,

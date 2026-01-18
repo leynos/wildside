@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from scripts.prepare_infra_k8s_inputs import (  # noqa: E402
+from scripts.prepare_infra_k8s_inputs import (
     RawInputs,
     _resolve_all_inputs,
     prepare_inputs,
@@ -62,7 +57,8 @@ def test_resolve_all_inputs_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
-    inputs = _resolve_all_inputs(RawInputs(**{field: None for field in RawInputs.__annotations__}))
+    raw_values = dict.fromkeys(RawInputs.__annotations__, None)
+    inputs = _resolve_all_inputs(RawInputs(**raw_values))
 
     assert inputs.cluster_name == "preview-1"
     assert inputs.enable_traefik is False
@@ -78,7 +74,8 @@ def test_resolve_all_inputs_rejects_invalid_cluster(monkeypatch: pytest.MonkeyPa
         monkeypatch.setenv(key, value)
 
     with pytest.raises(ValueError, match="cluster_name"):
-        _resolve_all_inputs(RawInputs(**{field: None for field in RawInputs.__annotations__}))
+        raw_values = dict.fromkeys(RawInputs.__annotations__, None)
+        _resolve_all_inputs(RawInputs(**raw_values))
 
 
 def test_prepare_inputs_masks_and_exports(tmp_path: Path) -> None:

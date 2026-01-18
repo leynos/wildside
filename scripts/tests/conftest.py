@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+
 def pytest_configure() -> None:
     """Ensure the repository root is available on sys.path before collection."""
     repo_root = Path(__file__).resolve().parents[2]
