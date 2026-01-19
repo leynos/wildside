@@ -89,10 +89,6 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
     -------
     GitOpsInputs
         Normalized inputs for GitOps operations.
-
-    Examples
-    --------
-    >>> resolve_gitops_inputs(RawGitOpsInputs())
     """
     gitops_repository = resolve_input(
         raw.gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)

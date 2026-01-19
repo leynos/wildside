@@ -9,7 +9,11 @@ Usage:
     python scripts/render_platform_manifests.py
 
 Examples:
-    >>> raw = RawRenderInputs(cluster_name="preview-1", domain="example.test")
+    >>> raw = RawRenderInputs(
+    ...     cluster_name="preview-1",
+    ...     domain="example.test",
+    ...     acme_email="ops@example.test",
+    ... )
     >>> inputs = resolve_render_inputs(raw)
     >>> build_render_tfvars(inputs)["cluster_name"]
     'preview-1'
@@ -227,8 +231,14 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
 
     Examples
     --------
-    >>> resolve_render_inputs(RawRenderInputs(cluster_name="preview-1", domain="example.test"))
-    RenderInputs(...)
+    >>> resolve_render_inputs(
+    ...     RawRenderInputs(
+    ...         cluster_name="preview-1",
+    ...         domain="example.test",
+    ...         acme_email="ops@example.test",
+    ...     )
+    ... )  # doctest: +ELLIPSIS
+    RenderInputs(cluster_name='preview-1', domain='example.test', acme_email='ops@example.test', ...)
     """
     (
         cluster_name_raw,
@@ -295,7 +305,25 @@ def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
 
     Examples
     --------
-    >>> build_render_tfvars(RenderInputs(...))["cluster_name"]
+    >>> inputs = RenderInputs(
+    ...     cluster_name="preview-1",
+    ...     domain="example.test",
+    ...     acme_email="ops@example.test",
+    ...     cloudflare_api_token_secret_name="cloudflare-api-token",
+    ...     vault_address=None,
+    ...     vault_role_id=None,
+    ...     vault_secret_id=None,
+    ...     vault_ca_certificate=None,
+    ...     enable_traefik=True,
+    ...     enable_cert_manager=True,
+    ...     enable_external_dns=True,
+    ...     enable_vault_eso=False,
+    ...     enable_cnpg=True,
+    ...     runner_temp=Path("/tmp"),
+    ...     output_dir=Path("/tmp/rendered"),
+    ...     github_env=Path("/tmp/github-env"),
+    ... )
+    >>> build_render_tfvars(inputs)["cluster_name"]
     'preview-1'
     """
     variables: dict[str, object] = {

@@ -23,7 +23,6 @@ Run the provisioning workflow with required environment variables:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -72,41 +71,6 @@ def _provision_and_export(inputs: ProvisionInputs) -> int:
     return 0
 
 
-@dataclass(frozen=True, slots=True)
-class CLIOverrides:
-    """Container for CLI override values."""
-    cluster_name: str | None = None
-    environment: str | None = None
-    region: str | None = None
-    kubernetes_version: str | None = None
-    node_pools: str | None = None
-    spaces_bucket: str | None = None
-    spaces_region: str | None = None
-    spaces_access_key: str | None = None
-    spaces_secret_key: str | None = None
-    runner_temp: Path | None = None
-    github_env: Path | None = None
-    dry_run: str | None = None
-
-
-def _build_raw_inputs_from_cli(overrides: CLIOverrides) -> RawProvisionInputs:
-    """Build raw provisioning inputs from CLI arguments."""
-    return RawProvisionInputs(
-        cluster_name=overrides.cluster_name,
-        environment=overrides.environment,
-        region=overrides.region,
-        kubernetes_version=overrides.kubernetes_version,
-        node_pools=overrides.node_pools,
-        spaces_bucket=overrides.spaces_bucket,
-        spaces_region=overrides.spaces_region,
-        spaces_access_key=overrides.spaces_access_key,
-        spaces_secret_key=overrides.spaces_secret_key,
-        runner_temp=overrides.runner_temp,
-        github_env=overrides.github_env,
-        dry_run=overrides.dry_run,
-    )
-
-
 @app.command()
 def main(
     cluster_name: str | None = CLUSTER_NAME_PARAM,
@@ -123,21 +87,19 @@ def main(
     dry_run: str | None = DRY_RUN_PARAM,
 ) -> int:
     """Provision a Kubernetes cluster via OpenTofu."""
-    raw_inputs = _build_raw_inputs_from_cli(
-        CLIOverrides(
-            cluster_name=cluster_name,
-            environment=environment,
-            region=region,
-            kubernetes_version=kubernetes_version,
-            node_pools=node_pools,
-            spaces_bucket=spaces_bucket,
-            spaces_region=spaces_region,
-            spaces_access_key=spaces_access_key,
-            spaces_secret_key=spaces_secret_key,
-            runner_temp=runner_temp,
-            github_env=github_env,
-            dry_run=dry_run,
-        )
+    raw_inputs = RawProvisionInputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        spaces_bucket=spaces_bucket,
+        spaces_region=spaces_region,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
     )
     inputs = resolve_provision_inputs(raw_inputs)
     return _provision_and_export(inputs)
