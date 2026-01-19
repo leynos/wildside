@@ -10,7 +10,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from scripts._gitops_errors import GitCloneError, GitCommandError, GitValidationError
+from scripts._gitops_errors import (
+    GitCloneError,
+    GitCommandError,
+    GitOpsValidationError,
+)
 from scripts._gitops_inputs import GitOpsInputs
 from scripts._infra_k8s import mask_secret
 
@@ -175,13 +179,13 @@ def _reset_cluster_dir(cluster_root: Path, cluster_dir: Path) -> None:
 
     if cluster_root.is_symlink():
         msg = f"Refusing to reset symlinked cluster root {cluster_root}"
-        raise GitValidationError(msg)
+        raise GitOpsValidationError(msg)
     if not cluster_root_resolved.is_relative_to(clone_dir_resolved):
         msg = f"Refusing to reset cluster root outside {clone_dir_resolved}"
-        raise GitValidationError(msg)
+        raise GitOpsValidationError(msg)
     if not cluster_dir_resolved.is_relative_to(cluster_root_resolved):
         msg = f"Refusing to reset cluster dir outside {cluster_root_resolved}"
-        raise GitValidationError(msg)
+        raise GitOpsValidationError(msg)
 
     if cluster_dir.exists():
         shutil.rmtree(cluster_dir)

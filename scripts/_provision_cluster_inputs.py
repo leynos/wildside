@@ -15,18 +15,33 @@ class ProvisionInputs:
 
     Attributes
     ----------
-    cluster_name, environment, region : str
-        Core cluster identifiers.
-    kubernetes_version : str | None
-        Optional Kubernetes version override.
-    node_pools : str | None
-        Node pools JSON payload.
-    spaces_bucket, spaces_region, spaces_access_key, spaces_secret_key : str
-        Spaces backend configuration values.
-    runner_temp, github_env : Path
-        Paths for working directories and GITHUB_ENV.
-    dry_run : bool
-        Whether to skip apply.
+    Cluster configuration
+        cluster_name : str
+            Cluster name identifier.
+        environment : str
+            Environment name for the cluster.
+        region : str
+            Cloud region for provisioning.
+        kubernetes_version : str | None
+            Optional Kubernetes version override.
+        node_pools : str | None
+            Optional node pool JSON payload.
+    Backend configuration
+        spaces_bucket : str
+            Spaces bucket for OpenTofu state.
+        spaces_region : str
+            Spaces region for state storage.
+        spaces_access_key : str
+            Access key for the Spaces backend.
+        spaces_secret_key : str
+            Secret key for the Spaces backend.
+    Paths and options
+        runner_temp : Path
+            Directory for temporary working files.
+        github_env : Path
+            Path to the GitHub Actions environment file.
+        dry_run : bool
+            Whether to skip apply and only plan.
     """
 
     # Cluster configuration
@@ -54,12 +69,28 @@ class RawProvisionInputs:
 
     Attributes
     ----------
-    cluster_name, environment, region, kubernetes_version, node_pools : str | None
-        Raw cluster configuration values.
-    spaces_bucket, spaces_region, spaces_access_key, spaces_secret_key : str | None
-        Raw Spaces backend values.
-    runner_temp, github_env : Path | None
-        Raw path overrides.
+    cluster_name : str | None
+        Raw cluster name override.
+    environment : str | None
+        Raw environment override.
+    region : str | None
+        Raw region override.
+    kubernetes_version : str | None
+        Raw Kubernetes version override.
+    node_pools : str | None
+        Raw node pools payload.
+    spaces_bucket : str | None
+        Raw Spaces bucket override.
+    spaces_region : str | None
+        Raw Spaces region override.
+    spaces_access_key : str | None
+        Raw Spaces access key override.
+    spaces_secret_key : str | None
+        Raw Spaces secret key override.
+    runner_temp : Path | None
+        Raw runner temp path override.
+    github_env : Path | None
+        Raw GitHub Actions env file override.
     dry_run : str | None
         Raw dry-run flag.
     """
@@ -167,8 +198,14 @@ def _resolve_execution_config(
     dry_run_raw = _with_override(
         raw.dry_run, InputResolution(env_key="DRY_RUN", default="false")
     )
-    assert runner_temp_raw is not None
-    assert github_env_raw is not None
+    assert runner_temp_raw is not None, (
+        "_resolve_execution_config expected _with_override to supply RUNNER_TEMP "
+        "before _to_path conversion."
+    )
+    assert github_env_raw is not None, (
+        "_resolve_execution_config expected _with_override to supply GITHUB_ENV "
+        "before _to_path conversion."
+    )
     return (
         _to_path(runner_temp_raw),
         _to_path(github_env_raw),

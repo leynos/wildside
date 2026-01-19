@@ -1,9 +1,9 @@
 """Resolve platform render inputs and build OpenTofu tfvars.
 
 This module resolves environment and CLI inputs into structured configuration
-for platform manifest rendering and produces the OpenTofu variables needed to
-render the platform modules. It assumes inputs are prepared via the action
-input preparation step.
+for platform manifest rendering and generates OpenTofu variables for the
+platform modules. It assumes inputs are prepared by the action input
+preparation step and that required environment variables are available.
 
 Usage:
     python scripts/render_platform_manifests.py

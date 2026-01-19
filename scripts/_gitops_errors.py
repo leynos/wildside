@@ -19,5 +19,9 @@ class GitValidationError(GitOpsError):
     """Raised when GitOps paths are unsafe or invalid."""
 
 
+class GitOpsValidationError(GitValidationError):
+    """Raised when GitOps paths are unsafe or invalid."""
+
+
 class GitSyncError(GitOpsError):
     """Raised when syncing manifests fails."""

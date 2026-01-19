@@ -1,15 +1,39 @@
 """Run OpenTofu for cluster provisioning and export outputs.
 
-This module orchestrates OpenTofu init/plan/apply and exports the resulting
-cluster outputs to ``GITHUB_ENV`` for downstream GitHub Actions steps.
+This module orchestrates OpenTofu init/plan/apply for the wildside-infra-k8s
+cluster module and exports resulting values to ``GITHUB_ENV`` so downstream
+action steps can consume them. Use it after inputs have been resolved and
+validated (typically via ``scripts/provision_cluster.py``).
+
+Prerequisites
+-------------
+Provisioning requires OpenTofu on the PATH and access to the DigitalOcean and
+Spaces credentials resolved into ``ProvisionInputs``. When invoked via the
+action flow, ``RUNNER_TEMP`` and ``GITHUB_ENV`` are expected to be present or
+mapped to safe defaults by the input resolver.
+
+Outputs
+-------
+The flow can export ``CLUSTER_ID``, ``CLUSTER_ENDPOINT``, and ``KUBECONFIG_RAW``
+to ``GITHUB_ENV``. OpenTofu state and cluster resources are created or updated
+as part of the apply step.
 
 Examples
 --------
-Provision a cluster with prepared inputs:
+Provision using prepared inputs:
 
 >>> backend = build_backend_config(inputs)
 >>> tfvars = build_tfvars(inputs)
 >>> provision_cluster(inputs, backend, tfvars)
+
+Run the CLI wrapper that resolves environment inputs:
+
+>>> python scripts/provision_cluster.py --region nyc1
+
+Side Effects
+------------
+This flow runs OpenTofu init/plan/apply, writes temporary tfvars to the runner
+temp directory, and updates remote state for the cluster module.
 """
 
 from __future__ import annotations

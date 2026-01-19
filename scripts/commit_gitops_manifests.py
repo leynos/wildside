@@ -6,8 +6,8 @@
 """Commit rendered manifests to the GitOps repository.
 
 This script clones the GitOps repository, replaces the cluster manifest
-directory with rendered output, commits and pushes changes, and exports
-the commit SHA to ``GITHUB_ENV``.
+directory with rendered output, commits and pushes changes, and exports the
+commit SHA to ``GITHUB_ENV``.
 
 Examples
 --------
@@ -41,8 +41,28 @@ RENDER_OUTPUT_DIR_PARAM = Parameter()
 RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 DRY_RUN_PARAM = Parameter()
+
+
 def _run_gitops_flow(inputs: GitOpsInputs) -> tuple[int, str | None]:
-    """Clone, sync, and commit GitOps manifests."""
+    """Clone, sync, and commit GitOps manifests.
+
+    Parameters
+    ----------
+    inputs : GitOpsInputs
+        Normalized GitOps inputs.
+
+    Returns
+    -------
+    tuple[int, str | None]
+        Count of synced files and the commit SHA if pushed.
+
+    Raises
+    ------
+    GitValidationError
+        Raised when the runner temp path is invalid.
+    GitOpsError
+        Raised when Git operations fail.
+    """
     if inputs.runner_temp.exists() and not inputs.runner_temp.is_dir():
         msg = f"RUNNER_TEMP must be a directory: {inputs.runner_temp}"
         raise GitValidationError(msg)
@@ -60,7 +80,15 @@ def _run_gitops_flow(inputs: GitOpsInputs) -> tuple[int, str | None]:
 
 
 def _export_commit_sha(github_env: Path, commit_sha: str | None) -> None:
-    """Export the GitOps commit SHA to GITHUB_ENV when available."""
+    """Export the GitOps commit SHA to GITHUB_ENV when available.
+
+    Parameters
+    ----------
+    github_env : Path
+        Path to the GitHub Actions environment file.
+    commit_sha : str | None
+        Commit SHA to export, if available.
+    """
     if commit_sha:
         append_github_env(github_env, {"GITOPS_COMMIT_SHA": commit_sha})
 
