@@ -64,6 +64,65 @@ RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 
 
+def _build_raw_inputs_from_cli(
+    cluster_name: str | None,
+    environment: str | None,
+    region: str | None,
+    kubernetes_version: str | None,
+    node_pools: str | None,
+    domain: str | None,
+    acme_email: str | None,
+    gitops_repository: str | None,
+    gitops_branch: str | None,
+    gitops_token: str | None,
+    vault_address: str | None,
+    vault_role_id: str | None,
+    vault_secret_id: str | None,
+    vault_ca_certificate: str | None,
+    digitalocean_token: str | None,
+    spaces_access_key: str | None,
+    spaces_secret_key: str | None,
+    cloudflare_api_token_secret_name: str | None,
+    enable_traefik: str | None,
+    enable_cert_manager: str | None,
+    enable_external_dns: str | None,
+    enable_vault_eso: str | None,
+    enable_cnpg: str | None,
+    dry_run: str | None,
+    runner_temp: Path | None,
+    github_env: Path | None,
+) -> RawInputs:
+    """Build raw inputs from CLI overrides."""
+    return RawInputs(
+        cluster_name=cluster_name,
+        environment=environment,
+        region=region,
+        kubernetes_version=kubernetes_version,
+        node_pools=node_pools,
+        domain=domain,
+        acme_email=acme_email,
+        gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch,
+        gitops_token=gitops_token,
+        vault_address=vault_address,
+        vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id,
+        vault_ca_certificate=vault_ca_certificate,
+        digitalocean_token=digitalocean_token,
+        spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
+        enable_traefik=enable_traefik,
+        enable_cert_manager=enable_cert_manager,
+        enable_external_dns=enable_external_dns,
+        enable_vault_eso=enable_vault_eso,
+        enable_cnpg=enable_cnpg,
+        dry_run=dry_run,
+        runner_temp=runner_temp,
+        github_env=github_env,
+    )
+
+
 @app.command()
 def main(
     cluster_name: str | None = CLUSTER_NAME_PARAM,
@@ -95,65 +154,39 @@ def main(
 ) -> None:
     """Prepare inputs for the wildside-infra-k8s action.
 
-    Parameters
-    ----------
-    cluster_name, environment, region, kubernetes_version, node_pools : str | None
-        CLI overrides for the cluster ``INPUT_*`` values.
-    domain, acme_email : str | None
-        CLI overrides for ``INPUT_DOMAIN`` and ``INPUT_ACME_EMAIL``.
-    gitops_repository, gitops_branch, gitops_token : str | None
-        CLI overrides for the GitOps ``INPUT_*`` values.
-    vault_address, vault_role_id, vault_secret_id, vault_ca_certificate : str | None
-        CLI overrides for Vault ``INPUT_*`` values.
-    digitalocean_token, spaces_access_key, spaces_secret_key : str | None
-        CLI overrides for cloud credential ``INPUT_*`` values.
-    cloudflare_api_token_secret_name : str | None
-        CLI override for ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
-    enable_traefik, enable_cert_manager, enable_external_dns : str | None
-        CLI overrides for platform enablement flags.
-    enable_vault_eso, enable_cnpg, dry_run : str | None
-        CLI overrides for remaining feature flags.
-    runner_temp, github_env : Path | None
-        Path overrides for ``RUNNER_TEMP`` and ``GITHUB_ENV``.
-
-    Returns
-    -------
-    None
-        Values are written to ``GITHUB_ENV``.
-
     Examples
     --------
     >>> python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
     """
-    raw = RawInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        domain=domain,
-        acme_email=acme_email,
-        gitops_repository=gitops_repository,
-        gitops_branch=gitops_branch,
-        gitops_token=gitops_token,
-        vault_address=vault_address,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-        vault_ca_certificate=vault_ca_certificate,
-        digitalocean_token=digitalocean_token,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
-        enable_traefik=enable_traefik,
-        enable_cert_manager=enable_cert_manager,
-        enable_external_dns=enable_external_dns,
-        enable_vault_eso=enable_vault_eso,
-        enable_cnpg=enable_cnpg,
-        dry_run=dry_run,
-        runner_temp=runner_temp,
-        github_env=github_env,
+    raw_inputs = _build_raw_inputs_from_cli(
+        cluster_name,
+        environment,
+        region,
+        kubernetes_version,
+        node_pools,
+        domain,
+        acme_email,
+        gitops_repository,
+        gitops_branch,
+        gitops_token,
+        vault_address,
+        vault_role_id,
+        vault_secret_id,
+        vault_ca_certificate,
+        digitalocean_token,
+        spaces_access_key,
+        spaces_secret_key,
+        cloudflare_api_token_secret_name,
+        enable_traefik,
+        enable_cert_manager,
+        enable_external_dns,
+        enable_vault_eso,
+        enable_cnpg,
+        dry_run,
+        runner_temp,
+        github_env,
     )
-    inputs = _resolve_all_inputs(raw)
+    inputs = _resolve_all_inputs(raw_inputs)
     prepare_inputs(inputs)
 
 
