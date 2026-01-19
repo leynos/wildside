@@ -54,6 +54,7 @@ DRY_RUN_PARAM = Parameter()
 
 
 def _provision_and_export(inputs: ProvisionInputs) -> int:
+    """Provision the cluster and export outputs."""
     backend_config = build_backend_config(inputs)
     tfvars = build_tfvars(inputs)
 
@@ -73,6 +74,7 @@ def _provision_and_export(inputs: ProvisionInputs) -> int:
 
 @dataclass(frozen=True, slots=True)
 class CLIOverrides:
+    """Container for CLI override values."""
     cluster_name: str | None = None
     environment: str | None = None
     region: str | None = None
