@@ -138,35 +138,7 @@ def main(
     github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
     """Prepare inputs for the wildside-infra-k8s action."""
-    values: dict[str, object] = {
-        "cluster_name": cluster_name,
-        "environment": environment,
-        "region": region,
-        "kubernetes_version": kubernetes_version,
-        "node_pools": node_pools,
-        "domain": domain,
-        "acme_email": acme_email,
-        "gitops_repository": gitops_repository,
-        "gitops_branch": gitops_branch,
-        "gitops_token": gitops_token,
-        "vault_address": vault_address,
-        "vault_role_id": vault_role_id,
-        "vault_secret_id": vault_secret_id,
-        "vault_ca_certificate": vault_ca_certificate,
-        "digitalocean_token": digitalocean_token,
-        "spaces_access_key": spaces_access_key,
-        "spaces_secret_key": spaces_secret_key,
-        "cloudflare_api_token_secret_name": cloudflare_api_token_secret_name,
-        "enable_traefik": enable_traefik,
-        "enable_cert_manager": enable_cert_manager,
-        "enable_external_dns": enable_external_dns,
-        "enable_vault_eso": enable_vault_eso,
-        "enable_cnpg": enable_cnpg,
-        "dry_run": dry_run,
-        "runner_temp": runner_temp,
-        "github_env": github_env,
-    }
-    return _run_prepare_flow(values)
+    return _run_prepare_flow(locals())
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
