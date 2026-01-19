@@ -254,10 +254,11 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
         secret_id=vault_secret_id_raw,
     )
     if vault_eso_enabled and missing:
-        raise ValueError(
+        msg = (
             "ENABLE_VAULT_ESO=true requires "
             f"{', '.join(missing)} to be set."
         )
+        raise ValueError(msg)
 
     return RenderInputs(
         cluster_name=str(cluster_name_raw),
