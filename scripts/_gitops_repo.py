@@ -59,7 +59,7 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
 
 
 @contextmanager
-def _git_auth_env(token: str, base_dir: Path) -> Iterator[dict[str, str]]:
+def git_auth_env(token: str, base_dir: Path) -> Iterator[dict[str, str]]:
     """Build environment for Git askpass authentication."""
     base_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(

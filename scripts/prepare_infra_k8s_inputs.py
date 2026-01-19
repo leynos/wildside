@@ -13,13 +13,14 @@ Examples
 --------
 Run with explicit CLI overrides:
 
->>> python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
+$ python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 from cyclopts import App, Parameter
 from scripts._prepare_infra_k8s_inputs import (
@@ -33,69 +34,78 @@ __all__ = [
     "RawInputs",
     "ResolvedInputs",
     "prepare_inputs",
+    "app",
 ]
 
 app = App(help="Prepare wildside-infra-k8s action inputs.")
 
-CLUSTER_NAME_PARAM = Parameter()
-ENVIRONMENT_PARAM = Parameter()
-REGION_PARAM = Parameter()
-KUBERNETES_VERSION_PARAM = Parameter()
-NODE_POOLS_PARAM = Parameter()
-DOMAIN_PARAM = Parameter()
-ACME_EMAIL_PARAM = Parameter()
-GITOPS_REPOSITORY_PARAM = Parameter()
-GITOPS_BRANCH_PARAM = Parameter()
-GITOPS_TOKEN_PARAM = Parameter()
-VAULT_ADDRESS_PARAM = Parameter()
-VAULT_ROLE_ID_PARAM = Parameter()
-VAULT_SECRET_ID_PARAM = Parameter()
-VAULT_CA_CERTIFICATE_PARAM = Parameter()
-DIGITALOCEAN_TOKEN_PARAM = Parameter()
-SPACES_ACCESS_KEY_PARAM = Parameter()
-SPACES_SECRET_KEY_PARAM = Parameter()
-CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM = Parameter()
-ENABLE_TRAEFIK_PARAM = Parameter()
-ENABLE_CERT_MANAGER_PARAM = Parameter()
-ENABLE_EXTERNAL_DNS_PARAM = Parameter()
-ENABLE_VAULT_ESO_PARAM = Parameter()
-ENABLE_CNPG_PARAM = Parameter()
-DRY_RUN_PARAM = Parameter()
-RUNNER_TEMP_PARAM = Parameter()
-GITHUB_ENV_PARAM = Parameter()
+CLUSTER_NAME_PARAM = Parameter(help="Cluster name override.")
+ENVIRONMENT_PARAM = Parameter(help="Environment override.")
+REGION_PARAM = Parameter(help="Region override.")
+KUBERNETES_VERSION_PARAM = Parameter(help="Kubernetes version override.")
+NODE_POOLS_PARAM = Parameter(help="Node pool JSON override.")
+DOMAIN_PARAM = Parameter(help="Cluster domain override.")
+ACME_EMAIL_PARAM = Parameter(help="ACME email override.")
+GITOPS_REPOSITORY_PARAM = Parameter(help="GitOps repository override.")
+GITOPS_BRANCH_PARAM = Parameter(help="GitOps branch override.")
+GITOPS_TOKEN_PARAM = Parameter(help="GitOps token override.")
+VAULT_ADDRESS_PARAM = Parameter(help="Vault address override.")
+VAULT_ROLE_ID_PARAM = Parameter(help="Vault AppRole role ID override.")
+VAULT_SECRET_ID_PARAM = Parameter(help="Vault AppRole secret ID override.")
+VAULT_CA_CERTIFICATE_PARAM = Parameter(help="Vault CA certificate override.")
+DIGITALOCEAN_TOKEN_PARAM = Parameter(help="DigitalOcean token override.")
+SPACES_ACCESS_KEY_PARAM = Parameter(help="Spaces access key override.")
+SPACES_SECRET_KEY_PARAM = Parameter(help="Spaces secret key override.")
+CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM = Parameter(
+    help="Cloudflare API token secret name override."
+)
+ENABLE_TRAEFIK_PARAM = Parameter(help="Enable Traefik flag override.")
+ENABLE_CERT_MANAGER_PARAM = Parameter(help="Enable cert-manager flag override.")
+ENABLE_EXTERNAL_DNS_PARAM = Parameter(help="Enable external-dns flag override.")
+ENABLE_VAULT_ESO_PARAM = Parameter(help="Enable Vault ESO flag override.")
+ENABLE_CNPG_PARAM = Parameter(help="Enable CNPG flag override.")
+DRY_RUN_PARAM = Parameter(help="Dry-run flag override.")
+RUNNER_TEMP_PARAM = Parameter(help="Runner temp directory override.")
+GITHUB_ENV_PARAM = Parameter(help="GITHUB_ENV path override.")
 
 
 def _build_raw_inputs_from_cli(values: Mapping[str, object]) -> RawInputs:
     """Build raw inputs from CLI overrides."""
+    def _get_str(key: str) -> str | None:
+        return cast("str | None", values.get(key))
+
+    def _get_path(key: str) -> Path | None:
+        return cast("Path | None", values.get(key))
+
     return RawInputs(
-        cluster_name=values.get("cluster_name"),
-        environment=values.get("environment"),
-        region=values.get("region"),
-        kubernetes_version=values.get("kubernetes_version"),
-        node_pools=values.get("node_pools"),
-        domain=values.get("domain"),
-        acme_email=values.get("acme_email"),
-        gitops_repository=values.get("gitops_repository"),
-        gitops_branch=values.get("gitops_branch"),
-        gitops_token=values.get("gitops_token"),
-        vault_address=values.get("vault_address"),
-        vault_role_id=values.get("vault_role_id"),
-        vault_secret_id=values.get("vault_secret_id"),
-        vault_ca_certificate=values.get("vault_ca_certificate"),
-        digitalocean_token=values.get("digitalocean_token"),
-        spaces_access_key=values.get("spaces_access_key"),
-        spaces_secret_key=values.get("spaces_secret_key"),
-        cloudflare_api_token_secret_name=values.get(
+        cluster_name=_get_str("cluster_name"),
+        environment=_get_str("environment"),
+        region=_get_str("region"),
+        kubernetes_version=_get_str("kubernetes_version"),
+        node_pools=_get_str("node_pools"),
+        domain=_get_str("domain"),
+        acme_email=_get_str("acme_email"),
+        gitops_repository=_get_str("gitops_repository"),
+        gitops_branch=_get_str("gitops_branch"),
+        gitops_token=_get_str("gitops_token"),
+        vault_address=_get_str("vault_address"),
+        vault_role_id=_get_str("vault_role_id"),
+        vault_secret_id=_get_str("vault_secret_id"),
+        vault_ca_certificate=_get_str("vault_ca_certificate"),
+        digitalocean_token=_get_str("digitalocean_token"),
+        spaces_access_key=_get_str("spaces_access_key"),
+        spaces_secret_key=_get_str("spaces_secret_key"),
+        cloudflare_api_token_secret_name=_get_str(
             "cloudflare_api_token_secret_name"
         ),
-        enable_traefik=values.get("enable_traefik"),
-        enable_cert_manager=values.get("enable_cert_manager"),
-        enable_external_dns=values.get("enable_external_dns"),
-        enable_vault_eso=values.get("enable_vault_eso"),
-        enable_cnpg=values.get("enable_cnpg"),
-        dry_run=values.get("dry_run"),
-        runner_temp=values.get("runner_temp"),
-        github_env=values.get("github_env"),
+        enable_traefik=_get_str("enable_traefik"),
+        enable_cert_manager=_get_str("enable_cert_manager"),
+        enable_external_dns=_get_str("enable_external_dns"),
+        enable_vault_eso=_get_str("enable_vault_eso"),
+        enable_cnpg=_get_str("enable_cnpg"),
+        dry_run=_get_str("dry_run"),
+        runner_temp=_get_path("runner_temp"),
+        github_env=_get_path("github_env"),
     )
 
 
@@ -137,7 +147,7 @@ def main(
     runner_temp: Path | None = RUNNER_TEMP_PARAM,
     github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
-    """Prepare inputs for the wildside-infra-k8s action."""
+    """Prepare inputs for the wildside-infra-k8s action (CLI overrides env)."""
     return _run_prepare_flow(locals())
 
 

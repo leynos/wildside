@@ -30,11 +30,11 @@ class GitCloneError(GitOpsError):
 
 
 class GitValidationError(GitOpsError):
-    """Raised when GitOps paths are unsafe or invalid."""
+    """Raised when GitOps inputs or paths fail validation."""
 
 
 class GitOpsValidationError(GitValidationError):
-    """Raised when GitOps paths are unsafe or invalid."""
+    """Raised when GitOps repository path checks fail."""
 
 
 class GitSyncError(GitOpsError):

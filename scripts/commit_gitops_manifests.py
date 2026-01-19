@@ -11,7 +11,7 @@ commit SHA to ``GITHUB_ENV``.
 
 Examples
 --------
->>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
+$ python scripts/commit_gitops_manifests.py --gitops-repository org/repo
 """
 
 from __future__ import annotations
@@ -23,12 +23,7 @@ from pathlib import Path
 from cyclopts import App, Parameter
 from scripts._gitops_errors import GitOpsError, GitValidationError
 from scripts._gitops_inputs import GitOpsInputs, RawGitOpsInputs, resolve_gitops_inputs
-from scripts._gitops_repo import (
-    _git_auth_env,
-    clone_repository,
-    commit_and_push,
-    sync_manifests,
-)
+from scripts._gitops_repo import git_auth_env, clone_repository, commit_and_push, sync_manifests
 from scripts._infra_k8s import append_github_env, mask_secret
 
 app = App(help="Commit rendered manifests to the GitOps repository.")
@@ -70,7 +65,7 @@ def _run_gitops_flow(inputs: GitOpsInputs) -> tuple[int, str | None]:
     with tempfile.TemporaryDirectory(dir=inputs.runner_temp) as tmp_dir:
         base_dir = Path(tmp_dir)
         clone_dir = base_dir / "repo"
-        with _git_auth_env(inputs.gitops_token, base_dir) as auth_env:
+        with git_auth_env(inputs.gitops_token, base_dir) as auth_env:
             clone_repository(inputs, clone_dir, auth_env)
             synced = sync_manifests(inputs, clone_dir)
             commit_sha = None
@@ -124,7 +119,7 @@ def main(
 
     Examples
     --------
-    >>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
+    $ python scripts/commit_gitops_manifests.py --gitops-repository org/repo
     """
     raw = RawGitOpsInputs(
         gitops_repository=gitops_repository,

@@ -10,9 +10,9 @@ import pytest
 from scripts.commit_gitops_manifests import (
     GitOpsInputs,
     RawGitOpsInputs,
-    _git_auth_env,
     clone_repository,
     commit_and_push,
+    git_auth_env,
     resolve_gitops_inputs,
     sync_manifests,
 )
@@ -69,7 +69,7 @@ def test_clone_repository_uses_askpass(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     monkeypatch.setattr("scripts._gitops_repo.subprocess.run", fake_run)
 
-    with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
+    with git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         clone_repository(inputs, clone_dir, auth_env)
 
         cmd = captured["cmd"]
@@ -138,7 +138,7 @@ def test_commit_and_push_no_changes(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
     monkeypatch.setattr("scripts._gitops_repo.subprocess.run", lambda *_args, **_kwargs: _Result())
 
-    with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
+    with git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         assert (
             commit_and_push(inputs, clone_dir, auth_env) is None
         ), "No changes should yield None commit SHA"
@@ -167,7 +167,7 @@ def test_commit_and_push_dry_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 
     monkeypatch.setattr("scripts._gitops_repo.subprocess.run", lambda *_args, **_kwargs: _Result())
 
-    with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
+    with git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         commit_sha = commit_and_push(inputs, clone_dir, auth_env)
     assert commit_sha == "abc123", "Dry-run should return computed commit SHA"
     assert (
