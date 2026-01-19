@@ -18,6 +18,7 @@ Run with explicit CLI overrides:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from cyclopts import App, Parameter
@@ -64,63 +65,47 @@ RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 
 
-def _build_raw_inputs_from_cli(
-    cluster_name: str | None,
-    environment: str | None,
-    region: str | None,
-    kubernetes_version: str | None,
-    node_pools: str | None,
-    domain: str | None,
-    acme_email: str | None,
-    gitops_repository: str | None,
-    gitops_branch: str | None,
-    gitops_token: str | None,
-    vault_address: str | None,
-    vault_role_id: str | None,
-    vault_secret_id: str | None,
-    vault_ca_certificate: str | None,
-    digitalocean_token: str | None,
-    spaces_access_key: str | None,
-    spaces_secret_key: str | None,
-    cloudflare_api_token_secret_name: str | None,
-    enable_traefik: str | None,
-    enable_cert_manager: str | None,
-    enable_external_dns: str | None,
-    enable_vault_eso: str | None,
-    enable_cnpg: str | None,
-    dry_run: str | None,
-    runner_temp: Path | None,
-    github_env: Path | None,
-) -> RawInputs:
+def _build_raw_inputs_from_cli(values: Mapping[str, object]) -> RawInputs:
     """Build raw inputs from CLI overrides."""
     return RawInputs(
-        cluster_name=cluster_name,
-        environment=environment,
-        region=region,
-        kubernetes_version=kubernetes_version,
-        node_pools=node_pools,
-        domain=domain,
-        acme_email=acme_email,
-        gitops_repository=gitops_repository,
-        gitops_branch=gitops_branch,
-        gitops_token=gitops_token,
-        vault_address=vault_address,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-        vault_ca_certificate=vault_ca_certificate,
-        digitalocean_token=digitalocean_token,
-        spaces_access_key=spaces_access_key,
-        spaces_secret_key=spaces_secret_key,
-        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
-        enable_traefik=enable_traefik,
-        enable_cert_manager=enable_cert_manager,
-        enable_external_dns=enable_external_dns,
-        enable_vault_eso=enable_vault_eso,
-        enable_cnpg=enable_cnpg,
-        dry_run=dry_run,
-        runner_temp=runner_temp,
-        github_env=github_env,
+        cluster_name=values.get("cluster_name"),
+        environment=values.get("environment"),
+        region=values.get("region"),
+        kubernetes_version=values.get("kubernetes_version"),
+        node_pools=values.get("node_pools"),
+        domain=values.get("domain"),
+        acme_email=values.get("acme_email"),
+        gitops_repository=values.get("gitops_repository"),
+        gitops_branch=values.get("gitops_branch"),
+        gitops_token=values.get("gitops_token"),
+        vault_address=values.get("vault_address"),
+        vault_role_id=values.get("vault_role_id"),
+        vault_secret_id=values.get("vault_secret_id"),
+        vault_ca_certificate=values.get("vault_ca_certificate"),
+        digitalocean_token=values.get("digitalocean_token"),
+        spaces_access_key=values.get("spaces_access_key"),
+        spaces_secret_key=values.get("spaces_secret_key"),
+        cloudflare_api_token_secret_name=values.get(
+            "cloudflare_api_token_secret_name"
+        ),
+        enable_traefik=values.get("enable_traefik"),
+        enable_cert_manager=values.get("enable_cert_manager"),
+        enable_external_dns=values.get("enable_external_dns"),
+        enable_vault_eso=values.get("enable_vault_eso"),
+        enable_cnpg=values.get("enable_cnpg"),
+        dry_run=values.get("dry_run"),
+        runner_temp=values.get("runner_temp"),
+        github_env=values.get("github_env"),
     )
+
+
+def _run_prepare_flow(values: Mapping[str, object]) -> int:
+    """Resolve and export inputs for downstream action steps."""
+    raw = _build_raw_inputs_from_cli(values)
+    resolved = _resolve_all_inputs(raw)
+    prepare_inputs(resolved)
+    print("Prepared wildside-infra-k8s inputs.")
+    return 0
 
 
 @app.command()
@@ -151,43 +136,9 @@ def main(
     dry_run: str | None = DRY_RUN_PARAM,
     runner_temp: Path | None = RUNNER_TEMP_PARAM,
     github_env: Path | None = GITHUB_ENV_PARAM,
-) -> None:
-    """Prepare inputs for the wildside-infra-k8s action.
-
-    Examples
-    --------
-    >>> python scripts/prepare_infra_k8s_inputs.py --cluster-name preview-1 --region nyc1
-    """
-    raw_inputs = _build_raw_inputs_from_cli(
-        cluster_name,
-        environment,
-        region,
-        kubernetes_version,
-        node_pools,
-        domain,
-        acme_email,
-        gitops_repository,
-        gitops_branch,
-        gitops_token,
-        vault_address,
-        vault_role_id,
-        vault_secret_id,
-        vault_ca_certificate,
-        digitalocean_token,
-        spaces_access_key,
-        spaces_secret_key,
-        cloudflare_api_token_secret_name,
-        enable_traefik,
-        enable_cert_manager,
-        enable_external_dns,
-        enable_vault_eso,
-        enable_cnpg,
-        dry_run,
-        runner_temp,
-        github_env,
-    )
-    inputs = _resolve_all_inputs(raw_inputs)
-    prepare_inputs(inputs)
+) -> int:
+    """Prepare inputs for the wildside-infra-k8s action."""
+    return _run_prepare_flow(locals())
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
