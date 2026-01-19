@@ -67,7 +67,7 @@ def test_clone_repository_uses_askpass(monkeypatch: pytest.MonkeyPatch, tmp_path
         captured["env"] = kwargs.get("env")
         return _Result()
 
-    monkeypatch.setattr("scripts.commit_gitops_manifests.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts._gitops_repo.subprocess.run", fake_run)
 
     with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         clone_repository(inputs, clone_dir, auth_env)
@@ -130,19 +130,13 @@ def test_commit_and_push_no_changes(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     clone_dir = tmp_path / "clone"
     clone_dir.mkdir()
 
-    monkeypatch.setattr(
-        "scripts.commit_gitops_manifests.run_git",
-        lambda *_args, **_kwargs: "",
-    )
+    monkeypatch.setattr("scripts._gitops_repo.run_git", lambda *_args, **_kwargs: "")
 
     class _Result:
         def __init__(self) -> None:
             self.returncode = 0
 
-    monkeypatch.setattr(
-        "scripts.commit_gitops_manifests.subprocess.run",
-        lambda *_args, **_kwargs: _Result(),
-    )
+    monkeypatch.setattr("scripts._gitops_repo.subprocess.run", lambda *_args, **_kwargs: _Result())
 
     with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         assert (
@@ -165,16 +159,13 @@ def test_commit_and_push_dry_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
             return "abc123"
         return ""
 
-    monkeypatch.setattr("scripts.commit_gitops_manifests.run_git", fake_run_git)
+    monkeypatch.setattr("scripts._gitops_repo.run_git", fake_run_git)
 
     class _Result:
         def __init__(self) -> None:
             self.returncode = 1
 
-    monkeypatch.setattr(
-        "scripts.commit_gitops_manifests.subprocess.run",
-        lambda *_args, **_kwargs: _Result(),
-    )
+    monkeypatch.setattr("scripts._gitops_repo.subprocess.run", lambda *_args, **_kwargs: _Result())
 
     with _git_auth_env(inputs.gitops_token, tmp_path) as auth_env:
         commit_sha = commit_and_push(inputs, clone_dir, auth_env)
