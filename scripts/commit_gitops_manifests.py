@@ -41,31 +41,6 @@ RENDER_OUTPUT_DIR_PARAM = Parameter()
 RUNNER_TEMP_PARAM = Parameter()
 GITHUB_ENV_PARAM = Parameter()
 DRY_RUN_PARAM = Parameter()
-# CLI parameters are declared for cyclopts but resolved via resolve_gitops_inputs().
-# This keeps defaults centralised while preventing ARG001/B008 false positives.
-def _build_raw_inputs_from_cli(
-    gitops_repository: str | None,
-    gitops_branch: str | None,
-    gitops_token: str | None,
-    cluster_name: str | None,
-    render_output_dir: Path | None,
-    runner_temp: Path | None,
-    github_env: Path | None,
-    dry_run: str | None,
-) -> RawGitOpsInputs:
-    """Build raw GitOps inputs from CLI arguments."""
-    return RawGitOpsInputs(
-        gitops_repository=gitops_repository,
-        gitops_branch=gitops_branch,
-        gitops_token=gitops_token,
-        cluster_name=cluster_name,
-        render_output_dir=render_output_dir,
-        runner_temp=runner_temp,
-        github_env=github_env,
-        dry_run=dry_run,
-    )
-
-
 def _run_gitops_flow(inputs: GitOpsInputs) -> tuple[int, str | None]:
     """Clone, sync, and commit GitOps manifests."""
     if inputs.runner_temp.exists() and not inputs.runner_temp.is_dir():
@@ -123,18 +98,18 @@ def main(
     --------
     >>> python scripts/commit_gitops_manifests.py --gitops-repository org/repo
     """
-    raw_inputs = _build_raw_inputs_from_cli(
-        gitops_repository,
-        gitops_branch,
-        gitops_token,
-        cluster_name,
-        render_output_dir,
-        runner_temp,
-        github_env,
-        dry_run,
+    raw = RawGitOpsInputs(
+        gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch,
+        gitops_token=gitops_token,
+        cluster_name=cluster_name,
+        render_output_dir=render_output_dir,
+        runner_temp=runner_temp,
+        github_env=github_env,
+        dry_run=dry_run,
     )
     # Resolve inputs from environment
-    inputs = resolve_gitops_inputs(raw_inputs)
+    inputs = resolve_gitops_inputs(raw)
 
     # Mask sensitive values
     mask_secret(inputs.gitops_token)
