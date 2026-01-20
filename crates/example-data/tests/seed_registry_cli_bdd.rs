@@ -12,9 +12,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base_d::{WordDictionary, word, wordlists};
 use example_data::SeedRegistry;
-use example_data::seed_registry_cli::{ParseOutcome, apply_update, parse_args, success_message};
+use example_data::seed_registry_cli::{
+    ParseOutcome, Update, apply_update, parse_args, seed_name_for_seed, success_message,
+};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -42,9 +43,10 @@ struct World {
 
 #[derive(Debug, Clone)]
 struct CommandResult {
-    success: bool,
+    is_success: bool,
     stdout: String,
     stderr: String,
+    update: Option<Update>,
 }
 
 #[fixture]
@@ -108,15 +110,31 @@ fn the_registry_contains_seed_named(world: &World, name: String) {
 fn the_cli_reports_success(world: &World) {
     let result = world.command_result.get().expect("command result set");
 
-    assert!(result.success, "stderr was: {}", result.stderr);
-    assert!(result.stdout.contains("Added seed"));
+    assert!(result.is_success, "stderr was: {}", result.stderr);
+    let update = result.update.as_ref().expect("update should be recorded");
+    let path = registry_path(world);
+    let expected = success_message(update, &path);
+
+    assert_eq!(
+        result.stdout.trim_end(),
+        expected,
+        "stdout mismatch: {}",
+        result.stdout
+    );
+
+    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+    let seed = registry
+        .find_seed(&update.name)
+        .expect("registry should contain the new seed");
+    assert_eq!(seed.seed(), update.seed);
+    assert_eq!(seed.user_count(), update.user_count);
 }
 
 #[then("the CLI reports a duplicate seed error")]
 fn the_cli_reports_a_duplicate_seed_error(world: &World) {
     let result = world.command_result.get().expect("command result set");
 
-    assert!(!result.success);
+    assert!(!result.is_success);
     assert!(!result.stderr.is_empty(), "stderr was empty");
 }
 
@@ -133,7 +151,7 @@ fn the_registry_remains_unchanged(world: &World) {
 fn the_cli_reports_a_registry_parse_error(world: &World) {
     let result = world.command_result.get().expect("command result set");
 
-    assert!(!result.success);
+    assert!(!result.is_success);
     assert!(result.stderr.contains("invalid registry JSON"));
 }
 
@@ -173,48 +191,41 @@ fn run_cli(registry_path: &Path, extra_args: &[&str]) -> CommandResult {
         Ok(outcome) => outcome,
         Err(err) => {
             return CommandResult {
-                success: false,
+                is_success: false,
                 stdout: String::new(),
                 stderr: err.to_string(),
+                update: None,
             };
         }
     };
 
     let ParseOutcome::Options(options) = parse_result else {
         return CommandResult {
-            success: false,
+            is_success: false,
             stdout: String::new(),
             stderr: "unexpected help output".to_owned(),
+            update: None,
         };
     };
 
     match apply_update(&options) {
         Ok(update) => CommandResult {
-            success: true,
+            is_success: true,
             stdout: success_message(&update, options.registry_path()),
             stderr: String::new(),
+            update: Some(update),
         },
         Err(err) => CommandResult {
-            success: false,
+            is_success: false,
             stdout: String::new(),
             stderr: err.to_string(),
+            update: None,
         },
     }
 }
 
 fn seed_name_from_value(seed: u64) -> String {
-    let dictionary = eff_long_dictionary();
-    let seed_str = seed.to_string();
-    word::encode(seed_str.as_bytes(), &dictionary)
-}
-
-fn eff_long_dictionary() -> WordDictionary {
-    WordDictionary::builder()
-        .words_from_str(wordlists::EFF_LONG)
-        .delimiter("-")
-        .case_sensitive(false)
-        .build()
-        .expect("EFF long word list should be valid")
+    seed_name_for_seed(seed).expect("seed name should be generated")
 }
 
 fn write_registry(contents: &str) -> PathBuf {
@@ -235,13 +246,15 @@ fn registry_json_with_seed(name: &str) -> String {
 }
 
 fn temp_registry_path() -> PathBuf {
+    static TEMP_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let counter = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
     let dir = std::env::temp_dir()
         .join("example-data-cli-tests")
-        .join(format!("seed-registry-{suffix}"));
+        .join(format!("seed-registry-{suffix}-{counter}"));
     fs::create_dir_all(&dir).expect("create temp dir");
     dir.join("seeds.json")
 }

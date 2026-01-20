@@ -32,6 +32,7 @@
 //! assert_eq!(users.len(), 3);
 //! ```
 
+mod atomic_io;
 mod error;
 mod generator;
 mod registry;

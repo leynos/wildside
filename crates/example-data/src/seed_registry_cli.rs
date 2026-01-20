@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use base_d::{WordDictionary, word, wordlists};
 use rand::Rng;
+use thiserror::Error;
 
 use crate::error::RegistryError;
 use crate::registry::{SeedDefinition, SeedRegistry};
@@ -188,6 +189,25 @@ pub fn apply_update(options: &Options) -> Result<Update, CliError> {
     })
 }
 
+/// Generates a seed name for the supplied seed value.
+///
+/// # Errors
+///
+/// Returns [`CliError`] if the word list cannot be loaded.
+///
+/// # Example
+///
+/// ```
+/// use example_data::seed_registry_cli::seed_name_for_seed;
+///
+/// let name = seed_name_for_seed(2026).expect("name should generate");
+/// assert!(!name.is_empty());
+/// ```
+pub fn seed_name_for_seed(seed: u64) -> Result<String, CliError> {
+    let dictionary = eff_long_dictionary()?;
+    Ok(seed_name_from_value(seed, &dictionary))
+}
+
 /// Formats the success message emitted by the CLI.
 ///
 /// # Example
@@ -293,21 +313,25 @@ fn eff_long_dictionary() -> Result<WordDictionary, CliError> {
 }
 
 /// Errors surfaced by the CLI parsing and update flow.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CliError {
     /// Registry path was not supplied.
+    #[error("missing required flag: --registry")]
     MissingRegistryPath,
     /// A flag expected a value but none was provided.
+    #[error("missing value for {flag}")]
     MissingValue {
         /// Flag that was missing its value.
         flag: &'static str,
     },
     /// An unsupported argument was supplied.
+    #[error("unknown argument: {value}")]
     UnknownArgument {
         /// Argument value that was not recognised.
         value: String,
     },
     /// A numeric value failed to parse.
+    #[error("invalid number for {flag}: '{value}' ({message})")]
     InvalidNumber {
         /// Flag associated with the invalid number.
         flag: &'static str,
@@ -317,72 +341,29 @@ pub enum CliError {
         message: String,
     },
     /// The EFF word list could not be built.
+    #[error("word list error: {message}")]
     WordlistError {
         /// Error message describing the failure.
         message: String,
     },
     /// The generated name already exists in the registry.
+    #[error("generated seed name '{name}' already exists; supply --name")]
     DuplicateGeneratedName {
         /// Generated name that collided.
         name: String,
     },
     /// Name generation ran out of retries.
+    #[error("failed to generate a unique seed name after {attempts} attempts")]
     NameGenerationExhausted {
         /// Number of attempts made.
         attempts: usize,
     },
     /// An error occurred while reading or writing the registry.
+    #[error("registry error: {source}")]
     RegistryError {
         /// Underlying registry error.
+        #[from]
+        #[source]
         source: RegistryError,
     },
-}
-
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingRegistryPath => {
-                write!(f, "missing required flag: --registry")
-            }
-            Self::MissingValue { flag } => {
-                write!(f, "missing value for {flag}")
-            }
-            Self::UnknownArgument { value } => {
-                write!(f, "unknown argument: {value}")
-            }
-            Self::InvalidNumber {
-                flag,
-                value,
-                message,
-            } => {
-                write!(f, "invalid number for {flag}: '{value}' ({message})")
-            }
-            Self::WordlistError { message } => {
-                write!(f, "wordlist error: {message}")
-            }
-            Self::DuplicateGeneratedName { name } => {
-                write!(
-                    f,
-                    "generated seed name '{name}' already exists; supply --name"
-                )
-            }
-            Self::NameGenerationExhausted { attempts } => {
-                write!(
-                    f,
-                    "failed to generate a unique seed name after {attempts} attempts"
-                )
-            }
-            Self::RegistryError { source } => {
-                write!(f, "registry error: {source}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for CliError {}
-
-impl From<RegistryError> for CliError {
-    fn from(source: RegistryError) -> Self {
-        Self::RegistryError { source }
-    }
 }
