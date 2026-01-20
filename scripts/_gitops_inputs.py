@@ -1,4 +1,17 @@
-"""Resolve and validate GitOps inputs."""
+"""Resolve and validate GitOps inputs.
+
+This module resolves CLI or environment-based inputs into validated,
+type-safe configuration for GitOps manifest operations. It handles
+coercion of raw string/path values, applies defaults where appropriate,
+and raises validation errors for missing or invalid required inputs.
+
+Classes
+-------
+GitOpsInputs
+    Immutable dataclass holding resolved GitOps configuration values.
+RawGitOpsInputs
+    Dataclass representing unvalidated inputs from CLI or defaults.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +21,8 @@ from pathlib import Path
 from scripts._gitops_errors import GitValidationError
 from scripts._input_resolution import InputResolution, resolve_input
 from scripts._infra_k8s import parse_bool
+
+__all__ = ["GitOpsInputs", "RawGitOpsInputs", "resolve_gitops_inputs"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,10 +84,29 @@ class RawGitOpsInputs:
     dry_run: str | None = None
 
 
-def _to_path(value: Path | str | None) -> Path:
-    """Coerce a string or Path to Path."""
+def _to_path(value: Path | str | None, name: str | None = None) -> Path:
+    """Coerce a string or Path to Path.
+
+    Parameters
+    ----------
+    value : Path | str | None
+        The value to coerce to a Path.
+    name : str | None
+        Descriptive name for the path value, used in error messages.
+
+    Returns
+    -------
+    Path
+        The coerced path value.
+
+    Raises
+    ------
+    GitValidationError
+        If value is None.
+    """
     if value is None:
-        msg = "Path value must not be None"
+        label = name or "<unknown>"
+        msg = f"Path value for '{label}' must not be None"
         raise GitValidationError(msg)
     return value if isinstance(value, Path) else Path(value)
 
@@ -91,7 +125,8 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
         Normalized inputs for GitOps operations.
     """
     gitops_repository = resolve_input(
-        raw.gitops_repository, InputResolution(env_key="GITOPS_REPOSITORY", required=True)
+        raw.gitops_repository,
+        InputResolution(env_key="GITOPS_REPOSITORY", required=True),
     )
     gitops_branch = resolve_input(
         raw.gitops_branch, InputResolution(env_key="GITOPS_BRANCH", default="main")
@@ -140,8 +175,8 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
         gitops_branch=str(gitops_branch),
         gitops_token=str(gitops_token),
         cluster_name=cluster_name_value,
-        render_output_dir=_to_path(render_output_dir_raw),
-        runner_temp=_to_path(runner_temp_raw),
-        github_env=_to_path(github_env_raw),
+        render_output_dir=_to_path(render_output_dir_raw, "render_output_dir"),
+        runner_temp=_to_path(runner_temp_raw, "runner_temp"),
+        github_env=_to_path(github_env_raw, "github_env"),
         dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
     )

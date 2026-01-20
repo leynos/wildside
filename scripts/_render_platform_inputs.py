@@ -129,7 +129,9 @@ def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
     cluster_name_raw = resolve_input(
         raw.cluster_name, InputResolution(env_key="CLUSTER_NAME", required=True)
     )
-    domain_raw = resolve_input(raw.domain, InputResolution(env_key="DOMAIN", required=True))
+    domain_raw = resolve_input(
+        raw.domain, InputResolution(env_key="DOMAIN", required=True)
+    )
     acme_email_raw = resolve_input(
         raw.acme_email, InputResolution(env_key="ACME_EMAIL", required=True)
     )
@@ -140,22 +142,36 @@ def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
             default="cloudflare-api-token",
         ),
     )
-    return cluster_name_raw, domain_raw, acme_email_raw, cloudflare_secret_raw
+    return (
+        cast(str, cluster_name_raw),
+        cast(str, domain_raw),
+        cast(str, acme_email_raw),
+        cast(str, cloudflare_secret_raw),
+    )
 
 
 def _resolve_vault_config(
     raw: RawRenderInputs,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Resolve vault configuration inputs."""
-    vault_address_raw = resolve_input(raw.vault_address, InputResolution(env_key="VAULT_ADDRESS"))
-    vault_role_id_raw = resolve_input(raw.vault_role_id, InputResolution(env_key="VAULT_ROLE_ID"))
+    vault_address_raw = resolve_input(
+        raw.vault_address, InputResolution(env_key="VAULT_ADDRESS")
+    )
+    vault_role_id_raw = resolve_input(
+        raw.vault_role_id, InputResolution(env_key="VAULT_ROLE_ID")
+    )
     vault_secret_id_raw = resolve_input(
         raw.vault_secret_id, InputResolution(env_key="VAULT_SECRET_ID")
     )
     vault_ca_cert_raw = resolve_input(
         raw.vault_ca_certificate, InputResolution(env_key="VAULT_CA_CERTIFICATE")
     )
-    return vault_address_raw, vault_role_id_raw, vault_secret_id_raw, vault_ca_cert_raw
+    return (
+        cast("str | None", vault_address_raw),
+        cast("str | None", vault_role_id_raw),
+        cast("str | None", vault_secret_id_raw),
+        cast("str | None", vault_ca_cert_raw),
+    )
 
 
 def _resolve_feature_flags(raw: RawRenderInputs) -> tuple[str, str, str, str, str]:
@@ -180,7 +196,13 @@ def _resolve_feature_flags(raw: RawRenderInputs) -> tuple[str, str, str, str, st
         raw.enable_cnpg,
         InputResolution(env_key="ENABLE_CNPG", default="true"),
     )
-    return enable_traefik, enable_cert_manager, enable_external_dns, enable_vault_eso, enable_cnpg
+    return (
+        cast(str, enable_traefik),
+        cast(str, enable_cert_manager),
+        cast(str, enable_external_dns),
+        cast(str, enable_vault_eso),
+        cast(str, enable_cnpg),
+    )
 
 
 def _resolve_paths(raw: RawRenderInputs) -> tuple[Path, Path, Path]:
@@ -264,10 +286,7 @@ def resolve_render_inputs(raw: RawRenderInputs) -> RenderInputs:
         secret_id=vault_secret_id_raw,
     )
     if vault_eso_enabled and missing:
-        msg = (
-            "ENABLE_VAULT_ESO=true requires "
-            f"{', '.join(missing)} to be set."
-        )
+        msg = f"ENABLE_VAULT_ESO=true requires {', '.join(missing)} to be set."
         raise ValueError(msg)
 
     return RenderInputs(
@@ -305,6 +324,7 @@ def build_render_tfvars(inputs: RenderInputs) -> dict[str, object]:
 
     Examples
     --------
+    >>> from pathlib import Path
     >>> inputs = RenderInputs(
     ...     cluster_name="preview-1",
     ...     domain="example.test",

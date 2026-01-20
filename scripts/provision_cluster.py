@@ -10,15 +10,15 @@ export key outputs to the GitHub Actions environment file.
 
 Examples
 --------
-Run the provisioning workflow with required environment variables:
+Run the provisioning workflow with required environment variables::
 
->>> export CLUSTER_NAME="preview-1"
->>> export ENVIRONMENT="preview"
->>> export REGION="nyc3"
->>> export SPACES_ACCESS_KEY="access-key"
->>> export SPACES_SECRET_KEY="secret-key"
->>> export GITHUB_ENV="/tmp/github-env"
->>> python scripts/provision_cluster.py --region nyc3
+    $ export CLUSTER_NAME="preview-1"
+    $ export ENVIRONMENT="preview"
+    $ export REGION="nyc3"
+    $ export SPACES_ACCESS_KEY="access-key"
+    $ export SPACES_SECRET_KEY="secret-key"
+    $ export GITHUB_ENV="/tmp/github-env"
+    $ python scripts/provision_cluster.py --region nyc3
 """
 
 from __future__ import annotations
