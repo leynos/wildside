@@ -8,10 +8,6 @@ sandbox user. Unprivileged invocations keep the current identity and provision
 directories with the caller’s UID. This guide explains how to configure the
 tool and integrate it into automated test flows.
 
-Version 0.2.0 introduces template database helpers and shared cluster support
-for persistent test sessions, reducing per-test overhead without changing the
-core bootstrap flow.
-
 ## Prerequisites
 
 - Linux host, VM, or container. `root` access enables the privilege-dropping
@@ -19,6 +15,15 @@ core bootstrap flow.
 - Rust toolchain specified in `rust-toolchain.toml`.
 - Outbound network access to crates.io and the PostgreSQL binary archive.
 - System timezone database (package usually named `tzdata`).
+
+## Platform expectations
+
+- Linux supports both privilege branches. Root executions require
+  `PG_EMBEDDED_WORKER` so the helper can drop to `nobody` for filesystem work.
+- macOS runs the unprivileged path; root executions are expected to fail fast
+  because privilege dropping is not supported on that target.
+- Windows always behaves as unprivileged, so the helper runs in-process and
+  ignores root-only scenarios.
 
 ## Quick start
 
@@ -43,16 +48,16 @@ core bootstrap flow.
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initializes the
+   cache, 0700 for the runtime and data directories), and initialises the
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
    worker helper so the privileged operations run entirely under the sandbox
    user. Ownership fix-ups occur on every call so running the tool twice
    remains idempotent.
 
-4. Pass the resulting paths and credentials to the tests. If
-   `postgresql_embedded` is used directly after the setup step, it can reuse
-   the staged binaries and data directory without needing `root`.
+4. Pass the resulting paths and credentials to your tests. If you use
+   `postgresql_embedded` directly after the setup step, it can reuse the staged
+   binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -113,6 +118,59 @@ The guard keeps `PGPASSFILE`, `TZ`, `TZDIR`, and the XDG directories populated
 for the duration of its lifetime, making synchronous tests usable without extra
 setup.
 
+### Async API for `#[tokio::test]` contexts
+
+Tests within an async runtime (e.g. `#[tokio::test]`) must not use the standard
+`TestCluster::new()` constructor, which panics with "Cannot start a runtime
+from within a runtime" because it creates its own internal Tokio runtime. Async
+contexts require enabling the `async-api` feature and using the async
+constructor and shutdown methods.
+
+Enable the feature in your `Cargo.toml`:
+
+```toml
+[dev-dependencies]
+pg-embed-setup-unpriv = { version = "0.2", features = ["async-api"] }
+```
+
+Then use `start_async()` and `stop_async()` in your async tests:
+
+```rust,no_run
+use pg_embedded_setup_unpriv::{TestCluster, error::BootstrapResult};
+
+#[tokio::test]
+async fn test_async_database_operations() -> BootstrapResult<()> {
+    let cluster = TestCluster::start_async().await?;
+
+    // Access connection metadata as usual.
+    let url = cluster.connection().database_url("app_db");
+    // Issue async queries using sqlx or other async clients here.
+
+    // Explicitly shut down to ensure clean resource release.
+    cluster.stop_async().await?;
+    Ok(())
+}
+```
+
+Async clusters behave like the synchronous guard: the same accessors apply, and
+the environment overrides are restored on shutdown. `stop_async()` consumes the
+guard, so capture any required connection details before calling it.
+
+**Important:** `stop_async()` must be called explicitly before the cluster goes
+out of scope. Unlike the synchronous API where `Drop` can reliably shut down
+PostgreSQL using its internal runtime, async-created clusters cannot guarantee
+cleanup in `Drop` because `Drop` cannot be async. When `stop_async()` is not
+called, the library will attempt best-effort cleanup and log a warning; if no
+async runtime handle is available (for example, after the runtime has shut
+down), resources may leak and the process may need to be stopped manually.
+
+The async API runs PostgreSQL lifecycle operations on the caller's runtime
+rather than creating a separate one, avoiding the nested-runtime panic whilst
+maintaining the same zero-configuration experience as the synchronous API. When
+running as `root`, the async API still delegates to the worker helper, and
+those operations are executed with `spawn_blocking` so they do not block the
+async executor.
+
 ## Observability
 
 Set `RUST_LOG=pg_embed::observability=info` to emit tracing spans that describe
@@ -139,7 +197,10 @@ normal informational lifecycle noise.
 `pg_embedded_setup_unpriv::test_support::test_cluster` exposes an `rstest`
 fixture that constructs the RAII guard on demand. Import the fixture so it is
 in scope and declare a `test_cluster: TestCluster` parameter inside an
-`#[rstest]` function; the macro injects the running cluster automatically.
+`#[rstest]` function; the macro injects the running cluster automatically. The
+`test_cluster` and `shared_test_cluster` fixtures are synchronous and
+constructed via `TestCluster::new()`, so they must not be used in async tests;
+`TestCluster::start_async()` should be used for async tests.
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{test_support::test_cluster, TestCluster};
@@ -226,8 +287,8 @@ overhead from seconds to milliseconds.
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When persistence beyond the guard is required, call
-`metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When you need to persist those values beyond the guard
+you can call `metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
@@ -379,7 +440,7 @@ let template_name = format!("template_{}", &hash[..8]);
 # }
 ```
 
-If a migration version is already tracked, include it in the template name
+If you already track a migration version, include it in the template name
 instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
 template invalidation explicit without hashing the migration directory.
 
@@ -453,9 +514,8 @@ using connection pools, drain the pool first.
 
 ### Automatic cleanup with TemporaryDatabase
 
-The `TemporaryDatabase` guard provides Resource Acquisition Is Initialization
-(RAII) cleanup semantics. When the guard goes out of scope, the database is
-automatically dropped:
+The `TemporaryDatabase` guard provides RAII cleanup semantics. When the guard
+goes out of scope, the database is automatically dropped:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::TestCluster;
@@ -539,19 +599,19 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the
-  distribution) when running the CLI. The library helper sets `TZ`
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
+  distribution) if you are running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
   valid timezone database.
 
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment when
-  `invalid value for parameter "TimeZone": "UTC"` appears.
+  `tzdata` package. Install it inside the execution environment if you see
+  `invalid value for parameter "TimeZone": "UTC"`.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable when
-  rate limits appear in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
+  hit rate limits in CI.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,
   `bootstrap_privileges::bootstrap_as_root`) do not trip the underlying Clap
@@ -563,5 +623,5 @@ still running as `root`, follow these steps:
 
 ## Further reading
 
-- `README.md` — overview, configuration reference, and troubleshooting tips.
-- `docs/developers-guide.md` — contributor notes and internal testing context.
+- `README.md` – overview, configuration reference, and troubleshooting tips.
+- `docs/developers-guide.md` – contributor notes and internal testing context.
