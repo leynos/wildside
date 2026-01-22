@@ -74,7 +74,8 @@ seeing no functional differences, only faster setup.
 - [x] (2026-01-12 01:25Z) Add shared cluster and template database helpers for tests.
 - [x] (2026-01-12 01:35Z) Migrate integration tests to template-backed
   databases where safe.
-- [x] (2026-01-12 01:55Z) Update documentation that references the old per-test bootstrap.
+- [x] (2026-01-12 01:55Z) Update documentation that references the old
+  per-test bootstrap.
 - [x] (2026-01-12 03:05Z) Group embedded Postgres tests and extend their
   nextest timeout to reduce flaky slow-suite timeouts.
 - [x] (2026-01-12 03:40Z) Swap cmd-mox source to PyPI release for

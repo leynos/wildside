@@ -93,9 +93,11 @@ seeding behaviour.
   Impact: Initial implementation used v0.2.0 patterns; later upgraded to v0.3.2
   with `Slot<T>`, `ScenarioState` derive, and explicit scenario name bindings.
 
-- Observation: Type inference issues with `handle_cluster_setup_failure` in BDD tests
+- Observation: Type inference issues with `handle_cluster_setup_failure`
+  in BDD tests
   Evidence: Compiler error `cannot infer type of the type parameter T`
-  Impact: Required explicit type annotation `let _: Option<()>` when discarding result.
+  Impact: Required explicit type annotation `let _: Option<()>` when
+  discarding result.
 
 - Observation: ExampleDataRunRow struct flagged as dead code
   Evidence: Clippy warning about unused struct
