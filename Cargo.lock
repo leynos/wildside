@@ -423,7 +423,7 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "cap-std",
- "rstest 0.26.1",
+ "rstest",
  "rstest-bdd 0.1.0",
  "rstest-bdd-macros 0.1.0",
  "syn 2.0.104",
@@ -543,7 +543,7 @@ dependencies = [
  "postgresql_embedded",
  "prometheus",
  "regex",
- "rstest 0.26.1",
+ "rstest",
  "rstest-bdd 0.3.2",
  "rstest-bdd-macros 0.3.2",
  "serde",
@@ -742,9 +742,9 @@ checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
 name = "cfg_aliases"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
@@ -1248,6 +1248,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys 0.5.0",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1395,7 +1404,7 @@ dependencies = [
  "fake",
  "rand 0.9.2",
  "rand_chacha 0.9.0",
- "rstest 0.26.1",
+ "rstest",
  "rstest-bdd 0.3.2",
  "rstest-bdd-macros 0.3.2",
  "serde",
@@ -1467,14 +1476,13 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc0505cd1b6fa6580283f6bdf70a73fcf4aba1184038c90902b92b3dd0df63ed"
+checksum = "f98844151eee8917efc50bd9e8318cb963ae8b297431495d3f758616ea5c57db"
 dependencies = [
  "cfg-if",
  "libc",
  "libredox",
- "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2664,9 +2672,9 @@ checksum = "5c8b7b69b0eafaa88ec8dc9fe7c3860af0a147517e5207cfbd0ecd21cd7cde18"
 
 [[package]]
 name = "nix"
-version = "0.28.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
 dependencies = [
  "bitflags 2.9.1",
  "cfg-if",
@@ -2811,7 +2819,7 @@ dependencies = [
  "clap",
  "clap-dispatch",
  "directories",
- "dirs",
+ "dirs 5.0.1",
  "dunce",
  "figment",
  "figment-json5",
@@ -3006,31 +3014,33 @@ dependencies = [
 
 [[package]]
 name = "pg-embed-setup-unpriv"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "963e113f6de192ac946f69856a34236c2580e4563ca812618d35b036a1ed4d09"
+checksum = "5b10479f1fe07895b9cf36d2ce8f808b44152b8918d86d75ad3e355c3dce92a3"
 dependencies = [
  "camino",
  "cap-std",
  "clap",
  "color-eyre",
  "dashmap",
+ "dirs 6.0.0",
  "figment",
  "figment-json5",
+ "filetime",
  "libc",
  "nix",
  "openssl-sys",
  "ortho_config",
  "postgres",
  "postgresql_embedded",
- "rstest 0.18.2",
+ "rstest",
  "secrecy",
  "serde",
  "serde_json",
  "serde_with",
  "sha2",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "uncased",
@@ -3639,25 +3649,13 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
-dependencies = [
- "futures",
- "futures-timer",
- "rstest_macros 0.18.2",
- "rustc_version",
-]
-
-[[package]]
-name = "rstest"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5a3193c063baaa2a95a33f03035c8a72b83d97a54916055ba22d35ed3839d49"
 dependencies = [
  "futures-timer",
  "futures-util",
- "rstest_macros 0.26.1",
+ "rstest_macros",
 ]
 
 [[package]]
@@ -3772,23 +3770,6 @@ dependencies = [
  "gherkin",
  "regex",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "rstest_macros"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d428f8247852f894ee1be110b375111b586d4fa431f6c46e64ba5a0dcccbe605"
-dependencies = [
- "cfg-if",
- "glob",
- "proc-macro2",
- "quote",
- "regex",
- "relative-path",
- "rustc_version",
- "syn 2.0.104",
- "unicode-ident",
 ]
 
 [[package]]
