@@ -133,7 +133,7 @@ Enable the feature in the test crate's `Cargo.toml`:
 pg-embed-setup-unpriv = { version = "0.4", features = ["async-api"] }
 ```
 
-Then use `start_async()` and `stop_async()` in your async tests:
+Then use `start_async()` and `stop_async()` in async tests:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{TestCluster, error::BootstrapResult};
