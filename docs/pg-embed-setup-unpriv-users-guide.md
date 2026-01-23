@@ -440,9 +440,9 @@ let template_name = format!("template_{}", &hash[..8]);
 # }
 ```
 
-If you already track a migration version, include it in the template name
-instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
-template invalidation explicit without hashing the migration directory.
+When a migration version is tracked, include it in the template name (for
+example, `format!("template_v{SCHEMA_VERSION}")`) to make template invalidation
+explicit without hashing the migration directory.
 
 ### Performance comparison
 
