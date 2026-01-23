@@ -48,16 +48,16 @@ tool and integrate it into automated test flows.
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initialises the
+   cache, 0700 for the runtime and data directories), and initializes the
    cluster with the provided credentials. Invocations that begin as `root`
    prepare directories for `nobody` and execute lifecycle commands through the
    worker helper so the privileged operations run entirely under the sandbox
    user. Ownership fix-ups occur on every call so running the tool twice
    remains idempotent.
 
-4. Pass the resulting paths and credentials to your tests. If you use
-   `postgresql_embedded` directly after the setup step, it can reuse the staged
-   binaries and data directory without needing `root`.
+4. Pass the resulting paths and credentials to the tests. If
+   `postgresql_embedded` is used directly after the setup step, it can reuse
+   the staged binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -126,11 +126,11 @@ from within a runtime" because it creates its own internal Tokio runtime. Async
 contexts require enabling the `async-api` feature and using the async
 constructor and shutdown methods.
 
-Enable the feature in your `Cargo.toml`:
+Enable the feature in the test crate's `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-pg-embed-setup-unpriv = { version = "0.2", features = ["async-api"] }
+pg-embed-setup-unpriv = { version = "0.4", features = ["async-api"] }
 ```
 
 Then use `start_async()` and `stop_async()` in your async tests:
@@ -287,8 +287,8 @@ overhead from seconds to milliseconds.
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When you need to persist those values beyond the guard
-you can call `metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When persistence of those values beyond the guard is
+required, call `metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
@@ -514,8 +514,9 @@ using connection pools, drain the pool first.
 
 ### Automatic cleanup with TemporaryDatabase
 
-The `TemporaryDatabase` guard provides RAII cleanup semantics. When the guard
-goes out of scope, the database is automatically dropped:
+The `TemporaryDatabase` guard provides Resource Acquisition Is Initialization
+(RAII) cleanup semantics. When the guard goes out of scope, the database is
+automatically dropped:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::TestCluster;
@@ -599,19 +600,19 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
-  distribution) if you are running the CLI. The library helper sets `TZ`
-  automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
-  valid timezone database.
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the target
+  distribution) when running the CLI. The library helper sets `TZ` automatically
+  and, on Unix-like hosts, also seeds `TZDIR` when it discovers a valid timezone
+  database.
 
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment if you see
-  `invalid value for parameter "TimeZone": "UTC"`.
+  `tzdata` package. Install it inside the execution environment if the error
+  `invalid value for parameter "TimeZone": "UTC"` appears.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
-  hit rate limits in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable when
+  rate limits are encountered in CI.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,
   `bootstrap_privileges::bootstrap_as_root`) do not trip the underlying Clap
