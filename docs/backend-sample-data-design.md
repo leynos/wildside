@@ -212,8 +212,8 @@ environments.
 ## Dependencies
 
 - `fake = "2.10.0"` for name generation.
-- `rand = "0.8.5"` for deterministic RNG.
-- `base-d = "3.0.30"` for memorable seed naming with the `eff_long` word
+- Deterministic RNG provided by `rand = "0.8.5"`.
+- Memorable seed naming uses `base-d = "3.0.30"` with the `eff_long` word
   list.
 - `ortho-config = "<latest stable>"` for hierarchical configuration.
 - Existing workspace `uuid` and `chrono` versions.
