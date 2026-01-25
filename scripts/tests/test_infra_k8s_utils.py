@@ -9,6 +9,7 @@ import pytest
 
 from scripts._infra_k8s import (
     TofuResult,
+    TofuCommandError,
     append_github_env,
     append_github_output,
     parse_bool,
@@ -134,7 +135,7 @@ def test_tofu_output_raises_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     monkeypatch.setattr("scripts._infra_k8s.run_tofu", fake_run)
 
-    with pytest.raises(RuntimeError, match="tofu output failed"):
+    with pytest.raises(TofuCommandError, match="tofu output failed"):
         tofu_output(tmp_path)
 
 

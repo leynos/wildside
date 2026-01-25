@@ -213,6 +213,7 @@ variable "namecheap_api_secret_name" {
   validation {
     condition = (
       length(trimspace(var.namecheap_api_secret_name)) > 0 &&
+      length(trimspace(var.namecheap_api_secret_name)) <= 253 &&
       can(regex("^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$", trimspace(var.namecheap_api_secret_name)))
     )
     error_message = "namecheap_api_secret_name must be a valid Kubernetes Secret name"
@@ -274,8 +275,8 @@ variable "cnpg_storage_size" {
   default     = "50Gi"
 
   validation {
-    condition     = can(regex("^[0-9]+[GMK]i$", var.cnpg_storage_size))
-    error_message = "cnpg_storage_size must be a valid Kubernetes quantity (e.g., 50Gi)"
+    condition     = can(regex("^[0-9]+(\\.[0-9]+)?[KMGT]i?$", var.cnpg_storage_size))
+    error_message = "cnpg_storage_size must be a valid Kubernetes quantity using K/M/G/T with optional i (e.g., 500M, 50Gi, 1Ti, 0.5G)"
   }
 }
 

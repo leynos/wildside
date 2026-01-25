@@ -32,10 +32,12 @@ class FlowPaths:
 
 
 def _is_blank_or_comment(line: str) -> bool:
+    """Return True when a line is empty or a comment."""
     return not line.strip() or line.lstrip().startswith("#")
 
 
 def _start_heredoc(line: str) -> tuple[str | None, str | None]:
+    """Detect a heredoc start and return the key and marker."""
     if "<<" not in line:
         return None, None
     key_part, marker = line.split("<<", 1)
@@ -43,6 +45,7 @@ def _start_heredoc(line: str) -> tuple[str | None, str | None]:
 
 
 def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> None:
+    """Store buffered heredoc content in entries when a key is present."""
     if key is None:
         return
     entries[key] = "\n".join(buf)

@@ -169,6 +169,7 @@ mod tests {
         assert!(is_transient_error("network unreachable"));
         assert!(is_transient_error("dns error: lookup failed"));
         assert!(is_transient_error("failed to lookup address"));
+        assert!(is_transient_error("failed to connect to admin database"));
     }
 
     #[test]

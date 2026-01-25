@@ -38,6 +38,10 @@ class TofuResult:
     return_code: int
 
 
+class TofuCommandError(RuntimeError):
+    """Raised when an OpenTofu command fails."""
+
+
 def mask_secret(value: str, stream: cabc.Callable[[str], object] = print) -> None:
     """Emit GitHub Action secret masking command.
 
@@ -365,7 +369,7 @@ def tofu_output(cwd: Path, name: str | None = None) -> object:
 
     if not result.success:
         msg = f"tofu output failed: {result.stderr}"
-        raise RuntimeError(msg)
+        raise TofuCommandError(msg)
 
     return json.loads(result.stdout)
 
