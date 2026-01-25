@@ -13,7 +13,7 @@
 //! both for the duration of the bootstrap, ensuring the embedded cluster uses
 //! a consistent workspace-backed configuration.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -99,18 +99,25 @@ fn bootstrap_with_retries<T>(
 
 /// Bootstraps a shared [`TestCluster`] for persistent test sessions.
 ///
-/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set, this function leaves
-/// them untouched. If either value is missing, this function sets both to
-/// stable directories under the target directory so the shared cluster can be
-/// reused across multiple tests.
+/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set and usable, this
+/// function leaves them untouched. If either value is missing or unusable,
+/// this function sets both to stable directories under the target directory
+/// so the shared cluster can be reused across multiple tests.
 pub fn shared_cluster() -> Result<&'static TestCluster, String> {
     let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|err| err.into_inner());
 
-    let needs_override =
-        std::env::var_os("PG_RUNTIME_DIR").is_none() || std::env::var_os("PG_DATA_DIR").is_none();
+    let runtime_dir_env = std::env::var_os("PG_RUNTIME_DIR");
+    let data_dir_env = std::env::var_os("PG_DATA_DIR");
+    let env_dirs_ready = match (&runtime_dir_env, &data_dir_env) {
+        (Some(runtime_dir), Some(data_dir)) => {
+            ensure_dir(&PathBuf::from(runtime_dir)) && ensure_dir(&PathBuf::from(data_dir))
+        }
+        _ => false,
+    };
+    let needs_override = !env_dirs_ready;
 
     let _env_guard = if needs_override {
         let (runtime_dir, data_dir) =
@@ -128,6 +135,13 @@ pub fn shared_cluster() -> Result<&'static TestCluster, String> {
     };
 
     bootstrap_with_retries(|| shared_cluster_inner().map_err(|err| format!("{err:?}")))
+}
+
+fn ensure_dir(path: &Path) -> bool {
+    if path.as_os_str().is_empty() {
+        return false;
+    }
+    std::fs::create_dir_all(path).is_ok()
 }
 
 #[cfg(test)]
