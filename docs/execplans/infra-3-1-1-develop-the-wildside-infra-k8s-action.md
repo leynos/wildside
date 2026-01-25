@@ -602,7 +602,7 @@ Create `scripts/prepare_infra_k8s_inputs.py`:
     #!/usr/bin/env -S uv run python
     # /// script
     # requires-python = ">=3.13"
-    # dependencies = ["cyclopts>=2.9", "hvac>=2.3", "plumbum"]
+    # dependencies = ["cyclopts>=2.9", "plumbum"]
     # ///
     """Prepare wildside-infra-k8s inputs and retrieve secrets from Vault."""
 
@@ -613,7 +613,7 @@ Create `scripts/provision_cluster.py`:
     #!/usr/bin/env -S uv run python
     # /// script
     # requires-python = ">=3.13"
-    # dependencies = ["cyclopts>=2.9", "hvac>=2.3", "plumbum"]
+    # dependencies = ["cyclopts>=2.9", "plumbum"]
     # ///
     """Provision or update the Kubernetes cluster via OpenTofu."""
 

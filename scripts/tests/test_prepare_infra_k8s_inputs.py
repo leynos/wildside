@@ -31,6 +31,11 @@ def base_env(tmp_path: Path, token_factory: Callable[[], str]) -> dict[str, str]
     """Build baseline environment variables for input resolution tests."""
     token = token_factory()
     do_token = token_factory()
+    vault_role_id = token_factory()
+    vault_secret_id = token_factory()
+    spaces_access_key = token_factory()
+    spaces_secret_key = token_factory()
+    cloudflare_secret_name = f"cloudflare-{token_factory()}"
     return {
         "INPUT_CLUSTER_NAME": "Preview-1",
         "INPUT_ENVIRONMENT": "preview",
@@ -40,11 +45,12 @@ def base_env(tmp_path: Path, token_factory: Callable[[], str]) -> dict[str, str]
         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
         "INPUT_GITOPS_TOKEN": token,
         "INPUT_VAULT_ADDRESS": "https://vault.example.test:8200",
-        "INPUT_VAULT_ROLE_ID": "role-id",
-        "INPUT_VAULT_SECRET_ID": "secret-id",
+        "INPUT_VAULT_ROLE_ID": vault_role_id,
+        "INPUT_VAULT_SECRET_ID": vault_secret_id,
         "INPUT_DIGITALOCEAN_TOKEN": do_token,
-        "INPUT_SPACES_ACCESS_KEY": "spaces-key",
-        "INPUT_SPACES_SECRET_KEY": "spaces-secret",
+        "INPUT_SPACES_ACCESS_KEY": spaces_access_key,
+        "INPUT_SPACES_SECRET_KEY": spaces_secret_key,
+        "INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME": cloudflare_secret_name,
         "RUNNER_TEMP": str(tmp_path / "runner"),
         "GITHUB_ENV": str(tmp_path / "env"),
     }
@@ -108,6 +114,11 @@ def test_prepare_inputs_masks_and_exports(
     masks: list[str] = []
     gitops_token = token_factory()
     do_token = token_factory()
+    vault_role_id = token_factory()
+    vault_secret_id = token_factory()
+    spaces_access_key = token_factory()
+    spaces_secret_key = token_factory()
+    cloudflare_secret = f"cloudflare-{token_factory()}"
 
     inputs = _resolve_all_inputs(
         RawInputs(
@@ -122,13 +133,13 @@ def test_prepare_inputs_masks_and_exports(
             gitops_branch="main",
             gitops_token=gitops_token,
             vault_address="https://vault.example.test:8200",
-            vault_role_id="role-id",
-            vault_secret_id="secret-id",
+            vault_role_id=vault_role_id,
+            vault_secret_id=vault_secret_id,
             vault_ca_certificate="CERT\nLINE",
             digitalocean_token=do_token,
-            spaces_access_key="spaces-key",
-            spaces_secret_key="spaces-secret",
-            cloudflare_api_token_secret_name="cloudflare-api-token",
+            spaces_access_key=spaces_access_key,
+            spaces_secret_key=spaces_secret_key,
+            cloudflare_api_token_secret_name=cloudflare_secret,
             enable_traefik="true",
             enable_cert_manager="true",
             enable_external_dns="true",

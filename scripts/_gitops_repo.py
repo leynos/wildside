@@ -41,6 +41,8 @@ from scripts._gitops_errors import (
 from scripts._gitops_inputs import GitOpsInputs
 from scripts._infra_k8s import mask_secret
 
+GIT_TIMEOUT_SECONDS = 300
+
 
 def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> str:
     """Run a git command and return stdout.
@@ -65,14 +67,21 @@ def run_git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> st
         Raised when the git command fails.
     """
     merged_env = {**os.environ, **(env or {})}
-    result = subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        env=merged_env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            env=merged_env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        msg = (
+            f"git {' '.join(args)} timed out after {GIT_TIMEOUT_SECONDS}s"
+        )
+        raise GitCommandError(msg) from exc
 
     if result.returncode != 0:
         msg = f"git {' '.join(args)} failed: {result.stderr}"
@@ -135,22 +144,30 @@ def clone_repository(
     print(f"Cloning {inputs.gitops_repository}@{inputs.gitops_branch}...")
 
     # Clone with depth 1 for efficiency
-    result = subprocess.run(
-        [
-            "git",
-            "clone",
-            "--depth",
-            "1",
-            "--branch",
-            inputs.gitops_branch,
-            repo_url,
-            str(clone_dir),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=auth_env,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                inputs.gitops_branch,
+                repo_url,
+                str(clone_dir),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=auth_env,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        msg = (
+            "git clone timed out after "
+            f"{GIT_TIMEOUT_SECONDS}s for {masked_repo_url}"
+        )
+        raise GitCloneError(msg) from exc
     if result.returncode != 0:
         stderr = result.stderr.replace(inputs.gitops_token, "***")
         msg = f"git clone failed for {masked_repo_url}: {stderr}".strip()
@@ -244,12 +261,20 @@ def commit_and_push(
     run_git(["add", "-A"], clone_dir)
 
     # Check for changes
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
-        cwd=clone_dir,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=clone_dir,
+            capture_output=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        msg = (
+            "git diff --cached timed out after "
+            f"{GIT_TIMEOUT_SECONDS}s"
+        )
+        raise GitCommandError(msg) from exc
 
     if result.returncode == 0:
         print("No changes to commit")

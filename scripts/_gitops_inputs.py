@@ -2,7 +2,7 @@
 
 This module converts raw CLI or environment values into a validated
 ``GitOpsInputs`` configuration used by the GitOps commit workflow. It
-normalizes types, applies defaults for local development, and raises
+normalises types, applies defaults for local development, and raises
 validation errors when required inputs are missing.
 
 Examples
@@ -129,7 +129,7 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
     Returns
     -------
     GitOpsInputs
-        Normalized inputs for GitOps operations.
+        Normalised inputs for GitOps operations.
     """
     gitops_repository = resolve_input(
         raw.gitops_repository,

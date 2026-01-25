@@ -19,8 +19,6 @@ from scripts.render_platform_manifests import main as render_manifests_main
 
 EnvSetter = Callable[[str, str], None]
 
-_ENV_SETTER: EnvSetter | None = None
-
 
 @dataclass(frozen=True, slots=True)
 class FlowPaths:
@@ -33,12 +31,8 @@ class FlowPaths:
     clone_dir: Path
 
 
-def _apply_env_file(env_path: Path) -> None:
+def _apply_env_file(env_path: Path, setenv: EnvSetter) -> None:
     """Apply GITHUB_ENV entries to the process environment."""
-    if _ENV_SETTER is None:
-        raise RuntimeError("Environment setter is not configured")
-
-    setenv = _ENV_SETTER
     lines = env_path.read_text(encoding="utf-8").splitlines()
     index = 0
     while index < len(lines):
@@ -80,9 +74,6 @@ def _mk_paths(tmp_path: Path) -> FlowPaths:
 
 def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
     """Seed baseline environment variables for the action flow."""
-    global _ENV_SETTER
-    _ENV_SETTER = monkeypatch.setenv
-
     token = _dummy_token()
     env_vars = {
         "INPUT_CLUSTER_NAME": "preview-1",
@@ -186,16 +177,16 @@ def _parse_github_output(output_path: Path) -> dict[str, str]:
     return {key.upper(): value for key, value in outputs.items()}
 
 
-def _run_full_flow(paths: FlowPaths) -> dict[str, str]:
+def _run_full_flow(paths: FlowPaths, setenv: EnvSetter) -> dict[str, str]:
     """Run the CLI entrypoints and return published outputs."""
     _call_cli(prepare_inputs_main)
-    _apply_env_file(paths.github_env)
+    _apply_env_file(paths.github_env, setenv)
     _call_cli(provision_cluster_main)
-    _apply_env_file(paths.github_env)
+    _apply_env_file(paths.github_env, setenv)
     _call_cli(render_manifests_main)
-    _apply_env_file(paths.github_env)
+    _apply_env_file(paths.github_env, setenv)
     _call_cli(commit_gitops_main)
-    _apply_env_file(paths.github_env)
+    _apply_env_file(paths.github_env, setenv)
     _call_cli(publish_outputs_main)
     return _parse_github_output(paths.github_output)
 
@@ -222,5 +213,5 @@ def test_action_flow_happy_path(
 ) -> None:
     paths = _mk_paths(tmp_path)
     _set_base_env(monkeypatch, paths)
-    outputs = _run_full_flow(paths)
+    outputs = _run_full_flow(paths, monkeypatch.setenv)
     _assert_published(outputs)

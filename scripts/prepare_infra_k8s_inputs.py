@@ -118,133 +118,135 @@ def _run_prepare_flow(values: Mapping[str, object]) -> int:
     return 0
 
 
+def _collect_cli_values(
+    cluster_name: str | None,
+    environment: str | None,
+    region: str | None,
+    kubernetes_version: str | None,
+    node_pools: str | None,
+    domain: str | None,
+    acme_email: str | None,
+    gitops_repository: str | None,
+    gitops_branch: str | None,
+    gitops_token: str | None,
+    vault_address: str | None,
+    vault_role_id: str | None,
+    vault_secret_id: str | None,
+    vault_ca_certificate: str | None,
+    digitalocean_token: str | None,
+    spaces_access_key: str | None,
+    spaces_secret_key: str | None,
+    cloudflare_api_token_secret_name: str | None,
+    enable_traefik: str | None,
+    enable_cert_manager: str | None,
+    enable_external_dns: str | None,
+    enable_vault_eso: str | None,
+    enable_cnpg: str | None,
+    dry_run: str | None,
+    runner_temp: Path | None,
+    github_env: Path | None,
+) -> Mapping[str, object]:
+    """Collect CLI overrides into the raw input mapping."""
+    return {
+        "cluster_name": cluster_name,
+        "environment": environment,
+        "region": region,
+        "kubernetes_version": kubernetes_version,
+        "node_pools": node_pools,
+        "domain": domain,
+        "acme_email": acme_email,
+        "gitops_repository": gitops_repository,
+        "gitops_branch": gitops_branch,
+        "gitops_token": gitops_token,
+        "vault_address": vault_address,
+        "vault_role_id": vault_role_id,
+        "vault_secret_id": vault_secret_id,
+        "vault_ca_certificate": vault_ca_certificate,
+        "digitalocean_token": digitalocean_token,
+        "spaces_access_key": spaces_access_key,
+        "spaces_secret_key": spaces_secret_key,
+        "cloudflare_api_token_secret_name": cloudflare_api_token_secret_name,
+        "enable_traefik": enable_traefik,
+        "enable_cert_manager": enable_cert_manager,
+        "enable_external_dns": enable_external_dns,
+        "enable_vault_eso": enable_vault_eso,
+        "enable_cnpg": enable_cnpg,
+        "dry_run": dry_run,
+        "runner_temp": runner_temp,
+        "github_env": github_env,
+    }
+
+
 @app.command()
 def main(
-    cluster_name: str | None = CLUSTER_NAME_PARAM,
-    environment: str | None = ENVIRONMENT_PARAM,
-    region: str | None = REGION_PARAM,
-    kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
-    node_pools: str | None = NODE_POOLS_PARAM,
-    domain: str | None = DOMAIN_PARAM,
-    acme_email: str | None = ACME_EMAIL_PARAM,
-    gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
-    gitops_branch: str | None = GITOPS_BRANCH_PARAM,
-    gitops_token: str | None = GITOPS_TOKEN_PARAM,
-    vault_address: str | None = VAULT_ADDRESS_PARAM,
-    vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
-    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM,
-    vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
-    digitalocean_token: str | None = DIGITALOCEAN_TOKEN_PARAM,
-    spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
+    cluster_name: str | None = CLUSTER_NAME_PARAM, environment: str | None = ENVIRONMENT_PARAM,
+    region: str | None = REGION_PARAM, kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
+    node_pools: str | None = NODE_POOLS_PARAM, domain: str | None = DOMAIN_PARAM,
+    acme_email: str | None = ACME_EMAIL_PARAM, gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
+    gitops_branch: str | None = GITOPS_BRANCH_PARAM, gitops_token: str | None = GITOPS_TOKEN_PARAM,
+    vault_address: str | None = VAULT_ADDRESS_PARAM, vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
+    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM, vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
+    digitalocean_token: str | None = DIGITALOCEAN_TOKEN_PARAM, spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
     spaces_secret_key: str | None = SPACES_SECRET_KEY_PARAM,
     cloudflare_api_token_secret_name: str | None = CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM,
-    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM,
-    enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
-    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM,
-    enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
-    enable_cnpg: str | None = ENABLE_CNPG_PARAM,
-    dry_run: str | None = DRY_RUN_PARAM,
-    runner_temp: Path | None = RUNNER_TEMP_PARAM,
-    github_env: Path | None = GITHUB_ENV_PARAM,
+    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM, enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
+    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM, enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
+    enable_cnpg: str | None = ENABLE_CNPG_PARAM, dry_run: str | None = DRY_RUN_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM, github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
     """Prepare inputs for the wildside-infra-k8s action (CLI overrides env).
-
     Parameters
     ----------
-    cluster_name : str | None
-        Cluster name override for ``INPUT_CLUSTER_NAME``.
-    environment : str | None
-        Environment override for ``INPUT_ENVIRONMENT``.
-    region : str | None
-        Region override for ``INPUT_REGION``.
-    kubernetes_version : str | None
-        Kubernetes version override for ``INPUT_KUBERNETES_VERSION``.
-    node_pools : str | None
-        Node pool JSON override for ``INPUT_NODE_POOLS``.
-    domain : str | None
-        Domain override for ``INPUT_DOMAIN``.
-    acme_email : str | None
-        ACME email override for ``INPUT_ACME_EMAIL``.
-    gitops_repository : str | None
-        GitOps repository override for ``INPUT_GITOPS_REPOSITORY``.
-    gitops_branch : str | None
-        GitOps branch override for ``INPUT_GITOPS_BRANCH``.
-    gitops_token : str | None
-        GitOps token override for ``INPUT_GITOPS_TOKEN``.
-    vault_address : str | None
-        Vault address override for ``INPUT_VAULT_ADDRESS``.
-    vault_role_id : str | None
-        Vault AppRole role ID override for ``INPUT_VAULT_ROLE_ID``.
-    vault_secret_id : str | None
-        Vault AppRole secret ID override for ``INPUT_VAULT_SECRET_ID``.
+    cluster_name, environment, region, kubernetes_version, node_pools,
+    domain, acme_email : str | None
+        Overrides for the corresponding ``INPUT_*`` values.
+    gitops_repository, gitops_branch, gitops_token : str | None
+        Overrides for ``INPUT_GITOPS_REPOSITORY``, ``INPUT_GITOPS_BRANCH``,
+        and ``INPUT_GITOPS_TOKEN``.
+    vault_address, vault_role_id, vault_secret_id,
     vault_ca_certificate : str | None
-        Vault CA certificate override for ``INPUT_VAULT_CA_CERTIFICATE``.
-    digitalocean_token : str | None
-        DigitalOcean token override for ``INPUT_DIGITALOCEAN_TOKEN``.
-    spaces_access_key : str | None
-        Spaces access key override for ``INPUT_SPACES_ACCESS_KEY``.
-    spaces_secret_key : str | None
-        Spaces secret key override for ``INPUT_SPACES_SECRET_KEY``.
+        Overrides for ``INPUT_VAULT_*`` values.
+    digitalocean_token, spaces_access_key, spaces_secret_key : str | None
+        Overrides for ``INPUT_DIGITALOCEAN_TOKEN``,
+        ``INPUT_SPACES_ACCESS_KEY``, and ``INPUT_SPACES_SECRET_KEY``.
     cloudflare_api_token_secret_name : str | None
-        Cloudflare API token secret override for
-        ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
-    enable_traefik : str | None
-        Traefik enable override for ``INPUT_ENABLE_TRAEFIK``.
-    enable_cert_manager : str | None
-        cert-manager enable override for ``INPUT_ENABLE_CERT_MANAGER``.
-    enable_external_dns : str | None
-        ExternalDNS enable override for ``INPUT_ENABLE_EXTERNAL_DNS``.
-    enable_vault_eso : str | None
-        Vault ESO enable override for ``INPUT_ENABLE_VAULT_ESO``.
-    enable_cnpg : str | None
-        CNPG enable override for ``INPUT_ENABLE_CNPG``.
+        Override for ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
+    enable_traefik, enable_cert_manager, enable_external_dns,
+    enable_vault_eso, enable_cnpg : str | None
+        Overrides for ``INPUT_ENABLE_*`` feature flags.
     dry_run : str | None
-        Dry-run override for ``INPUT_DRY_RUN``.
+        Override for ``INPUT_DRY_RUN``.
     runner_temp : Path | None
-        Runner temp override for ``RUNNER_TEMP``.
+        Override for ``RUNNER_TEMP``.
     github_env : Path | None
-        Environment file override for ``GITHUB_ENV``.
+        Override for ``GITHUB_ENV``.
 
     Returns
     -------
     int
         Exit code (0 for success).
-
     Examples
     --------
     >>> main(cluster_name="preview-1", region="nyc1")
     0
     """
-    return _run_prepare_flow(
-        {
-            "cluster_name": cluster_name,
-            "environment": environment,
-            "region": region,
-            "kubernetes_version": kubernetes_version,
-            "node_pools": node_pools,
-            "domain": domain,
-            "acme_email": acme_email,
-            "gitops_repository": gitops_repository,
-            "gitops_branch": gitops_branch,
-            "gitops_token": gitops_token,
-            "vault_address": vault_address,
-            "vault_role_id": vault_role_id,
-            "vault_secret_id": vault_secret_id,
-            "vault_ca_certificate": vault_ca_certificate,
-            "digitalocean_token": digitalocean_token,
-            "spaces_access_key": spaces_access_key,
-            "spaces_secret_key": spaces_secret_key,
-            "cloudflare_api_token_secret_name": cloudflare_api_token_secret_name,
-            "enable_traefik": enable_traefik,
-            "enable_cert_manager": enable_cert_manager,
-            "enable_external_dns": enable_external_dns,
-            "enable_vault_eso": enable_vault_eso,
-            "enable_cnpg": enable_cnpg,
-            "dry_run": dry_run,
-            "runner_temp": runner_temp,
-            "github_env": github_env,
-        }
+    values = _collect_cli_values(
+        cluster_name=cluster_name, environment=environment,
+        region=region, kubernetes_version=kubernetes_version,
+        node_pools=node_pools, domain=domain,
+        acme_email=acme_email, gitops_repository=gitops_repository,
+        gitops_branch=gitops_branch, gitops_token=gitops_token,
+        vault_address=vault_address, vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id, vault_ca_certificate=vault_ca_certificate,
+        digitalocean_token=digitalocean_token, spaces_access_key=spaces_access_key,
+        spaces_secret_key=spaces_secret_key,
+        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
+        enable_traefik=enable_traefik, enable_cert_manager=enable_cert_manager,
+        enable_external_dns=enable_external_dns, enable_vault_eso=enable_vault_eso,
+        enable_cnpg=enable_cnpg, dry_run=dry_run,
+        runner_temp=runner_temp, github_env=github_env,
     )
+    return _run_prepare_flow(values)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI

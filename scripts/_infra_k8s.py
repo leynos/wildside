@@ -37,21 +37,74 @@ class TofuResult:
     return_code: int
 
 
-def mask_secret(value: str, stream: cabc.Callable[[str], None] = print) -> None:
-    """Emit GitHub Action secret masking command."""
+def mask_secret(value: str, stream: cabc.Callable[[str], object] = print) -> None:
+    """Emit GitHub Action secret masking command.
+
+    Parameters
+    ----------
+    value : str
+        Secret value to mask.
+    stream : Callable[[str], int], optional
+        Output stream for the masking command (defaults to ``print``).
+
+    Returns
+    -------
+    None
+        Writes the masking command when ``value`` is non-empty.
+
+    Examples
+    --------
+    >>> mask_secret("token")
+    """
     if value:
         stream(f"::add-mask::{value}")
 
 
 def parse_bool(value: str | None, *, default: bool = True) -> bool:
-    """Parse a boolean string value."""
+    """Parse a boolean string value.
+
+    Parameters
+    ----------
+    value : str | None
+        Raw string value to parse.
+    default : bool, optional
+        Default value when ``value`` is ``None``.
+
+    Returns
+    -------
+    bool
+        Parsed boolean value.
+
+    Examples
+    --------
+    >>> parse_bool("yes")
+    True
+    >>> parse_bool(None, default=False)
+    False
+    """
     if value is None:
         return default
     return value.strip().lower() in ("true", "1", "yes")
 
 
 def parse_node_pools(value: str | None) -> list[dict[str, object]] | None:
-    """Parse node pools JSON string."""
+    """Parse node pools JSON string.
+
+    Parameters
+    ----------
+    value : str | None
+        JSON-encoded node pool payload.
+
+    Returns
+    -------
+    list[dict[str, object]] | None
+        Parsed node pool structures, or ``None`` if input is blank.
+
+    Examples
+    --------
+    >>> parse_node_pools('[{"name": "default", "node_count": 2}]')[0]["name"]
+    'default'
+    """
     if value is None or not value.strip():
         return None
     try:
@@ -87,7 +140,24 @@ def _write_github_multiline(
 
 
 def append_github_env(env_file: Path, variables: dict[str, str]) -> None:
-    """Append environment variables to GITHUB_ENV file."""
+    """Append environment variables to GITHUB_ENV file.
+
+    Parameters
+    ----------
+    env_file : Path
+        Path to the ``GITHUB_ENV`` file.
+    variables : dict[str, str]
+        Environment variables to append.
+
+    Returns
+    -------
+    None
+        Writes entries to the ``GITHUB_ENV`` file.
+
+    Examples
+    --------
+    >>> append_github_env(Path("/tmp/env"), {"CLUSTER_NAME": "preview-1"})
+    """
     env_file.parent.mkdir(parents=True, exist_ok=True)
     with env_file.open("a", encoding="utf-8") as handle:
         for key, value in variables.items():
@@ -98,7 +168,24 @@ def append_github_env(env_file: Path, variables: dict[str, str]) -> None:
 
 
 def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
-    """Append outputs to GITHUB_OUTPUT file."""
+    """Append outputs to GITHUB_OUTPUT file.
+
+    Parameters
+    ----------
+    output_file : Path
+        Path to the ``GITHUB_OUTPUT`` file.
+    outputs : dict[str, str]
+        Outputs to append.
+
+    Returns
+    -------
+    None
+        Writes entries to the ``GITHUB_OUTPUT`` file.
+
+    Examples
+    --------
+    >>> append_github_output(Path("/tmp/out"), {"cluster_id": "abc"})
+    """
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with output_file.open("a", encoding="utf-8") as handle:
         for key, value in outputs.items():

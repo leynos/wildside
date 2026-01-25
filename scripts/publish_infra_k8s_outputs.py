@@ -184,17 +184,18 @@ def final_secret_masking() -> None:
     Parameters
     ----------
     None
+        Reads sensitive values from the current environment.
 
     Returns
     -------
     None
-        Emits GitHub Actions masking commands for any sensitive values found
-        in the current environment.
+        Emits GitHub Actions masking commands for any sensitive values found.
 
     Examples
     --------
     >>> os.environ["SPACES_ACCESS_KEY"] = "secret"
     >>> final_secret_masking()
+    # Emits ::add-mask::secret
     """
     for key in SENSITIVE_KEYS:
         value = os.environ.get(key)

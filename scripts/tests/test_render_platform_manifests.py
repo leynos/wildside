@@ -43,15 +43,31 @@ def test_resolve_render_inputs_cli_override(monkeypatch: pytest.MonkeyPatch) -> 
     assert inputs.cluster_name == "cli", "CLI override should win"
 
 
-def test_build_render_tfvars_skips_vault_when_disabled(tmp_path: Path) -> None:
+@pytest.fixture
+def cloudflare_secret_name() -> str:
+    """Return a random Cloudflare secret name for tests."""
+    return f"cloudflare-secret-{secrets.token_hex(4)}"
+
+
+@pytest.fixture
+def vault_secret_value() -> str:
+    """Return a random Vault secret value for tests."""
+    return f"vault-secret-{secrets.token_hex(6)}"
+
+
+def test_build_render_tfvars_skips_vault_when_disabled(
+    tmp_path: Path,
+    cloudflare_secret_name: str,
+    vault_secret_value: str,
+) -> None:
     inputs = RenderInputs(
         cluster_name="preview",
         domain="example.test",
         acme_email="admin@example.test",
-        cloudflare_api_token_secret_name=_dummy_secret_name(),
+        cloudflare_api_token_secret_name=cloudflare_secret_name,
         vault_address="https://vault.example",
         vault_role_id="role",
-        vault_secret_id=_dummy_vault_secret(),
+        vault_secret_id=vault_secret_value,
         vault_ca_certificate="cert",
         enable_traefik=True,
         enable_cert_manager=True,
@@ -83,12 +99,13 @@ def test_extract_rendered_manifests_handles_wrapped_value() -> None:
 def test_render_manifests_runs_tofu(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    cloudflare_secret_name: str,
 ) -> None:
     inputs = RenderInputs(
         cluster_name="preview",
         domain="example.test",
         acme_email="admin@example.test",
-        cloudflare_api_token_secret_name=_dummy_secret_name(),
+        cloudflare_api_token_secret_name=cloudflare_secret_name,
         vault_address=None,
         vault_role_id=None,
         vault_secret_id=None,
@@ -122,10 +139,3 @@ def test_render_manifests_runs_tofu(
     assert "platform/traefik.yaml" in manifests, "Manifest path should be present"
     assert len(calls) == 2, "Expected init and apply calls"
 
-
-def _dummy_secret_name() -> str:
-    return f"cloudflare-secret-{secrets.token_hex(4)}"
-
-
-def _dummy_vault_secret() -> str:
-    return f"vault-secret-{secrets.token_hex(6)}"
