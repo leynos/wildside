@@ -32,6 +32,23 @@ class FlowPaths:
     clone_dir: Path
 
 
+def _is_blank_or_comment(line: str) -> bool:
+    return not line.strip() or line.lstrip().startswith("#")
+
+
+def _start_heredoc(line: str) -> tuple[str | None, str | None]:
+    if "<<" not in line:
+        return None, None
+    key_part, marker = line.split("<<", 1)
+    return key_part.strip(), marker.strip()
+
+
+def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> None:
+    if key is None:
+        return
+    entries[key] = "\n".join(buf)
+
+
 def _parse_github_kv_file(path: Path) -> dict[str, str]:
     """Parse a GitHub-style KEY=VALUE file with heredoc support."""
     if not path.exists():
@@ -42,28 +59,28 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
     delimiter: str | None = None
     buffer: list[str] = []
     for line in lines:
-        if delimiter is not None and key is not None:
+        if delimiter is not None:
             if line == delimiter:
-                entries[key] = "\n".join(buffer)
+                _flush_heredoc(entries, key, buffer)
                 key = None
                 delimiter = None
                 buffer = []
             else:
                 buffer.append(line)
             continue
-        if not line.strip() or line.lstrip().startswith("#"):
+        if _is_blank_or_comment(line):
             continue
-        if "<<" in line:
-            key_part, marker = line.split("<<", 1)
-            key = key_part.strip()
-            delimiter = marker.strip()
+        next_key, next_delimiter = _start_heredoc(line)
+        if next_key is not None and next_delimiter is not None:
+            key = next_key
+            delimiter = next_delimiter
             buffer = []
             continue
         if "=" in line:
-            key_part, value = line.split("=", 1)
-            entries[key_part] = value
-    if delimiter is not None and key is not None:
-        entries[key] = "\n".join(buffer)
+            key_part, _, value = line.partition("=")
+            entries[key_part.strip()] = value
+    if delimiter is not None:
+        _flush_heredoc(entries, key, buffer)
     return entries
 
 
