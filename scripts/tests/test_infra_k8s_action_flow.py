@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections.abc import Callable
 from pathlib import Path
 from typing import Iterable
@@ -52,6 +52,13 @@ def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> 
     entries[key] = "\n".join(buf)
 
 
+@dataclass(slots=True)
+class _HeredocState:
+    key: str | None = None
+    delimiter: str | None = None
+    buffer: list[str] = field(default_factory=list)
+
+
 def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
     buf: list[str] = []
     for raw in lines:
@@ -62,20 +69,17 @@ def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
     return "\n".join(buf)
 
 
-def _heredoc_step(
-    delimiter: str | None,
-    key: str | None,
-    buffer: list[str],
-    line: str,
-    entries: dict[str, str],
-) -> tuple[str | None, str | None, list[str], bool]:
-    if delimiter is None:
-        return key, delimiter, buffer, False
-    if line == delimiter:
-        _flush_heredoc(entries, key, buffer)
-        return None, None, [], True
-    buffer.append(line)
-    return key, delimiter, buffer, True
+def _heredoc_step(state: _HeredocState, line: str, entries: dict[str, str]) -> bool:
+    if state.delimiter is None:
+        return False
+    if line == state.delimiter:
+        _flush_heredoc(entries, state.key, state.buffer)
+        state.key = None
+        state.delimiter = None
+        state.buffer.clear()
+        return True
+    state.buffer.append(line)
+    return True
 
 
 def _parse_github_kv_file(path: Path) -> dict[str, str]:
@@ -83,18 +87,25 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     entries: dict[str, str] = {}
+    state = _HeredocState()
     with path.open("r", encoding="utf-8") as handle:
         it = (ln.rstrip("\n") for ln in handle)
         for line in it:
+            if _heredoc_step(state, line, entries):
+                continue
             if _is_blank_or_comment(line):
                 continue
             key, delim = _start_heredoc(line)
             if key is not None and delim is not None:
-                entries[key] = _consume_heredoc(it, delim)
+                state.key = key
+                state.delimiter = delim
+                state.buffer = []
                 continue
             if "=" in line:
                 key_part, _, value = line.partition("=")
                 entries[key_part] = value
+    if state.delimiter is not None:
+        _flush_heredoc(entries, state.key, state.buffer)
     return entries
 
 
