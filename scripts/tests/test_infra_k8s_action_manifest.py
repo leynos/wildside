@@ -19,6 +19,30 @@ def _load_action() -> dict[str, object]:
     return cast(dict[str, object], result)
 
 
+def _assert_step_invokes_script(
+    action: dict,
+    *,
+    step_id: str,
+    expected_substring: str,
+) -> None:
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
+    assert all(isinstance(step, dict) for step in steps)
+
+    step = next(
+        (
+            candidate
+            for candidate in steps
+            if isinstance(candidate, dict) and candidate.get("id") == step_id
+        ),
+        None,
+    )
+    assert step is not None, f"Missing {step_id} step"
+    assert expected_substring in step.get("run", "")
+
+
 def test_required_inputs_are_marked_as_required() -> None:
     """Verify all essential inputs are marked as required."""
     action = _load_action()
@@ -193,23 +217,11 @@ def test_provision_step_invokes_correct_script() -> None:
 def test_render_step_invokes_correct_script() -> None:
     """Verify the render step invokes render_platform_manifests.py."""
     action = _load_action()
-    runs = action["runs"]
-    assert isinstance(runs, dict)
-    steps = runs["steps"]
-    assert isinstance(steps, list)
-    assert all(isinstance(step, dict) for step in steps)
-
-    render = next(
-        (
-            step
-            for step in steps
-            if isinstance(step, dict) and step.get("id") == "render"
-        ),
-        None,
+    _assert_step_invokes_script(
+        action,
+        step_id="render",
+        expected_substring="uv run scripts/render_platform_manifests.py",
     )
-    assert render is not None, "Missing render step"
-
-    assert "uv run scripts/render_platform_manifests.py" in render["run"]
 
 
 def test_commit_step_is_conditional_on_dry_run() -> None:
@@ -241,22 +253,11 @@ def test_commit_step_is_conditional_on_dry_run() -> None:
 def test_publish_step_invokes_correct_script() -> None:
     """Verify the publish step invokes publish_infra_k8s_outputs.py."""
     action = _load_action()
-    runs = action["runs"]
-    assert isinstance(runs, dict)
-    steps = runs["steps"]
-    assert isinstance(steps, list)
-
-    publish = next(
-        (
-            step
-            for step in steps
-            if isinstance(step, dict) and step.get("id") == "publish"
-        ),
-        None,
+    _assert_step_invokes_script(
+        action,
+        step_id="publish",
+        expected_substring="uv run scripts/publish_infra_k8s_outputs.py",
     )
-    assert publish is not None, "Missing publish step"
-
-    assert "uv run scripts/publish_infra_k8s_outputs.py" in publish["run"]
 
 
 def test_uses_composite_action_runner() -> None:
