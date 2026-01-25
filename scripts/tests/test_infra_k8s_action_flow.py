@@ -39,7 +39,7 @@ def _start_heredoc(line: str) -> tuple[str | None, str | None]:
     if "<<" not in line:
         return None, None
     key_part, marker = line.split("<<", 1)
-    return key_part.strip(), marker.strip()
+    return key_part, marker
 
 
 def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> None:
@@ -55,14 +55,14 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
     entries: dict[str, str] = {}
     lines = path.read_text(encoding="utf-8").splitlines()
     key: str | None = None
-    delimiter: str | None = None
+    delim: str | None = None
     buffer: list[str] = []
     for line in lines:
-        if delimiter is not None:
-            if line == delimiter:
+        if delim is not None:
+            if line == delim:
                 _flush_heredoc(entries, key, buffer)
                 key = None
-                delimiter = None
+                delim = None
                 buffer = []
             else:
                 buffer.append(line)
@@ -70,15 +70,16 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
         if _is_blank_or_comment(line):
             continue
         next_key, next_delimiter = _start_heredoc(line)
-        if next_key is not None:
+        if next_key is not None and next_delimiter is not None:
             key = next_key
-            delimiter = next_delimiter
+            delim = next_delimiter
             buffer = []
             continue
         if "=" in line:
             key_part, _, value = line.partition("=")
-            entries[key_part.strip()] = value
-    _flush_heredoc(entries, key, buffer)
+            entries[key_part] = value
+    if delim is not None:
+        _flush_heredoc(entries, key, buffer)
     return entries
 
 
