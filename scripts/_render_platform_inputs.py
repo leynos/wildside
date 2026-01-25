@@ -197,11 +197,11 @@ def _resolve_feature_flags(raw: RawRenderInputs) -> tuple[str, str, str, str, st
         InputResolution(env_key="ENABLE_CNPG", default="true"),
     )
     return (
-        cast(str, enable_traefik),
-        cast(str, enable_cert_manager),
-        cast(str, enable_external_dns),
-        cast(str, enable_vault_eso),
-        cast(str, enable_cnpg),
+        cast("str", enable_traefik),
+        cast("str", enable_cert_manager),
+        cast("str", enable_external_dns),
+        cast("str", enable_vault_eso),
+        cast("str", enable_cnpg),
     )
 
 

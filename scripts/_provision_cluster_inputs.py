@@ -1,4 +1,33 @@
-"""Resolve inputs and build tfvars for cluster provisioning."""
+"""Resolve inputs and build tfvars for cluster provisioning.
+
+This module converts CLI or environment values into a validated
+``ProvisionInputs`` configuration, then derives backend configuration and
+tfvars for the OpenTofu provisioning flow. It centralizes validation so
+the provisioning script can focus on execution.
+
+Examples
+--------
+>>> from pathlib import Path
+>>> from scripts._provision_cluster_inputs import (
+...     RawProvisionInputs,
+...     resolve_provision_inputs,
+... )
+>>> inputs = resolve_provision_inputs(
+...     RawProvisionInputs(
+...         cluster_name="preview-1",
+...         environment="preview",
+...         region="nyc1",
+...         spaces_bucket="wildside-tofu-state",
+...         spaces_region="nyc3",
+...         spaces_access_key="access",
+...         spaces_secret_key="secret",
+...         runner_temp=Path("/tmp"),
+...         github_env=Path("/tmp/env"),
+...     )
+... )
+>>> inputs.cluster_name
+'preview-1'
+"""
 
 from __future__ import annotations
 

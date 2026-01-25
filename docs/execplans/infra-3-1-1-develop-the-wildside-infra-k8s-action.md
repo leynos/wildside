@@ -835,9 +835,7 @@ All steps should be re-runnable:
 **Python script dependencies:**
 
 - `cyclopts>=2.9` — CLI argument parsing.
-- `hvac>=2.3` — HashiCorp Vault client.
 - `plumbum` — subprocess management.
-- `gitpython>=3.1` — Git operations (for commit script).
 
 **Test dependencies:**
 

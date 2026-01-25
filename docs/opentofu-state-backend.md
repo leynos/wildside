@@ -35,8 +35,8 @@ to avoid storing credentials in version control.
 
 To initialize a configuration with the Spaces backend:
 
-    export SPACES_ACCESS_KEY="your-access-key"
-    export SPACES_SECRET_KEY="your-secret-key"
+    export SPACES_ACCESS_KEY="example-access-key"
+    export SPACES_SECRET_KEY="example-secret-key"
     export CLUSTER_NAME="preview-123"
 
     tofu init \

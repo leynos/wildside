@@ -64,16 +64,17 @@ func TestWildsideInfraK8sPlanDetailedExitCode(t *testing.T) {
 	if token == "" {
 		t.Skip("DIGITALOCEAN_TOKEN not set; skipping detailed exit code plan")
 	}
-	tfDir, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
+	_, opts := testutil.SetupTerraform(t, testutil.TerraformConfig{
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          testVars(),
 		EnvVars:       testutil.TerraformEnvVars(t, map[string]string{"DIGITALOCEAN_TOKEN": token}),
 	})
 	terraform.Init(t, opts)
-	cmd := exec.Command("tofu", "plan", "-input=false", "-no-color", "-detailed-exitcode")
-	cmd.Dir = tfDir
-	cmd.Env = testutil.TerraformEnv(t, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	args := terraform.FormatArgs(opts, "plan", "-input=false", "-no-color", "-detailed-exitcode")
+	cmd := exec.Command("tofu", args...)
+	cmd.Dir = opts.TerraformDir
+	cmd.Env = testutil.TerraformEnv(t, opts.EnvVars)
 	err := cmd.Run()
 	if err == nil {
 		t.Fatalf("expected exit code 2 (changes present), got 0")

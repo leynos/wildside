@@ -76,7 +76,7 @@ def _choose_multiline_delimiter(value: str, base: str = "EOF") -> str:
 
 
 def _write_github_multiline(
-    handle: cabc.Callable[[str], None],
+    handle: cabc.Callable[[str], int],
     key: str,
     value: str,
 ) -> None:
@@ -171,7 +171,7 @@ def tofu_init(
     backend_config: SpacesBackendConfig,
     backend_config_file: Path,
 ) -> TofuResult:
-    """Initialise OpenTofu with backend configuration.
+    """Initialize OpenTofu with backend configuration.
 
     Parameters
     ----------
@@ -325,7 +325,7 @@ def write_manifests(output_dir: Path, manifests: dict[str, str]) -> int:
 
 
 def validate_cluster_name(name: str) -> str:
-    """Validate and normalise a cluster name.
+    """Validate and normalize a cluster name.
 
     Parameters
     ----------
@@ -335,7 +335,7 @@ def validate_cluster_name(name: str) -> str:
     Returns
     -------
     str
-        Normalised cluster name.
+    Normalized cluster name.
 
     Raises
     ------

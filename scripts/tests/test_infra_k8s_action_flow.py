@@ -115,7 +115,7 @@ def _call_cli(main_func: Callable[..., object]) -> None:
     main_func(**params)
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub OpenTofu interactions for the action flow."""
     tofu_result = TofuResult(
@@ -149,7 +149,7 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_gitops(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub Git operations during the action flow."""
     monkeypatch.setattr(

@@ -96,7 +96,7 @@ def test_render_manifests_runs_tofu(
         enable_traefik=True,
         enable_cert_manager=True,
         enable_external_dns=True,
-        enable_vault_eso=True,
+        enable_vault_eso=False,
         enable_cnpg=True,
         runner_temp=tmp_path,
         output_dir=tmp_path / "out",

@@ -195,7 +195,7 @@ runs:
 
     - name: Commit to GitOps repository
       id: commit
-      if: ${{ !contains(fromJSON('["true","1","yes"]'), toLower(inputs.dry_run)) }}
+      if: ${{ !contains(fromJSON('["true","True","TRUE","1","yes","Yes","YES"]'), inputs.dry_run) }}
       shell: bash
       env:
         UV_CACHE_DIR: ${{ runner.temp }}/uv-cache

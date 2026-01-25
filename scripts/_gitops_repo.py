@@ -1,4 +1,27 @@
-"""Run Git operations for the GitOps manifest workflow."""
+"""Run Git operations for the GitOps manifest workflow.
+
+This module clones a GitOps repository, applies rendered manifests, and
+commits changes using token-based authentication. It provides a small
+wrapper around git subprocess calls, with validation and error handling
+tailored to the wildside-infra-k8s action.
+
+Examples
+--------
+>>> from pathlib import Path
+>>> from scripts._gitops_inputs import GitOpsInputs
+>>> inputs = GitOpsInputs(
+...     gitops_repository="wildside/wildside-infra",
+...     gitops_branch="main",
+...     gitops_token="token",
+...     cluster_name="preview-1",
+...     render_output_dir=Path("/tmp/rendered"),
+...     runner_temp=Path("/tmp"),
+...     github_env=Path("/tmp/env"),
+...     dry_run=True,
+... )
+>>> with git_auth_env(inputs.gitops_token, Path("/tmp")) as env:
+...     clone_repository(inputs, Path("/tmp/clone"), env)
+"""
 
 from __future__ import annotations
 

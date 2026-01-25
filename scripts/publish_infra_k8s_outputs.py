@@ -25,12 +25,14 @@ from scripts._infra_k8s import append_github_output, mask_secret
 
 app = App(help="Publish wildside-infra-k8s action outputs.")
 
-CLUSTER_NAME_PARAM = Parameter()
-CLUSTER_ID_PARAM = Parameter()
-CLUSTER_ENDPOINT_PARAM = Parameter()
-GITOPS_COMMIT_SHA_PARAM = Parameter()
-RENDERED_MANIFEST_COUNT_PARAM = Parameter()
-GITHUB_OUTPUT_PARAM = Parameter()
+CLUSTER_NAME_PARAM = Parameter(help="Cluster name output override.")
+CLUSTER_ID_PARAM = Parameter(help="Cluster ID output override.")
+CLUSTER_ENDPOINT_PARAM = Parameter(help="Cluster endpoint output override.")
+GITOPS_COMMIT_SHA_PARAM = Parameter(help="GitOps commit SHA output override.")
+RENDERED_MANIFEST_COUNT_PARAM = Parameter(
+    help="Rendered manifest count output override."
+)
+GITHUB_OUTPUT_PARAM = Parameter(help="GITHUB_OUTPUT path override.")
 
 
 @dataclass(frozen=True, slots=True)

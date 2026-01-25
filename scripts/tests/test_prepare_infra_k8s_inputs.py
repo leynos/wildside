@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,21 @@ from scripts.prepare_infra_k8s_inputs import (
 )
 
 
-def _base_env(tmp_path: Path) -> dict[str, str]:
-    token = _dummy_token()
-    do_token = _dummy_token()
+@pytest.fixture
+def token_factory() -> Callable[[], str]:
+    """Return a token factory for tests that need unique secrets."""
+
+    def _factory() -> str:
+        return f"token-{secrets.token_hex(8)}"
+
+    return _factory
+
+
+@pytest.fixture
+def base_env(tmp_path: Path, token_factory: Callable[[], str]) -> dict[str, str]:
+    """Build baseline environment variables for input resolution tests."""
+    token = token_factory()
+    do_token = token_factory()
     return {
         "INPUT_CLUSTER_NAME": "Preview-1",
         "INPUT_ENVIRONMENT": "preview",
@@ -37,12 +50,11 @@ def _base_env(tmp_path: Path) -> dict[str, str]:
     }
 
 
-def _dummy_token() -> str:
-    return f"token-{secrets.token_hex(8)}"
-
-
-def test_resolve_all_inputs_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    env = _base_env(tmp_path)
+def test_resolve_all_inputs_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+    base_env: dict[str, str],
+) -> None:
+    env = dict(base_env)
     env.update(
         {
             "INPUT_NODE_POOLS": json.dumps(
@@ -74,8 +86,11 @@ def test_resolve_all_inputs_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert inputs.node_pools[0]["name"] == "default", "Expected default pool name"
 
 
-def test_resolve_all_inputs_rejects_invalid_cluster(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    env = _base_env(tmp_path)
+def test_resolve_all_inputs_rejects_invalid_cluster(
+    monkeypatch: pytest.MonkeyPatch,
+    base_env: dict[str, str],
+) -> None:
+    env = dict(base_env)
     env["INPUT_CLUSTER_NAME"] = "Invalid_Name"
     for key, value in env.items():
         monkeypatch.setenv(key, value)
@@ -85,11 +100,14 @@ def test_resolve_all_inputs_rejects_invalid_cluster(monkeypatch: pytest.MonkeyPa
         _resolve_all_inputs(RawInputs(**raw_values))
 
 
-def test_prepare_inputs_masks_and_exports(tmp_path: Path) -> None:
+def test_prepare_inputs_masks_and_exports(
+    tmp_path: Path,
+    token_factory: Callable[[], str],
+) -> None:
     env_file = tmp_path / "env"
     masks: list[str] = []
-    gitops_token = _dummy_token()
-    do_token = _dummy_token()
+    gitops_token = token_factory()
+    do_token = token_factory()
 
     inputs = _resolve_all_inputs(
         RawInputs(

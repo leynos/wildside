@@ -51,18 +51,29 @@ def _make_inputs(tmp_path: Path, **overrides: object) -> ProvisionInputs:
 def test_build_backend_config(tmp_path: Path) -> None:
     inputs = _make_inputs(tmp_path)
     backend = build_backend_config(inputs)
-    assert backend.endpoint == "https://nyc3.digitaloceanspaces.com"
-    assert backend.state_key == "clusters/preview-1/terraform.tfstate"
+    assert (
+        backend.endpoint == "https://nyc3.digitaloceanspaces.com"
+    ), "Expected Spaces endpoint to match region"
+    assert (
+        backend.state_key == "clusters/preview-1/terraform.tfstate"
+    ), "Expected state key to include cluster name"
 
 
 def test_build_tfvars_includes_node_pools(tmp_path: Path) -> None:
     inputs = _make_inputs(tmp_path)
     tfvars = build_tfvars(inputs)
-    assert tfvars["cluster_name"] == "preview-1"
-    assert isinstance(tfvars["node_pools"], list)
+    assert (
+        tfvars["cluster_name"] == "preview-1"
+    ), "Expected cluster_name to be written to tfvars"
+    assert isinstance(
+        tfvars["node_pools"], list
+    ), "Expected node_pools to be a list in tfvars"
 
 
-def test_resolve_provision_inputs_cli_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_resolve_provision_inputs_cli_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     monkeypatch.setenv("CLUSTER_NAME", "env-name")
     monkeypatch.setenv("ENVIRONMENT", "preview")
     monkeypatch.setenv("REGION", "nyc1")
@@ -72,7 +83,7 @@ def test_resolve_provision_inputs_cli_override(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "env"))
 
     inputs = resolve_provision_inputs(RawProvisionInputs(cluster_name="cli-name"))
-    assert inputs.cluster_name == "cli-name"
+    assert inputs.cluster_name == "cli-name", "CLI override should win"
 
 
 def test_provision_cluster_dry_run_skips_apply(
@@ -101,9 +112,9 @@ def test_provision_cluster_dry_run_skips_apply(
     monkeypatch.setattr("scripts._provision_cluster_flow.tofu_apply", fake_apply)
 
     success, outputs = provision_cluster(inputs, backend, tfvars)
-    assert success is True
-    assert outputs == {}
-    assert "apply" not in calls
+    assert success is True, "Expected dry-run provision to succeed"
+    assert outputs == {}, "Expected no outputs in dry-run mode"
+    assert "apply" not in calls, "Dry-run should skip apply"
 
 
 def test_provision_cluster_apply_success(
@@ -147,8 +158,10 @@ def test_provision_cluster_apply_success(
     )
 
     success, outputs = provision_cluster(inputs, backend, tfvars)
-    assert success is True
-    assert outputs["cluster_id"]["value"] == "abc"
+    assert success is True, "Expected provision to succeed"
+    assert (
+        outputs["cluster_id"]["value"] == "abc"
+    ), "Expected cluster_id output to be populated"
 
 
 def test_export_cluster_outputs_writes_kubeconfig(
@@ -171,6 +184,6 @@ def test_export_cluster_outputs_writes_kubeconfig(
     )
 
     content = env_file.read_text(encoding="utf-8")
-    assert "CLUSTER_ID=abc" in content
-    assert "KUBECONFIG_RAW<<" in content
-    assert masked
+    assert "CLUSTER_ID=abc" in content, "Expected cluster ID to be exported"
+    assert "KUBECONFIG_RAW<<" in content, "Expected kubeconfig to export multiline"
+    assert masked, "Expected secrets to be masked"

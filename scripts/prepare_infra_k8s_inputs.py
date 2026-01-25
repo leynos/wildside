@@ -33,8 +33,8 @@ from scripts._prepare_infra_k8s_inputs import (
 __all__ = [
     "RawInputs",
     "ResolvedInputs",
-    "prepare_inputs",
     "app",
+    "prepare_inputs",
 ]
 
 app = App(help="Prepare wildside-infra-k8s action inputs.")
@@ -152,4 +152,4 @@ def main(
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
-    app()
+    raise SystemExit(app())

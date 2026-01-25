@@ -92,9 +92,9 @@ module "vault_eso" {
   mode = "render"
 
   vault_address       = coalesce(var.vault_address, "https://vault.example.test:8200")
-  vault_ca_bundle_pem = try(coalesce(var.vault_ca_bundle_pem, ""), "")
-  approle_role_id     = try(coalesce(var.vault_approle_role_id, ""), "")
-  approle_secret_id   = try(coalesce(var.vault_approle_secret_id, ""), "")
+  vault_ca_bundle_pem = var.vault_ca_bundle_pem != null ? var.vault_ca_bundle_pem : ""
+  approle_role_id     = var.vault_approle_role_id != null ? var.vault_approle_role_id : ""
+  approle_secret_id   = var.vault_approle_secret_id != null ? var.vault_approle_secret_id : ""
   kv_mount_path       = var.vault_kv_mount_path
 
   cluster_secret_store_kv_name = var.eso_cluster_secret_store_name

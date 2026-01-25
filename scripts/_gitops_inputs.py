@@ -1,22 +1,29 @@
-"""Resolve and validate GitOps inputs.
+"""Resolve and validate GitOps inputs for manifest commits.
 
-This module resolves CLI or environment-based inputs into validated,
-type-safe configuration for GitOps manifest operations. It handles
-coercion of raw string/path values, applies defaults where appropriate,
-and raises validation errors for missing or invalid required inputs.
+This module converts raw CLI or environment values into a validated
+``GitOpsInputs`` configuration used by the GitOps commit workflow. It
+normalizes types, applies defaults for local development, and raises
+validation errors when required inputs are missing.
 
-Classes
--------
-GitOpsInputs
-    Immutable dataclass holding resolved GitOps configuration values.
-RawGitOpsInputs
-    Dataclass representing unvalidated inputs from CLI or defaults.
+Examples
+--------
+>>> from scripts._gitops_inputs import RawGitOpsInputs, resolve_gitops_inputs
+>>> inputs = resolve_gitops_inputs(
+...     RawGitOpsInputs(
+...         gitops_repository="wildside/wildside-infra",
+...         gitops_token="token",
+...         cluster_name="preview-1",
+...     )
+... )
+>>> inputs.gitops_repository
+'wildside/wildside-infra'
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from scripts._gitops_errors import GitValidationError
 from scripts._input_resolution import InputResolution, resolve_input
@@ -178,5 +185,5 @@ def resolve_gitops_inputs(raw: RawGitOpsInputs) -> GitOpsInputs:
         render_output_dir=_to_path(render_output_dir_raw, "render_output_dir"),
         runner_temp=_to_path(runner_temp_raw, "runner_temp"),
         github_env=_to_path(github_env_raw, "github_env"),
-        dry_run=parse_bool(str(dry_run_raw) if dry_run_raw else None, default=False),
+        dry_run=parse_bool(cast("str | None", dry_run_raw), default=False),
     )

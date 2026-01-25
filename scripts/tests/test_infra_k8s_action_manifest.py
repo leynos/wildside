@@ -183,7 +183,7 @@ def test_commit_step_is_conditional_on_dry_run() -> None:
 
     assert "uv run scripts/commit_gitops_manifests.py" in commit["run"]
     assert commit.get("if") == (
-        '${{ !contains(fromJSON(\'["true","1","yes"]\'), toLower(inputs.dry_run)) }}'
+        '${{ !contains(fromJSON(\'["true","True","TRUE","1","yes","Yes","YES"]\'), inputs.dry_run) }}'
     ), (
         "Commit step should be conditional on dry_run input"
     )
