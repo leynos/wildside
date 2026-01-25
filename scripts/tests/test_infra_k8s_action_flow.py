@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import inspect
 import secrets
+from dataclasses import dataclass
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -48,35 +48,20 @@ def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> 
     entries[key] = "\n".join(buf)
 
 
-@dataclass(slots=True)
-class _HeredocState:
-    key: str | None = None
-    delim: str | None = None
-    buf: list[str] = field(default_factory=list)
-
-    @property
-    def active(self) -> bool:
-        return self.delim is not None
-
-
-def _handle_heredoc_line(
+def _heredoc_step(
+    delimiter: str | None,
+    key: str | None,
+    buffer: list[str],
     line: str,
-    state: _HeredocState,
     entries: dict[str, str],
-) -> None:
-    if line == state.delim:
-        _flush_heredoc(entries, state.key, state.buf)
-        state.key = None
-        state.delim = None
-        state.buf.clear()
-    else:
-        state.buf.append(line)
-
-
-def _maybe_store_kv(line: str, entries: dict[str, str]) -> None:
-    key_part, sep, value = line.partition("=")
-    if sep:
-        entries[key_part] = value
+) -> tuple[str | None, str | None, list[str], bool]:
+    if delimiter is None:
+        return key, delimiter, buffer, False
+    if line == delimiter:
+        _flush_heredoc(entries, key, buffer)
+        return None, None, [], True
+    buffer.append(line)
+    return key, delimiter, buffer, True
 
 
 def _parse_github_kv_file(path: Path) -> dict[str, str]:
@@ -84,22 +69,34 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     entries: dict[str, str] = {}
-    state = _HeredocState()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if state.active:
-            _handle_heredoc_line(line, state, entries)
-            continue
-        if _is_blank_or_comment(line):
-            continue
-        next_key, next_delim = _start_heredoc(line)
-        if next_key is not None and next_delim is not None:
-            state.key = next_key
-            state.delim = next_delim
-            state.buf.clear()
-            continue
-        _maybe_store_kv(line, entries)
-    if state.active:
-        _flush_heredoc(entries, state.key, state.buf)
+    key: str | None = None
+    delimiter: str | None = None
+    buffer: list[str] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.rstrip("\n")
+            key, delimiter, buffer, consumed = _heredoc_step(
+                delimiter,
+                key,
+                buffer,
+                line,
+                entries,
+            )
+            if consumed:
+                continue
+            if _is_blank_or_comment(line):
+                continue
+            next_key, next_delim = _start_heredoc(line)
+            if next_key is not None and next_delim is not None:
+                key = next_key
+                delimiter = next_delim
+                buffer = []
+                continue
+            if "=" in line:
+                key_part, _, value = line.partition("=")
+                entries[key_part.strip()] = value
+    if delimiter is not None:
+        _flush_heredoc(entries, key, buffer)
     return entries
 
 
