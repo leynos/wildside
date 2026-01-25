@@ -147,7 +147,8 @@ def main(
     github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
     """Prepare inputs for the wildside-infra-k8s action (CLI overrides env)."""
-    return _run_prepare_flow(_collect_cli_values(locals()))
+    raw = _collect_cli_values(locals())
+    return _run_prepare_flow(raw)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
