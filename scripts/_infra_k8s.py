@@ -10,6 +10,7 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from collections import abc as cabc
@@ -139,6 +140,16 @@ def _write_github_multiline(
     handle(f"{delimiter}\n")
 
 
+def _append_github_kv(target_file: Path, items: Mapping[str, str]) -> None:
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    with target_file.open("a", encoding="utf-8") as handle:
+        for key, value in items.items():
+            if "\n" in value or "\r" in value:
+                _write_github_multiline(handle.write, key, value)
+            else:
+                handle.write(f"{key}={value}\n")
+
+
 def append_github_env(env_file: Path, variables: dict[str, str]) -> None:
     """Append environment variables to GITHUB_ENV file.
 
@@ -158,13 +169,7 @@ def append_github_env(env_file: Path, variables: dict[str, str]) -> None:
     --------
     >>> append_github_env(Path("/tmp/env"), {"CLUSTER_NAME": "preview-1"})
     """
-    env_file.parent.mkdir(parents=True, exist_ok=True)
-    with env_file.open("a", encoding="utf-8") as handle:
-        for key, value in variables.items():
-            if "\n" in value or "\r" in value:
-                _write_github_multiline(handle.write, key, value)
-            else:
-                handle.write(f"{key}={value}\n")
+    _append_github_kv(env_file, variables)
 
 
 def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
@@ -186,13 +191,7 @@ def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
     --------
     >>> append_github_output(Path("/tmp/out"), {"cluster_id": "abc"})
     """
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with output_file.open("a", encoding="utf-8") as handle:
-        for key, value in outputs.items():
-            if "\n" in value or "\r" in value:
-                _write_github_multiline(handle.write, key, value)
-            else:
-                handle.write(f"{key}={value}\n")
+    _append_github_kv(output_file, outputs)
 
 
 def _validate_command_args(args: list[str]) -> None:
