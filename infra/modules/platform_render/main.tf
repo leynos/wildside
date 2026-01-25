@@ -12,6 +12,13 @@ locals {
   cluster_name = trimspace(var.cluster_name)
   domain       = lower(trimspace(var.domain))
   acme_email   = trimspace(var.acme_email)
+  vault_ca_bundle_pem = trimspace(coalesce(var.vault_ca_bundle_pem, " "))
+  vault_approle_role_id = trimspace(
+    coalesce(var.vault_approle_role_id, " ")
+  )
+  vault_approle_secret_id = trimspace(
+    coalesce(var.vault_approle_secret_id, " ")
+  )
 
   # External DNS TXT owner ID (unique per cluster)
   txt_owner_id = local.cluster_name
@@ -58,7 +65,7 @@ module "cert_manager" {
   vault_server            = var.vault_address
   vault_pki_path          = var.cert_manager_vault_pki_path
   vault_token_secret_name = "vault-token"
-  vault_ca_bundle_pem     = var.vault_ca_bundle_pem != null ? var.vault_ca_bundle_pem : ""
+  vault_ca_bundle_pem     = local.vault_ca_bundle_pem
 
   # Namecheap webhook configuration
   webhook_release_enabled = var.cert_manager_webhook_enabled
@@ -92,9 +99,9 @@ module "vault_eso" {
   mode = "render"
 
   vault_address       = coalesce(var.vault_address, "https://vault.example.test:8200")
-  vault_ca_bundle_pem = var.vault_ca_bundle_pem != null ? var.vault_ca_bundle_pem : ""
-  approle_role_id     = var.vault_approle_role_id != null ? var.vault_approle_role_id : ""
-  approle_secret_id   = var.vault_approle_secret_id != null ? var.vault_approle_secret_id : ""
+  vault_ca_bundle_pem = local.vault_ca_bundle_pem
+  approle_role_id     = local.vault_approle_role_id
+  approle_secret_id   = local.vault_approle_secret_id
   kv_mount_path       = var.vault_kv_mount_path
 
   cluster_secret_store_kv_name = var.eso_cluster_secret_store_name

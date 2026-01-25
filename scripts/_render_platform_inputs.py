@@ -143,10 +143,10 @@ def _resolve_core_config(raw: RawRenderInputs) -> tuple[str, str, str, str]:
         ),
     )
     return (
-        cast(str, cluster_name_raw),
-        cast(str, domain_raw),
-        cast(str, acme_email_raw),
-        cast(str, cloudflare_secret_raw),
+        cast("str", cluster_name_raw),
+        cast("str", domain_raw),
+        cast("str", acme_email_raw),
+        cast("str", cloudflare_secret_raw),
     )
 
 

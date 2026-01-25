@@ -179,7 +179,23 @@ SENSITIVE_KEYS: tuple[str, ...] = (
 
 
 def final_secret_masking() -> None:
-    """Perform final pass to ensure sensitive values are masked."""
+    """Perform final pass to ensure sensitive values are masked.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+        Emits GitHub Actions masking commands for any sensitive values found
+        in the current environment.
+
+    Examples
+    --------
+    >>> os.environ["SPACES_ACCESS_KEY"] = "secret"
+    >>> final_secret_masking()
+    """
     for key in SENSITIVE_KEYS:
         value = os.environ.get(key)
         if value:
