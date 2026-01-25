@@ -12,6 +12,7 @@ import re
 import subprocess
 from collections import abc as cabc
 from collections.abc import Mapping
+from typing import TextIO
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -134,16 +135,12 @@ def _choose_multiline_delimiter(value: str, base: str = "EOF") -> str:
     return delimiter
 
 
-def _write_github_multiline(
-    handle: cabc.Callable[[str], int],
-    key: str,
-    value: str,
-) -> None:
+def _write_github_multiline(handle: TextIO, key: str, value: str) -> None:
     """Write a multiline GitHub Actions value using heredoc syntax."""
     delimiter = _choose_multiline_delimiter(value)
-    handle(f"{key}<<{delimiter}\n")
-    handle(f"{value}\n")
-    handle(f"{delimiter}\n")
+    handle.write(f"{key}<<{delimiter}\n")
+    handle.write(f"{value}\n")
+    handle.write(f"{delimiter}\n")
 
 
 def _append_github_kv(target_file: Path, items: Mapping[str, str]) -> None:
@@ -152,7 +149,7 @@ def _append_github_kv(target_file: Path, items: Mapping[str, str]) -> None:
     with target_file.open("a", encoding="utf-8") as handle:
         for key, value in items.items():
             if "\n" in value or "\r" in value:
-                _write_github_multiline(handle.write, key, value)
+                _write_github_multiline(handle, key, value)
             else:
                 handle.write(f"{key}={value}\n")
 
