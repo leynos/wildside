@@ -7,6 +7,7 @@ import secrets
 from dataclasses import dataclass
 from collections.abc import Callable
 from pathlib import Path
+from typing import Iterable
 
 import pytest
 
@@ -51,6 +52,16 @@ def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> 
     entries[key] = "\n".join(buf)
 
 
+def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
+    buf: list[str] = []
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if line == delimiter:
+            break
+        buf.append(line)
+    return "\n".join(buf)
+
+
 def _heredoc_step(
     delimiter: str | None,
     key: str | None,
@@ -72,34 +83,18 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     entries: dict[str, str] = {}
-    key: str | None = None
-    delimiter: str | None = None
-    buffer: list[str] = []
     with path.open("r", encoding="utf-8") as handle:
-        for raw_line in handle:
-            line = raw_line.rstrip("\n")
-            key, delimiter, buffer, consumed = _heredoc_step(
-                delimiter,
-                key,
-                buffer,
-                line,
-                entries,
-            )
-            if consumed:
-                continue
+        it = (ln.rstrip("\n") for ln in handle)
+        for line in it:
             if _is_blank_or_comment(line):
                 continue
-            next_key, next_delim = _start_heredoc(line)
-            if next_key is not None and next_delim is not None:
-                key = next_key
-                delimiter = next_delim
-                buffer = []
+            key, delim = _start_heredoc(line)
+            if key is not None and delim is not None:
+                entries[key] = _consume_heredoc(it, delim)
                 continue
             if "=" in line:
                 key_part, _, value = line.partition("=")
-                entries[key_part.strip()] = value
-    if delimiter is not None:
-        _flush_heredoc(entries, key, buffer)
+                entries[key_part] = value
     return entries
 
 
