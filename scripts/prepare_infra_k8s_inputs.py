@@ -146,58 +146,8 @@ def main(
     runner_temp: Path | None = RUNNER_TEMP_PARAM,
     github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
-    """Prepare inputs for the wildside-infra-k8s action (CLI overrides env).
-
-    Parameters
-    ----------
-    cluster_name, environment, region, kubernetes_version, node_pools,
-    domain, acme_email : str | None
-        Overrides for the corresponding ``INPUT_*`` values.
-    gitops_repository, gitops_branch, gitops_token : str | None
-        Overrides for ``INPUT_GITOPS_REPOSITORY``, ``INPUT_GITOPS_BRANCH``,
-        and ``INPUT_GITOPS_TOKEN``.
-    vault_address, vault_role_id, vault_secret_id,
-    vault_ca_certificate : str | None
-        Overrides for ``INPUT_VAULT_*`` values.
-    digitalocean_token, spaces_access_key, spaces_secret_key : str | None
-        Overrides for ``INPUT_DIGITALOCEAN_TOKEN``,
-        ``INPUT_SPACES_ACCESS_KEY``, and ``INPUT_SPACES_SECRET_KEY``.
-    cloudflare_api_token_secret_name : str | None
-        Override for ``INPUT_CLOUDFLARE_API_TOKEN_SECRET_NAME``.
-    enable_traefik, enable_cert_manager, enable_external_dns,
-    enable_vault_eso, enable_cnpg : str | None
-        Overrides for ``INPUT_ENABLE_*`` feature flags.
-    dry_run : str | None
-        Override for ``INPUT_DRY_RUN``.
-    runner_temp : Path | None
-        Override for ``RUNNER_TEMP``.
-    github_env : Path | None
-        Override for ``GITHUB_ENV``.
-
-    Returns
-    -------
-    int
-        Exit code (0 for success).
-    Examples
-    --------
-    >>> import os
-    >>> os.environ.update(
-    ...     {
-    ...         "INPUT_ENVIRONMENT": "preview",
-    ...         "INPUT_DOMAIN": "example.test",
-    ...         "INPUT_ACME_EMAIL": "admin@example.test",
-    ...         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
-    ...         "INPUT_GITOPS_TOKEN": "token",
-    ...         "INPUT_DIGITALOCEAN_TOKEN": "do-token",
-    ...         "INPUT_SPACES_ACCESS_KEY": "spaces-key",
-    ...         "INPUT_SPACES_SECRET_KEY": "spaces-secret",
-    ...     }
-    ... )
-    >>> main(cluster_name="preview-1", region="nyc1")
-    0
-    """
-    raw = _collect_cli_values(locals())
-    return _run_prepare_flow(raw)
+    """Prepare inputs for the wildside-infra-k8s action (CLI overrides env)."""
+    return _run_prepare_flow(_collect_cli_values(locals()))
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
