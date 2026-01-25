@@ -7,6 +7,7 @@ import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 import pytest
 
@@ -48,38 +49,33 @@ def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> 
     entries[key] = "\n".join(buf)
 
 
+def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
+    buf = []
+    for line in lines:
+        ln = line.rstrip("\n")
+        if ln == delimiter:
+            break
+        buf.append(ln)
+    return "\n".join(buf)
+
+
 def _parse_github_kv_file(path: Path) -> dict[str, str]:
     """Parse a GitHub-style KEY=VALUE file with heredoc support."""
     if not path.exists():
         return {}
     entries: dict[str, str] = {}
-    lines = path.read_text(encoding="utf-8").splitlines()
-    key: str | None = None
-    delim: str | None = None
-    buffer: list[str] = []
-    for line in lines:
-        if delim is not None:
-            if line == delim:
-                _flush_heredoc(entries, key, buffer)
-                key = None
-                delim = None
-                buffer = []
-            else:
-                buffer.append(line)
-            continue
-        if _is_blank_or_comment(line):
-            continue
-        next_key, next_delimiter = _start_heredoc(line)
-        if next_key is not None and next_delimiter is not None:
-            key = next_key
-            delim = next_delimiter
-            buffer = []
-            continue
-        if "=" in line:
-            key_part, _, value = line.partition("=")
-            entries[key_part] = value
-    if delim is not None:
-        _flush_heredoc(entries, key, buffer)
+    with path.open(encoding="utf-8") as handle:
+        lines = (ln.rstrip("\n") for ln in handle)
+        for line in lines:
+            if _is_blank_or_comment(line):
+                continue
+            key, delimiter = _start_heredoc(line)
+            if key:
+                entries[key] = _consume_heredoc(lines, delimiter or "")
+                continue
+            if "=" in line:
+                key_part, _, value = line.partition("=")
+                entries[key_part.strip()] = value
     return entries
 
 
