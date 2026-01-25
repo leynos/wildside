@@ -10,6 +10,7 @@
 variable "cluster_name" {
   description = "Name of the Kubernetes cluster (used for resource naming)"
   type        = string
+  nullable    = false
 
   validation {
     condition     = length(trimspace(var.cluster_name)) > 0
@@ -28,6 +29,7 @@ variable "cluster_name" {
 variable "domain" {
   description = "Root DNS domain for the cluster (e.g., example.com)"
   type        = string
+  nullable    = false
 
   validation {
     condition = can(regex(
@@ -41,6 +43,7 @@ variable "domain" {
 variable "acme_email" {
   description = "Email address for ACME certificate registration"
   type        = string
+  nullable    = false
 
   validation {
     condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", trimspace(var.acme_email)))

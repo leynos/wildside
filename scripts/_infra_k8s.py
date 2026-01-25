@@ -10,10 +10,10 @@ import json
 import os
 import re
 import subprocess
+from collections import abc as cabc
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from collections import abc as cabc
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +45,7 @@ def mask_secret(value: str, stream: cabc.Callable[[str], object] = print) -> Non
     ----------
     value : str
         Secret value to mask.
-    stream : Callable[[str], int], optional
+    stream : Callable[[str], object], optional
         Output stream for the masking command (defaults to ``print``).
 
     Returns
@@ -121,6 +121,7 @@ def parse_node_pools(value: str | None) -> list[dict[str, object]] | None:
 
 
 def _choose_multiline_delimiter(value: str, base: str = "EOF") -> str:
+    """Choose a heredoc delimiter that is not in the value."""
     delimiter = base
     counter = 0
     while delimiter in value:
@@ -134,6 +135,7 @@ def _write_github_multiline(
     key: str,
     value: str,
 ) -> None:
+    """Write a multiline GitHub Actions value using heredoc syntax."""
     delimiter = _choose_multiline_delimiter(value)
     handle(f"{key}<<{delimiter}\n")
     handle(f"{value}\n")
@@ -141,6 +143,7 @@ def _write_github_multiline(
 
 
 def _append_github_kv(target_file: Path, items: Mapping[str, str]) -> None:
+    """Append key-value pairs to a GitHub Actions metadata file."""
     target_file.parent.mkdir(parents=True, exist_ok=True)
     with target_file.open("a", encoding="utf-8") as handle:
         for key, value in items.items():
@@ -195,6 +198,7 @@ def append_github_output(output_file: Path, outputs: dict[str, str]) -> None:
 
 
 def _validate_command_args(args: list[str]) -> None:
+    """Validate OpenTofu CLI arguments for safe execution."""
     for arg in args:
         if not isinstance(arg, str):
             msg = f"OpenTofu argument must be a string, got {type(arg).__name__}"
@@ -278,12 +282,14 @@ def tofu_init(
         f"-backend-config={backend_config_file}",
         f"-backend-config=region={backend_config.region}",
         f"-backend-config=endpoint={backend_config.endpoint}",
-        f"-backend-config=access_key={backend_config.access_key}",
-        f"-backend-config=secret_key={backend_config.secret_key}",
         f"-backend-config=key={backend_config.state_key}",
         "-input=false",
     ]
-    return run_tofu(args, cwd)
+    backend_env = {
+        "AWS_ACCESS_KEY_ID": backend_config.access_key,
+        "AWS_SECRET_ACCESS_KEY": backend_config.secret_key,
+    }
+    return run_tofu(args, cwd, env=backend_env)
 
 
 def tofu_plan(cwd: Path, var_file: Path | None = None) -> TofuResult:
@@ -421,7 +427,7 @@ def validate_cluster_name(name: str) -> str:
     Returns
     -------
     str
-    Normalized cluster name.
+        Normalized cluster name.
 
     Raises
     ------

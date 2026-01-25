@@ -119,22 +119,35 @@ def _run_prepare_flow(raw: RawInputs) -> int:
 
 @app.command()
 def main(
-    cluster_name: str | None = CLUSTER_NAME_PARAM, environment: str | None = ENVIRONMENT_PARAM,
-    region: str | None = REGION_PARAM, kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
-    node_pools: str | None = NODE_POOLS_PARAM, domain: str | None = DOMAIN_PARAM,
-    acme_email: str | None = ACME_EMAIL_PARAM, gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
-    gitops_branch: str | None = GITOPS_BRANCH_PARAM, gitops_token: str | None = GITOPS_TOKEN_PARAM,
-    vault_address: str | None = VAULT_ADDRESS_PARAM, vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
-    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM, vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
-    digitalocean_token: str | None = DIGITALOCEAN_TOKEN_PARAM, spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
+    cluster_name: str | None = CLUSTER_NAME_PARAM,
+    environment: str | None = ENVIRONMENT_PARAM,
+    region: str | None = REGION_PARAM,
+    kubernetes_version: str | None = KUBERNETES_VERSION_PARAM,
+    node_pools: str | None = NODE_POOLS_PARAM,
+    domain: str | None = DOMAIN_PARAM,
+    acme_email: str | None = ACME_EMAIL_PARAM,
+    gitops_repository: str | None = GITOPS_REPOSITORY_PARAM,
+    gitops_branch: str | None = GITOPS_BRANCH_PARAM,
+    gitops_token: str | None = GITOPS_TOKEN_PARAM,
+    vault_address: str | None = VAULT_ADDRESS_PARAM,
+    vault_role_id: str | None = VAULT_ROLE_ID_PARAM,
+    vault_secret_id: str | None = VAULT_SECRET_ID_PARAM,
+    vault_ca_certificate: str | None = VAULT_CA_CERTIFICATE_PARAM,
+    digitalocean_token: str | None = DIGITALOCEAN_TOKEN_PARAM,
+    spaces_access_key: str | None = SPACES_ACCESS_KEY_PARAM,
     spaces_secret_key: str | None = SPACES_SECRET_KEY_PARAM,
     cloudflare_api_token_secret_name: str | None = CLOUDFLARE_API_TOKEN_SECRET_NAME_PARAM,
-    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM, enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
-    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM, enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
-    enable_cnpg: str | None = ENABLE_CNPG_PARAM, dry_run: str | None = DRY_RUN_PARAM,
-    runner_temp: Path | None = RUNNER_TEMP_PARAM, github_env: Path | None = GITHUB_ENV_PARAM,
+    enable_traefik: str | None = ENABLE_TRAEFIK_PARAM,
+    enable_cert_manager: str | None = ENABLE_CERT_MANAGER_PARAM,
+    enable_external_dns: str | None = ENABLE_EXTERNAL_DNS_PARAM,
+    enable_vault_eso: str | None = ENABLE_VAULT_ESO_PARAM,
+    enable_cnpg: str | None = ENABLE_CNPG_PARAM,
+    dry_run: str | None = DRY_RUN_PARAM,
+    runner_temp: Path | None = RUNNER_TEMP_PARAM,
+    github_env: Path | None = GITHUB_ENV_PARAM,
 ) -> int:
     """Prepare inputs for the wildside-infra-k8s action (CLI overrides env).
+
     Parameters
     ----------
     cluster_name, environment, region, kubernetes_version, node_pools,
@@ -167,6 +180,19 @@ def main(
         Exit code (0 for success).
     Examples
     --------
+    >>> import os
+    >>> os.environ.update(
+    ...     {
+    ...         "INPUT_ENVIRONMENT": "preview",
+    ...         "INPUT_DOMAIN": "example.test",
+    ...         "INPUT_ACME_EMAIL": "admin@example.test",
+    ...         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
+    ...         "INPUT_GITOPS_TOKEN": "token",
+    ...         "INPUT_DIGITALOCEAN_TOKEN": "do-token",
+    ...         "INPUT_SPACES_ACCESS_KEY": "spaces-key",
+    ...         "INPUT_SPACES_SECRET_KEY": "spaces-secret",
+    ...     }
+    ... )
     >>> main(cluster_name="preview-1", region="nyc1")
     0
     """

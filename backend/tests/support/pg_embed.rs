@@ -61,6 +61,7 @@ fn is_transient_error(err: &str) -> bool {
         "network unreachable",
         "dns error",
         "failed to lookup",
+        "failed to connect to admin database",
     ];
 
     let err_lower = err.to_lowercase();
@@ -113,7 +114,7 @@ pub fn shared_cluster() -> Result<&'static TestCluster, String> {
     let data_dir_env = std::env::var_os("PG_DATA_DIR");
     let env_dirs_ready = match (&runtime_dir_env, &data_dir_env) {
         (Some(runtime_dir), Some(data_dir)) => {
-            ensure_dir(&PathBuf::from(runtime_dir)) && ensure_dir(&PathBuf::from(data_dir))
+            ensure_dir(Path::new(runtime_dir)) && ensure_dir(Path::new(data_dir))
         }
         _ => false,
     };
@@ -134,9 +135,18 @@ pub fn shared_cluster() -> Result<&'static TestCluster, String> {
         None
     };
 
-    bootstrap_with_retries(|| shared_cluster_inner().map_err(|err| format!("{err:?}")))
+    let cluster = bootstrap_with_retries(|| {
+        let cluster = shared_cluster_inner().map_err(|err| format!("{err:?}"))?;
+        cluster
+            .database_exists("postgres")
+            .map_err(|err| format!("{err:?}"))?;
+        Ok(cluster)
+    })?;
+
+    Ok(cluster)
 }
 
+/// Return whether the directory is usable, swallowing I/O errors.
 fn ensure_dir(path: &Path) -> bool {
     if path.as_os_str().is_empty() {
         return false;

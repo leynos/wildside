@@ -15,6 +15,7 @@ ACTION_PATH = (
 
 def _load_action() -> dict[str, object]:
     result = yaml.safe_load(ACTION_PATH.read_text(encoding="utf-8"))
+    assert isinstance(result, dict)
     return cast(dict[str, object], result)
 
 
@@ -22,6 +23,7 @@ def test_required_inputs_are_marked_as_required() -> None:
     """Verify all essential inputs are marked as required."""
     action = _load_action()
     inputs = action["inputs"]
+    assert isinstance(inputs, dict)
 
     required_inputs = [
         "cluster_name",
@@ -47,6 +49,7 @@ def test_optional_inputs_have_defaults() -> None:
     """Verify optional inputs have sensible defaults."""
     action = _load_action()
     inputs = action["inputs"]
+    assert isinstance(inputs, dict)
 
     optional_with_defaults = {
         "gitops_branch": "main",
@@ -77,6 +80,7 @@ def test_sensitive_inputs_not_marked_as_secret() -> None:
     """
     action = _load_action()
     inputs = action["inputs"]
+    assert isinstance(inputs, dict)
 
     sensitive_inputs = [
         "gitops_token",
@@ -98,6 +102,7 @@ def test_outputs_are_properly_wired() -> None:
     """Verify outputs are wired to the publish step."""
     action = _load_action()
     outputs = action["outputs"]
+    assert isinstance(outputs, dict)
 
     expected_outputs = {
         "cluster_name": "${{ steps.publish.outputs.cluster_name }}",
@@ -117,14 +122,26 @@ def test_outputs_are_properly_wired() -> None:
 def test_prepare_step_invokes_correct_script() -> None:
     """Verify the prepare step invokes prepare_infra_k8s_inputs.py."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
 
-    prepare = next(step for step in steps if step["id"] == "prepare")
+    prepare = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("id") == "prepare"
+        ),
+        None,
+    )
+    assert prepare is not None, "Missing prepare step"
 
     assert "uv run scripts/prepare_infra_k8s_inputs.py" in prepare["run"]
 
     # Verify essential environment variables are set
     env = prepare.get("env", {})
+    assert isinstance(env, dict)
     essential_env_vars = [
         "INPUT_CLUSTER_NAME",
         "INPUT_ENVIRONMENT",
@@ -148,14 +165,26 @@ def test_prepare_step_invokes_correct_script() -> None:
 def test_provision_step_invokes_correct_script() -> None:
     """Verify the provision step invokes provision_cluster.py."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
 
-    provision = next(step for step in steps if step["id"] == "provision")
+    provision = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("id") == "provision"
+        ),
+        None,
+    )
+    assert provision is not None, "Missing provision step"
 
     assert "uv run scripts/provision_cluster.py" in provision["run"]
 
     # Verify DigitalOcean credentials are passed
     env = provision.get("env", {})
+    assert isinstance(env, dict)
     assert "DIGITALOCEAN_TOKEN" in env
     assert "SPACES_ACCESS_KEY" in env
     assert "SPACES_SECRET_KEY" in env
@@ -164,9 +193,21 @@ def test_provision_step_invokes_correct_script() -> None:
 def test_render_step_invokes_correct_script() -> None:
     """Verify the render step invokes render_platform_manifests.py."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
+    assert all(isinstance(step, dict) for step in steps)
 
-    render = next(step for step in steps if step["id"] == "render")
+    render = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("id") == "render"
+        ),
+        None,
+    )
+    assert render is not None, "Missing render step"
 
     assert "uv run scripts/render_platform_manifests.py" in render["run"]
 
@@ -174,9 +215,20 @@ def test_render_step_invokes_correct_script() -> None:
 def test_commit_step_is_conditional_on_dry_run() -> None:
     """Verify the commit step is skipped in dry-run mode."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
 
-    commit = next(step for step in steps if step["id"] == "commit")
+    commit = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("id") == "commit"
+        ),
+        None,
+    )
+    assert commit is not None, "Missing commit step"
 
     assert "uv run scripts/commit_gitops_manifests.py" in commit["run"]
     assert commit.get("if") == (
@@ -189,9 +241,20 @@ def test_commit_step_is_conditional_on_dry_run() -> None:
 def test_publish_step_invokes_correct_script() -> None:
     """Verify the publish step invokes publish_infra_k8s_outputs.py."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
 
-    publish = next(step for step in steps if step["id"] == "publish")
+    publish = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("id") == "publish"
+        ),
+        None,
+    )
+    assert publish is not None, "Missing publish step"
 
     assert "uv run scripts/publish_infra_k8s_outputs.py" in publish["run"]
 
@@ -200,13 +263,19 @@ def test_uses_composite_action_runner() -> None:
     """Verify the action uses composite runner."""
     action = _load_action()
 
-    assert action["runs"]["using"] == "composite"
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+
+    assert runs["using"] == "composite"
 
 
 def test_installs_required_tools() -> None:
     """Verify required tools are installed."""
     action = _load_action()
-    steps = action["runs"]["steps"]
+    runs = action["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
+    assert isinstance(steps, list)
 
     step_names = [step.get("name", "") for step in steps]
 

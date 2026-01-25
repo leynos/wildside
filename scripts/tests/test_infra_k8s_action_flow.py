@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import os
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -71,7 +70,7 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
         if _is_blank_or_comment(line):
             continue
         next_key, next_delimiter = _start_heredoc(line)
-        if next_key is not None and next_delimiter is not None:
+        if next_key is not None:
             key = next_key
             delimiter = next_delimiter
             buffer = []
@@ -79,15 +78,13 @@ def _parse_github_kv_file(path: Path) -> dict[str, str]:
         if "=" in line:
             key_part, _, value = line.partition("=")
             entries[key_part.strip()] = value
-    if delimiter is not None:
-        _flush_heredoc(entries, key, buffer)
+    _flush_heredoc(entries, key, buffer)
     return entries
 
 
 def _apply_env_file(env_path: Path, setenv: EnvSetter) -> None:
     """Apply GITHUB_ENV entries to the process environment."""
     values = _parse_github_kv_file(env_path)
-    os.environ.update(values)
     for key, value in values.items():
         setenv(key, value)
 
@@ -124,11 +121,11 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
         "INPUT_GITOPS_REPOSITORY": "wildside/wildside-infra",
         "INPUT_GITOPS_TOKEN": token,
         "INPUT_VAULT_ADDRESS": "https://vault.example.test:8200",
-        "INPUT_VAULT_ROLE_ID": "role",
-        "INPUT_VAULT_SECRET_ID": "secret",
+        "INPUT_VAULT_ROLE_ID": _dummy_token(),
+        "INPUT_VAULT_SECRET_ID": _dummy_token(),
         "INPUT_DIGITALOCEAN_TOKEN": _dummy_token(),
-        "INPUT_SPACES_ACCESS_KEY": "access",
-        "INPUT_SPACES_SECRET_KEY": "secret",
+        "INPUT_SPACES_ACCESS_KEY": _dummy_token(),
+        "INPUT_SPACES_SECRET_KEY": _dummy_token(),
         "INPUT_DRY_RUN": "true",
         "RUNNER_TEMP": str(paths.runner_temp),
         "GITHUB_ENV": str(paths.github_env),
@@ -223,14 +220,14 @@ def _assert_published(outputs: dict[str, str]) -> None:
 
 
 def _dummy_token() -> str:
+    """Return a random token-like value for tests."""
     return f"token-{secrets.token_hex(8)}"
 
 
+@pytest.mark.usefixtures("fake_tofu", "fake_gitops")
 def test_action_flow_happy_path(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    fake_tofu: None,
-    fake_gitops: None,
 ) -> None:
     paths = _mk_paths(tmp_path)
     _set_base_env(monkeypatch, paths)

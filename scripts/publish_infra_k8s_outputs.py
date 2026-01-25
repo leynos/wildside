@@ -101,6 +101,13 @@ def resolve_output_values(raw: RawOutputValues) -> OutputValues:
     Examples
     --------
     >>> resolve_output_values(RawOutputValues())
+    OutputValues(
+        cluster_name=None,
+        cluster_id=None,
+        cluster_endpoint=None,
+        gitops_commit_sha=None,
+        rendered_manifest_count=None,
+    )
     """
     cluster_name = resolve_input(
         raw.cluster_name, InputResolution(env_key="CLUSTER_NAME")
@@ -145,7 +152,7 @@ def publish_outputs(values: OutputValues, github_output: Path) -> None:
 
     Examples
     --------
-    >>> publish_outputs(OutputValues(None, None, None, None, None), Path(\"/tmp/out\"))
+    >>> publish_outputs(OutputValues(None, None, None, None, None), Path("/tmp/out"))
     """
     outputs = {
         key: value
