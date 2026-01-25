@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -31,26 +32,47 @@ class FlowPaths:
     clone_dir: Path
 
 
+def _parse_github_kv_file(path: Path) -> dict[str, str]:
+    """Parse a GitHub-style KEY=VALUE file with heredoc support."""
+    if not path.exists():
+        return {}
+    entries: dict[str, str] = {}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    key: str | None = None
+    delimiter: str | None = None
+    buffer: list[str] = []
+    for line in lines:
+        if delimiter is not None and key is not None:
+            if line == delimiter:
+                entries[key] = "\n".join(buffer)
+                key = None
+                delimiter = None
+                buffer = []
+            else:
+                buffer.append(line)
+            continue
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if "<<" in line:
+            key_part, marker = line.split("<<", 1)
+            key = key_part.strip()
+            delimiter = marker.strip()
+            buffer = []
+            continue
+        if "=" in line:
+            key_part, value = line.split("=", 1)
+            entries[key_part] = value
+    if delimiter is not None and key is not None:
+        entries[key] = "\n".join(buffer)
+    return entries
+
+
 def _apply_env_file(env_path: Path, setenv: EnvSetter) -> None:
     """Apply GITHUB_ENV entries to the process environment."""
-    lines = env_path.read_text(encoding="utf-8").splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        if "<<" in line:
-            key, marker = line.split("<<", 1)
-            key = key.strip()
-            marker = marker.strip()
-            index += 1
-            value_lines: list[str] = []
-            while index < len(lines) and lines[index] != marker:
-                value_lines.append(lines[index])
-                index += 1
-            setenv(key, "\n".join(value_lines))
-        elif "=" in line:
-            key, value = line.split("=", 1)
-            setenv(key, value)
-        index += 1
+    values = _parse_github_kv_file(env_path)
+    os.environ.update(values)
+    for key, value in values.items():
+        setenv(key, value)
 
 
 def _mk_paths(tmp_path: Path) -> FlowPaths:
@@ -155,25 +177,7 @@ def fake_gitops(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _parse_github_output(output_path: Path) -> dict[str, str]:
     """Parse the GITHUB_OUTPUT file into a normalized mapping."""
-    outputs: dict[str, str] = {}
-    lines = output_path.read_text(encoding="utf-8").splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        if "<<" in line:
-            key, marker = line.split("<<", 1)
-            key = key.strip()
-            marker = marker.strip()
-            index += 1
-            value_lines: list[str] = []
-            while index < len(lines) and lines[index] != marker:
-                value_lines.append(lines[index])
-                index += 1
-            outputs[key] = "\n".join(value_lines)
-        elif "=" in line:
-            key, value = line.split("=", 1)
-            outputs[key] = value
-        index += 1
+    outputs = _parse_github_kv_file(output_path)
     return {key.upper(): value for key, value in outputs.items()}
 
 
