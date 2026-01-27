@@ -1,4 +1,14 @@
-"""GitHub Actions helpers for wildside-infra-k8s workflows."""
+"""GitHub Actions helpers for wildside-infra-k8s workflows.
+
+This module centralizes parsing and file-writing helpers that mirror GitHub
+Actions behaviour for ``GITHUB_ENV`` and ``GITHUB_OUTPUT`` files.
+
+Examples
+--------
+>>> append_github_env(Path("/tmp/github-env"), {"CLUSTER_NAME": "demo"})
+>>> parse_bool("true")
+True
+"""
 
 from __future__ import annotations
 

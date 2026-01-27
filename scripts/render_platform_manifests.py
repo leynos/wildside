@@ -189,6 +189,10 @@ def main(
                 "RENDER_OUTPUT_DIR": str(inputs.output_dir),
             },
         )
+        if count == 0:
+            print("Rendered 0 manifests; exported outputs for downstream steps.")
+        else:
+            print(f"Rendered {count} manifests to {inputs.output_dir}.")
     except (InfraK8sError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

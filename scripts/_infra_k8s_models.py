@@ -12,7 +12,7 @@ True
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,8 +51,8 @@ class SpacesBackendConfig:
     bucket: str
     region: str
     endpoint: str
-    access_key: str
-    secret_key: str
+    access_key: str = field(repr=False)
+    secret_key: str = field(repr=False)
     state_key: str
 
 

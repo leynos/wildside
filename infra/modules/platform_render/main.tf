@@ -139,20 +139,6 @@ module "cnpg" {
   app_credentials_vault_path       = var.cnpg_app_vault_path
 }
 
-check "cnpg_backup_requires_credentials" {
-  assert {
-    condition = (
-      !var.cnpg_backup_enabled || (
-        length(trimspace(var.cnpg_backup_destination_path)) > 0 &&
-        length(trimspace(var.cnpg_backup_endpoint_url)) > 0 &&
-        length(trimspace(var.cnpg_backup_s3_access_key_id)) > 0 &&
-        length(trimspace(var.cnpg_backup_s3_secret_access_key)) > 0
-      )
-    )
-    error_message = "CNPG backup configuration requires destination path, endpoint URL, and S3 credentials when cnpg_backup_enabled is true"
-  }
-}
-
 # -----------------------------------------------------------------------------
 # Valkey Redis-compatible Cache
 # -----------------------------------------------------------------------------
@@ -203,9 +189,24 @@ locals {
   has_path_collisions = local.actual_total < local.expected_total
 }
 
-# Validation check for path collisions
-check "no_path_collisions" {
-  assert {
+output "cnpg_backup_configuration_valid" {
+  description = "Validate CNPG backup inputs when backups are enabled."
+  value       = true
+  precondition {
+    condition = !var.cnpg_backup_enabled || (
+      length(trimspace(var.cnpg_backup_destination_path)) > 0 &&
+      length(trimspace(var.cnpg_backup_endpoint_url)) > 0 &&
+      length(trimspace(var.cnpg_backup_s3_access_key_id)) > 0 &&
+      length(trimspace(var.cnpg_backup_s3_secret_access_key)) > 0
+    )
+    error_message = "CNPG backup configuration requires destination path, endpoint URL, and S3 credentials when cnpg_backup_enabled is true"
+  }
+}
+
+output "manifests_have_no_path_collisions" {
+  description = "Ensure merged manifests contain no duplicate paths."
+  value       = true
+  precondition {
     condition     = !local.has_path_collisions
     error_message = "Path collision detected: expected ${local.expected_total} manifests, got ${local.actual_total}. Check for duplicate paths across modules."
   }

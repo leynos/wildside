@@ -151,25 +151,24 @@ def provision_cluster(
     return True, outputs_raw
 
 
+def _string_or_none(value: object | None) -> str | None:
+    """Convert a value to a non-empty string when possible."""
+    if value is None:
+        return None
+    text = str(value)
+    if not text:
+        return None
+    return text
+
+
 def _extract_output_value(outputs: dict[str, object], key: str) -> str | None:
     """Extract a value from OpenTofu outputs, handling wrapped formats."""
     if key not in outputs:
         return None
     output = outputs[key]
-    if output is None:
-        return None
     if isinstance(output, dict) and "value" in output:
-        output = output["value"]
-        if output is None:
-            return None
-        value = str(output)
-        if not value:
-            return None
-        return value
-    value = str(output)
-    if not value:
-        return None
-    return value
+        return _string_or_none(output.get("value"))
+    return _string_or_none(output)
 
 
 def export_cluster_outputs(
