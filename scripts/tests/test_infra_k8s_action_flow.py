@@ -18,12 +18,26 @@ from scripts.provision_cluster import main as provision_cluster_main
 from scripts.publish_infra_k8s_outputs import main as publish_outputs_main
 from scripts.render_platform_manifests import main as render_manifests_main
 
-EnvSetter = Callable[[str, str], None]
+type EnvSetter = Callable[[str, str], None]
 
 
 @dataclass(frozen=True, slots=True)
 class FlowPaths:
-    """Paths used by the end-to-end action flow."""
+    """Paths used by the end-to-end action flow.
+
+    Attributes
+    ----------
+    runner_temp
+        Temporary runner directory.
+    github_env
+        Path to the GitHub Actions env file.
+    github_output
+        Path to the GitHub Actions output file.
+    render_output_dir
+        Directory for rendered manifests.
+    clone_dir
+        Working directory for the GitOps clone.
+    """
 
     runner_temp: Path
     github_env: Path
@@ -165,7 +179,15 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
 
 def _call_cli(main_func: Callable[..., object]) -> None:
     """Call a CLI entrypoint with explicit None overrides."""
-    params = dict.fromkeys(inspect.signature(main_func).parameters, None)
+    def _is_cyclopts_parameter(default: object) -> bool:
+        cls = default.__class__
+        return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
+
+    params = {
+        name: None
+        for name, param in inspect.signature(main_func).parameters.items()
+        if param.default is None or _is_cyclopts_parameter(param.default)
+    }
     main_func(**params)
 
 
