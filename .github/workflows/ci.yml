@@ -231,11 +231,22 @@ jobs:
         with:
           tool: nextest@0.9.114
 
+      - name: Build pg_worker binary
+        run: |
+          RUSTFLAGS="-D warnings" cargo build -p backend --bin pg_worker
+          install -m 0755 target/debug/pg_worker target/pg_worker
+
       - name: Rust tests
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: RUSTFLAGS="-D warnings" cargo nextest run --manifest-path backend/Cargo.toml --all-targets --all-features
+          # pg-embed-setup-unpriv v0.4.0 requires the worker binary for privilege
+          # demotion; without it the library cannot bootstrap the test cluster.
+          PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
+        run: |
+          # Clean stale pg-embed directories that may conflict with new runs.
+          find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
+          RUSTFLAGS="-D warnings" cargo nextest run --manifest-path backend/Cargo.toml --all-targets --all-features
 
       # OpenAPI dump (at runtime or via a small bin)
       - name: Generate OpenAPI specification

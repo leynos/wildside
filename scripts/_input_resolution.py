@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections import abc as cabc
 from dataclasses import dataclass
 from pathlib import Path
-from collections import abc as cabc
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +18,12 @@ class InputResolution:
     as_path: bool = False
 
 
+def _is_cyclopts_parameter(value: object) -> bool:
+    """Return True when the value is a cyclopts Parameter sentinel."""
+    cls = value.__class__
+    return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
+
+
 def resolve_input(
     param_value: str | Path | None,
     resolution: InputResolution,
@@ -25,7 +31,7 @@ def resolve_input(
 ) -> str | Path | None:
     """Resolve input from parameter, environment variable, or default."""
 
-    if param_value is not None:
+    if param_value is not None and not _is_cyclopts_parameter(param_value):
         return param_value
 
     env_value = (env or os.environ).get(resolution.env_key)

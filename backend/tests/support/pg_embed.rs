@@ -13,7 +13,7 @@
 //! both for the duration of the bootstrap, ensuring the embedded cluster uses
 //! a consistent workspace-backed configuration.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -61,6 +61,7 @@ fn is_transient_error(err: &str) -> bool {
         "network unreachable",
         "dns error",
         "failed to lookup",
+        "failed to connect to admin database",
     ];
 
     let err_lower = err.to_lowercase();
@@ -99,18 +100,25 @@ fn bootstrap_with_retries<T>(
 
 /// Bootstraps a shared [`TestCluster`] for persistent test sessions.
 ///
-/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set, this function leaves
-/// them untouched. If either value is missing, this function sets both to
-/// stable directories under the target directory so the shared cluster can be
-/// reused across multiple tests.
+/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set and usable, this
+/// function leaves them untouched. If either value is missing or unusable,
+/// this function sets both to stable directories under the target directory
+/// so the shared cluster can be reused across multiple tests.
 pub fn shared_cluster() -> Result<&'static TestCluster, String> {
     let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|err| err.into_inner());
 
-    let needs_override =
-        std::env::var_os("PG_RUNTIME_DIR").is_none() || std::env::var_os("PG_DATA_DIR").is_none();
+    let runtime_dir_env = std::env::var_os("PG_RUNTIME_DIR");
+    let data_dir_env = std::env::var_os("PG_DATA_DIR");
+    let env_dirs_ready = match (&runtime_dir_env, &data_dir_env) {
+        (Some(runtime_dir), Some(data_dir)) => {
+            ensure_dir(Path::new(runtime_dir)) && ensure_dir(Path::new(data_dir))
+        }
+        _ => false,
+    };
+    let needs_override = !env_dirs_ready;
 
     let _env_guard = if needs_override {
         let (runtime_dir, data_dir) =
@@ -127,12 +135,37 @@ pub fn shared_cluster() -> Result<&'static TestCluster, String> {
         None
     };
 
-    bootstrap_with_retries(|| shared_cluster_inner().map_err(|err| format!("{err:?}")))
+    let cluster = bootstrap_with_retries(|| {
+        let cluster = shared_cluster_inner().map_err(|err| format!("{err:?}"))?;
+        cluster
+            .database_exists("postgres")
+            .map_err(|err| format!("{err:?}"))?;
+        Ok(cluster)
+    })?;
+
+    Ok(cluster)
+}
+
+/// Return whether the directory is usable, swallowing I/O errors.
+fn ensure_dir(path: &Path) -> bool {
+    if path.as_os_str().is_empty() {
+        return false;
+    }
+    std::fs::create_dir_all(path).is_ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after UNIX_EPOCH")
+            .as_nanos();
+        pg_embed_target_dir().join(format!("{prefix}-{nanos}"))
+    }
 
     #[test]
     fn is_transient_error_matches_known_patterns() {
@@ -145,6 +178,7 @@ mod tests {
         assert!(is_transient_error("network unreachable"));
         assert!(is_transient_error("dns error: lookup failed"));
         assert!(is_transient_error("failed to lookup address"));
+        assert!(is_transient_error("failed to connect to admin database"));
     }
 
     #[test]
@@ -164,5 +198,28 @@ mod tests {
         assert!(!is_transient_error("invalid configuration"));
         assert!(!is_transient_error("authentication failed"));
         assert!(!is_transient_error(""));
+    }
+
+    #[test]
+    fn ensure_dir_returns_false_for_empty_path() {
+        assert!(!ensure_dir(Path::new("")));
+    }
+
+    #[test]
+    fn ensure_dir_creates_directory_when_missing() {
+        let dir = unique_test_dir("ensure-dir-create");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(ensure_dir(&dir));
+        assert!(dir.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_dir_returns_true_when_directory_exists() {
+        let dir = unique_test_dir("ensure-dir-existing");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("test directory should be creatable");
+        assert!(ensure_dir(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
