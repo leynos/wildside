@@ -180,6 +180,7 @@ def main(
 
     try:
         manifests = render_manifests(inputs, tfvars)
+        inputs.output_dir.mkdir(parents=True, exist_ok=True)
         count = write_manifests(inputs.output_dir, manifests)
         append_github_env(
             inputs.github_env,

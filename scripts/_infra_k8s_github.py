@@ -21,14 +21,17 @@ def mask_secret(value: str, stream: Callable[[str], object] = print) -> None:
     Returns
     -------
     None
-        Writes the masking command when ``value`` is non-empty.
+        Writes one masking command per non-empty line in ``value``.
 
     Examples
     --------
     >>> mask_secret("token")
     """
-    if value:
-        stream(f"::add-mask::{value}")
+    if not value:
+        return
+    for line in value.splitlines():
+        if line:
+            stream(f"::add-mask::{line}")
 
 
 def parse_bool(value: str | None, *, default: bool = True) -> bool:

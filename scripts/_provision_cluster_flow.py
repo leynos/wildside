@@ -100,7 +100,7 @@ def provision_cluster(
     print(f"  State key: {backend_config.state_key}")
     print(f"  Dry run: {inputs.dry_run}")
 
-    # Initialise with backend configuration
+    # Initialize with backend configuration
     print("\n--- Running tofu init ---")
     init_result = tofu_init(
         CLUSTER_MODULE_PATH,

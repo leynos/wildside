@@ -157,7 +157,6 @@ fn ensure_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_test_dir(prefix: &str) -> PathBuf {

@@ -1,4 +1,14 @@
-"""Data models for wildside-infra-k8s orchestration."""
+"""Data models for wildside-infra-k8s orchestration.
+
+These models provide a small, typed contract shared by the OpenTofu and action
+helpers, keeping data flow explicit across module boundaries.
+
+Examples
+--------
+>>> result = TofuResult(success=True, stdout="ok", stderr="", return_code=0)
+>>> result.success
+True
+"""
 
 from __future__ import annotations
 

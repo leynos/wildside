@@ -204,6 +204,19 @@ variable "vault_kv_mount_path" {
   type        = string
   default     = "secret"
   nullable    = false
+
+  validation {
+    condition = (
+      length(trimspace(var.vault_kv_mount_path)) > 0 &&
+      !startswith(trimspace(var.vault_kv_mount_path), "/") &&
+      !endswith(trimspace(var.vault_kv_mount_path), "/") &&
+      can(regex(
+        "^[A-Za-z0-9][A-Za-z0-9/_-]*[A-Za-z0-9]$",
+        trimspace(var.vault_kv_mount_path)
+      ))
+    )
+    error_message = "vault_kv_mount_path must not have leading or trailing slashes and may contain letters, numbers, slashes, underscores, and hyphens"
+  }
 }
 
 # -----------------------------------------------------------------------------
