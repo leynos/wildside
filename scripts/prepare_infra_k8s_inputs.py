@@ -71,11 +71,19 @@ GITHUB_ENV_PARAM = Parameter(help="GITHUB_ENV path override.")
 
 def _collect_cli_values(values: Mapping[str, object]) -> RawInputs:
     """Collect CLI overrides into raw input values."""
+    def _normalise_value(value: object | None) -> object | None:
+        if value is None:
+            return None
+        cls = value.__class__
+        if cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts"):
+            return None
+        return value
+
     def _get_str(key: str) -> str | None:
-        return cast("str | None", values.get(key))
+        return cast("str | None", _normalise_value(values.get(key)))
 
     def _get_path(key: str) -> Path | None:
-        return cast("Path | None", values.get(key))
+        return cast("Path | None", _normalise_value(values.get(key)))
 
     return RawInputs(
         cluster_name=_get_str("cluster_name"),

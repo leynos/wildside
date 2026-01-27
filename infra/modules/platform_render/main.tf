@@ -12,12 +12,14 @@ locals {
   cluster_name = trimspace(var.cluster_name)
   domain       = lower(trimspace(var.domain))
   acme_email   = trimspace(var.acme_email)
-  vault_ca_bundle_pem = trimspace(coalesce(var.vault_ca_bundle_pem, " "))
+  vault_ca_bundle_pem = trimspace(
+    var.vault_ca_bundle_pem != null ? var.vault_ca_bundle_pem : ""
+  )
   vault_approle_role_id = trimspace(
-    coalesce(var.vault_approle_role_id, " ")
+    var.vault_approle_role_id != null ? var.vault_approle_role_id : ""
   )
   vault_approle_secret_id = trimspace(
-    coalesce(var.vault_approle_secret_id, " ")
+    var.vault_approle_secret_id != null ? var.vault_approle_secret_id : ""
   )
 
   # External DNS TXT owner ID (unique per cluster)

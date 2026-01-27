@@ -156,14 +156,10 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
 
 def _call_cli(main_func: Callable[..., object]) -> None:
     """Call a CLI entrypoint with explicit None overrides."""
-    def _is_cyclopts_parameter(default: object) -> bool:
-        cls = default.__class__
-        return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
-
     params = {
         name: None
         for name, param in inspect.signature(main_func).parameters.items()
-        if param.default is None or _is_cyclopts_parameter(param.default)
+        if param.default is None
     }
     main_func(**params)
 

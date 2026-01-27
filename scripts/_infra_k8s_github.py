@@ -52,7 +52,7 @@ def parse_bool(value: str | None, *, default: bool = True) -> bool:
     value
         Raw string value to parse.
     default
-        Default value when ``value`` is ``None``.
+        Default value when ``value`` is ``None`` or blank.
 
     Returns
     -------
@@ -66,7 +66,7 @@ def parse_bool(value: str | None, *, default: bool = True) -> bool:
     >>> parse_bool(None, default=False)
     False
     """
-    if value is None:
+    if value is None or not value.strip():
         return default
     return value.strip().lower() in ("true", "1", "yes")
 

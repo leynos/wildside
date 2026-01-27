@@ -138,12 +138,17 @@ class RawProvisionInputs:
     dry_run: str | None = None
 
 
+def _is_cyclopts_parameter(value: object) -> bool:
+    cls = value.__class__
+    return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
+
+
 def _with_override(
     value: str | Path | None,
     resolution: InputResolution,
 ) -> str | Path | None:
     """Return the CLI override when present, otherwise resolve from environment."""
-    if value is not None:
+    if value is not None and not _is_cyclopts_parameter(value):
         return value
     return resolve_input(None, resolution)
 
