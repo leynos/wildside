@@ -4,7 +4,7 @@ Feature: Seed registry CLI
 
   Scenario: Add a seed with a generated name
     Given a seed registry file
-    When the seed registry CLI adds a seed using RNG value 2026
+    When the seed registry CLI adds a seed from RNG value 2026
     Then the registry contains the generated seed name
     And the CLI reports success
 
