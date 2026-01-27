@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import inspect
 import secrets
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 import pytest
 
