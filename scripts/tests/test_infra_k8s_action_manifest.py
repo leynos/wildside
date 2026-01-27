@@ -20,16 +20,18 @@ def _load_action() -> dict[str, object]:
 
 
 def _assert_step_invokes_script(
-    action: dict,
+    action: dict[str, object],
     *,
     step_id: str,
     expected_substring: str,
 ) -> None:
-    runs = action["runs"]
-    assert isinstance(runs, dict)
-    steps = runs["steps"]
-    assert isinstance(steps, list)
-    assert all(isinstance(step, dict) for step in steps)
+    runs = action.get("runs")
+    assert isinstance(runs, dict), "action['runs'] must be a mapping"
+    steps = runs.get("steps")
+    assert isinstance(steps, list), "action['runs']['steps'] must be a list"
+    assert all(isinstance(step, dict) for step in steps), (
+        "action['runs']['steps'] must contain step mappings"
+    )
 
     step = next(
         (
@@ -40,7 +42,9 @@ def _assert_step_invokes_script(
         None,
     )
     assert step is not None, f"Missing {step_id} step"
-    assert expected_substring in step.get("run", "")
+    run_value = step.get("run", "")
+    assert isinstance(run_value, str), f"{step_id} step run must be a string"
+    assert expected_substring in run_value, f"{step_id} step should invoke expected script"
 
 
 def test_required_inputs_are_marked_as_required() -> None:
@@ -277,6 +281,9 @@ def test_installs_required_tools() -> None:
     assert isinstance(runs, dict)
     steps = runs["steps"]
     assert isinstance(steps, list)
+    assert all(isinstance(step, dict) for step in steps), (
+        "action['runs']['steps'] must contain step mappings"
+    )
 
     step_names = [step.get("name", "") for step in steps]
 

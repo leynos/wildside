@@ -89,7 +89,7 @@ def test_write_tfvars_and_manifests(tmp_path: Path) -> None:
     ), "Manifest content should match"
 
 
-def test_validate_cluster_name_normalises() -> None:
+def test_validate_cluster_name_normalizes() -> None:
     assert (
         validate_cluster_name(" Preview-1 ") == "preview-1"
     ), "Cluster name should be normalized"
@@ -111,12 +111,15 @@ class _StubResult:
 def test_run_tofu_invokes_subprocess(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run(cmd: list[str], **kwargs: object) -> _StubResult:  # type: ignore[override]
+    def fake_run(*args: object, **kwargs: object) -> _StubResult:
+        cmd = args[0]
+        assert isinstance(cmd, list), "Expected command argument list"
+        assert all(isinstance(part, str) for part in cmd), "Command parts must be strings"
         captured["cmd"] = cmd
         captured["cwd"] = kwargs.get("cwd")
         return _StubResult()
 
-    monkeypatch.setattr("scripts._infra_k8s.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts._infra_k8s_tofu.subprocess.run", fake_run)
 
     result = run_tofu(["plan", "-input=false"], tmp_path)
     assert isinstance(result, TofuResult), "Expected TofuResult return"
@@ -133,7 +136,7 @@ def test_tofu_output_raises_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path
     def fake_run(*_args: object, **_kwargs: object) -> TofuResult:
         return TofuResult(success=False, stdout="", stderr="boom", return_code=1)
 
-    monkeypatch.setattr("scripts._infra_k8s.run_tofu", fake_run)
+    monkeypatch.setattr("scripts._infra_k8s_tofu.run_tofu", fake_run)
 
     with pytest.raises(TofuCommandError, match="tofu output failed"):
         tofu_output(tmp_path)

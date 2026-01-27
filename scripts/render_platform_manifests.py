@@ -19,6 +19,8 @@ from pathlib import Path
 
 from cyclopts import App, Parameter
 from scripts._infra_k8s import (
+    InfraK8sError,
+    TofuCommandError,
     append_github_env,
     run_tofu,
     tofu_output,
@@ -72,7 +74,7 @@ def _run_tofu_or_raise(command_name: str, args: list[str], module_path: Path) ->
     if not result.success:
         err_msg = f"tofu {command_name} failed: {result.stderr}"
         print(f"error: {err_msg}", file=sys.stderr)
-        raise RuntimeError(err_msg)
+        raise TofuCommandError(err_msg)
     print(result.stdout)
 
 
@@ -186,7 +188,7 @@ def main(
                 "RENDER_OUTPUT_DIR": str(inputs.output_dir),
             },
         )
-    except (RuntimeError, TypeError) as exc:
+    except (InfraK8sError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     else:

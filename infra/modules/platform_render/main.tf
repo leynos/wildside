@@ -132,6 +132,18 @@ module "cnpg" {
   backup_s3_access_key_id     = var.cnpg_backup_s3_access_key_id
   backup_s3_secret_access_key = var.cnpg_backup_s3_secret_access_key
 
+  precondition {
+    condition = (
+      !var.cnpg_backup_enabled || (
+        length(trimspace(var.cnpg_backup_destination_path)) > 0 &&
+        length(trimspace(var.cnpg_backup_endpoint_url)) > 0 &&
+        length(trimspace(var.cnpg_backup_s3_access_key_id)) > 0 &&
+        length(trimspace(var.cnpg_backup_s3_secret_access_key)) > 0
+      )
+    )
+    error_message = "CNPG backup configuration requires destination path, endpoint URL, and S3 credentials when cnpg_backup_enabled is true"
+  }
+
   # ESO integration
   eso_enabled                      = var.vault_eso_enabled
   eso_cluster_secret_store_name    = var.eso_cluster_secret_store_name

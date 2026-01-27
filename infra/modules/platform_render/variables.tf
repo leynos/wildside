@@ -18,6 +18,11 @@ variable "cluster_name" {
   }
 
   validation {
+    condition     = length(trimspace(var.cluster_name)) <= 63
+    error_message = "cluster_name must be 63 characters or fewer"
+  }
+
+  validation {
     condition = can(regex(
       "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
       trimspace(var.cluster_name)
@@ -250,11 +255,15 @@ variable "cnpg_cluster_name" {
   default     = "wildside-pg-main"
 
   validation {
-    condition = can(regex(
-      "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-      trimspace(var.cnpg_cluster_name)
-    ))
-    error_message = "cnpg_cluster_name must be a valid Kubernetes resource name"
+    condition = (
+      length(trimspace(var.cnpg_cluster_name)) > 0 &&
+      length(trimspace(var.cnpg_cluster_name)) <= 63 &&
+      can(regex(
+        "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+        trimspace(var.cnpg_cluster_name)
+      ))
+    )
+    error_message = "cnpg_cluster_name must be a valid Kubernetes resource name of 63 characters or fewer"
   }
 }
 
@@ -264,8 +273,12 @@ variable "cnpg_instances" {
   default     = 3
 
   validation {
-    condition     = var.cnpg_instances >= 1 && var.cnpg_instances <= 10
-    error_message = "cnpg_instances must be between 1 and 10"
+    condition = (
+      var.cnpg_instances >= 1 &&
+      var.cnpg_instances <= 10 &&
+      floor(var.cnpg_instances) == var.cnpg_instances
+    )
+    error_message = "cnpg_instances must be an integer between 1 and 10"
   }
 }
 
@@ -275,21 +288,48 @@ variable "cnpg_storage_size" {
   default     = "50Gi"
 
   validation {
-    condition     = can(regex("^[0-9]+(\\.[0-9]+)?[KMGT]i?$", var.cnpg_storage_size))
+    condition = can(regex(
+      "^[0-9]+(\\.[0-9]+)?[KMGTkmgt]i?$",
+      trimspace(var.cnpg_storage_size)
+    ))
     error_message = "cnpg_storage_size must be a valid Kubernetes quantity using K/M/G/T with optional i (e.g., 500M, 50Gi, 1Ti, 0.5G)"
   }
 }
 
 variable "cnpg_database_name" {
-  description = "Initial database name for CNPG"
+  description = "Initial database name for CNPG (PostgreSQL identifier)"
   type        = string
   default     = "wildside"
+
+  validation {
+    condition = (
+      length(trimspace(var.cnpg_database_name)) > 0 &&
+      length(trimspace(var.cnpg_database_name)) <= 63 &&
+      can(regex(
+        "^[a-zA-Z_][a-zA-Z0-9_]*$",
+        trimspace(var.cnpg_database_name)
+      ))
+    )
+    error_message = "cnpg_database_name must be a valid PostgreSQL identifier of 63 characters or fewer"
+  }
 }
 
 variable "cnpg_database_owner" {
-  description = "Owner of the initial CNPG database"
+  description = "Owner of the initial CNPG database (PostgreSQL identifier)"
   type        = string
   default     = "wildside_app"
+
+  validation {
+    condition = (
+      length(trimspace(var.cnpg_database_owner)) > 0 &&
+      length(trimspace(var.cnpg_database_owner)) <= 63 &&
+      can(regex(
+        "^[a-zA-Z_][a-zA-Z0-9_]*$",
+        trimspace(var.cnpg_database_owner)
+      ))
+    )
+    error_message = "cnpg_database_owner must be a valid PostgreSQL identifier of 63 characters or fewer"
+  }
 }
 
 variable "cnpg_backup_enabled" {
@@ -300,26 +340,26 @@ variable "cnpg_backup_enabled" {
 }
 
 variable "cnpg_backup_destination_path" {
-  description = "S3 bucket path for CNPG backups"
+  description = "S3 bucket path for CNPG backups (required when cnpg_backup_enabled is true)"
   type        = string
   default     = ""
 }
 
 variable "cnpg_backup_endpoint_url" {
-  description = "S3-compatible endpoint URL for CNPG backups"
+  description = "S3-compatible endpoint URL for CNPG backups (required when cnpg_backup_enabled is true)"
   type        = string
   default     = ""
 }
 
 variable "cnpg_backup_s3_access_key_id" {
-  description = "S3 access key ID for CNPG backups"
+  description = "S3 access key ID for CNPG backups (required when cnpg_backup_enabled is true)"
   type        = string
   default     = ""
   sensitive   = true
 }
 
 variable "cnpg_backup_s3_secret_access_key" {
-  description = "S3 secret access key for CNPG backups"
+  description = "S3 secret access key for CNPG backups (required when cnpg_backup_enabled is true)"
   type        = string
   default     = ""
   sensitive   = true
@@ -338,11 +378,15 @@ variable "eso_cluster_secret_store_name" {
   default     = "vault-kv"
 
   validation {
-    condition = can(regex(
-      "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-      trimspace(var.eso_cluster_secret_store_name)
-    ))
-    error_message = "eso_cluster_secret_store_name must be a valid Kubernetes resource name"
+    condition = (
+      length(trimspace(var.eso_cluster_secret_store_name)) > 0 &&
+      length(trimspace(var.eso_cluster_secret_store_name)) <= 63 &&
+      can(regex(
+        "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+        trimspace(var.eso_cluster_secret_store_name)
+      ))
+    )
+    error_message = "eso_cluster_secret_store_name must be a valid Kubernetes resource name of 63 characters or fewer"
   }
 }
 

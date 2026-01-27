@@ -42,6 +42,7 @@ import sys
 from pathlib import Path
 
 from scripts._infra_k8s import (
+    InfraK8sError,
     SpacesBackendConfig,
     append_github_env,
     mask_secret,
@@ -139,7 +140,7 @@ def provision_cluster(
     print("\n--- Extracting outputs ---")
     try:
         outputs_raw = tofu_output(CLUSTER_MODULE_PATH)
-    except RuntimeError as exc:
+    except InfraK8sError as exc:
         print(f"error: failed to extract outputs: {exc}", file=sys.stderr)
         return False, {}
 

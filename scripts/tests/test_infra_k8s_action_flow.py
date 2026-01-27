@@ -1,13 +1,16 @@
-"""Behavioural test for wildside-infra-k8s action flow."""
+"""Exercise the wildside-infra-k8s action flow end to end.
+
+These behavioural tests wire the action entrypoints together using GitHub-style
+env and output files so the composite action contract is validated locally.
+"""
 
 from __future__ import annotations
 
 import inspect
 import secrets
-from dataclasses import dataclass, field
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import pytest
 
@@ -66,14 +69,8 @@ def _flush_heredoc(entries: dict[str, str], key: str | None, buf: list[str]) -> 
     entries[key] = "\n".join(buf)
 
 
-@dataclass(slots=True)
-class _HeredocState:
-    key: str | None = None
-    delimiter: str | None = None
-    buffer: list[str] = field(default_factory=list)
-
-
 def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
+    """Consume heredoc lines until the delimiter or EOF."""
     buf: list[str] = []
     for raw in lines:
         line = raw.rstrip("\n")
@@ -83,43 +80,23 @@ def _consume_heredoc(lines: Iterable[str], delimiter: str) -> str:
     return "\n".join(buf)
 
 
-def _heredoc_step(state: _HeredocState, line: str, entries: dict[str, str]) -> bool:
-    if state.delimiter is None:
-        return False
-    if line == state.delimiter:
-        _flush_heredoc(entries, state.key, state.buffer)
-        state.key = None
-        state.delimiter = None
-        state.buffer.clear()
-        return True
-    state.buffer.append(line)
-    return True
-
-
 def _parse_github_kv_file(path: Path) -> dict[str, str]:
     """Parse a GitHub-style KEY=VALUE file with heredoc support."""
     if not path.exists():
         return {}
     entries: dict[str, str] = {}
-    state = _HeredocState()
     with path.open("r", encoding="utf-8") as handle:
         it = (ln.rstrip("\n") for ln in handle)
         for line in it:
-            if _heredoc_step(state, line, entries):
-                continue
             if _is_blank_or_comment(line):
                 continue
             key, delim = _start_heredoc(line)
             if key is not None and delim is not None:
-                state.key = key
-                state.delimiter = delim
-                state.buffer = []
+                entries[key] = _consume_heredoc(it, delim)
                 continue
             if "=" in line:
                 key_part, _, value = line.partition("=")
                 entries[key_part] = value
-    if state.delimiter is not None:
-        _flush_heredoc(entries, state.key, state.buffer)
     return entries
 
 
@@ -208,11 +185,11 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
     monkeypatch.setattr(
-        "scripts._infra_k8s.run_tofu",
+        "scripts._infra_k8s_tofu.run_tofu",
         lambda *_args, **_kwargs: tofu_result,
     )
     monkeypatch.setattr(
-        "scripts._infra_k8s.tofu_output",
+        "scripts._provision_cluster_flow.tofu_output",
         lambda *_args, **_kwargs: tofu_outputs,
     )
     monkeypatch.setattr(

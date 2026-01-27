@@ -157,6 +157,16 @@ fn ensure_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after UNIX_EPOCH")
+            .as_nanos();
+        pg_embed_target_dir().join(format!("{prefix}-{nanos}"))
+    }
 
     #[test]
     fn is_transient_error_matches_known_patterns() {
@@ -189,5 +199,28 @@ mod tests {
         assert!(!is_transient_error("invalid configuration"));
         assert!(!is_transient_error("authentication failed"));
         assert!(!is_transient_error(""));
+    }
+
+    #[test]
+    fn ensure_dir_returns_false_for_empty_path() {
+        assert!(!ensure_dir(Path::new("")));
+    }
+
+    #[test]
+    fn ensure_dir_creates_directory_when_missing() {
+        let dir = unique_test_dir("ensure-dir-create");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(ensure_dir(&dir));
+        assert!(dir.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_dir_returns_true_when_directory_exists() {
+        let dir = unique_test_dir("ensure-dir-existing");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("test directory should be creatable");
+        assert!(ensure_dir(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
