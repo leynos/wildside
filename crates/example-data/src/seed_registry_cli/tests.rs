@@ -1,11 +1,29 @@
 //! Unit tests for the seed registry CLI helpers.
 
+use rstest::{fixture, rstest};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use rstest::rstest;
+struct RegistryFixture {
+    path: PathBuf,
+}
+
+impl RegistryFixture {
+    fn path(&self) -> PathBuf {
+        self.path.clone()
+    }
+
+    fn load(&self) -> SeedRegistry {
+        SeedRegistry::from_file(&self.path).expect("load registry")
+    }
+}
+
+impl Drop for RegistryFixture {
+    fn drop(&mut self) {
+        cleanup_path(&self.path);
+    }
+}
 
 use super::*;
 
@@ -15,6 +33,13 @@ const VALID_JSON: &str = r#"{
     "safetyToggleIds": [],
     "seeds": [{"name": "mossy-owl", "seed": 2026, "userCount": 12}]
 }"#;
+
+#[fixture]
+fn registry_fixture() -> RegistryFixture {
+    RegistryFixture {
+        path: write_registry(VALID_JSON),
+    }
+}
 
 #[test]
 fn parse_args_returns_help_for_help_flag() {
@@ -107,9 +132,9 @@ fn parse_args_parses_full_options() {
     assert_eq!(options.user_count, Some(9));
 }
 
-#[test]
-fn apply_update_appends_explicit_seed() {
-    let path = write_registry(VALID_JSON);
+#[rstest]
+fn apply_update_appends_explicit_seed(registry_fixture: RegistryFixture) {
+    let path = registry_fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(808),
@@ -128,15 +153,13 @@ fn apply_update_appends_explicit_seed() {
         }
     );
 
-    let registry = SeedRegistry::from_file(&path).expect("load registry");
+    let registry = registry_fixture.load();
     assert!(registry.find_seed("river-stone").is_ok());
-
-    cleanup_path(&path);
 }
 
-#[test]
-fn apply_update_generates_name_from_seed() {
-    let path = write_registry(VALID_JSON);
+#[rstest]
+fn apply_update_generates_name_from_seed(registry_fixture: RegistryFixture) {
+    let path = registry_fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(2026),
@@ -151,15 +174,13 @@ fn apply_update_generates_name_from_seed() {
     assert_eq!(update.seed, 2026);
     assert_eq!(update.user_count, DEFAULT_USER_COUNT);
 
-    let registry = SeedRegistry::from_file(&path).expect("load registry");
+    let registry = registry_fixture.load();
     assert!(registry.find_seed(&update.name).is_ok());
-
-    cleanup_path(&path);
 }
 
-#[test]
-fn apply_update_reports_duplicate_explicit_name() {
-    let path = write_registry(VALID_JSON);
+#[rstest]
+fn apply_update_reports_duplicate_explicit_name(registry_fixture: RegistryFixture) {
+    let path = registry_fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(404),
@@ -179,8 +200,6 @@ fn apply_update_reports_duplicate_explicit_name() {
             name: "mossy-owl".to_owned(),
         }
     );
-
-    cleanup_path(&path);
 }
 
 #[test]
@@ -203,8 +222,6 @@ fn apply_update_reports_duplicate_generated_name() {
             name: generated_name,
         }
     );
-
-    cleanup_path(&path);
 }
 
 #[test]
@@ -267,23 +284,18 @@ fn write_registry(json: &str) -> PathBuf {
 }
 
 fn cleanup_path(path: &Path) {
-    if let Some(parent) = path.parent()
-        && fs::remove_dir_all(parent).is_err()
-    {
-        // Ignore cleanup failures in test teardown.
+    if let Some(parent) = path.parent() {
+        drop(fs::remove_dir_all(parent));
     }
 }
 
 fn unique_temp_path(file_name: &str) -> PathBuf {
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos())
-        .unwrap_or(0);
-    let dir = std::env::temp_dir()
+    let process_id = std::process::id();
+    let dir = PathBuf::from("target")
         .join("example-data-tests")
-        .join(format!("seed-registry-cli-{suffix}-{counter}"));
+        .join(format!("seed-registry-cli-{process_id}-{counter}"));
     fs::create_dir_all(&dir).expect("create temp dir");
     dir.join(file_name)
 }
