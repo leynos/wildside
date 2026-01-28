@@ -367,3 +367,6 @@ pub enum CliError {
         source: RegistryError,
     },
 }
+
+#[cfg(test)]
+mod tests;
