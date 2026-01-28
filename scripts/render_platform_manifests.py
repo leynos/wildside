@@ -106,6 +106,7 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     Examples
     --------
     >>> from pathlib import Path
+    >>> # (illustrative example; not executable due to external dependencies)
     >>> inputs = RenderInputs(
     ...     cluster_name="preview-1",
     ...     domain="example.com",
@@ -185,6 +186,7 @@ def main(
     Examples
     --------
     >>> from pathlib import Path
+    >>> # (illustrative example; not executable due to external dependencies)
     >>> main(
     ...     cluster_name="preview-1",
     ...     domain="example.com",
