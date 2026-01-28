@@ -188,16 +188,6 @@ SENSITIVE_KEYS: tuple[str, ...] = (
 def final_secret_masking() -> None:
     """Perform final pass to ensure sensitive values are masked.
 
-    Parameters
-    ----------
-    None
-        Reads sensitive values from the current environment.
-
-    Returns
-    -------
-    None
-        Emits GitHub Actions masking commands for any sensitive values found.
-
     Examples
     --------
     >>> os.environ["SPACES_ACCESS_KEY"] = "secret"
