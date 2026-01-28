@@ -119,7 +119,7 @@ func TestWildsideInfraK8sPolicy(t *testing.T) {
 		"--policy",
 		clusterPolicy,
 	)
-	cmd.Env = testutil.TerraformEnv(t, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	cmd.Env = testutil.TerraformEnv(t, nil)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
