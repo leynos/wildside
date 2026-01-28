@@ -47,6 +47,15 @@ def run_tofu(
     -------
     TofuResult
         Result containing success status, output, and return code.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> result = run_tofu(["version"], Path("."))
+    >>> result.success
+    True
+    >>> result.return_code
+    0
     """
     cmd = ["tofu", *args]
     merged_env = {**os.environ, **(env or {})}
@@ -90,6 +99,21 @@ def tofu_init(
     -------
     TofuResult
         Result of the init command.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> config = SpacesBackendConfig(
+    ...     bucket="wildside-terraform-state",
+    ...     region="nyc3",
+    ...     endpoint="https://nyc3.digitaloceanspaces.com",
+    ...     access_key="AKIA...",
+    ...     secret_key="secret",
+    ...     state_key="clusters/dev/terraform.tfstate",
+    ... )
+    >>> result = tofu_init(Path("infra"), config, Path("backend.tfbackend"))
+    >>> result.success
+    True
     """
     args = [
         "init",
@@ -120,6 +144,14 @@ def tofu_plan(cwd: Path, var_file: Path | None = None) -> TofuResult:
     -------
     TofuResult
         Result of the plan command.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> tofu_plan(Path("infra")).success
+    True
+    >>> tofu_plan(Path("infra"), var_file=Path("dev.tfvars")).success
+    True
     """
     args = ["plan", "-input=false"]
     if var_file:
@@ -148,6 +180,14 @@ def tofu_apply(
     -------
     TofuResult
         Result of the apply command.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> tofu_apply(Path("infra")).success
+    True
+    >>> tofu_apply(Path("infra"), var_file=Path("dev.tfvars")).success
+    True
     """
     args = ["apply", "-input=false"]
     if auto_approve:
@@ -171,6 +211,15 @@ def tofu_output(cwd: Path, name: str | None = None) -> object:
     -------
     object
         Parsed JSON output. If ``name`` is specified, returns the raw value.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> outputs = tofu_output(Path("infra"))
+    >>> outputs["cluster_name"]["value"]
+    'wildside-dev'
+    >>> tofu_output(Path("infra"), "cluster_name")
+    'wildside-dev'
     """
     args = ["output", "-json"]
     if name:
