@@ -298,7 +298,8 @@ Files to create:
 - `infra/clusters/wildside-infra-k8s/outputs.tf` — cluster outputs.
 - `infra/clusters/wildside-infra-k8s/versions.tf` — provider requirements.
 - `infra/clusters/wildside-infra-k8s/backend.tf` — backend configuration.
-- `infra/clusters/wildside-infra-k8s/.tflint.hcl` — linting configuration.
+- `infra/clusters/wildside-infra-k8s/.tflint.hcl` — symlink to the shared
+  `infra/.tflint.hcl` linting configuration.
 
 ### Phase 3: Platform Render Orchestration Module
 
@@ -327,7 +328,8 @@ Files to create:
 - `infra/modules/platform_render/policy/` — OPA policies for path collision
   detection.
 - `infra/modules/platform_render/README.md` — module documentation.
-- `infra/modules/platform_render/.tflint.hcl` — linting configuration.
+- `infra/modules/platform_render/.tflint.hcl` — symlink to the shared
+  `infra/.tflint.hcl` linting configuration.
 
 ### Phase 4: Python Helper Scripts
 
