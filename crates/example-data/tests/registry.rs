@@ -165,10 +165,12 @@ fn writes_registry_to_file() {
     let round_trip = SeedRegistry::from_file(&path).expect("load registry");
     assert_eq!(registry, round_trip);
 
-    if let Some(parent) = path.parent()
-        && fs::remove_dir_all(parent).is_err()
-    {
-        // Ignore cleanup failures in test teardown.
+    if let Some(parent) = path.parent() {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "explicitly ignore cleanup failures in test teardown"
+        )]
+        let _ = fs::remove_dir_all(parent);
     }
 }
 
