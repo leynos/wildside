@@ -174,8 +174,7 @@ where
 /// ```
 pub fn apply_update(options: &Options) -> Result<Update, CliError> {
     let registry = SeedRegistry::from_file(&options.registry_path)?;
-    let dictionary = eff_long_dictionary()?;
-    let selection = select_seed_and_name(&registry, options, &dictionary)?;
+    let selection = select_seed_and_name(&registry, options, None)?;
     let user_count = options.user_count.unwrap_or(DEFAULT_USER_COUNT);
     let seed_def = SeedDefinition::new(selection.name.clone(), selection.seed, user_count);
     let updated = registry.append_seed(seed_def)?;
@@ -264,18 +263,23 @@ struct SeedSelection {
 fn select_seed_and_name(
     registry: &SeedRegistry,
     options: &Options,
-    dictionary: &WordDictionary,
+    dictionary_opt: Option<WordDictionary>,
 ) -> Result<SeedSelection, CliError> {
     if let Some(name) = options.name.clone() {
         let seed = options.seed.unwrap_or_else(random_seed);
         return Ok(SeedSelection { name, seed });
     }
 
+    let dictionary = match dictionary_opt {
+        Some(dictionary) => dictionary,
+        None => eff_long_dictionary()?,
+    };
+
     let supplied_seed = options.seed;
     let mut seed = supplied_seed.unwrap_or_else(random_seed);
 
     for _ in 0..MAX_NAME_ATTEMPTS {
-        let name = seed_name_from_value(seed, dictionary);
+        let name = seed_name_from_value(seed, &dictionary);
         if !registry_contains_name(registry, &name) {
             return Ok(SeedSelection { name, seed });
         }
