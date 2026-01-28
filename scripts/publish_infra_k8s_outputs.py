@@ -233,7 +233,9 @@ def main(
 
     Examples
     --------
-    >>> python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
+    Run from the command line::
+
+        $ python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
     """
     # Resolve GITHUB_OUTPUT path
     github_output_raw = resolve_input(
