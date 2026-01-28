@@ -102,6 +102,31 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     """Run OpenTofu to render platform manifests.
 
     Returns a dict mapping relative paths to YAML content.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> inputs = RenderInputs(
+    ...     cluster_name="preview-1",
+    ...     domain="example.com",
+    ...     acme_email="ops@example.com",
+    ...     cloudflare_api_token_secret_name="cloudflare-token",
+    ...     vault_address=None,
+    ...     vault_role_id=None,
+    ...     vault_secret_id=None,
+    ...     vault_ca_certificate=None,
+    ...     enable_traefik=True,
+    ...     enable_cert_manager=True,
+    ...     enable_external_dns=True,
+    ...     enable_vault_eso=False,
+    ...     enable_cnpg=False,
+    ...     runner_temp=Path("/tmp"),
+    ...     output_dir=Path("/tmp/output"),
+    ...     github_env=Path("/tmp/github-env"),
+    ... )
+    >>> tfvars = {"cluster_name": "preview-1", "domain": "example.com"}
+    >>> render_manifests(inputs, tfvars)
+    {'manifests/namespace.yaml': 'apiVersion: v1\\nkind: Namespace\\n'}
     """
     work_dir = inputs.runner_temp / "render-manifests"
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -156,6 +181,17 @@ def main(
 
     Inputs are resolved from CLI arguments and environment variables, OpenTofu
     renders platform manifests, and the output count is exported to GITHUB_ENV.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> main(
+    ...     cluster_name="preview-1",
+    ...     domain="example.com",
+    ...     acme_email="ops@example.com",
+    ...     github_env=Path("/tmp/github-env"),
+    ... )
+    0
     """
     raw_inputs = RawRenderInputs(
         cluster_name=cluster_name,
