@@ -81,16 +81,23 @@ fn write_to_temp_file(tmp_path: &Path, contents: &str) -> Result<(), RegistryErr
             message: e.to_string(),
         })?;
 
-    file.write_all(contents.as_bytes())
-        .map_err(|e| RegistryError::WriteError {
+    if let Err(err) = file.write_all(contents.as_bytes()) {
+        drop(file);
+        drop(fs::remove_file(tmp_path));
+        return Err(RegistryError::WriteError {
             path: tmp_path.to_path_buf(),
-            message: e.to_string(),
-        })?;
+            message: err.to_string(),
+        });
+    }
 
-    file.sync_all().map_err(|e| RegistryError::WriteError {
-        path: tmp_path.to_path_buf(),
-        message: e.to_string(),
-    })?;
+    if let Err(err) = file.sync_all() {
+        drop(file);
+        drop(fs::remove_file(tmp_path));
+        return Err(RegistryError::WriteError {
+            path: tmp_path.to_path_buf(),
+            message: err.to_string(),
+        });
+    }
 
     Ok(())
 }

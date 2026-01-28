@@ -309,7 +309,7 @@ fn eff_long_dictionary() -> Result<WordDictionary, CliError> {
         .delimiter("-")
         .case_sensitive(false)
         .build()
-        .map_err(|err| CliError::WordlistError { message: err })
+        .map_err(|err| CliError::WordListError { message: err })
 }
 
 /// Errors surfaced by the CLI parsing and update flow.
@@ -342,7 +342,7 @@ pub enum CliError {
     },
     /// The EFF word list could not be built.
     #[error("word list error: {message}")]
-    WordlistError {
+    WordListError {
         /// Error message describing the failure.
         message: String,
     },
