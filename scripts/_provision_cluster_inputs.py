@@ -34,7 +34,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts._input_resolution import InputResolution, resolve_input
+from scripts._input_resolution import (
+    InputResolution,
+    _is_cyclopts_parameter,
+    resolve_input,
+)
 from scripts._infra_k8s import SpacesBackendConfig, parse_bool, parse_node_pools
 
 
@@ -136,11 +140,6 @@ class RawProvisionInputs:
     runner_temp: Path | None = None
     github_env: Path | None = None
     dry_run: str | None = None
-
-
-def _is_cyclopts_parameter(value: object) -> bool:
-    cls = value.__class__
-    return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
 
 
 def _with_override(

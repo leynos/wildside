@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import cast
 
 from cyclopts import App, Parameter
+from scripts._input_resolution import _is_cyclopts_parameter
 from scripts._prepare_infra_k8s_inputs import (
     RawInputs,
     ResolvedInputs,
@@ -74,8 +75,7 @@ def _collect_cli_values(values: Mapping[str, object]) -> RawInputs:
     def _normalise_value(value: object | None) -> object | None:
         if value is None:
             return None
-        cls = value.__class__
-        if cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts"):
+        if _is_cyclopts_parameter(value):
             return None
         return value
 
