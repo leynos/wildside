@@ -248,7 +248,7 @@ def main(
     github_output_path = (
         github_output_raw
         if isinstance(github_output_raw, Path)
-        else Path(str(github_output_raw))
+        else Path(github_output_raw)
     )
 
     # Resolve output values from environment
