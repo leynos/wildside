@@ -54,8 +54,10 @@ fn print_usage(mut out: impl Write) {
     }
 }
 
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "stdout write failures are non-fatal for CLI success output"
+)]
 fn write_success(message: &str) {
-    if let Err(err) = writeln!(io::stdout().lock(), "{message}") {
-        let _ = err;
-    }
+    let _ = writeln!(io::stdout().lock(), "{message}");
 }
