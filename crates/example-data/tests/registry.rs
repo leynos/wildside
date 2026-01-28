@@ -146,10 +146,10 @@ fn append_seed_rejects_duplicate_name() {
 }
 
 #[test]
-fn serialises_registry_to_pretty_json() {
+fn serializes_registry_to_pretty_json() {
     let registry = SeedRegistry::from_json(VALID_JSON).expect("valid registry");
 
-    let json = registry.to_json_pretty().expect("serialise registry");
+    let json = registry.to_json_pretty().expect("serialize registry");
     let round_trip = SeedRegistry::from_json(&json).expect("round trip");
 
     assert_eq!(registry, round_trip);
@@ -165,8 +165,10 @@ fn writes_registry_to_file() {
     let round_trip = SeedRegistry::from_file(&path).expect("load registry");
     assert_eq!(registry, round_trip);
 
-    if let Some(parent) = path.parent() {
-        drop(fs::remove_dir_all(parent));
+    if let Some(parent) = path.parent()
+        && fs::remove_dir_all(parent).is_err()
+    {
+        // Ignore cleanup failures in test teardown.
     }
 }
 

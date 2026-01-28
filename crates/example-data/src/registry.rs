@@ -218,11 +218,11 @@ impl SeedRegistry {
         })
     }
 
-    /// Serialises the registry to pretty JSON.
+    /// Serializes the registry to pretty JSON.
     ///
     /// # Errors
     ///
-    /// Returns [`RegistryError::SerialisationError`] if the registry cannot
+    /// Returns [`RegistryError::SerializationError`] if the registry cannot
     /// be encoded to JSON.
     ///
     /// # Example
@@ -243,7 +243,7 @@ impl SeedRegistry {
     /// assert!(rendered.contains("\"version\": 1"));
     /// ```
     pub fn to_json_pretty(&self) -> Result<String, RegistryError> {
-        serde_json::to_string_pretty(self).map_err(|e| RegistryError::SerialisationError {
+        serde_json::to_string_pretty(self).map_err(|e| RegistryError::SerializationError {
             message: e.to_string(),
         })
     }

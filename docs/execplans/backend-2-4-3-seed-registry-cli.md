@@ -141,13 +141,13 @@ The registry format uses camelCase fields: `version`, `interestThemeIds`,
 
 Relevant code locations:
 
-- `crates/example-data/src/registry.rs` for registry parsing and validation.
-- `crates/example-data/src/error.rs` for registry error enums.
-- `crates/example-data/tests/` for unit and behavioural test patterns.
-- `backend/fixtures/example-data/seeds.json` for the default registry file.
-- `docs/backend-sample-data-design.md` for functional expectations.
-- `docs/wildside-backend-architecture.md` for architecture decisions.
-- `docs/backend-roadmap.md` for updating task 2.4.4 status.
+- `crates/example-data/src/registry.rs` covers registry parsing and validation.
+- `crates/example-data/src/error.rs` defines registry error enums.
+- `crates/example-data/tests/` holds unit and behavioural test patterns.
+- `backend/fixtures/example-data/seeds.json` is the default registry file.
+- `docs/backend-sample-data-design.md` outlines functional expectations.
+- `docs/wildside-backend-architecture.md` captures architecture decisions.
+- `docs/backend-roadmap.md` tracks task 2.4.4 status updates.
 
 `rstest` is used for unit tests, and `rstest-bdd` v0.3.2 is used for
 behavioural tests. Where Postgres is required, tests must rely on the
@@ -269,8 +269,8 @@ Quality criteria (what "done" means):
 CLI writes are safe to re-run because each new seed name is unique; if a
 collision occurs, the CLI must surface the error without overwriting existing
 entries. The atomic write strategy ensures partial writes do not corrupt the
-registry. If a write fails, remove any temp file left in the registry
-directory and re-run the CLI.
+registry. If a write operation fails, remove any temp file left in the
+registry directory and re-run the CLI.
 
 ## Artefacts and Notes
 

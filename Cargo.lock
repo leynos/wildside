@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "base-d"
-version = "3.0.30"
+version = "3.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a4dc8a40ec8fd5b7f1b7fa74cbd60ad278151653a26d2e8f5f8ba19e33ec4b6"
+checksum = "fb9dedd6db2351e613640d035286ecc318b8f7a2aaf0c1f3b8a239f38c04829f"
 dependencies = [
  "ascon-hash",
  "blake2",
@@ -4385,7 +4385,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b1fdf65dd6331831494dd616b30351c38e96e45921a27745cf98490458b90bb"
 dependencies = [
- "dirs 5.0.1",
+ "dirs 6.0.0",
 ]
 
 [[package]]

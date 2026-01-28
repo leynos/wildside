@@ -30,10 +30,10 @@ pub enum RegistryError {
         message: String,
     },
 
-    /// The registry could not be serialised to JSON.
-    #[error("failed to serialise registry JSON: {message}")]
-    SerialisationError {
-        /// Description of the serialisation error.
+    /// The registry could not be serialized to JSON.
+    #[error("failed to serialize registry JSON: {message}")]
+    SerializationError {
+        /// Description of the serialization error.
         message: String,
     },
 
@@ -128,9 +128,9 @@ mod tests {
         RegistryError::ParseError { message: "unexpected token".to_owned() },
         "invalid registry JSON: unexpected token"
     )]
-    #[case::serialisation_error(
-        RegistryError::SerialisationError { message: "boom".to_owned() },
-        "failed to serialise registry JSON: boom"
+    #[case::serialization_error(
+        RegistryError::SerializationError { message: "boom".to_owned() },
+        "failed to serialize registry JSON: boom"
     )]
     #[case::write_error(
         RegistryError::WriteError {

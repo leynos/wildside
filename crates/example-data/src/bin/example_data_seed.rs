@@ -16,7 +16,7 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             if let Err(write_err) = writeln!(io::stderr().lock(), "{err}") {
-                drop(write_err);
+                let _ = write_err;
             }
             ExitCode::FAILURE
         }
@@ -50,12 +50,12 @@ fn print_usage(mut out: impl Write) {
         "  -h, --help           Print this help output\n",
     );
     if let Err(err) = out.write_all(usage.as_bytes()) {
-        drop(err);
+        let _ = err;
     }
 }
 
 fn write_success(message: &str) {
     if let Err(err) = writeln!(io::stdout().lock(), "{message}") {
-        drop(err);
+        let _ = err;
     }
 }

@@ -73,8 +73,8 @@ fn an_invalid_seed_registry_file(world: &World) {
     world.registry_path.set(path);
 }
 
-#[when("the seed registry CLI adds a seed from RNG value {seed:u64}")]
-fn the_seed_registry_cli_adds_a_seed_from_rng_value(world: &World, seed: u64) {
+#[when("the seed registry CLI adds a seed using RNG value {seed:u64}")]
+fn the_seed_registry_cli_adds_a_seed_using_rng_value(world: &World, seed: u64) {
     world.seed_value.set(seed);
     let path = registry_path(world);
     let result = run_cli(&path, &["--seed", &seed.to_string()]);
