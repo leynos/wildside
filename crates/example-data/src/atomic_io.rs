@@ -26,10 +26,9 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use std::time::{SystemTime, UNIX_EPOCH};
-///
-/// use crate::atomic_io::write_atomic;
+/// // This example is illustrative; write_atomic is crate-private.
 ///
 /// let suffix = SystemTime::now()
 ///     .duration_since(UNIX_EPOCH)
