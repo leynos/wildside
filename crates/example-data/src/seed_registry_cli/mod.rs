@@ -280,7 +280,7 @@ fn select_seed_and_name(
 
     for _ in 0..MAX_NAME_ATTEMPTS {
         let name = seed_name_from_value(seed, &dictionary);
-        if !registry_contains_name(registry, &name) {
+        if !has_name_in_registry(registry, &name) {
             return Ok(SeedSelection { name, seed });
         }
         if supplied_seed.is_some() {
@@ -299,7 +299,7 @@ fn seed_name_from_value(seed: u64, dictionary: &WordDictionary) -> String {
     word::encode(seed_str.as_bytes(), dictionary)
 }
 
-fn registry_contains_name(registry: &SeedRegistry, name: &str) -> bool {
+fn has_name_in_registry(registry: &SeedRegistry, name: &str) -> bool {
     registry.seeds().iter().any(|seed| seed.name() == name)
 }
 
@@ -331,7 +331,7 @@ pub enum CliError {
     /// An unsupported argument was supplied.
     #[error("unknown argument: {value}")]
     UnknownArgument {
-        /// Argument value that was not recognised.
+        /// Argument value that was not recognized.
         value: String,
     },
     /// A numeric value failed to parse.
