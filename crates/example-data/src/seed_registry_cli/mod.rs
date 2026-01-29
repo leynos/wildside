@@ -93,41 +93,87 @@ pub fn parse_args<I>(mut args: I) -> Result<ParseOutcome, CliError>
 where
     I: Iterator<Item = String>,
 {
-    let mut registry_path: Option<PathBuf> = None;
-    let mut seed: Option<u64> = None;
-    let mut name: Option<String> = None;
-    let mut user_count: Option<usize> = None;
+    let mut state = ParseState {
+        registry_path: None,
+        seed: None,
+        name: None,
+        user_count: None,
+    };
 
     while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "-h" | "--help" => return Ok(ParseOutcome::Help),
-            "--registry" => {
-                let value = next_value(&mut args, "--registry")?;
-                registry_path = Some(PathBuf::from(value));
-            }
-            "--seed" => {
-                let value = next_value(&mut args, "--seed")?;
-                seed = Some(parse_number(&value, "--seed")?);
-            }
-            "--name" => {
-                let value = next_value(&mut args, "--name")?;
-                name = Some(value);
-            }
-            "--user-count" => {
-                let value = next_value(&mut args, "--user-count")?;
-                user_count = Some(parse_number(&value, "--user-count")?);
-            }
-            _ => return Err(CliError::UnknownArgument { value: arg }),
+        match handle_flag(&arg, &mut args, &mut state) {
+            FlagOutcome::Continue => {}
+            FlagOutcome::Help(outcome) => return Ok(outcome),
+            FlagOutcome::Error(err) => return Err(err),
         }
     }
 
-    let resolved_registry_path = registry_path.ok_or(CliError::MissingRegistryPath)?;
+    let resolved_registry_path = state.registry_path.ok_or(CliError::MissingRegistryPath)?;
     Ok(ParseOutcome::Options(Options {
         registry_path: resolved_registry_path,
-        seed,
-        name,
-        user_count,
+        seed: state.seed,
+        name: state.name,
+        user_count: state.user_count,
     }))
+}
+
+struct ParseState {
+    registry_path: Option<PathBuf>,
+    seed: Option<u64>,
+    name: Option<String>,
+    user_count: Option<usize>,
+}
+
+enum FlagOutcome {
+    Continue,
+    Help(ParseOutcome),
+    Error(CliError),
+}
+
+fn handle_flag<I>(arg: &str, args: &mut I, state: &mut ParseState) -> FlagOutcome
+where
+    I: Iterator<Item = String>,
+{
+    match arg {
+        "-h" | "--help" => FlagOutcome::Help(ParseOutcome::Help),
+        "--registry" => match next_value(args, "--registry") {
+            Ok(value) => {
+                state.registry_path = Some(PathBuf::from(value));
+                FlagOutcome::Continue
+            }
+            Err(err) => FlagOutcome::Error(err),
+        },
+        "--seed" => match next_value(args, "--seed") {
+            Ok(value) => match parse_number(&value, "--seed") {
+                Ok(parsed) => {
+                    state.seed = Some(parsed);
+                    FlagOutcome::Continue
+                }
+                Err(err) => FlagOutcome::Error(err),
+            },
+            Err(err) => FlagOutcome::Error(err),
+        },
+        "--name" => match next_value(args, "--name") {
+            Ok(value) => {
+                state.name = Some(value);
+                FlagOutcome::Continue
+            }
+            Err(err) => FlagOutcome::Error(err),
+        },
+        "--user-count" => match next_value(args, "--user-count") {
+            Ok(value) => match parse_number(&value, "--user-count") {
+                Ok(parsed) => {
+                    state.user_count = Some(parsed);
+                    FlagOutcome::Continue
+                }
+                Err(err) => FlagOutcome::Error(err),
+            },
+            Err(err) => FlagOutcome::Error(err),
+        },
+        _ => FlagOutcome::Error(CliError::UnknownArgument {
+            value: arg.to_owned(),
+        }),
+    }
 }
 
 /// Applies the registry update and returns the added seed details.
