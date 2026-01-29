@@ -130,46 +130,55 @@ enum FlagOutcome {
     Error(CliError),
 }
 
+fn handle_string_flag<I>(
+    args: &mut I,
+    flag: &'static str,
+    target: &mut Option<impl From<String>>,
+) -> FlagOutcome
+where
+    I: Iterator<Item = String>,
+{
+    match next_value(args, flag) {
+        Ok(value) => {
+            *target = Some(value.into());
+            FlagOutcome::Continue
+        }
+        Err(err) => FlagOutcome::Error(err),
+    }
+}
+
+fn handle_numeric_flag<I, T>(
+    args: &mut I,
+    flag: &'static str,
+    target: &mut Option<T>,
+) -> FlagOutcome
+where
+    I: Iterator<Item = String>,
+    T: std::str::FromStr,
+    T::Err: fmt::Display,
+{
+    match next_value(args, flag) {
+        Ok(value) => match parse_number(&value, flag) {
+            Ok(parsed) => {
+                *target = Some(parsed);
+                FlagOutcome::Continue
+            }
+            Err(err) => FlagOutcome::Error(err),
+        },
+        Err(err) => FlagOutcome::Error(err),
+    }
+}
+
 fn handle_flag<I>(arg: &str, args: &mut I, state: &mut ParseState) -> FlagOutcome
 where
     I: Iterator<Item = String>,
 {
     match arg {
         "-h" | "--help" => FlagOutcome::Help(ParseOutcome::Help),
-        "--registry" => match next_value(args, "--registry") {
-            Ok(value) => {
-                state.registry_path = Some(PathBuf::from(value));
-                FlagOutcome::Continue
-            }
-            Err(err) => FlagOutcome::Error(err),
-        },
-        "--seed" => match next_value(args, "--seed") {
-            Ok(value) => match parse_number(&value, "--seed") {
-                Ok(parsed) => {
-                    state.seed = Some(parsed);
-                    FlagOutcome::Continue
-                }
-                Err(err) => FlagOutcome::Error(err),
-            },
-            Err(err) => FlagOutcome::Error(err),
-        },
-        "--name" => match next_value(args, "--name") {
-            Ok(value) => {
-                state.name = Some(value);
-                FlagOutcome::Continue
-            }
-            Err(err) => FlagOutcome::Error(err),
-        },
-        "--user-count" => match next_value(args, "--user-count") {
-            Ok(value) => match parse_number(&value, "--user-count") {
-                Ok(parsed) => {
-                    state.user_count = Some(parsed);
-                    FlagOutcome::Continue
-                }
-                Err(err) => FlagOutcome::Error(err),
-            },
-            Err(err) => FlagOutcome::Error(err),
-        },
+        "--registry" => handle_string_flag(args, "--registry", &mut state.registry_path),
+        "--seed" => handle_numeric_flag(args, "--seed", &mut state.seed),
+        "--name" => handle_string_flag(args, "--name", &mut state.name),
+        "--user-count" => handle_numeric_flag(args, "--user-count", &mut state.user_count),
         _ => FlagOutcome::Error(CliError::UnknownArgument {
             value: arg.to_owned(),
         }),
