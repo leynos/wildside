@@ -34,7 +34,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts._input_resolution import InputResolution, resolve_input
+from scripts._input_resolution import (
+    InputResolution,
+    _is_cyclopts_parameter,
+    resolve_input,
+)
 from scripts._infra_k8s import SpacesBackendConfig, parse_bool, parse_node_pools
 
 
@@ -44,33 +48,30 @@ class ProvisionInputs:
 
     Attributes
     ----------
-    Cluster configuration
-        cluster_name : str
-            Cluster name identifier.
-        environment : str
-            Environment name for the cluster.
-        region : str
-            Cloud region for provisioning.
-        kubernetes_version : str | None
-            Optional Kubernetes version override.
-        node_pools : str | None
-            Optional node pool JSON payload.
-    Backend configuration
-        spaces_bucket : str
-            Spaces bucket for OpenTofu state.
-        spaces_region : str
-            Spaces region for state storage.
-        spaces_access_key : str
-            Access key for the Spaces backend.
-        spaces_secret_key : str
-            Secret key for the Spaces backend.
-    Paths and options
-        runner_temp : Path
-            Directory for temporary working files.
-        github_env : Path
-            Path to the GitHub Actions environment file.
-        dry_run : bool
-            Whether to skip apply and only plan.
+    cluster_name : str
+        Cluster name identifier.
+    environment : str
+        Environment name for the cluster.
+    region : str
+        Cloud region for provisioning.
+    kubernetes_version : str | None
+        Optional Kubernetes version override.
+    node_pools : str | None
+        Optional node pool JSON payload.
+    spaces_bucket : str
+        Spaces bucket for OpenTofu state.
+    spaces_region : str
+        Spaces region for state storage.
+    spaces_access_key : str
+        Access key for the Spaces backend.
+    spaces_secret_key : str
+        Secret key for the Spaces backend.
+    runner_temp : Path
+        Directory for temporary working files.
+    github_env : Path
+        Path to the GitHub Actions environment file.
+    dry_run : bool
+        Whether to skip apply and only plan.
     """
 
     # Cluster configuration
@@ -136,11 +137,6 @@ class RawProvisionInputs:
     runner_temp: Path | None = None
     github_env: Path | None = None
     dry_run: str | None = None
-
-
-def _is_cyclopts_parameter(value: object) -> bool:
-    cls = value.__class__
-    return cls.__name__ == "Parameter" and cls.__module__.startswith("cyclopts")
 
 
 def _with_override(

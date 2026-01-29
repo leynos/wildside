@@ -66,15 +66,15 @@ mod tests {
     }
 
     #[test]
-    fn unit_system_seed_serialises_lowercase() {
-        let metric = serde_json::to_string(&UnitSystemSeed::Metric).expect("serialise");
-        let imperial = serde_json::to_string(&UnitSystemSeed::Imperial).expect("serialise");
+    fn unit_system_seed_serializes_lowercase() {
+        let metric = serde_json::to_string(&UnitSystemSeed::Metric).expect("serialize");
+        let imperial = serde_json::to_string(&UnitSystemSeed::Imperial).expect("serialize");
         assert_eq!(metric, "\"metric\"");
         assert_eq!(imperial, "\"imperial\"");
     }
 
     #[test]
-    fn example_user_seed_serialises_to_camel_case() {
+    fn example_user_seed_serializes_to_camel_case() {
         let user = ExampleUserSeed {
             id: Uuid::nil(),
             display_name: "Test".to_owned(),
@@ -82,7 +82,7 @@ mod tests {
             safety_toggle_ids: vec![],
             unit_system: UnitSystemSeed::Metric,
         };
-        let json = serde_json::to_string(&user).expect("serialise");
+        let json = serde_json::to_string(&user).expect("serialize");
         assert!(json.contains("displayName"));
         assert!(json.contains("interestThemeIds"));
         assert!(json.contains("safetyToggleIds"));

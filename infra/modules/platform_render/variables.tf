@@ -407,10 +407,28 @@ variable "cnpg_superuser_vault_path" {
   description = "Vault path for CNPG superuser credentials"
   type        = string
   default     = ""
+
+  validation {
+    condition = (
+      !var.cnpg_enabled ||
+      !var.vault_eso_enabled ||
+      length(trimspace(var.cnpg_superuser_vault_path)) > 0
+    )
+    error_message = "cnpg_superuser_vault_path must be set when cnpg_enabled and vault_eso_enabled are true"
+  }
 }
 
 variable "cnpg_app_vault_path" {
   description = "Vault path for CNPG application credentials"
   type        = string
   default     = ""
+
+  validation {
+    condition = (
+      !var.cnpg_enabled ||
+      !var.vault_eso_enabled ||
+      length(trimspace(var.cnpg_app_vault_path)) > 0
+    )
+    error_message = "cnpg_app_vault_path must be set when cnpg_enabled and vault_eso_enabled are true"
+  }
 }

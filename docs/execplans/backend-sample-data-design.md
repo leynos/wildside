@@ -67,7 +67,8 @@ Success is observable when:
   across environments and tests. Date/Author: 2026-01-03 / Codex.
 
 - Decision: Store the seed registry in a JSON file and support multiple named
-  seeds, with a CLI helper to add new seeds using `lexis` for naming.
+  seeds, with a CLI helper to add new seeds using `base-d` (`eff_long`)
+  for naming.
   Rationale: JSON enables non-code updates and named seeds keep demos
   repeatable and discoverable. Date/Author: 2026-01-03 / Codex.
 
