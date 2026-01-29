@@ -26,6 +26,7 @@ impl Drop for RegistryFixture {
 }
 
 use super::*;
+use crate::error::RegistryError;
 
 const VALID_JSON: &str = r#"{
     "version": 1,
