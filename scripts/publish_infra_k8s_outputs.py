@@ -188,16 +188,6 @@ SENSITIVE_KEYS: tuple[str, ...] = (
 def final_secret_masking() -> None:
     """Perform final pass to ensure sensitive values are masked.
 
-    Parameters
-    ----------
-    None
-        Reads sensitive values from the current environment.
-
-    Returns
-    -------
-    None
-        Emits GitHub Actions masking commands for any sensitive values found.
-
     Examples
     --------
     >>> os.environ["SPACES_ACCESS_KEY"] = "secret"
@@ -243,7 +233,9 @@ def main(
 
     Examples
     --------
-    >>> python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
+    Run from the command line::
+
+        $ python scripts/publish_infra_k8s_outputs.py --github-output /tmp/output
     """
     # Resolve GITHUB_OUTPUT path
     github_output_raw = resolve_input(
@@ -256,7 +248,7 @@ def main(
     github_output_path = (
         github_output_raw
         if isinstance(github_output_raw, Path)
-        else Path(str(github_output_raw))
+        else Path(github_output_raw)
     )
 
     # Resolve output values from environment

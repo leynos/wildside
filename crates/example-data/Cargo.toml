@@ -6,6 +6,7 @@ description = "Deterministic example user data generation for demonstration purp
 license = "MIT"
 
 [dependencies]
+base-d = "3.0.31"
 fake = "4.4"
 rand = "0.9"
 rand_chacha = "0.9"

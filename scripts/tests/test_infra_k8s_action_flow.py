@@ -157,9 +157,8 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch, paths: FlowPaths) -> None:
 def _call_cli(main_func: Callable[..., object]) -> None:
     """Call a CLI entrypoint with explicit None overrides."""
     params = {
-        name: None
+        name: param.default if param.default is not inspect.Parameter.empty else None
         for name, param in inspect.signature(main_func).parameters.items()
-        if param.default is None
     }
     main_func(**params)
 

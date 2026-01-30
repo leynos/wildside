@@ -169,10 +169,10 @@ variable "flux_git_repository_path" {
 
   validation {
     condition = (
-      length(trimspace(var.flux_git_repository_path)) > 0 &&
+      trimspace(var.flux_git_repository_path) == "." ||
       (
-        trimspace(var.flux_git_repository_path) == "." ||
-        startswith(trimspace(var.flux_git_repository_path), "./")
+        length(trimspace(var.flux_git_repository_path)) > 0 &&
+        !startswith(trimspace(var.flux_git_repository_path), "/")
       )
     )
     error_message = "flux_git_repository_path must be a valid relative path"

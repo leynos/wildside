@@ -38,7 +38,6 @@ func TestWildsideInfraK8sValidate(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          testVars(),
-		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	terraform.InitAndValidate(t, opts)
 }
@@ -52,7 +51,6 @@ func TestWildsideInfraK8sPlanUnauthenticated(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          testVars(),
-		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.NoError(t, err)
@@ -68,7 +66,7 @@ func TestWildsideInfraK8sPlanDetailedExitCode(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          testVars(),
-		EnvVars:       testutil.TerraformEnvVars(t, map[string]string{"DIGITALOCEAN_TOKEN": token}),
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
 	})
 	terraform.Init(t, opts)
 	args := terraform.FormatArgs(opts, "plan", "-input=false", "-no-color", "-detailed-exitcode")
@@ -97,7 +95,7 @@ func TestWildsideInfraK8sPolicy(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          testVars(),
-		EnvVars:       testutil.TerraformEnvVars(t, map[string]string{"DIGITALOCEAN_TOKEN": token}),
+		EnvVars:       map[string]string{"DIGITALOCEAN_TOKEN": token},
 	})
 	planFile := filepath.Join(tfDir, "tfplan.binary")
 	opts.PlanFilePath = planFile
@@ -121,7 +119,7 @@ func TestWildsideInfraK8sPolicy(t *testing.T) {
 		"--policy",
 		clusterPolicy,
 	)
-	cmd.Env = testutil.TerraformEnv(t, map[string]string{"DIGITALOCEAN_TOKEN": token})
+	cmd.Env = testutil.TerraformEnv(t, nil)
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "conftest failed: %s", string(out))
 }
@@ -136,7 +134,6 @@ func TestWildsideInfraK8sFluxRequiresKubeconfig(t *testing.T) {
 		SourceRootRel: "../../..",
 		TfSubDir:      "clusters/wildside-infra-k8s",
 		Vars:          vars,
-		EnvVars:       testutil.TerraformEnvVars(t, nil),
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
 	require.Error(t, err)

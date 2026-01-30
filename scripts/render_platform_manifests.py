@@ -102,6 +102,32 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     """Run OpenTofu to render platform manifests.
 
     Returns a dict mapping relative paths to YAML content.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> # (illustrative example; not executable due to external dependencies)
+    >>> inputs = RenderInputs(
+    ...     cluster_name="preview-1",
+    ...     domain="example.com",
+    ...     acme_email="ops@example.com",
+    ...     cloudflare_api_token_secret_name="cloudflare-token",
+    ...     vault_address=None,
+    ...     vault_role_id=None,
+    ...     vault_secret_id=None,
+    ...     vault_ca_certificate=None,
+    ...     enable_traefik=True,
+    ...     enable_cert_manager=True,
+    ...     enable_external_dns=True,
+    ...     enable_vault_eso=False,
+    ...     enable_cnpg=False,
+    ...     runner_temp=Path("/tmp"),
+    ...     output_dir=Path("/tmp/output"),
+    ...     github_env=Path("/tmp/github-env"),
+    ... )
+    >>> tfvars = {"cluster_name": "preview-1", "domain": "example.com"}
+    >>> render_manifests(inputs, tfvars)
+    {'manifests/namespace.yaml': 'apiVersion: v1\\nkind: Namespace\\n'}
     """
     work_dir = inputs.runner_temp / "render-manifests"
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -133,6 +159,69 @@ def render_manifests(inputs: RenderInputs, tfvars: dict[str, object]) -> dict[st
     return _extract_rendered_manifests(outputs_raw)
 
 
+def _build_raw_inputs(
+    cluster_name: str | None,
+    domain: str | None,
+    acme_email: str | None,
+    cloudflare_api_token_secret_name: str | None,
+    vault_address: str | None,
+    vault_role_id: str | None,
+    vault_secret_id: str | None,
+    vault_ca_certificate: str | None,
+    enable_traefik: str | None,
+    enable_cert_manager: str | None,
+    enable_external_dns: str | None,
+    enable_vault_eso: str | None,
+    enable_cnpg: str | None,
+    runner_temp: Path | None,
+    output_dir: Path | None,
+    github_env: Path | None,
+) -> RawRenderInputs:
+    """Construct RawRenderInputs from CLI parameters."""
+    return RawRenderInputs(
+        cluster_name=cluster_name,
+        domain=domain,
+        acme_email=acme_email,
+        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
+        vault_address=vault_address,
+        vault_role_id=vault_role_id,
+        vault_secret_id=vault_secret_id,
+        vault_ca_certificate=vault_ca_certificate,
+        enable_traefik=enable_traefik,
+        enable_cert_manager=enable_cert_manager,
+        enable_external_dns=enable_external_dns,
+        enable_vault_eso=enable_vault_eso,
+        enable_cnpg=enable_cnpg,
+        runner_temp=runner_temp,
+        output_dir=output_dir,
+        github_env=github_env,
+    )
+
+
+def _handle_manifest_output(
+    inputs: RenderInputs,
+    manifests: dict[str, str],
+) -> int:
+    """Write manifests to disk and export environment variables.
+
+    Returns the number of manifests written.
+    """
+    inputs.output_dir.mkdir(parents=True, exist_ok=True)
+    count = write_manifests(inputs.output_dir, manifests)
+    append_github_env(
+        inputs.github_env,
+        {
+            "RENDERED_MANIFEST_COUNT": str(count),
+            "RENDER_OUTPUT_DIR": str(inputs.output_dir),
+        },
+    )
+    if count == 0:
+        print("Rendered 0 manifests; exported outputs for downstream steps.")
+    else:
+        print(f"Rendered {count} manifests to {inputs.output_dir}.")
+    return count
+
+
 @app.command()
 def main(
     cluster_name: str | None = CLUSTER_NAME_PARAM,
@@ -156,43 +245,43 @@ def main(
 
     Inputs are resolved from CLI arguments and environment variables, OpenTofu
     renders platform manifests, and the output count is exported to GITHUB_ENV.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> # (illustrative example; not executable due to external dependencies)
+    >>> main(
+    ...     cluster_name="preview-1",
+    ...     domain="example.com",
+    ...     acme_email="ops@example.com",
+    ...     github_env=Path("/tmp/github-env"),
+    ... )
+    0
     """
-    raw_inputs = RawRenderInputs(
-        cluster_name=cluster_name,
-        domain=domain,
-        acme_email=acme_email,
-        cloudflare_api_token_secret_name=cloudflare_api_token_secret_name,
-        vault_address=vault_address,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-        vault_ca_certificate=vault_ca_certificate,
-        enable_traefik=enable_traefik,
-        enable_cert_manager=enable_cert_manager,
-        enable_external_dns=enable_external_dns,
-        enable_vault_eso=enable_vault_eso,
-        enable_cnpg=enable_cnpg,
-        runner_temp=runner_temp,
-        output_dir=output_dir,
-        github_env=github_env,
+    raw_inputs = _build_raw_inputs(
+        cluster_name,
+        domain,
+        acme_email,
+        cloudflare_api_token_secret_name,
+        vault_address,
+        vault_role_id,
+        vault_secret_id,
+        vault_ca_certificate,
+        enable_traefik,
+        enable_cert_manager,
+        enable_external_dns,
+        enable_vault_eso,
+        enable_cnpg,
+        runner_temp,
+        output_dir,
+        github_env,
     )
     inputs = resolve_render_inputs(raw_inputs)
     tfvars = build_render_tfvars(inputs)
 
     try:
         manifests = render_manifests(inputs, tfvars)
-        inputs.output_dir.mkdir(parents=True, exist_ok=True)
-        count = write_manifests(inputs.output_dir, manifests)
-        append_github_env(
-            inputs.github_env,
-            {
-                "RENDERED_MANIFEST_COUNT": str(count),
-                "RENDER_OUTPUT_DIR": str(inputs.output_dir),
-            },
-        )
-        if count == 0:
-            print("Rendered 0 manifests; exported outputs for downstream steps.")
-        else:
-            print(f"Rendered {count} manifests to {inputs.output_dir}.")
+        _handle_manifest_output(inputs, manifests)
     except (InfraK8sError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

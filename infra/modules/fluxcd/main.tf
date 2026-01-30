@@ -21,7 +21,7 @@ locals {
   }
 }
 
-resource "kubernetes_namespace" "flux" {
+resource "kubernetes_namespace_v1" "flux" {
   metadata {
     name = local.namespace
     labels = merge(local.common_labels, {
@@ -35,7 +35,7 @@ resource "helm_release" "flux" {
   repository = var.chart_repository
   chart      = var.chart_name
   version    = var.chart_version
-  namespace  = kubernetes_namespace.flux.metadata[0].name
+  namespace  = kubernetes_namespace_v1.flux.metadata[0].name
   timeout    = local.helm_timeout
   wait       = var.helm_wait
   atomic     = true
@@ -46,16 +46,16 @@ resource "helm_release" "flux" {
 
   values = local.helm_values
 
-  depends_on = [kubernetes_namespace.flux]
+  depends_on = [kubernetes_namespace_v1.flux]
 }
 
-resource "kubernetes_manifest" "git_repository" {
+resource "kubernetes_manifest_v1" "git_repository" {
   manifest = {
     apiVersion = "source.toolkit.fluxcd.io/v1"
     kind       = "GitRepository"
     metadata = {
       name      = local.git_repository_name
-      namespace = kubernetes_namespace.flux.metadata[0].name
+      namespace = kubernetes_namespace_v1.flux.metadata[0].name
       labels    = local.common_labels
     }
     spec = merge({
@@ -75,13 +75,13 @@ resource "kubernetes_manifest" "git_repository" {
   depends_on = [helm_release.flux]
 }
 
-resource "kubernetes_manifest" "kustomization" {
+resource "kubernetes_manifest_v1" "kustomization" {
   manifest = {
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
     kind       = "Kustomization"
     metadata = {
       name      = local.kustomization_name
-      namespace = kubernetes_namespace.flux.metadata[0].name
+      namespace = kubernetes_namespace_v1.flux.metadata[0].name
       labels    = local.common_labels
     }
     spec = {
@@ -99,5 +99,5 @@ resource "kubernetes_manifest" "kustomization" {
     }
   }
 
-  depends_on = [kubernetes_manifest.git_repository]
+  depends_on = [kubernetes_manifest_v1.git_repository]
 }

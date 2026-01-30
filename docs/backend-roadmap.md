@@ -116,8 +116,8 @@ adapter; direct stateful logic belongs behind the ports established above.
   validation.
 - [x] 2.4.3. Add the `example_data_runs` migration plus a repository helper to
   guard seeding once per seed name.
-- [ ] 2.4.4. Deliver a seed registry CLI that uses `lexis` to generate memorable
-  seed names and updates the JSON registry safely.
+- [x] 2.4.4. Deliver a seed registry CLI that uses `base-d` (`eff_long`) to
+  generate memorable seed names and updates the JSON registry safely.
 - [ ] 2.4.5. Wire startup seeding behind the `example-data` feature flag and
   `ortho-config` settings, logging when seeding is skipped or applied.
 - [ ] 2.4.6. Add integration tests for once-only seeding and update backend
