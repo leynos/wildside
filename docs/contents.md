@@ -55,48 +55,10 @@
 
 ## Infrastructure and delivery
 
-- [Cloud-native architecture for preview environments](cloud-native-ephemeral-previews.md)
-  – GitOps-driven preview platform design. *Audience: platform engineers.*
-- [Ephemeral previews infrastructure roadmap](ephemeral-previews-roadmap.md)
-  – phased plan for preview environment infrastructure. *Audience: platform
-  engineers and project managers.*
-- [Architecting a modern CI/CD pipeline](ci-cd-container-pipeline-design.md) –
-  GitHub Actions to Kubernetes workflow. *Audience: DevOps engineers.*
-- [Declarative DNS guide](declarative-dns-guide.md) –
-  automating Cloudflare DNS with FluxCD, ExternalDNS, and OpenTofu. *Audience:
-  platform engineers.*
-- [Declarative TLS guide](declarative-tls-guide.md) – automating certificate
-  management with cert-manager. *Audience: platform engineers.*
-- [Using Cloudflare DNS with OpenTofu](using-cloudflare-dns-with-opentofu.md)
-  – practical steps for managing DNS records. *Audience: infrastructure
-  developers.*
-- [A comprehensive developer’s guide to HCL for OpenTofu](opentofu-hcl-syntax-guide.md)
-  – HCL syntax and workflows. *Audience: infrastructure developers.*
-- [Unit testing OpenTofu modules and scripts](opentofu-module-unit-testing-guide.md)
-  – strategies for testing IaC modules. *Audience: infrastructure developers.*
-- [Infrastructure test dependency checklist](infrastructure-test-dependencies.md)
-  – validates CLI prerequisites before running Terraform policy suites.
-  *Audience: infrastructure developers and Continuous Integration (CI)
-  engineers.*
-- [DOKS OpenTofu module design](doks-module-design.md) – design decisions for
-  the DigitalOcean Kubernetes module. *Audience: infrastructure developers.*
-- [FluxCD OpenTofu module design](fluxcd-module-design.md)
-  – design decisions for the GitOps control plane module. *Audience:
-  infrastructure developers.*
-- [Cert-manager OpenTofu module design](cert-manager-module-design.md) – design
-  decisions for the cert-manager module. *Audience: infrastructure developers.*
-- [Vault appliance OpenTofu module design](vault-appliance-module-design.md) –
-  design decisions for the Vault infrastructure module. *Audience:
-  infrastructure developers.*
-- [Vault External Secrets Operator (ESO) OpenTofu module design](vault-eso-module-design.md)
-  – design decisions for the ESO integration module. *Audience: infrastructure
-  developers.*
-- [Valkey OpenTofu module design](valkey-module-design.md) – design decisions
-  for the Valkey (Redis-compatible) module. *Audience: infrastructure
-  developers.*
-- [OpenTofu module interoperability contract](opentofu-module-interoperability-contract.md)
-  – defines how modules thread DNS zones, issuers, and credential handles.
-  *Audience: infrastructure developers.*
+- Infrastructure automation, GitOps workflows, and ephemeral preview
+  environments are documented in the Nile Valley repository
+  (`../../nile-valley`). This repository keeps the application code, container
+  images, and Helm chart that Nile Valley deploys.
 
 ## Developer guidelines and tooling
 

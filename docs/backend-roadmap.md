@@ -271,21 +271,8 @@ publish events and metrics through their ports only.
 - [ ] 6.2.3. Instrument PostHog events (`RouteGenerated`, `UserSignup`, and
   similar) with consistent payload schemas and batching policies.
 
-## 7. GitOps and environments
+## 7. Deployment coordination
 
-Operational safeguards should track the ports and adapters in deployment
-artefacts to keep environment drift visible.
-
-### 7.1. FluxCD resilience
-
-- [ ] 7.1.1. Harden FluxCD pipelines so manifests in `deploy/` reconcile
-  cleanly across environments with image digest pinning and pull-request
-  previews.
-
-### 7.2. Operational runbooks
-
-- [ ] 7.2.1. Publish runbooks describing rolling upgrades, session-key
-  rotation, and Martin or worker scaling procedures, referencing the
-  observability dashboards.
-- [ ] 7.2.2. Automate preview-environment teardown and resource reclamation
-  policies, including TTL enforcement and secret revocation.
+Deployment automation, preview environment workflows, and operational runbooks
+are maintained in the Nile Valley repository. Coordinate roadmap changes with
+that repository when deployment or infrastructure behaviour needs updates.

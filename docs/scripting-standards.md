@@ -31,14 +31,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from plumbum import local
-from plumbum.cmd import tofu
+from plumbum.cmd import git
 
 
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
-    cluster_dir = project_root / "infra" / "clusters" / "dev"
-    with local.cwd(cluster_dir):
-        tofu["plan"]()
+    with local.cwd(project_root):
+        git["rev-parse", "--short", "HEAD"]()
 
 
 if __name__ == "__main__":
@@ -55,7 +54,8 @@ if __name__ == "__main__":
   Behaviour-Driven Development (BDD) via `pytest-bdd` so the intent of the
   script is captured in human-readable Given/When/Then narratives.
 - Tests reside in `scripts/tests/` mirroring the script names. For example,
-  `scripts/bootstrap_doks.py` pairs with `scripts/tests/test_bootstrap_doks.py`.
+  `scripts/rotate_session_key.py` pairs with
+  `scripts/tests/test_rotate_session_key.py`.
 - When scripts rely on environment variables, assert both the happy path and
   failure modes; the tests should demonstrate graceful error handling rather
   than raising opaque stack traces.

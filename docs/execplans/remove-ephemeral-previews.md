@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 No `PLANS.md` file exists in this repository.
 
@@ -70,27 +70,41 @@ match the Nile Valley example chart interface.
 
 ## Progress
 
-    - [ ] (2026-01-31 00:00Z) Inventory duplicated infra components and docs.
-    - [ ] (2026-01-31 00:00Z) Remove infra code/scripts and update tooling.
-    - [ ] (2026-01-31 00:00Z) Remove infra docs and update documentation index.
-    - [ ] (2026-01-31 00:00Z) Verify Helm chart interface and container images.
-    - [ ] (2026-01-31 00:00Z) Run quality gates and commit changes.
+    - [x] (2026-01-31 17:42Z) Inventory duplicated infra components and docs.
+    - [x] (2026-01-31 17:42Z) Remove infra code/scripts and update tooling.
+    - [x] (2026-01-31 17:42Z) Remove infra docs and update documentation index.
+    - [x] (2026-01-31 17:42Z) Verify Helm chart interface and container images.
+    - [x] (2026-01-31 17:55Z) Run quality gates and commit changes.
 
 ## Surprises & Discoveries
 
-    - Observation: none yet.
-      Evidence: none yet.
-      Impact: none yet.
+    - Observation: The Helm chart values schema matches Nile Valley exactly;
+      only the default `sessionSecret.name` value differs.
+      Evidence: `diff -u` on `values.schema.json` produced no changes, while
+      `values.yaml` only differed on the session secret name default.
+      Impact: No chart interface changes required.
 
 ## Decision Log
 
-    - Decision: none yet.
-      Rationale: none yet.
-      Date/Author: to be filled.
+    - Decision: Remove `infra/`, `deploy/k8s`, infra scripts, and infra docs
+      from this repo because Nile Valley owns the preview infrastructure.
+      Rationale: The infrastructure content is duplicated and now maintained
+      in Nile Valley; keeping it here risks drift.
+      Date/Author: 2026-01-31 (assistant)
+
+    - Decision: Retain the Wildside Helm chart unchanged after confirming
+      schema parity with Nile Valley’s example chart.
+      Rationale: Interface matches; only defaults and chart naming differ.
+      Date/Author: 2026-01-31 (assistant)
 
 ## Outcomes & Retrospective
 
-To be completed after implementation.
+Removed the duplicated infra directories, scripts, actions, and docs while
+preserving the Wildside Helm chart and container build assets. Documentation
+now points to Nile Valley for infrastructure guidance, and CI/Makefile targets
+no longer depend on OpenTofu or infra checks. All quality gates passed, and
+the Helm chart interface was confirmed to match Nile Valley (schema identical,
+defaults only differ).
 
 ## Context and Orientation
 
@@ -258,5 +272,11 @@ Valley example chart at `../../nile-valley/deploy/charts/example-app`:
 - standard `service`, `resources`, `autoscaling`, and security contexts
 
 Container images must remain buildable from `deploy/docker/*.Dockerfile` and
-configured in chart values via `image.repository` and `image.tag` so Nile Valley
-can inject preview tags.
+configured in chart values via `image.repository` and `image.tag` so Nile
+Valley can inject preview tags.
+
+## Revision note (required when editing an ExecPlan)
+
+Updated status to COMPLETE, marked the final quality gates, and recorded the
+outcomes now that infra removals and documentation updates are done. Remaining
+work is limited to review or follow-up requests.

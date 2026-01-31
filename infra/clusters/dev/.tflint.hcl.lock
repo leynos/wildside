@@ -1,7 +1,0 @@
-plugin "terraform" {
-  version = "0.10.0"
-  source  = "github.com/terraform-linters/tflint-ruleset-terraform"
-  hashes = [
-    "h1:nCk2dhh5ITZG85wmf3vQM3pMm365UNJcAQ8gp4vsjW0="
-  ]
-}
