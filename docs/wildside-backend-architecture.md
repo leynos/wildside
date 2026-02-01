@@ -1952,15 +1952,9 @@ workflows ensuring declarative, reproducible environments.
 
 ### GitOps and Environments
 
-- Manage all manifests in the `deploy/` repository folder and reconcile via
-  FluxCD. Changes land through pull requests, enabling audit trails and easy
-  rollbacks.
-- Provision ephemeral preview environments per feature branch using FluxCD’s
-  Kustomize overlays. Each preview stack includes isolated namespaces,
-  temporary databases (schema clones or separate instances), and environment-
-  scoped secrets.
-- Automate teardown of preview environments after merges or inactivity to
-  minimise cost.
+- Manage deployment manifests and environment overrides in the Nile Valley
+  repository, which applies GitOps automation to this Helm chart. Changes land
+  through pull requests, enabling audit trails and easy rollbacks.
 
 ### Platform Observability
 

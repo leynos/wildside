@@ -27,12 +27,12 @@ pnpm install --frozen-lockfile
 
 The Bun toolchain remains in use for runtime scripts and formatting tasks.
 
-## Terraform provider lockfile
+## Infrastructure
 
-OpenTofu pins provider versions in `.terraform.lock.hcl`. Commit this file so
-local and CI environments resolve identical provider builds. When upgrading
-providers with `tofu init -upgrade`, include the updated lockfile in your
-commit.
+Infrastructure automation, GitOps workflows, and ephemeral preview
+environments are maintained in the Nile Valley repository
+(`../../nile-valley`). This repository ships the application code, container
+images, and Helm chart that Nile Valley deploys.
 
 ## Formatting, linting, and type checking
 

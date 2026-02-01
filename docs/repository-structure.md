@@ -7,9 +7,9 @@ PWA frontend. It supports:
 - Actix WebSocket/events→**AsyncAPI** for docs and (optional) client stubs.
 - **Design tokens** as a first‑class package powering Tailwind/daisyUI and
   future native shells.
-- Docker-friendly builds (musl where sensible) targeting Kubernetes on
-  DigitalOcean Kubernetes Service (DOKS), with static assets served from object
-  storage/CDN.
+- Docker-friendly builds (musl where sensible) targeting Kubernetes via Helm,
+  with static assets served from object storage/CDN. Cluster automation and
+  preview infrastructure live in the Nile Valley repository.
 
 A typical request flow is illustrated below:
 
@@ -104,21 +104,10 @@ myapp/
 │  │  └─ frontend.Dockerfile
 │  ├─ charts/                         # Helm charts for the application
 │  │  └─ wildside/                    # reusable chart with templates and values
-│  ├─ k8s/                            # HelmReleases and Kustomize overlays
-│  │  ├─ base/                        # base HelmRelease
-│  │  │  ├─ helmrelease.yaml
-│  │  │  └─ kustomization.yaml
-│  │  └─ overlays/
-│  │     └─ production/               # production overrides
-│  │        ├─ patch-helmrelease-values.yaml
-│  │        └─ kustomization.yaml
-│  ├─ ingress/                        # cert-manager only; app Ingress is templated in the Helm chart
-│  │  ├─ certificate.yaml
-│  │  ├─ cluster-issuer.yaml
-│  │  └─ kustomization.yaml
-│  └─ scripts/                        # CI/deploy helpers
+│  ├─ docker-compose.yml              # local compose stack
+│  └─ nginx/                          # Nginx config and Dockerfile for static assets
 │
-├─ .github/workflows/                 # CI pipelines + manual DOKS deploy
+├─ .github/workflows/                 # CI pipelines
 ├─ Makefile                           # local DX (optional, see Section 6)
 ├─ package.json                       # bun workspaces + root scripts
 └─ README.md
@@ -326,8 +315,8 @@ from layer caching. The final stage uses `nginx:alpine` to serve the compiled
 - Health checks can be tailored using `HEALTHCHECK_PORT`, `HEALTHCHECK_PATH`,
   `HEALTHCHECK_INTERVAL`, `HEALTHCHECK_TIMEOUT`, and `HEALTHCHECK_RETRIES`.
 
-- In CI, extract `/usr/share/nginx/html` and upload to **DOKS Spaces** (object
-  storage) behind a CDN.
+- In CI, extract `/usr/share/nginx/html` and upload to object storage behind a
+  CDN (see Nile Valley for the deployment automation).
 
 - The backend serves only the API; static assets come from CDN or the Nginx
   runtime image.
@@ -362,40 +351,22 @@ services:
 
 ______________________________________________________________________
 
-## 7) Kubernetes (DOKS) Deployment Strategy
+## 7) Helm Deployment Interface
+
+This repository ships the Helm chart used to deploy the application. Cluster
+automation, object storage/CDN uploads, and environment overlays are managed
+in the Nile Valley repository.
 
 **Principles:**
 
-- Backend pods are stateless; DB/cache live in managed services (e.g.,
-  PostgreSQL, Redis). Migrations run via Job.
-- Frontend assets are immutable in Spaces + CDN; deploys are object‑store
-  uploads (no pod just to serve files).
+- Backend pods are stateless; DB/cache live in managed services (for example,
+  PostgreSQL and Redis). Migrations run via Job.
+- Frontend assets are immutable in object storage + CDN; deploys are uploads,
+  not pods, and are handled by Nile Valley automation.
 - Ingress terminates TLS; backend exposed via HTTP (or gRPC) behind a single
   hostname.
 
-### 7.1 Static Assets on DOKS Spaces
-
-1. CI uploads `frontend-pwa/dist/` to `spaces://my-bucket/app/<git-sha>/` and
-   updates a `latest` object (or versioned index).
-2. CDN is configured on the bucket; cache‑control headers set during upload
-   (`immutable`, long max‑age) with a short TTL for `index.html`.
-
-**Upload script (pseudo):** `deploy/scripts/push_static.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-DIST=frontend-pwa/dist
-PREFIX=${ASSETS_PREFIX:-app/$(git rev-parse --short HEAD)}
-# set cache headers; tool could be doctl, rclone, or s3cmd
-rclone copy "$DIST" spaces:my-bucket/$PREFIX --s3-acl public-read \
-  --metadata Cache-Control:max-age=31536000,immutable
-# Update the release alias (optional):
-# rclone sync "$DIST" spaces:my-bucket/app/latest --s3-acl public-read \
-#   --metadata Cache-Control:no-cache
-```
-
-### 7.2 Backend on K8s
+### 7.1 Chart resources
 
 **Key objects:** Deployment, Service, ConfigMap (non‑secret settings), existing
 Secret (tokens/DB URLs), HPA, PodDisruptionBudget (rendered only when
@@ -488,276 +459,31 @@ spec:
 ```
 
 > Note: In chart defaults, `ingress.enabled` is `false`. Enable it via the
-> Flux HelmRelease values (e.g., the production overlay) when exposing the API.
+> Nile Valley GitOps values when exposing the API.
 
-Use the **Helm chart** as the primary packaging. Drive deploys via a Flux
-**HelmRelease** in `deploy/k8s/base`, and apply environment‑specific overrides
-with **Kustomize overlays** that patch `spec.values` (e.g., production).
+Use the **Helm chart** as the primary packaging. Deployment manifests and
+environment overrides live in the Nile Valley repository, which applies values
+to this chart.
 
-### 7.3 CI/CD Outline
+### 7.2 CI/CD Outline
 
 1. **Lint & test**: cargo fmt/clippy/test; bun lint/type‑check/unit tests.
 2. **Build artifacts**:
    - Build backend image → push to registry.
-   - Build frontend dist → upload to Spaces.
+   - Build frontend dist → upload to object storage.
    - Emit `spec/openapi.json` and publish as build artifact; run `orval` in a
      “types up‑to‑date” check.
    - (Optional) Generate AsyncAPI HTML docs and publish to an internal docs
      bucket.
 3. **Deploy**:
    - Update Helm values with new image tag; commit to a GitOps repo watched by
-     FluxCD.
+     the Nile Valley automation.
    - Invalidate CDN (only for `index.html`), or rely on cache busting for
      hashed assets.
 
-### 7.4 Manual OpenTofu DOKS deployment workflow
-
-| Phase       | Focus                        | Key actions                                                                                     |
-| ----------- | ---------------------------- | ----------------------------------------------------------------------------------------------- |
-| Trigger     | Operator input               | Manual `workflow_dispatch` with cluster and optional flags                                      |
-| Preparation | Environment setup            | Check out repos, install OpenTofu/doctl, authenticate Vault                                     |
-| Plan/apply  | Infrastructure as Code (IaC) | Execute Infrastructure as Code (IaC) changes (`tofu plan`/`tofu apply`, respecting `plan_only`) |
-| Post-apply  | State persistence            | Commit state artefacts and sync generated secrets to Vault                                      |
-| Reporting   | Observability                | Upload logs and send optional Slack notification                                                |
-
-A manual-only GitHub Actions workflow `deploy-opentofu-doks.yml` lives in
-`.github/workflows/` and drives the DOKS provisioning stack. Keeping the
-workflow manual reduces accidental cluster churn and ensures infra changes are
-intentional.
-
-#### Trigger and operator inputs
-
-- `workflow_dispatch` with a mandatory `cluster` choice sourced from
-  `infra/clusters/*` so the dropdown always mirrors available environments.
-- Optional `plan_only` boolean for running drift checks without changing
-  infrastructure.
-- Optional `vault_secret_prefix` input that defaults to
-  `kv/wildside/platform/`; operators set it when Vault namespaces organize
-  secrets differently.
-
-#### Execution outline
-
-1. Check out the application repo and the `wildside-infra` state repo as
-   separate worktrees so Terraform state commits remain isolated from app
-   sources. Set `timeout-minutes: 5` on each `actions/checkout` invocation to
-   fail fast if GitHub cannot reach the repository.
-2. Install OpenTofu via `opentofu/setup-opentofu@v1` and export
-   `TF_IN_AUTOMATION=1` to keep logs concise for review. Cap the toolchain
-   setup step at `timeout-minutes: 5` to prevent indefinite downloads.
-3. Configure the DigitalOcean provider with `digitalocean/action-doctl@v2`
-   (fed by `DO_API_TOKEN`) before invoking the OpenTofu wrapper. Rely on the
-   action's `core.setSecret` masking or emit `::add-mask::` for any derived
-   environment variables, avoid `doctl` debug output, keep `TF_LOG` at `ERROR`,
-   and set `timeout-minutes: 5` so credential bootstrap cannot hang.
-4. Authenticate against Vault using the AppRole credentials, requesting a
-   short-lived token restricted to the configured secret prefix. Use a
-   20-minute time to live (TTL) with automatic renewal, mask the token via
-   `echo "::add-mask::${{ steps.login.outputs.token }}"`, and assign
-   `timeout-minutes: 5`. Ensure a `finally` step revokes the token on failure.
-5. Run `tofu init`, `tofu plan`, and `tofu apply` from
-   `infra/clusters/${{ inputs.cluster }}`. Configure them as distinct steps
-   with sensible guards:
-   - `tofu init`: `timeout-minutes: 5`.
-   - `tofu plan`: `timeout-minutes: 10`.
-   - `tofu apply`: `timeout-minutes: 30` plus `TF_CLI_ARGS_apply` containing
-     `-lock-timeout=5m -input=false`.
-   Honour `plan_only` by skipping apply and treat any timeout as a failure.
-   When `tofu` prints `Acquiring state lock` it follows up with a `Lock Info`
-   block; parse the `ID` line (for example,
-   ``grep -m1 'Lock Info: ID' | awk '{print $4}'``) and persist the value as a
-   step output so it is available for `tofu force-unlock <LOCK_ID>` recovery.
-   Use that command only after confirming the workflow run timed out or was
-   explicitly aborted, the backend still reports this run as the lock owner,
-   and recent state backups exist. Normal execution errors must not trigger
-   `force-unlock`; retry the run or coordinate with the current lock holder
-   instead. When the safety checks justify an unlock, perform it before the
-   cleanup step that revokes Vault tokens so the revocation happens after the
-   state has been safely reconciled.
-6. After a successful apply:
-   - Copy `terraform.tfstate` and JSON outputs into the checked out
-     `wildside-infra` repository under
-     `state/doks/${{ inputs.cluster }}/`, redacting values marked sensitive
-     before persistence.
-   - Commit using the bot identity and push to `main` so state history is
-     version controlled; set `timeout-minutes: 5` on the push step.
-   - Stream newly generated secrets (kubeconfig, Flux bootstrap tokens, admin
-     passwords) to Vault with `vault kv put
-     "${{ inputs.vault_secret_prefix }}${{ inputs.cluster }}"`, piping
-     stdout through tooling that honours GitHub masking and avoiding any
-     direct `echo` of secret values.
-7. Upload plan and apply logs to the workflow summary and optionally forward a
-   Slack notification when the run completes. Use a redaction script (for
-   example, `scripts/redact_tofu_outputs.py`) so Terraform outputs, Vault
-   responses, and DigitalOcean IDs remain masked, and keep the upload step to
-   `timeout-minutes: 5`.
-8. Add a terminal cleanup step conditioned with `if: always()` to revoke
-   tokens, unlock OpenTofu state, and roll back partial state pushes when an
-   earlier step times out or fails.
-
-```yaml
-name: deploy-opentofu-doks
-
-on:
-  workflow_dispatch:
-    inputs:
-      cluster:
-        description: Target cluster
-        required: true
-        type: choice
-        options: [] # populated dynamically before dispatch
-      plan_only:
-        description: Run plan without applying changes
-        required: false
-        type: boolean
-        default: false
-      vault_secret_prefix:
-        description: Vault KV prefix
-        required: false
-        default: kv/wildside/platform/
-
-jobs:
-  deploy:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - name: Checkout application
-        uses: actions/checkout@v4
-        timeout-minutes: 5
-
-      - name: Checkout state repository
-        uses: actions/checkout@v4
-        timeout-minutes: 5
-        with:
-          repository: wildside/wildside-infra
-          path: wildside-infra
-
-      - name: Install OpenTofu
-        uses: opentofu/setup-opentofu@v1
-        timeout-minutes: 5
-
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        timeout-minutes: 5
-        with:
-          token: ${{ secrets.DO_API_TOKEN }}
-
-      - name: Vault AppRole login
-        id: vault
-        timeout-minutes: 5
-        run: |
-          token=$(vault write -field=token auth/approle/login \
-            role_id=${{ secrets.VAULT_ROLE_ID }} \
-            secret_id=${{ secrets.VAULT_SECRET_ID }})
-          echo "::add-mask::${token}"
-          echo "token=${token}" >> $GITHUB_OUTPUT
-
-      - name: tofu init
-        timeout-minutes: 5
-        env:
-          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
-        working-directory: infra/clusters/${{ inputs.cluster }}
-        run: tofu init
-
-      - name: tofu plan
-        timeout-minutes: 10
-        env:
-          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
-        working-directory: infra/clusters/${{ inputs.cluster }}
-        run: tofu plan
-
-      - name: tofu apply
-        if: inputs.plan_only != 'true'
-        timeout-minutes: 30
-        env:
-          VAULT_TOKEN: ${{ steps.vault.outputs.token }}
-          TF_CLI_ARGS_apply: -lock-timeout=5m -input=false
-        working-directory: infra/clusters/${{ inputs.cluster }}
-        run: tofu apply -auto-approve
-
-      - name: Persist state
-        timeout-minutes: 5
-        run: ./scripts/persist_state.sh
-
-      - name: Cleanup
-        if: always()
-        timeout-minutes: 5
-        run: ./scripts/cleanup.sh
-```
-
-#### Integration with `wildside-infra-k8s`
-
-- The manual workflow shells out to the reusable `wildside-infra-k8s`
-  composite action (published alongside the cluster modules) instead of
-  duplicating bootstrap logic. The action receives the selected `cluster` and
-  Vault inputs and emits the generated Flux manifests into the checked out
-  `wildside-infra` repository, matching the `clusters/{name}` and `platform/**`
-  tree expected by FluxCD.
-- `wildside-infra-k8s` encapsulates a Python bootstrap helper
-  (`scripts/bootstrap_doks.py`) implemented according to the
-  [scripting standards](scripting-standards.md). The helper keeps provider
-  versions aligned with the module and ensures Flux is configured to watch the
-  same `wildside-infra` commit that captured the state.
-- By reusing the action, the manual trigger produces the exact same layout and
-  artefacts as automated preview pipelines, preventing drift between
-  human-driven and CI-driven provisioning.
-
-Maintain strict secret hygiene: although GitHub Actions masks registered
-secrets, never echo or log credential values, including through debug
-statements or accidental `print` output. Avoid writing secrets to workspace
-files or committing them; prefer least-privilege, short-lived tokens, and rely
-on the platform's masking and secret redaction features when streaming data to
-Vault. Review workflow permissions regularly and provision dedicated secrets
-per environment so blast radius stays contained.
-
-#### Idempotent bootstrap behaviour
-
-- The action's `scripts/bootstrap_doks.py` executes `tofu init`, `tofu plan`,
-  and `tofu apply` with `-refresh=true` and never issues destroy operations. It
-  uses `-target` only when reconciling newly added modules, so re-runs simply
-  converge the cluster to the declared state.
-- Generated credentials (Flux deploy key, kubeconfig, admin tokens) are only
-  minted when Vault lacks the corresponding keys. The script first attempts a
-  `vault kv get` and short-circuits secret generation if data already exists,
-  guaranteeing re-runs do not rotate credentials unexpectedly.
-- When data must be updated (for example, after scaling node pools), the
-  script uses `vault kv patch` to upsert just the changed fields, leaving any
-  operator-added metadata untouched.
-- Flux bootstrap is invoked with `--components-upgrade` and
-  `--reconcile-strategy=merge`, which makes it safe to run repeatedly. The
-  command is guarded by `kubectl apply --server-side --dry-run=client` checks,
-  so configuration is validated before touching the cluster.
-- The final `git push` to `wildside-infra` happens only when `git status` is
-  dirty, avoiding empty commits and ensuring the run is a no-op if nothing has
-  changed.
-
-#### Bootstrap secrets required in repository settings
-
-- `DO_API_TOKEN`: DigitalOcean Personal Access Token (PAT) with write access
-  to Kubernetes, droplets, networking, and Spaces so the provider can create
-  cluster assets.
-- `WILDSIDE_INFRA_PAT`: GitHub Personal Access Token (PAT) or deploy key with
-  push rights to the `wildside-infra` repository. Required for committing state
-  artefacts.
-- `VAULT_ADDR`: URL of the Vault cluster receiving generated credentials.
-- `VAULT_NAMESPACE` (optional): Populate when Vault uses namespaces; leave
-  empty otherwise.
-- `VAULT_ROLE_ID` and `VAULT_SECRET_ID`: AppRole pair scoped to the
-  workflow's secret prefix. Grants write access without sharing a long-lived
-  token.
-- `VAULT_KV_MOUNT`: Name of the KV v2 mount (for example `kv`). Keeps the
-  workflow configurable when multiple mounts exist.
-- `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`: Identity used when committing
-  state back to `wildside-infra`.
-- `SLACK_WEBHOOK_URL` (optional): Enables post-deploy notifications to the
-  platform channel.
-
-Secrets never leave the runner disk unencrypted: the workflow streams ephemeral
-outputs straight to Vault, and only non-sensitive plan/apply logs enter the
-Actions trace. State stays authoritative inside the `wildside-infra`
-repository, while Vault retains any runtime credentials that OpenTofu mints,
-giving operators a reproducible path to rebuild clusters.
+Deployment automation for clusters and preview environments lives in the Nile
+Valley repository. Refer to its documentation for GitOps workflows and
+infrastructure state handling.
 
 ______________________________________________________________________
 
@@ -890,6 +616,6 @@ ______________________________________________________________________
 - **Design:** Tokens JSON → Style Dictionary → CSS vars + Tailwind preset +
   daisyUI theme.
 - **Build/Deploy:** Docker multi‑stage (musl where possible) → K8s Deployment →
-  CDN‑hosted static from DOKS Spaces; Ingress routes `/api` into cluster. This
-  structure keeps contracts central, isolates platform concerns, and allows
-  painless evolution from PWA to native shells without a rewrite.
+  CDN‑hosted static from object storage; Ingress routes `/api` into cluster.
+  This structure keeps contracts central, isolates platform concerns, and
+  allows painless evolution from PWA to native shells without a rewrite.
