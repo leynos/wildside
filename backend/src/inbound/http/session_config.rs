@@ -6,6 +6,7 @@
 use actix_web::cookie::{Key, SameSite};
 use cap_std::{ambient_authority, fs::Dir};
 use parsing::{BoolEnvConfig, debug_warn_or_error, parse_bool_env, parse_same_site_value};
+use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use tracing::warn;
@@ -248,69 +249,121 @@ fn session_key_from_env<E: SessionEnv>(
     mode: BuildMode,
     allow_ephemeral: bool,
 ) -> Result<Key, SessionConfigError> {
+    let path = resolve_key_path(env)?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = extract_file_name(&path)?;
+    let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
+        Ok(dir) => dir,
+        Err(error) => return handle_directory_open_error(error, &path, mode, allow_ephemeral),
+    };
+
+    read_and_validate_key(&dir, file_name, &path, mode, allow_ephemeral)
+}
+
+/// Decide whether to allow an ephemeral session key.
+fn should_allow_ephemeral(mode: BuildMode, allow_ephemeral: bool) -> bool {
+    mode.is_debug() || allow_ephemeral
+}
+
+/// Resolve the configured key path from the environment or the default.
+fn resolve_key_path<E: SessionEnv>(env: &E) -> Result<PathBuf, SessionConfigError> {
     let key_path = env
         .string(KEY_FILE_ENV)
         .unwrap_or_else(|| SESSION_KEY_DEFAULT_PATH.to_string());
-    let path = PathBuf::from(key_path);
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| SessionConfigError::KeyRead {
-            path: path.clone(),
-            source: io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "session key path must be a file",
-            ),
-        })?;
-    let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
-        Ok(dir) => dir,
-        Err(error) => {
-            if mode.is_debug() || allow_ephemeral {
-                warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "using temporary session key (dev or allow_ephemeral)"
-                );
-                return Ok(Key::generate());
-            }
-            return Err(SessionConfigError::KeyRead {
-                path: path.clone(),
-                source: error,
-            });
-        }
-    };
+    Ok(PathBuf::from(key_path))
+}
 
-    match dir.read(Path::new(file_name)) {
-        Ok(mut bytes) => {
-            let length = bytes.len();
-            if mode == BuildMode::Release && length < SESSION_KEY_MIN_LEN {
-                bytes.zeroize();
-                return Err(SessionConfigError::KeyTooShort {
-                    path,
-                    length,
-                    min_len: SESSION_KEY_MIN_LEN,
-                });
-            }
-            let key = Key::derive_from(&bytes);
-            bytes.zeroize();
-            Ok(key)
-        }
-        Err(error) => {
-            if mode.is_debug() || allow_ephemeral {
-                warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "using temporary session key (dev or allow_ephemeral)"
-                );
-                Ok(Key::generate())
-            } else {
-                Err(SessionConfigError::KeyRead {
-                    path,
-                    source: error,
-                })
-            }
-        }
+/// Extract the file name from the path, rejecting paths without one.
+fn extract_file_name(path: &Path) -> Result<&OsStr, SessionConfigError> {
+    path.file_name().ok_or_else(|| SessionConfigError::KeyRead {
+        path: path.to_path_buf(),
+        source: io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "session key path must be a file",
+        ),
+    })
+}
+
+/// Handle errors when opening the key directory.
+fn handle_directory_open_error(
+    error: io::Error,
+    path: &Path,
+    mode: BuildMode,
+    allow_ephemeral: bool,
+) -> Result<Key, SessionConfigError> {
+    if should_allow_ephemeral(mode, allow_ephemeral) {
+        warn!(
+            path = %path.display(),
+            error = %error,
+            "using temporary session key (dev or allow_ephemeral)"
+        );
+        return Ok(Key::generate());
     }
+
+    Err(SessionConfigError::KeyRead {
+        path: path.to_path_buf(),
+        source: error,
+    })
+}
+
+/// Read the key file and validate the contents for the current build mode.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "signature mirrors explicit call-site requirements for clarity"
+)]
+fn read_and_validate_key(
+    dir: &Dir,
+    file_name: &OsStr,
+    full_path: &Path,
+    mode: BuildMode,
+    allow_ephemeral: bool,
+) -> Result<Key, SessionConfigError> {
+    match dir.read(Path::new(file_name)) {
+        Ok(bytes) => process_key_bytes(bytes, full_path, mode),
+        Err(error) => handle_key_read_error(error, full_path, mode, allow_ephemeral),
+    }
+}
+
+/// Validate key bytes, derive the key, and zeroize the buffer.
+fn process_key_bytes(
+    mut bytes: Vec<u8>,
+    path: &Path,
+    mode: BuildMode,
+) -> Result<Key, SessionConfigError> {
+    let length = bytes.len();
+    if mode == BuildMode::Release && length < SESSION_KEY_MIN_LEN {
+        bytes.zeroize();
+        return Err(SessionConfigError::KeyTooShort {
+            path: path.to_path_buf(),
+            length,
+            min_len: SESSION_KEY_MIN_LEN,
+        });
+    }
+    let key = Key::derive_from(&bytes);
+    bytes.zeroize();
+    Ok(key)
+}
+
+/// Handle errors when reading the key file.
+fn handle_key_read_error(
+    error: io::Error,
+    path: &Path,
+    mode: BuildMode,
+    allow_ephemeral: bool,
+) -> Result<Key, SessionConfigError> {
+    if should_allow_ephemeral(mode, allow_ephemeral) {
+        warn!(
+            path = %path.display(),
+            error = %error,
+            "using temporary session key (dev or allow_ephemeral)"
+        );
+        return Ok(Key::generate());
+    }
+
+    Err(SessionConfigError::KeyRead {
+        path: path.to_path_buf(),
+        source: error,
+    })
 }
 
 pub mod fingerprint;
