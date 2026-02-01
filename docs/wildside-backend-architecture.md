@@ -1960,7 +1960,7 @@ workflows ensuring declarative, reproducible environments.
   temporary databases (schema clones or separate instances), and environment-
   scoped secrets.
 - Automate teardown of preview environments after merges or inactivity to
-  minimise cost, using Nile Valley workflows.
+  minimize cost, using Nile Valley workflows.
 
 ### Platform Observability
 
