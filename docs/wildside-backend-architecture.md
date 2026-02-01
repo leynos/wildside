@@ -1955,12 +1955,6 @@ workflows ensuring declarative, reproducible environments.
 - Manage deployment manifests and environment overrides in the Nile Valley
   repository, which applies GitOps automation to this Helm chart. Changes land
   through pull requests, enabling audit trails and easy rollbacks.
-- Provision ephemeral preview environments per feature branch via the Nile
-  Valley automation. Each preview stack includes isolated namespaces,
-  temporary databases (schema clones or separate instances), and environment-
-  scoped secrets.
-- Automate teardown of preview environments after merges or inactivity to
-  minimize cost, using Nile Valley workflows.
 
 ### Platform Observability
 
