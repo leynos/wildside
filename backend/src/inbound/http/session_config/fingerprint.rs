@@ -40,6 +40,7 @@ pub fn key_fingerprint(key: &Key) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use rstest::rstest;
 

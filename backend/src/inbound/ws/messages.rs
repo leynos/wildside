@@ -101,6 +101,7 @@ impl From<DisplayNameRejectedEvent> for InvalidDisplayNameResponse {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::TraceId;
     use crate::domain::{DisplayName, User, UserId, UserValidationError};

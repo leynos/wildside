@@ -36,9 +36,10 @@ MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile \
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile lint-specs \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-asyncapi lint-openapi lint-makefile lint-actions lint-architecture workspace-sync
+        lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
+        lint-architecture workspace-sync
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -79,11 +80,22 @@ fmt: workspace-sync
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 lint: workspace-sync
+	$(MAKE) lint-rust
+	$(MAKE) lint-architecture
+	$(MAKE) lint-frontend
+	$(MAKE) lint-specs
+	$(MAKE) lint-makefile lint-actions
+
+lint-rust:
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
 	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
-	$(MAKE) lint-architecture
+	whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+	whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+
+lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
-	$(MAKE) lint-asyncapi lint-openapi lint-makefile lint-actions
+
+lint-specs: lint-asyncapi lint-openapi
 
 lint-architecture:
 	$(RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet

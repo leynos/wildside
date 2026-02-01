@@ -8,12 +8,11 @@
     reason = "test code uses expect for clear failure messages"
 )]
 
-use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::{ambient_authority, fs::Dir};
 use example_data::{RegistryError, SeedDefinition, SeedRegistry};
 use rstest::{fixture, rstest};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const VALID_JSON: &str = r#"{
     "version": 1,
@@ -163,28 +162,40 @@ fn serializes_registry_to_pretty_json(registry_fixture: SeedRegistry) {
 fn writes_registry_to_file(registry_fixture: SeedRegistry) {
     let registry = registry_fixture;
     let path = unique_temp_path("seeds.json");
+    let dir = open_registry_dir(&path);
 
-    registry.write_to_file(&path).expect("write registry file");
+    registry
+        .write_to_file(&dir, &path)
+        .expect("write registry file");
 
-    let round_trip = SeedRegistry::from_file(&path).expect("load registry");
+    let round_trip = SeedRegistry::from_file(&dir, &path).expect("load registry");
     assert_eq!(registry, round_trip);
 
-    if let Some(parent) = path.parent() {
-        #[expect(
-            clippy::let_underscore_must_use,
-            reason = "explicitly ignore cleanup failures in test teardown"
-        )]
-        let _ = fs::remove_dir_all(parent);
-    }
+    cleanup_path(&path);
 }
 
-fn unique_temp_path(file_name: &str) -> PathBuf {
+fn unique_temp_path(file_name: &str) -> Utf8PathBuf {
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();
-    let dir = PathBuf::from("target")
+    let dir = Utf8PathBuf::from("target")
         .join("example-data-tests")
         .join(format!("seed-registry-{process_id}-{counter}"));
-    fs::create_dir_all(&dir).expect("create temp dir");
+    let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
+    root.create_dir_all(&dir).expect("create temp dir");
     dir.join(file_name)
+}
+
+fn open_registry_dir(path: &Utf8Path) -> Dir {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    Dir::open_ambient_dir(parent, ambient_authority()).expect("open registry dir")
+}
+
+fn cleanup_path(path: &Utf8Path) {
+    if let Some(parent) = path.parent() {
+        let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
+        if root.remove_dir_all(parent).is_err() {
+            // Ignore cleanup failures in test teardown.
+        }
+    }
 }

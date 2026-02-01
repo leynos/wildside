@@ -129,6 +129,7 @@ impl ExampleDataRunsRepository for FixtureExampleDataRunsRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use rstest::rstest;
 

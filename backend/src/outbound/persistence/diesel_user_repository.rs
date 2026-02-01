@@ -159,6 +159,7 @@ impl UserRepository for DieselUserRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use rstest::{fixture, rstest};
 

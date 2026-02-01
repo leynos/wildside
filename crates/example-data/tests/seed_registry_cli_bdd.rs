@@ -8,8 +8,8 @@
     reason = "test code uses expect for clear failure messages"
 )]
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::{ambient_authority, fs::Dir};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use example_data::SeedRegistry;
@@ -36,7 +36,7 @@ const VALID_REGISTRY_JSON: &str = r#"{
 
 #[derive(Default, ScenarioState)]
 struct World {
-    registry_path: Slot<PathBuf>,
+    registry_path: Slot<Utf8PathBuf>,
     command_result: Slot<CommandResult>,
     seed_value: Slot<u64>,
 }
@@ -93,7 +93,8 @@ fn the_registry_contains_the_generated_seed_name(world: &World) {
     let path = registry_path(world);
     let seed = world.seed_value.get().expect("seed should be set");
     let expected = seed_name_from_value(seed);
-    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+    let dir = open_registry_dir(&path);
+    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
 
     assert!(registry.find_seed(&expected).is_ok());
 }
@@ -101,7 +102,8 @@ fn the_registry_contains_the_generated_seed_name(world: &World) {
 #[then("the registry contains seed named \"{name}\"")]
 fn the_registry_contains_seed_named(world: &World, name: String) {
     let path = registry_path(world);
-    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+    let dir = open_registry_dir(&path);
+    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
 
     assert!(registry.find_seed(&name).is_ok());
 }
@@ -122,7 +124,8 @@ fn the_cli_reports_success(world: &World) {
         result.stdout
     );
 
-    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+    let dir = open_registry_dir(&path);
+    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
     let seed = registry
         .find_seed(&update.name)
         .expect("registry should contain the new seed");
@@ -150,7 +153,8 @@ fn the_cli_reports_a_duplicate_seed_error(world: &World) {
 #[then("the registry remains unchanged")]
 fn the_registry_remains_unchanged(world: &World) {
     let path = registry_path(world);
-    let registry = SeedRegistry::from_file(&path).expect("registry should load");
+    let dir = open_registry_dir(&path);
+    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
 
     assert_eq!(registry.seeds().len(), 1);
     assert!(registry.find_seed("mossy-owl").is_ok());
@@ -184,7 +188,7 @@ fn reject_invalid_registry_json(world: World) {
     let _ = world;
 }
 
-fn registry_path(world: &World) -> PathBuf {
+fn registry_path(world: &World) -> Utf8PathBuf {
     world
         .registry_path
         .get()
@@ -192,8 +196,8 @@ fn registry_path(world: &World) -> PathBuf {
         .clone()
 }
 
-fn run_cli(registry_path: &Path, extra_args: &[&str]) -> CommandResult {
-    let mut args = vec!["--registry".to_owned(), registry_path.display().to_string()];
+fn run_cli(registry_path: &Utf8Path, extra_args: &[&str]) -> CommandResult {
+    let mut args = vec!["--registry".to_owned(), registry_path.as_str().to_owned()];
     args.extend(extra_args.iter().map(std::string::ToString::to_string));
 
     let parse_result = match parse_args(args.into_iter()) {
@@ -237,9 +241,11 @@ fn seed_name_from_value(seed: u64) -> String {
     seed_name_for_seed(seed).expect("seed name should be generated")
 }
 
-fn write_registry(contents: &str) -> PathBuf {
+fn write_registry(contents: &str) -> Utf8PathBuf {
     let path = temp_registry_path();
-    fs::write(&path, contents).expect("write registry file");
+    let dir = open_registry_dir(&path);
+    let file_name = path.file_name().expect("registry file name");
+    dir.write(file_name, contents).expect("write registry file");
     path
 }
 
@@ -254,16 +260,22 @@ fn registry_json_with_seed(name: &str) -> String {
     )
 }
 
-fn temp_registry_path() -> PathBuf {
+fn temp_registry_path() -> Utf8PathBuf {
     static TEMP_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let counter = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
-    let dir = std::env::temp_dir()
+    let dir = Utf8PathBuf::from("target")
         .join("example-data-cli-tests")
         .join(format!("seed-registry-{suffix}-{counter}"));
-    fs::create_dir_all(&dir).expect("create temp dir");
+    let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
+    root.create_dir_all(&dir).expect("create temp dir");
     dir.join("seeds.json")
+}
+
+fn open_registry_dir(path: &Utf8Path) -> Dir {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    Dir::open_ambient_dir(parent, ambient_authority()).expect("open registry dir")
 }

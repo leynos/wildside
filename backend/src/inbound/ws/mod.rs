@@ -104,6 +104,7 @@ fn is_allowed_origin(origin: &Url) -> bool {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use actix_web::http::{StatusCode, header::HeaderValue};
     use rstest::rstest;

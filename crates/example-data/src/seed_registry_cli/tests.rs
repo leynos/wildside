@@ -1,21 +1,22 @@
 //! Unit tests for the seed registry CLI helpers.
 
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::{ambient_authority, fs::Dir};
 use rstest::{fixture, rstest};
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct RegistryFixture {
-    path: PathBuf,
+    path: Utf8PathBuf,
 }
 
 impl RegistryFixture {
-    fn path(&self) -> PathBuf {
+    fn path(&self) -> Utf8PathBuf {
         self.path.clone()
     }
 
     fn load(&self) -> SeedRegistry {
-        SeedRegistry::from_file(&self.path).expect("load registry")
+        let dir = open_registry_dir(&self.path);
+        SeedRegistry::from_file(&dir, &self.path).expect("load registry")
     }
 }
 
@@ -127,7 +128,7 @@ fn parse_args_parses_full_options() {
         panic!("expected options");
     };
 
-    assert_eq!(options.registry_path, PathBuf::from("seeds.json"));
+    assert_eq!(options.registry_path, Utf8PathBuf::from("seeds.json"));
     assert_eq!(options.seed, Some(2026));
     assert_eq!(options.name.as_deref(), Some("river-stone"));
     assert_eq!(options.user_count, Some(9));
@@ -259,7 +260,7 @@ fn success_message_formats_expected_output() {
         user_count: 12,
     };
 
-    let message = success_message(&update, Path::new("seeds.json"));
+    let message = success_message(&update, Utf8Path::new("seeds.json"));
 
     assert_eq!(
         message,
@@ -278,25 +279,35 @@ fn registry_json_with_seed(name: &str, seed: u64) -> String {
     )
 }
 
-fn write_registry(json: &str) -> PathBuf {
+fn write_registry(json: &str) -> Utf8PathBuf {
     let path = unique_temp_path("seeds.json");
-    fs::write(&path, json).expect("write registry");
+    let dir = open_registry_dir(&path);
+    let file_name = path.file_name().expect("registry file name");
+    dir.write(file_name, json).expect("write registry");
     path
 }
 
-fn cleanup_path(path: &Path) {
+fn cleanup_path(path: &Utf8Path) {
     if let Some(parent) = path.parent() {
-        drop(fs::remove_dir_all(parent));
+        let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
+        drop(root.remove_dir_all(parent));
     }
 }
 
-fn unique_temp_path(file_name: &str) -> PathBuf {
+fn unique_temp_path(file_name: &str) -> Utf8PathBuf {
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();
-    let dir = PathBuf::from("target")
+    let dir_name = format!("seed-registry-cli-{process_id}-{counter}");
+    let dir = Utf8PathBuf::from("target")
         .join("example-data-tests")
-        .join(format!("seed-registry-cli-{process_id}-{counter}"));
-    fs::create_dir_all(&dir).expect("create temp dir");
+        .join(dir_name);
+    let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
+    root.create_dir_all(&dir).expect("create temp dir");
     dir.join(file_name)
+}
+
+fn open_registry_dir(path: &Utf8Path) -> Dir {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    Dir::open_ambient_dir(parent, ambient_authority()).expect("open registry dir")
 }

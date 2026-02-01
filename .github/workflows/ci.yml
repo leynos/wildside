@@ -144,6 +144,13 @@ jobs:
       - name: Rust clippy
         run: cargo clippy --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
 
+      - name: Whitaker lint
+        run: |
+          cargo install whitaker-installer
+          whitaker-installer --experimental
+          whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+          whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+
       - name: Install nextest
         uses: taiki-e/install-action@db22c42b5af88356329b9a8056bb2c2f026d5a10
         with:

@@ -182,13 +182,16 @@ impl IdempotencyRepository for DieselIdempotencyRepository {
             .map_err(map_diesel_error)?;
 
         debug!(deleted, cutoff = %cutoff, "cleaned up expired idempotency records");
-        #[expect(clippy::expect_used, reason = "usize row count always fits in u64")]
-        Ok(u64::try_from(deleted).expect("row count fits in u64"))
+        let deleted = u64::try_from(deleted).map_err(|err| {
+            IdempotencyRepositoryError::query(format!("row count overflowed u64: {err}"))
+        })?;
+        Ok(deleted)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use rstest::rstest;
 

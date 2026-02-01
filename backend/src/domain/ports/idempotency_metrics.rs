@@ -87,6 +87,7 @@ impl IdempotencyMetrics for NoOpIdempotencyMetrics {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
 
     #[tokio::test]

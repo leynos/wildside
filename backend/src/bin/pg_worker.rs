@@ -7,9 +7,9 @@
 
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use cap_std::{ambient_authority, fs::Dir};
 use color_eyre::eyre::{Context, Report, Result, eyre};
 use pg_embedded_setup_unpriv::worker::{PlainSecret, WorkerPayload};
 use postgresql_embedded::PostgreSQL;
@@ -42,8 +42,15 @@ fn run_worker(mut args: impl Iterator<Item = OsString>) -> Result<()> {
 }
 
 fn load_payload(path: &PathBuf) -> Result<WorkerPayload> {
-    let payload =
-        fs::read(path).with_context(|| format!("failed to read worker config at {path:?}"))?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| eyre!("worker config path must be a file"))?;
+    let dir = Dir::open_ambient_dir(parent, ambient_authority())
+        .with_context(|| format!("failed to open worker config parent at {parent:?}"))?;
+    let payload = dir
+        .read(Path::new(file_name))
+        .with_context(|| format!("failed to read worker config at {path:?}"))?;
     let parsed: WorkerPayload = serde_json::from_slice(&payload)
         .with_context(|| format!("failed to parse worker config at {path:?}"))?;
     Ok(parsed)
@@ -116,6 +123,8 @@ impl std::fmt::Display for Operation {
 
 #[cfg(test)]
 mod tests {
+    //! Sanity checks for pg_worker argument handling.
+
     use super::*;
 
     #[test]

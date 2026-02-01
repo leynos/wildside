@@ -49,6 +49,7 @@ impl UserOnboarding for UserOnboardingService {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::user::{DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
     use rstest::rstest;

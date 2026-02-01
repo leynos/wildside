@@ -37,6 +37,7 @@ impl LoginService for FixtureLoginService {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::ErrorCode;
     use rstest::rstest;

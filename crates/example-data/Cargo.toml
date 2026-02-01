@@ -7,6 +7,8 @@ license = "MIT"
 
 [dependencies]
 base-d = "3.0.31"
+camino = "1"
+cap-std = "3"
 fake = "4.4"
 rand = "0.9"
 rand_chacha = "0.9"

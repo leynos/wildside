@@ -297,6 +297,7 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
 // Tests for helper functions
 
 mod age_bucket_tests {
+    //! Coverage for age bucket helper logic.
     use chrono::{Duration, TimeZone, Utc};
     use rstest::rstest;
 
@@ -342,6 +343,7 @@ mod age_bucket_tests {
 }
 
 mod user_scope_hash_tests {
+    //! Coverage for the user scope hash helper.
     use super::super::user_scope_hash;
     use crate::domain::UserId;
 

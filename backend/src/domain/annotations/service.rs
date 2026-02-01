@@ -373,4 +373,4 @@ impl_route_annotations_command!(
 
 #[cfg(test)]
 #[path = "service_tests.rs"]
-mod service_tests;
+mod tests;

@@ -32,25 +32,34 @@ fn temporary_databases_are_isolated_from_template() {
         }
     };
 
-    let mut client_one = Client::connect(db_one.url(), NoTls).unwrap_or_else(|err| {
-        panic!(
-            "failed to connect to db one: {}",
-            format_postgres_error(&err)
-        )
-    });
-    client_one
-        .batch_execute(concat!(
-            "CREATE TABLE isolation_test (id INT PRIMARY KEY, value TEXT);",
-            "INSERT INTO isolation_test (id, value) VALUES (1, 'alpha');"
-        ))
-        .unwrap_or_else(|err| panic!("failed to seed db one: {}", format_postgres_error(&err)));
+    let mut client_one = match Client::connect(db_one.url(), NoTls) {
+        Ok(client) => client,
+        Err(err) => {
+            panic!(
+                "failed to connect to db one: {}",
+                format_postgres_error(&err)
+            );
+        }
+    };
+    match client_one.batch_execute(concat!(
+        "CREATE TABLE isolation_test (id INT PRIMARY KEY, value TEXT);",
+        "INSERT INTO isolation_test (id, value) VALUES (1, 'alpha');"
+    )) {
+        Ok(()) => {}
+        Err(err) => {
+            panic!("failed to seed db one: {}", format_postgres_error(&err));
+        }
+    }
 
-    let mut client_two = Client::connect(db_two.url(), NoTls).unwrap_or_else(|err| {
-        panic!(
-            "failed to connect to db two: {}",
-            format_postgres_error(&err)
-        )
-    });
+    let mut client_two = match Client::connect(db_two.url(), NoTls) {
+        Ok(client) => client,
+        Err(err) => {
+            panic!(
+                "failed to connect to db two: {}",
+                format_postgres_error(&err)
+            );
+        }
+    };
     let err = client_two
         .query("SELECT value FROM isolation_test", &[])
         .expect_err("db two should not see tables created in db one");

@@ -15,7 +15,6 @@
 use std::collections::BTreeSet;
 use std::fmt;
 use std::io;
-use std::path::Path;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
@@ -82,8 +81,8 @@ impl From<io::Error> for ArchitectureLintError {
     }
 }
 
-pub fn cargo_toml_declares_workspace(dir: &Path) -> bool {
-    std::fs::read_to_string(dir.join("Cargo.toml"))
+pub fn cargo_toml_declares_workspace(dir: &Dir, cargo_toml_path: &Utf8Path) -> bool {
+    dir.read_to_string(cargo_toml_path)
         .ok()
         .is_some_and(|contents| contents.contains("[workspace]"))
 }

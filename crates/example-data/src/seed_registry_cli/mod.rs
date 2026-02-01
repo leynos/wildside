@@ -5,11 +5,13 @@
 //! without spawning a subprocess.
 
 use std::fmt;
-use std::path::{Path, PathBuf};
 
 use base_d::{WordDictionary, word, wordlists};
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::{ambient_authority, fs::Dir};
 use rand::random;
 
+use crate::error::RegistryError;
 use crate::registry::{SeedDefinition, SeedRegistry};
 
 mod error;
@@ -21,7 +23,7 @@ const MAX_NAME_ATTEMPTS: usize = 5;
 /// Parsed options for the seed registry CLI.
 #[derive(Debug, Clone)]
 pub struct Options {
-    registry_path: PathBuf,
+    registry_path: Utf8PathBuf,
     seed: Option<u64>,
     name: Option<String>,
     user_count: Option<usize>,
@@ -40,10 +42,10 @@ impl Options {
     ///     panic!("expected options");
     /// };
     ///
-    /// assert!(options.registry_path().ends_with("seeds.json"));
+    /// assert!(options.registry_path().as_str().ends_with("seeds.json"));
     /// ```
     #[must_use]
-    pub fn registry_path(&self) -> &Path {
+    pub fn registry_path(&self) -> &Utf8Path {
         &self.registry_path
     }
 }
@@ -119,7 +121,7 @@ where
 }
 
 struct ParseState {
-    registry_path: Option<PathBuf>,
+    registry_path: Option<Utf8PathBuf>,
     seed: Option<u64>,
     name: Option<String>,
     user_count: Option<usize>,
@@ -229,18 +231,29 @@ where
 /// std::fs::remove_file(&path).expect("clean up");
 /// ```
 pub fn apply_update(options: &Options) -> Result<Update, CliError> {
-    let registry = SeedRegistry::from_file(&options.registry_path)?;
+    let registry_dir = open_registry_dir(&options.registry_path)?;
+    let registry = SeedRegistry::from_file(&registry_dir, &options.registry_path)?;
     let selection = select_seed_and_name(&registry, options, None)?;
     let user_count = options.user_count.unwrap_or(DEFAULT_USER_COUNT);
     let seed_def = SeedDefinition::new(selection.name.clone(), selection.seed, user_count);
     let updated = registry.append_seed(seed_def)?;
 
-    updated.write_to_file(&options.registry_path)?;
+    updated.write_to_file(&registry_dir, &options.registry_path)?;
 
     Ok(Update {
         name: selection.name,
         seed: selection.seed,
         user_count,
+    })
+}
+
+fn open_registry_dir(path: &Utf8Path) -> Result<Dir, CliError> {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    Dir::open_ambient_dir(parent, ambient_authority()).map_err(|err| CliError::RegistryError {
+        source: RegistryError::IoError {
+            path: path.to_path_buf(),
+            message: err.to_string(),
+        },
     })
 }
 
@@ -269,25 +282,25 @@ pub fn seed_name_for_seed(seed: u64) -> Result<String, CliError> {
 ///
 /// ```
 /// use example_data::seed_registry_cli::{Update, success_message};
-/// use std::path::Path;
+/// use camino::Utf8Path;
 ///
 /// let update = Update {
 ///     name: "mossy-owl".to_string(),
 ///     seed: 2026,
 ///     user_count: 12,
 /// };
-/// let message = success_message(&update, Path::new("seeds.json"));
+/// let message = success_message(&update, Utf8Path::new("seeds.json"));
 ///
 /// assert!(message.contains("mossy-owl"));
 /// ```
 #[must_use]
-pub fn success_message(update: &Update, registry_path: &Path) -> String {
+pub fn success_message(update: &Update, registry_path: &Utf8Path) -> String {
     format!(
         "Added seed \"{}\" (seed={}, userCount={}) to {}",
         update.name,
         update.seed,
         update.user_count,
-        registry_path.display()
+        registry_path.as_str()
     )
 }
 

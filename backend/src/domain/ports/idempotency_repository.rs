@@ -104,6 +104,7 @@ impl IdempotencyRepository for FixtureIdempotencyRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::{IdempotencyKey, MutationType, UserId, canonicalize_and_hash};
     use chrono::Utc;

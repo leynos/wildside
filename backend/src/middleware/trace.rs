@@ -104,6 +104,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use actix_web::{App, HttpResponse, web};
 

@@ -57,13 +57,13 @@ fn idempotency_key_serde_roundtrip() {
 
 #[test]
 fn payload_hash_to_hex_produces_64_chars() {
-    let hash = PayloadHash::from_bytes(&[0u8; 32]);
+    let hash = PayloadHash::from_bytes([0u8; 32]);
     assert_eq!(hash.to_hex().len(), 64);
 }
 
 #[test]
 fn payload_hash_display_matches_hex() {
-    let hash = PayloadHash::from_bytes(&[0xab; 32]);
+    let hash = PayloadHash::from_bytes([0xab; 32]);
     assert_eq!(format!("{hash}"), hash.to_hex());
 }
 

@@ -38,6 +38,7 @@ impl UsersQuery for FixtureUsersQuery {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
 
     #[tokio::test]

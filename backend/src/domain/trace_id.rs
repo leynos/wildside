@@ -94,6 +94,7 @@ impl std::str::FromStr for TraceId {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
 
     #[tokio::test]

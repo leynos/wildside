@@ -4,8 +4,7 @@
 //! generation, following the project's error handling conventions with
 //! `thiserror`.
 
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use thiserror::Error;
 
 /// Errors that can occur when parsing or querying a seed registry.
@@ -18,7 +17,7 @@ pub enum RegistryError {
     #[error("failed to read registry file at '{path}': {message}")]
     IoError {
         /// Path to the registry file.
-        path: PathBuf,
+        path: Utf8PathBuf,
         /// Description of the I/O error.
         message: String,
     },
@@ -41,7 +40,7 @@ pub enum RegistryError {
     #[error("failed to write registry file at '{path}': {message}")]
     WriteError {
         /// Path to the registry file.
-        path: PathBuf,
+        path: Utf8PathBuf,
         /// Description of the write error.
         message: String,
     },
@@ -112,6 +111,8 @@ pub enum GenerationError {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for registry and generation error formatting.
+
     use rstest::rstest;
 
     use super::*;
@@ -119,7 +120,7 @@ mod tests {
     #[rstest]
     #[case::io_error(
         RegistryError::IoError {
-            path: PathBuf::from("/tmp/seeds.json"),
+            path: Utf8PathBuf::from("/tmp/seeds.json"),
             message: "file not found".to_owned(),
         },
         "failed to read registry file at '/tmp/seeds.json': file not found"
@@ -134,7 +135,7 @@ mod tests {
     )]
     #[case::write_error(
         RegistryError::WriteError {
-            path: PathBuf::from("/tmp/seeds.json"),
+            path: Utf8PathBuf::from("/tmp/seeds.json"),
             message: "permission denied".to_owned(),
         },
         "failed to write registry file at '/tmp/seeds.json': permission denied"

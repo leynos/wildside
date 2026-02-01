@@ -138,6 +138,7 @@ pub struct UserInterestsSchema {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use utoipa::PartialSchema;
 

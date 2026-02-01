@@ -49,6 +49,7 @@ pub enum RouteCacheKeyValidationError {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::{RouteCacheKey, RouteCacheKeyValidationError};
     use rstest::rstest;
 
