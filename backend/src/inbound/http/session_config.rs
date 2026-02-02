@@ -254,7 +254,9 @@ fn session_key_from_env<E: SessionEnv>(
     let file_name = extract_file_name(&path)?;
     let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
         Ok(dir) => dir,
-        Err(error) => return handle_directory_open_error(error, &path, mode, allow_ephemeral),
+        Err(error) => {
+            return handle_io_error_with_ephemeral_fallback(error, &path, mode, allow_ephemeral);
+        }
     };
 
     read_and_validate_key(&dir, file_name, &path, mode, allow_ephemeral)
@@ -284,8 +286,8 @@ fn extract_file_name(path: &Path) -> Result<&OsStr, SessionConfigError> {
     })
 }
 
-/// Handle errors when opening the key directory.
-fn handle_directory_open_error(
+/// Handle I/O errors when accessing the session key, with optional ephemeral fallback.
+fn handle_io_error_with_ephemeral_fallback(
     error: io::Error,
     path: &Path,
     mode: BuildMode,
@@ -320,7 +322,9 @@ fn read_and_validate_key(
 ) -> Result<Key, SessionConfigError> {
     match dir.read(Path::new(file_name)) {
         Ok(bytes) => process_key_bytes(bytes, full_path, mode),
-        Err(error) => handle_key_read_error(error, full_path, mode, allow_ephemeral),
+        Err(error) => {
+            handle_io_error_with_ephemeral_fallback(error, full_path, mode, allow_ephemeral)
+        }
     }
 }
 
@@ -342,28 +346,6 @@ fn process_key_bytes(
     let key = Key::derive_from(&bytes);
     bytes.zeroize();
     Ok(key)
-}
-
-/// Handle errors when reading the key file.
-fn handle_key_read_error(
-    error: io::Error,
-    path: &Path,
-    mode: BuildMode,
-    allow_ephemeral: bool,
-) -> Result<Key, SessionConfigError> {
-    if should_allow_ephemeral(mode, allow_ephemeral) {
-        warn!(
-            path = %path.display(),
-            error = %error,
-            "using temporary session key (dev or allow_ephemeral)"
-        );
-        return Ok(Key::generate());
-    }
-
-    Err(SessionConfigError::KeyRead {
-        path: path.to_path_buf(),
-        source: error,
-    })
 }
 
 pub mod fingerprint;
