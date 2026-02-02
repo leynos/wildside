@@ -244,27 +244,45 @@ fn allow_ephemeral_from_env<E: SessionEnv>(
     )
 }
 
+/// Session key validation policy for runtime behaviour.
+#[derive(Clone, Copy)]
+struct KeyValidationPolicy {
+    mode: BuildMode,
+    allow_ephemeral: bool,
+}
+
+impl KeyValidationPolicy {
+    /// Create a validation policy for the current build mode.
+    fn new(mode: BuildMode, allow_ephemeral: bool) -> Self {
+        Self {
+            mode,
+            allow_ephemeral,
+        }
+    }
+
+    /// Decide whether to allow an ephemeral session key.
+    fn should_allow_ephemeral(self) -> bool {
+        self.mode.is_debug() || self.allow_ephemeral
+    }
+}
+
 fn session_key_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
     allow_ephemeral: bool,
 ) -> Result<Key, SessionConfigError> {
+    let policy = KeyValidationPolicy::new(mode, allow_ephemeral);
     let path = resolve_key_path(env)?;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = extract_file_name(&path)?;
     let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
         Ok(dir) => dir,
         Err(error) => {
-            return handle_io_error_with_ephemeral_fallback(error, &path, mode, allow_ephemeral);
+            return handle_io_error_with_ephemeral_fallback(error, &path, policy);
         }
     };
 
-    read_and_validate_key(&dir, file_name, &path, mode, allow_ephemeral)
-}
-
-/// Decide whether to allow an ephemeral session key.
-fn should_allow_ephemeral(mode: BuildMode, allow_ephemeral: bool) -> bool {
-    mode.is_debug() || allow_ephemeral
+    read_and_validate_key(&dir, file_name, &path, policy)
 }
 
 /// Resolve the configured key path from the environment or the default.
@@ -290,10 +308,9 @@ fn extract_file_name(path: &Path) -> Result<&OsStr, SessionConfigError> {
 fn handle_io_error_with_ephemeral_fallback(
     error: io::Error,
     path: &Path,
-    mode: BuildMode,
-    allow_ephemeral: bool,
+    policy: KeyValidationPolicy,
 ) -> Result<Key, SessionConfigError> {
-    if should_allow_ephemeral(mode, allow_ephemeral) {
+    if policy.should_allow_ephemeral() {
         warn!(
             path = %path.display(),
             error = %error,
@@ -309,22 +326,15 @@ fn handle_io_error_with_ephemeral_fallback(
 }
 
 /// Read the key file and validate the contents for the current build mode.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "signature mirrors explicit call-site requirements for clarity"
-)]
 fn read_and_validate_key(
     dir: &Dir,
     file_name: &OsStr,
     full_path: &Path,
-    mode: BuildMode,
-    allow_ephemeral: bool,
+    policy: KeyValidationPolicy,
 ) -> Result<Key, SessionConfigError> {
     match dir.read(Path::new(file_name)) {
-        Ok(bytes) => process_key_bytes(bytes, full_path, mode),
-        Err(error) => {
-            handle_io_error_with_ephemeral_fallback(error, full_path, mode, allow_ephemeral)
-        }
+        Ok(bytes) => process_key_bytes(bytes, full_path, policy.mode),
+        Err(error) => handle_io_error_with_ephemeral_fallback(error, full_path, policy),
     }
 }
 
