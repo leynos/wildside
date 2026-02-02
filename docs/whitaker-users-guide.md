@@ -53,9 +53,9 @@ Add the following to the workspace `Cargo.toml`:
 
 ```toml
 [workspace.metadata.dylint]
-libraries = [
-  { git = "https://github.com/leynos/whitaker", pattern = "whitaker_suite" }
-]
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "whitaker_suite"
 ```
 
 Then run the lints:
@@ -70,18 +70,20 @@ For reproducible builds, pin to a specific release tag or commit:
 
 ```toml
 [workspace.metadata.dylint]
-libraries = [
-  { git = "https://github.com/leynos/whitaker", pattern = "whitaker_suite", tag = "v0.1.0" }
-]
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "whitaker_suite"
+tag = "v0.1.0"
 ```
 
 Or pin to a specific commit:
 
 ```toml
 [workspace.metadata.dylint]
-libraries = [
-  { git = "https://github.com/leynos/whitaker", pattern = "whitaker_suite", rev = "abc123def456" }
-]
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "whitaker_suite"
+rev = "abc123def456"
 ```
 
 ### Selecting individual lints
@@ -90,10 +92,13 @@ To load specific lints instead of the full suite, specify each lint explicitly:
 
 ```toml
 [workspace.metadata.dylint]
-libraries = [
-  { git = "https://github.com/leynos/whitaker", pattern = "crates/module_max_lines" },
-  { git = "https://github.com/leynos/whitaker", pattern = "crates/no_expect_outside_tests" }
-]
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "crates/module_max_lines"
+
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "crates/no_expect_outside_tests"
 ```
 
 ### Standard vs experimental lints
@@ -124,10 +129,13 @@ Add experimental lints alongside the suite:
 
 ```toml
 [workspace.metadata.dylint]
-libraries = [
-  { git = "https://github.com/leynos/whitaker", pattern = "whitaker_suite" },
-  { git = "https://github.com/leynos/whitaker", pattern = "crates/bumpy_road_function" }
-]
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "whitaker_suite"
+
+[[workspace.metadata.dylint.libraries]]
+git = "https://github.com/leynos/whitaker"
+pattern = "crates/bumpy_road_function"
 ```
 
 ## Lint configuration

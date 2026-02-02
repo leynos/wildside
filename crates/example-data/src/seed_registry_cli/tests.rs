@@ -4,9 +4,8 @@
 mod test_support;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use cap_std::ambient_authority;
 use rstest::{fixture, rstest};
-use test_support::{open_registry_dir, unique_temp_path};
+use test_support::{cleanup_path, open_registry_dir, unique_temp_path};
 
 struct RegistryFixture {
     path: Utf8PathBuf,
@@ -26,7 +25,7 @@ impl RegistryFixture {
 
 impl Drop for RegistryFixture {
     fn drop(&mut self) {
-        cleanup_path(&self.path);
+        cleanup_path(&self.path).expect("cleanup temp dir");
     }
 }
 
@@ -255,7 +254,7 @@ fn apply_update_reports_registry_io_errors() {
         _ => panic!("expected IO error"),
     }
 
-    cleanup_path(&path);
+    cleanup_path(&path).expect("cleanup temp dir");
 }
 
 #[test]
@@ -330,12 +329,4 @@ fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
         .join("example-data-tests")
         .join(dir_name)
         .join(file_name)
-}
-
-fn cleanup_path(path: &Utf8Path) {
-    if let Some(parent) = path.parent() {
-        let root = cap_std::fs::Dir::open_ambient_dir(".", ambient_authority())
-            .expect("open workspace dir");
-        drop(root.remove_dir_all(parent));
-    }
 }

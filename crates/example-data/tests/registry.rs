@@ -11,10 +11,9 @@
 mod test_support;
 
 use camino::Utf8Path;
-use cap_std::ambient_authority;
 use example_data::{RegistryError, SeedDefinition, SeedRegistry};
 use rstest::{fixture, rstest};
-use test_support::{open_registry_dir, unique_temp_path};
+use test_support::{cleanup_path, open_registry_dir, unique_temp_path};
 
 const VALID_JSON: &str = r#"{
     "version": 1,
@@ -174,7 +173,7 @@ fn writes_registry_to_file(registry_fixture: SeedRegistry) {
     let round_trip = SeedRegistry::from_file(&dir, file_name).expect("load registry");
     assert_eq!(registry, round_trip);
 
-    cleanup_path(&path);
+    cleanup_path(&path).expect("cleanup temp dir");
 }
 
 #[rstest]
@@ -186,7 +185,7 @@ fn write_to_file_rejects_directory_path(registry_fixture: SeedRegistry) {
         registry.write_to_file(dir, directory_path)
     });
 
-    cleanup_path(&path);
+    cleanup_path(&path).expect("cleanup temp dir");
 }
 
 #[rstest]
@@ -198,7 +197,7 @@ fn from_file_rejects_directory_path(registry_fixture: SeedRegistry) {
         SeedRegistry::from_file(dir, directory_path)
     });
 
-    cleanup_path(&path);
+    cleanup_path(&path).expect("cleanup temp dir");
 }
 
 #[derive(Clone, Copy)]
@@ -226,12 +225,4 @@ fn assert_directory_path_error<T: std::fmt::Debug>(
         },
     };
     assert_eq!(err, expected);
-}
-
-fn cleanup_path(path: &Utf8Path) {
-    if let Some(parent) = path.parent() {
-        let root = cap_std::fs::Dir::open_ambient_dir(".", ambient_authority())
-            .expect("open workspace dir");
-        drop(root.remove_dir_all(parent));
-    }
 }

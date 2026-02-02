@@ -73,7 +73,7 @@ impl IdempotencyEnv for DefaultIdempotencyEnv {
 /// let custom = IdempotencyConfig::with_ttl(Duration::from_secs(12 * 3600));
 /// assert_eq!(custom.ttl(), Duration::from_secs(12 * 3600));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct IdempotencyConfig {
     ttl: Duration,
 }
@@ -109,6 +109,7 @@ impl IdempotencyConfig {
     /// assert!(config.ttl() >= Duration::from_secs(3600));
     /// assert!(config.ttl() <= Duration::from_secs(87600 * 3600));
     /// ```
+    #[must_use]
     pub fn from_env() -> Self {
         Self::from_env_with(&DefaultIdempotencyEnv)
     }
@@ -133,6 +134,7 @@ impl IdempotencyConfig {
     /// let config = IdempotencyConfig::from_env_with(&StubEnv);
     /// assert_eq!(config.ttl(), Duration::from_secs(12 * 3600));
     /// ```
+    #[must_use]
     pub fn from_env_with(env: &impl IdempotencyEnv) -> Self {
         let hours = env
             .string(IDEMPOTENCY_TTL_HOURS_ENV)
@@ -154,6 +156,7 @@ impl IdempotencyConfig {
     /// let config = IdempotencyConfig::with_ttl(Duration::from_secs(3600));
     /// assert_eq!(config.ttl(), Duration::from_secs(3600));
     /// ```
+    #[must_use]
     pub fn with_ttl(ttl: Duration) -> Self {
         Self { ttl }
     }
