@@ -38,6 +38,7 @@ impl UsersQuery for FixtureUsersQuery {
 
 #[cfg(test)]
 mod tests {
+    //! Ensures the fixture users query returns the expected static user.
     use super::*;
 
     #[tokio::test]

@@ -104,6 +104,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    //! Verifies trace headers and error propagation in the middleware.
     use super::*;
     use actix_web::{App, HttpResponse, web};
 

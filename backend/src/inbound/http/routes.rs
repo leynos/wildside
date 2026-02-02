@@ -116,6 +116,7 @@ pub async fn submit_route(
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::ports::{
         FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,

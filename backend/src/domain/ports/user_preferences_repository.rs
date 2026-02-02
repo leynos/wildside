@@ -101,6 +101,7 @@ impl UserPreferencesRepository for FixtureUserPreferencesRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::UnitSystem;
     use chrono::Utc;

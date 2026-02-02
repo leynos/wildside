@@ -2,9 +2,7 @@
 
 use std::fmt;
 
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 use uuid::Uuid;
 
 /// Validation errors returned by [`User::try_from_strings`].
@@ -162,15 +160,10 @@ pub const DISPLAY_NAME_MIN: usize = 3;
 /// Maximum allowed length for a display name.
 pub const DISPLAY_NAME_MAX: usize = 32;
 
-static DISPLAY_NAME_RE: OnceLock<Regex> = OnceLock::new();
-
-fn display_name_regex() -> &'static Regex {
-    DISPLAY_NAME_RE.get_or_init(|| {
-        // Length is enforced separately; this regex constrains allowed characters.
-        let pattern = "^[A-Za-z0-9_ ]+$";
-        Regex::new(pattern)
-            .unwrap_or_else(|error| panic!("display name regex failed to compile: {error}"))
-    })
+fn display_name_has_valid_characters(display_name: &str) -> bool {
+    display_name
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == ' ')
 }
 
 impl DisplayName {
@@ -196,7 +189,7 @@ impl DisplayName {
             });
         }
 
-        if !display_name_regex().is_match(&display_name) {
+        if !display_name_has_valid_characters(&display_name) {
             return Err(UserValidationError::DisplayNameInvalidCharacters);
         }
 

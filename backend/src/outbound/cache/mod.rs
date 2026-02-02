@@ -73,6 +73,7 @@ impl<P: Send + Sync> RouteCache for StubRouteCache<P> {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
 
     /// Test plan type for unit tests.

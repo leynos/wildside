@@ -87,6 +87,7 @@ impl IdempotencyMetrics for NoOpIdempotencyMetrics {
 
 #[cfg(test)]
 mod tests {
+    //! Ensures NoOpIdempotencyMetrics accepts miss, hit, and conflict events.
     use super::*;
 
     #[tokio::test]

@@ -8,12 +8,12 @@
     reason = "test code uses expect for clear failure messages"
 )]
 
-use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+mod test_support;
 
+use camino::Utf8Path;
 use example_data::{RegistryError, SeedDefinition, SeedRegistry};
 use rstest::{fixture, rstest};
+use test_support::{cleanup_path, open_registry_dir, unique_temp_path};
 
 const VALID_JSON: &str = r#"{
     "version": 1,
@@ -162,29 +162,67 @@ fn serializes_registry_to_pretty_json(registry_fixture: SeedRegistry) {
 #[rstest]
 fn writes_registry_to_file(registry_fixture: SeedRegistry) {
     let registry = registry_fixture;
-    let path = unique_temp_path("seeds.json");
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
+    let dir = open_registry_dir(&path).expect("open registry dir");
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
 
-    registry.write_to_file(&path).expect("write registry file");
+    registry
+        .write_to_file(&dir, file_name)
+        .expect("write registry file");
 
-    let round_trip = SeedRegistry::from_file(&path).expect("load registry");
+    let round_trip = SeedRegistry::from_file(&dir, file_name).expect("load registry");
     assert_eq!(registry, round_trip);
 
-    if let Some(parent) = path.parent() {
-        #[expect(
-            clippy::let_underscore_must_use,
-            reason = "explicitly ignore cleanup failures in test teardown"
-        )]
-        let _ = fs::remove_dir_all(parent);
-    }
+    cleanup_path(&path).expect("cleanup temp dir");
 }
 
-fn unique_temp_path(file_name: &str) -> PathBuf {
-    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let process_id = std::process::id();
-    let dir = PathBuf::from("target")
-        .join("example-data-tests")
-        .join(format!("seed-registry-{process_id}-{counter}"));
-    fs::create_dir_all(&dir).expect("create temp dir");
-    dir.join(file_name)
+#[rstest]
+fn write_to_file_rejects_directory_path(registry_fixture: SeedRegistry) {
+    let registry = registry_fixture;
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
+
+    assert_directory_path_error(&path, RegistryPathError::Write, |dir, directory_path| {
+        registry.write_to_file(dir, directory_path)
+    });
+
+    cleanup_path(&path).expect("cleanup temp dir");
+}
+
+#[rstest]
+fn from_file_rejects_directory_path(registry_fixture: SeedRegistry) {
+    let _ = registry_fixture;
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
+
+    assert_directory_path_error(&path, RegistryPathError::Read, |dir, directory_path| {
+        SeedRegistry::from_file(dir, directory_path)
+    });
+
+    cleanup_path(&path).expect("cleanup temp dir");
+}
+
+#[derive(Clone, Copy)]
+enum RegistryPathError {
+    Read,
+    Write,
+}
+
+fn assert_directory_path_error<T: std::fmt::Debug>(
+    path: &Utf8Path,
+    kind: RegistryPathError,
+    action: impl FnOnce(&cap_std::fs::Dir, &Utf8Path) -> Result<T, RegistryError>,
+) {
+    let dir = open_registry_dir(path).expect("open registry dir");
+    let directory_path = path.parent().expect("temp dir").to_path_buf();
+    let err = action(&dir, &directory_path).expect_err("directory path should fail");
+    let expected = match kind {
+        RegistryPathError::Read => RegistryError::IoError {
+            path: directory_path.clone(),
+            message: "registry path must be a file".to_owned(),
+        },
+        RegistryPathError::Write => RegistryError::WriteError {
+            path: directory_path.clone(),
+            message: "registry path must be a file".to_owned(),
+        },
+    };
+    assert_eq!(err, expected);
 }

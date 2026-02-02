@@ -91,6 +91,7 @@ impl TryFrom<String> for InterestThemeId {
 
 #[cfg(test)]
 mod tests {
+    //! Covers InterestThemeId parsing and validation outcomes.
     use super::*;
     use rstest::rstest;
 

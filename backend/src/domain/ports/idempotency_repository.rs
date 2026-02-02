@@ -104,6 +104,7 @@ impl IdempotencyRepository for FixtureIdempotencyRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::{IdempotencyKey, MutationType, UserId, canonicalize_and_hash};
     use chrono::Utc;
@@ -114,7 +115,7 @@ mod tests {
         let repo = FixtureIdempotencyRepository;
         let key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let hash = canonicalize_and_hash(&json!({"test": true}));
+        let hash = canonicalize_and_hash(&json!({"test": true})).expect("payload hash");
         let query = IdempotencyLookupQuery::new(key, user_id, MutationType::Routes, hash);
 
         let result = repo
@@ -130,7 +131,7 @@ mod tests {
         let record = IdempotencyRecord {
             key: IdempotencyKey::random(),
             mutation_type: MutationType::Routes,
-            payload_hash: canonicalize_and_hash(&json!({"test": true})),
+            payload_hash: canonicalize_and_hash(&json!({"test": true})).expect("payload hash"),
             response_snapshot: json!({"request_id": "123"}),
             user_id: UserId::random(),
             created_at: Utc::now(),
@@ -156,7 +157,7 @@ mod tests {
         let repo = FixtureIdempotencyRepository;
         let key = IdempotencyKey::random();
         let user_id = UserId::random();
-        let hash = canonicalize_and_hash(&json!({"test": true}));
+        let hash = canonicalize_and_hash(&json!({"test": true})).expect("payload hash");
 
         // All mutation types should return NotFound from the fixture
         for mutation_type in [

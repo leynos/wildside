@@ -182,8 +182,9 @@ Stage C: Implement the CLI binary.
   a minimal manual parser to avoid new dependencies.
 - If `--name` is absent, use `base-d` with the `eff_long` word list to encode
   the seed bytes and join the resulting words with hyphens.
-- Ensure the CLI reads the registry via `SeedRegistry::from_file`, appends the
-  new seed via the registry helper, and writes atomically.
+- Ensure the CLI reads the registry via `SeedRegistry::from_file` with a
+  capability handle, appends the new seed via the registry helper, and writes
+  atomically.
 - Emit a concise success message to stdout via `std::io`.
 
 Stage D: Behavioural tests and documentation updates.

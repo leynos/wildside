@@ -1,27 +1,31 @@
 //! Unit tests for the seed registry CLI helpers.
 
+#[path = "../../tests/test_support.rs"]
+mod test_support;
+
+use camino::{Utf8Path, Utf8PathBuf};
 use rstest::{fixture, rstest};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use test_support::{cleanup_path, open_registry_dir, unique_missing_path, unique_temp_path};
 
 struct RegistryFixture {
-    path: PathBuf,
+    path: Utf8PathBuf,
 }
 
 impl RegistryFixture {
-    fn path(&self) -> PathBuf {
+    fn path(&self) -> Utf8PathBuf {
         self.path.clone()
     }
 
     fn load(&self) -> SeedRegistry {
-        SeedRegistry::from_file(&self.path).expect("load registry")
+        let dir = open_registry_dir(&self.path).expect("open registry dir");
+        let file_name = Utf8Path::new(self.path.file_name().expect("registry file name"));
+        SeedRegistry::from_file(&dir, file_name).expect("load registry")
     }
 }
 
 impl Drop for RegistryFixture {
     fn drop(&mut self) {
-        cleanup_path(&self.path);
+        cleanup_path(&self.path).expect("cleanup temp dir");
     }
 }
 
@@ -127,7 +131,7 @@ fn parse_args_parses_full_options() {
         panic!("expected options");
     };
 
-    assert_eq!(options.registry_path, PathBuf::from("seeds.json"));
+    assert_eq!(options.registry_path, Utf8PathBuf::from("seeds.json"));
     assert_eq!(options.seed, Some(2026));
     assert_eq!(options.name.as_deref(), Some("river-stone"));
     assert_eq!(options.user_count, Some(9));
@@ -227,7 +231,9 @@ fn apply_update_reports_duplicate_generated_name() {
 
 #[test]
 fn apply_update_reports_registry_io_errors() {
-    let path = unique_temp_path("missing.json");
+    let path =
+        unique_temp_path("seed-registry-cli", "missing.json").expect("create temp registry path");
+    let file_name = Utf8PathBuf::from(path.file_name().expect("registry file name"));
     let options = Options {
         registry_path: path.clone(),
         seed: Some(1),
@@ -243,12 +249,40 @@ fn apply_update_reports_registry_io_errors() {
 
     match source {
         RegistryError::IoError { path: err_path, .. } => {
-            assert_eq!(err_path, path);
+            assert_eq!(err_path, file_name);
         }
         _ => panic!("expected IO error"),
     }
 
-    cleanup_path(&path);
+    cleanup_path(&path).expect("cleanup temp dir");
+}
+
+#[test]
+fn apply_update_reports_open_registry_dir_errors() {
+    let path = unique_missing_path("seeds.json");
+    let options = Options {
+        registry_path: path.clone(),
+        seed: Some(1),
+        name: Some("river-stone".to_owned()),
+        user_count: None,
+    };
+
+    let err = apply_update(&options).expect_err("expected error");
+
+    let CliError::RegistryError { source } = err else {
+        panic!("expected registry error");
+    };
+
+    match source {
+        RegistryError::IoError {
+            path: err_path,
+            message,
+        } => {
+            assert_eq!(err_path, path);
+            assert!(!message.is_empty());
+        }
+        _ => panic!("expected IO error"),
+    }
 }
 
 #[test]
@@ -259,7 +293,7 @@ fn success_message_formats_expected_output() {
         user_count: 12,
     };
 
-    let message = success_message(&update, Path::new("seeds.json"));
+    let message = success_message(&update, Utf8Path::new("seeds.json"));
 
     assert_eq!(
         message,
@@ -278,25 +312,11 @@ fn registry_json_with_seed(name: &str, seed: u64) -> String {
     )
 }
 
-fn write_registry(json: &str) -> PathBuf {
-    let path = unique_temp_path("seeds.json");
-    fs::write(&path, json).expect("write registry");
+fn write_registry(json: &str) -> Utf8PathBuf {
+    let path =
+        unique_temp_path("seed-registry-cli", "seeds.json").expect("create temp registry path");
+    let dir = open_registry_dir(&path).expect("open registry dir");
+    let file_name = path.file_name().expect("registry file name");
+    dir.write(file_name, json).expect("write registry");
     path
-}
-
-fn cleanup_path(path: &Path) {
-    if let Some(parent) = path.parent() {
-        drop(fs::remove_dir_all(parent));
-    }
-}
-
-fn unique_temp_path(file_name: &str) -> PathBuf {
-    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let process_id = std::process::id();
-    let dir = PathBuf::from("target")
-        .join("example-data-tests")
-        .join(format!("seed-registry-cli-{process_id}-{counter}"));
-    fs::create_dir_all(&dir).expect("create temp dir");
-    dir.join(file_name)
 }

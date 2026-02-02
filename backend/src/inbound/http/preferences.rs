@@ -189,6 +189,7 @@ pub async fn update_preferences(
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use crate::domain::{ErrorCode, UnitSystem, UserId};
     use chrono::Utc;

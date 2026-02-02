@@ -80,6 +80,8 @@ pub(crate) fn sanitize_display_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Covers display name validation and sanitization behaviour.
+
     use rstest::rstest;
 
     use super::*;

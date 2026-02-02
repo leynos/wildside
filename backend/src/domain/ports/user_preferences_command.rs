@@ -105,6 +105,7 @@ impl UserPreferencesCommand for FixtureUserPreferencesCommand {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
 
     #[tokio::test]

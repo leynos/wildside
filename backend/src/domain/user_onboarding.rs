@@ -49,6 +49,7 @@ impl UserOnboarding for UserOnboardingService {
 
 #[cfg(test)]
 mod tests {
+    //! Covers onboarding event creation for valid and invalid display names.
     use super::*;
     use crate::domain::user::{DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
     use rstest::rstest;

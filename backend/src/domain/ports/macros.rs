@@ -61,6 +61,7 @@ pub(crate) use define_port_error;
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     define_port_error! {
         pub enum ExamplePortError {
             Foo { message: String } => "foo: {message}",

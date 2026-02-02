@@ -185,7 +185,7 @@ async fn replays_response_for_matching_payload() {
     let idempotency_key = IdempotencyKey::random();
     let user_id = UserId::random();
     let payload = default_payload();
-    let payload_hash = canonicalize_and_hash(&payload);
+    let payload_hash = canonicalize_and_hash(&payload).expect("payload hash");
     let original_request_id = Uuid::new_v4();
 
     let existing_record = build_record(
@@ -219,7 +219,7 @@ async fn replays_response_for_matching_payload() {
 async fn returns_conflict_for_different_payload() {
     let idempotency_key = IdempotencyKey::random();
     let user_id = UserId::random();
-    let original_hash = canonicalize_and_hash(&default_payload());
+    let original_hash = canonicalize_and_hash(&default_payload()).expect("payload hash");
 
     let existing_record = build_record(
         idempotency_key.clone(),
@@ -255,7 +255,7 @@ async fn returns_conflict_for_different_payload() {
 #[tokio::test]
 async fn handles_concurrent_insert_race_with_matching_payload() {
     let payload = default_payload();
-    let payload_hash = canonicalize_and_hash(&payload);
+    let payload_hash = canonicalize_and_hash(&payload).expect("payload hash");
     let original_request_id = Uuid::new_v4();
 
     let (service, request) = setup_race_condition_test(
@@ -277,7 +277,7 @@ async fn handles_concurrent_insert_race_with_matching_payload() {
 #[tokio::test]
 async fn handles_concurrent_insert_race_with_conflicting_payload() {
     let our_payload = default_payload();
-    let their_hash = canonicalize_and_hash(&alternative_payload());
+    let their_hash = canonicalize_and_hash(&alternative_payload()).expect("payload hash");
 
     let (service, request) = setup_race_condition_test(
         false, // is_matching_payload
@@ -297,6 +297,7 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
 // Tests for helper functions
 
 mod age_bucket_tests {
+    //! Coverage for age bucket helper logic.
     use chrono::{Duration, TimeZone, Utc};
     use rstest::rstest;
 
@@ -342,6 +343,7 @@ mod age_bucket_tests {
 }
 
 mod user_scope_hash_tests {
+    //! Coverage for the user scope hash helper.
     use super::super::user_scope_hash;
     use crate::domain::UserId;
 

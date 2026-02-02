@@ -45,8 +45,9 @@ pub mod openapi {
     ///
     /// Panics if the property does not exist.
     pub fn get_property<'a>(obj: &'a Object, field: &str) -> &'a RefOr<Schema> {
-        obj.properties
-            .get(field)
-            .unwrap_or_else(|| panic!("property '{field}' not found"))
+        match obj.properties.get(field) {
+            Some(property) => property,
+            None => panic!("property '{field}' not found"),
+        }
     }
 }

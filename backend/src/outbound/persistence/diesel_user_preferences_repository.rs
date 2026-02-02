@@ -228,6 +228,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Exercises error mapping and preference row conversions for diesel.
     use super::*;
     use rstest::rstest;
 

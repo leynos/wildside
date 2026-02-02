@@ -4,11 +4,12 @@
 //! temporary file and rename strategy, ensuring partial writes do not
 //! corrupt the target file.
 
-use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use camino::{Utf8Component, Utf8Path};
+use cap_std::fs::{Dir, OpenOptions};
 
 use crate::error::RegistryError;
 
@@ -34,22 +35,31 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 ///     .duration_since(UNIX_EPOCH)
 ///     .map(|elapsed| elapsed.as_nanos())
 ///     .unwrap_or(0);
-/// let dir = std::env::temp_dir().join(format!("example-data-{suffix}"));
-/// std::fs::create_dir_all(&dir).expect("create temp dir");
-/// let path = dir.join("registry.json");
+/// let dir_path = std::env::temp_dir().join(format!("example-data-{suffix}"));
+/// std::fs::create_dir_all(&dir_path).expect("create temp dir");
+/// let dir = cap_std::fs::Dir::open_ambient_dir(&dir_path, cap_std::ambient_authority())
+///     .expect("open temp dir");
+/// let path = camino::Utf8Path::new("registry.json");
 ///
-/// write_atomic(&path, r#"{ "version": 1 }"#).expect("write registry");
-/// let contents = std::fs::read_to_string(&path).expect("read registry");
+/// write_atomic(&dir, path, r#"{ "version": 1 }"#).expect("write registry");
+/// let contents = dir.read_to_string(path).expect("read registry");
 ///
 /// assert!(contents.contains("\"version\""));
-/// std::fs::remove_file(&path).expect("clean up");
+/// dir.remove_file(path).expect("clean up");
 /// ```
-pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), RegistryError> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path.file_name().ok_or_else(|| RegistryError::WriteError {
-        path: path.to_path_buf(),
-        message: "registry path must be a file".to_owned(),
-    })?;
+pub(crate) fn write_atomic(
+    dir: &Dir,
+    path: &Utf8Path,
+    contents: &str,
+) -> Result<(), RegistryError> {
+    let mut components = path.components();
+    let (Some(Utf8Component::Normal(file_name)), None) = (components.next(), components.next())
+    else {
+        return Err(RegistryError::WriteError {
+            path: path.to_path_buf(),
+            message: "registry path must be a file".to_owned(),
+        });
+    };
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -57,33 +67,38 @@ pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), RegistryEr
         .unwrap_or(0);
     let tmp_name = format!(
         ".{}.tmp.{}.{}.{}",
-        file_name.to_string_lossy(),
+        file_name,
         std::process::id(),
         suffix,
         counter
     );
-    let tmp_path = parent.join(tmp_name);
 
-    write_to_temp_file(&tmp_path, contents)?;
-    rename_temp_to_target(&tmp_path, path)?;
-    sync_parent_directory(parent);
+    write_to_temp_file(dir, &tmp_name, path, contents)?;
+    rename_temp_to_target(dir, &tmp_name, file_name, path)?;
+    sync_parent_directory(dir);
 
     Ok(())
 }
 
-fn write_to_temp_file(tmp_path: &Path, contents: &str) -> Result<(), RegistryError> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(tmp_path)
-        .map_err(|e| RegistryError::WriteError {
+fn write_to_temp_file(
+    dir: &Dir,
+    tmp_name: &str,
+    target_path: &Utf8Path,
+    contents: &str,
+) -> Result<(), RegistryError> {
+    let tmp_path = target_path.with_file_name(tmp_name);
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    let mut file = dir
+        .open_with(tmp_name, &options)
+        .map_err(|err| RegistryError::WriteError {
             path: tmp_path.to_path_buf(),
-            message: e.to_string(),
+            message: err.to_string(),
         })?;
 
     if let Err(err) = file.write_all(contents.as_bytes()) {
         drop(file);
-        drop(fs::remove_file(tmp_path));
+        drop(dir.remove_file(tmp_name));
         return Err(RegistryError::WriteError {
             path: tmp_path.to_path_buf(),
             message: err.to_string(),
@@ -92,7 +107,7 @@ fn write_to_temp_file(tmp_path: &Path, contents: &str) -> Result<(), RegistryErr
 
     if let Err(err) = file.sync_all() {
         drop(file);
-        drop(fs::remove_file(tmp_path));
+        drop(dir.remove_file(tmp_name));
         return Err(RegistryError::WriteError {
             path: tmp_path.to_path_buf(),
             message: err.to_string(),
@@ -102,14 +117,19 @@ fn write_to_temp_file(tmp_path: &Path, contents: &str) -> Result<(), RegistryErr
     Ok(())
 }
 
-fn rename_temp_to_target(tmp_path: &Path, target: &Path) -> Result<(), RegistryError> {
-    if let Err(err) = rename_temp_to_target_impl(tmp_path, target) {
+fn rename_temp_to_target(
+    dir: &Dir,
+    tmp_name: &str,
+    target_name: &str,
+    target_path: &Utf8Path,
+) -> Result<(), RegistryError> {
+    if let Err(err) = rename_temp_to_target_impl(dir, tmp_name, target_name) {
         // Best-effort cleanup of temp file on rename failure.
-        if fs::remove_file(tmp_path).is_err() {
+        if dir.remove_file(tmp_name).is_err() {
             // Ignore cleanup failures.
         }
         return Err(RegistryError::WriteError {
-            path: target.to_path_buf(),
+            path: target_path.to_path_buf(),
             message: err.to_string(),
         });
     }
@@ -117,22 +137,24 @@ fn rename_temp_to_target(tmp_path: &Path, target: &Path) -> Result<(), RegistryE
 }
 
 #[cfg(windows)]
-fn rename_temp_to_target_impl(tmp_path: &Path, target: &Path) -> io::Result<()> {
+fn rename_temp_to_target_impl(dir: &Dir, tmp_name: &str, target_name: &str) -> io::Result<()> {
     // Windows rename fails if the target exists, so remove it first.
-    if target.exists() {
-        fs::remove_file(target)?;
+    match dir.remove_file(target_name) {
+        Ok(()) => {}
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err),
     }
-    fs::rename(tmp_path, target)
+    dir.rename(tmp_name, dir, target_name)
 }
 
 #[cfg(not(windows))]
-fn rename_temp_to_target_impl(tmp_path: &Path, target: &Path) -> io::Result<()> {
-    fs::rename(tmp_path, target)
+fn rename_temp_to_target_impl(dir: &Dir, tmp_name: &str, target_name: &str) -> io::Result<()> {
+    dir.rename(tmp_name, dir, target_name)
 }
 
-fn sync_parent_directory(parent: &Path) {
+fn sync_parent_directory(parent: &Dir) {
     // Best-effort directory sync; ignore failures.
-    if File::open(parent).and_then(|dir| dir.sync_all()).is_err() {
+    if parent.open(".").and_then(|dir| dir.sync_all()).is_err() {
         // Ignore sync failures.
     }
 }

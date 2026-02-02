@@ -65,7 +65,7 @@ impl ReplayCase {
             user_id.clone(),
             RouteNoteContent::new("cached"),
         );
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = UpsertNoteResponse {
             note: note.clone(),
             replayed: false,
@@ -111,7 +111,7 @@ impl ReplayCase {
             .visited_stop_ids(visited_stop_ids)
             .revision(2)
             .build();
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = UpdateProgressResponse {
             progress: progress.clone(),
             replayed: false,
@@ -150,7 +150,7 @@ impl ReplayCase {
             user_id: user_id.clone(),
             idempotency_key: Some(idempotency_key.clone()),
         };
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = DeleteNoteResponse {
             deleted: true,
             replayed: false,
@@ -188,7 +188,12 @@ pub(super) fn mock_idempotency_replay<Res>(
 where
     Res: serde::Serialize + 'static,
 {
-    let response_snapshot = serde_json::to_value(response).expect("response snapshot");
+    let response_snapshot = match serde_json::to_value(response) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            panic!("response snapshot failed: {error}");
+        }
+    };
     let expected_mutation_type = spec.mutation_type;
     let record = IdempotencyRecord {
         key: spec.idempotency_key.clone(),
@@ -240,8 +245,11 @@ pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, CallFut,
         mock_idempotency_replay(request_spec.spec, request_spec.response.clone());
     let service = make_service_with_idempotency(repo, idempotency_repo);
 
-    let response = call_service(service, request_spec.request)
-        .await
-        .expect("cached response");
+    let response = match call_service(service, request_spec.request).await {
+        Ok(response) => response,
+        Err(error) => {
+            panic!("cached response failed: {error}");
+        }
+    };
     assert_response(response);
 }

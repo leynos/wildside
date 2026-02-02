@@ -7,8 +7,8 @@ use serde_json::json;
 
 use crate::domain::ports::{DeleteNoteRequest, UpdateProgressRequest, UpsertNoteRequest};
 use crate::domain::{
-    IdempotencyKey, IdempotencyLookupQuery, IdempotencyRecord, MutationType, PayloadHash, UserId,
-    canonicalize_and_hash,
+    IdempotencyKey, IdempotencyLookupQuery, IdempotencyRecord, MutationType, PayloadHash,
+    PayloadHashError, UserId, canonicalize_and_hash,
 };
 
 pub(super) struct IdempotentMutationParams<'a, Req> {
@@ -19,7 +19,7 @@ pub(super) struct IdempotentMutationParams<'a, Req> {
 }
 
 pub(super) trait PayloadHashable {
-    fn compute_payload_hash(&self) -> PayloadHash;
+    fn compute_payload_hash(&self) -> Result<PayloadHash, PayloadHashError>;
 }
 
 pub(super) trait IdempotentMutationRequest: PayloadHashable {
@@ -29,7 +29,7 @@ pub(super) trait IdempotentMutationRequest: PayloadHashable {
 }
 
 impl PayloadHashable for UpsertNoteRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
+    fn compute_payload_hash(&self) -> Result<PayloadHash, PayloadHashError> {
         canonicalize_and_hash(&json!({
             "routeId": self.route_id,
             "noteId": self.note_id,
@@ -41,7 +41,7 @@ impl PayloadHashable for UpsertNoteRequest {
 }
 
 impl PayloadHashable for UpdateProgressRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
+    fn compute_payload_hash(&self) -> Result<PayloadHash, PayloadHashError> {
         canonicalize_and_hash(&json!({
             "routeId": self.route_id,
             "visitedStopIds": self.visited_stop_ids,
@@ -51,7 +51,7 @@ impl PayloadHashable for UpdateProgressRequest {
 }
 
 impl PayloadHashable for DeleteNoteRequest {
-    fn compute_payload_hash(&self) -> PayloadHash {
+    fn compute_payload_hash(&self) -> Result<PayloadHash, PayloadHashError> {
         canonicalize_and_hash(&json!({
             "noteId": self.note_id,
         }))

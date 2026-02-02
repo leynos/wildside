@@ -181,6 +181,7 @@ impl RouteAnnotationRepository for FixtureRouteAnnotationRepository {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use chrono::Utc;
     use rstest::rstest;

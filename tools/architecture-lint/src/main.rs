@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use architecture_lint::cargo_toml_declares_workspace;
+use camino::Utf8Path;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
@@ -69,10 +70,14 @@ fn repo_root() -> Result<PathBuf, RepoRootError> {
 }
 
 fn find_workspace_root(start: &Path) -> Option<PathBuf> {
+    let cargo_toml = Utf8Path::new("Cargo.toml");
     let mut current = Some(start);
     while let Some(dir) = current {
-        let cargo_toml = dir.join("Cargo.toml");
-        if cargo_toml.is_file() && cargo_toml_declares_workspace(dir) {
+        let Ok(dir_handle) = Dir::open_ambient_dir(dir, ambient_authority()) else {
+            current = dir.parent();
+            continue;
+        };
+        if cargo_toml_declares_workspace(&dir_handle, cargo_toml) {
             return Some(dir.to_path_buf());
         }
         current = dir.parent();

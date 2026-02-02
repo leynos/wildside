@@ -58,6 +58,8 @@ pub struct ExampleUserSeed {
 
 #[cfg(test)]
 mod tests {
+    //! Regression tests for seed derivation helpers.
+
     use super::*;
 
     #[test]

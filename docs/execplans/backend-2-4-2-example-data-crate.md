@@ -223,7 +223,8 @@ Create `src/seed.rs`:
 Add to `src/registry.rs`:
 
 - `SeedRegistry::from_json(json: &str) -> Result<Self, RegistryError>`
-- `SeedRegistry::from_file(path: &Path) -> Result<Self, RegistryError>`
+- `SeedRegistry::from_file(dir: &Dir, path: &Utf8Path)`
+  `-> Result<Self, RegistryError>`
 - UUID validation for theme/toggle IDs
 - Seed lookup by name
 

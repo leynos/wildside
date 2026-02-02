@@ -8,6 +8,7 @@
     )
 )]
 
+use cap_std::{ambient_authority, fs::Dir};
 use std::io::Write;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -42,8 +43,10 @@ impl TempKeyFile {
     ///
     /// Returns an IO error if the file cannot be created or written.
     pub fn new(len: usize) -> std::io::Result<Self> {
-        let path = std::env::temp_dir().join(format!("session-key-{}", Uuid::new_v4()));
-        let mut file = std::fs::File::create(&path)?;
+        let file_name = format!("session-key-{}", Uuid::new_v4());
+        let dir = Dir::open_ambient_dir(std::env::temp_dir(), ambient_authority())?;
+        let mut file = dir.create(&file_name)?;
+        let path = std::env::temp_dir().join(&file_name);
         let buffer = [b'a'; 4096];
         let mut remaining = len;
         while remaining > 0 {
@@ -63,6 +66,41 @@ impl TempKeyFile {
 
 impl Drop for TempKeyFile {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        let Some(parent) = self.path.parent() else {
+            return;
+        };
+        let Some(file_name) = self.path.file_name() else {
+            return;
+        };
+        let Ok(dir) = Dir::open_ambient_dir(parent, ambient_authority()) else {
+            return;
+        };
+        let _ = dir.remove_file(file_name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Exercises TempKeyFile creation and cleanup behaviour.
+
+    use super::*;
+
+    #[test]
+    fn temp_key_file_is_created_and_removed_on_drop() {
+        let temp_file = TempKeyFile::new(32).expect("create temp key file");
+        let path = temp_file.path.clone();
+        let parent = path.parent().expect("temp file parent");
+        let file_name = path.file_name().expect("temp file name");
+        let dir = Dir::open_ambient_dir(parent, ambient_authority()).expect("open temp dir");
+
+        dir.open(file_name).expect("temp key file should exist");
+
+        drop(temp_file);
+
+        let dir = Dir::open_ambient_dir(parent, ambient_authority()).expect("open temp dir");
+        assert!(
+            dir.open(file_name).is_err(),
+            "temp key file should be removed on drop"
+        );
     }
 }

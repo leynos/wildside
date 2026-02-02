@@ -57,14 +57,26 @@ fn idempotency_key_serde_roundtrip() {
 
 #[test]
 fn payload_hash_to_hex_produces_64_chars() {
-    let hash = PayloadHash::from_bytes(&[0u8; 32]);
+    let hash = PayloadHash::from_bytes([0u8; 32]);
     assert_eq!(hash.to_hex().len(), 64);
 }
 
 #[test]
 fn payload_hash_display_matches_hex() {
-    let hash = PayloadHash::from_bytes(&[0xab; 32]);
+    let hash = PayloadHash::from_bytes([0xab; 32]);
     assert_eq!(format!("{hash}"), hash.to_hex());
+}
+
+#[test]
+fn payload_hash_rejects_invalid_length() {
+    let err = PayloadHash::try_from_bytes(&[0u8; 31]).expect_err("expected length error");
+    assert_eq!(
+        err,
+        PayloadHashError::InvalidLength {
+            expected: 32,
+            actual: 31,
+        }
+    );
 }
 
 // Canonicalization tests
@@ -72,8 +84,8 @@ fn payload_hash_display_matches_hex() {
 #[test]
 fn canonicalize_and_hash_is_deterministic() {
     let value = json!({"foo": "bar", "baz": 123});
-    let hash1 = canonicalize_and_hash(&value);
-    let hash2 = canonicalize_and_hash(&value);
+    let hash1 = canonicalize_and_hash(&value).expect("hash value");
+    let hash2 = canonicalize_and_hash(&value).expect("hash value");
     assert_eq!(hash1, hash2);
 }
 
@@ -81,44 +93,51 @@ fn canonicalize_and_hash_is_deterministic() {
 fn canonicalize_and_hash_ignores_key_order() {
     let a = json!({"z": 1, "a": 2, "m": 3});
     let b = json!({"a": 2, "m": 3, "z": 1});
-    assert_eq!(canonicalize_and_hash(&a), canonicalize_and_hash(&b));
+    let hash_a = canonicalize_and_hash(&a).expect("hash a");
+    let hash_b = canonicalize_and_hash(&b).expect("hash b");
+    assert_eq!(hash_a, hash_b);
 }
 
 #[test]
 fn canonicalize_and_hash_handles_nested_objects() {
     let a = json!({"outer": {"z": 1, "a": 2}});
     let b = json!({"outer": {"a": 2, "z": 1}});
-    assert_eq!(canonicalize_and_hash(&a), canonicalize_and_hash(&b));
+    let hash_a = canonicalize_and_hash(&a).expect("hash a");
+    let hash_b = canonicalize_and_hash(&b).expect("hash b");
+    assert_eq!(hash_a, hash_b);
 }
 
 #[test]
 fn canonicalize_and_hash_preserves_array_order() {
     let a = json!({"arr": [1, 2, 3]});
     let b = json!({"arr": [3, 2, 1]});
-    assert_ne!(canonicalize_and_hash(&a), canonicalize_and_hash(&b));
+    let hash_a = canonicalize_and_hash(&a).expect("hash a");
+    let hash_b = canonicalize_and_hash(&b).expect("hash b");
+    assert_ne!(hash_a, hash_b);
 }
 
 #[test]
 fn canonicalize_and_hash_differs_for_different_values() {
     let a = json!({"key": "value1"});
     let b = json!({"key": "value2"});
-    assert_ne!(canonicalize_and_hash(&a), canonicalize_and_hash(&b));
+    let hash_a = canonicalize_and_hash(&a).expect("hash a");
+    let hash_b = canonicalize_and_hash(&b).expect("hash b");
+    assert_ne!(hash_a, hash_b);
 }
 
 #[test]
 fn canonicalize_and_hash_handles_primitives() {
-    assert_ne!(
-        canonicalize_and_hash(&json!(null)),
-        canonicalize_and_hash(&json!(false))
-    );
-    assert_ne!(
-        canonicalize_and_hash(&json!(1)),
-        canonicalize_and_hash(&json!(2))
-    );
-    assert_ne!(
-        canonicalize_and_hash(&json!("a")),
-        canonicalize_and_hash(&json!("b"))
-    );
+    let null_hash = canonicalize_and_hash(&json!(null)).expect("hash null");
+    let false_hash = canonicalize_and_hash(&json!(false)).expect("hash false");
+    assert_ne!(null_hash, false_hash);
+
+    let one_hash = canonicalize_and_hash(&json!(1)).expect("hash one");
+    let two_hash = canonicalize_and_hash(&json!(2)).expect("hash two");
+    assert_ne!(one_hash, two_hash);
+
+    let a_hash = canonicalize_and_hash(&json!("a")).expect("hash a");
+    let b_hash = canonicalize_and_hash(&json!("b")).expect("hash b");
+    assert_ne!(a_hash, b_hash);
 }
 
 // MutationType tests

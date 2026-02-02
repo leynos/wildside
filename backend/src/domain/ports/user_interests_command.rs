@@ -35,6 +35,7 @@ impl UserInterestsCommand for FixtureUserInterestsCommand {
 
 #[cfg(test)]
 mod tests {
+    //! Checks the fixture command echoes user interest updates unchanged.
     use super::*;
     use rstest::rstest;
 

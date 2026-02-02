@@ -200,6 +200,8 @@ fn select_subset(
 
 #[cfg(test)]
 mod tests {
+    //! Regression tests for deterministic example user generation.
+
     use rstest::{fixture, rstest};
 
     use super::*;

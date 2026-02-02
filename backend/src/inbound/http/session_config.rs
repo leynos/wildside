@@ -4,7 +4,11 @@
 //! validated consistently and can be tested in isolation.
 
 use actix_web::cookie::{Key, SameSite};
-use std::path::PathBuf;
+use cap_std::{ambient_authority, fs::Dir};
+use parsing::{BoolEnvConfig, debug_warn_or_error, parse_bool_env, parse_same_site_value};
+use std::ffi::OsStr;
+use std::io;
+use std::path::{Path, PathBuf};
 use tracing::warn;
 use zeroize::Zeroize;
 
@@ -14,8 +18,6 @@ pub const COOKIE_SECURE_ENV: &str = "SESSION_COOKIE_SECURE";
 pub const SAMESITE_ENV: &str = "SESSION_SAMESITE";
 pub const ALLOW_EPHEMERAL_ENV: &str = "SESSION_ALLOW_EPHEMERAL";
 pub const KEY_FILE_ENV: &str = "SESSION_KEY_FILE";
-const BOOL_EXPECTED: &str = "1|0|true|false|yes|no|y|n";
-const SAMESITE_EXPECTED: &str = "Strict|Lax|None";
 
 /// Environment abstraction for session configuration lookups.
 pub trait SessionEnv {
@@ -186,68 +188,6 @@ pub fn session_settings_from_env<E: SessionEnv>(
     })
 }
 
-/// Configuration for parsing a boolean environment variable.
-struct BoolEnvConfig {
-    name: &'static str,
-    default_value: bool,
-}
-
-impl BoolEnvConfig {
-    const fn new(name: &'static str, default_value: bool) -> Self {
-        Self {
-            name,
-            default_value,
-        }
-    }
-}
-
-fn parse_bool_env<E: SessionEnv, F>(
-    env: &E,
-    mode: BuildMode,
-    config: BoolEnvConfig,
-    value_validator: F,
-) -> Result<bool, SessionConfigError>
-where
-    F: FnOnce(bool, BuildMode) -> Result<bool, SessionConfigError>,
-{
-    let default_label = if config.default_value {
-        "enabled"
-    } else {
-        "disabled"
-    };
-    match env.string(config.name) {
-        Some(value) => match parse_bool(&value) {
-            Some(flag) => value_validator(flag, mode),
-            None => {
-                let value_clone = value.clone();
-                debug_warn_or_error(
-                    mode,
-                    config.default_value,
-                    SessionConfigError::InvalidEnv {
-                        name: config.name,
-                        value: value_clone,
-                        expected: BOOL_EXPECTED,
-                    },
-                    || {
-                        warn!(
-                            value = %value,
-                            "invalid {}; defaulting to {}",
-                            config.name,
-                            default_label
-                        );
-                    },
-                )
-            }
-        },
-        None => debug_warn_or_error(
-            mode,
-            config.default_value,
-            SessionConfigError::MissingEnv { name: config.name },
-            || warn!("{} not set; defaulting to {}", config.name, default_label),
-        ),
-    }
-}
-
 fn cookie_secure_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
@@ -258,66 +198,6 @@ fn cookie_secure_from_env<E: SessionEnv>(
         BoolEnvConfig::new(COOKIE_SECURE_ENV, true),
         |flag, _| Ok(flag),
     )
-}
-
-fn debug_warn_or_error<T, F>(
-    mode: BuildMode,
-    fallback: T,
-    error: SessionConfigError,
-    warn_fn: F,
-) -> Result<T, SessionConfigError>
-where
-    F: FnOnce(),
-{
-    if mode.is_debug() {
-        warn_fn();
-        Ok(fallback)
-    } else {
-        Err(error)
-    }
-}
-
-fn validate_same_site_none(mode: BuildMode, cookie_secure: bool) -> Result<(), SessionConfigError> {
-    if cookie_secure {
-        return Ok(());
-    }
-
-    debug_warn_or_error(mode, (), SessionConfigError::InsecureSameSiteNone, || {
-        warn!(
-            "{}",
-            concat!(
-                "SESSION_SAMESITE=None with SESSION_COOKIE_SECURE=0; ",
-                "browsers may reject third-party cookies"
-            )
-        );
-    })
-}
-
-fn parse_same_site_value(
-    value: String,
-    mode: BuildMode,
-    cookie_secure: bool,
-    default_same_site: SameSite,
-) -> Result<SameSite, SessionConfigError> {
-    let value_lower = value.to_ascii_lowercase();
-    match value_lower.as_str() {
-        "lax" => Ok(SameSite::Lax),
-        "strict" => Ok(SameSite::Strict),
-        "none" => {
-            validate_same_site_none(mode, cookie_secure)?;
-            Ok(SameSite::None)
-        }
-        _ => debug_warn_or_error(
-            mode,
-            default_same_site,
-            SessionConfigError::InvalidEnv {
-                name: SAMESITE_ENV,
-                value: value.clone(),
-                expected: SAMESITE_EXPECTED,
-            },
-            || warn!(value = %value, "invalid SESSION_SAMESITE, using default"),
-        ),
-    }
 }
 
 fn same_site_from_env<E: SessionEnv>(
@@ -369,18 +249,30 @@ fn session_key_from_env<E: SessionEnv>(
     mode: BuildMode,
     allow_ephemeral: bool,
 ) -> Result<Key, SessionConfigError> {
+    let allow_ephemeral_fallback = mode.is_debug() || allow_ephemeral;
     let key_path = env
         .string(KEY_FILE_ENV)
-        .unwrap_or_else(|| SESSION_KEY_DEFAULT_PATH.to_string());
-    let path = PathBuf::from(key_path);
+        .map_or_else(|| PathBuf::from(SESSION_KEY_DEFAULT_PATH), PathBuf::from);
+    let parent = key_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = extract_file_name(&key_path)?;
+    let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
+        Ok(dir) => dir,
+        Err(error) => {
+            return handle_io_error_with_ephemeral_fallback(
+                error,
+                &key_path,
+                allow_ephemeral_fallback,
+            );
+        }
+    };
 
-    match std::fs::read(&path) {
+    match dir.read(Path::new(file_name)) {
         Ok(mut bytes) => {
             let length = bytes.len();
             if mode == BuildMode::Release && length < SESSION_KEY_MIN_LEN {
                 bytes.zeroize();
                 return Err(SessionConfigError::KeyTooShort {
-                    path,
+                    path: key_path.clone(),
                     length,
                     min_len: SESSION_KEY_MIN_LEN,
                 });
@@ -390,32 +282,45 @@ fn session_key_from_env<E: SessionEnv>(
             Ok(key)
         }
         Err(error) => {
-            if mode.is_debug() || allow_ephemeral {
-                warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "using temporary session key (dev or allow_ephemeral)"
-                );
-                Ok(Key::generate())
-            } else {
-                Err(SessionConfigError::KeyRead {
-                    path,
-                    source: error,
-                })
-            }
+            handle_io_error_with_ephemeral_fallback(error, &key_path, allow_ephemeral_fallback)
         }
     }
 }
 
-fn parse_bool(value: &str) -> Option<bool> {
-    match value.to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "y" => Some(true),
-        "0" | "false" | "no" | "n" => Some(false),
-        _ => None,
+/// Extract the file name from the path, rejecting paths without one.
+fn extract_file_name(path: &Path) -> Result<&OsStr, SessionConfigError> {
+    path.file_name().ok_or_else(|| SessionConfigError::KeyRead {
+        path: path.to_path_buf(),
+        source: io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "session key path must be a file",
+        ),
+    })
+}
+
+/// Handle I/O errors when accessing the session key, with optional ephemeral fallback.
+fn handle_io_error_with_ephemeral_fallback(
+    error: io::Error,
+    path: &Path,
+    allow_ephemeral_fallback: bool,
+) -> Result<Key, SessionConfigError> {
+    if allow_ephemeral_fallback {
+        warn!(
+            path = %path.display(),
+            error = %error,
+            "using temporary session key (dev or allow_ephemeral)"
+        );
+        return Ok(Key::generate());
     }
+
+    Err(SessionConfigError::KeyRead {
+        path: path.to_path_buf(),
+        source: error,
+    })
 }
 
 pub mod fingerprint;
+mod parsing;
 pub mod test_utils;
 
 #[cfg(test)]

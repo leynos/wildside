@@ -49,6 +49,7 @@ pub enum RouteCacheKeyValidationError {
 
 #[cfg(test)]
 mod tests {
+    //! Validates cache key parsing and whitespace constraints.
     use super::{RouteCacheKey, RouteCacheKeyValidationError};
     use rstest::rstest;
 

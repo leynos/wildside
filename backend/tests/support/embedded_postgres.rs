@@ -106,6 +106,8 @@ pub fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
 
 #[cfg(test)]
 mod tests {
+    //! Linkage checks for embedded postgres helpers.
+
     use super::*;
 
     #[test]

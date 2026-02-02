@@ -65,6 +65,7 @@ impl FromRequest for SessionContext {
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for this module.
     use super::*;
     use actix_session::Session;
     use actix_web::http::StatusCode;

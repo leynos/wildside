@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
+use cap_std::{ambient_authority, fs::Dir};
 use pg_embedded_setup_unpriv::TestCluster;
 use pg_embedded_setup_unpriv::test_support::shared_cluster as shared_cluster_inner;
 
@@ -43,8 +44,8 @@ fn create_shared_pg_embed_dirs() -> Result<(PathBuf, PathBuf), std::io::Error> {
     let runtime_dir = base.join("install");
     let data_dir = base.join("data");
 
-    std::fs::create_dir_all(&runtime_dir)?;
-    std::fs::create_dir_all(&data_dir)?;
+    Dir::create_ambient_dir_all(&runtime_dir, ambient_authority())?;
+    Dir::create_ambient_dir_all(&data_dir, ambient_authority())?;
 
     Ok((runtime_dir, data_dir))
 }
@@ -151,11 +152,13 @@ fn ensure_dir(path: &Path) -> bool {
     if path.as_os_str().is_empty() {
         return false;
     }
-    std::fs::create_dir_all(path).is_ok()
+    Dir::create_ambient_dir_all(path, ambient_authority()).is_ok()
 }
 
 #[cfg(test)]
 mod tests {
+    //! Regression coverage for pg-embed filesystem helpers.
+
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -208,18 +211,34 @@ mod tests {
     #[test]
     fn ensure_dir_creates_directory_when_missing() {
         let dir = unique_test_dir("ensure-dir-create");
-        let _ = std::fs::remove_dir_all(&dir);
+        remove_dir_all(&dir);
         assert!(ensure_dir(&dir));
         assert!(dir.exists());
-        let _ = std::fs::remove_dir_all(&dir);
+        remove_dir_all(&dir);
     }
 
     #[test]
     fn ensure_dir_returns_true_when_directory_exists() {
         let dir = unique_test_dir("ensure-dir-existing");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("test directory should be creatable");
+        remove_dir_all(&dir);
+        Dir::create_ambient_dir_all(&dir, ambient_authority())
+            .expect("test directory should be creatable");
         assert!(ensure_dir(&dir));
-        let _ = std::fs::remove_dir_all(&dir);
+        remove_dir_all(&dir);
+    }
+
+    fn remove_dir_all(path: &Path) {
+        let Some(parent) = path.parent() else {
+            return;
+        };
+        let Some(name) = path.file_name() else {
+            return;
+        };
+        let Ok(dir) = Dir::open_ambient_dir(parent, ambient_authority()) else {
+            return;
+        };
+        if dir.remove_dir_all(name).is_err() {
+            // Ignore cleanup failures in test teardown.
+        }
     }
 }

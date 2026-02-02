@@ -79,6 +79,7 @@ impl LoginCredentials {
 
 #[cfg(test)]
 mod tests {
+    //! Validation coverage for login credential parsing and trimming.
     use super::*;
     use rstest::rstest;
 

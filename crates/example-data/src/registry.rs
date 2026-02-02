@@ -4,9 +4,8 @@
 //! definitions and descriptor IDs. The registry is loaded from JSON and
 //! provides deterministic seed lookups.
 
-use std::fs;
-use std::path::Path;
-
+use camino::{Utf8Component, Utf8Path};
+use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -70,11 +69,37 @@ impl SeedRegistry {
     /// # Errors
     ///
     /// Returns [`RegistryError`] if the file cannot be read or parsed.
-    pub fn from_file(path: &Path) -> Result<Self, RegistryError> {
-        let contents = fs::read_to_string(path).map_err(|e| RegistryError::IoError {
-            path: path.to_path_buf(),
-            message: e.to_string(),
-        })?;
+    ///
+    /// `dir` must be a capability handle to the directory containing `path`.
+    ///
+    /// Only file-name-only paths (e.g. `seeds.json`) are accepted; parent
+    /// segments such as `config/seeds.json` are rejected.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use cap_std::{ambient_authority, fs::Dir};
+    /// # use camino::Utf8Path;
+    /// # use example_data::SeedRegistry;
+    /// let dir = Dir::open_ambient_dir(".", ambient_authority()).expect("open dir");
+    /// let path = Utf8Path::new("seeds.json");
+    /// let _ = SeedRegistry::from_file(&dir, path);
+    /// ```
+    pub fn from_file(dir: &Dir, path: &Utf8Path) -> Result<Self, RegistryError> {
+        let mut components = path.components();
+        let (Some(Utf8Component::Normal(file_name)), None) = (components.next(), components.next())
+        else {
+            return Err(RegistryError::IoError {
+                path: path.to_path_buf(),
+                message: "registry path must be a file".to_owned(),
+            });
+        };
+        let contents = dir
+            .read_to_string(file_name)
+            .map_err(|e| RegistryError::IoError {
+                path: path.to_path_buf(),
+                message: e.to_string(),
+            })?;
 
         Self::from_json(&contents)
     }
@@ -276,15 +301,27 @@ impl SeedRegistry {
     /// std::fs::create_dir_all(&dir).expect("create temp dir");
     /// let path = dir.join("seeds.json");
     ///
-    /// registry.write_to_file(&path).expect("write registry");
-    /// let rendered = std::fs::read_to_string(&path).expect("read registry");
+    /// use cap_std::{ambient_authority, fs::Dir};
+    /// use camino::Utf8Path;
+    ///
+    /// let temp_root =
+    ///     Dir::open_ambient_dir(std::env::temp_dir(), ambient_authority()).expect("open temp");
+    /// let dir_name = format!("example-data-docs-{suffix}");
+    /// temp_root.create_dir_all(&dir_name).expect("create temp dir");
+    /// let dir = temp_root.open_dir(&dir_name).expect("open temp dir");
+    /// let path = Utf8Path::new("seeds.json");
+    ///
+    /// registry.write_to_file(&dir, path).expect("write registry");
+    /// let rendered = dir.read_to_string(path).expect("read registry");
     ///
     /// assert!(rendered.contains("\"seeds\""));
-    /// std::fs::remove_file(&path).expect("clean up");
+    /// dir.remove_file(path).expect("clean up");
     /// ```
-    pub fn write_to_file(&self, path: &Path) -> Result<(), RegistryError> {
+    ///
+    /// `dir` must be a capability handle to the directory containing `path`.
+    pub fn write_to_file(&self, dir: &Dir, path: &Utf8Path) -> Result<(), RegistryError> {
         let json = self.to_json_pretty()?;
-        write_atomic(path, &json)
+        write_atomic(dir, path, &json)
     }
 }
 
