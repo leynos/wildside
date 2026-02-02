@@ -228,7 +228,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Exercises error mapping and preference row conversions for diesel.
     use super::*;
     use rstest::rstest;
 

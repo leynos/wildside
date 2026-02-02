@@ -43,6 +43,11 @@ fn run_worker(mut args: impl Iterator<Item = OsString>) -> Result<()> {
 
 fn load_payload(path: &PathBuf) -> Result<WorkerPayload> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
     let file_name = path
         .file_name()
         .ok_or_else(|| eyre!("worker config path must be a file"))?;

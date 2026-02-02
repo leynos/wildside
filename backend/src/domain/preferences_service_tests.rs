@@ -112,7 +112,8 @@ async fn update_returns_cached_response_for_duplicate_idempotency_key() {
     let payload_hash = UserPreferencesService::<
         MockUserPreferencesRepository,
         MockIdempotencyRepository,
-    >::preferences_payload_hash(&request);
+    >::preferences_payload_hash(&request)
+    .expect("preferences payload hash");
     let preferences = UserPreferences::builder(user_id.clone())
         .revision(2)
         .unit_system(UnitSystem::Metric)

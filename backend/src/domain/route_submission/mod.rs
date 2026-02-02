@@ -17,7 +17,7 @@ use super::ports::{
 };
 use super::{
     Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
-    MutationType, PayloadHash, UserId, canonicalize_and_hash,
+    MutationType, PayloadHash, PayloadHashError, UserId, canonicalize_and_hash,
 };
 
 /// Compute age bucket string from record creation time.
@@ -269,6 +269,10 @@ fn map_repository_error(error: IdempotencyRepositoryError) -> Error {
     }
 }
 
+fn map_payload_hash_error(error: PayloadHashError) -> Error {
+    Error::internal(format!("failed to hash idempotency payload: {error}"))
+}
+
 #[async_trait]
 impl<R, M> RouteSubmissionService for RouteSubmissionServiceImpl<R, M>
 where
@@ -293,7 +297,8 @@ where
         };
 
         // Compute payload hash only when idempotency key is present.
-        let payload_hash = canonicalize_and_hash(&request.payload);
+        let payload_hash =
+            canonicalize_and_hash(&request.payload).map_err(map_payload_hash_error)?;
 
         // Look up existing record for this key (scoped to user and mutation type).
         let query = IdempotencyLookupQuery::new(

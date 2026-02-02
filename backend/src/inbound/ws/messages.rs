@@ -101,7 +101,7 @@ impl From<DisplayNameRejectedEvent> for InvalidDisplayNameResponse {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Covers websocket message serialization for user events and errors.
     use super::*;
     use crate::domain::TraceId;
     use crate::domain::{DisplayName, User, UserId, UserValidationError};

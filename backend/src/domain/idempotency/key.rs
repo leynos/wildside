@@ -58,6 +58,18 @@ impl IdempotencyKey {
     /// Construct an [`IdempotencyKey`] directly from a UUID.
     ///
     /// Useful when the UUID is already validated (e.g., loaded from database).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyKey;
+    /// # use uuid::Uuid;
+    /// let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")
+    ///     .expect("valid UUID");
+    /// let key = IdempotencyKey::from_uuid(uuid);
+    ///
+    /// assert_eq!(key.as_uuid(), &uuid);
+    /// ```
     pub fn from_uuid(uuid: Uuid) -> Self {
         let raw = uuid.to_string();
         Self(uuid, raw)
@@ -66,6 +78,14 @@ impl IdempotencyKey {
     /// Generate a new random [`IdempotencyKey`].
     ///
     /// Primarily useful for testing.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyKey;
+    /// let key = IdempotencyKey::random();
+    /// assert_eq!(key.as_uuid().to_string(), key.as_ref());
+    /// ```
     pub fn random() -> Self {
         let uuid = Uuid::new_v4();
         Self(uuid, uuid.to_string())
@@ -80,10 +100,20 @@ impl IdempotencyKey {
         }
         let parsed =
             Uuid::parse_str(&key).map_err(|_| IdempotencyKeyValidationError::InvalidKey)?;
-        Ok(Self(parsed, key))
+        Ok(Self(parsed, parsed.to_string()))
     }
 
     /// Access the underlying UUID.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyKey;
+    /// let key = IdempotencyKey::new("550e8400-e29b-41d4-a716-446655440000")
+    ///     .expect("valid UUID");
+    ///
+    /// assert_eq!(key.as_uuid().to_string(), key.as_ref());
+    /// ```
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }

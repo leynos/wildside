@@ -87,7 +87,7 @@ impl IdempotencyMetrics for NoOpIdempotencyMetrics {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Ensures NoOpIdempotencyMetrics accepts miss, hit, and conflict events.
     use super::*;
 
     #[tokio::test]

@@ -182,10 +182,7 @@ impl IdempotencyRepository for DieselIdempotencyRepository {
             .map_err(map_diesel_error)?;
 
         debug!(deleted, cutoff = %cutoff, "cleaned up expired idempotency records");
-        let deleted = u64::try_from(deleted).map_err(|err| {
-            IdempotencyRepositoryError::query(format!("row count overflowed u64: {err}"))
-        })?;
-        Ok(deleted)
+        Ok(deleted as u64)
     }
 }
 

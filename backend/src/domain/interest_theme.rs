@@ -91,7 +91,7 @@ impl TryFrom<String> for InterestThemeId {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Covers InterestThemeId parsing and validation outcomes.
     use super::*;
     use rstest::rstest;
 

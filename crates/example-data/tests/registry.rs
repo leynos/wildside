@@ -163,13 +163,57 @@ fn writes_registry_to_file(registry_fixture: SeedRegistry) {
     let registry = registry_fixture;
     let path = unique_temp_path("seeds.json");
     let dir = open_registry_dir(&path);
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
 
     registry
-        .write_to_file(&dir, &path)
+        .write_to_file(&dir, file_name)
         .expect("write registry file");
 
-    let round_trip = SeedRegistry::from_file(&dir, &path).expect("load registry");
+    let round_trip = SeedRegistry::from_file(&dir, file_name).expect("load registry");
     assert_eq!(registry, round_trip);
+
+    cleanup_path(&path);
+}
+
+#[rstest]
+fn write_to_file_rejects_directory_path(registry_fixture: SeedRegistry) {
+    let registry = registry_fixture;
+    let path = unique_temp_path("seeds.json");
+    let dir = open_registry_dir(&path);
+    let directory_path = path.parent().expect("temp dir").to_path_buf();
+
+    let err = registry
+        .write_to_file(&dir, &directory_path)
+        .expect_err("directory path should fail");
+
+    assert_eq!(
+        err,
+        RegistryError::WriteError {
+            path: directory_path,
+            message: "registry path must be a file".to_owned(),
+        }
+    );
+
+    cleanup_path(&path);
+}
+
+#[rstest]
+fn from_file_rejects_directory_path(registry_fixture: SeedRegistry) {
+    let _ = registry_fixture;
+    let path = unique_temp_path("seeds.json");
+    let dir = open_registry_dir(&path);
+    let directory_path = path.parent().expect("temp dir").to_path_buf();
+
+    let err =
+        SeedRegistry::from_file(&dir, &directory_path).expect_err("directory path should fail");
+
+    assert_eq!(
+        err,
+        RegistryError::IoError {
+            path: directory_path,
+            message: "registry path must be a file".to_owned(),
+        }
+    );
 
     cleanup_path(&path);
 }

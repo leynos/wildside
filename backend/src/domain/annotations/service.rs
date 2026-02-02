@@ -19,7 +19,7 @@ use crate::domain::ports::{
     RouteAnnotationRepository, RouteAnnotationRepositoryError, RouteAnnotationsCommand,
     UpdateProgressRequest, UpdateProgressResponse, UpsertNoteRequest, UpsertNoteResponse,
 };
-use crate::domain::{Error, IdempotencyLookupResult, RouteNote, RouteProgress};
+use crate::domain::{Error, IdempotencyLookupResult, PayloadHashError, RouteNote, RouteProgress};
 
 type CommandFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a>>;
 
@@ -88,6 +88,10 @@ where
                 Error::internal(format!("unexpected idempotency key conflict: {message}"))
             }
         }
+    }
+
+    fn map_payload_hash_error(error: PayloadHashError) -> Error {
+        Error::internal(format!("failed to hash idempotency payload: {error}"))
     }
 
     pub(super) fn map_annotations_error(error: RouteAnnotationRepositoryError) -> Error {
@@ -227,11 +231,15 @@ where
             return operation().await;
         };
 
+        let payload_hash = params
+            .request
+            .compute_payload_hash()
+            .map_err(Self::map_payload_hash_error)?;
         let context = IdempotencyContext::new(
             idempotency_key,
             params.user_id.clone(),
             params.mutation_type,
-            params.request.compute_payload_hash(),
+            payload_hash,
         );
         self.handle_idempotent(context, operation, mark_replayed)
             .await

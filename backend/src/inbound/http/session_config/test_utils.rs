@@ -80,3 +80,29 @@ impl Drop for TempKeyFile {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Exercises TempKeyFile creation and cleanup behaviour.
+
+    use super::*;
+
+    #[test]
+    fn temp_key_file_is_created_and_removed_on_drop() {
+        let temp_file = TempKeyFile::new(32).expect("create temp key file");
+        let path = temp_file.path.clone();
+        let parent = path.parent().expect("temp file parent");
+        let file_name = path.file_name().expect("temp file name");
+        let dir = Dir::open_ambient_dir(parent, ambient_authority()).expect("open temp dir");
+
+        dir.open(file_name).expect("temp key file should exist");
+
+        drop(temp_file);
+
+        let dir = Dir::open_ambient_dir(parent, ambient_authority()).expect("open temp dir");
+        assert!(
+            dir.open(file_name).is_err(),
+            "temp key file should be removed on drop"
+        );
+    }
+}

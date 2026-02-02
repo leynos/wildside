@@ -244,53 +244,48 @@ fn allow_ephemeral_from_env<E: SessionEnv>(
     )
 }
 
-/// Session key validation policy for runtime behaviour.
-#[derive(Clone, Copy)]
-struct KeyValidationPolicy {
-    mode: BuildMode,
-    allow_ephemeral: bool,
-}
-
-impl KeyValidationPolicy {
-    /// Create a validation policy for the current build mode.
-    fn new(mode: BuildMode, allow_ephemeral: bool) -> Self {
-        Self {
-            mode,
-            allow_ephemeral,
-        }
-    }
-
-    /// Decide whether to allow an ephemeral session key.
-    fn should_allow_ephemeral(self) -> bool {
-        self.mode.is_debug() || self.allow_ephemeral
-    }
-}
-
 fn session_key_from_env<E: SessionEnv>(
     env: &E,
     mode: BuildMode,
     allow_ephemeral: bool,
 ) -> Result<Key, SessionConfigError> {
-    let policy = KeyValidationPolicy::new(mode, allow_ephemeral);
-    let path = resolve_key_path(env)?;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = extract_file_name(&path)?;
+    let allow_ephemeral_fallback = mode.is_debug() || allow_ephemeral;
+    let key_path = PathBuf::from(
+        env.string(KEY_FILE_ENV)
+            .unwrap_or_else(|| SESSION_KEY_DEFAULT_PATH.to_string()),
+    );
+    let parent = key_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = extract_file_name(&key_path)?;
     let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {
         Ok(dir) => dir,
         Err(error) => {
-            return handle_io_error_with_ephemeral_fallback(error, &path, policy);
+            return handle_io_error_with_ephemeral_fallback(
+                error,
+                &key_path,
+                allow_ephemeral_fallback,
+            );
         }
     };
 
-    read_and_validate_key(&dir, file_name, &path, policy)
-}
-
-/// Resolve the configured key path from the environment or the default.
-fn resolve_key_path<E: SessionEnv>(env: &E) -> Result<PathBuf, SessionConfigError> {
-    let key_path = env
-        .string(KEY_FILE_ENV)
-        .unwrap_or_else(|| SESSION_KEY_DEFAULT_PATH.to_string());
-    Ok(PathBuf::from(key_path))
+    match dir.read(Path::new(file_name)) {
+        Ok(mut bytes) => {
+            let length = bytes.len();
+            if mode == BuildMode::Release && length < SESSION_KEY_MIN_LEN {
+                bytes.zeroize();
+                return Err(SessionConfigError::KeyTooShort {
+                    path: key_path.clone(),
+                    length,
+                    min_len: SESSION_KEY_MIN_LEN,
+                });
+            }
+            let key = Key::derive_from(&bytes);
+            bytes.zeroize();
+            Ok(key)
+        }
+        Err(error) => {
+            handle_io_error_with_ephemeral_fallback(error, &key_path, allow_ephemeral_fallback)
+        }
+    }
 }
 
 /// Extract the file name from the path, rejecting paths without one.
@@ -308,9 +303,9 @@ fn extract_file_name(path: &Path) -> Result<&OsStr, SessionConfigError> {
 fn handle_io_error_with_ephemeral_fallback(
     error: io::Error,
     path: &Path,
-    policy: KeyValidationPolicy,
+    allow_ephemeral_fallback: bool,
 ) -> Result<Key, SessionConfigError> {
-    if policy.should_allow_ephemeral() {
+    if allow_ephemeral_fallback {
         warn!(
             path = %path.display(),
             error = %error,
@@ -323,39 +318,6 @@ fn handle_io_error_with_ephemeral_fallback(
         path: path.to_path_buf(),
         source: error,
     })
-}
-
-/// Read the key file and validate the contents for the current build mode.
-fn read_and_validate_key(
-    dir: &Dir,
-    file_name: &OsStr,
-    full_path: &Path,
-    policy: KeyValidationPolicy,
-) -> Result<Key, SessionConfigError> {
-    match dir.read(Path::new(file_name)) {
-        Ok(bytes) => process_key_bytes(bytes, full_path, policy.mode),
-        Err(error) => handle_io_error_with_ephemeral_fallback(error, full_path, policy),
-    }
-}
-
-/// Validate key bytes, derive the key, and zeroize the buffer.
-fn process_key_bytes(
-    mut bytes: Vec<u8>,
-    path: &Path,
-    mode: BuildMode,
-) -> Result<Key, SessionConfigError> {
-    let length = bytes.len();
-    if mode == BuildMode::Release && length < SESSION_KEY_MIN_LEN {
-        bytes.zeroize();
-        return Err(SessionConfigError::KeyTooShort {
-            path: path.to_path_buf(),
-            length,
-            min_len: SESSION_KEY_MIN_LEN,
-        });
-    }
-    let key = Key::derive_from(&bytes);
-    bytes.zeroize();
-    Ok(key)
 }
 
 pub mod fingerprint;

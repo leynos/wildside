@@ -16,7 +16,8 @@ impl RegistryFixture {
 
     fn load(&self) -> SeedRegistry {
         let dir = open_registry_dir(&self.path);
-        SeedRegistry::from_file(&dir, &self.path).expect("load registry")
+        let file_name = Utf8Path::new(self.path.file_name().expect("registry file name"));
+        SeedRegistry::from_file(&dir, file_name).expect("load registry")
     }
 }
 
@@ -229,6 +230,7 @@ fn apply_update_reports_duplicate_generated_name() {
 #[test]
 fn apply_update_reports_registry_io_errors() {
     let path = unique_temp_path("missing.json");
+    let file_name = Utf8PathBuf::from(path.file_name().expect("registry file name"));
     let options = Options {
         registry_path: path.clone(),
         seed: Some(1),
@@ -244,12 +246,40 @@ fn apply_update_reports_registry_io_errors() {
 
     match source {
         RegistryError::IoError { path: err_path, .. } => {
-            assert_eq!(err_path, path);
+            assert_eq!(err_path, file_name);
         }
         _ => panic!("expected IO error"),
     }
 
     cleanup_path(&path);
+}
+
+#[test]
+fn apply_update_reports_open_registry_dir_errors() {
+    let path = unique_missing_path("seeds.json");
+    let options = Options {
+        registry_path: path.clone(),
+        seed: Some(1),
+        name: Some("river-stone".to_owned()),
+        user_count: None,
+    };
+
+    let err = apply_update(&options).expect_err("expected error");
+
+    let CliError::RegistryError { source } = err else {
+        panic!("expected registry error");
+    };
+
+    match source {
+        RegistryError::IoError {
+            path: err_path,
+            message,
+        } => {
+            assert_eq!(err_path, path);
+            assert!(!message.is_empty());
+        }
+        _ => panic!("expected IO error"),
+    }
 }
 
 #[test]
@@ -305,6 +335,16 @@ fn unique_temp_path(file_name: &str) -> Utf8PathBuf {
     let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
     root.create_dir_all(&dir).expect("create temp dir");
     dir.join(file_name)
+}
+
+fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir_name = format!("seed-registry-cli-missing-{counter}");
+    Utf8PathBuf::from("target")
+        .join("example-data-tests")
+        .join(dir_name)
+        .join(file_name)
 }
 
 fn open_registry_dir(path: &Utf8Path) -> Dir {

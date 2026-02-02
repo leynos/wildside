@@ -79,7 +79,7 @@ where
         }))
     }
 
-    fn preferences_payload_hash(request: &UpdatePreferencesRequest) -> PayloadHash {
+    fn preferences_payload_hash(request: &UpdatePreferencesRequest) -> Result<PayloadHash, Error> {
         let payload = json!({
             "interestThemeIds": request.interest_theme_ids,
             "safetyToggleIds": request.safety_toggle_ids,
@@ -87,6 +87,7 @@ where
             "expectedRevision": request.expected_revision,
         });
         canonicalize_and_hash(&payload)
+            .map_err(|err| Error::internal(format!("failed to hash preferences payload: {err}")))
     }
 
     fn serialize_response(
@@ -242,7 +243,7 @@ where
             });
         };
 
-        let payload_hash = Self::preferences_payload_hash(&request);
+        let payload_hash = Self::preferences_payload_hash(&request)?;
         let query = IdempotencyLookupQuery::new(
             idempotency_key.clone(),
             request.user_id.clone(),

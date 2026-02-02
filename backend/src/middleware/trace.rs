@@ -104,7 +104,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Verifies trace headers and error propagation in the middleware.
     use super::*;
     use actix_web::{App, HttpResponse, web};
 

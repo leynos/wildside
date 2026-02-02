@@ -11,6 +11,23 @@ pub const IDEMPOTENCY_TTL_HOURS_ENV: &str = "IDEMPOTENCY_TTL_HOURS";
 /// mutations.
 pub trait IdempotencyEnv {
     /// Fetch a string value by name.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyEnv;
+    /// struct StubEnv;
+    ///
+    /// impl IdempotencyEnv for StubEnv {
+    ///     fn string(&self, name: &str) -> Option<String> {
+    ///         (name == "IDEMPOTENCY_TTL_HOURS").then(|| "12".to_string())
+    ///     }
+    /// }
+    ///
+    /// let env = StubEnv;
+    /// assert_eq!(env.string("IDEMPOTENCY_TTL_HOURS"), Some("12".to_string()));
+    /// assert_eq!(env.string("OTHER"), None);
+    /// ```
     fn string(&self, name: &str) -> Option<String>;
 }
 
@@ -20,6 +37,19 @@ pub struct DefaultIdempotencyEnv;
 
 impl DefaultIdempotencyEnv {
     /// Create a new environment reader.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::{DefaultIdempotencyEnv, IdempotencyEnv};
+    /// # std::env::set_var("IDEMPOTENCY_TTL_HOURS", "12");
+    /// let env = DefaultIdempotencyEnv::new();
+    /// assert_eq!(
+    ///     env.string("IDEMPOTENCY_TTL_HOURS").as_deref(),
+    ///     Some("12")
+    /// );
+    /// # std::env::remove_var("IDEMPOTENCY_TTL_HOURS");
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -91,6 +121,23 @@ impl IdempotencyConfig {
     /// Load configuration from a custom environment source.
     ///
     /// Useful for testing without unsafe env var mutations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::{IdempotencyConfig, IdempotencyEnv};
+    /// # use std::time::Duration;
+    /// struct StubEnv;
+    ///
+    /// impl IdempotencyEnv for StubEnv {
+    ///     fn string(&self, name: &str) -> Option<String> {
+    ///         (name == "IDEMPOTENCY_TTL_HOURS").then(|| "12".to_string())
+    ///     }
+    /// }
+    ///
+    /// let config = IdempotencyConfig::from_env_with(&StubEnv);
+    /// assert_eq!(config.ttl(), Duration::from_secs(12 * 3600));
+    /// ```
     pub fn from_env_with(env: &impl IdempotencyEnv) -> Self {
         let hours = env
             .string(IDEMPOTENCY_TTL_HOURS_ENV)
@@ -103,11 +150,29 @@ impl IdempotencyConfig {
     }
 
     /// Create with explicit TTL (for testing).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyConfig;
+    /// # use std::time::Duration;
+    /// let config = IdempotencyConfig::with_ttl(Duration::from_secs(3600));
+    /// assert_eq!(config.ttl(), Duration::from_secs(3600));
+    /// ```
     pub fn with_ttl(ttl: Duration) -> Self {
         Self { ttl }
     }
 
     /// Returns the configured TTL.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::IdempotencyConfig;
+    /// # use std::time::Duration;
+    /// let config = IdempotencyConfig::with_ttl(Duration::from_secs(7200));
+    /// assert_eq!(config.ttl(), Duration::from_secs(7200));
+    /// ```
     pub fn ttl(&self) -> Duration {
         self.ttl
     }

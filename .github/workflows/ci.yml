@@ -146,7 +146,7 @@ jobs:
 
       - name: Whitaker lint
         run: |
-          cargo install whitaker-installer
+          cargo install whitaker-installer --version 0.1.1
           whitaker-installer --experimental
           whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
           whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features

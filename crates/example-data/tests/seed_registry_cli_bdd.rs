@@ -94,7 +94,8 @@ fn the_registry_contains_the_generated_seed_name(world: &World) {
     let seed = world.seed_value.get().expect("seed should be set");
     let expected = seed_name_from_value(seed);
     let dir = open_registry_dir(&path);
-    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
+    let registry = SeedRegistry::from_file(&dir, file_name).expect("registry should load");
 
     assert!(registry.find_seed(&expected).is_ok());
 }
@@ -103,7 +104,8 @@ fn the_registry_contains_the_generated_seed_name(world: &World) {
 fn the_registry_contains_seed_named(world: &World, name: String) {
     let path = registry_path(world);
     let dir = open_registry_dir(&path);
-    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
+    let registry = SeedRegistry::from_file(&dir, file_name).expect("registry should load");
 
     assert!(registry.find_seed(&name).is_ok());
 }
@@ -125,7 +127,8 @@ fn the_cli_reports_success(world: &World) {
     );
 
     let dir = open_registry_dir(&path);
-    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
+    let registry = SeedRegistry::from_file(&dir, file_name).expect("registry should load");
     let seed = registry
         .find_seed(&update.name)
         .expect("registry should contain the new seed");
@@ -154,7 +157,8 @@ fn the_cli_reports_a_duplicate_seed_error(world: &World) {
 fn the_registry_remains_unchanged(world: &World) {
     let path = registry_path(world);
     let dir = open_registry_dir(&path);
-    let registry = SeedRegistry::from_file(&dir, &path).expect("registry should load");
+    let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
+    let registry = SeedRegistry::from_file(&dir, file_name).expect("registry should load");
 
     assert_eq!(registry.seeds().len(), 1);
     assert!(registry.find_seed("mossy-owl").is_ok());

@@ -4,7 +4,7 @@
 //! definitions and descriptor IDs. The registry is loaded from JSON and
 //! provides deterministic seed lookups.
 
-use camino::Utf8Path;
+use camino::{Utf8Component, Utf8Path};
 use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -71,11 +71,29 @@ impl SeedRegistry {
     /// Returns [`RegistryError`] if the file cannot be read or parsed.
     ///
     /// `dir` must be a capability handle to the directory containing `path`.
+    ///
+    /// Only file-name-only paths (e.g. `seeds.json`) are accepted; parent
+    /// segments such as `config/seeds.json` are rejected.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use cap_std::{ambient_authority, fs::Dir};
+    /// # use camino::Utf8Path;
+    /// # use example_data::SeedRegistry;
+    /// let dir = Dir::open_ambient_dir(".", ambient_authority()).expect("open dir");
+    /// let path = Utf8Path::new("seeds.json");
+    /// let _ = SeedRegistry::from_file(&dir, path);
+    /// ```
     pub fn from_file(dir: &Dir, path: &Utf8Path) -> Result<Self, RegistryError> {
-        let file_name = path.file_name().ok_or_else(|| RegistryError::IoError {
-            path: path.to_path_buf(),
-            message: "registry path must be a file".to_owned(),
-        })?;
+        let mut components = path.components();
+        let (Some(Utf8Component::Normal(file_name)), None) = (components.next(), components.next())
+        else {
+            return Err(RegistryError::IoError {
+                path: path.to_path_buf(),
+                message: "registry path must be a file".to_owned(),
+            });
+        };
         let contents = dir
             .read_to_string(file_name)
             .map_err(|e| RegistryError::IoError {

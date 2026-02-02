@@ -35,7 +35,7 @@ impl UserInterestsCommand for FixtureUserInterestsCommand {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Checks the fixture command echoes user interest updates unchanged.
     use super::*;
     use rstest::rstest;
 

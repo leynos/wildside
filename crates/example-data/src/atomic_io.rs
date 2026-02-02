@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use camino::Utf8Path;
+use camino::{Utf8Component, Utf8Path};
 use cap_std::fs::{Dir, OpenOptions};
 
 use crate::error::RegistryError;
@@ -52,10 +52,14 @@ pub(crate) fn write_atomic(
     path: &Utf8Path,
     contents: &str,
 ) -> Result<(), RegistryError> {
-    let file_name = path.file_name().ok_or_else(|| RegistryError::WriteError {
-        path: path.to_path_buf(),
-        message: "registry path must be a file".to_owned(),
-    })?;
+    let mut components = path.components();
+    let (Some(Utf8Component::Normal(file_name)), None) = (components.next(), components.next())
+    else {
+        return Err(RegistryError::WriteError {
+            path: path.to_path_buf(),
+            message: "registry path must be a file".to_owned(),
+        });
+    };
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -68,9 +72,8 @@ pub(crate) fn write_atomic(
         suffix,
         counter
     );
-    let tmp_path = path.with_file_name(&tmp_name);
 
-    write_to_temp_file(dir, &tmp_name, &tmp_path, contents)?;
+    write_to_temp_file(dir, &tmp_name, path, contents)?;
     rename_temp_to_target(dir, &tmp_name, file_name, path)?;
     sync_parent_directory(dir);
 
@@ -80,9 +83,10 @@ pub(crate) fn write_atomic(
 fn write_to_temp_file(
     dir: &Dir,
     tmp_name: &str,
-    tmp_path: &Utf8Path,
+    target_path: &Utf8Path,
     contents: &str,
 ) -> Result<(), RegistryError> {
+    let tmp_path = target_path.with_file_name(tmp_name);
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     let mut file = dir

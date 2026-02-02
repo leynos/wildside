@@ -14,6 +14,11 @@ pub enum PayloadHashError {
         /// Actual number of bytes.
         actual: usize,
     },
+    /// Failed to serialise the canonical JSON payload.
+    Serialization {
+        /// Description of the serialization failure.
+        message: String,
+    },
 }
 
 impl fmt::Display for PayloadHashError {
@@ -21,6 +26,9 @@ impl fmt::Display for PayloadHashError {
         match self {
             Self::InvalidLength { expected, actual } => {
                 write!(f, "payload hash must be {expected} bytes, got {actual}")
+            }
+            Self::Serialization { message } => {
+                write!(f, "failed to serialise canonical JSON payload: {message}")
             }
         }
     }
@@ -41,6 +49,15 @@ impl PayloadHash {
     /// # Errors
     ///
     /// Returns an error if the slice is not exactly 32 bytes.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::PayloadHash;
+    /// let bytes = vec![0u8; 32];
+    /// let hash = PayloadHash::try_from_bytes(&bytes).expect("valid hash bytes");
+    /// assert_eq!(hash.as_bytes(), &[0u8; 32]);
+    /// ```
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self, PayloadHashError> {
         let arr: [u8; 32] = bytes
             .try_into()
@@ -52,16 +69,40 @@ impl PayloadHash {
     }
 
     /// Construct a [`PayloadHash`] from a 32-byte array.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::PayloadHash;
+    /// let hash = PayloadHash::from_bytes([0u8; 32]);
+    /// assert_eq!(hash.as_bytes(), &[0u8; 32]);
+    /// ```
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
     /// Access the raw hash bytes.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::PayloadHash;
+    /// let hash = PayloadHash::from_bytes([0xab; 32]);
+    /// assert_eq!(hash.as_bytes()[0], 0xab);
+    /// ```
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
     /// Encode the hash as a lowercase hexadecimal string.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::PayloadHash;
+    /// let hash = PayloadHash::from_bytes([0u8; 32]);
+    /// assert_eq!(hash.to_hex().len(), 64);
+    /// ```
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
     }
@@ -90,18 +131,19 @@ impl fmt::Display for PayloadHash {
 /// # use serde_json::json;
 /// let a = json!({"b": 2, "a": 1});
 /// let b = json!({"a": 1, "b": 2});
-/// assert_eq!(canonicalize_and_hash(&a), canonicalize_and_hash(&b));
+/// let hash_a = canonicalize_and_hash(&a).expect("hash A");
+/// let hash_b = canonicalize_and_hash(&b).expect("hash B");
+/// assert_eq!(hash_a, hash_b);
 /// ```
-pub fn canonicalize_and_hash(value: &serde_json::Value) -> PayloadHash {
+pub fn canonicalize_and_hash(value: &serde_json::Value) -> Result<PayloadHash, PayloadHashError> {
     let canonical = canonicalize(value);
-    #[expect(
-        clippy::unwrap_used,
-        reason = "serde_json::Value serialization to JSON bytes is infallible"
-    )]
-    let json_bytes = serde_json::to_vec(&canonical).unwrap();
+    let json_bytes =
+        serde_json::to_vec(&canonical).map_err(|err| PayloadHashError::Serialization {
+            message: err.to_string(),
+        })?;
     let hash = Sha256::digest(&json_bytes);
     let hash_bytes: [u8; 32] = hash.into();
-    PayloadHash::from_bytes(hash_bytes)
+    Ok(PayloadHash::from_bytes(hash_bytes))
 }
 
 /// Recursively sort object keys for canonical JSON representation.
@@ -109,7 +151,7 @@ fn canonicalize(value: &serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
             let mut sorted: Vec<_> = map.iter().collect();
-            sorted.sort_by_key(|(k, _)| *k);
+            sorted.sort_by_key(|(k, _)| k.as_str());
             let canonical_map: serde_json::Map<String, serde_json::Value> = sorted
                 .into_iter()
                 .map(|(k, v)| (k.clone(), canonicalize(v)))

@@ -51,6 +51,19 @@ pub struct IdempotencyLookupQuery {
 
 impl IdempotencyLookupQuery {
     /// Create a new lookup query.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use backend::domain::idempotency::{IdempotencyKey, IdempotencyLookupQuery, MutationType, PayloadHash};
+    /// # use backend::domain::UserId;
+    /// let key = IdempotencyKey::random();
+    /// let user_id = UserId::random();
+    /// let payload_hash = PayloadHash::from_bytes([0u8; 32]);
+    /// let query = IdempotencyLookupQuery::new(key, user_id, MutationType::Routes, payload_hash);
+    ///
+    /// assert_eq!(query.mutation_type, MutationType::Routes);
+    /// ```
     pub fn new(
         key: IdempotencyKey,
         user_id: UserId,

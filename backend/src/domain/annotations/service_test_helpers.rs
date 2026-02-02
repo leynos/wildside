@@ -65,7 +65,7 @@ impl ReplayCase {
             user_id.clone(),
             RouteNoteContent::new("cached"),
         );
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = UpsertNoteResponse {
             note: note.clone(),
             replayed: false,
@@ -111,7 +111,7 @@ impl ReplayCase {
             .visited_stop_ids(visited_stop_ids)
             .revision(2)
             .build();
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = UpdateProgressResponse {
             progress: progress.clone(),
             replayed: false,
@@ -150,7 +150,7 @@ impl ReplayCase {
             user_id: user_id.clone(),
             idempotency_key: Some(idempotency_key.clone()),
         };
-        let payload_hash = request.compute_payload_hash();
+        let payload_hash = request.compute_payload_hash().expect("payload hash");
         let response = DeleteNoteResponse {
             deleted: true,
             replayed: false,

@@ -38,7 +38,7 @@ impl UsersQuery for FixtureUsersQuery {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Ensures the fixture users query returns the expected static user.
     use super::*;
 
     #[tokio::test]

@@ -232,13 +232,14 @@ where
 /// ```
 pub fn apply_update(options: &Options) -> Result<Update, CliError> {
     let registry_dir = open_registry_dir(&options.registry_path)?;
-    let registry = SeedRegistry::from_file(&registry_dir, &options.registry_path)?;
+    let file_name = registry_file_name(&options.registry_path)?;
+    let registry = SeedRegistry::from_file(&registry_dir, file_name)?;
     let selection = select_seed_and_name(&registry, options, None)?;
     let user_count = options.user_count.unwrap_or(DEFAULT_USER_COUNT);
     let seed_def = SeedDefinition::new(selection.name.clone(), selection.seed, user_count);
     let updated = registry.append_seed(seed_def)?;
 
-    updated.write_to_file(&registry_dir, &options.registry_path)?;
+    updated.write_to_file(&registry_dir, file_name)?;
 
     Ok(Update {
         name: selection.name,
@@ -249,12 +250,27 @@ pub fn apply_update(options: &Options) -> Result<Update, CliError> {
 
 fn open_registry_dir(path: &Utf8Path) -> Result<Dir, CliError> {
     let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    Dir::open_ambient_dir(parent, ambient_authority()).map_err(|err| CliError::RegistryError {
+    let parent_dir = if parent.as_str().is_empty() {
+        Utf8Path::new(".")
+    } else {
+        parent
+    };
+    Dir::open_ambient_dir(parent_dir, ambient_authority()).map_err(|err| CliError::RegistryError {
         source: RegistryError::IoError {
             path: path.to_path_buf(),
             message: err.to_string(),
         },
     })
+}
+
+fn registry_file_name(path: &Utf8Path) -> Result<&Utf8Path, CliError> {
+    let file_name = path.file_name().ok_or_else(|| CliError::RegistryError {
+        source: RegistryError::IoError {
+            path: path.to_path_buf(),
+            message: "registry path must be a file".to_owned(),
+        },
+    })?;
+    Ok(Utf8Path::new(file_name))
 }
 
 /// Generates a seed name for the supplied seed value.
@@ -362,20 +378,16 @@ fn select_seed_and_name(
         attempts: MAX_NAME_ATTEMPTS,
     })
 }
-
 fn seed_name_from_value(seed: u64, dictionary: &WordDictionary) -> String {
     let seed_str = seed.to_string();
     word::encode(seed_str.as_bytes(), dictionary)
 }
-
 fn has_name_in_registry(registry: &SeedRegistry, name: &str) -> bool {
     registry.seeds().iter().any(|seed| seed.name() == name)
 }
-
 fn random_seed() -> u64 {
     random()
 }
-
 fn eff_long_dictionary() -> Result<WordDictionary, CliError> {
     WordDictionary::builder()
         .words_from_str(wordlists::EFF_LONG)
@@ -384,6 +396,5 @@ fn eff_long_dictionary() -> Result<WordDictionary, CliError> {
         .build()
         .map_err(|err| CliError::WordListError { message: err })
 }
-
 #[cfg(test)]
 mod tests;

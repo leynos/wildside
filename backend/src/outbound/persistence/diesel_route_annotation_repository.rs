@@ -257,7 +257,7 @@ impl RouteAnnotationRepository for DieselRouteAnnotationRepository {
 
 #[cfg(test)]
 mod tests {
-    //! Regression coverage for this module.
+    //! Covers error mapping and note/progress row conversions for diesel.
     use super::*;
     use crate::outbound::persistence::pool::PoolError;
     use rstest::rstest;
