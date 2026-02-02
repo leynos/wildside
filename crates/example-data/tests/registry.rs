@@ -8,11 +8,13 @@
     reason = "test code uses expect for clear failure messages"
 )]
 
-use camino::{Utf8Path, Utf8PathBuf};
-use cap_std::{ambient_authority, fs::Dir};
+mod test_support;
+
+use camino::Utf8Path;
+use cap_std::ambient_authority;
 use example_data::{RegistryError, SeedDefinition, SeedRegistry};
 use rstest::{fixture, rstest};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use test_support::{open_registry_dir, unique_temp_path};
 
 const VALID_JSON: &str = r#"{
     "version": 1,
@@ -161,8 +163,8 @@ fn serializes_registry_to_pretty_json(registry_fixture: SeedRegistry) {
 #[rstest]
 fn writes_registry_to_file(registry_fixture: SeedRegistry) {
     let registry = registry_fixture;
-    let path = unique_temp_path("seeds.json");
-    let dir = open_registry_dir(&path);
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
+    let dir = open_registry_dir(&path).expect("open registry dir");
     let file_name = Utf8Path::new(path.file_name().expect("registry file name"));
 
     registry
@@ -178,21 +180,11 @@ fn writes_registry_to_file(registry_fixture: SeedRegistry) {
 #[rstest]
 fn write_to_file_rejects_directory_path(registry_fixture: SeedRegistry) {
     let registry = registry_fixture;
-    let path = unique_temp_path("seeds.json");
-    let dir = open_registry_dir(&path);
-    let directory_path = path.parent().expect("temp dir").to_path_buf();
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
 
-    let err = registry
-        .write_to_file(&dir, &directory_path)
-        .expect_err("directory path should fail");
-
-    assert_eq!(
-        err,
-        RegistryError::WriteError {
-            path: directory_path,
-            message: "registry path must be a file".to_owned(),
-        }
-    );
+    assert_directory_path_error(&path, RegistryPathError::Write, |dir, directory_path| {
+        registry.write_to_file(dir, directory_path)
+    });
 
     cleanup_path(&path);
 }
@@ -200,46 +192,46 @@ fn write_to_file_rejects_directory_path(registry_fixture: SeedRegistry) {
 #[rstest]
 fn from_file_rejects_directory_path(registry_fixture: SeedRegistry) {
     let _ = registry_fixture;
-    let path = unique_temp_path("seeds.json");
-    let dir = open_registry_dir(&path);
-    let directory_path = path.parent().expect("temp dir").to_path_buf();
+    let path = unique_temp_path("seed-registry", "seeds.json").expect("create temp registry path");
 
-    let err =
-        SeedRegistry::from_file(&dir, &directory_path).expect_err("directory path should fail");
-
-    assert_eq!(
-        err,
-        RegistryError::IoError {
-            path: directory_path,
-            message: "registry path must be a file".to_owned(),
-        }
-    );
+    assert_directory_path_error(&path, RegistryPathError::Read, |dir, directory_path| {
+        SeedRegistry::from_file(dir, directory_path)
+    });
 
     cleanup_path(&path);
 }
 
-fn unique_temp_path(file_name: &str) -> Utf8PathBuf {
-    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let process_id = std::process::id();
-    let dir = Utf8PathBuf::from("target")
-        .join("example-data-tests")
-        .join(format!("seed-registry-{process_id}-{counter}"));
-    let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
-    root.create_dir_all(&dir).expect("create temp dir");
-    dir.join(file_name)
+#[derive(Clone, Copy)]
+enum RegistryPathError {
+    Read,
+    Write,
 }
 
-fn open_registry_dir(path: &Utf8Path) -> Dir {
-    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    Dir::open_ambient_dir(parent, ambient_authority()).expect("open registry dir")
+fn assert_directory_path_error<T: std::fmt::Debug>(
+    path: &Utf8Path,
+    kind: RegistryPathError,
+    action: impl FnOnce(&cap_std::fs::Dir, &Utf8Path) -> Result<T, RegistryError>,
+) {
+    let dir = open_registry_dir(path).expect("open registry dir");
+    let directory_path = path.parent().expect("temp dir").to_path_buf();
+    let err = action(&dir, &directory_path).expect_err("directory path should fail");
+    let expected = match kind {
+        RegistryPathError::Read => RegistryError::IoError {
+            path: directory_path.clone(),
+            message: "registry path must be a file".to_owned(),
+        },
+        RegistryPathError::Write => RegistryError::WriteError {
+            path: directory_path.clone(),
+            message: "registry path must be a file".to_owned(),
+        },
+    };
+    assert_eq!(err, expected);
 }
 
 fn cleanup_path(path: &Utf8Path) {
     if let Some(parent) = path.parent() {
-        let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
-        if root.remove_dir_all(parent).is_err() {
-            // Ignore cleanup failures in test teardown.
-        }
+        let root = cap_std::fs::Dir::open_ambient_dir(".", ambient_authority())
+            .expect("open workspace dir");
+        drop(root.remove_dir_all(parent));
     }
 }

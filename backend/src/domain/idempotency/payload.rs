@@ -14,7 +14,7 @@ pub enum PayloadHashError {
         /// Actual number of bytes.
         actual: usize,
     },
-    /// Failed to serialise the canonical JSON payload.
+    /// Failed to serialize the canonical JSON payload.
     Serialization {
         /// Description of the serialization failure.
         message: String,
@@ -28,7 +28,7 @@ impl fmt::Display for PayloadHashError {
                 write!(f, "payload hash must be {expected} bytes, got {actual}")
             }
             Self::Serialization { message } => {
-                write!(f, "failed to serialise canonical JSON payload: {message}")
+                write!(f, "failed to serialize canonical JSON payload: {message}")
             }
         }
     }

@@ -250,10 +250,9 @@ fn session_key_from_env<E: SessionEnv>(
     allow_ephemeral: bool,
 ) -> Result<Key, SessionConfigError> {
     let allow_ephemeral_fallback = mode.is_debug() || allow_ephemeral;
-    let key_path = PathBuf::from(
-        env.string(KEY_FILE_ENV)
-            .unwrap_or_else(|| SESSION_KEY_DEFAULT_PATH.to_string()),
-    );
+    let key_path = env
+        .string(KEY_FILE_ENV)
+        .map_or_else(|| PathBuf::from(SESSION_KEY_DEFAULT_PATH), PathBuf::from);
     let parent = key_path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = extract_file_name(&key_path)?;
     let dir = match Dir::open_ambient_dir(parent, ambient_authority()) {

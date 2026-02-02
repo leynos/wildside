@@ -1,9 +1,12 @@
 //! Unit tests for the seed registry CLI helpers.
 
+#[path = "../../tests/test_support.rs"]
+mod test_support;
+
 use camino::{Utf8Path, Utf8PathBuf};
-use cap_std::{ambient_authority, fs::Dir};
+use cap_std::ambient_authority;
 use rstest::{fixture, rstest};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use test_support::{open_registry_dir, unique_temp_path};
 
 struct RegistryFixture {
     path: Utf8PathBuf,
@@ -15,7 +18,7 @@ impl RegistryFixture {
     }
 
     fn load(&self) -> SeedRegistry {
-        let dir = open_registry_dir(&self.path);
+        let dir = open_registry_dir(&self.path).expect("open registry dir");
         let file_name = Utf8Path::new(self.path.file_name().expect("registry file name"));
         SeedRegistry::from_file(&dir, file_name).expect("load registry")
     }
@@ -229,7 +232,8 @@ fn apply_update_reports_duplicate_generated_name() {
 
 #[test]
 fn apply_update_reports_registry_io_errors() {
-    let path = unique_temp_path("missing.json");
+    let path =
+        unique_temp_path("seed-registry-cli", "missing.json").expect("create temp registry path");
     let file_name = Utf8PathBuf::from(path.file_name().expect("registry file name"));
     let options = Options {
         registry_path: path.clone(),
@@ -310,36 +314,17 @@ fn registry_json_with_seed(name: &str, seed: u64) -> String {
 }
 
 fn write_registry(json: &str) -> Utf8PathBuf {
-    let path = unique_temp_path("seeds.json");
-    let dir = open_registry_dir(&path);
+    let path =
+        unique_temp_path("seed-registry-cli", "seeds.json").expect("create temp registry path");
+    let dir = open_registry_dir(&path).expect("open registry dir");
     let file_name = path.file_name().expect("registry file name");
     dir.write(file_name, json).expect("write registry");
     path
 }
 
-fn cleanup_path(path: &Utf8Path) {
-    if let Some(parent) = path.parent() {
-        let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
-        drop(root.remove_dir_all(parent));
-    }
-}
-
-fn unique_temp_path(file_name: &str) -> Utf8PathBuf {
-    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let process_id = std::process::id();
-    let dir_name = format!("seed-registry-cli-{process_id}-{counter}");
-    let dir = Utf8PathBuf::from("target")
-        .join("example-data-tests")
-        .join(dir_name);
-    let root = Dir::open_ambient_dir(".", ambient_authority()).expect("open workspace dir");
-    root.create_dir_all(&dir).expect("create temp dir");
-    dir.join(file_name)
-}
-
 fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
-    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    static TEMP_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let counter = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir_name = format!("seed-registry-cli-missing-{counter}");
     Utf8PathBuf::from("target")
         .join("example-data-tests")
@@ -347,7 +332,10 @@ fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
         .join(file_name)
 }
 
-fn open_registry_dir(path: &Utf8Path) -> Dir {
-    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    Dir::open_ambient_dir(parent, ambient_authority()).expect("open registry dir")
+fn cleanup_path(path: &Utf8Path) {
+    if let Some(parent) = path.parent() {
+        let root = cap_std::fs::Dir::open_ambient_dir(".", ambient_authority())
+            .expect("open workspace dir");
+        drop(root.remove_dir_all(parent));
+    }
 }

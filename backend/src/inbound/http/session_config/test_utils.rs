@@ -75,9 +75,7 @@ impl Drop for TempKeyFile {
         let Ok(dir) = Dir::open_ambient_dir(parent, ambient_authority()) else {
             return;
         };
-        if dir.remove_file(file_name).is_err() {
-            // Ignore cleanup failures in test teardown.
-        }
+        let _ = dir.remove_file(file_name);
     }
 }
 
