@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// # Example
 ///
 /// ```no_run
-/// # use crate::unique_temp_path;
+/// # use test_support::unique_temp_path;
 /// # fn main() -> std::io::Result<()> {
 /// let path = unique_temp_path("example", "seeds.json")?;
 /// assert!(path.as_str().contains("example"));
@@ -35,6 +35,27 @@ pub fn unique_temp_path(prefix: &str, file_name: &str) -> io::Result<Utf8PathBuf
     Ok(dir.join(file_name))
 }
 
+/// Create a unique temp path that does not create the directory.
+///
+/// This is useful for tests that need a missing registry path.
+///
+/// # Example
+///
+/// ```
+/// # use test_support::unique_missing_path;
+/// let path = unique_missing_path("missing.json");
+/// assert!(path.ends_with("missing.json"));
+/// ```
+pub fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir_name = format!("seed-registry-cli-missing-{counter}");
+    Utf8PathBuf::from("target")
+        .join("example-data-tests")
+        .join(dir_name)
+        .join(file_name)
+}
+
 /// Open the registry parent directory with a capability-based handle.
 ///
 /// # Errors
@@ -44,7 +65,7 @@ pub fn unique_temp_path(prefix: &str, file_name: &str) -> io::Result<Utf8PathBuf
 /// # Example
 ///
 /// ```no_run
-/// # use crate::{open_registry_dir, unique_temp_path};
+/// # use test_support::{open_registry_dir, unique_temp_path};
 /// # fn main() -> std::io::Result<()> {
 /// let path = unique_temp_path("example", "seeds.json")?;
 /// let _dir = open_registry_dir(&path)?;
@@ -66,7 +87,7 @@ pub fn open_registry_dir(path: &Utf8Path) -> io::Result<Dir> {
 /// # Example
 ///
 /// ```no_run
-/// # use crate::{cleanup_path, unique_temp_path};
+/// # use test_support::{cleanup_path, unique_temp_path};
 /// # fn main() -> std::io::Result<()> {
 /// let path = unique_temp_path("example", "seeds.json")?;
 /// cleanup_path(&path)?;
@@ -95,9 +116,11 @@ mod tests {
     fn temp_helpers_create_and_cleanup_paths() {
         let path =
             unique_temp_path("test-support", "seeds.json").expect("create temp registry path");
+        let missing = unique_missing_path("missing.json");
         let dir = open_registry_dir(&path).expect("open registry dir");
         let file_name = path.file_name().expect("registry file name");
         dir.write(file_name, "{}").expect("write registry file");
+        assert!(missing.ends_with("missing.json"));
         cleanup_path(&path).expect("cleanup temp dir");
     }
 }

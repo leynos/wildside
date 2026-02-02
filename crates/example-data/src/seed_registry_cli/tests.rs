@@ -5,7 +5,7 @@ mod test_support;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use rstest::{fixture, rstest};
-use test_support::{cleanup_path, open_registry_dir, unique_temp_path};
+use test_support::{cleanup_path, open_registry_dir, unique_missing_path, unique_temp_path};
 
 struct RegistryFixture {
     path: Utf8PathBuf,
@@ -319,14 +319,4 @@ fn write_registry(json: &str) -> Utf8PathBuf {
     let file_name = path.file_name().expect("registry file name");
     dir.write(file_name, json).expect("write registry");
     path
-}
-
-fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
-    static TEMP_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let counter = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir_name = format!("seed-registry-cli-missing-{counter}");
-    Utf8PathBuf::from("target")
-        .join("example-data-tests")
-        .join(dir_name)
-        .join(file_name)
 }
