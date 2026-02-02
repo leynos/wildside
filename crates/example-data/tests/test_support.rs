@@ -49,7 +49,8 @@ pub fn unique_temp_path(prefix: &str, file_name: &str) -> io::Result<Utf8PathBuf
 pub fn unique_missing_path(file_name: &str) -> Utf8PathBuf {
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir_name = format!("seed-registry-cli-missing-{counter}");
+    let process_id = std::process::id();
+    let dir_name = format!("seed-registry-cli-missing-{process_id}-{counter}");
     Utf8PathBuf::from("target")
         .join("example-data-tests")
         .join(dir_name)
