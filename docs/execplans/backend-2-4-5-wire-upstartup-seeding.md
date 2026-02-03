@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes &
 Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference.
@@ -75,31 +75,55 @@ port/adapter that owns the transaction boundary, keeping domain logic pure.
 
 ## Progress
 
-- [ ] (2026-02-03) Audit existing seeding-related code, configuration modules,
+- [x] (2026-02-03) ExecPlan approved; implementation started.
+- [x] (2026-02-03) Audit existing seeding-related code, configuration modules,
       and tests to confirm current behaviour and gaps.
-- [ ] (2026-02-03) Add the `example-data` feature flag and `ortho-config`
+- [x] (2026-02-03) Add the `example-data` feature flag and `ortho-config`
       settings model for example data seeding.
-- [ ] (2026-02-03) Implement domain-level seeding orchestration and outbound
+- [x] (2026-02-03) Implement domain-level seeding orchestration and outbound
       adapter wiring behind ports, including logging decisions.
-- [ ] (2026-02-03) Add unit tests (`rstest`) for config and seeding logic.
-- [ ] (2026-02-03) Add behavioural tests (`rstest-bdd` v0.4.0) with embedded
+- [x] (2026-02-03) Add unit tests (`rstest`) for config and seeding logic.
+- [x] (2026-02-03) Add behavioural tests (`rstest-bdd` v0.4.0) with embedded
       Postgres covering applied/skip/error paths.
-- [ ] (2026-02-03) Update architecture documentation and mark roadmap task 2.4.5
+- [x] (2026-02-03) Update architecture documentation and mark roadmap task 2.4.5
       complete.
-- [ ] (2026-02-03) Run `make check-fmt`, `make lint`, and `make test` with
+- [x] (2026-02-03) Run `make check-fmt`, `make lint`, and `make test` with
       logged output and confirm success.
 
 ## Surprises & Discoveries
 
-Observation: _None yet._ Evidence: _TBD._ Impact: _TBD._
+Observation (2026-02-03): `ortho_config` derive macros require `clap` to be a
+direct dependency for generated CLI parsing helpers. Evidence: `cargo clippy`
+failed with unresolved `clap` imports until `clap` was added behind the
+`example-data` feature. Impact: add `clap` as a feature-gated dependency in
+`backend/Cargo.toml`.
+
+Observation (2026-02-03): Whitaker's `no_std_fs_operations` lint rejected
+`std::fs::read_to_string` in startup seeding; switching to capability-based
+`cap_std::fs::Dir` reads aligned with the repo's filesystem policy.
 
 ## Decision Log
 
-Decision: _TBD._ Rationale: _TBD._ Date/Author: _TBD._
+Decision (2026-02-03): Introduce `ExampleDataSeedRepository` to own the
+transaction boundary for recording seed runs and upserting users/preferences,
+keeping the domain seeding service pure. Configuration uses `ortho_config`
+prefix `EXAMPLE_DATA`, with `count` mapped to config file key
+`user_count` and defaults for the seed name (`mossy-owl`) and registry path
+(`backend/fixtures/example-data/seeds.json`). Rationale: align with the
+sample-data design while keeping seeding optional and testable across env and
+config sources.
 
 ## Outcomes & Retrospective
 
-_TBD once implementation completes._
+Outcome (2026-02-03):
+
+- Startup seeding is fully gated behind the `example-data` feature and
+  `ortho-config` settings, with capability-based registry reads and structured
+  logging for applied and skipped runs.
+- Unit tests (`rstest`) and behavioural tests (`rstest-bdd` v0.4.0) cover config
+  parsing, successful seeding, idempotent skips, and missing seed failures with
+  embedded Postgres.
+- Quality gates passed: `make check-fmt`, `make lint`, and `make test`.
 
 ## Context and Orientation
 
@@ -129,11 +153,11 @@ Key locations (repository-relative):
 
 Terminology (plain-language):
 
-- *Feature flag*: Cargo feature (`example-data`) that gates compilation and
+- _Feature flag_: Cargo feature (`example-data`) that gates compilation and
   runtime behaviour.
-- *Seed registry*: JSON file listing seed names and deterministic seed values.
-- *Seeding applied*: seed record inserted and demo data written.
-- *Seeding skipped*: seeding did not run because it was disabled, already ran,
+- _Seed registry_: JSON file listing seed names and deterministic seed values.
+- _Seeding applied_: seed record inserted and demo data written.
+- _Seeding skipped_: seeding did not run because it was disabled, already ran,
   or prerequisites were missing (e.g., no database URL).
 
 ## Plan of Work
@@ -213,32 +237,32 @@ Stage G: Validation and commits.
 ## Concrete Steps
 
 1. Review relevant docs and existing seeding-related code paths:
-   `docs/backend-roadmap.md`, `docs/backend-sample-data-design.md`,
-   `backend/src/main.rs`, `backend/src/server/mod.rs`, and
-   `backend/src/domain/ports/example_data_runs_repository.rs`.
+`docs/backend-roadmap.md`, `docs/backend-sample-data-design.md`,
+`backend/src/main.rs`, `backend/src/server/mod.rs`, and
+`backend/src/domain/ports/example_data_runs_repository.rs`.
 
 2. Add feature flag + dependencies in `backend/Cargo.toml` and wire
-   `example-data` + `ortho-config` behind that flag.
+`example-data` + `ortho-config` behind that flag.
 
 3. Implement `ExampleDataSettings` loader using `ortho-config` and add unit
-   tests using `rstest`.
+tests using `rstest`.
 
 4. Add domain seeding service + ports/adapters, ensuring transactional semantics
-   if required by the design document.
+if required by the design document.
 
 5. Wire startup seeding in `backend/src/main.rs` (feature-gated) and add
-   structured `tracing` logs for applied/skip paths.
+structured `tracing` logs for applied/skip paths.
 
 6. Add `rstest-bdd` scenarios and feature file under `backend/tests/features/`
-   for startup seeding behaviour, using embedded Postgres helpers.
+for startup seeding behaviour, using embedded Postgres helpers.
 
 7. Update `docs/wildside-backend-architecture.md` and mark 2.4.5 complete in
-   `docs/backend-roadmap.md`.
+`docs/backend-roadmap.md`.
 
 8. Run quality gates: `make check-fmt | tee /tmp/check-fmt-$(get-project)-$(git
-   branch --show).out`, `make lint | tee /tmp/lint-$(get-project)-$(git branch
-   --show).out`, and `make test | tee /tmp/test-$(get-project)-$(git branch
-   --show).out`.
+branch --show).out`, `make lint | tee /tmp/lint-$(get-project)-$(git branch
+--show).out`, and `make test | tee /tmp/test-$(get-project)-$(git branch
+--show).out`.
 
 ## Validation and Acceptance
 
@@ -254,8 +278,8 @@ Acceptance criteria:
   inserts nothing new.
 - Invalid configuration (missing registry or seed) fails fast with a clear
   error.
-- All tests and quality gates pass: `make check-fmt`, `make lint`, and
-  `make test`.
+- All tests and quality gates pass: `make check-fmt`, `make lint`, and `make
+  test`.
 
 ## Idempotence and Recovery
 
@@ -298,3 +322,7 @@ Acceptance criteria:
 - Tests should use `pg_embedded_setup_unpriv::TestCluster` helpers from
   `backend/tests/support/pg_embed.rs`, `rstest` fixtures for config and service
   unit tests, and `rstest-bdd` v0.4.0 macros for behavioural tests.
+
+## Revision note
+
+- Updated status to IN PROGRESS and noted approval/start of implementation.

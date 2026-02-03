@@ -5,7 +5,12 @@
 use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
+#[cfg(feature = "example-data")]
+use backend::example_data::{ExampleDataSettings, seed_example_data_on_startup};
 use backend::inbound::http::session_config::{BuildMode, DefaultEnv, session_settings_from_env};
+use backend::outbound::persistence::{DbPool, PoolConfig};
+#[cfg(feature = "example-data")]
+use ortho_config::OrthoConfig;
 use std::env;
 use std::net::SocketAddr;
 use tracing::{info, warn};
@@ -70,6 +75,30 @@ fn bind_addr() -> SocketAddr {
     }
 }
 
+async fn build_db_pool(seeding_enabled: bool) -> std::io::Result<Option<DbPool>> {
+    let Ok(database_url) = env::var("DATABASE_URL") else {
+        return Ok(None);
+    };
+
+    let config = PoolConfig::new(database_url);
+    match DbPool::new(config).await {
+        Ok(pool) => Ok(Some(pool)),
+        Err(error) => {
+            if seeding_enabled {
+                Err(std::io::Error::other(format!(
+                    "database pool initialization failed: {error}"
+                )))
+            } else {
+                warn!(
+                    error = %error,
+                    "failed to initialize database pool; continuing without persistence"
+                );
+                Ok(None)
+            }
+        }
+    }
+}
+
 /// Application bootstrap.
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -92,11 +121,30 @@ async fn main() -> std::io::Result<()> {
     let cookie_secure = session_settings.cookie_secure;
     let same_site = session_settings.same_site;
     let key = session_settings.key;
+
+    #[cfg(feature = "example-data")]
+    let example_data_settings = ExampleDataSettings::load().map_err(std::io::Error::other)?;
+    #[cfg(feature = "example-data")]
+    let seeding_enabled = example_data_settings.enabled;
+    #[cfg(not(feature = "example-data"))]
+    let seeding_enabled = false;
+
+    let db_pool = build_db_pool(seeding_enabled).await?;
+
+    #[cfg(feature = "example-data")]
+    seed_example_data_on_startup(&example_data_settings, db_pool.as_ref())
+        .await
+        .map_err(std::io::Error::other)?;
     #[cfg(feature = "metrics")]
     let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
     let server_config = {
         let config = ServerConfig::new(key, cookie_secure, same_site, bind_addr());
+        let config = if let Some(pool) = db_pool.clone() {
+            config.with_db_pool(pool)
+        } else {
+            config
+        };
         #[cfg(feature = "metrics")]
         let config = config.with_metrics(prometheus);
         config

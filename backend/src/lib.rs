@@ -7,6 +7,8 @@
 
 pub mod doc;
 pub mod domain;
+#[cfg(feature = "example-data")]
+pub mod example_data;
 pub mod inbound;
 mod middleware;
 pub mod outbound;

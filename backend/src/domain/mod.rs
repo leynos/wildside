@@ -30,10 +30,14 @@
 //! - RouteNoteContent — content parameters for creating route notes.
 //! - RouteProgress — progress tracking for a route walk.
 //! - RouteAnnotations — aggregated notes and progress for a route.
+//! - ExampleDataSeeder — startup seeding orchestration for example data.
+//! - ExampleDataSeedOutcome — summary of seeding results and counts.
 
 pub mod annotations;
 pub mod auth;
 pub mod error;
+#[cfg(feature = "example-data")]
+pub mod example_data;
 pub mod idempotency;
 pub mod interest_theme;
 pub mod ports;
@@ -53,6 +57,8 @@ pub use self::annotations::{
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
+#[cfg(feature = "example-data")]
+pub use self::example_data::{ExampleDataSeedOutcome, ExampleDataSeeder, ExampleDataSeedingError};
 pub use self::idempotency::{
     IdempotencyConfig, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupQuery,
     IdempotencyLookupResult, IdempotencyRecord, MutationType, ParseMutationTypeError, PayloadHash,

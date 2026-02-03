@@ -37,7 +37,6 @@ impl ServerConfig {
     ///
     /// When provided, the server will use database-backed implementations
     /// for ports that have adapters available (e.g., `RouteSubmissionService`).
-    #[expect(dead_code, reason = "Reserved for production DB integration")]
     #[must_use]
     pub fn with_db_pool(mut self, pool: DbPool) -> Self {
         self.db_pool = Some(pool);
