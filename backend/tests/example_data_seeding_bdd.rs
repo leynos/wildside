@@ -209,6 +209,19 @@ fn startup_seeding_runs_again_for(world: &ExampleDataSeedingWorld, seed_key: Str
 // Then Steps
 // -----------------------------------------------------------------------------
 
+fn assert_seeding_result(
+    result: &Result<ExampleDataSeedOutcome, Arc<ExampleDataSeedingError>>,
+    expected: backend::domain::ports::SeedingResult,
+) {
+    match result {
+        Ok(outcome) if outcome.result == expected => {}
+        Ok(outcome) => {
+            panic!("expected {expected:?}, got {:?}", outcome.result);
+        }
+        Err(err) => panic!("expected {expected:?}, got error: {err}"),
+    }
+}
+
 #[then("the seeding result is {expected}")]
 fn the_seeding_result_is(world: &ExampleDataSeedingWorld, expected: String) {
     if world.is_skipped() {
@@ -222,21 +235,15 @@ fn the_seeding_result_is(world: &ExampleDataSeedingWorld, expected: String) {
         .expect("seeding result should be set");
 
     match expected.trim_matches('"') {
-        "applied" => match result {
-            Ok(outcome) if outcome.result == backend::domain::ports::SeedingResult::Applied => {}
-            Ok(outcome) => {
-                panic!("expected Applied, got {:?}", outcome.result);
-            }
-            Err(err) => panic!("expected Applied, got error: {err}"),
-        },
-        "already seeded" => match result {
-            Ok(outcome)
-                if outcome.result == backend::domain::ports::SeedingResult::AlreadySeeded => {}
-            Ok(outcome) => {
-                panic!("expected AlreadySeeded, got {:?}", outcome.result);
-            }
-            Err(err) => panic!("expected AlreadySeeded, got error: {err}"),
-        },
+        "applied" => {
+            assert_seeding_result(&result, backend::domain::ports::SeedingResult::Applied);
+        }
+        "already seeded" => {
+            assert_seeding_result(
+                &result,
+                backend::domain::ports::SeedingResult::AlreadySeeded,
+            );
+        }
         other => panic!("unknown expected result: {other}"),
     }
 }
