@@ -63,8 +63,7 @@ pub(crate) fn write_atomic(
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |elapsed| elapsed.as_nanos());
     let tmp_name = format!(
         ".{}.tmp.{}.{}.{}",
         file_name,
