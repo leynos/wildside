@@ -241,34 +241,41 @@ fn the_seeding_result_is(world: &ExampleDataSeedingWorld, expected: String) {
     }
 }
 
-#[then("{count} users are stored")]
-fn users_are_stored(world: &ExampleDataSeedingWorld, count: i64) {
+/// Assert that the stored row count matches the expected value for a slot.
+fn assert_count_stored(
+    world: &ExampleDataSeedingWorld,
+    expected_count: i64,
+    count_slot: &Slot<i64>,
+    error_msg: &str,
+) {
     if world.is_skipped() {
         eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
         return;
     }
 
     world.record_table_counts();
-    let user_count = world
-        .last_user_count
-        .get()
-        .expect("user count should be recorded");
-    assert_eq!(user_count, count);
+    let actual_count = count_slot.get().expect(error_msg);
+    assert_eq!(actual_count, expected_count);
+}
+
+#[then("{count} users are stored")]
+fn users_are_stored(world: &ExampleDataSeedingWorld, count: i64) {
+    assert_count_stored(
+        world,
+        count,
+        &world.last_user_count,
+        "user count should be recorded",
+    );
 }
 
 #[then("{count} preferences are stored")]
 fn preferences_are_stored(world: &ExampleDataSeedingWorld, count: i64) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
-        return;
-    }
-
-    world.record_table_counts();
-    let pref_count = world
-        .last_preferences_count
-        .get()
-        .expect("preferences count should be recorded");
-    assert_eq!(pref_count, count);
+    assert_count_stored(
+        world,
+        count,
+        &world.last_preferences_count,
+        "preferences count should be recorded",
+    );
 }
 
 #[then("a seeding error is returned")]
