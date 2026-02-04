@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes &
 Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference.
@@ -107,7 +107,7 @@ Observation (2026-02-03): Whitaker's `no_std_fs_operations` lint rejected
 Decision (2026-02-03): Introduce `ExampleDataSeedRepository` to own the
 transaction boundary for recording seed runs and upserting users/preferences,
 keeping the domain seeding service pure. Configuration uses `ortho_config`
-prefix `EXAMPLE_DATA`, with `count` mapped to config file key
+prefix `EXAMPLE_DATA_`, with `count` mapped to config file key
 `user_count` and defaults for the seed name (`mossy-owl`) and registry path
 (`backend/fixtures/example-data/seeds.json`). Rationale: align with the
 sample-data design while keeping seeding optional and testable across env and

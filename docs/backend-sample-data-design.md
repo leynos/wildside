@@ -145,7 +145,7 @@ can be sourced from a settings file and environment overrides. Ensure the key
 naming matches existing backend `ortho-config` conventions before finalizing
 the field names. Proposed config fields:
 
-- `example_data.enabled`: boolean toggle.
+- `example_data.is_enabled`: boolean toggle.
 - `example_data.seed_name`: seed name to load from the registry.
 - `example_data.user_count`: optional override for the seed's default count.
 - `example_data.registry_path`: path to the registry JSON.
@@ -153,7 +153,7 @@ the field names. Proposed config fields:
 Environment overrides (subject to the same naming conventions and mapping
 rules `ortho-config` applies elsewhere):
 
-- `EXAMPLE_DATA_ENABLED`
+- `EXAMPLE_DATA_IS_ENABLED`
 - `EXAMPLE_DATA_SEED_NAME`
 - `EXAMPLE_DATA_COUNT`
 - `EXAMPLE_DATA_REGISTRY_PATH`

@@ -31,6 +31,7 @@ thiserror = "2.0.17"
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
 chrono = { version = "0.4", features = ["serde"] }
+mockable = { version = "0.3", features = ["clock", "mock"] }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -55,9 +56,11 @@ hex = "0.4"
 [features]
 default = []
 # Enable example data seeding at startup via OrthoConfig.
-example-data = ["dep:clap", "dep:example-data", "dep:ortho_config"]
+example-data = ["dep:clap", "dep:example-data", "dep:ortho_config", "serde_json"]
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
+# Enable OrthoConfig merge helpers that rely on serde_json.
+serde_json = []
 # Expose test utilities for integration tests
 test-support = []
 
@@ -80,7 +83,6 @@ rstest-bdd = "0.4.0"
 rstest-bdd-macros = "0.4.0"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
-mockable = { version = "0.3", features = ["mock"] }
 # Diesel migration runner for integration tests
 diesel_migrations = "2.2"
 

@@ -565,15 +565,17 @@ data without rewriting view components.
 
 > **Design decision (2026-02-03):** Example data seeding runs only when the
 > backend is compiled with the `example-data` feature flag. Configuration is
-> loaded with `ortho_config` using the `EXAMPLE_DATA` prefix (for example
-> `EXAMPLE_DATA_ENABLED`, `EXAMPLE_DATA_SEED_NAME`, `EXAMPLE_DATA_COUNT`,
+> loaded with `ortho_config` using the `EXAMPLE_DATA_` prefix (for example
+> `EXAMPLE_DATA_IS_ENABLED`, `EXAMPLE_DATA_SEED_NAME`, `EXAMPLE_DATA_COUNT`,
 > and `EXAMPLE_DATA_REGISTRY_PATH`). The default registry path is
 > `backend/fixtures/example-data/seeds.json`, and the default seed name is
 > `mossy-owl`. Startup wiring invokes `ExampleDataSeeder` with the
 > `DieselExampleDataSeedRepository`, ensuring the seed run record, users, and
-> preferences are written atomically. When seeding is disabled, already
-> applied, or a database URL is missing, the service logs the skip; registry
-> parse failures or missing seeds abort startup to prevent partial demo data.
+> preferences are written atomically. `ExampleDataSeeder` receives a
+> `mockable::Clock` so timestamping is deterministic in tests. When seeding is
+> disabled, already applied, or a database URL is missing, the service logs the
+> skip; registry parse failures or missing seeds abort startup to prevent
+> partial demo data.
 
 #### Driving ports (services and queries)
 

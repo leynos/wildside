@@ -22,3 +22,27 @@ Feature: Example data startup seeding
     And a seed registry with seed "mossy-owl"
     When startup seeding runs for "missing-seed"
     Then a seeding error is returned
+
+  Scenario: Seeding is skipped when disabled
+    Given a fresh database
+    And a seed registry with seed "mossy-owl"
+    And example data seeding is disabled
+    When startup seeding runs for "mossy-owl"
+    Then startup seeding is skipped
+    And 0 users are stored
+    And 0 preferences are stored
+
+  Scenario: Seeding is skipped when database is missing
+    Given a fresh database
+    And a seed registry with seed "mossy-owl"
+    And the database is unavailable
+    When startup seeding runs for "mossy-owl"
+    Then startup seeding is skipped
+    And 0 users are stored
+    And 0 preferences are stored
+
+  Scenario: Invalid registry path returns an error
+    Given a fresh database
+    And an invalid registry path
+    When startup seeding runs for "mossy-owl"
+    Then a seeding error is returned

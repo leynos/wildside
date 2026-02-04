@@ -28,6 +28,21 @@ pub struct DieselExampleDataSeedRepository {
 
 impl DieselExampleDataSeedRepository {
     /// Create a new seeding repository with the given connection pool.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use backend::outbound::persistence::{
+    ///     DbPool, DieselExampleDataSeedRepository, PoolConfig,
+    /// };
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pool = DbPool::new(PoolConfig::new("postgres://localhost")).await?;
+    /// let repository = DieselExampleDataSeedRepository::new(pool);
+    /// # let _ = repository;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
     }
@@ -46,12 +61,19 @@ fn map_pool_error(error: PoolError) -> ExampleDataSeedRepositoryError {
 fn map_diesel_error(error: diesel::result::Error) -> ExampleDataSeedRepositoryError {
     use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
+    let error_message = error.to_string();
     match &error {
         DieselError::DatabaseError(kind, info) => {
-            debug!(?kind, message = info.message(), "diesel operation failed");
+            debug!(
+                ?kind,
+                message = info.message(),
+                error = %error_message,
+                "diesel operation failed"
+            );
         }
         _ => debug!(
             error_type = %std::any::type_name_of_val(&error),
+            error = %error_message,
             "diesel operation failed"
         ),
     }
@@ -64,7 +86,7 @@ fn map_diesel_error(error: diesel::result::Error) -> ExampleDataSeedRepositoryEr
         DieselError::DatabaseError(_, info) => {
             ExampleDataSeedRepositoryError::query(info.message().to_owned())
         }
-        _ => ExampleDataSeedRepositoryError::query("database error"),
+        _ => ExampleDataSeedRepositoryError::query(error_message),
     }
 }
 

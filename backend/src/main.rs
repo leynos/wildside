@@ -75,28 +75,15 @@ fn bind_addr() -> SocketAddr {
     }
 }
 
-async fn build_db_pool(seeding_enabled: bool) -> std::io::Result<Option<DbPool>> {
+async fn build_db_pool() -> std::io::Result<Option<DbPool>> {
     let Ok(database_url) = env::var("DATABASE_URL") else {
         return Ok(None);
     };
 
     let config = PoolConfig::new(database_url);
-    match DbPool::new(config).await {
-        Ok(pool) => Ok(Some(pool)),
-        Err(error) => {
-            if seeding_enabled {
-                Err(std::io::Error::other(format!(
-                    "database pool initialization failed: {error}"
-                )))
-            } else {
-                warn!(
-                    error = %error,
-                    "failed to initialize database pool; continuing without persistence"
-                );
-                Ok(None)
-            }
-        }
-    }
+    DbPool::new(config).await.map(Some).map_err(|error| {
+        std::io::Error::other(format!("database pool initialization failed: {error}"))
+    })
 }
 
 /// Application bootstrap.
@@ -124,12 +111,8 @@ async fn main() -> std::io::Result<()> {
 
     #[cfg(feature = "example-data")]
     let example_data_settings = ExampleDataSettings::load().map_err(std::io::Error::other)?;
-    #[cfg(feature = "example-data")]
-    let seeding_enabled = example_data_settings.enabled;
-    #[cfg(not(feature = "example-data"))]
-    let seeding_enabled = false;
 
-    let db_pool = build_db_pool(seeding_enabled).await?;
+    let db_pool = build_db_pool().await?;
 
     #[cfg(feature = "example-data")]
     seed_example_data_on_startup(&example_data_settings, db_pool.as_ref())

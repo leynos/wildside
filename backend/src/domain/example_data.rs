@@ -5,11 +5,12 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use example_data::{
     ExampleUserSeed, GenerationError, RegistryError, SeedDefinition, SeedRegistry, UnitSystemSeed,
     generate_example_users,
 };
+use mockable::Clock;
 use thiserror::Error;
 
 use crate::domain::ports::{
@@ -58,12 +59,25 @@ pub enum ExampleDataSeedingError {
 #[derive(Clone)]
 pub struct ExampleDataSeeder<R> {
     repository: Arc<R>,
+    clock: Arc<dyn Clock>,
 }
 
 impl<R> ExampleDataSeeder<R> {
     /// Create a new seeder with the given persistence adapter.
-    pub fn new(repository: Arc<R>) -> Self {
-        Self { repository }
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use std::sync::Arc;
+    /// use backend::domain::ExampleDataSeeder;
+    /// use mockable::DefaultClock;
+    ///
+    /// struct Repo;
+    ///
+    /// let seeder = ExampleDataSeeder::new(Arc::new(Repo), Arc::new(DefaultClock));
+    /// ```
+    pub fn new(repository: Arc<R>, clock: Arc<dyn Clock>) -> Self {
+        Self { repository, clock }
     }
 }
 
@@ -77,6 +91,48 @@ where
     ///
     /// Returns [`ExampleDataSeedingError`] if registry lookup, generation,
     /// validation, or persistence fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use std::sync::Arc;
+    ///
+    /// use async_trait::async_trait;
+    /// use backend::domain::ExampleDataSeeder;
+    /// use backend::domain::ports::{
+    ///     ExampleDataSeedRepository, ExampleDataSeedRepositoryError, ExampleDataSeedRequest,
+    ///     SeedingResult,
+    /// };
+    /// use example_data::SeedRegistry;
+    /// use mockable::DefaultClock;
+    ///
+    /// struct Repo;
+    ///
+    /// #[async_trait]
+    /// impl ExampleDataSeedRepository for Repo {
+    ///     async fn seed_example_data(
+    ///         &self,
+    ///         _request: ExampleDataSeedRequest,
+    ///     ) -> Result<SeedingResult, ExampleDataSeedRepositoryError> {
+    ///         Ok(SeedingResult::Applied)
+    ///     }
+    /// }
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let registry = SeedRegistry::from_json(
+    ///     r#"{
+    ///       "version": 1,
+    ///       "interestThemeIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+    ///       "safetyToggleIds": [],
+    ///       "seeds": [{"name": "mossy-owl", "seed": 42, "userCount": 2}]
+    ///     }"#,
+    /// )?;
+    /// let seeder = ExampleDataSeeder::new(Arc::new(Repo), Arc::new(DefaultClock));
+    /// let outcome = seeder.seed_from_registry(&registry, "mossy-owl", None).await?;
+    /// assert_eq!(outcome.result, SeedingResult::Applied);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn seed_from_registry(
         &self,
         registry: &SeedRegistry,
@@ -96,8 +152,9 @@ where
         let seed_def = SeedDefinition::new(seed_key.clone(), seed_value, user_count);
         let example_users = generate_example_users(registry, &seed_def)?;
         let mut users = Vec::with_capacity(example_users.len());
+        let now = self.clock.utc();
         for seed_user in example_users {
-            users.push(convert_seed_user(seed_user)?);
+            users.push(convert_seed_user(seed_user, &now)?);
         }
 
         let request = ExampleDataSeedRequest {
@@ -118,6 +175,7 @@ where
 
 fn convert_seed_user(
     seed_user: ExampleUserSeed,
+    now: &DateTime<Utc>,
 ) -> Result<ExampleDataSeedUser, UserValidationError> {
     let user_id = UserId::from_uuid(seed_user.id);
     let display_name = DisplayName::new(seed_user.display_name)?;
@@ -127,7 +185,7 @@ fn convert_seed_user(
         .safety_toggle_ids(seed_user.safety_toggle_ids)
         .unit_system(map_unit_system(seed_user.unit_system))
         .revision(1)
-        .updated_at(Utc::now())
+        .updated_at(*now)
         .build();
 
     Ok(ExampleDataSeedUser { user, preferences })
@@ -146,7 +204,8 @@ mod tests {
 
     use super::*;
     use crate::domain::ports::MockExampleDataSeedRepository;
-    use rstest::rstest;
+    use mockable::DefaultClock;
+    use rstest::{fixture, rstest};
 
     const REGISTRY_JSON: &str = r#"{
         "version": 1,
@@ -155,13 +214,14 @@ mod tests {
         "seeds": [{"name": "mossy-owl", "seed": 42, "userCount": 2}]
     }"#;
 
+    #[fixture]
     fn registry() -> SeedRegistry {
         SeedRegistry::from_json(REGISTRY_JSON).expect("registry should parse")
     }
 
     #[rstest]
     #[tokio::test]
-    async fn seed_applies_for_new_seed() {
+    async fn seed_applies_for_new_seed(registry: SeedRegistry) {
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data()
             .withf(|request| {
@@ -173,9 +233,9 @@ mod tests {
             .times(1)
             .return_once(|_| Ok(SeedingResult::Applied));
 
-        let seeder = ExampleDataSeeder::new(Arc::new(repo));
+        let seeder = ExampleDataSeeder::new(Arc::new(repo), Arc::new(DefaultClock));
         let outcome = seeder
-            .seed_from_registry(&registry(), "mossy-owl", None)
+            .seed_from_registry(&registry, "mossy-owl", None)
             .await
             .expect("seed succeeds");
 
@@ -186,15 +246,15 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn seed_skips_when_already_seeded() {
+    async fn seed_skips_when_already_seeded(registry: SeedRegistry) {
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data()
             .times(1)
             .return_once(|_| Ok(SeedingResult::AlreadySeeded));
 
-        let seeder = ExampleDataSeeder::new(Arc::new(repo));
+        let seeder = ExampleDataSeeder::new(Arc::new(repo), Arc::new(DefaultClock));
         let outcome = seeder
-            .seed_from_registry(&registry(), "mossy-owl", None)
+            .seed_from_registry(&registry, "mossy-owl", None)
             .await
             .expect("seed succeeds");
 
@@ -203,10 +263,13 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn seed_rejects_unknown_seed() {
-        let seeder = ExampleDataSeeder::new(Arc::new(MockExampleDataSeedRepository::new()));
+    async fn seed_rejects_unknown_seed(registry: SeedRegistry) {
+        let seeder = ExampleDataSeeder::new(
+            Arc::new(MockExampleDataSeedRepository::new()),
+            Arc::new(DefaultClock),
+        );
         let error = seeder
-            .seed_from_registry(&registry(), "missing-seed", None)
+            .seed_from_registry(&registry, "missing-seed", None)
             .await
             .expect_err("missing seed should error");
 
@@ -215,14 +278,14 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn user_count_overflow_is_rejected() {
+    async fn user_count_overflow_is_rejected(registry: SeedRegistry) {
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data().times(0);
 
-        let seeder = ExampleDataSeeder::new(Arc::new(repo));
+        let seeder = ExampleDataSeeder::new(Arc::new(repo), Arc::new(DefaultClock));
         let overflow_count = (i32::MAX as usize) + 1;
         let error = seeder
-            .seed_from_registry(&registry(), "mossy-owl", Some(overflow_count))
+            .seed_from_registry(&registry, "mossy-owl", Some(overflow_count))
             .await
             .expect_err("overflow should be rejected");
 
@@ -242,7 +305,8 @@ mod tests {
             unit_system: UnitSystemSeed::Metric,
         };
 
-        let result = convert_seed_user(seed_user);
+        let now = DateTime::<Utc>::from_timestamp(0, 0).expect("valid timestamp");
+        let result = convert_seed_user(seed_user, &now);
         assert!(matches!(
             result,
             Err(UserValidationError::DisplayNameTooShort { .. })

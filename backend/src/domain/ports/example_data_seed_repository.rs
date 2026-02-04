@@ -55,6 +55,49 @@ pub trait ExampleDataSeedRepository: Send + Sync {
     ///
     /// Returns `Applied` when the seed run is recorded and data is inserted,
     /// or `AlreadySeeded` when the seed key already exists.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use async_trait::async_trait;
+    /// use backend::domain::ports::{
+    ///     ExampleDataSeedRepository, ExampleDataSeedRepositoryError, ExampleDataSeedRequest,
+    ///     ExampleDataSeedUser, SeedingResult,
+    /// };
+    /// use backend::domain::{DisplayName, User, UserId, UserPreferencesBuilder};
+    /// use uuid::Uuid;
+    ///
+    /// struct Repo;
+    ///
+    /// #[async_trait]
+    /// impl ExampleDataSeedRepository for Repo {
+    ///     async fn seed_example_data(
+    ///         &self,
+    ///         request: ExampleDataSeedRequest,
+    ///     ) -> Result<SeedingResult, ExampleDataSeedRepositoryError> {
+    ///         Ok(if request.seed_key == "mossy-owl" {
+    ///             SeedingResult::Applied
+    ///         } else {
+    ///             SeedingResult::AlreadySeeded
+    ///         })
+    ///     }
+    /// }
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let user_id = UserId::from_uuid(Uuid::new_v4());
+    /// let user = User::new(user_id.clone(), DisplayName::new("Demo user".to_string())?);
+    /// let preferences = UserPreferencesBuilder::new(user_id).revision(1).build();
+    /// let request = ExampleDataSeedRequest {
+    ///     seed_key: "mossy-owl".to_string(),
+    ///     user_count: 1,
+    ///     seed: 42,
+    ///     users: vec![ExampleDataSeedUser { user, preferences }],
+    /// };
+    /// let result = Repo.seed_example_data(request).await?;
+    /// assert_eq!(result, SeedingResult::Applied);
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn seed_example_data(
         &self,
         request: ExampleDataSeedRequest,

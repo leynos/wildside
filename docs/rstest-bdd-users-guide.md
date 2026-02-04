@@ -893,8 +893,8 @@ Once feature files and step definitions are in place, scenarios run via the
 usual `cargo test` command. Test functions created by the `#[scenario]` macro
 behave like other `rstest` tests; they honour `#[tokio::test]` attributes if
 applied to the original function. Each scenario runs its steps sequentially in
-the order defined in the feature file. By default, missing steps emit a
-compile‑time warning and are checked again at runtime, so steps can live in
+the order defined in the feature file. By default, missing steps emit
+compile‑time warnings and are checked again at runtime, so steps can live in
 other crates. Enabling the `compile-time-validation` feature on
 `rstest-bdd-macros` registers steps and performs compile‑time validation,
 emitting warnings for any that are missing. The

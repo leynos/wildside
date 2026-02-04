@@ -1,9 +1,11 @@
 //! Startup seeding orchestration.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use cap_std::{ambient_authority, fs::Dir};
 use example_data::{RegistryError, SeedRegistry};
+use mockable::DefaultClock;
 use thiserror::Error;
 use tracing::{info, warn};
 
@@ -14,9 +16,6 @@ use crate::outbound::persistence::{DbPool, DieselExampleDataSeedRepository};
 /// Errors returned while executing startup seeding.
 #[derive(Debug, Error)]
 pub enum StartupSeedingError {
-    /// Configuration loading failed.
-    #[error("example data configuration error: {0}")]
-    Config(#[from] std::sync::Arc<ortho_config::OrthoError>),
     /// Registry file could not be read.
     #[error("failed to read registry at {path}: {source}")]
     RegistryRead {
@@ -38,11 +37,31 @@ pub enum StartupSeedingError {
 }
 
 /// Apply example data on startup when enabled.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::path::PathBuf;
+///
+/// use backend::example_data::{ExampleDataSettings, seed_example_data_on_startup};
+///
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let settings = ExampleDataSettings {
+///     is_enabled: false,
+///     seed_name: Some("mossy-owl".to_string()),
+///     count: None,
+///     registry_path: Some(PathBuf::from("fixtures/example-data/seeds.json")),
+/// };
+/// let outcome = seed_example_data_on_startup(&settings, None).await?;
+/// assert!(outcome.is_none());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn seed_example_data_on_startup(
     settings: &ExampleDataSettings,
     db_pool: Option<&DbPool>,
 ) -> Result<Option<ExampleDataSeedOutcome>, StartupSeedingError> {
-    if !settings.enabled {
+    if !settings.is_enabled() {
         info!(reason = "disabled", "example data seeding skipped");
         return Ok(None);
     }
@@ -64,7 +83,7 @@ pub async fn seed_example_data_on_startup(
     let registry = load_registry(&registry_path)?;
 
     let repository = DieselExampleDataSeedRepository::new(db_pool.clone());
-    let seeder = ExampleDataSeeder::new(std::sync::Arc::new(repository));
+    let seeder = ExampleDataSeeder::new(Arc::new(repository), Arc::new(DefaultClock));
     let outcome = seeder
         .seed_from_registry(&registry, seed_name, settings.count)
         .await?;
