@@ -424,8 +424,8 @@ dependencies = [
  "camino",
  "cap-std 3.4.5",
  "rstest",
- "rstest-bdd 0.1.0",
- "rstest-bdd-macros 0.1.0",
+ "rstest-bdd",
+ "rstest-bdd-macros",
  "syn 2.0.104",
  "tempfile",
 ]
@@ -549,7 +549,6 @@ dependencies = [
  "backend",
  "cap-std 3.4.5",
  "chrono",
- "clap",
  "color-eyre",
  "diesel",
  "diesel-async",
@@ -569,8 +568,8 @@ dependencies = [
  "postgresql_embedded",
  "prometheus",
  "rstest",
- "rstest-bdd 0.4.0",
- "rstest-bdd-macros 0.4.0",
+ "rstest-bdd",
+ "rstest-bdd-macros",
  "serde",
  "serde_json",
  "sha2",
@@ -1575,8 +1574,8 @@ dependencies = [
  "rand 0.9.2",
  "rand_chacha 0.9.0",
  "rstest",
- "rstest-bdd 0.4.0",
- "rstest-bdd-macros 0.4.0",
+ "rstest-bdd",
+ "rstest-bdd-macros",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -3967,30 +3966,6 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0c58a595280bc9d8386a1888aac2264838ce90f29450dfa50d4b9a00cbbcc63"
-dependencies = [
- "ctor",
- "derive_more 0.99.20",
- "fluent",
- "gherkin",
- "hashbrown 0.16.0",
- "i18n-embed",
- "inventory",
- "log",
- "once_cell",
- "regex",
- "rstest-bdd-patterns 0.1.0-alpha4",
- "rust-embed",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "unic-langid",
-]
-
-[[package]]
-name = "rstest-bdd"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e741d97bce6ea0a7d0f074716041e0d0eebe6ab9edcd243e7d12f9fd2b5e8b6"
@@ -4004,35 +3979,13 @@ dependencies = [
  "inventory",
  "log",
  "regex",
- "rstest-bdd-patterns 0.4.0",
+ "rstest-bdd-patterns",
  "rstest-bdd-policy",
  "rust-embed",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "unic-langid",
-]
-
-[[package]]
-name = "rstest-bdd-macros"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7db2930cac8d70e8a7d4aab1e0b6782b6aadfef3b68d6acf91179e8433ec44df"
-dependencies = [
- "camino",
- "cap-std 3.4.5",
- "cfg-if",
- "convert_case 0.6.0",
- "gherkin",
- "once_cell",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "regex",
- "rstest-bdd-patterns 0.1.0-alpha4",
- "syn 2.0.104",
- "walkdir",
 ]
 
 [[package]]
@@ -4052,21 +4005,11 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "rstest-bdd-patterns 0.4.0",
+ "rstest-bdd-patterns",
  "rstest-bdd-policy",
  "syn 2.0.104",
  "thiserror 1.0.69",
  "walkdir",
-]
-
-[[package]]
-name = "rstest-bdd-patterns"
-version = "0.1.0-alpha4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e86cae3abdbeecef13e120bdedaa6d96e9d3fee9b83efa58b86fc250fdf32f"
-dependencies = [
- "regex",
- "thiserror 1.0.69",
 ]
 
 [[package]]

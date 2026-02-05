@@ -1,11 +1,21 @@
-//! Example data configuration loaded via OrthoConfig.
+//! Example data configuration loaded via OrthoConfig helpers.
 
 use std::path::PathBuf;
 
-use ortho_config::OrthoConfig;
+use ortho_config::declarative::{LayerComposition, MergeComposer, MergeLayer, merge_value};
+use ortho_config::discovery::{ConfigDiscovery, DiscoveryLayersOutcome};
+use ortho_config::figment::Figment;
+use ortho_config::{
+    CsvEnv, OrthoConfig, OrthoJsonMergeExt, OrthoMergeExt, OrthoResult, sanitize_value,
+};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
+const APP_NAME: &str = "example_data";
+const CONFIG_ENV_VAR: &str = "EXAMPLE_DATA_CONFIG_PATH";
 const DEFAULT_SEED_NAME: &str = "mossy-owl";
+const DOTFILE_NAME: &str = ".example_data.toml";
+const ENV_PREFIX: &str = "EXAMPLE_DATA_";
 
 fn default_registry_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -15,17 +25,15 @@ fn default_registry_path() -> PathBuf {
 }
 
 /// Configuration values controlling example data seeding at startup.
-#[derive(Debug, Clone, Deserialize, Serialize, OrthoConfig)]
-#[ortho_config(prefix = "EXAMPLE_DATA_")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExampleDataSettings {
     /// Enable example data seeding on startup.
     #[serde(default)]
-    #[ortho_config(default = false, cli_default_as_absent)]
     pub is_enabled: bool,
     /// Seed name to load from the registry.
     pub seed_name: Option<String>,
     /// Optional override for the number of users generated.
-    #[ortho_config(file_key = "user_count")]
+    #[serde(alias = "user_count")]
     pub count: Option<usize>,
     /// Optional registry path override.
     pub registry_path: Option<PathBuf>,
@@ -95,6 +103,75 @@ impl ExampleDataSettings {
             .clone()
             .unwrap_or_else(default_registry_path)
     }
+
+    fn merge_from_layers(layers: Vec<MergeLayer<'static>>) -> OrthoResult<Self> {
+        let mut buffer = Value::Object(Map::new());
+        for layer in layers {
+            merge_value(&mut buffer, layer.into_value());
+        }
+        serde_json::from_value(buffer).into_ortho_merge_json()
+    }
+}
+
+impl OrthoConfig for ExampleDataSettings {
+    fn load_from_iter<I, T>(_iter: I) -> OrthoResult<Self>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let composition = compose_layers();
+        composition.into_merge_result(Self::merge_from_layers)
+    }
+
+    fn prefix() -> &'static str {
+        ENV_PREFIX
+    }
+}
+
+fn compose_layers() -> LayerComposition {
+    let mut errors = Vec::new();
+    let mut composer = MergeComposer::with_capacity(3);
+
+    let defaults = ExampleDataSettings {
+        is_enabled: false,
+        seed_name: None,
+        count: None,
+        registry_path: None,
+    };
+    match sanitize_value(&defaults) {
+        Ok(value) => composer.push_defaults(value),
+        Err(err) => errors.push(err),
+    }
+
+    let discovery = ConfigDiscovery::builder(APP_NAME)
+        .env_var(CONFIG_ENV_VAR)
+        .dotfile_name(DOTFILE_NAME)
+        .build();
+    let DiscoveryLayersOutcome {
+        value: layers,
+        mut required_errors,
+        mut optional_errors,
+    } = discovery.compose_layers();
+    errors.append(&mut required_errors);
+    if layers.is_empty() {
+        errors.append(&mut optional_errors);
+    }
+    for layer in layers {
+        composer.push_layer(layer);
+    }
+
+    let env_provider = CsvEnv::prefixed(ENV_PREFIX)
+        .map(|key| ortho_config::uncased::Uncased::new(key.as_str().to_ascii_uppercase()))
+        .split("__");
+    match Figment::from(env_provider)
+        .extract::<Value>()
+        .into_ortho_merge()
+    {
+        Ok(value) => composer.push_environment(value),
+        Err(err) => errors.push(err),
+    }
+
+    LayerComposition::new(composer.layers(), errors)
 }
 
 #[cfg(test)]

@@ -11,6 +11,6 @@ syn = { version = "2", features = ["full", "visit"] }
 
 [dev-dependencies]
 rstest = "0.26"
-rstest-bdd = "0.1.0"
-rstest-bdd-macros = "0.1.0"
+rstest-bdd = "0.4.0"
+rstest-bdd-macros = "0.4.0"
 tempfile = "3"
