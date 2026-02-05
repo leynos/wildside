@@ -105,15 +105,24 @@ mod tests {
     use std::ffi::OsString;
 
     use env_lock::lock_env;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
-    fn load_settings_from_empty_args() -> ExampleDataSettings {
-        ExampleDataSettings::load_from_iter([OsString::from("backend")])
-            .expect("config should load")
+    struct SettingsLoader;
+
+    impl SettingsLoader {
+        fn load(&self) -> ExampleDataSettings {
+            ExampleDataSettings::load_from_iter([OsString::from("backend")])
+                .expect("config should load")
+        }
+    }
+
+    #[fixture]
+    fn load_settings_from_empty_args() -> SettingsLoader {
+        SettingsLoader
     }
 
     #[rstest]
-    fn default_values_are_used_when_missing() {
+    fn default_values_are_used_when_missing(load_settings_from_empty_args: SettingsLoader) {
         let _guard = lock_env([
             ("EXAMPLE_DATA_IS_ENABLED", None::<String>),
             ("EXAMPLE_DATA_SEED_NAME", None::<String>),
@@ -121,7 +130,7 @@ mod tests {
             ("EXAMPLE_DATA_REGISTRY_PATH", None::<String>),
         ]);
 
-        let settings = load_settings_from_empty_args();
+        let settings = load_settings_from_empty_args.load();
         assert!(!settings.is_enabled());
         assert_eq!(settings.seed_name(), DEFAULT_SEED_NAME);
         assert_eq!(settings.registry_path(), default_registry_path());
@@ -129,7 +138,7 @@ mod tests {
     }
 
     #[rstest]
-    fn environment_overrides_are_respected() {
+    fn environment_overrides_are_respected(load_settings_from_empty_args: SettingsLoader) {
         let _guard = lock_env([
             ("EXAMPLE_DATA_IS_ENABLED", Some("true".to_owned())),
             ("EXAMPLE_DATA_SEED_NAME", Some("rainbow-fox".to_owned())),
@@ -140,7 +149,7 @@ mod tests {
             ),
         ]);
 
-        let settings = load_settings_from_empty_args();
+        let settings = load_settings_from_empty_args.load();
         assert!(settings.is_enabled());
         assert_eq!(settings.seed_name(), "rainbow-fox");
         assert_eq!(
