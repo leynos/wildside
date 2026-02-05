@@ -171,8 +171,8 @@ impl ExampleDataSeedingWorld {
     fn record_table_counts(&self) {
         if let Some((users, prefs)) = self.execute_async(|runtime, pool| {
             runtime.block_on(async {
-                let users = count_table(pool, "users").await;
-                let prefs = count_table(pool, "user_preferences").await;
+                let users = count_table(pool, TableName::Users).await;
+                let prefs = count_table(pool, TableName::UserPreferences).await;
                 (users, prefs)
             })
         }) {
@@ -182,9 +182,18 @@ impl ExampleDataSeedingWorld {
     }
 }
 
-async fn count_table(pool: &DbPool, table: &str) -> i64 {
+#[derive(Clone, Copy)]
+enum TableName {
+    Users,
+    UserPreferences,
+}
+
+async fn count_table(pool: &DbPool, table: TableName) -> i64 {
     let mut conn = pool.get().await.expect("get connection");
-    let query = format!("SELECT COUNT(*) AS count FROM {table}");
+    let query = match table {
+        TableName::Users => "SELECT COUNT(*) AS count FROM users",
+        TableName::UserPreferences => "SELECT COUNT(*) AS count FROM user_preferences",
+    };
     let row: CountRow = sql_query(query)
         .get_result(&mut conn)
         .await

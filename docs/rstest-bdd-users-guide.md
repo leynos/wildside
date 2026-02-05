@@ -713,7 +713,7 @@ rows.
 
 ### Fixture injection with `scenarios!`
 
-The `fixtures = [name: Type, ...]` parameter injects fixtures into all
+The `fixtures = [name: Type, …]` parameter injects fixtures into all
 generated scenario tests. Fixtures are bound via rstest and inserted into the
 step context, making them available to step functions that declare the
 corresponding parameter.
