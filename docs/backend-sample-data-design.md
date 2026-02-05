@@ -84,14 +84,16 @@ registry includes descriptor UUIDs and named seed definitions. Proposed path:
 
 Example structure:
 
-    {
-      "version": 1,
-      "interestThemeIds": ["…"],
-      "safetyToggleIds": ["…"],
-      "seeds": [
-        { "name": "mossy-owl", "seed": 2026, "userCount": 12 }
-      ]
-    }
+```json
+{
+  "version": 1,
+  "interestThemeIds": ["…"],
+  "safetyToggleIds": ["…"],
+  "seeds": [
+    { "name": "mossy-owl", "seed": 2026, "userCount": 12 }
+  ]
+}
+```
 
 ### Named seeds and base-d
 
@@ -230,7 +232,7 @@ repository's default caret semantics.
 - **Registry churn**: manual edits could introduce invalid seeds.
   Mitigation: validate registry shape and provide the CLI for updates.
 - **Feature misuse in production**: accidental enablement in production.
-  Mitigation: default `example_data.enabled` to false and document expected
+  Mitigation: default `example_data.is_enabled` to false and document expected
   usage in runbooks.
 
 ## Alternatives considered
