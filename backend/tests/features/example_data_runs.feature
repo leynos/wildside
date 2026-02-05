@@ -4,7 +4,7 @@ Feature: Example data seeding guard
   idempotent semantics to ensure each seed is applied at most once.
 
   Scenario: First seed attempt succeeds
-    Given a fresh database
+    Given a fresh database for example data runs
     When a seed is recorded for "mossy-owl"
     Then the result is "applied"
 
@@ -19,7 +19,7 @@ Feature: Example data seeding guard
     Then the result is "applied"
 
   Scenario: Query returns false for unknown seeds
-    Given a fresh database
+    Given a fresh database for example data runs
     When checking if seed "unknown-seed" exists
     Then the existence check returns false
 

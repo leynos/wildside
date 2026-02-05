@@ -84,14 +84,16 @@ registry includes descriptor UUIDs and named seed definitions. Proposed path:
 
 Example structure:
 
-    {
-      "version": 1,
-      "interestThemeIds": ["…"],
-      "safetyToggleIds": ["…"],
-      "seeds": [
-        { "name": "mossy-owl", "seed": 2026, "userCount": 12 }
-      ]
-    }
+```json
+{
+  "version": 1,
+  "interestThemeIds": ["…"],
+  "safetyToggleIds": ["…"],
+  "seeds": [
+    { "name": "mossy-owl", "seed": 2026, "userCount": 12 }
+  ]
+}
+```
 
 ### Named seeds and base-d
 
@@ -145,7 +147,7 @@ can be sourced from a settings file and environment overrides. Ensure the key
 naming matches existing backend `ortho-config` conventions before finalizing
 the field names. Proposed config fields:
 
-- `example_data.enabled`: boolean toggle.
+- `example_data.is_enabled`: boolean toggle.
 - `example_data.seed_name`: seed name to load from the registry.
 - `example_data.user_count`: optional override for the seed's default count.
 - `example_data.registry_path`: path to the registry JSON.
@@ -153,9 +155,9 @@ the field names. Proposed config fields:
 Environment overrides (subject to the same naming conventions and mapping
 rules `ortho-config` applies elsewhere):
 
-- `EXAMPLE_DATA_ENABLED`
+- `EXAMPLE_DATA_IS_ENABLED`
 - `EXAMPLE_DATA_SEED_NAME`
-- `EXAMPLE_DATA_COUNT`
+- `EXAMPLE_DATA_USER_COUNT`
 - `EXAMPLE_DATA_REGISTRY_PATH`
 
 If seeding is enabled but the registry or seed name cannot be resolved, startup
@@ -230,7 +232,7 @@ repository's default caret semantics.
 - **Registry churn**: manual edits could introduce invalid seeds.
   Mitigation: validate registry shape and provide the CLI for updates.
 - **Feature misuse in production**: accidental enablement in production.
-  Mitigation: default `example_data.enabled` to false and document expected
+  Mitigation: default `example_data.is_enabled` to false and document expected
   usage in runbooks.
 
 ## Alternatives considered

@@ -152,7 +152,7 @@ fn world() -> ExampleDataRunsWorld {
 // Given Steps
 // -----------------------------------------------------------------------------
 
-#[given("a fresh database")]
+#[given("a fresh database for example data runs")]
 fn a_fresh_database(world: &ExampleDataRunsWorld) {
     world.setup_fresh_database();
 }

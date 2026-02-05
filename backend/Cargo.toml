@@ -16,6 +16,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
 cap-std = "3"
+example-data = { path = "../crates/example-data", optional = true }
+ortho_config = { version = "0.7.0", optional = true }
 
 async-trait = "0.1.89"
 color-eyre = "0.6.5"
@@ -28,6 +30,7 @@ thiserror = "2.0.17"
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
 chrono = { version = "0.4", features = ["serde"] }
+mockable = { version = "0.3", features = ["clock"] }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -51,6 +54,8 @@ hex = "0.4"
 
 [features]
 default = []
+# Enable example data seeding at startup via OrthoConfig.
+example-data = ["dep:example-data", "dep:ortho_config"]
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
 # Expose test utilities for integration tests
@@ -59,7 +64,9 @@ test-support = []
 [dev-dependencies]
 # Enable test-support feature for integration tests
 backend = { path = ".", features = ["test-support"] }
+example-data = { path = "../crates/example-data" }
 mockall = "0.13"
+mockable = { version = "0.3", features = ["clock", "mock"] }
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"
@@ -70,11 +77,10 @@ awc = "3.8.1"
 env-lock = "1.0.1"
 futures = "0.3"
 rstest = "0.26"
-rstest-bdd = "0.3.2"
-rstest-bdd-macros = "0.3.2"
+rstest-bdd = "0.4.0"
+rstest-bdd-macros = "0.4.0"
 insta = { version = "1", features = ["json", "redactions"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
-mockable = { version = "0.3", features = ["mock"] }
 # Diesel migration runner for integration tests
 diesel_migrations = "2.2"
 

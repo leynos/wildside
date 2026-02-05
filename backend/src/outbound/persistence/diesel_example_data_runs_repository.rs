@@ -65,6 +65,8 @@ fn map_pool_error(error: PoolError) -> ExampleDataRunsError {
 fn map_diesel_error(error: diesel::result::Error) -> ExampleDataRunsError {
     use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
+    let error_message = error.to_string();
+
     debug!(?error, "diesel operation failed");
 
     match error {
@@ -75,7 +77,7 @@ fn map_diesel_error(error: diesel::result::Error) -> ExampleDataRunsError {
         DieselError::DatabaseError(_, info) => {
             ExampleDataRunsError::query(info.message().to_owned())
         }
-        _ => ExampleDataRunsError::query("database error"),
+        _ => ExampleDataRunsError::query(format!("database error: {error_message}")),
     }
 }
 
