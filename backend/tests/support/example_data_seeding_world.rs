@@ -41,6 +41,7 @@ struct CountRow {
     count: i64,
 }
 
+/// World state for example data seeding BDD scenarios.
 #[derive(Default, ScenarioState)]
 pub struct ExampleDataSeedingWorld {
     runtime: Slot<RuntimeHandle>,
@@ -157,9 +158,9 @@ impl ExampleDataSeedingWorld {
     fn run_startup_seeding(&self, seed_key: &str) {
         let seed_key = seed_key.trim_matches('"');
         let settings = self.build_settings(seed_key);
-        let use_database = self.is_database_enabled();
+        let is_database_enabled = self.is_database_enabled();
         if let Some(result) = self.execute_async(|runtime, pool| {
-            let db_pool = use_database.then_some(pool);
+            let db_pool = is_database_enabled.then_some(pool);
             runtime
                 .block_on(seed_example_data_on_startup(&settings, db_pool))
                 .map_err(|error| error.to_string())
