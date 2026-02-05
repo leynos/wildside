@@ -126,11 +126,11 @@ impl ExampleDataSeedingWorld {
         Some(operation(&runtime.0, &pool))
     }
 
-    fn set_seeding_enabled(&self, enabled: bool) {
+    fn set_is_seeding_enabled(&self, enabled: bool) {
         self.is_seeding_enabled.set(enabled);
     }
 
-    fn set_database_enabled(&self, enabled: bool) {
+    fn set_is_database_enabled(&self, enabled: bool) {
         self.is_database_enabled.set(enabled);
     }
 
@@ -223,12 +223,12 @@ fn a_seed_registry_with_seed(world: &ExampleDataSeedingWorld, seed_key: String) 
 
 #[given("example data seeding is disabled")]
 fn example_data_seeding_is_disabled(world: &ExampleDataSeedingWorld) {
-    world.set_seeding_enabled(false);
+    world.set_is_seeding_enabled(false);
 }
 
 #[given("the database is unavailable")]
 fn database_is_unavailable(world: &ExampleDataSeedingWorld) {
-    world.set_database_enabled(false);
+    world.set_is_database_enabled(false);
 }
 
 #[given("an invalid registry path")]
