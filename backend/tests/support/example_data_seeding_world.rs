@@ -202,6 +202,19 @@ async fn count_table(pool: &DbPool, table: TableName) -> i64 {
     row.count
 }
 
+/// Build the default world fixture for example data seeding scenarios.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::tests::support::example_data_seeding_world::{
+///     world, ExampleDataSeedingWorld,
+/// };
+///
+/// let fixture = world();
+/// let defaults = ExampleDataSeedingWorld::default();
+/// let _ = (fixture, defaults);
+/// ```
 #[fixture]
 pub fn world() -> ExampleDataSeedingWorld {
     ExampleDataSeedingWorld::default()
