@@ -30,7 +30,7 @@ thiserror = "2.0.17"
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
 chrono = { version = "0.4", features = ["serde"] }
-mockable = { version = "0.3", features = ["clock", "mock"] }
+mockable = { version = "0.3", features = ["clock"] }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -55,11 +55,9 @@ hex = "0.4"
 [features]
 default = []
 # Enable example data seeding at startup via OrthoConfig.
-example-data = ["dep:example-data", "dep:ortho_config", "serde_json"]
+example-data = ["dep:example-data", "dep:ortho_config"]
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
-# Enable OrthoConfig merge helpers that rely on serde_json.
-serde_json = []
 # Expose test utilities for integration tests
 test-support = []
 
@@ -68,6 +66,7 @@ test-support = []
 backend = { path = ".", features = ["test-support"] }
 example-data = { path = "../crates/example-data" }
 mockall = "0.13"
+mockable = { version = "0.3", features = ["clock", "mock"] }
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"

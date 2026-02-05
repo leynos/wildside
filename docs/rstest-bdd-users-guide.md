@@ -775,7 +775,7 @@ fn increment(counter: &mut Counter) {
     counter.value += 1;
 }
 
-#[then(expr = "the counter value is {n}")]
+#[then("the counter value is {n}")]
 fn check_value(counter: &Counter, n: i32) {
     assert_eq!(counter.value, n);
 }

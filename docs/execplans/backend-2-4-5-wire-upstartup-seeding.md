@@ -325,4 +325,4 @@ Acceptance criteria:
 
 ## Revision note
 
-- Updated status to IN PROGRESS and noted approval/start of implementation.
+- Updated status to COMPLETE and noted approval/start of implementation.

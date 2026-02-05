@@ -108,7 +108,9 @@ pub async fn seed_example_data_on_startup(
     Ok(Some(outcome))
 }
 
-fn load_registry(path: &Path) -> Result<SeedRegistry, StartupSeedingError> {
+fn registry_parent_and_filename(
+    path: &Path,
+) -> Result<(PathBuf, std::ffi::OsString), StartupSeedingError> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let parent = if parent.as_os_str().is_empty() {
         Path::new(".")
@@ -124,14 +126,19 @@ fn load_registry(path: &Path) -> Result<SeedRegistry, StartupSeedingError> {
                 "registry path must be a file",
             ),
         })?;
-    let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|source| {
+    Ok((parent.to_path_buf(), file_name.to_os_string()))
+}
+
+fn load_registry(path: &Path) -> Result<SeedRegistry, StartupSeedingError> {
+    let (parent, file_name) = registry_parent_and_filename(path)?;
+    let dir = Dir::open_ambient_dir(&parent, ambient_authority()).map_err(|source| {
         StartupSeedingError::RegistryRead {
             path: path.to_path_buf(),
             source,
         }
     })?;
     let payload =
-        dir.read(Path::new(file_name))
+        dir.read(Path::new(&file_name))
             .map_err(|source| StartupSeedingError::RegistryRead {
                 path: path.to_path_buf(),
                 source,

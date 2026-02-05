@@ -157,7 +157,7 @@ rules `ortho-config` applies elsewhere):
 
 - `EXAMPLE_DATA_IS_ENABLED`
 - `EXAMPLE_DATA_SEED_NAME`
-- `EXAMPLE_DATA_COUNT`
+- `EXAMPLE_DATA_USER_COUNT`
 - `EXAMPLE_DATA_REGISTRY_PATH`
 
 If seeding is enabled but the registry or seed name cannot be resolved, startup

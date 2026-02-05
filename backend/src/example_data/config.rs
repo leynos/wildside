@@ -18,10 +18,22 @@ const DOTFILE_NAME: &str = ".example_data.toml";
 const ENV_PREFIX: &str = "EXAMPLE_DATA_";
 
 fn default_registry_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let direct = cwd.join("fixtures").join("example-data").join("seeds.json");
+    if direct.is_file() {
+        return direct;
+    }
+
+    let nested = cwd
+        .join("backend")
         .join("fixtures")
         .join("example-data")
-        .join("seeds.json")
+        .join("seeds.json");
+    if nested.is_file() {
+        return nested;
+    }
+
+    direct
 }
 
 /// Configuration values controlling example data seeding at startup.

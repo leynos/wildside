@@ -7,6 +7,8 @@
 
 mod cluster_skip;
 pub mod embedded_postgres;
+#[cfg(feature = "example-data")]
+pub mod example_data_seeding_world;
 
 /// Render a `postgres` error with enough detail to be useful in CI logs.
 ///
