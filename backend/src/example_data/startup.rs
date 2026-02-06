@@ -187,8 +187,7 @@ mod tests {
         let settings = ExampleDataSettings {
             is_enabled: true,
             seed_name: Some("   ".to_owned()),
-            count: default_settings.count,
-            registry_path: default_settings.registry_path,
+            ..default_settings
         };
 
         let error = seed_example_data_on_startup(&settings, None)
@@ -204,8 +203,7 @@ mod tests {
         let settings = ExampleDataSettings {
             is_enabled: true,
             seed_name: Some("mossy-owl".to_owned()),
-            count: default_settings.count,
-            registry_path: default_settings.registry_path,
+            ..default_settings
         };
 
         let result = seed_example_data_on_startup(&settings, None)
