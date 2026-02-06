@@ -577,6 +577,34 @@ data without rewriting view components.
 > skip; registry parse failures or missing seeds abort startup to prevent
 > partial demo data.
 
+#### Demo data flow (startup seeding)
+
+When the backend boots with `example-data` enabled, demo users and preferences
+flow through the same hexagonal seams as production writes. The flow is:
+
+1. Startup reads `ExampleDataSettings` from `ortho_config` using
+   `EXAMPLE_DATA_` environment overrides.
+2. `seed_example_data_on_startup` in `backend::example_data` checks whether
+   seeding is enabled and whether a database pool is available.
+3. The adapter loads the JSON registry (`backend/fixtures/example-data/seeds.json`
+   by default) and resolves the configured seed name.
+4. `ExampleDataSeeder` (domain service) generates deterministic users from
+   `crates/example-data` and prepares validated domain entities.
+5. `DieselExampleDataSeedRepository` applies the seed in one transaction:
+   insert seed run marker (`example_data_runs`), then upsert `users` and
+   `user_preferences`.
+6. Startup logs one structured outcome: applied, already seeded, or skipped.
+
+This keeps once-only semantics and transactional writes in outbound adapters,
+while startup orchestration remains an inbound concern that depends on domain
+services.
+
+> **Design decision (2026-02-05):** Once-only startup seeding is validated with
+> embedded Postgres behavioural scenarios that assert both outcome labels and
+> persistent row counts. Repeat runs for the same seed key must keep user and
+> preference counts unchanged, and registry/seed failures must not write any
+> partial demo data rows.
+
 #### Driving ports (services and queries)
 
 - `ExploreCatalogueQuery` composes catalogue and descriptor repositories into

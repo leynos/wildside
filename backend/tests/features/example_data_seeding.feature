@@ -16,12 +16,16 @@ Feature: Example data startup seeding
     When startup seeding runs for "mossy-owl"
     And startup seeding runs again for "mossy-owl"
     Then the seeding result is "already seeded"
+    And 2 users are stored
+    And 2 preferences are stored
 
   Scenario: Missing seed returns an error
     Given a fresh database
     And a seed registry with seed "mossy-owl"
     When startup seeding runs for "missing-seed"
     Then a seeding error is returned
+    And 0 users are stored
+    And 0 preferences are stored
 
   Scenario: Seeding is skipped when disabled
     Given a fresh database
@@ -46,3 +50,5 @@ Feature: Example data startup seeding
     And an invalid registry path
     When startup seeding runs for "mossy-owl"
     Then a seeding error is returned
+    And 0 users are stored
+    And 0 preferences are stored

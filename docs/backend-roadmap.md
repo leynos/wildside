@@ -120,7 +120,7 @@ adapter; direct stateful logic belongs behind the ports established above.
   generate memorable seed names and updates the JSON registry safely.
 - [x] 2.4.5. Wire startup seeding behind the `example-data` feature flag and
   `ortho-config` settings, logging when seeding is skipped or applied.
-- [ ] 2.4.6. Add integration tests for once-only seeding and update backend
+- [x] 2.4.6. Add integration tests for once-only seeding and update backend
   documentation to describe the demo data flow.
 
 ## 3. Data platform foundation

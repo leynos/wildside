@@ -150,3 +150,79 @@ fn load_registry(path: &Path) -> Result<SeedRegistry, StartupSeedingError> {
         })?;
     Ok(SeedRegistry::from_json(&contents)?)
 }
+
+#[cfg(test)]
+mod tests {
+    //! Unit tests for startup seeding orchestration.
+
+    use super::*;
+    use std::path::PathBuf;
+
+    use rstest::{fixture, rstest};
+    use uuid::Uuid;
+
+    #[fixture]
+    fn default_settings() -> ExampleDataSettings {
+        ExampleDataSettings {
+            is_enabled: false,
+            seed_name: None,
+            count: None,
+            registry_path: None,
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn disabled_seeding_skips(default_settings: ExampleDataSettings) {
+        let result = seed_example_data_on_startup(&default_settings, None)
+            .await
+            .expect("disabled seeding should skip");
+
+        assert!(result.is_none());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn empty_seed_name_returns_error(default_settings: ExampleDataSettings) {
+        let settings = ExampleDataSettings {
+            is_enabled: true,
+            seed_name: Some("   ".to_owned()),
+            ..default_settings
+        };
+
+        let error = seed_example_data_on_startup(&settings, None)
+            .await
+            .expect_err("empty seed name should fail");
+
+        assert!(matches!(error, StartupSeedingError::EmptySeedName));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn enabled_seeding_without_database_skips(default_settings: ExampleDataSettings) {
+        let settings = ExampleDataSettings {
+            is_enabled: true,
+            seed_name: Some("mossy-owl".to_owned()),
+            ..default_settings
+        };
+
+        let result = seed_example_data_on_startup(&settings, None)
+            .await
+            .expect("missing database should skip");
+
+        assert!(result.is_none());
+    }
+
+    #[rstest]
+    fn load_registry_returns_error_for_missing_path() {
+        let missing_path = PathBuf::from(format!(
+            "{}/missing-registry-{}.json",
+            std::env::temp_dir().display(),
+            Uuid::new_v4()
+        ));
+
+        let error = load_registry(&missing_path).expect_err("missing path should fail");
+
+        assert!(matches!(error, StartupSeedingError::RegistryRead { .. }));
+    }
+}
