@@ -44,36 +44,51 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
     DescriptorIngestionRepositoryError::query(error_message)
 }
 
-macro_rules! impl_upsert_descriptor {
+macro_rules! impl_upsert_methods {
     (
-        $method_name:ident,
-        $ingestion_type:ty,
-        $row_type:ident,
-        $table:ident,
-        [$($field:ident),+ $(,)?],
-        $pool:expr,
-        $records:expr
-    ) => {{
-        let _method_name = stringify!($method_name);
-        let typed_records: &[$ingestion_type] = $records;
-        let mut conn = $pool.get().await.map_err(map_pool_error)?;
-        for record in typed_records {
-            let row = $row_type::from(record);
-            diesel::insert_into($table::table)
-                .values(&row)
-                .on_conflict($table::id)
-                .do_update()
-                .set((
-                    $(
-                        $table::$field.eq(excluded($table::$field)),
-                    )+
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
+        impl $trait:ident for $repo:ty {
+            methods: [
+                $((
+                    $method_name:ident,
+                    $ingestion_type:ty,
+                    $row_type:ident,
+                    $table:ident,
+                    [$($field:ident),+ $(,)?]
+                )),+ $(,)?
+            ],
+            keep: { $($keep:tt)* }
         }
-        Ok(())
-    }};
+    ) => {
+        #[async_trait]
+        impl $trait for $repo {
+            $(
+                async fn $method_name(
+                    &self,
+                    records: &[$ingestion_type],
+                ) -> Result<(), DescriptorIngestionRepositoryError> {
+                    let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+                    for record in records {
+                        let row = $row_type::from(record);
+                        diesel::insert_into($table::table)
+                            .values(&row)
+                            .on_conflict($table::id)
+                            .do_update()
+                            .set((
+                                $(
+                                    $table::$field.eq(excluded($table::$field)),
+                                )+
+                            ))
+                            .execute(&mut conn)
+                            .await
+                            .map_err(map_diesel_error)?;
+                    }
+                    Ok(())
+                }
+            )+
+
+            $($keep)*
+        }
+    };
 }
 
 impl<'a> From<&'a TagIngestion> for NewTagRow<'a> {
@@ -121,91 +136,65 @@ impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
     }
 }
 
-#[async_trait]
-impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
-    async fn upsert_tags(
-        &self,
-        records: &[TagIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError> {
-        impl_upsert_descriptor!(
-            upsert_tags,
-            TagIngestion,
-            NewTagRow,
-            tags,
-            [slug, icon_key, localizations],
-            self.pool,
-            records
-        )
-    }
-
-    async fn upsert_badges(
-        &self,
-        records: &[BadgeIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError> {
-        impl_upsert_descriptor!(
-            upsert_badges,
-            BadgeIngestion,
-            NewBadgeRow,
-            badges,
-            [slug, icon_key, localizations],
-            self.pool,
-            records
-        )
-    }
-
-    async fn upsert_safety_toggles(
-        &self,
-        records: &[SafetyToggleIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError> {
-        impl_upsert_descriptor!(
-            upsert_safety_toggles,
-            SafetyToggleIngestion,
-            NewSafetyToggleRow,
-            safety_toggles,
-            [slug, icon_key, localizations],
-            self.pool,
-            records
-        )
-    }
-
-    async fn upsert_safety_presets(
-        &self,
-        records: &[SafetyPresetIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError> {
-        impl_upsert_descriptor!(
-            upsert_safety_presets,
-            SafetyPresetIngestion,
-            NewSafetyPresetRow,
-            safety_presets,
-            [slug, icon_key, localizations, safety_toggle_ids],
-            self.pool,
-            records
-        )
-    }
-
-    async fn upsert_interest_themes(
-        &self,
-        records: &[InterestThemeIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for record in records {
-            let row = NewInterestThemeRow {
-                id: record.id,
-                name: record.name.as_str(),
-                description: record.description.as_deref(),
-            };
-            diesel::insert_into(interest_themes::table)
-                .values(&row)
-                .on_conflict(interest_themes::id)
-                .do_update()
-                .set((
-                    interest_themes::name.eq(excluded(interest_themes::name)),
-                    interest_themes::description.eq(excluded(interest_themes::description)),
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
+impl_upsert_methods! {
+    impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
+        methods: [
+            (
+                upsert_tags,
+                TagIngestion,
+                NewTagRow,
+                tags,
+                [slug, icon_key, localizations]
+            ),
+            (
+                upsert_badges,
+                BadgeIngestion,
+                NewBadgeRow,
+                badges,
+                [slug, icon_key, localizations]
+            ),
+            (
+                upsert_safety_toggles,
+                SafetyToggleIngestion,
+                NewSafetyToggleRow,
+                safety_toggles,
+                [slug, icon_key, localizations]
+            ),
+            (
+                upsert_safety_presets,
+                SafetyPresetIngestion,
+                NewSafetyPresetRow,
+                safety_presets,
+                [slug, icon_key, localizations, safety_toggle_ids]
+            )
+        ],
+        keep: {
+            async fn upsert_interest_themes(
+                &self,
+                records: &[InterestThemeIngestion],
+            ) -> Result<(), DescriptorIngestionRepositoryError> {
+                let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+                for record in records {
+                    let row = NewInterestThemeRow {
+                        id: record.id,
+                        name: record.name.as_str(),
+                        description: record.description.as_deref(),
+                    };
+                    diesel::insert_into(interest_themes::table)
+                        .values(&row)
+                        .on_conflict(interest_themes::id)
+                        .do_update()
+                        .set((
+                            interest_themes::name.eq(excluded(interest_themes::name)),
+                            interest_themes::description
+                                .eq(excluded(interest_themes::description)),
+                        ))
+                        .execute(&mut conn)
+                        .await
+                        .map_err(map_diesel_error)?;
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
