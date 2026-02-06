@@ -44,23 +44,18 @@ impl BaselineWorld {
         self.indexes = indexes;
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "test helper signature is mandated by the migration test contract"
-    )]
     fn insert_poi(
         &mut self,
         element_type: &str,
         id: i64,
-        x: f64,
-        y: f64,
+        location: (f64, f64),
     ) -> Result<u64, PostgresError> {
         self.client.execute(
             concat!(
                 "INSERT INTO pois (element_type, id, location, osm_tags, narrative, popularity_score) ",
                 "VALUES ($1, $2, point($3, $4), '{}'::jsonb, NULL, 0.0)"
             ),
-            &[&element_type, &id, &x, &y],
+            &[&element_type, &id, &location.0, &location.1],
         )
     }
 }
@@ -197,13 +192,13 @@ fn inserting_duplicate_route_positions(world: &mut BaselineWorld) {
 #[given("an existing point of interest")]
 fn an_existing_point_of_interest(world: &mut BaselineWorld) {
     world
-        .insert_poi("way", 42, 2.0, 2.0)
+        .insert_poi("way", 42, (2.0, 2.0))
         .expect("insert baseline poi");
 }
 
 #[when("inserting a duplicate point of interest")]
 fn inserting_a_duplicate_point_of_interest(world: &mut BaselineWorld) {
-    world.last_error = world.insert_poi("way", 42, 2.0, 2.0).err();
+    world.last_error = world.insert_poi("way", 42, (2.0, 2.0)).err();
 }
 
 #[then("insertion fails with a unique constraint violation")]
