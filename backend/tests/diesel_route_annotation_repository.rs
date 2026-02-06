@@ -43,14 +43,13 @@ fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<()
         )
         .map_err(|err| format_postgres_error(&err))?;
 
-    let request_id = Uuid::new_v4();
     client
         .execute(
             concat!(
-                "INSERT INTO routes (id, user_id, request_id, plan_snapshot) ",
-                "VALUES ($1, $2, $3, '{}'::jsonb)"
+                "INSERT INTO routes (id, user_id, path, generation_params) ",
+                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
             ),
-            &[&route_id, &user_uuid, &request_id],
+            &[&route_id, &user_uuid],
         )
         .map_err(|err| format_postgres_error(&err))?;
 

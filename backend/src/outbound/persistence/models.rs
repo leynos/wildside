@@ -3,27 +3,19 @@
 //! These types are implementation details of the persistence layer and must
 //! never be exposed to the domain. They exist solely to satisfy Diesel's
 //! type requirements for queries and mutations.
-//!
-//! # Conversion
-//!
-//! Repository implementations are responsible for converting between these
-//! internal models and domain types. This keeps Diesel dependencies confined
-//! to the outbound adapter layer.
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::schema::{
-    example_data_runs, idempotency_keys, route_notes, route_progress, routes, user_preferences,
+    badges, community_picks, example_data_runs, idempotency_keys, interest_themes,
+    route_categories, route_collections, route_notes, route_progress, route_summaries, routes,
+    safety_presets, safety_toggles, tags, themes, trending_route_highlights, user_preferences,
     users,
 };
 
 /// Row struct for reading from the users table.
-///
-/// Maps directly to a SELECT result with all columns. Timestamp fields are
-/// included to match the database schema even when not currently exposed
-/// through the domain model.
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -37,9 +29,6 @@ pub(crate) struct UserRow {
 }
 
 /// Insertable struct for creating new user records.
-///
-/// Only includes columns that must be provided at insert time; timestamps
-/// default to `NOW()` via the database schema.
 #[derive(Debug, Clone, Insertable)]
 #[diesel(table_name = users)]
 pub(crate) struct NewUserRow<'a> {
@@ -48,8 +37,6 @@ pub(crate) struct NewUserRow<'a> {
 }
 
 /// Changeset struct for updating existing user records.
-///
-/// Used with `ON CONFLICT DO UPDATE` for upsert operations.
 #[derive(Debug, Clone, AsChangeset)]
 #[diesel(table_name = users)]
 pub(crate) struct UserUpdate<'a> {
@@ -98,11 +85,10 @@ pub(crate) struct NewIdempotencyKeyRow<'a> {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub(crate) struct RouteRow {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub request_id: Uuid,
-    pub plan_snapshot: serde_json::Value,
+    pub user_id: Option<Uuid>,
+    pub path: String,
+    pub generation_params: serde_json::Value,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 /// Insertable struct for creating new route records.
@@ -110,9 +96,9 @@ pub(crate) struct RouteRow {
 #[diesel(table_name = routes)]
 pub(crate) struct NewRouteRow<'a> {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub request_id: Uuid,
-    pub plan_snapshot: &'a serde_json::Value,
+    pub user_id: Option<Uuid>,
+    pub path: &'a str,
+    pub generation_params: &'a serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------
@@ -234,9 +220,6 @@ pub(crate) struct RouteProgressUpdate<'a> {
 // ---------------------------------------------------------------------------
 
 /// Row struct for reading from the example_data_runs table.
-///
-/// Tracks which example data seeds have been applied to prevent duplicate
-/// seeding on subsequent startups.
 #[expect(
     dead_code,
     reason = "will be used when seed audit/query functionality is added"
@@ -258,4 +241,144 @@ pub(crate) struct NewExampleDataRunRow<'a> {
     pub seed_key: &'a str,
     pub user_count: i32,
     pub seed: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue and descriptor ingestion models
+// ---------------------------------------------------------------------------
+
+/// Insertable row for route categories.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = route_categories)]
+pub(crate) struct NewRouteCategoryRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+    pub route_count: i32,
+}
+
+/// Insertable row for themes.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = themes)]
+pub(crate) struct NewThemeRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+    pub image: &'a serde_json::Value,
+    pub walk_count: i32,
+    pub distance_range_metres: &'a [i32],
+    pub rating: f32,
+}
+
+/// Insertable row for route collections.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = route_collections)]
+pub(crate) struct NewRouteCollectionRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+    pub lead_image: &'a serde_json::Value,
+    pub map_preview: &'a serde_json::Value,
+    pub distance_range_metres: &'a [i32],
+    pub duration_range_seconds: &'a [i32],
+    pub difficulty: &'a str,
+    pub route_ids: &'a [Uuid],
+}
+
+/// Insertable row for route summaries.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = route_summaries)]
+pub(crate) struct NewRouteSummaryRow<'a> {
+    pub id: Uuid,
+    pub route_id: Uuid,
+    pub category_id: Uuid,
+    pub theme_id: Uuid,
+    pub slug: Option<&'a str>,
+    pub localizations: &'a serde_json::Value,
+    pub hero_image: &'a serde_json::Value,
+    pub distance_metres: i32,
+    pub duration_seconds: i32,
+    pub rating: f32,
+    pub badge_ids: &'a [Uuid],
+    pub difficulty: &'a str,
+    pub interest_theme_ids: &'a [Uuid],
+}
+
+/// Insertable row for trending highlights.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = trending_route_highlights)]
+pub(crate) struct NewTrendingRouteHighlightRow<'a> {
+    pub id: Uuid,
+    pub route_summary_id: Uuid,
+    pub trend_delta: &'a str,
+    pub subtitle_localizations: &'a serde_json::Value,
+}
+
+/// Insertable row for community picks.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = community_picks)]
+pub(crate) struct NewCommunityPickRow<'a> {
+    pub id: Uuid,
+    pub route_summary_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
+    pub localizations: &'a serde_json::Value,
+    pub curator_display_name: &'a str,
+    pub curator_avatar: &'a serde_json::Value,
+    pub rating: f32,
+    pub distance_metres: i32,
+    pub duration_seconds: i32,
+    pub saves: i32,
+}
+
+/// Insertable row for descriptor entries.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = tags)]
+pub(crate) struct NewTagRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+}
+
+/// Insertable row for descriptor entries.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = badges)]
+pub(crate) struct NewBadgeRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+}
+
+/// Insertable row for descriptor entries.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = safety_toggles)]
+pub(crate) struct NewSafetyToggleRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+}
+
+/// Insertable row for descriptor entries.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = safety_presets)]
+pub(crate) struct NewSafetyPresetRow<'a> {
+    pub id: Uuid,
+    pub slug: &'a str,
+    pub icon_key: &'a str,
+    pub localizations: &'a serde_json::Value,
+    pub safety_toggle_ids: &'a [Uuid],
+}
+
+/// Insertable row for interest themes.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = interest_themes)]
+pub(crate) struct NewInterestThemeRow<'a> {
+    pub id: Uuid,
+    pub name: &'a str,
+    pub description: Option<&'a str>,
 }
