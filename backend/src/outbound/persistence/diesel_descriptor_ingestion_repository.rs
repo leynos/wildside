@@ -44,121 +44,143 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
     DescriptorIngestionRepositoryError::query(error_message)
 }
 
+macro_rules! impl_upsert_descriptor {
+    (
+        $method_name:ident,
+        $ingestion_type:ty,
+        $row_type:ident,
+        $table:ident,
+        [$($field:ident),+ $(,)?],
+        $pool:expr,
+        $records:expr
+    ) => {{
+        let _method_name = stringify!($method_name);
+        let typed_records: &[$ingestion_type] = $records;
+        let mut conn = $pool.get().await.map_err(map_pool_error)?;
+        for record in typed_records {
+            let row = $row_type::from(record);
+            diesel::insert_into($table::table)
+                .values(&row)
+                .on_conflict($table::id)
+                .do_update()
+                .set((
+                    $(
+                        $table::$field.eq(excluded($table::$field)),
+                    )+
+                ))
+                .execute(&mut conn)
+                .await
+                .map_err(map_diesel_error)?;
+        }
+        Ok(())
+    }};
+}
+
+impl<'a> From<&'a TagIngestion> for NewTagRow<'a> {
+    fn from(record: &'a TagIngestion) -> Self {
+        Self {
+            id: record.id,
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_str(),
+            localizations: &record.localizations,
+        }
+    }
+}
+
+impl<'a> From<&'a BadgeIngestion> for NewBadgeRow<'a> {
+    fn from(record: &'a BadgeIngestion) -> Self {
+        Self {
+            id: record.id,
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_str(),
+            localizations: &record.localizations,
+        }
+    }
+}
+
+impl<'a> From<&'a SafetyToggleIngestion> for NewSafetyToggleRow<'a> {
+    fn from(record: &'a SafetyToggleIngestion) -> Self {
+        Self {
+            id: record.id,
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_str(),
+            localizations: &record.localizations,
+        }
+    }
+}
+
+impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
+    fn from(record: &'a SafetyPresetIngestion) -> Self {
+        Self {
+            id: record.id,
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_str(),
+            localizations: &record.localizations,
+            safety_toggle_ids: record.safety_toggle_ids.as_slice(),
+        }
+    }
+}
+
 #[async_trait]
 impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
     async fn upsert_tags(
         &self,
         records: &[TagIngestion],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for record in records {
-            let row = NewTagRow {
-                id: record.id,
-                slug: record.slug.as_str(),
-                icon_key: record.icon_key.as_str(),
-                localizations: &record.localizations,
-            };
-            diesel::insert_into(tags::table)
-                .values(&row)
-                .on_conflict(tags::id)
-                .do_update()
-                .set((
-                    tags::slug.eq(excluded(tags::slug)),
-                    tags::icon_key.eq(excluded(tags::icon_key)),
-                    tags::localizations.eq(excluded(tags::localizations)),
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
-        }
-        Ok(())
+        impl_upsert_descriptor!(
+            upsert_tags,
+            TagIngestion,
+            NewTagRow,
+            tags,
+            [slug, icon_key, localizations],
+            self.pool,
+            records
+        )
     }
 
     async fn upsert_badges(
         &self,
         records: &[BadgeIngestion],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for record in records {
-            let row = NewBadgeRow {
-                id: record.id,
-                slug: record.slug.as_str(),
-                icon_key: record.icon_key.as_str(),
-                localizations: &record.localizations,
-            };
-            diesel::insert_into(badges::table)
-                .values(&row)
-                .on_conflict(badges::id)
-                .do_update()
-                .set((
-                    badges::slug.eq(excluded(badges::slug)),
-                    badges::icon_key.eq(excluded(badges::icon_key)),
-                    badges::localizations.eq(excluded(badges::localizations)),
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
-        }
-        Ok(())
+        impl_upsert_descriptor!(
+            upsert_badges,
+            BadgeIngestion,
+            NewBadgeRow,
+            badges,
+            [slug, icon_key, localizations],
+            self.pool,
+            records
+        )
     }
 
     async fn upsert_safety_toggles(
         &self,
         records: &[SafetyToggleIngestion],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for record in records {
-            let row = NewSafetyToggleRow {
-                id: record.id,
-                slug: record.slug.as_str(),
-                icon_key: record.icon_key.as_str(),
-                localizations: &record.localizations,
-            };
-            diesel::insert_into(safety_toggles::table)
-                .values(&row)
-                .on_conflict(safety_toggles::id)
-                .do_update()
-                .set((
-                    safety_toggles::slug.eq(excluded(safety_toggles::slug)),
-                    safety_toggles::icon_key.eq(excluded(safety_toggles::icon_key)),
-                    safety_toggles::localizations.eq(excluded(safety_toggles::localizations)),
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
-        }
-        Ok(())
+        impl_upsert_descriptor!(
+            upsert_safety_toggles,
+            SafetyToggleIngestion,
+            NewSafetyToggleRow,
+            safety_toggles,
+            [slug, icon_key, localizations],
+            self.pool,
+            records
+        )
     }
 
     async fn upsert_safety_presets(
         &self,
         records: &[SafetyPresetIngestion],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
-        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for record in records {
-            let row = NewSafetyPresetRow {
-                id: record.id,
-                slug: record.slug.as_str(),
-                icon_key: record.icon_key.as_str(),
-                localizations: &record.localizations,
-                safety_toggle_ids: record.safety_toggle_ids.as_slice(),
-            };
-            diesel::insert_into(safety_presets::table)
-                .values(&row)
-                .on_conflict(safety_presets::id)
-                .do_update()
-                .set((
-                    safety_presets::slug.eq(excluded(safety_presets::slug)),
-                    safety_presets::icon_key.eq(excluded(safety_presets::icon_key)),
-                    safety_presets::localizations.eq(excluded(safety_presets::localizations)),
-                    safety_presets::safety_toggle_ids
-                        .eq(excluded(safety_presets::safety_toggle_ids)),
-                ))
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
-        }
-        Ok(())
+        impl_upsert_descriptor!(
+            upsert_safety_presets,
+            SafetyPresetIngestion,
+            NewSafetyPresetRow,
+            safety_presets,
+            [slug, icon_key, localizations, safety_toggle_ids],
+            self.pool,
+            records
+        )
     }
 
     async fn upsert_interest_themes(
