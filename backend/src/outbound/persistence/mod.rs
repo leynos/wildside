@@ -37,6 +37,7 @@ mod diesel_idempotency_repository;
 mod diesel_route_annotation_repository;
 mod diesel_user_preferences_repository;
 mod diesel_user_repository;
+mod ingestion_upsert_macros;
 mod models;
 mod pool;
 mod schema;

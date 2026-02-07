@@ -1,16 +1,15 @@
 //! PostgreSQL-backed descriptor ingestion adapter.
 
-use async_trait::async_trait;
 use diesel::prelude::*;
-use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
-use tracing::debug;
 
 use crate::domain::ports::{
     BadgeIngestion, DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
     InterestThemeIngestion, SafetyPresetIngestion, SafetyToggleIngestion, TagIngestion,
 };
+use crate::impl_upsert_methods;
 
+use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
 use super::models::{
     NewBadgeRow, NewInterestThemeRow, NewSafetyPresetRow, NewSafetyToggleRow, NewTagRow,
 };
@@ -31,64 +30,14 @@ impl DieselDescriptorIngestionRepository {
 }
 
 fn map_pool_error(error: PoolError) -> DescriptorIngestionRepositoryError {
-    match error {
-        PoolError::Checkout { message } | PoolError::Build { message } => {
-            DescriptorIngestionRepositoryError::connection(message)
-        }
-    }
+    DescriptorIngestionRepositoryError::connection(map_pool_error_message(error))
 }
 
 fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionRepositoryError {
-    let error_message = error.to_string();
-    debug!(%error_message, "descriptor diesel operation failed");
-    DescriptorIngestionRepositoryError::query(error_message)
-}
-
-macro_rules! impl_upsert_methods {
-    (
-        impl $trait:ident for $repo:ty {
-            methods: [
-                $((
-                    $method_name:ident,
-                    $ingestion_type:ty,
-                    $row_type:ident,
-                    $table:ident,
-                    [$($field:ident),+ $(,)?]
-                )),+ $(,)?
-            ],
-            keep: { $($keep:tt)* }
-        }
-    ) => {
-        #[async_trait]
-        impl $trait for $repo {
-            $(
-                async fn $method_name(
-                    &self,
-                    records: &[$ingestion_type],
-                ) -> Result<(), DescriptorIngestionRepositoryError> {
-                    let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-                    for record in records {
-                        let row = $row_type::from(record);
-                        diesel::insert_into($table::table)
-                            .values(&row)
-                            .on_conflict($table::id)
-                            .do_update()
-                            .set((
-                                $(
-                                    $table::$field.eq(excluded($table::$field)),
-                                )+
-                            ))
-                            .execute(&mut conn)
-                            .await
-                            .map_err(map_diesel_error)?;
-                    }
-                    Ok(())
-                }
-            )+
-
-            $($keep)*
-        }
-    };
+    DescriptorIngestionRepositoryError::query(map_diesel_error_message(
+        error,
+        "descriptor ingestion upsert",
+    ))
 }
 
 impl<'a> From<&'a TagIngestion> for NewTagRow<'a> {
@@ -138,32 +87,36 @@ impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
 
 impl_upsert_methods! {
     impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
+        error: DescriptorIngestionRepositoryError,
+        map_pool_error: map_pool_error,
+        map_diesel_error: map_diesel_error,
+        pool: pool,
         methods: [
             (
                 upsert_tags,
                 TagIngestion,
-                NewTagRow,
+                NewTagRow<'_>,
                 tags,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_badges,
                 BadgeIngestion,
-                NewBadgeRow,
+                NewBadgeRow<'_>,
                 badges,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_toggles,
                 SafetyToggleIngestion,
-                NewSafetyToggleRow,
+                NewSafetyToggleRow<'_>,
                 safety_toggles,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_presets,
                 SafetyPresetIngestion,
-                NewSafetyPresetRow,
+                NewSafetyPresetRow<'_>,
                 safety_presets,
                 [slug, icon_key, localizations, safety_toggle_ids]
             )
@@ -173,26 +126,31 @@ impl_upsert_methods! {
                 &self,
                 records: &[InterestThemeIngestion],
             ) -> Result<(), DescriptorIngestionRepositoryError> {
+                if records.is_empty() {
+                    return Ok(());
+                }
                 let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-                for record in records {
-                    let row = NewInterestThemeRow {
+                let rows: Vec<NewInterestThemeRow<'_>> = records
+                    .iter()
+                    .map(|record| NewInterestThemeRow {
                         id: record.id,
                         name: record.name.as_str(),
                         description: record.description.as_deref(),
-                    };
-                    diesel::insert_into(interest_themes::table)
-                        .values(&row)
-                        .on_conflict(interest_themes::id)
-                        .do_update()
-                        .set((
-                            interest_themes::name.eq(excluded(interest_themes::name)),
-                            interest_themes::description
-                                .eq(excluded(interest_themes::description)),
-                        ))
-                        .execute(&mut conn)
-                        .await
-                        .map_err(map_diesel_error)?;
-                }
+                    })
+                    .collect();
+                diesel::insert_into(interest_themes::table)
+                    .values(&rows)
+                    .on_conflict(interest_themes::id)
+                    .do_update()
+                    .set((
+                        interest_themes::name
+                            .eq(diesel::upsert::excluded(interest_themes::name)),
+                        interest_themes::description
+                            .eq(diesel::upsert::excluded(interest_themes::description)),
+                    ))
+                    .execute(&mut conn)
+                    .await
+                    .map_err(map_diesel_error)?;
                 Ok(())
             }
         }

@@ -1,18 +1,20 @@
 # Deliver Diesel schema baseline for roadmap 3.1.1
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+proceeds.
 
 Status: DONE
 
 ## Purpose / Big Picture
 
 Roadmap item 3.1.1 requires a concrete Diesel migration baseline that
-materialises the backend architecture schema for catalogue, descriptor, and
+materializes the backend architecture schema for catalogue, descriptor, and
 user-state persistence. After completion, the backend can apply the baseline
-schema with composite key constraints and GiST/GIN indexes, while ingestion
-writes are exposed through domain ports and outbound adapters.
+schema with composite key constraints and GiST (Generalized Search Tree) / GIN
+(Generalized Inverted Index) indexes, while ingestion writes are exposed
+through domain ports and outbound adapters.
 
 Observable outcome: the new migration applies on embedded Postgres, schema
 objects and indices exist, duplicate composite keys are rejected, new
@@ -23,19 +25,22 @@ ingestion ports are present, and `make check-fmt`, `make lint`, and
 
 - Keep hexagonal boundaries: domain ports define contracts, outbound adapters
   implement persistence.
-- Materialise roadmap 3.1.1 scope: core spatial schema, catalogue tables,
+- Materialize roadmap 3.1.1 scope: core spatial schema, catalogue tables,
   descriptor tables, and current user-state tables.
 - Align `routes` table to architecture shape (`path`, `generation_params`).
 - Keep baseline migrations executable in embedded Postgres test environments
-  without requiring PostGIS.
+  without requiring PostGIS (PostgreSQL Geographic Information System
+  extension).
 - Use `rstest` and `rstest-bdd` v0.4.0 for validation coverage.
 - Update `docs/wildside-backend-architecture.md` with design decisions.
 - Mark roadmap entry `3.1.1` done only when all quality gates pass.
 
 ## Tolerances (Exception Triggers)
 
-- Scope: if work exceeds 20 files or 1,200 net LOC, pause and reassess.
-- API drift: if HTTP contract changes are required, stop and escalate.
+- Scope: if work exceeds 20 files or 1,200 net lines of code (LOC), pause and
+  reassess.
+- Application Programming Interface (API) drift: if HTTP contract changes are
+  required, stop and escalate.
 - Dependencies: no new crates unless unavoidable.
 - Validation retries: if a gate fails 3 times without clear root cause, stop
   and record options.
@@ -94,7 +99,7 @@ ingestion ports are present, and `make check-fmt`, `make lint`, and
 
 - Decision: keep schema baseline compatible with embedded Postgres by using
   native `PATH`/`POINT` types and supported GiST/GIN indexes instead of a hard
-  PostGIS extension dependency.
+  PostGIS (PostgreSQL Geographic Information System extension) dependency.
   Rationale: project quality gates require local test execution via
   `pg-embedded-setup-unpriv`, and that environment does not bundle PostGIS.
   Date/Author: 2026-02-06 / Codex.
@@ -151,8 +156,8 @@ Done means:
 
 ## Idempotence and Recovery
 
-Migration is reversible via `down.sql`. Template DB strategy allows rerunning
-integration/behaviour tests without persistent state conflicts.
+Migration is reversible via `down.sql`. Template database (DB) strategy allows
+rerunning integration/behaviour tests without persistent state conflicts.
 
 ## Artifacts and Notes
 

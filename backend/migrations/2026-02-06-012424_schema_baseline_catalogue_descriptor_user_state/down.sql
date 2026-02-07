@@ -20,8 +20,6 @@ DROP TABLE IF EXISTS pois;
 DROP TABLE IF EXISTS user_interest_themes;
 DROP TABLE IF EXISTS interest_themes;
 
-DROP INDEX IF EXISTS idx_routes_path_gist;
-
 ALTER TABLE routes
     DROP COLUMN IF EXISTS generation_params,
     DROP COLUMN IF EXISTS path,

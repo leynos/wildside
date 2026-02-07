@@ -1,6 +1,6 @@
 //! Port abstraction for catalogue ingestion writes.
 //!
-//! This port keeps catalogue materialisation behind the domain boundary so
+//! This port keeps catalogue materialization behind the domain boundary so
 //! ingestion jobs can evolve without leaking persistence details.
 
 use async_trait::async_trait;

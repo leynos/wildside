@@ -24,24 +24,19 @@ struct BaselineWorld {
 }
 
 impl BaselineWorld {
-    fn query_and_collect(&mut self, query: &str, target: &mut Vec<String>) {
-        target.clear();
+    fn query_and_collect(&mut self, query: &str) -> Vec<String> {
         let rows = self.client.query(query, &[]).expect("query rows");
-        *target = rows.into_iter().map(|row| row.get(0)).collect();
+        rows.into_iter().map(|row| row.get(0)).collect()
     }
 
     fn query_table_names(&mut self) {
         let query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
-        let mut tables = std::mem::take(&mut self.tables);
-        self.query_and_collect(query, &mut tables);
-        self.tables = tables;
+        self.tables = self.query_and_collect(query);
     }
 
     fn query_indexes(&mut self) {
         let query = "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'";
-        let mut indexes = std::mem::take(&mut self.indexes);
-        self.query_and_collect(query, &mut indexes);
-        self.indexes = indexes;
+        self.indexes = self.query_and_collect(query);
     }
 
     fn insert_poi(
@@ -149,24 +144,10 @@ fn a_seeded_route_with_two_points_of_interest(world: &mut BaselineWorld) {
         )
         .expect("insert route");
     world
-        .client
-        .execute(
-            concat!(
-                "INSERT INTO pois (element_type, id, location, osm_tags, narrative, popularity_score) ",
-                "VALUES ('node', 1, point(0, 0), '{}'::jsonb, NULL, 0.0)"
-            ),
-            &[],
-        )
+        .insert_poi("node", 1, (0.0, 0.0))
         .expect("insert poi one");
     world
-        .client
-        .execute(
-            concat!(
-                "INSERT INTO pois (element_type, id, location, osm_tags, narrative, popularity_score) ",
-                "VALUES ('node', 2, point(1, 1), '{}'::jsonb, NULL, 0.0)"
-            ),
-            &[],
-        )
+        .insert_poi("node", 2, (1.0, 1.0))
         .expect("insert poi two");
     world
         .client
@@ -216,9 +197,9 @@ fn insertion_fails_with_a_unique_constraint_violation(world: &mut BaselineWorld)
 
 #[scenario(
     path = "tests/features/schema_baseline.feature",
-    name = "Baseline tables are materialised"
+    name = "Baseline tables are materialized"
 )]
-fn baseline_tables_are_materialised(world: BaselineWorld) {
+fn baseline_tables_are_materialized(world: BaselineWorld) {
     let _ = world;
 }
 

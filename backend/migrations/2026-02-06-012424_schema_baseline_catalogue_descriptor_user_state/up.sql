@@ -1,6 +1,6 @@
 -- Baseline schema for data platform foundation (roadmap 3.1.1).
 --
--- Materialises core spatial tables plus catalogue/descriptor read models and
+-- Materializes core spatial tables plus catalogue/descriptor read models and
 -- preserves existing user state tables. This migration also aligns the routes
 -- table with the backend architecture schema.
 
@@ -12,6 +12,20 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DROP TRIGGER IF EXISTS update_routes_updated_at ON routes;
 DROP INDEX IF EXISTS idx_routes_request_id;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'routes'
+          AND column_name = 'plan_snapshot'
+    )
+    AND EXISTS (SELECT 1 FROM routes LIMIT 1) THEN
+        RAISE EXCEPTION
+            'schema baseline migration requires an empty routes table before removing plan_snapshot';
+    END IF;
+END $$;
 
 ALTER TABLE routes
     DROP COLUMN IF EXISTS request_id,

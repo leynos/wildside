@@ -39,6 +39,8 @@ fn creates_expected_baseline_tables(#[case] table_ddl: &str) {
 
 #[rstest]
 fn creates_expected_spatial_and_json_indexes() {
+    // These static SQL checks intentionally assert specific strings; if the
+    // migration DDL is reformatted, update these literals alongside it.
     assert!(MIGRATION_UP.contains("idx_pois_location_gist"));
     assert!(MIGRATION_UP.contains("USING GIST (location)"));
     assert!(MIGRATION_UP.contains("idx_pois_osm_tags_gin"));

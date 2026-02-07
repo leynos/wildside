@@ -2,7 +2,7 @@ Feature: Schema baseline migration
   Data platform baseline migrations must create the catalogue and descriptor
   schema with required constraints and spatial indexes.
 
-  Scenario: Baseline tables are materialised
+  Scenario: Baseline tables are materialized
     Given a migrated schema baseline
     When listing baseline tables
     Then all required baseline tables are present
