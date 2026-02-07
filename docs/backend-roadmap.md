@@ -130,7 +130,7 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.1. Schema baseline
 
-- [ ] 3.1.1. Deliver Diesel migrations that materialize the schema in
+- [x] 3.1.1. Deliver Diesel migrations that materialize the schema in
   `docs/wildside-backend-architecture.md`, including catalogue, descriptor, and
   user state tables plus GiST/GIN indices and unique constraints for composite
   keys.

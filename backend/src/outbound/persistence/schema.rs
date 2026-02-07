@@ -1,29 +1,13 @@
 //! Diesel table definitions for the PostgreSQL schema.
 //!
-//! These definitions must match the database migrations exactly. They are used
-//! by Diesel for compile-time query validation and type-safe SQL generation.
-//!
-//! # Maintenance
-//!
-//! When migrations change the schema, this file should be regenerated or
-//! manually updated to reflect those changes. The `diesel print-schema`
-//! command can generate these definitions from a live database.
+//! These definitions are maintained manually to keep the persistence adapter
+//! compile-safe while migrations evolve. Native geometric columns are
+//! represented with Diesel-compatible placeholder types (`Text`) because the
+//! current adapter layer does not query them via Diesel yet.
 
 // -----------------------------------------------------------------------------
-// idempotency_keys table
+// Existing application tables
 // -----------------------------------------------------------------------------
-//
-// Stores idempotency records for safe request retries on outbox-backed mutations.
-// Supports multiple mutation types (routes, notes, progress, preferences, bundles).
-//
-// Columns:
-//
-// - key: Client-provided UUID v4 idempotency key (part of composite primary key)
-// - user_id: User who made the original request (part of composite primary key)
-// - mutation_type: Type of mutation (routes, notes, etc.) (part of composite PK)
-// - payload_hash: SHA-256 hash of the canonicalised request payload (32 bytes)
-// - response_snapshot: JSONB snapshot of the original response to replay
-// - created_at: Record creation timestamp (used for TTL-based cleanup)
 
 diesel::table! {
     idempotency_keys (key, user_id, mutation_type) {
@@ -36,18 +20,6 @@ diesel::table! {
     }
 }
 
-// -----------------------------------------------------------------------------
-// users table
-// -----------------------------------------------------------------------------
-//
-// User accounts table storing registered users with their display names and
-// audit timestamps. Columns:
-//
-// - id: Primary key (UUID v4 identifier)
-// - display_name: Human-readable display name (max 32 characters)
-// - created_at: Record creation timestamp
-// - updated_at: Last modification timestamp (auto-updated by trigger)
-
 diesel::table! {
     users (id) {
         id -> Uuid,
@@ -57,48 +29,15 @@ diesel::table! {
     }
 }
 
-// -----------------------------------------------------------------------------
-// routes table
-// -----------------------------------------------------------------------------
-//
-// Generated route plans stored for users. This table is a prerequisite for
-// route_notes and route_progress which have foreign keys to it.
-//
-// Columns:
-//
-// - id: Primary key (UUID v4 identifier)
-// - user_id: User who created the route (FK to users)
-// - request_id: Original route request identifier
-// - plan_snapshot: JSONB snapshot of the generated route plan
-// - created_at: Record creation timestamp
-// - updated_at: Last modification timestamp (auto-updated by trigger)
-
 diesel::table! {
     routes (id) {
         id -> Uuid,
-        user_id -> Uuid,
-        request_id -> Uuid,
-        plan_snapshot -> Jsonb,
+        user_id -> Nullable<Uuid>,
+        path -> Text,
+        generation_params -> Jsonb,
         created_at -> Timestamptz,
-        updated_at -> Timestamptz,
     }
 }
-
-// -----------------------------------------------------------------------------
-// user_preferences table
-// -----------------------------------------------------------------------------
-//
-// User preferences for interests, safety settings, and display options.
-// Supports optimistic concurrency via the revision column.
-//
-// Columns:
-//
-// - user_id: Primary key / FK to users
-// - interest_theme_ids: Array of selected interest theme UUIDs
-// - safety_toggle_ids: Array of enabled safety toggle UUIDs
-// - unit_system: Display unit system ('metric' or 'imperial')
-// - revision: Optimistic concurrency revision number
-// - updated_at: Last modification timestamp (auto-updated by trigger)
 
 diesel::table! {
     user_preferences (user_id) {
@@ -110,24 +49,6 @@ diesel::table! {
         updated_at -> Timestamptz,
     }
 }
-
-// -----------------------------------------------------------------------------
-// route_notes table
-// -----------------------------------------------------------------------------
-//
-// User annotations attached to routes or specific POIs within routes.
-// Supports optimistic concurrency via the revision column.
-//
-// Columns:
-//
-// - id: Primary key (UUID v4 identifier)
-// - route_id: FK to routes table
-// - poi_id: Optional POI identifier within the route
-// - user_id: FK to users table
-// - body: Note content text
-// - revision: Optimistic concurrency revision number
-// - created_at: Record creation timestamp
-// - updated_at: Last modification timestamp (auto-updated by trigger)
 
 diesel::table! {
     route_notes (id) {
@@ -142,21 +63,6 @@ diesel::table! {
     }
 }
 
-// -----------------------------------------------------------------------------
-// route_progress table
-// -----------------------------------------------------------------------------
-//
-// Progress tracking for users walking routes, storing visited stop IDs.
-// Supports optimistic concurrency via the revision column.
-//
-// Columns:
-//
-// - route_id: Part of composite PK, FK to routes
-// - user_id: Part of composite PK, FK to users
-// - visited_stop_ids: Array of visited stop UUIDs
-// - revision: Optimistic concurrency revision number
-// - updated_at: Last modification timestamp (auto-updated by trigger)
-
 diesel::table! {
     route_progress (route_id, user_id) {
         route_id -> Uuid,
@@ -164,6 +70,182 @@ diesel::table! {
         visited_stop_ids -> Array<Uuid>,
         revision -> Int4,
         updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    example_data_runs (seed_key) {
+        seed_key -> Text,
+        seeded_at -> Timestamptz,
+        user_count -> Int4,
+        seed -> Int8,
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Data platform baseline tables (roadmap 3.1.1)
+// -----------------------------------------------------------------------------
+
+diesel::table! {
+    interest_themes (id) {
+        id -> Uuid,
+        name -> Text,
+        description -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    user_interest_themes (user_id, theme_id) {
+        user_id -> Uuid,
+        theme_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    pois (element_type, id) {
+        element_type -> Text,
+        id -> Int8,
+        location -> Text,
+        osm_tags -> Jsonb,
+        narrative -> Nullable<Text>,
+        popularity_score -> Float4,
+    }
+}
+
+diesel::table! {
+    poi_interest_themes (poi_element_type, poi_id, theme_id) {
+        poi_element_type -> Text,
+        poi_id -> Int8,
+        theme_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    route_pois (route_id, poi_element_type, poi_id) {
+        route_id -> Uuid,
+        poi_element_type -> Text,
+        poi_id -> Int8,
+        position -> Int4,
+    }
+}
+
+diesel::table! {
+    route_categories (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+        route_count -> Int4,
+    }
+}
+
+diesel::table! {
+    themes (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+        image -> Jsonb,
+        walk_count -> Int4,
+        distance_range_metres -> Array<Int4>,
+        rating -> Float4,
+    }
+}
+
+diesel::table! {
+    route_summaries (id) {
+        id -> Uuid,
+        route_id -> Uuid,
+        category_id -> Uuid,
+        theme_id -> Uuid,
+        slug -> Nullable<Text>,
+        localizations -> Jsonb,
+        hero_image -> Jsonb,
+        distance_metres -> Int4,
+        duration_seconds -> Int4,
+        rating -> Float4,
+        badge_ids -> Array<Uuid>,
+        difficulty -> Text,
+        interest_theme_ids -> Array<Uuid>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    route_collections (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+        lead_image -> Jsonb,
+        map_preview -> Jsonb,
+        distance_range_metres -> Array<Int4>,
+        duration_range_seconds -> Array<Int4>,
+        difficulty -> Text,
+        route_ids -> Array<Uuid>,
+    }
+}
+
+diesel::table! {
+    trending_route_highlights (id) {
+        id -> Uuid,
+        route_summary_id -> Uuid,
+        trend_delta -> Text,
+        subtitle_localizations -> Jsonb,
+        highlighted_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    community_picks (id) {
+        id -> Uuid,
+        route_summary_id -> Nullable<Uuid>,
+        user_id -> Nullable<Uuid>,
+        localizations -> Jsonb,
+        curator_display_name -> Text,
+        curator_avatar -> Jsonb,
+        rating -> Float4,
+        distance_metres -> Int4,
+        duration_seconds -> Int4,
+        saves -> Int4,
+        picked_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    tags (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+    }
+}
+
+diesel::table! {
+    badges (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+    }
+}
+
+diesel::table! {
+    safety_toggles (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+    }
+}
+
+diesel::table! {
+    safety_presets (id) {
+        id -> Uuid,
+        slug -> Text,
+        icon_key -> Text,
+        localizations -> Jsonb,
+        safety_toggle_ids -> Array<Uuid>,
     }
 }
 
@@ -177,36 +259,38 @@ diesel::joinable!(route_notes -> routes (route_id));
 diesel::joinable!(route_notes -> users (user_id));
 diesel::joinable!(route_progress -> routes (route_id));
 diesel::joinable!(route_progress -> users (user_id));
-
-// -----------------------------------------------------------------------------
-// example_data_runs table
-// -----------------------------------------------------------------------------
-//
-// Tracks applied example data seeds to prevent duplicate seeding. Used by the
-// example-data feature to ensure once-only seeding on startup.
-//
-// Columns:
-//
-// - seed_key: Primary key (seed name, e.g., "mossy-owl")
-// - seeded_at: Timestamp when seeding was performed
-// - user_count: Number of users created by this seed
-// - seed: The RNG seed value used for deterministic generation
-
-diesel::table! {
-    example_data_runs (seed_key) {
-        seed_key -> Text,
-        seeded_at -> Timestamptz,
-        user_count -> Int4,
-        seed -> Int8,
-    }
-}
+diesel::joinable!(user_interest_themes -> users (user_id));
+diesel::joinable!(user_interest_themes -> interest_themes (theme_id));
+diesel::joinable!(poi_interest_themes -> interest_themes (theme_id));
+diesel::joinable!(route_pois -> routes (route_id));
+diesel::joinable!(route_summaries -> routes (route_id));
+diesel::joinable!(route_summaries -> route_categories (category_id));
+diesel::joinable!(route_summaries -> themes (theme_id));
+diesel::joinable!(trending_route_highlights -> route_summaries (route_summary_id));
+diesel::joinable!(community_picks -> route_summaries (route_summary_id));
+diesel::joinable!(community_picks -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    badges,
+    community_picks,
     example_data_runs,
     idempotency_keys,
+    interest_themes,
+    poi_interest_themes,
+    pois,
+    route_categories,
+    route_collections,
     route_notes,
+    route_pois,
     route_progress,
+    route_summaries,
     routes,
+    safety_presets,
+    safety_toggles,
+    tags,
+    themes,
+    trending_route_highlights,
+    user_interest_themes,
     user_preferences,
     users,
 );
