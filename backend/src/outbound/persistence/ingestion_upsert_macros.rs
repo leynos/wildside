@@ -67,8 +67,8 @@ macro_rules! impl_upsert_methods {
                         }
                         .scope_boxed()
                     })
-                        .await
-                        .map_err($map_diesel_error)?;
+                    .await
+                    .map_err($map_diesel_error)?;
                     Ok(())
                 }
             )+

@@ -135,6 +135,9 @@ impl_upsert_methods! {
                 &self,
                 records: &[InterestThemeIngestion],
             ) -> Result<(), DescriptorIngestionRepositoryError> {
+                use diesel_async::AsyncConnection as _;
+                use diesel_async::scoped_futures::ScopedFutureExt as _;
+
                 if records.is_empty() {
                     return Ok(());
                 }
@@ -143,17 +146,25 @@ impl_upsert_methods! {
                     .iter()
                     .map(NewInterestThemeRow::from)
                     .collect();
-                diesel::insert_into(interest_themes::table)
-                    .values(&rows)
-                    .on_conflict(interest_themes::id)
-                    .do_update()
-                    .set((
-                        interest_themes::name
-                            .eq(diesel::upsert::excluded(interest_themes::name)),
-                        interest_themes::description
-                            .eq(diesel::upsert::excluded(interest_themes::description)),
-                    ))
-                    .execute(&mut conn)
+
+                conn.transaction(|conn| {
+                    async move {
+                        diesel::insert_into(interest_themes::table)
+                            .values(&rows)
+                            .on_conflict(interest_themes::id)
+                            .do_update()
+                            .set((
+                                interest_themes::name
+                                    .eq(diesel::upsert::excluded(interest_themes::name)),
+                                interest_themes::description
+                                    .eq(diesel::upsert::excluded(interest_themes::description)),
+                            ))
+                            .execute(conn)
+                            .await?;
+                        Ok(())
+                    }
+                    .scope_boxed()
+                })
                     .await
                     .map_err(map_diesel_error)?;
                 Ok(())

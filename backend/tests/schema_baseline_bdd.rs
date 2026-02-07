@@ -2,7 +2,7 @@
 
 use backend::domain::ports::UserPersistenceError;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
-use postgres::{Client, Error as PostgresError, NoTls};
+use postgres::{Client, Error as PostgresError, NoTls, error::SqlState};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
@@ -216,9 +216,12 @@ fn insertion_fails_with_a_unique_constraint_violation(world: &mut BaselineWorld)
         .take()
         .expect("expected insert to fail with constraint error");
     let formatted = format_postgres_error(&error);
-    assert!(
-        formatted.to_lowercase().contains("duplicate key"),
-        "expected duplicate-key error, got: {formatted}"
+    let sql_state = error.as_db_error().map(|db_error| db_error.code());
+    assert_eq!(
+        sql_state,
+        Some(&SqlState::UNIQUE_VIOLATION),
+        "expected SQLSTATE UNIQUE_VIOLATION, got {} ({formatted})",
+        sql_state.map_or("none", SqlState::code),
     );
 }
 
