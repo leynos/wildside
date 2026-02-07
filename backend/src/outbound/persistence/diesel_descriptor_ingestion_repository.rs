@@ -24,9 +24,8 @@ pub struct DieselDescriptorIngestionRepository {
 
 impl DieselDescriptorIngestionRepository {
     /// Create a new repository with the given connection pool.
-    pub fn new(pool: DbPool) -> Self {
-        Self { pool }
-    }
+    #[rustfmt::skip]
+    pub fn new(pool: DbPool) -> Self { Self { pool } }
 }
 
 fn map_pool_error(error: PoolError) -> DescriptorIngestionRepositoryError {
