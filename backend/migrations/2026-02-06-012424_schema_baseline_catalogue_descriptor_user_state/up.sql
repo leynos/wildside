@@ -22,6 +22,7 @@ BEGIN
           AND column_name = 'plan_snapshot'
     )
     AND EXISTS (SELECT 1 FROM routes LIMIT 1) THEN
+        -- Guard against silent data loss during the one-way shape replacement.
         RAISE EXCEPTION
             'schema baseline migration requires an empty routes table before removing plan_snapshot';
     END IF;
@@ -120,6 +121,8 @@ CREATE TABLE IF NOT EXISTS route_summaries (
     distance_metres INTEGER NOT NULL DEFAULT 0,
     duration_seconds INTEGER NOT NULL DEFAULT 0,
     rating REAL NOT NULL DEFAULT 0,
+    -- Denormalized read-model arrays maintained by ingestion upserts.
+    -- Foreign keys are intentionally not enforced for these snapshot fields.
     badge_ids UUID[] NOT NULL DEFAULT '{}',
     difficulty TEXT NOT NULL DEFAULT 'easy',
     interest_theme_ids UUID[] NOT NULL DEFAULT '{}',

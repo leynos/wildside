@@ -105,31 +105,49 @@ pub struct CommunityPickIngestion {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait CatalogueIngestionRepository: Send + Sync {
+    /// Persist route category snapshots keyed by category identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_route_categories(
         &self,
         records: &[RouteCategoryIngestion],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
+    /// Persist theme snapshots keyed by theme identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_themes(
         &self,
         records: &[ThemeIngestion],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
+    /// Persist route collection snapshots keyed by collection identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_route_collections(
         &self,
         records: &[RouteCollectionIngestion],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
+    /// Persist route summary snapshots keyed by summary identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_route_summaries(
         &self,
         records: &[RouteSummaryIngestion],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
+    /// Persist trending highlight overlays keyed by highlight identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_trending_highlights(
         &self,
         records: &[TrendingRouteHighlightIngestion],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
+    /// Persist community pick snapshots keyed by pick identifier.
+    ///
+    /// Existing rows are updated with incoming payload values.
     async fn upsert_community_picks(
         &self,
         records: &[CommunityPickIngestion],

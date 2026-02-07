@@ -85,6 +85,16 @@ impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
     }
 }
 
+impl<'a> From<&'a InterestThemeIngestion> for NewInterestThemeRow<'a> {
+    fn from(record: &'a InterestThemeIngestion) -> Self {
+        Self {
+            id: record.id,
+            name: record.name.as_str(),
+            description: record.description.as_deref(),
+        }
+    }
+}
+
 impl_upsert_methods! {
     impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
         error: DescriptorIngestionRepositoryError,
@@ -132,11 +142,7 @@ impl_upsert_methods! {
                 let mut conn = self.pool.get().await.map_err(map_pool_error)?;
                 let rows: Vec<NewInterestThemeRow<'_>> = records
                     .iter()
-                    .map(|record| NewInterestThemeRow {
-                        id: record.id,
-                        name: record.name.as_str(),
-                        description: record.description.as_deref(),
-                    })
+                    .map(NewInterestThemeRow::from)
                     .collect();
                 diesel::insert_into(interest_themes::table)
                     .values(&rows)

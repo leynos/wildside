@@ -24,19 +24,24 @@ struct BaselineWorld {
 }
 
 impl BaselineWorld {
-    fn query_and_collect(&mut self, query: &str) -> Vec<String> {
+    fn query_and_collect(&mut self, query: &str, target: &mut Vec<String>) {
+        target.clear();
         let rows = self.client.query(query, &[]).expect("query rows");
-        rows.into_iter().map(|row| row.get(0)).collect()
+        target.extend(rows.into_iter().map(|row| row.get(0)));
     }
 
     fn query_table_names(&mut self) {
         let query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
-        self.tables = self.query_and_collect(query);
+        let mut tables = core::mem::take(&mut self.tables);
+        self.query_and_collect(query, &mut tables);
+        self.tables = tables;
     }
 
     fn query_indexes(&mut self) {
         let query = "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'";
-        self.indexes = self.query_and_collect(query);
+        let mut indexes = core::mem::take(&mut self.indexes);
+        self.query_and_collect(query, &mut indexes);
+        self.indexes = indexes;
     }
 
     fn insert_poi(
@@ -163,8 +168,10 @@ fn inserting_duplicate_route_positions(world: &mut BaselineWorld) {
     world.last_error = world
         .client
         .execute(
-            "INSERT INTO route_pois (route_id, poi_element_type, poi_id, position) \
-             SELECT route_id, 'node', 2, 0 FROM route_pois LIMIT 1",
+            concat!(
+                "INSERT INTO route_pois (route_id, poi_element_type, poi_id, position) ",
+                "SELECT route_id, 'node', 2, 0 FROM route_pois LIMIT 1"
+            ),
             &[],
         )
         .err();

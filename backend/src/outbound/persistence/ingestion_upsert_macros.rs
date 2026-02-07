@@ -7,6 +7,9 @@
 /// - acquire a pooled connection
 /// - convert ingestion records to Diesel insert rows via `From`
 /// - execute a single batched `INSERT .. ON CONFLICT .. DO UPDATE` statement
+///
+/// Note: conflict targeting is currently fixed to `$table::id`. Extend the
+/// macro if a repository needs composite conflict targets.
 #[macro_export]
 macro_rules! impl_upsert_methods {
     (

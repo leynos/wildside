@@ -16,7 +16,7 @@ schema with composite key constraints and GiST (Generalized Search Tree) / GIN
 (Generalized Inverted Index) indexes, while ingestion writes are exposed
 through domain ports and outbound adapters.
 
-Observable outcome: the new migration applies on embedded Postgres, schema
+Observable outcome: the new migration applies to embedded Postgres, schema
 objects and indices exist, duplicate composite keys are rejected, new
 ingestion ports are present, and `make check-fmt`, `make lint`, and
 `make test` all pass.
@@ -108,9 +108,9 @@ ingestion ports are present, and `make check-fmt`, `make lint`, and
 
 Roadmap item 3.1.1 is implemented with gated verification:
 
-- `make check-fmt` passed.
-- `make lint` passed.
-- `make test` passed (`589 passed, 1 skipped`).
+- Formatting validation passed via `make check-fmt`.
+- Lint checks completed successfully with `make lint`.
+- Test verification completed through `make test` (`589 passed, 1 skipped`).
 
 ## Context and Orientation
 
