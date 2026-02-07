@@ -44,6 +44,14 @@ impl BaselineWorld {
         self.indexes = indexes;
     }
 
+    fn find_index_definition(&self, index_name: &str) -> Option<&str> {
+        let name = index_name.to_lowercase();
+        self.indexes
+            .iter()
+            .find(|index| index.to_lowercase().contains(name.as_str()))
+            .map(String::as_str)
+    }
+
     fn insert_poi(
         &mut self,
         element_type: &str,
@@ -79,6 +87,7 @@ fn world() -> BaselineWorld {
 
 #[given("a migrated schema baseline")]
 fn a_migrated_schema_baseline(world: &mut BaselineWorld) {
+    // The fixture already provisions a migrated template database.
     let _ = world;
 }
 
@@ -120,11 +129,19 @@ fn querying_baseline_indexes(world: &mut BaselineWorld) {
 
 #[then("GiST and GIN indexes are present")]
 fn gist_and_gin_indexes_are_present(world: &mut BaselineWorld) {
-    let index_blob = world.indexes.join("\n").to_lowercase();
-    assert!(index_blob.contains("idx_pois_location_gist"));
-    assert!(index_blob.contains("using gist (location"));
-    assert!(index_blob.contains("idx_pois_osm_tags_gin"));
-    assert!(index_blob.contains("using gin (osm_tags"));
+    let location_index = world
+        .find_index_definition("idx_pois_location_gist")
+        .expect("missing idx_pois_location_gist");
+    assert!(
+        location_index
+            .to_lowercase()
+            .contains("using gist (location")
+    );
+
+    let tags_index = world
+        .find_index_definition("idx_pois_osm_tags_gin")
+        .expect("missing idx_pois_osm_tags_gin");
+    assert!(tags_index.to_lowercase().contains("using gin (osm_tags"));
 }
 
 #[given("a seeded route with two points of interest")]
@@ -157,7 +174,10 @@ fn a_seeded_route_with_two_points_of_interest(world: &mut BaselineWorld) {
     world
         .client
         .execute(
-            "INSERT INTO route_pois (route_id, poi_element_type, poi_id, position) VALUES ($1, 'node', 1, 0)",
+            concat!(
+                "INSERT INTO route_pois (route_id, poi_element_type, poi_id, position) ",
+                "VALUES ($1, 'node', 1, 0)"
+            ),
             &[&route_id],
         )
         .expect("insert first route_poi");

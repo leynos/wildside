@@ -7,9 +7,13 @@
 /// - acquire a pooled connection
 /// - convert ingestion records to Diesel insert rows via `From`
 /// - execute a single batched `INSERT .. ON CONFLICT .. DO UPDATE` statement
+///   inside an explicit transaction
 ///
 /// Note: conflict targeting is currently fixed to `$table::id`. Extend the
 /// macro if a repository needs composite conflict targets.
+///
+/// Expansion requirements: the consuming crate must depend on `async-trait`,
+/// `diesel`, and `diesel-async`.
 #[macro_export]
 macro_rules! impl_upsert_methods {
     (
@@ -37,21 +41,32 @@ macro_rules! impl_upsert_methods {
                     &self,
                     records: &[$ingestion_type],
                 ) -> Result<(), $error_ty> {
+                    use diesel_async::AsyncConnection as _;
+                    use diesel_async::scoped_futures::ScopedFutureExt as _;
+
                     if records.is_empty() {
                         return Ok(());
                     }
                     let mut conn = self.$pool_field.get().await.map_err($map_pool_error)?;
                     let rows: Vec<$row_type> = records.iter().map(<$row_type>::from).collect();
-                    diesel::insert_into($table::table)
-                        .values(&rows)
-                        .on_conflict($table::id)
-                        .do_update()
-                        .set((
-                            $(
-                                $table::$field.eq(diesel::upsert::excluded($table::$field)),
-                            )+
-                        ))
-                        .execute(&mut conn)
+
+                    conn.transaction(|conn| {
+                        async move {
+                            diesel::insert_into($table::table)
+                                .values(&rows)
+                                .on_conflict($table::id)
+                                .do_update()
+                                .set((
+                                    $(
+                                        $table::$field.eq(diesel::upsert::excluded($table::$field)),
+                                    )+
+                                ))
+                                .execute(conn)
+                                .await?;
+                            Ok(())
+                        }
+                        .scope_boxed()
+                    })
                         .await
                         .map_err($map_diesel_error)?;
                     Ok(())

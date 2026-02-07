@@ -139,6 +139,8 @@ CREATE TABLE IF NOT EXISTS route_collections (
     distance_range_metres INTEGER[] NOT NULL DEFAULT ARRAY[0, 0],
     duration_range_seconds INTEGER[] NOT NULL DEFAULT ARRAY[0, 0],
     difficulty TEXT NOT NULL DEFAULT 'easy',
+    -- Denormalized read-model array maintained by ingestion upserts.
+    -- Foreign keys are intentionally not enforced for this snapshot field.
     route_ids UUID[] NOT NULL DEFAULT '{}'
 );
 
@@ -194,5 +196,7 @@ CREATE TABLE IF NOT EXISTS safety_presets (
     slug TEXT NOT NULL UNIQUE,
     icon_key TEXT NOT NULL,
     localizations JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Denormalized read-model array maintained by ingestion upserts.
+    -- Foreign keys are intentionally not enforced for this snapshot field.
     safety_toggle_ids UUID[] NOT NULL DEFAULT '{}'
 );
