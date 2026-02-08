@@ -14,6 +14,32 @@
 ///
 /// Expansion requirements: the consuming crate must depend on `async-trait`,
 /// `diesel`, and `diesel-async`.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// impl_upsert_methods! {
+///     impl DescriptorIngestionRepository for DieselDescriptorIngestionRepository {
+///         error: DescriptorIngestionRepositoryError,
+///         map_pool_error: map_pool_error,
+///         map_diesel_error: map_diesel_error,
+///         pool: pool,
+///         methods: [
+///             (
+///                 upsert_tags,
+///                 TagIngestion,
+///                 NewTagRow<'_>,
+///                 tags,
+///                 [slug, icon_key, localizations]
+///             )
+///         ],
+///         keep: {}
+///     }
+/// }
+/// ```
+///
+/// Calling `upsert_tags` from the generated implementation writes the batch
+/// atomically and returns `Ok(())` when the transaction commits.
 #[macro_export]
 macro_rules! impl_upsert_methods {
     (

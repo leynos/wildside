@@ -24,6 +24,21 @@ pub struct DieselDescriptorIngestionRepository {
 
 impl DieselDescriptorIngestionRepository {
     /// Create a new repository with the given connection pool.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use backend::outbound::persistence::{
+    ///     DbPool, DieselDescriptorIngestionRepository, PoolConfig,
+    /// };
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pool = DbPool::new(PoolConfig::new("postgres://localhost")).await?;
+    /// let repository = DieselDescriptorIngestionRepository::new(pool);
+    /// # let _ = repository;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[rustfmt::skip]
     pub fn new(pool: DbPool) -> Self { Self { pool } }
 }
