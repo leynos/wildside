@@ -4,8 +4,8 @@ This guide summarizes how to run the test suites locally and which toggles to
 adjust when running without elevated privileges.
 
 For behavioural test strategy, fixture conventions, and contributor workflow
-rules, read `docs/developers-guide.md` first. This file focuses on command
-execution and local environment setup.
+rules, read the [developers guide](developers-guide.md) first. This file
+focuses on command execution and local environment setup.
 
 ## Core commands
 

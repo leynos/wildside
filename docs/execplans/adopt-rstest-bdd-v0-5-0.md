@@ -138,9 +138,9 @@ Primary files touched by migration:
 
 Stage A completed: dependency and behavioural suite migration with gate checks.
 
-Stage B in progress: documentation alignment.
+Stage B completed: contributor documentation alignment.
 
-Stage C pending completion: rerun full gates after doc updates and commit docs.
+Stage C completed: full gates rerun after doc updates and docs commit.
 
 ## Concrete steps
 
@@ -180,8 +180,9 @@ Final dependency intent:
 - `rstest-bdd = "0.5.0"`
 - `rstest-bdd-macros = { version = "0.5.0",`
   `features = ["strict-compile-time-validation"] }`
+- `diesel_migrations = "2.2"`
 
-No additional dependency introductions are planned.
+No further dependency introductions are planned.
 
 ## Revision note
 

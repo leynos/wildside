@@ -1,8 +1,9 @@
 # Developers guide
 
 This guide is the canonical reference for day-to-day contributor workflows in
-this repository. It explains how we structure tests, how we write behavioural
-tests with `rstest-bdd`, and which quality gates must pass before commit.
+this repository. It explains how tests are structured, how behavioural tests
+with `rstest-bdd` are written, and which quality gates must pass before
+commit.
 
 Use this guide with `docs/wildside-testing-guide.md`. The testing guide is an
 operations quick reference, while this document defines strategy and usage
