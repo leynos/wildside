@@ -175,22 +175,22 @@ fn the_cli_reports_a_registry_parse_error(world: &World) {
 
 #[scenario(path = "tests/features/seed_registry_cli.feature", index = 0)]
 fn add_seed_with_generated_name(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(path = "tests/features/seed_registry_cli.feature", index = 1)]
 fn add_seed_with_explicit_name(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(path = "tests/features/seed_registry_cli.feature", index = 2)]
 fn reject_duplicate_seed_name(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(path = "tests/features/seed_registry_cli.feature", index = 3)]
 fn reject_invalid_registry_json(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 fn registry_path(world: &World) -> Utf8PathBuf {

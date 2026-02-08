@@ -280,7 +280,7 @@ fn parsing_fails_with_invalid_uuid_error(world: &World) {
     name = "Valid registry parses successfully"
 )]
 fn valid_registry_parses_successfully(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -288,7 +288,7 @@ fn valid_registry_parses_successfully(world: World) {
     name = "Deterministic generation produces identical users"
 )]
 fn deterministic_generation_produces_identical_users(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -296,7 +296,7 @@ fn deterministic_generation_produces_identical_users(world: World) {
     name = "Generated display names are valid"
 )]
 fn generated_display_names_are_valid(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -304,7 +304,7 @@ fn generated_display_names_are_valid(world: World) {
     name = "Interest theme selection stays within registry"
 )]
 fn interest_theme_selection_stays_within_registry(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -312,7 +312,7 @@ fn interest_theme_selection_stays_within_registry(world: World) {
     name = "Invalid JSON fails parsing"
 )]
 fn invalid_json_fails_parsing(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -320,7 +320,7 @@ fn invalid_json_fails_parsing(world: World) {
     name = "Empty seeds array fails parsing"
 )]
 fn empty_seeds_array_fails_parsing(world: World) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -328,5 +328,5 @@ fn empty_seeds_array_fails_parsing(world: World) {
     name = "Invalid UUID in interest themes fails parsing"
 )]
 fn invalid_uuid_in_interest_themes_fails_parsing(world: World) {
-    let _ = world;
+    drop(world);
 }

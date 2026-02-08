@@ -22,7 +22,7 @@ mod support;
     name = "First seed run applies example data"
 )]
 fn first_seed_run_applies_example_data(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -30,7 +30,7 @@ fn first_seed_run_applies_example_data(world: ExampleDataSeedingWorld) {
     name = "Seed run is skipped when already applied"
 )]
 fn seed_run_is_skipped_when_already_applied(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -38,7 +38,7 @@ fn seed_run_is_skipped_when_already_applied(world: ExampleDataSeedingWorld) {
     name = "Missing seed returns an error"
 )]
 fn missing_seed_returns_error(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -46,7 +46,7 @@ fn missing_seed_returns_error(world: ExampleDataSeedingWorld) {
     name = "Seeding is skipped when disabled"
 )]
 fn seeding_is_skipped_when_disabled(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -54,7 +54,7 @@ fn seeding_is_skipped_when_disabled(world: ExampleDataSeedingWorld) {
     name = "Seeding is skipped when database is missing"
 )]
 fn seeding_is_skipped_when_database_is_missing(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -62,5 +62,5 @@ fn seeding_is_skipped_when_database_is_missing(world: ExampleDataSeedingWorld) {
     name = "Invalid registry path returns an error"
 )]
 fn invalid_registry_path_returns_error(world: ExampleDataSeedingWorld) {
-    let _ = world;
+    drop(world);
 }

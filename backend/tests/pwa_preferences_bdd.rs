@@ -257,5 +257,5 @@ replayed_response_step!(
 
 #[scenario(path = "tests/features/pwa_preferences.feature")]
 fn pwa_preferences(world: WorldFixture) {
-    let _ = world;
+    drop(world);
 }
