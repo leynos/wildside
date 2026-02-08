@@ -3,6 +3,10 @@
 This guide summarizes how to run the test suites locally and which toggles to
 adjust when running without elevated privileges.
 
+For behavioural test strategy, fixture conventions, and contributor workflow
+rules, read `docs/developers-guide.md` first. This file focuses on command
+execution and local environment setup.
+
 ## Core commands
 
 - `make fmt` – formats Rust and JS/TS sources.
@@ -10,6 +14,12 @@ adjust when running without elevated privileges.
 - `make check-fmt` – verifies formatting without writing changes.
 - `make test` – executes Rust nextest suites, workspace JS/TS tests, and
   Python script tests. Honour the notes below before running.
+
+## Behavioural test stack
+
+Rust behavioural suites use `rstest-bdd` v0.5.0 with strict compile-time
+validation through `rstest-bdd-macros`. This keeps Gherkin scenarios aligned
+with local step definitions at build time.
 
 ## Embedded Postgres worker path
 
