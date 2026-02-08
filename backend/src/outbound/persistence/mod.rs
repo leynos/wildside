@@ -28,6 +28,8 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
+mod diesel_catalogue_ingestion_repository;
+mod diesel_descriptor_ingestion_repository;
 mod diesel_example_data_runs_repository;
 mod diesel_example_data_seed_repository;
 pub(crate) mod diesel_helpers;
@@ -35,10 +37,13 @@ mod diesel_idempotency_repository;
 mod diesel_route_annotation_repository;
 mod diesel_user_preferences_repository;
 mod diesel_user_repository;
+mod ingestion_upsert_macros;
 mod models;
 mod pool;
 mod schema;
 
+pub use diesel_catalogue_ingestion_repository::DieselCatalogueIngestionRepository;
+pub use diesel_descriptor_ingestion_repository::DieselDescriptorIngestionRepository;
 pub use diesel_example_data_runs_repository::DieselExampleDataRunsRepository;
 pub use diesel_example_data_seed_repository::DieselExampleDataSeedRepository;
 pub use diesel_idempotency_repository::DieselIdempotencyRepository;

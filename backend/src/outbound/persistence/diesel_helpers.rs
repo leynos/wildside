@@ -12,6 +12,20 @@ use crate::domain::ports::RouteAnnotationRepositoryError;
 
 use super::pool::PoolError;
 
+/// Extract a readable message from a pool error.
+pub fn map_pool_error_message(error: PoolError) -> String {
+    match error {
+        PoolError::Checkout { message } | PoolError::Build { message } => message,
+    }
+}
+
+/// Extract a readable message from a Diesel error and emit debug context.
+pub fn map_diesel_error_message(error: diesel::result::Error, operation: &str) -> String {
+    let error_message = error.to_string();
+    debug!(%error_message, %operation, "diesel operation failed");
+    error_message
+}
+
 /// Map pool errors to domain route annotation repository errors.
 pub fn map_pool_error(error: PoolError) -> RouteAnnotationRepositoryError {
     match error {

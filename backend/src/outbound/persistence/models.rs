@@ -3,12 +3,6 @@
 //! These types are implementation details of the persistence layer and must
 //! never be exposed to the domain. They exist solely to satisfy Diesel's
 //! type requirements for queries and mutations.
-//!
-//! # Conversion
-//!
-//! Repository implementations are responsible for converting between these
-//! internal models and domain types. This keeps Diesel dependencies confined
-//! to the outbound adapter layer.
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -20,10 +14,6 @@ use super::schema::{
 };
 
 /// Row struct for reading from the users table.
-///
-/// Maps directly to a SELECT result with all columns. Timestamp fields are
-/// included to match the database schema even when not currently exposed
-/// through the domain model.
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -37,9 +27,6 @@ pub(crate) struct UserRow {
 }
 
 /// Insertable struct for creating new user records.
-///
-/// Only includes columns that must be provided at insert time; timestamps
-/// default to `NOW()` via the database schema.
 #[derive(Debug, Clone, Insertable)]
 #[diesel(table_name = users)]
 pub(crate) struct NewUserRow<'a> {
@@ -48,8 +35,6 @@ pub(crate) struct NewUserRow<'a> {
 }
 
 /// Changeset struct for updating existing user records.
-///
-/// Used with `ON CONFLICT DO UPDATE` for upsert operations.
 #[derive(Debug, Clone, AsChangeset)]
 #[diesel(table_name = users)]
 pub(crate) struct UserUpdate<'a> {
@@ -98,11 +83,10 @@ pub(crate) struct NewIdempotencyKeyRow<'a> {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub(crate) struct RouteRow {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub request_id: Uuid,
-    pub plan_snapshot: serde_json::Value,
+    pub user_id: Option<Uuid>,
+    pub path: String,
+    pub generation_params: serde_json::Value,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 /// Insertable struct for creating new route records.
@@ -110,9 +94,9 @@ pub(crate) struct RouteRow {
 #[diesel(table_name = routes)]
 pub(crate) struct NewRouteRow<'a> {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub request_id: Uuid,
-    pub plan_snapshot: &'a serde_json::Value,
+    pub user_id: Option<Uuid>,
+    pub path: &'a str,
+    pub generation_params: &'a serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------
@@ -234,9 +218,6 @@ pub(crate) struct RouteProgressUpdate<'a> {
 // ---------------------------------------------------------------------------
 
 /// Row struct for reading from the example_data_runs table.
-///
-/// Tracks which example data seeds have been applied to prevent duplicate
-/// seeding on subsequent startups.
 #[expect(
     dead_code,
     reason = "will be used when seed audit/query functionality is added"
@@ -259,3 +240,11 @@ pub(crate) struct NewExampleDataRunRow<'a> {
     pub user_count: i32,
     pub seed: i64,
 }
+
+mod ingestion_rows;
+
+pub(crate) use ingestion_rows::{
+    NewBadgeRow, NewCommunityPickRow, NewInterestThemeRow, NewRouteCategoryRow,
+    NewRouteCollectionRow, NewRouteSummaryRow, NewSafetyPresetRow, NewSafetyToggleRow, NewTagRow,
+    NewThemeRow, NewTrendingRouteHighlightRow,
+};

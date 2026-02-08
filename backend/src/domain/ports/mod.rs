@@ -4,6 +4,8 @@ mod macros;
 pub(crate) use macros::define_port_error;
 
 mod cache_key;
+mod catalogue_ingestion_repository;
+mod descriptor_ingestion_repository;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
 mod idempotency_metrics;
@@ -27,6 +29,20 @@ mod user_repository;
 mod users_query;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
+#[cfg(test)]
+pub use catalogue_ingestion_repository::MockCatalogueIngestionRepository;
+pub use catalogue_ingestion_repository::{
+    CatalogueIngestionRepository, CatalogueIngestionRepositoryError, CommunityPickIngestion,
+    FixtureCatalogueIngestionRepository, RouteCategoryIngestion, RouteCollectionIngestion,
+    RouteSummaryIngestion, ThemeIngestion, TrendingRouteHighlightIngestion,
+};
+#[cfg(test)]
+pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
+pub use descriptor_ingestion_repository::{
+    BadgeIngestion, DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
+    FixtureDescriptorIngestionRepository, InterestThemeIngestion, SafetyPresetIngestion,
+    SafetyToggleIngestion, TagIngestion,
+};
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,
     SeedingResult, try_seed_to_i64,

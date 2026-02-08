@@ -604,6 +604,19 @@ services.
 > persistent row counts. Repeat runs for the same seed key must keep user and
 > preference counts unchanged, and registry/seed failures must not write any
 > partial demo data rows.
+>
+> **Design decision (2026-02-06):** Roadmap item 3.1.1 establishes the schema
+> baseline via Diesel migrations that add core spatial catalogue entities
+> (`interest_themes`, `user_interest_themes`, `pois`, `poi_interest_themes`,
+> and `route_pois`), catalogue read models, and descriptor registries with
+> composite-key constraints and GiST/GIN indexes. `routes` is aligned to the
+> architecture schema (`path` + `generation_params`) in the same baseline. For
+> local embedded Postgres testing, the migration uses native geometric types
+> (`PATH` and `POINT`) without requiring the PostGIS extension while preserving
+> GiST/GIN index coverage and composite-key guarantees. Ingestion write
+> operations are introduced behind domain ports
+> (`CatalogueIngestionRepository` and `DescriptorIngestionRepository`) so
+> persistence details remain confined to outbound adapters.
 
 #### Driving ports (services and queries)
 
