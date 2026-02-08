@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` are maintained as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 No `PLANS.md` file exists in this repository root.
 
@@ -66,8 +66,8 @@ Observable success:
   macros `0.5.0` with strict compile-time validation.
 - [x] (2026-02-08 21:29Z) Migrate behavioural test bindings and comments,
   preserving fixture compatibility and passing full gates.
-- [ ] (2026-02-08 21:31Z) Add and align contributor documentation, then rerun
-  full gates and commit docs.
+- [x] (2026-02-08 23:04Z) Add and align contributor documentation, rerun full
+  gates, and commit docs.
 
 ## Surprises & discoveries
 
@@ -104,16 +104,16 @@ Observable success:
 
 ## Outcomes & retrospective
 
-Code migration outcomes so far:
+Code migration outcomes:
 
 - Behavioural dependency upgrade and lockfile refresh completed.
 - Behavioural suites pass full gates after fixture-key compatibility fixes.
 - Async-support guidance comments were updated to match v0.5.0 reality.
 
-Pending:
+Complete:
 
-- Finalize and validate contributor documentation updates.
-- Mark plan complete after docs commit and final full gate run.
+- Contributor documentation updates are finalized and validated.
+- The docs commit was created after successful full-gate validation.
 
 ## Context and orientation
 
@@ -185,6 +185,5 @@ No additional dependency introductions are planned.
 
 ## Revision note
 
-2026-02-08: Added live implementation progress, documented fixture-key
-behaviour discovered during migration, and recorded completed code migration
-milestone with documentation alignment in progress.
+2026-02-08: Marked plan status `COMPLETE` after final documentation commit and
+successful rerun of `make check-fmt`, `make lint`, and `make test`.
