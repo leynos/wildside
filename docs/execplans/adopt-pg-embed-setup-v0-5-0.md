@@ -8,7 +8,7 @@ Status: COMPLETE
 
 No `PLANS.md` file exists in this repository root.
 
-## Purpose / Big Picture
+## Purpose / big picture
 
 Upgrade backend test infrastructure from `pg-embed-setup-unpriv` `0.4.0` to
 `0.5.0` and adopt the new lifecycle and test-focused functionality where it
@@ -42,7 +42,7 @@ Success is observable when:
 
 If any objective requires violating a constraint, stop and escalate.
 
-## Tolerances (Exception Triggers)
+## Tolerances (exception triggers)
 
 - Scope: if implementation requires touching more than 12 tracked files or
   exceeds 500 net changed lines, stop and escalate before proceeding.
@@ -60,7 +60,7 @@ If any objective requires violating a constraint, stop and escalate.
 ## Risks
 
 - Risk: strict `PG_TEST_BACKEND` validation in v0.5.0 could make previously
-  permissive local or CI configurations fail early.
+  permissive local or Continuous Integration (CI) configurations fail early.
   Severity: high
   Likelihood: medium
   Mitigation: audit CI and test helper environment assumptions, set
@@ -104,7 +104,7 @@ If any objective requires violating a constraint, stop and escalate.
   successfully.
 - [x] (2026-02-09 11:38Z) Committed migration and documentation changes.
 
-## Surprises & Discoveries
+## Surprises & discoveries
 
 - Observation: repository docs are inconsistent about the currently adopted
   pg-embed version (`docs/wildside-testing-guide.md` still states `v0.2.0`,
@@ -129,7 +129,7 @@ If any objective requires violating a constraint, stop and escalate.
   Impact: implementation validation used full gate logs with `tee` and waited
   for final command completion markers.
 
-## Decision Log
+## Decision log
 
 - Decision: create a dedicated ExecPlan at
   `docs/execplans/adopt-pg-embed-setup-v0-5-0.md` before implementing changes.
@@ -156,7 +156,7 @@ If any objective requires violating a constraint, stop and escalate.
   bootstrap deterministic and aligned between local and CI runs.
   Date/Author: 2026-02-09 / Codex.
 
-## Outcomes & Retrospective
+## Outcomes & retrospective
 
 Migration implementation completed within plan tolerances. Backend test helpers
 now run on `pg-embed-setup-unpriv` `0.5.0`, shared cluster ownership uses
@@ -171,7 +171,7 @@ Validation outcome:
 
 No plan tolerances were exceeded.
 
-## Context and Orientation
+## Context and orientation
 
 This repository already uses shared embedded-Postgres infrastructure for backend
 integration and behavioural tests.
@@ -201,9 +201,9 @@ Terms used in this plan:
   per-test temporary databases for isolation.
 - Template database: pre-migrated database cloned quickly for each test.
 
-## Plan of Work
+## Plan of work
 
-### Stage A: Confirm migration surface and choose shared-cluster adoption path
+### Stage A: confirm migration surface and choose shared-cluster adoption path
 
 Inspect test helper code and choose whether to adopt v0.5.0 shared access using
 `shared_test_cluster_handle()` directly or a custom wrapper built on
@@ -214,7 +214,7 @@ Go/no-go validation:
 - A documented choice exists in this ExecPlan `Decision Log`.
 - The chosen path preserves current isolation and skip semantics.
 
-### Stage B: Upgrade dependency and align helper APIs
+### Stage B: upgrade dependency and align helper APIs
 
 Update `backend/Cargo.toml` and refresh `Cargo.lock` to `0.5.0`. Then migrate
 shared helper interfaces in `backend/tests/support/pg_embed.rs` and
@@ -232,7 +232,7 @@ Go/no-go validation:
 - Helper modules compile.
 - Representative suites compile with migrated helper signatures.
 
-### Stage C: Migrate call sites and CI contract
+### Stage C: migrate call sites and CI contract
 
 Apply necessary call-site updates across backend tests that consume shared
 helpers. Update `.github/workflows/ci.yml` comments and environment contract as
@@ -243,7 +243,7 @@ Go/no-go validation:
 - All embedded-Postgres test files compile.
 - CI config text matches v0.5.0 behaviour and no stale version notes remain.
 
-### Stage D: Documentation, hardening, and verification
+### Stage D: documentation, hardening, and verification
 
 Update `docs/developers-guide.md` so it coherently describes the embedded
 Postgres strategy and v0.5.0 usage conventions adopted by the migration.
@@ -255,7 +255,7 @@ Go/no-go validation:
 - `make check-fmt`, `make lint`, and `make test` pass.
 - Documentation and code references are coherent.
 
-## Concrete Steps
+## Concrete steps
 
 Run all commands from repository root:
 `/data/leynos/Projects/wildside.worktrees/adopt-pg-embed-setup-v0-5-0`.
@@ -293,7 +293,7 @@ Expected success indicators:
 - Each command exits with status `0`.
 - Gate logs end without failures.
 
-## Validation and Acceptance
+## Validation and acceptance
 
 Acceptance is behavioural and repository-visible:
 
@@ -312,7 +312,7 @@ Acceptance is behavioural and repository-visible:
 - Quality gates:
   `make check-fmt`, `make lint`, and `make test` all pass.
 
-## Idempotence and Recovery
+## Idempotence and recovery
 
 - Most steps are idempotent and safe to re-run.
 - If dependency resolution or compilation fails midway, fix the issue and rerun
@@ -323,7 +323,7 @@ Acceptance is behavioural and repository-visible:
   after confirming unchanged code, then treat repeated failure as a tolerance
   breach.
 
-## Artifacts and Notes
+## Artifacts and notes
 
 Implementation should preserve concise evidence:
 
@@ -334,7 +334,7 @@ Implementation should preserve concise evidence:
 - `/tmp/lint-${PROJECT}-${BRANCH}.out`
 - `/tmp/test-${PROJECT}-${BRANCH}.out`
 
-## Interfaces and Dependencies
+## Interfaces and dependencies
 
 The migration must keep using these interfaces and dependencies:
 
@@ -352,7 +352,7 @@ The migration must keep using these interfaces and dependencies:
   `backend/tests/support/cluster_skip.rs::handle_cluster_setup_failure`
   remains the gatekeeper for optional test skipping.
 
-## Revision Note
+## Revision note
 
 Updated after implementation approval to record dependency migration to `0.5.0`,
 the `ClusterHandle` split-bootstrap adoption, strict `PG_TEST_BACKEND`

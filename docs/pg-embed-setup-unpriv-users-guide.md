@@ -30,7 +30,7 @@ tool and integrate it into automated test flows.
 `PG_TEST_BACKEND` selects the backend used by `bootstrap_for_tests()` and
 `TestCluster`. Supported values are:
 
-- unset or empty: `postgresql_embedded`
+- unset: `postgresql_embedded`
 - `postgresql_embedded`: run the embedded PostgreSQL backend
 
 Any other value triggers a `SKIP-TEST-CLUSTER` error, so test harnesses can
@@ -165,7 +165,7 @@ drop(cluster);
 
 Shared clusters created with `test_support::shared_test_cluster()` are
 intentionally leaked for the process lifetime via `std::mem::forget` in the
-test helper and therefore do not perform cleanup on drop. This behaviour is
+test helper, and therefore do not perform cleanup on drop. This behaviour is
 intentional because process-wide reuse is required for shared fixtures.
 
 ### Async API for `#[tokio::test]` contexts

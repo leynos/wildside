@@ -182,11 +182,11 @@ pub fn shared_cluster() -> Result<&'static ClusterHandle, String> {
         return Ok(handle);
     }
 
-    let needs_override = !are_env_dirs_ready();
-    let needs_backend_override = std::env::var_os("PG_TEST_BACKEND").is_none();
+    let should_override_dirs = !are_env_dirs_ready();
+    let should_override_backend = std::env::var_os("PG_TEST_BACKEND").is_none();
 
-    let _env_guard = if needs_override || needs_backend_override {
-        let overrides = build_env_overrides(needs_override, needs_backend_override)?;
+    let _env_guard = if should_override_dirs || should_override_backend {
+        let overrides = build_env_overrides(should_override_dirs, should_override_backend)?;
 
         Some(lock_env(overrides))
     } else {
