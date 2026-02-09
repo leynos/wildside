@@ -52,7 +52,7 @@ test usage remains coherent:
   not implicit fallback.
 - Prefer the handle/guard split APIs for shared or send-bound fixtures where
   appropriate (`ClusterHandle` with explicit lifecycle ownership).
-- Continue using template-database cloning (`ensure_template_exists` and
+- Continue using template-database cloning (`ensure_template_database` and
   `temporary_database_from_template`) for per-test isolation rather than
   rerunning migrations per test.
 - Use `CleanupMode::None` only for explicit debugging sessions where retained

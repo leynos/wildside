@@ -18,6 +18,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use cap_std::{ambient_authority, fs::Dir};
+use env_lock::lock_env;
 use pg_embedded_setup_unpriv::{ClusterHandle, TestCluster};
 
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -109,7 +110,9 @@ fn init_shared_cluster_handle() -> Result<&'static ClusterHandle, String> {
         .database_exists("postgres")
         .map_err(|err| format!("{err:?}"))?;
 
-    // Shared test cluster ownership is intentionally process-lifetime.
+    // `ClusterHandle` is cheap to retain and does not own teardown behaviour;
+    // cleanup is bound to `guard`. Forgetting the guard is intentional here so
+    // shared-cluster ownership remains process-lifetime for test binaries.
     std::mem::forget(guard);
     let _ = SHARED_CLUSTER_HANDLE.set(handle);
 
@@ -134,7 +137,8 @@ fn build_env_overrides(
     needs_dirs: bool,
     needs_backend: bool,
 ) -> Result<Vec<(&'static str, Option<String>)>, String> {
-    let mut overrides: Vec<(&'static str, Option<String>)> = Vec::new();
+    let mut overrides: Vec<(&'static str, Option<String>)> =
+        Vec::with_capacity(usize::from(needs_dirs) * 2 + usize::from(needs_backend));
 
     if needs_dirs {
         let (runtime_dir, data_dir) =
@@ -175,7 +179,7 @@ pub fn shared_cluster() -> Result<&'static ClusterHandle, String> {
     let _env_guard = if needs_override || needs_backend_override {
         let overrides = build_env_overrides(needs_override, needs_backend_override)?;
 
-        Some(env_lock::lock_env(overrides))
+        Some(lock_env(overrides))
     } else {
         None
     };
