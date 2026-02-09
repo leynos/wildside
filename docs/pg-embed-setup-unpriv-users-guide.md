@@ -658,7 +658,7 @@ still running as `root`, follow these steps:
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
   `tzdata` package. Install it inside the execution environment if the error
-  `invalid value for parameter "TimeZone": "UTC"`.
+  `invalid value for parameter "TimeZone": "UTC"` appears.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
   Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if rate
   limits are encountered in CI.
