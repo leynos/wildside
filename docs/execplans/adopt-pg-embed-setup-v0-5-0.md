@@ -270,7 +270,9 @@ Run all commands from repository root:
 
 3. Verify documentation references:
 
-    rg -n "pg-embed-setup-unpriv|PG_TEST_BACKEND|ClusterHandle|CleanupMode" docs/developers-guide.md docs/wildside-testing-guide.md .github/workflows/ci.yml
+    rg -n "pg-embed-setup-unpriv|PG_TEST_BACKEND|ClusterHandle|CleanupMode" \
+      docs/developers-guide.md docs/wildside-testing-guide.md \
+      .github/workflows/ci.yml
 
 4. Run quality gates with `tee` logs:
 
@@ -319,7 +321,9 @@ Acceptance is behavioural and repository-visible:
 
 Implementation should preserve concise evidence:
 
-- `git diff -- backend/Cargo.toml backend/tests/support/pg_embed.rs backend/tests/support/embedded_postgres.rs docs/developers-guide.md .github/workflows/ci.yml`
+- `git diff -- backend/Cargo.toml backend/tests/support/pg_embed.rs`
+  `backend/tests/support/embedded_postgres.rs docs/developers-guide.md`
+  `.github/workflows/ci.yml`
 - `/tmp/check-fmt-${PROJECT}-${BRANCH}.out`
 - `/tmp/lint-${PROJECT}-${BRANCH}.out`
 - `/tmp/test-${PROJECT}-${BRANCH}.out`
@@ -329,7 +333,8 @@ Implementation should preserve concise evidence:
 The migration must keep using these interfaces and dependencies:
 
 - Crate dependency:
-  `pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv", version = "0.5.0" }`
+  `pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv",`
+  `version = "0.5.0" }`
   in `backend/Cargo.toml`.
 - Test helper contract:
   `backend/tests/support/pg_embed.rs` continues to provide a shared cluster
