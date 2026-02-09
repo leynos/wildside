@@ -6,7 +6,7 @@ with `rstest-bdd` are written, and which quality gates must pass before
 commit.
 
 Use this guide with the [Wildside testing
-guide](docs/wildside-testing-guide.md). The testing guide is an operations
+guide](wildside-testing-guide.md). The testing guide is an operations
 quick reference, while this document defines strategy and usage conventions.
 
 ## Testing strategy
@@ -107,7 +107,7 @@ intent and avoid broad rewrites that obscure regressions.
 ## Operational references
 
 - For local command quick reference and embedded PostgreSQL worker setup:
-  [Wildside testing guide](docs/wildside-testing-guide.md)
+  [Wildside testing guide](wildside-testing-guide.md)
 - For `rstest-bdd` API details and migration notes:
-  - [rstest-bdd users guide](docs/rstest-bdd-users-guide.md)
-  - [rstest-bdd v0.5.0 migration guide](docs/rstest-bdd-v0-5-0-migration-guide.md)
+  - [rstest-bdd users' guide](rstest-bdd-users-guide.md)
+  - [rstest-bdd v0.5.0 migration guide](rstest-bdd-v0-5-0-migration-guide.md)
