@@ -40,6 +40,7 @@ mod diesel_user_repository;
 mod ingestion_upsert_macros;
 mod models;
 mod pool;
+mod postgres_schema_snapshot_repository;
 mod schema;
 
 pub use diesel_catalogue_ingestion_repository::DieselCatalogueIngestionRepository;
@@ -51,3 +52,4 @@ pub use diesel_route_annotation_repository::DieselRouteAnnotationRepository;
 pub use diesel_user_preferences_repository::DieselUserPreferencesRepository;
 pub use diesel_user_repository::DieselUserRepository;
 pub use pool::{DbPool, PoolConfig, PoolError};
+pub use postgres_schema_snapshot_repository::PostgresSchemaSnapshotRepository;

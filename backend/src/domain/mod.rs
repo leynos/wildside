@@ -35,6 +35,7 @@
 
 pub mod annotations;
 pub mod auth;
+pub mod er_diagram;
 pub mod error;
 #[cfg(feature = "example-data")]
 pub mod example_data;
@@ -56,6 +57,9 @@ pub use self::annotations::{
     RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
+pub use self::er_diagram::{
+    SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable, render_mermaid_er_diagram,
+};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 #[cfg(feature = "example-data")]
 pub use self::example_data::{ExampleDataSeedOutcome, ExampleDataSeeder, ExampleDataSeedingError};

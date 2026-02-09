@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETED (2026-02-09)
 
 No `PLANS.md` file exists in the repository root at the time of writing. If
 one is added, this ExecPlan must be updated to follow it.
@@ -89,15 +89,22 @@ Success is observable when:
 ## Progress
 
 - [x] (2026-02-09 20:51Z) Draft ExecPlan for roadmap item 3.1.2.
-- [ ] Implement domain port and service for schema graph extraction.
-- [ ] Implement outbound Postgres adapter for migration-backed introspection.
-- [ ] Implement inbound snapshot generation command and documentation artefact
-      writer.
-- [ ] Add and pass `rstest` unit tests for rendering and error paths.
-- [ ] Add and pass `rstest-bdd` behavioural tests for end-to-end generation.
-- [ ] Update architecture design decisions and ER snapshot references.
-- [ ] Mark roadmap item `3.1.2` as done.
-- [ ] Pass `make check-fmt`, `make lint`, and `make test`.
+- [x] (2026-02-09 21:20Z) Implement domain schema graph model and rendering
+      service (`SchemaDiagram` + Mermaid renderer).
+- [x] (2026-02-09 21:21Z) Implement outbound Postgres schema snapshot adapter
+      behind `SchemaSnapshotRepository`.
+- [x] (2026-02-09 21:23Z) Implement inbound snapshot generator and
+      `er-snapshots` CLI, plus generated artefacts in `docs/diagrams/er/`.
+- [x] (2026-02-09 21:29Z) Add and pass `rstest` unit tests for rendering and
+      snapshot orchestration, including failure handling and deterministic
+      reruns.
+- [x] (2026-02-09 21:31Z) Add and pass `rstest-bdd` behavioural scenarios for
+      happy path, renderer failure, and deterministic reruns using
+      `pg-embed-setup-unpriv`.
+- [x] (2026-02-09 21:34Z) Update architecture design decisions and ER snapshot
+      references.
+- [x] (2026-02-09 21:35Z) Mark roadmap item `3.1.2` as done.
+- [x] (2026-02-09 21:42Z) Pass `make check-fmt`, `make lint`, and `make test`.
 - [ ] Commit gated implementation.
 
 ## Surprises & Discoveries
@@ -115,6 +122,13 @@ Success is observable when:
   Evidence: root `package.json` includes `@mermaid-js/mermaid-cli`, and
   `scripts/install-mermaid-browser.mjs` supports Mermaid rendering setup.
   Impact: no new diagram-rendering dependency is expected.
+
+- Observation: the repository enforces capability-based filesystem access via
+  Whitaker lint (`no_std_fs_operations`) across library and test targets.
+  Evidence: initial `make lint` runs failed on `std::fs` usage in new
+  snapshot modules and tests.
+  Impact: snapshot implementation was rewritten to use `cap_std::fs::Dir`
+  operations, including test helpers.
 
 ## Decision Log
 
@@ -138,12 +152,34 @@ Success is observable when:
 
 ## Outcomes & Retrospective
 
-Pending implementation. This section will capture:
-
-- final artefact paths,
-- quality-gate outcomes,
-- roadmap update confirmation,
-- and lessons learned about deterministic schema visualization.
+- Final artefacts:
+  - `docs/diagrams/er/schema-baseline.mmd`
+  - `docs/diagrams/er/schema-baseline.svg`
+- Implementation surfaces:
+  - Domain ER model + renderer in `backend/src/domain/er_diagram.rs`
+  - Domain port `SchemaSnapshotRepository` in
+    `backend/src/domain/ports/schema_snapshot_repository.rs`
+  - Outbound Postgres adapter in
+    `backend/src/outbound/persistence/postgres_schema_snapshot_repository.rs`
+  - Snapshot orchestration in `backend/src/er_snapshots.rs`
+  - CLI entry point in `backend/src/bin/er_snapshots.rs`
+- Test coverage:
+  - `rstest` unit tests in `backend/src/domain/er_diagram.rs` and
+    `backend/src/er_snapshots_tests.rs`
+  - `rstest-bdd` scenarios in `backend/tests/er_snapshots_bdd.rs` and
+    `backend/tests/features/er_snapshots.feature`
+- Quality gates:
+  - `make check-fmt` passed (`/tmp/check-fmt-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+  - `make lint` passed (`/tmp/lint-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+  - `make test` passed (`/tmp/test-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+- Roadmap and architecture updates:
+  - Marked `docs/backend-roadmap.md` item `3.1.2` as done.
+  - Added architecture design decision and snapshot references in
+    `docs/wildside-backend-architecture.md`.
+- Lessons learned:
+  - Capability-based filesystem linting applies to behavioural and unit tests
+    as well as production modules; reusable `cap_std::fs::Dir` helpers reduce
+    rework and make snapshot pipelines policy-compliant by default.
 
 ## Context and Orientation
 
@@ -337,3 +373,8 @@ Dependencies:
 port requirements, deterministic ER snapshot generation strategy, test
 requirements (`rstest` + `rstest-bdd` + `pg-embed-setup-unpriv`), documentation
 update requirements, and quality gates.
+
+2026-02-09: Completed implementation and validation. Added domain ports and
+adapters for schema snapshot extraction, CLI generation flow, deterministic ER
+artefacts, behavioural and unit coverage, architecture and roadmap updates, and
+passed required quality gates.
