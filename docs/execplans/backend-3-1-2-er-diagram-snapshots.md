@@ -105,7 +105,7 @@ Success is observable when:
       references.
 - [x] (2026-02-09 21:35Z) Mark roadmap item `3.1.2` as done.
 - [x] (2026-02-09 21:42Z) Pass `make check-fmt`, `make lint`, and `make test`.
-- [ ] Commit gated implementation.
+- [x] (2026-02-09 21:46Z) Commit gated implementation.
 
 ## Surprises & Discoveries
 
