@@ -1,4 +1,4 @@
-# Developers guide
+# Developers' guide
 
 This guide is the canonical reference for day-to-day contributor workflows in
 this repository. It explains how tests are structured, how behavioural tests
