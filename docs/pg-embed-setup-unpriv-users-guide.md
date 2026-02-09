@@ -81,8 +81,8 @@ Troubleshooting guidance:
    remains idempotent.
 
 4. Pass the resulting paths and credentials to the test suite. If
-   `postgresql_embedded` directly after the setup step, it can reuse the staged
-   binaries and data directory without needing `root`.
+   `postgresql_embedded` is used directly after the setup step, it can reuse
+   the staged binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 

@@ -262,25 +262,31 @@ Run all commands from repository root:
 
 1. Baseline and dependency upgrade:
 
+    ```bash
     git branch --show
     rg -n "pg-embed-setup-unpriv|pg_embedded_setup_unpriv" backend/Cargo.toml backend/tests
     cargo update -p pg-embed-setup-unpriv --precise 0.5.0
+    ```
 
 2. Migrate helper code and test call sites as described in Stage B and C.
 
 3. Verify documentation references:
 
+    ```bash
     rg -n "pg-embed-setup-unpriv|PG_TEST_BACKEND|ClusterHandle|CleanupMode" \
       docs/developers-guide.md docs/wildside-testing-guide.md \
       .github/workflows/ci.yml
+    ```
 
 4. Run quality gates with `tee` logs:
 
+    ```bash
     PROJECT="$(basename "$(git rev-parse --show-toplevel)")"
     BRANCH="$(git branch --show)"
     make check-fmt | tee "/tmp/check-fmt-${PROJECT}-${BRANCH}.out"
     make lint | tee "/tmp/lint-${PROJECT}-${BRANCH}.out"
     make test | tee "/tmp/test-${PROJECT}-${BRANCH}.out"
+    ```
 
 Expected success indicators:
 

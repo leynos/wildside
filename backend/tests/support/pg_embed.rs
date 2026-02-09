@@ -163,6 +163,15 @@ fn build_env_overrides(
 /// function leaves them untouched. If either value is missing or unusable,
 /// this function sets both to stable directories under the target directory
 /// so the shared cluster can be reused across multiple tests.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let first = shared_cluster()?;
+/// let second = shared_cluster()?;
+/// assert!(std::ptr::eq(first, second));
+/// # Ok::<(), String>(())
+/// ```
 pub fn shared_cluster() -> Result<&'static ClusterHandle, String> {
     let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
         .get_or_init(|| Mutex::new(()))
