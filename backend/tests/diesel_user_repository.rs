@@ -7,10 +7,10 @@
 //!
 //! # Runtime Strategy
 //!
-//! The rstest-bdd-macros crate does not support async step definitions, so we
-//! store a Tokio runtime in the test context and reuse it for all async
-//! operations. This avoids the overhead of creating a new runtime per async
-//! block while maintaining BDD step compatibility.
+//! `rstest-bdd` v0.5.0 supports async step definitions, but this suite keeps
+//! synchronous steps and reuses a shared Tokio runtime in the test context.
+//! This keeps database operations deterministic and avoids recreating a runtime
+//! for each step.
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
@@ -137,10 +137,7 @@ fn diesel_world() -> Option<SharedContext> {
 // -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed user repository")]
-fn a_diesel_backed_user_repository(world: SharedContext) {
-    // Context already initialised with repository.
-    let _ = world;
-}
+fn a_diesel_backed_user_repository(_world: SharedContext) {}
 
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(world: SharedContext, user: User) {

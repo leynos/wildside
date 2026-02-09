@@ -131,9 +131,7 @@ fn repo_world(repo_context: Option<RepoContext>) -> Option<SharedContext> {
 }
 
 #[given("a postgres-backed user repository")]
-fn a_postgres_backed_user_repository(repo_world: SharedContext) {
-    let _ = repo_world;
-}
+fn a_postgres_backed_user_repository(_repo_world: SharedContext) {}
 
 #[when("the repository upserts the user")]
 fn the_repository_upserts_the_user(repo_world: SharedContext, user: User) {

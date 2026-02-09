@@ -229,7 +229,7 @@ fn the_existence_check_returns_false(world: &ExampleDataRunsWorld) {
     name = "First seed attempt succeeds"
 )]
 fn first_seed_attempt_succeeds(world: ExampleDataRunsWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -237,7 +237,7 @@ fn first_seed_attempt_succeeds(world: ExampleDataRunsWorld) {
     name = "Duplicate seed attempt is detected"
 )]
 fn duplicate_seed_attempt_is_detected(world: ExampleDataRunsWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -245,7 +245,7 @@ fn duplicate_seed_attempt_is_detected(world: ExampleDataRunsWorld) {
     name = "Different seeds are independent"
 )]
 fn different_seeds_are_independent(world: ExampleDataRunsWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -253,7 +253,7 @@ fn different_seeds_are_independent(world: ExampleDataRunsWorld) {
     name = "Query returns false for unknown seeds"
 )]
 fn query_returns_false_for_unknown_seeds(world: ExampleDataRunsWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -261,5 +261,5 @@ fn query_returns_false_for_unknown_seeds(world: ExampleDataRunsWorld) {
     name = "Query returns true for recorded seeds"
 )]
 fn query_returns_true_for_recorded_seeds(world: ExampleDataRunsWorld) {
-    let _ = world;
+    drop(world);
 }

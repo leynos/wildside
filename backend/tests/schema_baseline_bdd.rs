@@ -87,7 +87,6 @@ fn world() -> BaselineWorld {
 
 #[given("a migrated schema baseline")]
 fn a_migrated_schema_baseline(world: &mut BaselineWorld) {
-    // The fixture already provisions a migrated template database.
     let _ = world;
 }
 
@@ -230,7 +229,7 @@ fn insertion_fails_with_a_unique_constraint_violation(world: &mut BaselineWorld)
     name = "Baseline tables are materialized"
 )]
 fn baseline_tables_are_materialized(world: BaselineWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -238,7 +237,7 @@ fn baseline_tables_are_materialized(world: BaselineWorld) {
     name = "Spatial and JSON indexes are present"
 )]
 fn spatial_and_json_indexes_are_present(world: BaselineWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -246,7 +245,7 @@ fn spatial_and_json_indexes_are_present(world: BaselineWorld) {
     name = "Duplicate route positions are rejected"
 )]
 fn duplicate_route_positions_are_rejected(world: BaselineWorld) {
-    let _ = world;
+    drop(world);
 }
 
 #[scenario(
@@ -254,5 +253,5 @@ fn duplicate_route_positions_are_rejected(world: BaselineWorld) {
     name = "Duplicate POI composite keys are rejected"
 )]
 fn duplicate_poi_composite_keys_are_rejected(world: BaselineWorld) {
-    let _ = world;
+    drop(world);
 }

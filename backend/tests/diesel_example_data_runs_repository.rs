@@ -6,10 +6,10 @@
 //!
 //! # Runtime Strategy
 //!
-//! The rstest-bdd-macros crate does not support async step definitions, so we
-//! store a Tokio runtime in the test context and reuse it for all async
-//! operations. This avoids the overhead of creating a new runtime per async
-//! block while maintaining BDD step compatibility.
+//! `rstest-bdd` v0.5.0 supports async step definitions, but this suite keeps
+//! synchronous steps and reuses a shared Tokio runtime in the test context.
+//! This keeps repository operations deterministic and avoids recreating a
+//! runtime for each step.
 
 use std::sync::{Arc, Mutex};
 
@@ -177,9 +177,7 @@ fn assert_is_seeded(world: &SharedContext, expected: bool) {
 // -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed example data runs repository")]
-fn a_diesel_backed_example_data_runs_repository(world: SharedContext) {
-    let _ = world;
-}
+fn a_diesel_backed_example_data_runs_repository(_world: SharedContext) {}
 
 #[when("the repository records a seed")]
 fn the_repository_records_a_seed(world: SharedContext) {
