@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 No `PLANS.md` file exists in this repository root.
 
@@ -91,13 +91,18 @@ If any objective requires violating a constraint, stop and escalate.
 
 - [x] (2026-02-09 02:32Z) Drafted ExecPlan from repository context and
   v0.5.0 migration/user guides.
-- [ ] Await approval for implementation phase.
-- [ ] Upgrade dependency and lockfile to `pg-embed-setup-unpriv` `0.5.0`.
-- [ ] Migrate shared cluster support to v0.5.0 lifecycle APIs.
-- [ ] Apply required test-suite call-site updates.
-- [ ] Update contributor testing strategy documentation.
-- [ ] Run `make check-fmt`, `make lint`, and `make test`; record evidence.
-- [ ] Commit migration and documentation changes.
+- [x] (2026-02-09 11:30Z) Approval received for implementation phase.
+- [x] (2026-02-09 11:31Z) Upgraded dependency target in `backend/Cargo.toml`
+  and started lockfile refresh.
+- [x] (2026-02-09 11:34Z) Migrated shared cluster support to v0.5.0
+  handle/guard split APIs.
+- [x] (2026-02-09 11:35Z) Applied helper call-site type updates for
+  `ClusterHandle`.
+- [x] (2026-02-09 11:36Z) Updated contributor and workflow documentation for
+  v0.5.0 backend-selection and fixture usage.
+- [x] (2026-02-09 11:38Z) Ran `make check-fmt`, `make lint`, and `make test`
+  successfully.
+- [x] (2026-02-09 11:38Z) Committed migration and documentation changes.
 
 ## Surprises & Discoveries
 
@@ -116,6 +121,14 @@ If any objective requires violating a constraint, stop and escalate.
   Impact: plan keeps both adoption options open until implementation chooses
   the least risky path.
 
+- Observation: repository-level `make test` includes additional package suites
+  beyond backend integration tests, so quality-gate verification must allow for
+  significantly longer runtime than backend-only nextest.
+  Evidence: `make test` logs include `mxd` and `mxd-verification` suites after
+  workspace nextest.
+  Impact: implementation validation used full gate logs with `tee` and waited
+  for final command completion markers.
+
 ## Decision Log
 
 - Decision: create a dedicated ExecPlan at
@@ -130,11 +143,33 @@ If any objective requires violating a constraint, stop and escalate.
   Rationale: user requirement and existing documentation drift.
   Date/Author: 2026-02-09 / Codex.
 
+- Decision: implement shared test bootstrap with `TestCluster::new_split()`,
+  retain process-lifetime ownership via intentional `ClusterGuard` leak, and
+  expose only `&'static ClusterHandle` to tests.
+  Rationale: this adopts v0.5.0 send-safe lifecycle APIs while preserving the
+  existing sandbox path overrides and retry controls in local helpers.
+  Date/Author: 2026-02-09 / Codex.
+
+- Decision: set `PG_TEST_BACKEND=postgresql_embedded` explicitly in both CI
+  test environment and local shared-cluster bootstrap when unset.
+  Rationale: v0.5.0 validates backend values strictly; explicit defaulting keeps
+  bootstrap deterministic and aligned between local and CI runs.
+  Date/Author: 2026-02-09 / Codex.
+
 ## Outcomes & Retrospective
 
-Implementation has not started. The immediate outcome of this draft is a
-concrete, bounded migration path with explicit exception triggers and
-validation criteria. Retrospective notes will be updated after implementation.
+Migration implementation completed within plan tolerances. Backend test helpers
+now run on `pg-embed-setup-unpriv` `0.5.0`, shared cluster ownership uses
+`ClusterHandle` from the split lifecycle APIs, and CI/local guidance now
+documents strict backend selection for `PG_TEST_BACKEND`.
+
+Validation outcome:
+
+- `make check-fmt` passed.
+- `make lint` passed.
+- `make test` passed.
+
+No plan tolerances were exceeded.
 
 ## Context and Orientation
 
@@ -308,6 +343,6 @@ The migration must keep using these interfaces and dependencies:
 
 ## Revision Note
 
-Initial draft created. The document now captures migration scope, tolerances,
-and concrete verification steps for upgrading backend embedded-Postgres tests
-from `pg-embed-setup-unpriv` `0.4.0` to `0.5.0`.
+Updated after implementation approval to record dependency migration to `0.5.0`,
+the `ClusterHandle` split-bootstrap adoption, strict `PG_TEST_BACKEND`
+alignment, and final quality-gate evidence. Remaining work has been completed.

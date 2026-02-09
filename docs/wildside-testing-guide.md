@@ -42,10 +42,14 @@ write access.
 ## Embedded Postgres test strategy
 
 Backend integration tests use the shared cluster helpers from
-`pg-embed-setup-unpriv` v0.2.0. A single embedded PostgreSQL instance is
+`pg-embed-setup-unpriv` v0.5.0. A single embedded PostgreSQL instance is
 started per test process, and each test receives a temporary database cloned
 from a migration-backed template. This keeps per-test setup fast while
 preserving database-level isolation.
+
+The test harness sets `PG_TEST_BACKEND=postgresql_embedded` when not already
+provided. This matches v0.5.0 strict backend validation and keeps local and CI
+behaviour explicit.
 
 If full cluster-level isolation is required (for example, to change
 server-wide settings), switch the test to the per-test `TestCluster` helper
