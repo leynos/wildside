@@ -134,13 +134,13 @@ fn are_env_dirs_ready() -> bool {
 }
 
 fn build_env_overrides(
-    needs_dirs: bool,
-    needs_backend: bool,
+    should_set_dirs: bool,
+    should_set_backend: bool,
 ) -> Result<Vec<(&'static str, Option<String>)>, String> {
     let mut overrides: Vec<(&'static str, Option<String>)> =
-        Vec::with_capacity(usize::from(needs_dirs) * 2 + usize::from(needs_backend));
+        Vec::with_capacity(usize::from(should_set_dirs) * 2 + usize::from(should_set_backend));
 
-    if needs_dirs {
+    if should_set_dirs {
         let (runtime_dir, data_dir) =
             create_shared_pg_embed_dirs().map_err(|err| err.to_string())?;
 
@@ -150,7 +150,7 @@ fn build_env_overrides(
         overrides.push(("PG_DATA_DIR", Some(data_dir_value)));
     }
 
-    if needs_backend {
+    if should_set_backend {
         overrides.push(("PG_TEST_BACKEND", Some("postgresql_embedded".to_owned())));
     }
 
