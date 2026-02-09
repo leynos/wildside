@@ -63,8 +63,10 @@ injection while keeping warning gates green under `RUSTFLAGS="-D warnings"`.
 Scenario state is isolated by default:
 
 - Prefer per-scenario fixtures and `ScenarioState` data structures.
-- Use `Slot<T>` for optional or late-bound values within one scenario.
-- Use `#[once]` only for expensive, effectively read-only infrastructure.
+- Use `Slot<T>` from `rstest-bdd` to hold optional or late-bound values within
+  one scenario.
+- Use `rstest`'s `#[once]` fixture attribute only for expensive, effectively
+  read-only infrastructure.
 - Do not rely on scenario execution order or cross-scenario mutable state.
 
 ### Async step guidance
@@ -75,8 +77,9 @@ Scenario state is isolated by default:
   deterministic execution is more important than style changes.
 - Use async steps when they materially reduce adapters/wrappers and do not
   create nested runtime issues.
-- If a synchronous scenario must run async-only work, rely on library fallback
-  semantics rather than creating nested Tokio runtimes manually.
+- If a synchronous scenario must run async-only work, rely on `rstest-bdd`'s
+  per-step Tokio current-thread fallback for async-only steps in synchronous
+  scenarios rather than creating nested Tokio runtimes manually.
 
 ### Where behavioural tests live
 
