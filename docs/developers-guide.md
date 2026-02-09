@@ -25,6 +25,39 @@ All suites run through the same quality gateways:
 - `make lint`
 - `make test`
 
+## Embedded PostgreSQL integration tests
+
+Backend integration and behavioural suites that require PostgreSQL use the
+shared helpers under `backend/tests/support/`:
+
+- `pg_embed::shared_cluster()` provisions one embedded PostgreSQL cluster per
+  test process.
+- `embedded_postgres::provision_template_database()` creates a per-test
+  temporary database cloned from a migration-backed template.
+- `cluster_skip::handle_cluster_setup_failure()` is the single policy point for
+  converting setup failures into explicit `SKIP-TEST-CLUSTER` outcomes.
+
+This strategy is the default because it keeps test runtime low while preserving
+database-level isolation. Only use direct per-test cluster construction when a
+suite truly needs cluster-level isolation (for example, server-wide settings or
+lifecycle-specific assertions).
+
+### v0.5.0 migration usage rules
+
+When migrating to `pg-embed-setup-unpriv` `v0.5.0`, apply these conventions so
+test usage remains coherent:
+
+- Keep `PG_TEST_BACKEND` limited to supported values (`postgresql_embedded` or
+  unset/empty). Treat unsupported values as intentional skip/failure signals,
+  not implicit fallback.
+- Prefer the handle/guard split APIs for shared or send-bound fixtures where
+  appropriate (`ClusterHandle` with explicit lifecycle ownership).
+- Continue using template-database cloning (`ensure_template_database` and
+  `temporary_database_from_template`) for per-test isolation rather than
+  rerunning migrations per test.
+- Use `CleanupMode::None` only for explicit debugging sessions where retained
+  files are required; keep deterministic cleanup defaults for normal runs.
+
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
 ### Dependency contract
@@ -114,3 +147,6 @@ intent and avoid broad rewrites that obscure regressions.
 - For `rstest-bdd` API details and migration notes:
   - [rstest-bdd users' guide](rstest-bdd-users-guide.md)
   - [rstest-bdd v0.5.0 migration guide](rstest-bdd-v0-5-0-migration-guide.md)
+- For embedded PostgreSQL API details and migration notes:
+  - [pg-embed-setup-unpriv users' guide](pg-embed-setup-unpriv-users-guide.md)
+  - [pg-embed-setup-unpriv v0.5.0 migration guide](pg-embed-setup-unpriv-v0-5-0-migration-guide.md)

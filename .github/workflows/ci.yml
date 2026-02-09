@@ -165,8 +165,9 @@ jobs:
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # pg-embed-setup-unpriv v0.4.0 requires the worker binary for privilege
-          # demotion; without it the library cannot bootstrap the test cluster.
+          # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
+          PG_TEST_BACKEND: postgresql_embedded
+          # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         run: |
           # Clean stale pg-embed directories that may conflict with new runs.

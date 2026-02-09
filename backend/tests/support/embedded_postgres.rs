@@ -16,7 +16,7 @@ use diesel::Connection;
 use diesel::pg::PgConnection;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use pg_embedded_setup_unpriv::test_support::hash_directory;
-use pg_embedded_setup_unpriv::{TemporaryDatabase, TestCluster};
+use pg_embedded_setup_unpriv::{ClusterHandle, TemporaryDatabase};
 use postgres::{Client, NoTls};
 use uuid::Uuid;
 
@@ -45,7 +45,7 @@ fn new_test_database_name() -> String {
 }
 
 /// Creates or reuses a template database with the latest migrations applied.
-fn ensure_template_database(cluster: &TestCluster) -> Result<String, UserPersistenceError> {
+fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersistenceError> {
     let template_name = template_database_name()?;
     let _lock = TEMPLATE_LOCK
         .get_or_init(|| Mutex::new(()))
@@ -70,7 +70,7 @@ fn ensure_template_database(cluster: &TestCluster) -> Result<String, UserPersist
 
 /// Provisions a temporary database cloned from the migration template.
 pub fn provision_template_database(
-    cluster: &TestCluster,
+    cluster: &ClusterHandle,
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
     let template_name = ensure_template_database(cluster)?;
     let db_name = new_test_database_name();

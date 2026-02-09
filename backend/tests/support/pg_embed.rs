@@ -18,10 +18,11 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use cap_std::{ambient_authority, fs::Dir};
-use pg_embedded_setup_unpriv::TestCluster;
-use pg_embedded_setup_unpriv::test_support::shared_cluster as shared_cluster_inner;
+use env_lock::lock_env;
+use pg_embedded_setup_unpriv::{ClusterHandle, TestCluster};
 
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static SHARED_CLUSTER_HANDLE: OnceLock<ClusterHandle> = OnceLock::new();
 
 /// Maximum number of retry attempts for transient network errors.
 const MAX_RETRIES: u32 = 3;
@@ -99,50 +100,100 @@ fn bootstrap_with_retries<T>(
     Err(last_error)
 }
 
-/// Bootstraps a shared [`TestCluster`] for persistent test sessions.
-///
-/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set and usable, this
-/// function leaves them untouched. If either value is missing or unusable,
-/// this function sets both to stable directories under the target directory
-/// so the shared cluster can be reused across multiple tests.
-pub fn shared_cluster() -> Result<&'static TestCluster, String> {
-    let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|err| err.into_inner());
+fn init_shared_cluster_handle() -> Result<&'static ClusterHandle, String> {
+    if let Some(handle) = SHARED_CLUSTER_HANDLE.get() {
+        return Ok(handle);
+    }
 
+    let (handle, guard) = TestCluster::new_split().map_err(|err| format!("{err:?}"))?;
+    handle
+        .database_exists("postgres")
+        .map_err(|err| format!("{err:?}"))?;
+
+    // `ClusterHandle` is cheap to retain and does not own teardown behaviour;
+    // cleanup is bound to `guard`. Forgetting the guard is intentional here so
+    // shared-cluster ownership remains process-lifetime for test binaries.
+    std::mem::forget(guard);
+    let _ = SHARED_CLUSTER_HANDLE.set(handle);
+
+    SHARED_CLUSTER_HANDLE
+        .get()
+        .ok_or_else(|| "shared cluster handle was not retained after initialization".to_owned())
+}
+
+fn are_env_dirs_ready() -> bool {
     let runtime_dir_env = std::env::var_os("PG_RUNTIME_DIR");
     let data_dir_env = std::env::var_os("PG_DATA_DIR");
-    let env_dirs_ready = match (&runtime_dir_env, &data_dir_env) {
+
+    match (&runtime_dir_env, &data_dir_env) {
         (Some(runtime_dir), Some(data_dir)) => {
             ensure_dir(Path::new(runtime_dir)) && ensure_dir(Path::new(data_dir))
         }
         _ => false,
-    };
-    let needs_override = !env_dirs_ready;
+    }
+}
 
-    let _env_guard = if needs_override {
+fn build_env_overrides(
+    should_set_dirs: bool,
+    should_set_backend: bool,
+) -> Result<Vec<(&'static str, Option<String>)>, String> {
+    let mut overrides: Vec<(&'static str, Option<String>)> =
+        Vec::with_capacity(usize::from(should_set_dirs) * 2 + usize::from(should_set_backend));
+
+    if should_set_dirs {
         let (runtime_dir, data_dir) =
             create_shared_pg_embed_dirs().map_err(|err| err.to_string())?;
 
         let runtime_dir_value = runtime_dir.to_string_lossy().into_owned();
         let data_dir_value = data_dir.to_string_lossy().into_owned();
+        overrides.push(("PG_RUNTIME_DIR", Some(runtime_dir_value)));
+        overrides.push(("PG_DATA_DIR", Some(data_dir_value)));
+    }
 
-        Some(env_lock::lock_env([
-            ("PG_RUNTIME_DIR", Some(runtime_dir_value)),
-            ("PG_DATA_DIR", Some(data_dir_value)),
-        ]))
+    if should_set_backend {
+        overrides.push(("PG_TEST_BACKEND", Some("postgresql_embedded".to_owned())));
+    }
+
+    Ok(overrides)
+}
+
+/// Bootstraps a shared [`ClusterHandle`] for persistent test sessions.
+///
+/// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set and usable, this
+/// function leaves them untouched. If either value is missing or unusable,
+/// this function sets both to stable directories under the target directory
+/// so the shared cluster can be reused across multiple tests.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let first = shared_cluster()?;
+/// let second = shared_cluster()?;
+/// assert!(std::ptr::eq(first, second));
+/// # Ok::<(), String>(())
+/// ```
+pub fn shared_cluster() -> Result<&'static ClusterHandle, String> {
+    let _bootstrap_guard = PG_EMBED_BOOTSTRAP_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+
+    if let Some(handle) = SHARED_CLUSTER_HANDLE.get() {
+        return Ok(handle);
+    }
+
+    let should_override_dirs = !are_env_dirs_ready();
+    let should_override_backend = std::env::var_os("PG_TEST_BACKEND").is_none();
+
+    let _env_guard = if should_override_dirs || should_override_backend {
+        let overrides = build_env_overrides(should_override_dirs, should_override_backend)?;
+
+        Some(lock_env(overrides))
     } else {
         None
     };
 
-    let cluster = bootstrap_with_retries(|| {
-        let cluster = shared_cluster_inner().map_err(|err| format!("{err:?}"))?;
-        cluster
-            .database_exists("postgres")
-            .map_err(|err| format!("{err:?}"))?;
-        Ok(cluster)
-    })?;
+    let cluster = bootstrap_with_retries(init_shared_cluster_handle)?;
 
     Ok(cluster)
 }
