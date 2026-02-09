@@ -118,6 +118,41 @@ fn init_shared_cluster_handle() -> Result<&'static ClusterHandle, String> {
         .ok_or_else(|| "shared cluster handle was not retained after initialization".to_owned())
 }
 
+fn are_env_dirs_ready() -> bool {
+    let runtime_dir_env = std::env::var_os("PG_RUNTIME_DIR");
+    let data_dir_env = std::env::var_os("PG_DATA_DIR");
+
+    match (&runtime_dir_env, &data_dir_env) {
+        (Some(runtime_dir), Some(data_dir)) => {
+            ensure_dir(Path::new(runtime_dir)) && ensure_dir(Path::new(data_dir))
+        }
+        _ => false,
+    }
+}
+
+fn build_env_overrides(
+    needs_dirs: bool,
+    needs_backend: bool,
+) -> Result<Vec<(&'static str, Option<String>)>, String> {
+    let mut overrides: Vec<(&'static str, Option<String>)> = Vec::new();
+
+    if needs_dirs {
+        let (runtime_dir, data_dir) =
+            create_shared_pg_embed_dirs().map_err(|err| err.to_string())?;
+
+        let runtime_dir_value = runtime_dir.to_string_lossy().into_owned();
+        let data_dir_value = data_dir.to_string_lossy().into_owned();
+        overrides.push(("PG_RUNTIME_DIR", Some(runtime_dir_value)));
+        overrides.push(("PG_DATA_DIR", Some(data_dir_value)));
+    }
+
+    if needs_backend {
+        overrides.push(("PG_TEST_BACKEND", Some("postgresql_embedded".to_owned())));
+    }
+
+    Ok(overrides)
+}
+
 /// Bootstraps a shared [`ClusterHandle`] for persistent test sessions.
 ///
 /// When `PG_RUNTIME_DIR`/`PG_DATA_DIR` are already set and usable, this
@@ -134,34 +169,11 @@ pub fn shared_cluster() -> Result<&'static ClusterHandle, String> {
         return Ok(handle);
     }
 
-    let runtime_dir_env = std::env::var_os("PG_RUNTIME_DIR");
-    let data_dir_env = std::env::var_os("PG_DATA_DIR");
-    let backend_env = std::env::var_os("PG_TEST_BACKEND");
-    let env_dirs_ready = match (&runtime_dir_env, &data_dir_env) {
-        (Some(runtime_dir), Some(data_dir)) => {
-            ensure_dir(Path::new(runtime_dir)) && ensure_dir(Path::new(data_dir))
-        }
-        _ => false,
-    };
-    let needs_override = !env_dirs_ready;
-    let needs_backend_override = backend_env.is_none();
+    let needs_override = !are_env_dirs_ready();
+    let needs_backend_override = std::env::var_os("PG_TEST_BACKEND").is_none();
 
     let _env_guard = if needs_override || needs_backend_override {
-        let mut overrides: Vec<(&str, Option<String>)> = Vec::new();
-
-        if needs_override {
-            let (runtime_dir, data_dir) =
-                create_shared_pg_embed_dirs().map_err(|err| err.to_string())?;
-
-            let runtime_dir_value = runtime_dir.to_string_lossy().into_owned();
-            let data_dir_value = data_dir.to_string_lossy().into_owned();
-            overrides.push(("PG_RUNTIME_DIR", Some(runtime_dir_value)));
-            overrides.push(("PG_DATA_DIR", Some(data_dir_value)));
-        }
-
-        if needs_backend_override {
-            overrides.push(("PG_TEST_BACKEND", Some("postgresql_embedded".to_owned())));
-        }
+        let overrides = build_env_overrides(needs_override, needs_backend_override)?;
 
         Some(env_lock::lock_env(overrides))
     } else {
