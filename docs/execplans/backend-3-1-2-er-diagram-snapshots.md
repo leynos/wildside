@@ -1,21 +1,21 @@
 # Generate ER diagram snapshots for roadmap 3.1.2
 
 This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+`Risks`, `Progress`, `Surprises & discoveries`, `Decision log`, and
+`Outcomes & retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETED (2026-02-09)
 
 No `PLANS.md` file exists in the repository root at the time of writing. If
 one is added, this ExecPlan must be updated to follow it.
 
-## Purpose / Big Picture
+## Purpose / big picture
 
 Roadmap item 3.1.2 requires traceable entity-relationship (ER) diagram
 snapshots generated from the current Diesel migrations and stored with project
 documentation. After this change, contributors can run one command to rebuild
-ER artefacts from the migration-applied schema, and reviewers can diff the
-diagram snapshots in version control whenever schema shape changes.
+ER artefacts from the migration-applied schema and compare rendered diagram
+snapshots in version control whenever schema shape changes.
 
 Success is observable when:
 
@@ -48,7 +48,7 @@ Success is observable when:
 - Update architecture documentation with explicit design decisions.
 - Mark roadmap item `3.1.2` complete only after all quality gates succeed.
 
-## Tolerances (Exception Triggers)
+## Tolerances (exception triggers)
 
 - Scope: if implementation exceeds 18 files or 900 net lines changed, stop and
   reassess before continuing.
@@ -108,7 +108,7 @@ Success is observable when:
 - [x] (2026-02-09 21:42Z) Pass `make check-fmt`, `make lint`, and `make test`.
 - [x] (2026-02-09 21:46Z) Commit gated implementation.
 
-## Surprises & Discoveries
+## Surprises & discoveries
 
 - Observation: The architecture document already contains a hand-authored
   Mermaid ER diagram, but no automated snapshot pipeline currently exists.
@@ -131,7 +131,7 @@ Success is observable when:
   Impact: snapshot implementation was rewritten to use `cap_std::fs::Dir`
   operations, including test helpers.
 
-## Decision Log
+## Decision log
 
 - Decision: store ER snapshot artefacts under `docs/diagrams/er/` as
   deterministic Mermaid source (`.mmd`) plus a rendered image (`.svg`).
@@ -151,7 +151,7 @@ Success is observable when:
   scenarios prove end-to-end execution with embedded Postgres.
   Date/Author: 2026-02-09 / Codex.
 
-## Outcomes & Retrospective
+## Outcomes & retrospective
 
 - Final artefacts:
   - `docs/diagrams/er/schema-baseline.mmd`
@@ -183,7 +183,7 @@ Success is observable when:
     as well as production modules; reusable `cap_std::fs::Dir` helpers reduce
     rework and make snapshot pipelines policy-compliant by default.
 
-## Context and Orientation
+## Context and orientation
 
 This task extends the schema baseline delivered in roadmap item `3.1.1`.
 Current migration and test anchors:
@@ -211,7 +211,7 @@ Key term definitions used in this ExecPlan:
   migrations, not from handwritten schema files.
 - Deterministic output: identical output bytes for identical schema input.
 
-## Plan of Work
+## Plan of work
 
 Stage A: define ports and domain rendering workflow (no rendering side effects
 yet).
@@ -270,10 +270,10 @@ Stage D: documentation and roadmap completion.
    describing the generation flow, storage location, and traceability intent.
 2. Link to the generated ER artefacts from the architecture documentation.
 3. Mark `docs/backend-roadmap.md` item `3.1.2` as done after all gates pass.
-4. Update this ExecPlan `Progress`, `Decision Log`, `Surprises & Discoveries`,
-   and `Outcomes & Retrospective` sections with final implementation evidence.
+4. Update this ExecPlan `Progress`, `Decision log`, `Surprises & discoveries`,
+   and `Outcomes & retrospective` sections with final implementation evidence.
 
-## Concrete Steps
+## Concrete steps
 
 Run all commands from repository root:
 
@@ -321,7 +321,7 @@ Run all commands from repository root:
    timeout 300 make test 2>&1 | tee /tmp/test-$(get-project)-$(git branch --show).out
    ```
 
-## Validation and Acceptance
+## Validation and acceptance
 
 Acceptance is satisfied when all conditions below hold:
 
@@ -335,7 +335,7 @@ Acceptance is satisfied when all conditions below hold:
 - Roadmap item `3.1.2` is checked as complete.
 - `make check-fmt`, `make lint`, and `make test` pass.
 
-## Idempotence and Recovery
+## Idempotence and recovery
 
 - Snapshot generation must be safely re-runnable; reruns should overwrite
   artefacts deterministically without accumulating stale files.
@@ -346,7 +346,7 @@ Acceptance is satisfied when all conditions below hold:
 - All steps in this plan are restartable from the repository root after fixing
   the failure cause.
 
-## Artefacts and Notes
+## Artefacts and notes
 
 Expected implementation artefacts:
 
@@ -360,7 +360,7 @@ Expected implementation artefacts:
   - `docs/backend-roadmap.md`
   - this ExecPlan.
 
-## Interfaces and Dependencies
+## Interfaces and dependencies
 
 Planned interfaces:
 

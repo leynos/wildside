@@ -20,7 +20,7 @@ pub mod cap_fs {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use backend::test_support::cap_fs::{read_file_to_string, write_file};
     ///
     /// let path = std::env::temp_dir().join("cap-fs-read-example.txt");
@@ -40,7 +40,7 @@ pub mod cap_fs {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use backend::test_support::cap_fs::{read_file_to_string, write_file};
     ///
     /// let path = std::env::temp_dir().join("cap-fs-write-example.txt");
@@ -58,7 +58,7 @@ pub mod cap_fs {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use backend::test_support::cap_fs::{path_exists, write_file};
     ///
     /// let path = std::env::temp_dir().join("cap-fs-exists-example.txt");
@@ -79,10 +79,12 @@ pub mod cap_fs {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use backend::test_support::cap_fs::{path_exists, remove_directory, write_file};
+    /// use cap_std::{ambient_authority, fs::Dir};
     ///
     /// let directory = std::env::temp_dir().join("cap-fs-remove-example");
+    /// Dir::create_ambient_dir_all(&directory, ambient_authority())?;
     /// let file = directory.join("entry.txt");
     /// write_file(&file, b"cleanup\n")?;
     /// assert!(path_exists(&file));
@@ -93,7 +95,11 @@ pub mod cap_fs {
     /// ```
     pub fn remove_directory(path: &Path) -> io::Result<()> {
         let (parent, directory_name) = parent_and_file_name(path)?;
-        let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
+        let directory = match Dir::open_ambient_dir(parent, ambient_authority()) {
+            Ok(directory) => directory,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error),
+        };
         match directory.remove_dir_all(Path::new(&directory_name)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -110,6 +116,45 @@ pub mod cap_fs {
             )
         })?;
         Ok((parent, file_name.to_os_string()))
+    }
+}
+
+pub mod er_snapshots {
+    //! Shared test doubles for ER snapshot generation tests.
+
+    use std::path::Path;
+
+    use crate::er_snapshots::{MermaidRenderer, SnapshotGenerationError};
+    use crate::test_support::cap_fs::write_file;
+
+    /// Fixture Mermaid renderer for ER snapshot tests.
+    #[derive(Debug, Clone, Default)]
+    pub struct FixtureMermaidRenderer {
+        pub should_fail: bool,
+    }
+
+    impl MermaidRenderer for FixtureMermaidRenderer {
+        fn render_svg(
+            &self,
+            _input_path: &Path,
+            output_path: &Path,
+        ) -> Result<(), SnapshotGenerationError> {
+            if self.should_fail {
+                return Err(SnapshotGenerationError::RendererFailed {
+                    command: "fixture-renderer".to_owned(),
+                    status: Some(1),
+                    stderr: "fixture failure".to_owned(),
+                });
+            }
+
+            write_file(output_path, "<svg><text>fixture</text></svg>\n".as_bytes()).map_err(
+                |error| SnapshotGenerationError::Io {
+                    path: output_path.to_path_buf(),
+                    message: error.to_string(),
+                },
+            )?;
+            Ok(())
+        }
     }
 }
 

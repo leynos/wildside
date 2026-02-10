@@ -9,10 +9,9 @@ use uuid::Uuid;
 
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
-use crate::er_snapshots::{
-    MermaidRenderer, SnapshotGenerationError, SnapshotRequest, generate_from_repository,
-};
+use crate::er_snapshots::{SnapshotGenerationError, SnapshotRequest, generate_from_repository};
 use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
+use crate::test_support::er_snapshots::FixtureMermaidRenderer;
 
 #[derive(Debug, Clone)]
 struct FixtureRepository {
@@ -25,31 +24,6 @@ impl SchemaSnapshotRepository for FixtureRepository {
     }
 }
 
-#[derive(Debug, Clone)]
-struct FixtureRenderer {
-    should_fail: bool,
-}
-
-impl MermaidRenderer for FixtureRenderer {
-    fn render_svg(
-        &self,
-        _input_path: &std::path::Path,
-        output_path: &std::path::Path,
-    ) -> Result<(), SnapshotGenerationError> {
-        if self.should_fail {
-            return Err(SnapshotGenerationError::RendererFailed {
-                command: "fixture-renderer".to_owned(),
-                status: Some(1),
-                stderr: "fixture failure".to_owned(),
-            });
-        }
-
-        write_file(output_path, "<svg><text>fixture</text></svg>\n".as_bytes())
-            .map_err(|error| SnapshotGenerationError::io(output_path, error))?;
-        Ok(())
-    }
-}
-
 #[fixture]
 fn repository() -> FixtureRepository {
     FixtureRepository {
@@ -58,19 +32,19 @@ fn repository() -> FixtureRepository {
 }
 
 #[fixture]
-fn successful_renderer() -> FixtureRenderer {
-    FixtureRenderer { should_fail: false }
+fn successful_renderer() -> FixtureMermaidRenderer {
+    FixtureMermaidRenderer { should_fail: false }
 }
 
 #[fixture]
-fn failing_renderer() -> FixtureRenderer {
-    FixtureRenderer { should_fail: true }
+fn failing_renderer() -> FixtureMermaidRenderer {
+    FixtureMermaidRenderer { should_fail: true }
 }
 
 #[rstest]
 fn generate_from_repository_writes_mermaid_and_svg(
     repository: FixtureRepository,
-    successful_renderer: FixtureRenderer,
+    successful_renderer: FixtureMermaidRenderer,
 ) {
     let output_dir = temp_output_dir("writes");
     let request = SnapshotRequest {
@@ -92,7 +66,7 @@ fn generate_from_repository_writes_mermaid_and_svg(
 #[rstest]
 fn generate_from_repository_keeps_output_clean_when_renderer_fails(
     repository: FixtureRepository,
-    failing_renderer: FixtureRenderer,
+    failing_renderer: FixtureMermaidRenderer,
 ) {
     let output_dir = temp_output_dir("renderer-fails");
     let request = SnapshotRequest {
@@ -117,7 +91,7 @@ fn generate_from_repository_keeps_output_clean_when_renderer_fails(
 #[rstest]
 fn generate_from_repository_is_deterministic_across_reruns(
     repository: FixtureRepository,
-    successful_renderer: FixtureRenderer,
+    successful_renderer: FixtureMermaidRenderer,
 ) {
     let output_dir = temp_output_dir("deterministic");
     let request = SnapshotRequest {
@@ -140,7 +114,7 @@ fn generate_from_repository_is_deterministic_across_reruns(
 #[rstest]
 fn generate_from_repository_removes_stale_svg_when_render_is_disabled(
     repository: FixtureRepository,
-    successful_renderer: FixtureRenderer,
+    successful_renderer: FixtureMermaidRenderer,
 ) {
     let output_dir = temp_output_dir("stale-svg");
     let stale_svg_path = output_dir.join("schema-baseline.svg");

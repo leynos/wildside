@@ -117,7 +117,7 @@ pub struct SchemaRelationship {
 ///     }],
 /// };
 ///
-/// assert!(render_mermaid_er_diagram(&diagram).contains("Users ||--|{ Routes"));
+/// assert!(render_mermaid_er_diagram(&diagram).contains("Users ||--o{ Routes"));
 /// ```
 pub fn render_mermaid_er_diagram(diagram: &SchemaDiagram) -> String {
     let normalized = diagram.normalized();
@@ -140,10 +140,7 @@ fn render_table_entity(
     table: &SchemaTable,
     entity_names: &BTreeMap<&str, String>,
 ) {
-    let entity_name = entity_names
-        .get(table.name.as_str())
-        .cloned()
-        .unwrap_or_else(|| to_pascal_case(table.name.as_str()));
+    let entity_name = get_entity_name(table.name.as_str(), entity_names);
     output.push_str("  ");
     output.push_str(entity_name.as_str());
     output.push_str(" {\n");
@@ -171,18 +168,12 @@ fn render_relationship_line(
     relationship: &SchemaRelationship,
     entity_names: &BTreeMap<&str, String>,
 ) {
-    let parent = entity_names
-        .get(relationship.referenced_table.as_str())
-        .cloned()
-        .unwrap_or_else(|| to_pascal_case(relationship.referenced_table.as_str()));
-    let child = entity_names
-        .get(relationship.referencing_table.as_str())
-        .cloned()
-        .unwrap_or_else(|| to_pascal_case(relationship.referencing_table.as_str()));
+    let parent = get_entity_name(relationship.referenced_table.as_str(), entity_names);
+    let child = get_entity_name(relationship.referencing_table.as_str(), entity_names);
     let cardinality = if relationship.referencing_is_nullable {
-        "||--o{"
+        "o|--o{"
     } else {
-        "||--|{"
+        "||--o{"
     };
 
     output.push_str("  ");
@@ -196,6 +187,13 @@ fn render_relationship_line(
     output.push_str(" -> ");
     output.push_str(relationship.referenced_column.as_str());
     output.push_str("\"\n");
+}
+
+fn get_entity_name(table_name: &str, entity_names: &BTreeMap<&str, String>) -> String {
+    entity_names
+        .get(table_name)
+        .cloned()
+        .unwrap_or_else(|| to_pascal_case(table_name))
 }
 
 fn entity_names(tables: &[SchemaTable]) -> BTreeMap<&str, String> {
@@ -321,7 +319,7 @@ mod tests {
             "    text display_name\n",
             "    uuid id PK\n",
             "  }\n\n",
-            "  Users ||--|{ Routes : \"user_id -> id\"\n",
+            "  Users ||--o{ Routes : \"user_id -> id\"\n",
         );
 
         assert_eq!(rendered, expected);
@@ -360,7 +358,7 @@ mod tests {
         };
 
         let rendered = render_mermaid_er_diagram(&diagram);
-        assert!(rendered.contains("Routes ||--o{ RouteNotes"));
+        assert!(rendered.contains("Routes o|--o{ RouteNotes"));
     }
 
     #[rstest]

@@ -8,6 +8,7 @@
 //! ```
 
 use std::env;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::PathBuf;
 
@@ -29,23 +30,24 @@ impl Default for CliArgs {
 }
 
 impl CliArgs {
-    fn parse(arguments: impl IntoIterator<Item = String>) -> io::Result<Self> {
+    fn parse(arguments: impl IntoIterator<Item = OsString>) -> io::Result<Self> {
         let mut args = arguments.into_iter();
         let mut parsed = Self::default();
 
         while let Some(argument) = args.next() {
-            match argument.as_str() {
-                "--output-dir" => {
+            match argument.as_os_str() {
+                value if value == OsStr::new("--output-dir") => {
                     parsed.output_dir = parse_output_dir_value(&mut args)?;
                 }
-                "--skip-svg" => {
+                value if value == OsStr::new("--skip-svg") => {
                     parsed.should_render_svg = false;
                 }
-                "--help" | "-h" => {
+                value if value == OsStr::new("--help") || value == OsStr::new("-h") => {
                     print_help();
                     std::process::exit(0);
                 }
-                unknown => {
+                _ => {
+                    let unknown = argument_to_string(argument)?;
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("unknown argument: {unknown}"),
@@ -58,7 +60,7 @@ impl CliArgs {
     }
 }
 
-fn parse_output_dir_value(args: &mut impl Iterator<Item = String>) -> io::Result<PathBuf> {
+fn parse_output_dir_value(args: &mut impl Iterator<Item = OsString>) -> io::Result<PathBuf> {
     match args.next() {
         Some(path) => Ok(PathBuf::from(path)),
         None => Err(io::Error::new(
@@ -66,6 +68,15 @@ fn parse_output_dir_value(args: &mut impl Iterator<Item = String>) -> io::Result
             "--output-dir requires a value",
         )),
     }
+}
+
+fn argument_to_string(argument: OsString) -> io::Result<String> {
+    argument.into_string().map_err(|value| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("argument is not valid UTF-8: {}", value.to_string_lossy()),
+        )
+    })
 }
 
 fn print_help() {
@@ -79,7 +90,7 @@ fn print_help() {
 }
 
 fn main() -> io::Result<()> {
-    let parsed = CliArgs::parse(env::args().skip(1))?;
+    let parsed = CliArgs::parse(env::args_os().skip(1))?;
     let request = SnapshotRequest {
         output_dir: parsed.output_dir,
         should_render_svg: parsed.should_render_svg,

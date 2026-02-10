@@ -63,17 +63,20 @@ impl SchemaSnapshotRepository for PostgresSchemaSnapshotRepository {
 
 fn query_tables(client: &mut Client) -> Result<Vec<String>, SchemaSnapshotRepositoryError> {
     let query = concat!(
-        "SELECT tablename ",
-        "FROM pg_catalog.pg_tables ",
-        "WHERE schemaname = 'public' ",
-        "ORDER BY tablename"
+        "SELECT cls.relname AS table_name ",
+        "FROM pg_catalog.pg_class cls ",
+        "JOIN pg_catalog.pg_namespace ns ",
+        "  ON ns.oid = cls.relnamespace ",
+        "WHERE ns.nspname = 'public' ",
+        "  AND cls.relkind IN ('r', 'p') ",
+        "ORDER BY cls.relname"
     );
 
     let rows = client
         .query(query, &[])
         .map_err(|error| SchemaSnapshotRepositoryError::query(error.to_string()))?;
 
-    Ok(rows.into_iter().map(|row| row.get("tablename")).collect())
+    Ok(rows.into_iter().map(|row| row.get("table_name")).collect())
 }
 
 fn query_columns(
@@ -91,15 +94,14 @@ fn query_columns(
         "    WHERE idx.indrelid = cls.oid ",
         "      AND idx.indisprimary ",
         "      AND attr.attnum = ANY(idx.indkey)",
-        "  ) AS is_primary_key, ",
-        "  attr.attnum AS ordinal_position ",
+        "  ) AS is_primary_key ",
         "FROM pg_catalog.pg_attribute attr ",
         "JOIN pg_catalog.pg_class cls ",
         "  ON cls.oid = attr.attrelid ",
         "JOIN pg_catalog.pg_namespace ns ",
         "  ON ns.oid = cls.relnamespace ",
         "WHERE ns.nspname = 'public' ",
-        "  AND cls.relkind = 'r' ",
+        "  AND cls.relkind IN ('r', 'p') ",
         "  AND attr.attnum > 0 ",
         "  AND NOT attr.attisdropped ",
         "ORDER BY cls.relname, attr.attnum"

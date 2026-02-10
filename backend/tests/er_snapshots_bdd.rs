@@ -6,9 +6,8 @@ use backend::er_snapshots::{
     CommandMermaidRenderer, MermaidRenderer, SnapshotArtifacts, SnapshotGenerationError,
     SnapshotRequest, generate_from_database_url,
 };
-use backend::test_support::cap_fs::{
-    path_exists, read_file_to_string, remove_directory, write_file,
-};
+use backend::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory};
+use backend::test_support::er_snapshots::FixtureMermaidRenderer;
 use cap_std::{ambient_authority, fs::Dir};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
@@ -70,25 +69,6 @@ impl Drop for SnapshotWorld {
         if path_exists(&self.output_dir) {
             let _cleanup_result = remove_directory(&self.output_dir);
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct FixtureRenderer;
-
-impl MermaidRenderer for FixtureRenderer {
-    fn render_svg(
-        &self,
-        _input_path: &std::path::Path,
-        output_path: &std::path::Path,
-    ) -> Result<(), SnapshotGenerationError> {
-        write_file(output_path, "<svg><text>fixture</text></svg>\n".as_bytes()).map_err(
-            |error| SnapshotGenerationError::Io {
-                path: output_path.to_path_buf(),
-                message: error.to_string(),
-            },
-        )?;
-        Ok(())
     }
 }
 
@@ -163,7 +143,7 @@ fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
         return;
     }
 
-    let renderer = FixtureRenderer;
+    let renderer = FixtureMermaidRenderer::default();
     world.result = Some(run_snapshot_generation(world, &renderer, true));
 }
 
@@ -186,7 +166,7 @@ fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
         return;
     }
 
-    let renderer = FixtureRenderer;
+    let renderer = FixtureMermaidRenderer::default();
     let first =
         run_snapshot_generation(world, &renderer, false).expect("first generation should succeed");
     let second =
