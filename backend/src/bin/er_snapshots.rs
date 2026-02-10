@@ -8,92 +8,31 @@
 //! ```
 
 use std::env;
-use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::PathBuf;
 
 use backend::er_snapshots::{CommandMermaidRenderer, SnapshotRequest, generate_from_migrations};
+use ortho_config::OrthoConfig;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+fn default_output_dir() -> PathBuf {
+    PathBuf::from("docs/diagrams/er")
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, OrthoConfig)]
+#[ortho_config(prefix = "ER_SNAPSHOTS")]
 struct CliArgs {
+    #[ortho_config(default = default_output_dir())]
     output_dir: PathBuf,
-    should_render_svg: bool,
-}
-
-impl Default for CliArgs {
-    fn default() -> Self {
-        Self {
-            output_dir: PathBuf::from("docs/diagrams/er"),
-            should_render_svg: true,
-        }
-    }
-}
-
-impl CliArgs {
-    fn parse(arguments: impl IntoIterator<Item = OsString>) -> io::Result<Self> {
-        let mut args = arguments.into_iter();
-        let mut parsed = Self::default();
-
-        while let Some(argument) = args.next() {
-            match argument.as_os_str() {
-                value if value == OsStr::new("--output-dir") => {
-                    parsed.output_dir = parse_output_dir_value(&mut args)?;
-                }
-                value if value == OsStr::new("--skip-svg") => {
-                    parsed.should_render_svg = false;
-                }
-                value if value == OsStr::new("--help") || value == OsStr::new("-h") => {
-                    print_help();
-                    std::process::exit(0);
-                }
-                _ => {
-                    let unknown = argument_to_string(argument)?;
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("unknown argument: {unknown}"),
-                    ));
-                }
-            }
-        }
-
-        Ok(parsed)
-    }
-}
-
-fn parse_output_dir_value(args: &mut impl Iterator<Item = OsString>) -> io::Result<PathBuf> {
-    match args.next() {
-        Some(path) => Ok(PathBuf::from(path)),
-        None => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "--output-dir requires a value",
-        )),
-    }
-}
-
-fn argument_to_string(argument: OsString) -> io::Result<String> {
-    argument.into_string().map_err(|value| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("argument is not valid UTF-8: {}", value.to_string_lossy()),
-        )
-    })
-}
-
-fn print_help() {
-    println!(concat!(
-        "Usage: er-snapshots [OPTIONS]\n\n",
-        "Options:\n",
-        "  --output-dir <path>  Output directory for snapshot artefacts\n",
-        "  --skip-svg           Generate Mermaid source only (skip SVG rendering)\n",
-        "  -h, --help           Print this help message\n",
-    ));
+    #[ortho_config(cli_long = "skip-svg")]
+    skip_svg: bool,
 }
 
 fn main() -> io::Result<()> {
-    let parsed = CliArgs::parse(env::args_os().skip(1))?;
+    let parsed = CliArgs::load_from_iter(env::args_os()).map_err(io::Error::other)?;
     let request = SnapshotRequest {
         output_dir: parsed.output_dir,
-        should_render_svg: parsed.should_render_svg,
+        should_render_svg: !parsed.skip_svg,
     };
     let renderer = CommandMermaidRenderer::default();
 
