@@ -279,12 +279,16 @@ Run all commands from repository root:
 
    ```bash
    set -o pipefail
-   timeout 300 cargo test --manifest-path backend/Cargo.toml schema_baseline_unit 2>&1 | tee /tmp/test-$(get-project)-$(git branch --show).out
+   timeout 300 cargo test --manifest-path backend/Cargo.toml schema_baseline_unit \
+     2>&1 | tee \
+     /tmp/test-$(get-project)-$(git branch --show).out
    ```
 
    ```bash
    set -o pipefail
-   timeout 300 cargo test --manifest-path backend/Cargo.toml schema_baseline_bdd 2>&1 | tee /tmp/test-bdd-$(get-project)-$(git branch --show).out
+   timeout 300 cargo test --manifest-path backend/Cargo.toml schema_baseline_bdd \
+     2>&1 | tee \
+     /tmp/test-bdd-$(get-project)-$(git branch --show).out
    ```
 
 2. Generate ER snapshots with the new binary (command name to be finalized
@@ -292,7 +296,10 @@ Run all commands from repository root:
 
    ```bash
    set -o pipefail
-   timeout 300 cargo run --manifest-path backend/Cargo.toml --bin er-snapshots -- --output docs/diagrams/er 2>&1 | tee /tmp/er-snapshots-$(get-project)-$(git branch --show).out
+   timeout 300 cargo run --manifest-path backend/Cargo.toml --bin er-snapshots \
+     -- --output docs/diagrams/er \
+     2>&1 | tee \
+     /tmp/er-snapshots-$(get-project)-$(git branch --show).out
    ```
 
 3. Run required quality gates:
