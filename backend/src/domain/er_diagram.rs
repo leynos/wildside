@@ -76,63 +76,74 @@ pub struct SchemaRelationship {
 pub fn render_mermaid_er_diagram(diagram: &SchemaDiagram) -> String {
     let normalized = diagram.normalized();
     let entity_names = entity_names(&normalized.tables);
-
     let mut output = String::from("erDiagram\n");
 
     for table in &normalized.tables {
-        let entity_name = entity_names
-            .get(table.name.as_str())
-            .cloned()
-            .unwrap_or_else(|| to_pascal_case(table.name.as_str()));
-        output.push_str("  ");
-        output.push_str(entity_name.as_str());
-        output.push_str(" {\n");
-
-        for column in &table.columns {
-            output.push_str("    ");
-            output.push_str(sanitize_data_type(column.data_type.as_str()).as_str());
-            output.push(' ');
-            output.push_str(column.name.as_str());
-
-            if column.is_primary_key {
-                output.push_str(" PK");
-            }
-
-            output.push('\n');
-        }
-
-        output.push_str("  }\n\n");
+        render_table(&mut output, table, &entity_names);
     }
 
     for relationship in &normalized.relationships {
-        let parent = entity_names
-            .get(relationship.referenced_table.as_str())
-            .cloned()
-            .unwrap_or_else(|| to_pascal_case(relationship.referenced_table.as_str()));
-        let child = entity_names
-            .get(relationship.referencing_table.as_str())
-            .cloned()
-            .unwrap_or_else(|| to_pascal_case(relationship.referencing_table.as_str()));
-        let cardinality = if relationship.referencing_is_nullable {
-            "||--o{"
-        } else {
-            "||--|{"
-        };
-
-        output.push_str("  ");
-        output.push_str(parent.as_str());
-        output.push(' ');
-        output.push_str(cardinality);
-        output.push(' ');
-        output.push_str(child.as_str());
-        output.push_str(" : \"");
-        output.push_str(relationship.referencing_column.as_str());
-        output.push_str(" -> ");
-        output.push_str(relationship.referenced_column.as_str());
-        output.push_str("\"\n");
+        render_relationship(&mut output, relationship, &entity_names);
     }
 
     output
+}
+
+fn render_table(output: &mut String, table: &SchemaTable, entity_names: &BTreeMap<&str, String>) {
+    let entity_name = get_entity_name(table.name.as_str(), entity_names);
+    output.push_str("  ");
+    output.push_str(entity_name.as_str());
+    output.push_str(" {\n");
+
+    for column in &table.columns {
+        render_column(output, column);
+    }
+
+    output.push_str("  }\n\n");
+}
+
+fn render_column(output: &mut String, column: &SchemaColumn) {
+    output.push_str("    ");
+    output.push_str(sanitize_data_type(column.data_type.as_str()).as_str());
+    output.push(' ');
+    output.push_str(column.name.as_str());
+    if column.is_primary_key {
+        output.push_str(" PK");
+    }
+    output.push('\n');
+}
+
+fn render_relationship(
+    output: &mut String,
+    relationship: &SchemaRelationship,
+    entity_names: &BTreeMap<&str, String>,
+) {
+    let parent = get_entity_name(relationship.referenced_table.as_str(), entity_names);
+    let child = get_entity_name(relationship.referencing_table.as_str(), entity_names);
+    let cardinality = if relationship.referencing_is_nullable {
+        "||--o{"
+    } else {
+        "||--|{"
+    };
+
+    output.push_str("  ");
+    output.push_str(parent.as_str());
+    output.push(' ');
+    output.push_str(cardinality);
+    output.push(' ');
+    output.push_str(child.as_str());
+    output.push_str(" : \"");
+    output.push_str(relationship.referencing_column.as_str());
+    output.push_str(" -> ");
+    output.push_str(relationship.referenced_column.as_str());
+    output.push_str("\"\n");
+}
+
+fn get_entity_name(table_name: &str, entity_names: &BTreeMap<&str, String>) -> String {
+    entity_names
+        .get(table_name)
+        .cloned()
+        .unwrap_or_else(|| to_pascal_case(table_name))
 }
 
 fn entity_names(tables: &[SchemaTable]) -> BTreeMap<&str, String> {
