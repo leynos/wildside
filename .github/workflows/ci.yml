@@ -178,6 +178,9 @@ jobs:
       - name: Generate OpenAPI specification
         run: make openapi
 
+      - name: Lint AsyncAPI specification
+        run: make lint-asyncapi
+
       - name: Lint OpenAPI specification
         run: make lint-openapi
 

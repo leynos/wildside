@@ -19,6 +19,7 @@ mod route_metrics;
 mod route_queue;
 mod route_repository;
 mod route_submission;
+mod schema_snapshot_repository;
 mod user_interests_command;
 mod user_onboarding;
 mod user_preferences_command;
@@ -83,6 +84,11 @@ pub use route_repository::{RoutePersistenceError, RouteRepository};
 pub use route_submission::{
     FixtureRouteSubmissionService, RouteSubmissionRequest, RouteSubmissionResponse,
     RouteSubmissionService, RouteSubmissionStatus,
+};
+#[cfg(test)]
+pub use schema_snapshot_repository::MockSchemaSnapshotRepository;
+pub use schema_snapshot_repository::{
+    FixtureSchemaSnapshotRepository, SchemaSnapshotRepository, SchemaSnapshotRepositoryError,
 };
 pub use user_interests_command::{FixtureUserInterestsCommand, UserInterestsCommand};
 pub use user_onboarding::UserOnboarding;

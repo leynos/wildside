@@ -134,7 +134,7 @@ so persistence details stay confined to outbound adapters.
   `docs/wildside-backend-architecture.md`, including catalogue, descriptor, and
   user state tables plus GiST/GIN indices and unique constraints for composite
   keys.
-- [ ] 3.1.2. Generate entity-relationship (ER) diagram snapshots from
+- [x] 3.1.2. Generate entity-relationship (ER) diagram snapshots from
   migrations and store them alongside documentation for traceability.
 
 ### 3.2. Catalogue and descriptor read models

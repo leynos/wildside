@@ -7,6 +7,7 @@
 
 pub mod doc;
 pub mod domain;
+pub mod er_snapshots;
 #[cfg(feature = "example-data")]
 pub mod example_data;
 pub mod inbound;

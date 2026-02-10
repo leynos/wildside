@@ -17,18 +17,21 @@ serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
 cap-std = "3"
 example-data = { path = "../crates/example-data", optional = true }
-ortho_config = { version = "0.7.0", optional = true }
+ortho_config = "0.7.0"
+clap = { version = "4", features = ["derive"] }
 
 async-trait = "0.1.89"
 color-eyre = "0.6.5"
 pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv", version = "0.5.0" }
 postgresql_embedded = { version = "0.20.0", features = ["tokio"] }
+postgres = { version = "0.19.12", features = ["with-uuid-1"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
 
 # Diesel ORM with PostgreSQL and async support
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
+diesel_migrations = "2.2"
 chrono = { version = "0.4", features = ["serde"] }
 mockable = { version = "0.3", features = ["clock"] }
 
@@ -55,7 +58,7 @@ hex = "0.4"
 [features]
 default = []
 # Enable example data seeding at startup via OrthoConfig.
-example-data = ["dep:example-data", "dep:ortho_config"]
+example-data = ["dep:example-data"]
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
 # Expose test utilities for integration tests
@@ -80,13 +83,14 @@ rstest = "0.26"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
 insta = { version = "1", features = ["json", "redactions"] }
-postgres = { version = "0.19.12", features = ["with-uuid-1"] }
-# Diesel migration runner for integration tests
-diesel_migrations = "2.2"
 
 [[bin]]
 name = "openapi-dump"
 path = "src/bin/openapi_dump.rs"
+
+[[bin]]
+name = "er-snapshots"
+path = "src/bin/er_snapshots.rs"
 
 [[bin]]
 name = "pg_worker"

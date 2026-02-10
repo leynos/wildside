@@ -617,6 +617,16 @@ services.
 > operations are introduced behind domain ports
 > (`CatalogueIngestionRepository` and `DescriptorIngestionRepository`) so
 > persistence details remain confined to outbound adapters.
+>
+> **Design decision (2026-02-09):** Roadmap item 3.1.2 captures ER snapshots
+> from migration-backed schemas through a domain port
+> (`SchemaSnapshotRepository`) with a PostgreSQL outbound adapter. Snapshot
+> generation is exposed via the inbound command
+> `backend/src/bin/er_snapshots.rs`, which writes deterministic artefacts to
+> `docs/diagrams/er/schema-baseline.mmd` and
+> `docs/diagrams/er/schema-baseline.svg`. The Mermaid source is the canonical
+> review artefact; the SVG is regenerated from it. Snapshot writes stage files
+> atomically so renderer failures do not leave partial documentation output.
 
 #### Driving ports (services and queries)
 
@@ -641,6 +651,11 @@ For screen readers: The following entity-relationship diagram shows how
 catalogue entities, descriptors, and user state relate to routes and users.
 `localizations` columns store the `EntityLocalizations` shape defined in
 `docs/wildside-pwa-data-model.md`.
+
+Generated migration-backed snapshots are version-controlled for traceability:
+
+- Mermaid source: `docs/diagrams/er/schema-baseline.mmd`
+- Rendered SVG: `docs/diagrams/er/schema-baseline.svg`
 
 ```mermaid
 erDiagram

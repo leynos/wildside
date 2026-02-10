@@ -1,0 +1,219 @@
+%% Generated from backend migrations. Do not edit manually.
+erDiagram
+  DieselSchemaMigrations {
+    timestamp_without_time_zone run_on
+    character_varying_50 version PK
+  }
+
+  Badges {
+    text icon_key
+    uuid id PK
+    jsonb localizations
+    text slug
+  }
+
+  CommunityPicks {
+    jsonb curator_avatar
+    text curator_display_name
+    integer distance_metres
+    integer duration_seconds
+    uuid id PK
+    jsonb localizations
+    timestamp_with_time_zone picked_at
+    real rating
+    uuid route_summary_id
+    integer saves
+    uuid user_id
+  }
+
+  ExampleDataRuns {
+    bigint seed
+    text seed_key PK
+    timestamp_with_time_zone seeded_at
+    integer user_count
+  }
+
+  IdempotencyKeys {
+    timestamp_with_time_zone created_at
+    uuid key PK
+    text mutation_type PK
+    bytea payload_hash
+    jsonb response_snapshot
+    uuid user_id PK
+  }
+
+  InterestThemes {
+    text description
+    uuid id PK
+    text name
+  }
+
+  PoiInterestThemes {
+    text poi_element_type PK
+    bigint poi_id PK
+    uuid theme_id PK
+  }
+
+  Pois {
+    text element_type PK
+    bigint id PK
+    point location
+    text narrative
+    jsonb osm_tags
+    real popularity_score
+  }
+
+  RouteCategories {
+    text icon_key
+    uuid id PK
+    jsonb localizations
+    integer route_count
+    text slug
+  }
+
+  RouteCollections {
+    text difficulty
+    integer_array distance_range_metres
+    integer_array duration_range_seconds
+    text icon_key
+    uuid id PK
+    jsonb lead_image
+    jsonb localizations
+    jsonb map_preview
+    uuid_array route_ids
+    text slug
+  }
+
+  RouteNotes {
+    text body
+    timestamp_with_time_zone created_at
+    uuid id PK
+    uuid poi_id
+    integer revision
+    uuid route_id
+    timestamp_with_time_zone updated_at
+    uuid user_id
+  }
+
+  RoutePois {
+    text poi_element_type PK
+    bigint poi_id PK
+    integer position
+    uuid route_id PK
+  }
+
+  RouteProgress {
+    integer revision
+    uuid route_id PK
+    timestamp_with_time_zone updated_at
+    uuid user_id PK
+    uuid_array visited_stop_ids
+  }
+
+  RouteSummaries {
+    uuid_array badge_ids
+    uuid category_id
+    timestamp_with_time_zone created_at
+    text difficulty
+    integer distance_metres
+    integer duration_seconds
+    jsonb hero_image
+    uuid id PK
+    uuid_array interest_theme_ids
+    jsonb localizations
+    real rating
+    uuid route_id
+    text slug
+    uuid theme_id
+  }
+
+  Routes {
+    timestamp_with_time_zone created_at
+    jsonb generation_params
+    uuid id PK
+    path path
+    uuid user_id
+  }
+
+  SafetyPresets {
+    text icon_key
+    uuid id PK
+    jsonb localizations
+    uuid_array safety_toggle_ids
+    text slug
+  }
+
+  SafetyToggles {
+    text icon_key
+    uuid id PK
+    jsonb localizations
+    text slug
+  }
+
+  Tags {
+    text icon_key
+    uuid id PK
+    jsonb localizations
+    text slug
+  }
+
+  Themes {
+    integer_array distance_range_metres
+    text icon_key
+    uuid id PK
+    jsonb image
+    jsonb localizations
+    real rating
+    text slug
+    integer walk_count
+  }
+
+  TrendingRouteHighlights {
+    timestamp_with_time_zone highlighted_at
+    uuid id PK
+    uuid route_summary_id
+    jsonb subtitle_localizations
+    text trend_delta
+  }
+
+  UserInterestThemes {
+    uuid theme_id PK
+    uuid user_id PK
+  }
+
+  UserPreferences {
+    uuid_array interest_theme_ids
+    integer revision
+    uuid_array safety_toggle_ids
+    text unit_system
+    timestamp_with_time_zone updated_at
+    uuid user_id PK
+  }
+
+  Users {
+    timestamp_with_time_zone created_at
+    character_varying_32 display_name
+    uuid id PK
+    timestamp_with_time_zone updated_at
+  }
+
+  InterestThemes ||--o{ PoiInterestThemes : "theme_id -> id"
+  InterestThemes ||--o{ UserInterestThemes : "theme_id -> id"
+  Pois ||--o{ PoiInterestThemes : "poi_element_type -> element_type"
+  Pois ||--o{ PoiInterestThemes : "poi_id -> id"
+  Pois ||--o{ RoutePois : "poi_element_type -> element_type"
+  Pois ||--o{ RoutePois : "poi_id -> id"
+  RouteCategories ||--o{ RouteSummaries : "category_id -> id"
+  RouteSummaries o|--o{ CommunityPicks : "route_summary_id -> id"
+  RouteSummaries ||--o{ TrendingRouteHighlights : "route_summary_id -> id"
+  Routes ||--o{ RouteNotes : "route_id -> id"
+  Routes ||--o{ RoutePois : "route_id -> id"
+  Routes ||--o{ RouteProgress : "route_id -> id"
+  Routes ||--o{ RouteSummaries : "route_id -> id"
+  Themes ||--o{ RouteSummaries : "theme_id -> id"
+  Users o|--o{ CommunityPicks : "user_id -> id"
+  Users ||--o{ RouteNotes : "user_id -> id"
+  Users ||--o{ RouteProgress : "user_id -> id"
+  Users o|--o{ Routes : "user_id -> id"
+  Users ||--o{ UserInterestThemes : "user_id -> id"
+  Users ||--o{ UserPreferences : "user_id -> id"

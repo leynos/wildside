@@ -4,14 +4,11 @@
 slow-timeout = { period = "60s", terminate-after = 1, grace-period = "5s" }
 
 # Put a hard ceiling on the whole run.
-global-timeout = "15m"
+global-timeout = "60m"
 
-# Embedded Postgres test binaries share the default pg-embed install/data paths
-# (`/var/tmp/pg-embed-<uid>/{install,data}`), which are not safe to set up in
-# parallel. Nextest runs integration test binaries concurrently, so we group
-# those suites and run them serially.
-[test-groups.pg-embedded]
-max-threads = 1
+# Embedded Postgres test binaries are heavier than pure unit tests due to
+# database lifecycle and migration work. Reserve more scheduler capacity per
+# test to keep host and CI runs balanced without a fixed per-group cap.
 
 [[profile.default.overrides]]
 filter = """
@@ -19,9 +16,12 @@ filter = """
   | binary(diesel_user_preferences_repository)
   | binary(diesel_route_annotation_repository)
   | binary(diesel_example_data_runs_repository)
+  | binary(er_snapshots_bdd)
+  | binary(example_data_seeding_bdd)
   | binary(example_data_runs_bdd)
   | binary(ports_behaviour)
   | binary(pg_embed_isolation)
+  | binary(schema_baseline_bdd)
 """
-test-group = "pg-embedded"
-slow-timeout = { period = "120s", terminate-after = 1, grace-period = "5s" }
+threads-required = 4
+slow-timeout = { period = "300s", terminate-after = 1, grace-period = "5s" }

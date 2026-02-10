@@ -32,9 +32,15 @@
 //! - RouteAnnotations — aggregated notes and progress for a route.
 //! - ExampleDataSeeder — startup seeding orchestration for example data.
 //! - ExampleDataSeedOutcome — summary of seeding results and counts.
+//! - SchemaDiagram — normalized table/relationship graph used for ER snapshots.
+//! - SchemaTable — table descriptor used by `SchemaDiagram`.
+//! - SchemaColumn — typed column descriptor used by `SchemaTable`.
+//! - SchemaRelationship — foreign-key edge used by `SchemaDiagram`.
+//! - render_mermaid_er_diagram — deterministic Mermaid ER rendering function.
 
 pub mod annotations;
 pub mod auth;
+pub mod er_diagram;
 pub mod error;
 #[cfg(feature = "example-data")]
 pub mod example_data;
@@ -56,6 +62,9 @@ pub use self::annotations::{
     RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
+pub use self::er_diagram::{
+    SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable, render_mermaid_er_diagram,
+};
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 #[cfg(feature = "example-data")]
 pub use self::example_data::{ExampleDataSeedOutcome, ExampleDataSeeder, ExampleDataSeedingError};
