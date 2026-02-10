@@ -226,38 +226,29 @@ fn to_pascal_case(value: &str) -> String {
 }
 
 fn sanitize_data_type(value: &str) -> String {
-    let mut sanitized = String::with_capacity(value.len());
-    let mut previous_was_underscore = false;
-    let mut characters = value.chars().peekable();
+    let with_array_markers = value.replace("[]", "_array");
+    let sanitized: String = with_array_markers
+        .chars()
+        .map(sanitize_data_type_character)
+        .collect();
+    let collapsed = sanitized
+        .split('_')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("_");
 
-    while let Some(character) = characters.next() {
-        if character == '[' && matches!(characters.peek(), Some(']')) {
-            characters.next();
-            if !previous_was_underscore && !sanitized.is_empty() {
-                sanitized.push('_');
-            }
-            sanitized.push_str("array");
-            previous_was_underscore = false;
-            continue;
-        }
-
-        if character.is_ascii_alphanumeric() {
-            sanitized.push(character.to_ascii_lowercase());
-            previous_was_underscore = false;
-            continue;
-        }
-
-        if !previous_was_underscore {
-            sanitized.push('_');
-            previous_was_underscore = true;
-        }
-    }
-
-    let trimmed = sanitized.trim_matches('_');
-    if trimmed.is_empty() {
+    if collapsed.is_empty() {
         "unknown".to_owned()
     } else {
-        trimmed.to_owned()
+        collapsed
+    }
+}
+
+fn sanitize_data_type_character(character: char) -> char {
+    if character.is_ascii_alphanumeric() {
+        character.to_ascii_lowercase()
+    } else {
+        '_'
     }
 }
 

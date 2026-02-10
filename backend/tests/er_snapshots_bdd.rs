@@ -92,6 +92,24 @@ impl MermaidRenderer for FixtureRenderer {
     }
 }
 
+fn run_snapshot_generation(
+    world: &SnapshotWorld,
+    renderer: &dyn MermaidRenderer,
+    should_render_svg: bool,
+) -> Result<SnapshotArtifacts, SnapshotGenerationError> {
+    let request = SnapshotRequest {
+        output_dir: world.output_dir.clone(),
+        should_render_svg,
+    };
+    let database_url = world
+        .database
+        .as_ref()
+        .expect("database should be available")
+        .url();
+
+    generate_from_database_url(database_url, renderer, &request)
+}
+
 #[fixture]
 fn world() -> SnapshotWorld {
     let cluster = match shared_cluster() {
@@ -145,21 +163,8 @@ fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
         return;
     }
 
-    let request = SnapshotRequest {
-        output_dir: world.output_dir.clone(),
-        should_render_svg: true,
-    };
     let renderer = FixtureRenderer;
-    let database_url = world
-        .database
-        .as_ref()
-        .expect("database should be available")
-        .url();
-    world.result = Some(generate_from_database_url(
-        database_url,
-        &renderer,
-        &request,
-    ));
+    world.result = Some(run_snapshot_generation(world, &renderer, true));
 }
 
 #[when("ER snapshots are generated with a missing renderer command")]
@@ -169,22 +174,9 @@ fn er_snapshots_are_generated_with_a_missing_renderer_command(world: &mut Snapsh
         return;
     }
 
-    let request = SnapshotRequest {
-        output_dir: world.output_dir.clone(),
-        should_render_svg: true,
-    };
     let renderer =
         CommandMermaidRenderer::new("command-that-does-not-exist", std::iter::empty::<&str>());
-    let database_url = world
-        .database
-        .as_ref()
-        .expect("database should be available")
-        .url();
-    world.result = Some(generate_from_database_url(
-        database_url,
-        &renderer,
-        &request,
-    ));
+    world.result = Some(run_snapshot_generation(world, &renderer, true));
 }
 
 #[when("ER snapshots are generated twice")]
@@ -194,21 +186,11 @@ fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
         return;
     }
 
-    let request = SnapshotRequest {
-        output_dir: world.output_dir.clone(),
-        should_render_svg: false,
-    };
     let renderer = FixtureRenderer;
-    let database_url = world
-        .database
-        .as_ref()
-        .expect("database should be available")
-        .url();
-
-    let first = generate_from_database_url(database_url, &renderer, &request)
-        .expect("first generation should succeed");
-    let second = generate_from_database_url(database_url, &renderer, &request)
-        .expect("second generation should succeed");
+    let first =
+        run_snapshot_generation(world, &renderer, false).expect("first generation should succeed");
+    let second =
+        run_snapshot_generation(world, &renderer, false).expect("second generation should succeed");
 
     world.first_mermaid =
         Some(read_file_to_string(&first.mermaid_path).expect("read first Mermaid snapshot"));

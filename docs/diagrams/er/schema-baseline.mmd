@@ -1,5 +1,10 @@
 %% Generated from backend migrations. Do not edit manually.
 erDiagram
+  DieselSchemaMigrations {
+    timestamp_without_time_zone run_on
+    character_varying_50 version PK
+  }
+
   Badges {
     text icon_key
     uuid id PK
@@ -68,14 +73,14 @@ erDiagram
 
   RouteCollections {
     text difficulty
-    integer distance_range_metres
-    integer duration_range_seconds
+    integer_array distance_range_metres
+    integer_array duration_range_seconds
     text icon_key
     uuid id PK
     jsonb lead_image
     jsonb localizations
     jsonb map_preview
-    uuid route_ids
+    uuid_array route_ids
     text slug
   }
 
@@ -102,11 +107,11 @@ erDiagram
     uuid route_id PK
     timestamp_with_time_zone updated_at
     uuid user_id PK
-    uuid visited_stop_ids
+    uuid_array visited_stop_ids
   }
 
   RouteSummaries {
-    uuid badge_ids
+    uuid_array badge_ids
     uuid category_id
     timestamp_with_time_zone created_at
     text difficulty
@@ -114,7 +119,7 @@ erDiagram
     integer duration_seconds
     jsonb hero_image
     uuid id PK
-    uuid interest_theme_ids
+    uuid_array interest_theme_ids
     jsonb localizations
     real rating
     uuid route_id
@@ -134,7 +139,7 @@ erDiagram
     text icon_key
     uuid id PK
     jsonb localizations
-    uuid safety_toggle_ids
+    uuid_array safety_toggle_ids
     text slug
   }
 
@@ -153,7 +158,7 @@ erDiagram
   }
 
   Themes {
-    integer distance_range_metres
+    integer_array distance_range_metres
     text icon_key
     uuid id PK
     jsonb image
@@ -177,9 +182,9 @@ erDiagram
   }
 
   UserPreferences {
-    uuid interest_theme_ids
+    uuid_array interest_theme_ids
     integer revision
-    uuid safety_toggle_ids
+    uuid_array safety_toggle_ids
     text unit_system
     timestamp_with_time_zone updated_at
     uuid user_id PK
