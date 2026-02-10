@@ -1,8 +1,7 @@
 //! Unit tests for ER snapshot orchestration behaviour.
 
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::{env, io};
+use std::env;
+use std::path::PathBuf;
 
 use cap_std::{ambient_authority, fs::Dir};
 use rstest::rstest;
@@ -13,6 +12,7 @@ use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryErr
 use crate::er_snapshots::{
     MermaidRenderer, SnapshotGenerationError, SnapshotRequest, generate_from_repository,
 };
+use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
 
 #[derive(Debug, Clone)]
 struct FixtureRepository {
@@ -123,6 +123,41 @@ fn generate_from_repository_is_deterministic_across_reruns() {
     cleanup(output_dir);
 }
 
+#[rstest]
+fn generate_from_repository_removes_stale_svg_when_render_is_disabled() {
+    let output_dir = temp_output_dir("stale-svg");
+    let stale_svg_path = output_dir.join("schema-baseline.svg");
+    write_file(
+        &stale_svg_path,
+        "<svg><text>stale</text></svg>\n".as_bytes(),
+    )
+    .expect("write stale svg fixture");
+
+    let repository = FixtureRepository {
+        diagram: fixture_diagram(),
+    };
+    let renderer = FixtureRenderer { fail: false };
+    let request = SnapshotRequest {
+        output_dir: output_dir.clone(),
+        render_svg: false,
+    };
+
+    let result = generate_from_repository(&repository, &renderer, &request)
+        .expect("snapshot generation should succeed");
+
+    assert!(
+        path_exists(&result.mermaid_path),
+        "Mermaid snapshot should exist after generation"
+    );
+    assert_eq!(None, result.svg_path, "svg path should be omitted");
+    assert!(
+        !path_exists(&stale_svg_path),
+        "stale svg should be removed when svg rendering is disabled"
+    );
+
+    cleanup(output_dir);
+}
+
 fn fixture_diagram() -> SchemaDiagram {
     SchemaDiagram {
         tables: vec![
@@ -174,47 +209,4 @@ fn temp_output_dir(prefix: &str) -> PathBuf {
 
 fn cleanup(path: PathBuf) {
     let _cleanup_result = remove_directory(path.as_path());
-}
-
-fn read_file_to_string(path: &Path) -> io::Result<String> {
-    let (parent, file_name) = parent_and_file_name(path)?;
-    let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
-    directory.read_to_string(Path::new(&file_name))
-}
-
-fn write_file(path: &Path, contents: &[u8]) -> io::Result<()> {
-    let (parent, file_name) = parent_and_file_name(path)?;
-    let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
-    directory.write(Path::new(&file_name), contents)
-}
-
-fn path_exists(path: &Path) -> bool {
-    let Ok((parent, file_name)) = parent_and_file_name(path) else {
-        return false;
-    };
-    let Ok(directory) = Dir::open_ambient_dir(parent, ambient_authority()) else {
-        return false;
-    };
-    directory.exists(Path::new(&file_name))
-}
-
-fn remove_directory(path: &Path) -> io::Result<()> {
-    let (parent, directory_name) = parent_and_file_name(path)?;
-    let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
-    match directory.remove_dir_all(Path::new(&directory_name)) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
-}
-
-fn parent_and_file_name(path: &Path) -> io::Result<(&Path, OsString)> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path.file_name().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "path must include a file or directory name",
-        )
-    })?;
-    Ok((parent, file_name.to_os_string()))
 }

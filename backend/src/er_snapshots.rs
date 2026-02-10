@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use cap_std::{ambient_authority, fs::Dir};
+use diesel::Connection;
+use diesel::pg::PgConnection;
+use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
-use postgres::{Client, NoTls};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -234,27 +236,18 @@ fn generate_from_diagram(
     write_snapshots_atomically(mermaid.as_str(), renderer, request)
 }
 
-/// Apply all migration `up.sql` scripts in lexicographic directory order.
+/// Apply all pending Diesel file-based migrations for the given database.
 pub fn apply_migrations(
     database_url: &str,
     migrations_dir: &Path,
 ) -> Result<(), SnapshotGenerationError> {
-    let migrations_root = Dir::open_ambient_dir(migrations_dir, ambient_authority())
-        .map_err(|error| SnapshotGenerationError::io(migrations_dir, error))?;
-    let migration_files = migration_up_sql_files(&migrations_root, migrations_dir)?;
-    let mut client = Client::connect(database_url, NoTls)
+    let mut connection = PgConnection::establish(database_url)
         .map_err(|error| SnapshotGenerationError::migration(migrations_dir, error))?;
-
-    for migration_relative_path in migration_files {
-        let migration_path = migrations_dir.join(&migration_relative_path);
-        let sql = migrations_root
-            .read_to_string(&migration_relative_path)
-            .map_err(|error| SnapshotGenerationError::io(&migration_path, error))?;
-        client
-            .batch_execute(sql.as_str())
-            .map_err(|error| SnapshotGenerationError::migration(&migration_path, error))?;
-    }
-
+    let migrations = FileBasedMigrations::from_path(migrations_dir)
+        .map_err(|error| SnapshotGenerationError::migration(migrations_dir, error))?;
+    connection
+        .run_pending_migrations(migrations)
+        .map_err(|error| SnapshotGenerationError::migration(migrations_dir, error))?;
     Ok(())
 }
 
@@ -305,6 +298,8 @@ fn write_snapshots_atomically(
                 Path::new(SVG_FILENAME),
                 &request.output_dir,
             )?;
+        } else {
+            remove_file_if_exists(&output_dir, Path::new(SVG_FILENAME), &request.output_dir)?;
         }
 
         Ok(SnapshotArtifacts {
@@ -335,35 +330,16 @@ fn replace_file(
         .map_err(|error| SnapshotGenerationError::io(output_dir.join(to), error))
 }
 
-fn migration_up_sql_files(
-    migrations_root: &Dir,
-    migrations_dir: &Path,
-) -> Result<Vec<PathBuf>, SnapshotGenerationError> {
-    let mut files = Vec::new();
-    let entries = migrations_root
-        .entries()
-        .map_err(|error| SnapshotGenerationError::io(migrations_dir, error))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|error| SnapshotGenerationError::io(migrations_dir, error))?;
-        let migration_name = entry.file_name();
-        let migration_relative = PathBuf::from(&migration_name);
-        let entry_path = migrations_dir.join(&migration_relative);
-        let file_type = entry
-            .file_type()
-            .map_err(|error| SnapshotGenerationError::io(&entry_path, error))?;
-        if !file_type.is_dir() {
-            continue;
-        }
-
-        let up_sql = migration_relative.join("up.sql");
-        if migrations_root.is_file(&up_sql) {
-            files.push(up_sql);
-        }
+fn remove_file_if_exists(
+    directory: &Dir,
+    path: &Path,
+    output_dir: &Path,
+) -> Result<(), SnapshotGenerationError> {
+    match directory.remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(SnapshotGenerationError::io(output_dir.join(path), error)),
     }
-
-    files.sort();
-    Ok(files)
 }
 
 fn migrations_directory() -> PathBuf {

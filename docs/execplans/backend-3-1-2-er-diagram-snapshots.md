@@ -78,8 +78,8 @@ Success is observable when:
   Mitigation: enforce explicit ordering in SQL queries and deterministic
   in-memory sorting before rendering.
 
-- Risk: behavioural tests that invoke rendering binaries can be flaky in CI if
-  browser prerequisites are missing.
+- Risk: behavioural tests that invoke rendering binaries can be flaky in
+  continuous integration (CI) if browser prerequisites are missing.
   Severity: medium
   Likelihood: medium
   Mitigation: separate renderer integration from core schema extraction,
@@ -94,7 +94,8 @@ Success is observable when:
 - [x] (2026-02-09 21:21Z) Implement outbound Postgres schema snapshot adapter
       behind `SchemaSnapshotRepository`.
 - [x] (2026-02-09 21:23Z) Implement inbound snapshot generator and
-      `er-snapshots` CLI, plus generated artefacts in `docs/diagrams/er/`.
+      `er-snapshots` command-line interface (CLI), plus generated artefacts in
+      `docs/diagrams/er/`.
 - [x] (2026-02-09 21:29Z) Add and pass `rstest` unit tests for rendering and
       snapshot orchestration, including failure handling and deterministic
       reruns.
@@ -162,7 +163,8 @@ Success is observable when:
   - Outbound Postgres adapter in
     `backend/src/outbound/persistence/postgres_schema_snapshot_repository.rs`
   - Snapshot orchestration in `backend/src/er_snapshots.rs`
-  - CLI entry point in `backend/src/bin/er_snapshots.rs`
+  - Command-line interface (CLI) entry point in
+    `backend/src/bin/er_snapshots.rs`
 - Test coverage:
   - `rstest` unit tests in `backend/src/domain/er_diagram.rs` and
     `backend/src/er_snapshots_tests.rs`
@@ -344,7 +346,7 @@ Acceptance is satisfied when all conditions below hold:
 - All steps in this plan are restartable from the repository root after fixing
   the failure cause.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Expected implementation artefacts:
 
