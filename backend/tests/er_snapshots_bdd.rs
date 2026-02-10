@@ -90,6 +90,15 @@ fn run_snapshot_generation(
     generate_from_database_url(database_url, renderer, &request)
 }
 
+fn skip_if_needed(world: &SnapshotWorld) -> bool {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        true
+    } else {
+        false
+    }
+}
+
 #[fixture]
 fn world() -> SnapshotWorld {
     let cluster = match shared_cluster() {
@@ -124,8 +133,7 @@ fn a_migration_backed_temporary_database(world: &mut SnapshotWorld) {
 
 #[given("an empty ER snapshot output directory")]
 fn an_empty_er_snapshot_output_directory(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -138,8 +146,7 @@ fn an_empty_er_snapshot_output_directory(world: &mut SnapshotWorld) {
 
 #[when("ER snapshots are generated")]
 fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -149,8 +156,7 @@ fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
 
 #[when("ER snapshots are generated with a missing renderer command")]
 fn er_snapshots_are_generated_with_a_missing_renderer_command(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -161,8 +167,7 @@ fn er_snapshots_are_generated_with_a_missing_renderer_command(world: &mut Snapsh
 
 #[when("ER snapshots are generated twice")]
 fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -180,8 +185,7 @@ fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
 
 #[then("Mermaid and SVG snapshot files are created")]
 fn mermaid_and_svg_snapshot_files_are_created(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -201,8 +205,7 @@ fn mermaid_and_svg_snapshot_files_are_created(world: &mut SnapshotWorld) {
 
 #[then("generation fails with a renderer error")]
 fn generation_fails_with_a_renderer_error(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -220,8 +223,7 @@ fn generation_fails_with_a_renderer_error(world: &mut SnapshotWorld) {
 
 #[then("no snapshot files are written")]
 fn no_snapshot_files_are_written(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 
@@ -235,8 +237,7 @@ fn no_snapshot_files_are_written(world: &mut SnapshotWorld) {
 
 #[then("the Mermaid snapshot content is identical across runs")]
 fn the_mermaid_snapshot_content_is_identical_across_runs(world: &mut SnapshotWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if skip_if_needed(world) {
         return;
     }
 

@@ -220,7 +220,7 @@ yet).
    columns, foreign-key relationships) and deterministic Mermaid rendering.
 2. Add a new domain port trait for schema introspection from a live database.
 3. Add domain errors for extraction and snapshot generation failures, with
-   explicit variants for connection, introspection, render, and file output
+   explicit variants for connection, introspection, rendering, and file output
    failures.
 
 Go/no-go gate for Stage A: unit tests for pure rendering logic pass and compile

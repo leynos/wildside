@@ -276,6 +276,32 @@ fn generate_from_diagram(
 }
 
 /// Apply all pending Diesel file-based migrations for the given database.
+///
+/// This delegates migration execution to Diesel's `MigrationHarness` and
+/// `FileBasedMigrations`, rather than manually executing SQL files, so the
+/// runtime behaviour stays aligned with the repository's Diesel migration flow.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// use backend::er_snapshots::apply_migrations;
+///
+/// let database_url = "postgres://postgres:postgres@localhost:5432/wildside";
+/// let migrations_dir = Path::new("backend/migrations");
+///
+/// // backend/migrations/
+/// // └── 2026-02-06-012424_schema_baseline_catalogue_descriptor_user_state/
+/// //     ├── up.sql
+/// //     └── down.sql
+/// apply_migrations(database_url, migrations_dir)?;
+/// # Ok::<(), backend::er_snapshots::SnapshotGenerationError>(())
+/// ```
+///
+/// Returns `Ok(())` when every pending migration is applied successfully.
+/// Returns `Err(SnapshotGenerationError::Migration { .. })` when connecting to
+/// the database, loading migration files, or applying pending migrations fails.
 pub fn apply_migrations(
     database_url: &str,
     migrations_dir: &Path,

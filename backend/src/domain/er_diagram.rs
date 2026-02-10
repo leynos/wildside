@@ -17,7 +17,7 @@ impl SchemaDiagram {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use backend::domain::er_diagram::{SchemaDiagram, SchemaTable};
     ///
     /// let diagram = SchemaDiagram {
