@@ -89,8 +89,8 @@ lint: workspace-sync
 lint-rust:
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
 	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
-	whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-	whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
