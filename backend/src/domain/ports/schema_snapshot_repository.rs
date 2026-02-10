@@ -20,6 +20,20 @@ define_port_error! {
 #[cfg_attr(test, mockall::automock)]
 pub trait SchemaSnapshotRepository: Send + Sync {
     /// Load an ER-focused schema snapshot from the backing store.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::ports::{FixtureSchemaSnapshotRepository, SchemaSnapshotRepository};
+    ///
+    /// let repository = FixtureSchemaSnapshotRepository;
+    /// let diagram = repository
+    ///     .load_schema_diagram()
+    ///     .expect("fixture repository should always return a diagram");
+    ///
+    /// assert!(diagram.tables.is_empty());
+    /// assert!(diagram.relationships.is_empty());
+    /// ```
     fn load_schema_diagram(&self) -> Result<SchemaDiagram, SchemaSnapshotRepositoryError>;
 }
 

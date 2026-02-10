@@ -1,5 +1,5 @@
 #![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
-#![cfg_attr(not(any(test, doctest)), forbid(clippy::expect_used))]
+#![cfg_attr(not(any(test, doctest)), deny(clippy::expect_used))]
 //! Generate ER diagram snapshots from migration-backed schema metadata.
 //!
 //! # Examples
@@ -16,14 +16,14 @@ use backend::er_snapshots::{CommandMermaidRenderer, SnapshotRequest, generate_fr
 #[derive(Debug, Clone)]
 struct CliArgs {
     output_dir: PathBuf,
-    render_svg: bool,
+    should_render_svg: bool,
 }
 
 impl Default for CliArgs {
     fn default() -> Self {
         Self {
             output_dir: PathBuf::from("docs/diagrams/er"),
-            render_svg: true,
+            should_render_svg: true,
         }
     }
 }
@@ -39,7 +39,7 @@ impl CliArgs {
                     parsed.output_dir = parse_output_dir_value(&mut args)?;
                 }
                 "--skip-svg" => {
-                    parsed.render_svg = false;
+                    parsed.should_render_svg = false;
                 }
                 "--help" | "-h" => {
                     print_help();
@@ -82,7 +82,7 @@ fn main() -> io::Result<()> {
     let parsed = CliArgs::parse(env::args().skip(1))?;
     let request = SnapshotRequest {
         output_dir: parsed.output_dir,
-        render_svg: parsed.render_svg,
+        should_render_svg: parsed.should_render_svg,
     };
     let renderer = CommandMermaidRenderer::default();
 

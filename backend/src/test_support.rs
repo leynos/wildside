@@ -17,6 +17,19 @@ pub mod cap_fs {
     use cap_std::{ambient_authority, fs::Dir};
 
     /// Read a UTF-8 text file through `cap_std`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use backend::test_support::cap_fs::{read_file_to_string, write_file};
+    ///
+    /// let path = std::env::temp_dir().join("cap-fs-read-example.txt");
+    /// write_file(&path, b"hello\n")?;
+    ///
+    /// let content = read_file_to_string(&path)?;
+    /// assert_eq!(content, "hello\n");
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     pub fn read_file_to_string(path: &Path) -> io::Result<String> {
         let (parent, file_name) = parent_and_file_name(path)?;
         let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
@@ -24,6 +37,17 @@ pub mod cap_fs {
     }
 
     /// Write bytes to a file through `cap_std`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use backend::test_support::cap_fs::{read_file_to_string, write_file};
+    ///
+    /// let path = std::env::temp_dir().join("cap-fs-write-example.txt");
+    /// write_file(&path, b"snapshot\n")?;
+    /// assert_eq!(read_file_to_string(&path)?, "snapshot\n");
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     pub fn write_file(path: &Path, contents: &[u8]) -> io::Result<()> {
         let (parent, file_name) = parent_and_file_name(path)?;
         let directory = Dir::open_ambient_dir(parent, ambient_authority())?;
@@ -31,6 +55,16 @@ pub mod cap_fs {
     }
 
     /// Return true when `path` exists, false when it does not.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use backend::test_support::cap_fs::{path_exists, write_file};
+    ///
+    /// let path = std::env::temp_dir().join("cap-fs-exists-example.txt");
+    /// write_file(&path, b"exists\n")?;
+    /// assert!(path_exists(&path));
+    /// ```
     pub fn path_exists(path: &Path) -> bool {
         let Ok((parent, file_name)) = parent_and_file_name(path) else {
             return false;
@@ -42,6 +76,21 @@ pub mod cap_fs {
     }
 
     /// Remove a directory tree, treating a missing path as success.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use backend::test_support::cap_fs::{path_exists, remove_directory, write_file};
+    ///
+    /// let directory = std::env::temp_dir().join("cap-fs-remove-example");
+    /// let file = directory.join("entry.txt");
+    /// write_file(&file, b"cleanup\n")?;
+    /// assert!(path_exists(&file));
+    ///
+    /// remove_directory(&directory)?;
+    /// assert!(!path_exists(&file));
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     pub fn remove_directory(path: &Path) -> io::Result<()> {
         let (parent, directory_name) = parent_and_file_name(path)?;
         let directory = Dir::open_ambient_dir(parent, ambient_authority())?;

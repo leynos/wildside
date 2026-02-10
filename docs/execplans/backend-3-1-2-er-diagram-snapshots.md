@@ -83,7 +83,7 @@ Success is observable when:
   Severity: medium
   Likelihood: medium
   Mitigation: separate renderer integration from core schema extraction,
-  support a no-render mode for logic tests, and run full pipeline tests with
+  support a no-rendering mode for logic tests, and run full pipeline tests with
   current workspace Mermaid tooling.
 
 ## Progress
@@ -208,7 +208,7 @@ Key term definitions used in this ExecPlan:
 - ER snapshot: a version-controlled diagram artefact generated from the live
   schema produced by Diesel migrations.
 - Migration-backed schema: a temporary Postgres database created from current
-  migrations, not from hand-written schema files.
+  migrations, not from handwritten schema files.
 - Deterministic output: identical output bytes for identical schema input.
 
 ## Plan of Work

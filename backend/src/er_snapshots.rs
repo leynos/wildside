@@ -3,23 +3,20 @@
 //! This module orchestrates schema introspection, Mermaid rendering, and
 //! atomic snapshot writes for traceable documentation artefacts.
 
-use std::ffi::OsString;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-
+use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
+use crate::domain::render_mermaid_er_diagram;
+use crate::outbound::persistence::PostgresSchemaSnapshotRepository;
 use cap_std::{ambient_authority, fs::Dir};
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
+use std::ffi::OsString;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use thiserror::Error;
 use uuid::Uuid;
-
-use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
-use crate::domain::render_mermaid_er_diagram;
-use crate::outbound::persistence::PostgresSchemaSnapshotRepository;
-
 const MERMAID_FILENAME: &str = "schema-baseline.mmd";
 const SVG_FILENAME: &str = "schema-baseline.svg";
 const MERMAID_HEADER: &str = "%% Generated from backend migrations. Do not edit manually.\n";
@@ -28,14 +25,13 @@ const MERMAID_HEADER: &str = "%% Generated from backend migrations. Do not edit 
 #[derive(Debug, Clone)]
 pub struct SnapshotRequest {
     pub output_dir: PathBuf,
-    pub render_svg: bool,
+    pub should_render_svg: bool,
 }
-
 impl Default for SnapshotRequest {
     fn default() -> Self {
         Self {
             output_dir: PathBuf::from("docs/diagrams/er"),
-            render_svg: true,
+            should_render_svg: true,
         }
     }
 }
@@ -182,6 +178,16 @@ impl MermaidRenderer for CommandMermaidRenderer {
 }
 
 /// Generate snapshots from a migration-backed embedded PostgreSQL instance.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::er_snapshots::{CommandMermaidRenderer, SnapshotRequest, generate_from_migrations};
+/// let artifacts =
+///     generate_from_migrations(&CommandMermaidRenderer::default(), &SnapshotRequest::default())?;
+/// assert!(artifacts.mermaid_path.ends_with("schema-baseline.mmd"));
+/// # Ok::<(), backend::er_snapshots::SnapshotGenerationError>(())
+/// ```
 pub fn generate_from_migrations(
     renderer: &dyn MermaidRenderer,
     request: &SnapshotRequest,
@@ -208,6 +214,21 @@ pub fn generate_from_migrations(
 }
 
 /// Generate snapshots from an already-migrated database URL.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::er_snapshots::{
+///     CommandMermaidRenderer, SnapshotRequest, generate_from_database_url
+/// };
+/// let artifacts = generate_from_database_url(
+///     "postgres://postgres:postgres@localhost/example",
+///     &CommandMermaidRenderer::default(),
+///     &SnapshotRequest::default(),
+/// )?;
+/// assert!(artifacts.mermaid_path.ends_with("schema-baseline.mmd"));
+/// # Ok::<(), backend::er_snapshots::SnapshotGenerationError>(())
+/// ```
 pub fn generate_from_database_url(
     database_url: &str,
     renderer: &dyn MermaidRenderer,
@@ -218,6 +239,24 @@ pub fn generate_from_database_url(
 }
 
 /// Generate snapshots from any port implementation.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::domain::ports::FixtureSchemaSnapshotRepository;
+/// use backend::er_snapshots::{
+///     CommandMermaidRenderer, SnapshotRequest, generate_from_repository
+/// };
+/// let request = SnapshotRequest { output_dir: std::env::temp_dir().join("example-er-snapshots"),
+///     should_render_svg: false };
+/// let artifacts = generate_from_repository(
+///     &FixtureSchemaSnapshotRepository,
+///     &CommandMermaidRenderer::default(),
+///     &request,
+/// )?;
+/// assert!(artifacts.svg_path.is_none());
+/// # Ok::<(), backend::er_snapshots::SnapshotGenerationError>(())
+/// ```
 pub fn generate_from_repository(
     repository: &dyn SchemaSnapshotRepository,
     renderer: &dyn MermaidRenderer,
@@ -278,7 +317,7 @@ fn write_snapshots_atomically(
             .write(&staged_mermaid_relative, mermaid.as_bytes())
             .map_err(|error| SnapshotGenerationError::io(&staged_mermaid, error))?;
 
-        let svg_path = if request.render_svg {
+        let svg_path = if request.should_render_svg {
             renderer.render_svg(&staged_mermaid, &staged_svg)?;
             Some(final_svg.clone())
         } else {
@@ -291,7 +330,7 @@ fn write_snapshots_atomically(
             Path::new(MERMAID_FILENAME),
             &request.output_dir,
         )?;
-        if request.render_svg {
+        if request.should_render_svg {
             replace_file(
                 &output_dir,
                 staged_svg_relative.as_path(),

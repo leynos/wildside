@@ -4,7 +4,7 @@ use std::env;
 use std::path::PathBuf;
 
 use cap_std::{ambient_authority, fs::Dir};
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use uuid::Uuid;
 
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
@@ -27,7 +27,7 @@ impl SchemaSnapshotRepository for FixtureRepository {
 
 #[derive(Debug, Clone)]
 struct FixtureRenderer {
-    fail: bool,
+    should_fail: bool,
 }
 
 impl MermaidRenderer for FixtureRenderer {
@@ -36,7 +36,7 @@ impl MermaidRenderer for FixtureRenderer {
         _input_path: &std::path::Path,
         output_path: &std::path::Path,
     ) -> Result<(), SnapshotGenerationError> {
-        if self.fail {
+        if self.should_fail {
             return Err(SnapshotGenerationError::RendererFailed {
                 command: "fixture-renderer".to_owned(),
                 status: Some(1),
@@ -50,19 +50,35 @@ impl MermaidRenderer for FixtureRenderer {
     }
 }
 
-#[rstest]
-fn generate_from_repository_writes_mermaid_and_svg() {
-    let output_dir = temp_output_dir("writes");
-    let repository = FixtureRepository {
+#[fixture]
+fn repository() -> FixtureRepository {
+    FixtureRepository {
         diagram: fixture_diagram(),
-    };
-    let renderer = FixtureRenderer { fail: false };
+    }
+}
+
+#[fixture]
+fn successful_renderer() -> FixtureRenderer {
+    FixtureRenderer { should_fail: false }
+}
+
+#[fixture]
+fn failing_renderer() -> FixtureRenderer {
+    FixtureRenderer { should_fail: true }
+}
+
+#[rstest]
+fn generate_from_repository_writes_mermaid_and_svg(
+    repository: FixtureRepository,
+    successful_renderer: FixtureRenderer,
+) {
+    let output_dir = temp_output_dir("writes");
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
-        render_svg: true,
+        should_render_svg: true,
     };
 
-    let result = generate_from_repository(&repository, &renderer, &request)
+    let result = generate_from_repository(&repository, &successful_renderer, &request)
         .expect("snapshot generation should succeed");
     let mermaid = read_file_to_string(&result.mermaid_path).expect("read mermaid snapshot");
     let svg = read_file_to_string(result.svg_path.as_ref().expect("svg path")).expect("read svg");
@@ -74,18 +90,17 @@ fn generate_from_repository_writes_mermaid_and_svg() {
 }
 
 #[rstest]
-fn generate_from_repository_keeps_output_clean_when_renderer_fails() {
+fn generate_from_repository_keeps_output_clean_when_renderer_fails(
+    repository: FixtureRepository,
+    failing_renderer: FixtureRenderer,
+) {
     let output_dir = temp_output_dir("renderer-fails");
-    let repository = FixtureRepository {
-        diagram: fixture_diagram(),
-    };
-    let renderer = FixtureRenderer { fail: true };
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
-        render_svg: true,
+        should_render_svg: true,
     };
 
-    let result = generate_from_repository(&repository, &renderer, &request);
+    let result = generate_from_repository(&repository, &failing_renderer, &request);
     assert!(matches!(
         result,
         Err(SnapshotGenerationError::RendererFailed { .. })
@@ -100,22 +115,21 @@ fn generate_from_repository_keeps_output_clean_when_renderer_fails() {
 }
 
 #[rstest]
-fn generate_from_repository_is_deterministic_across_reruns() {
+fn generate_from_repository_is_deterministic_across_reruns(
+    repository: FixtureRepository,
+    successful_renderer: FixtureRenderer,
+) {
     let output_dir = temp_output_dir("deterministic");
-    let repository = FixtureRepository {
-        diagram: fixture_diagram(),
-    };
-    let renderer = FixtureRenderer { fail: false };
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
-        render_svg: false,
+        should_render_svg: false,
     };
 
-    let first = generate_from_repository(&repository, &renderer, &request)
+    let first = generate_from_repository(&repository, &successful_renderer, &request)
         .expect("first generation should succeed");
     let first_mermaid = read_file_to_string(&first.mermaid_path).expect("read first snapshot");
 
-    let second = generate_from_repository(&repository, &renderer, &request)
+    let second = generate_from_repository(&repository, &successful_renderer, &request)
         .expect("second generation should succeed");
     let second_mermaid = read_file_to_string(&second.mermaid_path).expect("read second snapshot");
 
@@ -124,7 +138,10 @@ fn generate_from_repository_is_deterministic_across_reruns() {
 }
 
 #[rstest]
-fn generate_from_repository_removes_stale_svg_when_render_is_disabled() {
+fn generate_from_repository_removes_stale_svg_when_render_is_disabled(
+    repository: FixtureRepository,
+    successful_renderer: FixtureRenderer,
+) {
     let output_dir = temp_output_dir("stale-svg");
     let stale_svg_path = output_dir.join("schema-baseline.svg");
     write_file(
@@ -133,16 +150,12 @@ fn generate_from_repository_removes_stale_svg_when_render_is_disabled() {
     )
     .expect("write stale svg fixture");
 
-    let repository = FixtureRepository {
-        diagram: fixture_diagram(),
-    };
-    let renderer = FixtureRenderer { fail: false };
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
-        render_svg: false,
+        should_render_svg: false,
     };
 
-    let result = generate_from_repository(&repository, &renderer, &request)
+    let result = generate_from_repository(&repository, &successful_renderer, &request)
         .expect("snapshot generation should succeed");
 
     assert!(

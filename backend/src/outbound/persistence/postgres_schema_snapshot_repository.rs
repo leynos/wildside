@@ -15,6 +15,17 @@ pub struct PostgresSchemaSnapshotRepository {
 
 impl PostgresSchemaSnapshotRepository {
     /// Construct a repository from a PostgreSQL connection URL.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::outbound::persistence::PostgresSchemaSnapshotRepository;
+    ///
+    /// let repository =
+    ///     PostgresSchemaSnapshotRepository::new("postgres://postgres:postgres@localhost/test");
+    ///
+    /// let _ = repository;
+    /// ```
     pub fn new(database_url: impl Into<String>) -> Self {
         Self {
             database_url: database_url.into(),

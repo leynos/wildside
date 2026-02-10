@@ -32,6 +32,11 @@
 //! - RouteAnnotations — aggregated notes and progress for a route.
 //! - ExampleDataSeeder — startup seeding orchestration for example data.
 //! - ExampleDataSeedOutcome — summary of seeding results and counts.
+//! - SchemaDiagram — normalized table/relationship graph used for ER snapshots.
+//! - SchemaTable — table descriptor used by `SchemaDiagram`.
+//! - SchemaColumn — typed column descriptor used by `SchemaTable`.
+//! - SchemaRelationship — foreign-key edge used by `SchemaDiagram`.
+//! - render_mermaid_er_diagram — deterministic Mermaid ER rendering function.
 
 pub mod annotations;
 pub mod auth;

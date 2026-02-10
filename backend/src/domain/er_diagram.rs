@@ -1,6 +1,6 @@
 //! Domain types for entity-relationship (ER) diagram snapshots.
 //!
-//! These types keep schema visualisation logic infrastructure-agnostic so
+//! These types keep schema visualization logic infrastructure-agnostic so
 //! adapters can provide schema metadata without leaking persistence details.
 
 use std::collections::BTreeMap;
@@ -14,6 +14,23 @@ pub struct SchemaDiagram {
 
 impl SchemaDiagram {
     /// Return a stable, deterministically ordered clone of the diagram.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use backend::domain::er_diagram::{SchemaDiagram, SchemaTable};
+    ///
+    /// let diagram = SchemaDiagram {
+    ///     tables: vec![
+    ///         SchemaTable { name: "z_table".to_owned(), columns: vec![] },
+    ///         SchemaTable { name: "a_table".to_owned(), columns: vec![] },
+    ///     ],
+    ///     relationships: vec![],
+    /// };
+    ///
+    /// let normalized = diagram.normalized();
+    /// assert_eq!(normalized.tables[0].name, "a_table");
+    /// ```
     pub fn normalized(&self) -> Self {
         let mut tables = self.tables.clone();
         for table in &mut tables {
@@ -73,6 +90,35 @@ pub struct SchemaRelationship {
 }
 
 /// Render a Mermaid ER diagram from a schema snapshot.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::domain::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
+/// use backend::domain::render_mermaid_er_diagram;
+///
+/// let diagram = SchemaDiagram {
+///     tables: vec![
+///         SchemaTable { name: "users".to_owned(), columns: vec![SchemaColumn {
+///             name: "id".to_owned(), data_type: "uuid".to_owned(),
+///             is_primary_key: true, is_nullable: false
+///         }]},
+///         SchemaTable { name: "routes".to_owned(), columns: vec![SchemaColumn {
+///             name: "user_id".to_owned(), data_type: "uuid".to_owned(),
+///             is_primary_key: false, is_nullable: false
+///         }]},
+///     ],
+///     relationships: vec![SchemaRelationship {
+///         referencing_table: "routes".to_owned(),
+///         referencing_column: "user_id".to_owned(),
+///         referenced_table: "users".to_owned(),
+///         referenced_column: "id".to_owned(),
+///         referencing_is_nullable: false,
+///     }],
+/// };
+///
+/// assert!(render_mermaid_er_diagram(&diagram).contains("Users ||--|{ Routes"));
+/// ```
 pub fn render_mermaid_er_diagram(diagram: &SchemaDiagram) -> String {
     let normalized = diagram.normalized();
     let entity_names = entity_names(&normalized.tables);
@@ -182,8 +228,19 @@ fn to_pascal_case(value: &str) -> String {
 fn sanitize_data_type(value: &str) -> String {
     let mut sanitized = String::with_capacity(value.len());
     let mut previous_was_underscore = false;
+    let mut characters = value.chars().peekable();
 
-    for character in value.chars() {
+    while let Some(character) = characters.next() {
+        if character == '[' && matches!(characters.peek(), Some(']')) {
+            characters.next();
+            if !previous_was_underscore && !sanitized.is_empty() {
+                sanitized.push('_');
+            }
+            sanitized.push_str("array");
+            previous_was_underscore = false;
+            continue;
+        }
+
         if character.is_ascii_alphanumeric() {
             sanitized.push(character.to_ascii_lowercase());
             previous_was_underscore = false;
@@ -313,5 +370,24 @@ mod tests {
 
         let rendered = render_mermaid_er_diagram(&diagram);
         assert!(rendered.contains("Routes ||--o{ RouteNotes"));
+    }
+
+    #[rstest]
+    fn render_mermaid_er_diagram_preserves_array_marker_in_column_types() {
+        let diagram = SchemaDiagram {
+            tables: vec![SchemaTable {
+                name: "routes".to_owned(),
+                columns: vec![SchemaColumn {
+                    name: "visited_stop_ids".to_owned(),
+                    data_type: "uuid[]".to_owned(),
+                    is_primary_key: false,
+                    is_nullable: false,
+                }],
+            }],
+            relationships: vec![],
+        };
+
+        let rendered = render_mermaid_er_diagram(&diagram);
+        assert!(rendered.contains("uuid_array visited_stop_ids"));
     }
 }

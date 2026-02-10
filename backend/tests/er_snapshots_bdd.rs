@@ -25,16 +25,51 @@ use support::{handle_cluster_setup_failure, provision_template_database};
 
 #[derive(Debug)]
 struct SnapshotWorld {
-    database: TemporaryDatabase,
+    database: Option<TemporaryDatabase>,
     output_dir: PathBuf,
     result: Option<Result<SnapshotArtifacts, SnapshotGenerationError>>,
     first_mermaid: Option<String>,
     second_mermaid: Option<String>,
+    setup_error: Option<String>,
+}
+
+impl SnapshotWorld {
+    fn ready(database: TemporaryDatabase, output_dir: PathBuf) -> Self {
+        Self {
+            database: Some(database),
+            output_dir,
+            result: None,
+            first_mermaid: None,
+            second_mermaid: None,
+            setup_error: None,
+        }
+    }
+
+    fn skipped(reason: String) -> Self {
+        let output_dir = std::env::temp_dir().join(format!(
+            "backend-er-snapshots-bdd-skip-{}",
+            Uuid::new_v4().simple()
+        ));
+        Self {
+            database: None,
+            output_dir,
+            result: None,
+            first_mermaid: None,
+            second_mermaid: None,
+            setup_error: Some(reason),
+        }
+    }
+
+    fn is_skipped(&self) -> bool {
+        self.setup_error.is_some()
+    }
 }
 
 impl Drop for SnapshotWorld {
     fn drop(&mut self) {
-        let _cleanup_result = remove_directory(&self.output_dir);
+        if path_exists(&self.output_dir) {
+            let _cleanup_result = remove_directory(&self.output_dir);
+        }
     }
 }
 
@@ -62,15 +97,15 @@ fn world() -> SnapshotWorld {
     let cluster = match shared_cluster() {
         Ok(cluster) => cluster,
         Err(reason) => {
-            let _ = handle_cluster_setup_failure::<SnapshotWorld>(reason);
-            panic!("embedded postgres cluster should be available");
+            let _: Option<()> = handle_cluster_setup_failure(reason.clone());
+            return SnapshotWorld::skipped(reason);
         }
     };
     let database = match provision_template_database(cluster).map_err(|error| error.to_string()) {
         Ok(database) => database,
         Err(reason) => {
-            let _ = handle_cluster_setup_failure::<SnapshotWorld>(reason);
-            panic!("template database should be provisioned");
+            let _: Option<()> = handle_cluster_setup_failure(reason.clone());
+            return SnapshotWorld::skipped(reason);
         }
     };
 
@@ -81,13 +116,7 @@ fn world() -> SnapshotWorld {
     Dir::create_ambient_dir_all(&output_dir, ambient_authority())
         .expect("create snapshot output dir");
 
-    SnapshotWorld {
-        database,
-        output_dir,
-        result: None,
-        first_mermaid: None,
-        second_mermaid: None,
-    }
+    SnapshotWorld::ready(database, output_dir)
 }
 
 #[given("a migration-backed temporary database")]
@@ -97,6 +126,11 @@ fn a_migration_backed_temporary_database(world: &mut SnapshotWorld) {
 
 #[given("an empty ER snapshot output directory")]
 fn an_empty_er_snapshot_output_directory(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     if path_exists(&world.output_dir) {
         remove_directory(&world.output_dir).expect("clear output dir");
     }
@@ -106,13 +140,23 @@ fn an_empty_er_snapshot_output_directory(world: &mut SnapshotWorld) {
 
 #[when("ER snapshots are generated")]
 fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let request = SnapshotRequest {
         output_dir: world.output_dir.clone(),
-        render_svg: true,
+        should_render_svg: true,
     };
     let renderer = FixtureRenderer;
+    let database_url = world
+        .database
+        .as_ref()
+        .expect("database should be available")
+        .url();
     world.result = Some(generate_from_database_url(
-        world.database.url(),
+        database_url,
         &renderer,
         &request,
     ));
@@ -120,14 +164,24 @@ fn er_snapshots_are_generated(world: &mut SnapshotWorld) {
 
 #[when("ER snapshots are generated with a missing renderer command")]
 fn er_snapshots_are_generated_with_a_missing_renderer_command(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let request = SnapshotRequest {
         output_dir: world.output_dir.clone(),
-        render_svg: true,
+        should_render_svg: true,
     };
     let renderer =
         CommandMermaidRenderer::new("command-that-does-not-exist", std::iter::empty::<&str>());
+    let database_url = world
+        .database
+        .as_ref()
+        .expect("database should be available")
+        .url();
     world.result = Some(generate_from_database_url(
-        world.database.url(),
+        database_url,
         &renderer,
         &request,
     ));
@@ -135,15 +189,25 @@ fn er_snapshots_are_generated_with_a_missing_renderer_command(world: &mut Snapsh
 
 #[when("ER snapshots are generated twice")]
 fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let request = SnapshotRequest {
         output_dir: world.output_dir.clone(),
-        render_svg: false,
+        should_render_svg: false,
     };
     let renderer = FixtureRenderer;
+    let database_url = world
+        .database
+        .as_ref()
+        .expect("database should be available")
+        .url();
 
-    let first = generate_from_database_url(world.database.url(), &renderer, &request)
+    let first = generate_from_database_url(database_url, &renderer, &request)
         .expect("first generation should succeed");
-    let second = generate_from_database_url(world.database.url(), &renderer, &request)
+    let second = generate_from_database_url(database_url, &renderer, &request)
         .expect("second generation should succeed");
 
     world.first_mermaid =
@@ -154,6 +218,11 @@ fn er_snapshots_are_generated_twice(world: &mut SnapshotWorld) {
 
 #[then("Mermaid and SVG snapshot files are created")]
 fn mermaid_and_svg_snapshot_files_are_created(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let result = world
         .result
         .take()
@@ -170,6 +239,11 @@ fn mermaid_and_svg_snapshot_files_are_created(world: &mut SnapshotWorld) {
 
 #[then("generation fails with a renderer error")]
 fn generation_fails_with_a_renderer_error(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let error = world
         .result
         .take()
@@ -184,6 +258,11 @@ fn generation_fails_with_a_renderer_error(world: &mut SnapshotWorld) {
 
 #[then("no snapshot files are written")]
 fn no_snapshot_files_are_written(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     assert!(!path_exists(
         world.output_dir.join("schema-baseline.mmd").as_path()
     ));
@@ -194,6 +273,11 @@ fn no_snapshot_files_are_written(world: &mut SnapshotWorld) {
 
 #[then("the Mermaid snapshot content is identical across runs")]
 fn the_mermaid_snapshot_content_is_identical_across_runs(world: &mut SnapshotWorld) {
+    if world.is_skipped() {
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        return;
+    }
+
     let first = world
         .first_mermaid
         .as_ref()
