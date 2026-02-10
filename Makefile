@@ -103,7 +103,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml; \
+	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
