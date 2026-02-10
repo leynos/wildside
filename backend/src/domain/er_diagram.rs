@@ -79,30 +79,37 @@ pub fn render_mermaid_er_diagram(diagram: &SchemaDiagram) -> String {
     let mut output = String::from("erDiagram\n");
 
     for table in &normalized.tables {
-        render_table(&mut output, table, &entity_names);
+        render_table_entity(&mut output, table, &entity_names);
     }
 
     for relationship in &normalized.relationships {
-        render_relationship(&mut output, relationship, &entity_names);
+        render_relationship_line(&mut output, relationship, &entity_names);
     }
 
     output
 }
 
-fn render_table(output: &mut String, table: &SchemaTable, entity_names: &BTreeMap<&str, String>) {
-    let entity_name = get_entity_name(table.name.as_str(), entity_names);
+fn render_table_entity(
+    output: &mut String,
+    table: &SchemaTable,
+    entity_names: &BTreeMap<&str, String>,
+) {
+    let entity_name = entity_names
+        .get(table.name.as_str())
+        .cloned()
+        .unwrap_or_else(|| to_pascal_case(table.name.as_str()));
     output.push_str("  ");
     output.push_str(entity_name.as_str());
     output.push_str(" {\n");
 
     for column in &table.columns {
-        render_column(output, column);
+        render_column_line(output, column);
     }
 
     output.push_str("  }\n\n");
 }
 
-fn render_column(output: &mut String, column: &SchemaColumn) {
+fn render_column_line(output: &mut String, column: &SchemaColumn) {
     output.push_str("    ");
     output.push_str(sanitize_data_type(column.data_type.as_str()).as_str());
     output.push(' ');
@@ -113,13 +120,19 @@ fn render_column(output: &mut String, column: &SchemaColumn) {
     output.push('\n');
 }
 
-fn render_relationship(
+fn render_relationship_line(
     output: &mut String,
     relationship: &SchemaRelationship,
     entity_names: &BTreeMap<&str, String>,
 ) {
-    let parent = get_entity_name(relationship.referenced_table.as_str(), entity_names);
-    let child = get_entity_name(relationship.referencing_table.as_str(), entity_names);
+    let parent = entity_names
+        .get(relationship.referenced_table.as_str())
+        .cloned()
+        .unwrap_or_else(|| to_pascal_case(relationship.referenced_table.as_str()));
+    let child = entity_names
+        .get(relationship.referencing_table.as_str())
+        .cloned()
+        .unwrap_or_else(|| to_pascal_case(relationship.referencing_table.as_str()));
     let cardinality = if relationship.referencing_is_nullable {
         "||--o{"
     } else {
@@ -137,13 +150,6 @@ fn render_relationship(
     output.push_str(" -> ");
     output.push_str(relationship.referenced_column.as_str());
     output.push_str("\"\n");
-}
-
-fn get_entity_name(table_name: &str, entity_names: &BTreeMap<&str, String>) -> String {
-    entity_names
-        .get(table_name)
-        .cloned()
-        .unwrap_or_else(|| to_pascal_case(table_name))
 }
 
 fn entity_names(tables: &[SchemaTable]) -> BTreeMap<&str, String> {
