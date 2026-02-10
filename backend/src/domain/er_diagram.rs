@@ -93,7 +93,7 @@ pub struct SchemaRelationship {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use backend::domain::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
 /// use backend::domain::render_mermaid_er_diagram;
 ///

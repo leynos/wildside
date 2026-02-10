@@ -64,6 +64,7 @@ pub mod cap_fs {
     /// let path = std::env::temp_dir().join("cap-fs-exists-example.txt");
     /// write_file(&path, b"exists\n")?;
     /// assert!(path_exists(&path));
+    /// # Ok::<(), std::io::Error>(())
     /// ```
     pub fn path_exists(path: &Path) -> bool {
         let Ok((parent, file_name)) = parent_and_file_name(path) else {
