@@ -279,8 +279,13 @@ fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
 
     let hero_image =
         serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
-    assert_eq!(hero_image["url"], "https://example.test/hero.jpg");
-    assert_eq!(hero_image["alt"], "Hero image");
+    assert_eq!(
+        hero_image,
+        json!({
+            "url": "https://example.test/hero.jpg",
+            "alt": "Hero image",
+        })
+    );
 }
 
 fn assert_preset_toggle_ids_stored(client: &mut Client) {
