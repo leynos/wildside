@@ -7,6 +7,13 @@ pub(super) fn validate_slug(
     value: String,
     field: &'static str,
 ) -> Result<String, CatalogueValidationError> {
+    let has_whitespace = value.trim() != value;
+    let is_empty = value.is_empty();
+
+    if has_whitespace || is_empty {
+        return Err(CatalogueValidationError::InvalidSlug { field });
+    }
+
     if !is_valid_slug(&value) {
         return Err(CatalogueValidationError::InvalidSlug { field });
     }
