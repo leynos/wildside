@@ -9,8 +9,6 @@ use super::*;
 use crate::domain::localization::{LocalizationMap, LocalizedStringSet};
 use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
-mod numeric_validations;
-
 #[fixture]
 fn localizations() -> LocalizationMap {
     let mut values = BTreeMap::new();
@@ -271,4 +269,129 @@ fn community_pick_accepts_optional_references() {
 
     assert!(pick.route_summary_id.is_none());
     assert!(pick.user_id.is_none());
+}
+
+#[rstest]
+#[case(-0.1)]
+#[case(5.1)]
+fn theme_rejects_out_of_range_rating(#[case] rating: f32) {
+    let result = Theme::new(ThemeDraft {
+        id: Uuid::new_v4(),
+        slug: "nature".to_owned(),
+        icon_key: icon_key(),
+        localizations: localizations(),
+        image: image(),
+        walk_count: 25,
+        distance_range_metres: [1_000, 6_000],
+        rating,
+    });
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::InvalidRating {
+            field: "theme.rating",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+fn theme_rejects_negative_walk_count() {
+    let result = Theme::new(ThemeDraft {
+        id: Uuid::new_v4(),
+        slug: "nature".to_owned(),
+        icon_key: icon_key(),
+        localizations: localizations(),
+        image: image(),
+        walk_count: -1,
+        distance_range_metres: [1_000, 6_000],
+        rating: 4.2,
+    });
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::NegativeValue {
+            field: "theme.walk_count",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+fn route_summary_rejects_negative_duration_seconds() {
+    let mut draft = route_summary_draft();
+    draft.duration_seconds = -1;
+    let result = RouteSummary::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::NegativeValue {
+            field: "route_summary.duration_seconds",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+#[case(-0.1)]
+#[case(5.1)]
+fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
+    let mut draft = route_summary_draft();
+    draft.rating = rating;
+    let result = RouteSummary::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::InvalidRating {
+            field: "route_summary.rating",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+#[case(-0.1)]
+#[case(5.1)]
+fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) {
+    let mut draft = community_pick_draft(None, None, "Trail Team");
+    draft.rating = rating;
+    let result = CommunityPick::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::InvalidRating {
+            field: "community_pick.rating",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+fn community_pick_rejects_negative_duration_seconds() {
+    let mut draft = community_pick_draft(None, None, "Trail Team");
+    draft.duration_seconds = -1;
+    let result = CommunityPick::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::NegativeValue {
+            field: "community_pick.duration_seconds",
+            ..
+        })
+    ));
+}
+
+#[rstest]
+fn community_pick_rejects_negative_saves() {
+    let mut draft = community_pick_draft(None, None, "Trail Team");
+    draft.saves = -1;
+    let result = CommunityPick::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::NegativeValue {
+            field: "community_pick.saves",
+            ..
+        })
+    ));
 }
