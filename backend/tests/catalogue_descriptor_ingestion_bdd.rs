@@ -223,12 +223,10 @@ fn assert_route_category_stored(client: &mut Client) {
     );
     let category_localizations = serde_json::from_str::<Value>(&route_category.get::<_, String>(2))
         .expect("route category localizations should parse");
-    assert_eq!(
-        category_localizations,
-        expected_localizations_json(
-            ("Scenic", "Scenic short", "Scenic description"),
-            ("Scenic FR", "Scenic FR court", "Scenic FR description"),
-        )
+    assert_localizations_json_shape(
+        &category_localizations,
+        ("Scenic", "Scenic short", "Scenic description"),
+        ("Scenic FR", "Scenic FR court", "Scenic FR description"),
     );
 }
 
@@ -243,12 +241,10 @@ fn assert_tag_stored(client: &mut Client) {
     assert_eq!(tag.get::<_, String>(1), "tag:family");
     let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
         .expect("tag localizations should parse");
-    assert_eq!(
-        tag_localizations,
-        expected_localizations_json(
-            ("Family", "Family short", "Family description"),
-            ("Family FR", "Family FR court", "Family FR description"),
-        )
+    assert_localizations_json_shape(
+        &tag_localizations,
+        ("Family", "Family short", "Family description"),
+        ("Family FR", "Family FR court", "Family FR description"),
     );
 }
 
@@ -261,31 +257,23 @@ fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
         .expect("route summary row should exist");
     let localizations =
         serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("localizations JSON");
-    assert_eq!(
-        localizations,
-        expected_localizations_json(
-            (
-                "Coastal loop",
-                "Coastal loop short",
-                "Coastal loop description"
-            ),
-            (
-                "Coastal loop FR",
-                "Coastal loop FR court",
-                "Coastal loop FR description",
-            ),
-        )
+    assert_localizations_json_shape(
+        &localizations,
+        (
+            "Coastal loop",
+            "Coastal loop short",
+            "Coastal loop description",
+        ),
+        (
+            "Coastal loop FR",
+            "Coastal loop FR court",
+            "Coastal loop FR description",
+        ),
     );
 
     let hero_image =
         serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
-    assert_eq!(
-        hero_image,
-        json!({
-            "url": "https://example.test/hero.jpg",
-            "alt": "Hero image",
-        })
-    );
+    assert_image_asset_json_shape(&hero_image, "https://example.test/hero.jpg", "Hero image");
 }
 
 fn assert_preset_toggle_ids_stored(client: &mut Client) {
@@ -301,21 +289,84 @@ fn assert_preset_toggle_ids_stored(client: &mut Client) {
 
 type LocalizedCopy<'a> = (&'a str, &'a str, &'a str);
 
-fn expected_localizations_json(en_gb: LocalizedCopy<'_>, fr_fr: LocalizedCopy<'_>) -> Value {
+fn assert_localizations_json_shape(
+    localizations: &Value,
+    en_gb: LocalizedCopy<'_>,
+    fr_fr: LocalizedCopy<'_>,
+) {
     let (en_name, en_short_label, en_description) = en_gb;
     let (fr_name, fr_short_label, fr_description) = fr_fr;
-    json!({
+
+    let expected = json!({
         "en-GB": {
             "name": en_name,
             "shortLabel": en_short_label,
-            "description": en_description
+            "description": en_description,
         },
         "fr-FR": {
             "name": fr_name,
             "shortLabel": fr_short_label,
-            "description": fr_description
-        }
-    })
+            "description": fr_description,
+        },
+    });
+    assert_eq!(localizations, &expected);
+    assert_localized_copy_for_locale(localizations, "en-GB", en_gb);
+    assert_localized_copy_for_locale(localizations, "fr-FR", fr_fr);
+}
+
+fn assert_localized_copy_for_locale(
+    localizations: &Value,
+    locale: &str,
+    expected_copy: LocalizedCopy<'_>,
+) {
+    let locale_json = localizations
+        .get(locale)
+        .expect("locale should exist")
+        .as_object()
+        .expect("locale value should be an object");
+    assert_eq!(locale_json.len(), 3);
+
+    let (name, short_label, description) = expected_copy;
+    assert_eq!(
+        locale_json
+            .get("name")
+            .expect("name key should exist")
+            .as_str(),
+        Some(name)
+    );
+    assert_eq!(
+        locale_json
+            .get("shortLabel")
+            .expect("shortLabel key should exist")
+            .as_str(),
+        Some(short_label)
+    );
+    assert_eq!(
+        locale_json
+            .get("description")
+            .expect("description key should exist")
+            .as_str(),
+        Some(description)
+    );
+}
+
+fn assert_image_asset_json_shape(image: &Value, expected_url: &str, expected_alt: &str) {
+    let image_json = image.as_object().expect("image value should be an object");
+    assert_eq!(image_json.len(), 2);
+    assert_eq!(
+        image_json
+            .get("url")
+            .expect("url key should exist")
+            .as_str(),
+        Some(expected_url)
+    );
+    assert_eq!(
+        image_json
+            .get("alt")
+            .expect("alt key should exist")
+            .as_str(),
+        Some(expected_alt)
+    );
 }
 
 macro_rules! define_drop_table_upsert_step {
@@ -487,27 +538,24 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
     assert_eq!(row.get::<_, Option<Uuid>>(1), None);
     let localizations =
         serde_json::from_str::<Value>(&row.get::<_, String>(2)).expect("edge localizations JSON");
-    assert_eq!(
-        localizations,
-        expected_localizations_json(
-            ("Edge pick", "Edge pick short", "Edge pick description"),
-            (
-                "Edge pick FR",
-                "Edge pick FR court",
-                "Edge pick FR description"
-            ),
+    assert_localizations_json_shape(
+        &localizations,
+        ("Edge pick", "Edge pick short", "Edge pick description"),
+        (
+            "Edge pick FR",
+            "Edge pick FR court",
+            "Edge pick FR description",
         ),
     );
     let curator_avatar =
         serde_json::from_str::<Value>(&row.get::<_, String>(3)).expect("curator avatar JSON");
-    assert_eq!(
-        curator_avatar,
-        json!({
-            "url": "https://example.test/avatar-edge.jpg",
-            "alt": "Curator avatar",
-        })
+    assert_image_asset_json_shape(
+        &curator_avatar,
+        "https://example.test/avatar-edge.jpg",
+        "Curator avatar",
     );
-    assert_eq!(row.get::<_, i32>(4), 17);
+    let saves = row.get::<_, i32>(4);
+    assert_eq!(saves, 17);
 }
 
 #[scenario(
