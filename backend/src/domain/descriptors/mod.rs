@@ -13,7 +13,6 @@ use super::localization::{LocalizationMap, LocalizationValidationError};
 use super::semantic_icon_identifier::{
     SemanticIconIdentifier, SemanticIconIdentifierValidationError,
 };
-use crate::domain::slug::is_valid_slug;
 
 #[cfg(test)]
 mod tests;
@@ -296,11 +295,25 @@ impl From<SafetyPreset> for SafetyPresetDraft {
 }
 
 fn validate_slug(value: String, field: &'static str) -> Result<String, DescriptorValidationError> {
-    if !is_valid_slug(&value) {
+    if has_whitespace_or_is_empty(&value) {
+        return Err(DescriptorValidationError::InvalidSlug { field });
+    }
+
+    if !contains_only_valid_slug_chars(&value) {
         return Err(DescriptorValidationError::InvalidSlug { field });
     }
 
     Ok(value)
+}
+
+fn has_whitespace_or_is_empty(value: &str) -> bool {
+    value.trim() != value || value.is_empty()
+}
+
+fn contains_only_valid_slug_chars(value: &str) -> bool {
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn ensure_non_empty_unique_toggle_ids(ids: &[Uuid]) -> Result<(), DescriptorValidationError> {
