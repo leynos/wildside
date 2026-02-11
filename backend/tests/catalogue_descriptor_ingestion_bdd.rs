@@ -1,5 +1,6 @@
 //! Behavioural tests for catalogue and descriptor domain type ingestion.
 
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{
@@ -167,7 +168,7 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
 
     assert_route_category_stored(&mut ctx.client);
     assert_tag_stored(&mut ctx.client);
-    assert_summary_hero_image_stored(&mut ctx.client);
+    assert_summary_localizations_and_hero_image_stored(&mut ctx.client);
     assert_preset_toggle_ids_stored(&mut ctx.client);
 }
 
@@ -207,18 +208,46 @@ fn assert_tag_stored(client: &mut Client) {
     let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
         .expect("tag localizations should parse");
     assert_eq!(tag_localizations["en-GB"]["name"], "Family");
+    assert_eq!(tag_localizations["en-GB"]["shortLabel"], "Family short");
+    assert_eq!(
+        tag_localizations["en-GB"]["description"],
+        "Family description"
+    );
     assert_eq!(tag_localizations["fr-FR"]["name"], "Family FR");
+    assert_eq!(tag_localizations["fr-FR"]["shortLabel"], "Family FR court");
+    assert_eq!(
+        tag_localizations["fr-FR"]["description"],
+        "Family FR description"
+    );
 }
 
-fn assert_summary_hero_image_stored(client: &mut Client) {
+fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
     let summary = client
         .query_one(
-            "SELECT hero_image::text FROM route_summaries WHERE id = $1",
+            "SELECT localizations::text, hero_image::text FROM route_summaries WHERE id = $1",
             &[&ROUTE_SUMMARY_ID],
         )
         .expect("route summary row should exist");
+    let localizations =
+        serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("localizations JSON");
+    assert_eq!(localizations["en-GB"]["name"], "Coastal loop");
+    assert_eq!(localizations["en-GB"]["shortLabel"], "Coastal loop short");
+    assert_eq!(
+        localizations["en-GB"]["description"],
+        "Coastal loop description"
+    );
+    assert_eq!(localizations["fr-FR"]["name"], "Coastal loop FR");
+    assert_eq!(
+        localizations["fr-FR"]["shortLabel"],
+        "Coastal loop FR court"
+    );
+    assert_eq!(
+        localizations["fr-FR"]["description"],
+        "Coastal loop FR description"
+    );
+
     let hero_image =
-        serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("hero image JSON");
+        serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
     assert_eq!(hero_image["url"], "https://example.test/hero.jpg");
     assert_eq!(hero_image["alt"], "Hero image");
 }
@@ -236,39 +265,29 @@ fn assert_preset_toggle_ids_stored(client: &mut Client) {
 
 #[when("the tags table is dropped and a tag upsert is attempted")]
 fn the_tags_table_is_dropped_and_a_tag_upsert_is_attempted(world: SharedContext) {
-    let (descriptor_repository, handle) = {
-        let mut ctx = world.lock().expect("context lock");
-        ctx.client
-            .batch_execute("DROP TABLE tags;")
-            .expect("tags table should drop");
-        (
-            ctx.descriptor_repository.clone(),
-            ctx.runtime.handle().clone(),
-        )
-    };
-
-    let tag = build_ingestion_snapshots().tag;
-
-    let result = handle.block_on(async {
-        descriptor_repository
-            .upsert_tags(std::slice::from_ref(&tag))
-            .await
-    });
+    let error = run_operation_with_dropped_table(
+        &world,
+        "DROP TABLE tags;",
+        |ctx| ctx.descriptor_repository.clone(),
+        |descriptor_repository| async move {
+            let tag = build_ingestion_snapshots().tag;
+            descriptor_repository
+                .upsert_tags(std::slice::from_ref(&tag))
+                .await
+        },
+    );
 
     let mut ctx = world.lock().expect("context lock");
-    ctx.last_descriptor_error = result.err();
+    ctx.last_descriptor_error = error;
 }
 
 #[then("the descriptor repository reports a query error")]
 fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
-    assert!(
-        matches!(
-            ctx.last_descriptor_error,
-            Some(DescriptorIngestionRepositoryError::Query { .. })
-        ),
-        "expected DescriptorIngestionRepositoryError::Query, got {:?}",
-        ctx.last_descriptor_error
+    assert_query_error(
+        &ctx.last_descriptor_error,
+        |error| matches!(error, DescriptorIngestionRepositoryError::Query { .. }),
+        "DescriptorIngestionRepositoryError::Query",
     );
 }
 
@@ -276,40 +295,68 @@ fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
 fn the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted(
     world: SharedContext,
 ) {
-    let (catalogue_repository, handle) = {
-        let mut ctx = world.lock().expect("context lock");
-        ctx.client
-            .batch_execute("DROP TABLE route_categories CASCADE;")
-            .expect("route_categories table should drop");
-        (
-            ctx.catalogue_repository.clone(),
-            ctx.runtime.handle().clone(),
-        )
-    };
-
-    let category = build_ingestion_snapshots().category;
-
-    let result = handle.block_on(async {
-        catalogue_repository
-            .upsert_route_categories(std::slice::from_ref(&category))
-            .await
-    });
+    let error = run_operation_with_dropped_table(
+        &world,
+        "DROP TABLE route_categories CASCADE;",
+        |ctx| ctx.catalogue_repository.clone(),
+        |catalogue_repository| async move {
+            let category = build_ingestion_snapshots().category;
+            catalogue_repository
+                .upsert_route_categories(std::slice::from_ref(&category))
+                .await
+        },
+    );
 
     let mut ctx = world.lock().expect("context lock");
-    ctx.last_catalogue_error = result.err();
+    ctx.last_catalogue_error = error;
 }
 
 #[then("the catalogue repository reports a query error")]
 fn the_catalogue_repository_reports_a_query_error(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
-    assert!(
-        matches!(
-            ctx.last_catalogue_error,
-            Some(CatalogueIngestionRepositoryError::Query { .. })
-        ),
-        "expected CatalogueIngestionRepositoryError::Query, got {:?}",
-        ctx.last_catalogue_error
+    assert_query_error(
+        &ctx.last_catalogue_error,
+        |error| matches!(error, CatalogueIngestionRepositoryError::Query { .. }),
+        "CatalogueIngestionRepositoryError::Query",
     );
+}
+
+fn assert_query_error<Error, IsQuery>(
+    error: &Option<Error>,
+    is_query_error: IsQuery,
+    expected_error_label: &str,
+) where
+    Error: std::fmt::Debug,
+    IsQuery: FnOnce(&Error) -> bool,
+{
+    assert!(
+        error.as_ref().is_some_and(is_query_error),
+        "expected {expected_error_label}, got {:?}",
+        error
+    );
+}
+
+fn run_operation_with_dropped_table<Repo, Error, SelectRepository, Op, Fut>(
+    world: &SharedContext,
+    drop_table_sql: &str,
+    select_repository: SelectRepository,
+    operation: Op,
+) -> Option<Error>
+where
+    SelectRepository: FnOnce(&TestContext) -> Repo,
+    Op: FnOnce(Repo) -> Fut,
+    Fut: Future<Output = Result<(), Error>>,
+{
+    let (repository, handle) = {
+        let mut ctx = world.lock().expect("context lock");
+        ctx.client
+            .batch_execute(drop_table_sql)
+            .expect("table should drop");
+        (select_repository(&ctx), ctx.runtime.handle().clone())
+    };
+
+    let result = handle.block_on(operation(repository));
+    result.err()
 }
 
 #[when("a community pick without route and user references is upserted")]
@@ -354,7 +401,7 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
     assert_eq!(row.get::<_, Option<Uuid>>(0), None);
     assert_eq!(row.get::<_, Option<Uuid>>(1), None);
     assert_eq!(row.get::<_, String>(2), "Edge pick");
-    assert_eq!(row.get::<_, i32>(3), 0);
+    assert_eq!(row.get::<_, i32>(3), 17);
 }
 
 #[scenario(

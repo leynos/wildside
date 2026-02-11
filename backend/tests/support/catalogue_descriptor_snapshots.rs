@@ -51,7 +51,7 @@ pub(crate) fn build_edge_community_pick() -> CommunityPick {
     draft.rating = 4.0;
     draft.distance_metres = 1_250;
     draft.duration_seconds = 2_100;
-    draft.saves = 0;
+    draft.saves = 17;
 
     build_community_pick(draft)
 }
