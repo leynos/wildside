@@ -11,7 +11,7 @@ use crate::domain::{Badge, SafetyPreset, SafetyToggle, Tag};
 use super::define_port_error;
 
 define_port_error! {
-    /// Errors raised when persisting descriptor ingestion payloads.
+    /// Errors raised when persisting descriptor ingestion records.
     pub enum DescriptorIngestionRepositoryError {
         /// Repository connection could not be established.
         Connection { message: String } =>
