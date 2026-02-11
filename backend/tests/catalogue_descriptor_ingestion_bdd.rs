@@ -179,9 +179,14 @@ fn assert_route_category_stored(client: &mut Client) {
             &[&ROUTE_CATEGORY_ID],
         )
         .expect("route category row should exist");
-    assert_eq!(route_category.get::<_, String>(0), "scenic");
-    assert_eq!(route_category.get::<_, String>(1), "category:scenic");
-    assert_eq!(route_category.get::<_, i32>(3), 42);
+    assert_eq!(
+        (
+            route_category.get::<_, String>(0),
+            route_category.get::<_, String>(1),
+            route_category.get::<_, i32>(3),
+        ),
+        ("scenic".to_owned(), "category:scenic".to_owned(), 42),
+    );
     let category_localizations = serde_json::from_str::<Value>(&route_category.get::<_, String>(2))
         .expect("route category localizations should parse");
     assert_eq!(
