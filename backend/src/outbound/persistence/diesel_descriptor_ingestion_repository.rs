@@ -3,10 +3,8 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use crate::domain::ports::{
-    DescriptorIngestionRepository, DescriptorIngestionRepositoryError, InterestThemeIngestion,
-};
-use crate::domain::{Badge, SafetyPreset, SafetyToggle, Tag};
+use crate::domain::ports::{DescriptorIngestionRepository, DescriptorIngestionRepositoryError};
+use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyToggle, Tag};
 use crate::impl_upsert_methods;
 
 use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
@@ -41,57 +39,57 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
     ))
 }
 
-impl From<&Tag> for NewTagRow {
-    fn from(record: &Tag) -> Self {
+impl<'a> From<&'a Tag> for NewTagRow<'a> {
+    fn from(record: &'a Tag) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.clone(),
-            icon_key: record.icon_key.as_ref().to_owned(),
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_ref(),
             localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl From<&Badge> for NewBadgeRow {
-    fn from(record: &Badge) -> Self {
+impl<'a> From<&'a Badge> for NewBadgeRow<'a> {
+    fn from(record: &'a Badge) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.clone(),
-            icon_key: record.icon_key.as_ref().to_owned(),
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_ref(),
             localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl From<&SafetyToggle> for NewSafetyToggleRow {
-    fn from(record: &SafetyToggle) -> Self {
+impl<'a> From<&'a SafetyToggle> for NewSafetyToggleRow<'a> {
+    fn from(record: &'a SafetyToggle) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.clone(),
-            icon_key: record.icon_key.as_ref().to_owned(),
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_ref(),
             localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl From<&SafetyPreset> for NewSafetyPresetRow {
-    fn from(record: &SafetyPreset) -> Self {
+impl<'a> From<&'a SafetyPreset> for NewSafetyPresetRow<'a> {
+    fn from(record: &'a SafetyPreset) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.clone(),
-            icon_key: record.icon_key.as_ref().to_owned(),
+            slug: record.slug.as_str(),
+            icon_key: record.icon_key.as_ref(),
             localizations: localization_map_to_json(&record.localizations),
-            safety_toggle_ids: record.safety_toggle_ids.clone(),
+            safety_toggle_ids: record.safety_toggle_ids.as_slice(),
         }
     }
 }
 
-impl From<&InterestThemeIngestion> for NewInterestThemeRow {
-    fn from(record: &InterestThemeIngestion) -> Self {
+impl<'a> From<&'a InterestTheme> for NewInterestThemeRow<'a> {
+    fn from(record: &'a InterestTheme) -> Self {
         Self {
             id: record.id,
-            name: record.name.clone(),
-            description: record.description.clone(),
+            name: record.name.as_str(),
+            description: record.description.as_deref(),
         }
     }
 }
@@ -106,28 +104,28 @@ impl_upsert_methods! {
             (
                 upsert_tags,
                 Tag,
-                NewTagRow,
+                NewTagRow<'_>,
                 tags,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_badges,
                 Badge,
-                NewBadgeRow,
+                NewBadgeRow<'_>,
                 badges,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_toggles,
                 SafetyToggle,
-                NewSafetyToggleRow,
+                NewSafetyToggleRow<'_>,
                 safety_toggles,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_presets,
                 SafetyPreset,
-                NewSafetyPresetRow,
+                NewSafetyPresetRow<'_>,
                 safety_presets,
                 [slug, icon_key, localizations, safety_toggle_ids]
             )
@@ -135,7 +133,7 @@ impl_upsert_methods! {
         keep: {
             async fn upsert_interest_themes(
                 &self,
-                records: &[InterestThemeIngestion],
+                records: &[InterestTheme],
             ) -> Result<(), DescriptorIngestionRepositoryError> {
                 use diesel_async::AsyncConnection as _;
                 use diesel_async::scoped_futures::ScopedFutureExt as _;
@@ -144,7 +142,7 @@ impl_upsert_methods! {
                     return Ok(());
                 }
                 let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-                let rows: Vec<NewInterestThemeRow> = records
+                let rows: Vec<NewInterestThemeRow<'_>> = records
                     .iter()
                     .map(NewInterestThemeRow::from)
                     .collect();

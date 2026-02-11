@@ -327,8 +327,8 @@ Stage D: test coverage expansion (unit + behavioural).
   - Unhappy paths: invalid slugs/icon keys/localization maps or invalid ranges.
   - Edge cases: optional fields (`slug`, `routeId`) and boundary numeric values.
 - Behavioural tests (`rstest-bdd`) with embedded PostgreSQL:
-  - Add `backend/tests/catalogue_descriptor_domain_types_bdd.rs`.
-  - Add `backend/tests/features/catalogue_descriptor_domain_types.feature`.
+  - Add `backend/tests/catalogue_descriptor_ingestion_bdd.rs`.
+  - Add `backend/tests/features/catalogue_descriptor_ingestion.feature`.
   - Reuse `backend/tests/support/pg_embed.rs` and
     `backend/tests/support/provision_template_database`.
   - Cover:
@@ -370,7 +370,7 @@ Run from repository root:
 
     cargo test -p backend domain:: -- --nocapture
 
-    cargo test -p backend --test catalogue_descriptor_domain_types_bdd -- --nocapture
+    cargo test -p backend --test catalogue_descriptor_ingestion_bdd -- --nocapture
 
 3. Run required quality gates with log capture:
 

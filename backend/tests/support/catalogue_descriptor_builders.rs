@@ -18,6 +18,8 @@ pub(crate) const SAFETY_TOGGLE_ID: Uuid = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaa
 pub(crate) const SAFETY_PRESET_ID: Uuid = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
 pub(crate) const ROUTE_ID: Uuid = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
 pub(crate) const CURATOR_USER_ID: Uuid = Uuid::from_u128(0xdddddddddddddddddddddddddddddddd);
+pub(crate) const ROUTE_COLLECTION_ROUTE_ID: Uuid =
+    Uuid::from_u128(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee);
 
 pub(crate) fn icon(value: &str) -> SemanticIconIdentifier {
     SemanticIconIdentifier::new(value).expect("icon identifier fixture should be valid")

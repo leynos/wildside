@@ -32,8 +32,9 @@ mod snapshots;
 mod support;
 
 use builders::{
-    CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_CATEGORY_ID, ROUTE_ID, ROUTE_SUMMARY_ID,
-    SAFETY_PRESET_ID, SAFETY_TOGGLE_ID, TAG_ID,
+    BADGE_ID, COMMUNITY_PICK_ID, CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_CATEGORY_ID,
+    ROUTE_COLLECTION_ID, ROUTE_COLLECTION_ROUTE_ID, ROUTE_ID, ROUTE_SUMMARY_ID, SAFETY_PRESET_ID,
+    SAFETY_TOGGLE_ID, TAG_ID, THEME_ID,
 };
 use pg_embed::shared_cluster;
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
@@ -201,7 +202,12 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
     );
 
     assert_route_category_stored(&mut ctx.client);
+    assert_themes_stored(&mut ctx.client);
+    assert_route_collections_stored(&mut ctx.client);
+    assert_community_picks_stored(&mut ctx.client);
     assert_tag_stored(&mut ctx.client);
+    assert_badges_stored(&mut ctx.client);
+    assert_safety_toggles_stored(&mut ctx.client);
     assert_summary_localizations_and_hero_image_stored(&mut ctx.client);
     assert_preset_toggle_ids_stored(&mut ctx.client);
 }
@@ -248,6 +254,74 @@ fn assert_tag_stored(client: &mut Client) {
     );
 }
 
+fn assert_themes_stored(client: &mut Client) {
+    let theme = client
+        .query_one(
+            "SELECT slug, icon_key, localizations::text, image::text, walk_count, distance_range_metres, rating FROM themes WHERE id = $1",
+            &[&THEME_ID],
+        )
+        .expect("theme row should exist");
+    assert_eq!(theme.get::<_, String>(0), "coastal");
+    assert_eq!(theme.get::<_, String>(1), "theme:coastal");
+
+    let localizations =
+        serde_json::from_str::<Value>(&theme.get::<_, String>(2)).expect("theme localizations");
+    assert_localizations_json_shape(
+        &localizations,
+        ("Coastal", "Coastal short", "Coastal description"),
+        ("Coastal FR", "Coastal FR court", "Coastal FR description"),
+    );
+
+    let image = serde_json::from_str::<Value>(&theme.get::<_, String>(3)).expect("theme image");
+    assert_image_asset_json_shape(&image, "https://example.test/theme.jpg", "Theme image");
+
+    assert_eq!(theme.get::<_, i32>(4), 23);
+    assert_eq!(theme.get::<_, Vec<i32>>(5), vec![1_500, 9_000]);
+    assert!((theme.get::<_, f32>(6) - 4.6).abs() < f32::EPSILON);
+}
+
+fn assert_route_collections_stored(client: &mut Client) {
+    let collection = client
+        .query_one(
+            "SELECT slug, icon_key, localizations::text, lead_image::text, map_preview::text, distance_range_metres, duration_range_seconds, difficulty, route_ids FROM route_collections WHERE id = $1",
+            &[&ROUTE_COLLECTION_ID],
+        )
+        .expect("route collection row should exist");
+    assert_eq!(collection.get::<_, String>(0), "weekend-favourites");
+    assert_eq!(collection.get::<_, String>(1), "collection:weekend");
+
+    let localizations = serde_json::from_str::<Value>(&collection.get::<_, String>(2))
+        .expect("route collection localizations");
+    assert_localizations_json_shape(
+        &localizations,
+        (
+            "Weekend favourites",
+            "Weekend favourites short",
+            "Weekend favourites description",
+        ),
+        (
+            "Weekend favourites FR",
+            "Weekend favourites FR court",
+            "Weekend favourites FR description",
+        ),
+    );
+
+    let lead_image =
+        serde_json::from_str::<Value>(&collection.get::<_, String>(3)).expect("lead image");
+    assert_image_asset_json_shape(&lead_image, "https://example.test/lead.jpg", "Lead image");
+    let map_preview =
+        serde_json::from_str::<Value>(&collection.get::<_, String>(4)).expect("map preview");
+    assert_image_asset_json_shape(&map_preview, "https://example.test/map.jpg", "Map preview");
+
+    assert_eq!(collection.get::<_, Vec<i32>>(5), vec![2_000, 12_000]);
+    assert_eq!(collection.get::<_, Vec<i32>>(6), vec![1_800, 7_200]);
+    assert_eq!(collection.get::<_, String>(7), "moderate");
+    assert_eq!(
+        collection.get::<_, Vec<Uuid>>(8),
+        vec![ROUTE_COLLECTION_ROUTE_ID]
+    );
+}
+
 fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
     let summary = client
         .query_one(
@@ -274,6 +348,87 @@ fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
     let hero_image =
         serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
     assert_image_asset_json_shape(&hero_image, "https://example.test/hero.jpg", "Hero image");
+}
+
+fn assert_community_picks_stored(client: &mut Client) {
+    let pick = client
+        .query_one(
+            "SELECT route_summary_id, user_id, localizations::text, curator_avatar::text, rating, distance_metres, duration_seconds, saves FROM community_picks WHERE id = $1",
+            &[&COMMUNITY_PICK_ID],
+        )
+        .expect("community pick row should exist");
+    assert_eq!(pick.get::<_, Option<Uuid>>(0), Some(ROUTE_SUMMARY_ID));
+    assert_eq!(pick.get::<_, Option<Uuid>>(1), Some(CURATOR_USER_ID));
+
+    let localizations =
+        serde_json::from_str::<Value>(&pick.get::<_, String>(2)).expect("community pick JSON");
+    assert_localizations_json_shape(
+        &localizations,
+        (
+            "Community favourite",
+            "Community favourite short",
+            "Community favourite description",
+        ),
+        (
+            "Community favourite FR",
+            "Community favourite FR court",
+            "Community favourite FR description",
+        ),
+    );
+
+    let avatar =
+        serde_json::from_str::<Value>(&pick.get::<_, String>(3)).expect("community pick avatar");
+    assert_image_asset_json_shape(&avatar, "https://example.test/avatar.jpg", "Curator avatar");
+    assert!((pick.get::<_, f32>(4) - 4.4).abs() < f32::EPSILON);
+    assert_eq!(pick.get::<_, i32>(5), 3_400);
+    assert_eq!(pick.get::<_, i32>(6), 4_800);
+    assert_eq!(pick.get::<_, i32>(7), 128);
+}
+
+fn assert_badges_stored(client: &mut Client) {
+    let badge = client
+        .query_one(
+            "SELECT slug, icon_key, localizations::text FROM badges WHERE id = $1",
+            &[&BADGE_ID],
+        )
+        .expect("badge row should exist");
+    assert_eq!(badge.get::<_, String>(0), "accessible");
+    assert_eq!(badge.get::<_, String>(1), "badge:accessible");
+
+    let localizations =
+        serde_json::from_str::<Value>(&badge.get::<_, String>(2)).expect("badge localizations");
+    assert_localizations_json_shape(
+        &localizations,
+        ("Accessible", "Accessible short", "Accessible description"),
+        (
+            "Accessible FR",
+            "Accessible FR court",
+            "Accessible FR description",
+        ),
+    );
+}
+
+fn assert_safety_toggles_stored(client: &mut Client) {
+    let toggle = client
+        .query_one(
+            "SELECT slug, icon_key, localizations::text FROM safety_toggles WHERE id = $1",
+            &[&SAFETY_TOGGLE_ID],
+        )
+        .expect("safety toggle row should exist");
+    assert_eq!(toggle.get::<_, String>(0), "well-lit");
+    assert_eq!(toggle.get::<_, String>(1), "safety:well-lit");
+
+    let localizations = serde_json::from_str::<Value>(&toggle.get::<_, String>(2))
+        .expect("safety toggle localizations");
+    assert_localizations_json_shape(
+        &localizations,
+        ("Well lit", "Well lit short", "Well lit description"),
+        (
+            "Well lit FR",
+            "Well lit FR court",
+            "Well lit FR description",
+        ),
+    );
 }
 
 fn assert_preset_toggle_ids_stored(client: &mut Client) {

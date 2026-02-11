@@ -9,6 +9,8 @@ use super::*;
 use crate::domain::localization::{LocalizationMap, LocalizedStringSet};
 use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
+mod numeric_validations;
+
 #[fixture]
 fn localizations() -> LocalizationMap {
     let mut values = BTreeMap::new();

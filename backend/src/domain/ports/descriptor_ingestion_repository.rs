@@ -3,10 +3,8 @@
 //! Descriptors are stable registries used by catalogue and user preferences.
 //! Keeping these writes behind a domain port preserves adapter boundaries.
 
+use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyToggle, Tag};
 use async_trait::async_trait;
-use uuid::Uuid;
-
-use crate::domain::{Badge, SafetyPreset, SafetyToggle, Tag};
 
 use super::define_port_error;
 
@@ -20,14 +18,6 @@ define_port_error! {
         Query { message: String } =>
             "descriptor ingestion query failed: {message}",
     }
-}
-
-/// Ingestion payload for interest themes.
-#[derive(Debug, Clone)]
-pub struct InterestThemeIngestion {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
 }
 
 /// Port for writing descriptor registries.
@@ -53,7 +43,7 @@ pub trait DescriptorIngestionRepository: Send + Sync {
 
     async fn upsert_interest_themes(
         &self,
-        records: &[InterestThemeIngestion],
+        records: &[InterestTheme],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 }
 
@@ -93,7 +83,7 @@ impl DescriptorIngestionRepository for FixtureDescriptorIngestionRepository {
 
     async fn upsert_interest_themes(
         &self,
-        _records: &[InterestThemeIngestion],
+        _records: &[InterestTheme],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }

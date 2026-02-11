@@ -41,7 +41,8 @@
 //! - SemanticIconIdentifier — validated semantic icon key.
 //! - Catalogue read-model entities (`RouteSummary`, `RouteCategory`, `Theme`,
 //!   `RouteCollection`, `TrendingRouteHighlight`, `CommunityPick`).
-//! - Descriptor entities (`Tag`, `Badge`, `SafetyToggle`, `SafetyPreset`).
+//! - Descriptor entities (`Tag`, `Badge`, `SafetyToggle`, `SafetyPreset`,
+//!   `InterestTheme`).
 
 pub mod annotations;
 pub mod auth;
@@ -78,7 +79,7 @@ pub use self::catalogue::{
     Theme, ThemeDraft, TrendingRouteHighlight,
 };
 pub use self::descriptors::{
-    Badge, DescriptorValidationError, SafetyPreset, SafetyPresetDraft, SafetyToggle, Tag,
+    Badge, DescriptorValidationError, InterestTheme, SafetyPreset, SafetyToggle, Tag,
 };
 pub use self::er_diagram::{
     SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable, render_mermaid_er_diagram,

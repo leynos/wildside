@@ -2,15 +2,15 @@
 
 use backend::domain::{
     Badge, CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollection,
-    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, SafetyPreset, SafetyPresetDraft,
-    SafetyToggle, Tag, Theme, ThemeDraft, TrendingRouteHighlight,
+    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, SafetyPreset, SafetyToggle, Tag, Theme,
+    ThemeDraft, TrendingRouteHighlight,
 };
 use uuid::Uuid;
 
 use crate::builders::{
     BADGE_ID, COMMUNITY_PICK_ID, CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, HIGHLIGHT_ID,
-    ROUTE_CATEGORY_ID, ROUTE_COLLECTION_ID, ROUTE_ID, ROUTE_SUMMARY_ID, SAFETY_PRESET_ID,
-    SAFETY_TOGGLE_ID, TAG_ID, THEME_ID, icon, image, localizations,
+    ROUTE_CATEGORY_ID, ROUTE_COLLECTION_ID, ROUTE_COLLECTION_ROUTE_ID, ROUTE_ID, ROUTE_SUMMARY_ID,
+    SAFETY_PRESET_ID, SAFETY_TOGGLE_ID, TAG_ID, THEME_ID, icon, image, localizations,
 };
 
 pub(crate) struct IngestionSnapshots {
@@ -92,7 +92,7 @@ fn build_route_collection() -> RouteCollection {
         distance_range_metres: [2_000, 12_000],
         duration_range_seconds: [1_800, 7_200],
         difficulty: "moderate".to_owned(),
-        route_ids: vec![Uuid::new_v4()],
+        route_ids: vec![ROUTE_COLLECTION_ROUTE_ID],
     })
     .expect("route collection should be valid")
 }
@@ -165,7 +165,7 @@ fn build_safety_toggle() -> SafetyToggle {
 }
 
 fn build_safety_preset() -> SafetyPreset {
-    SafetyPreset::new(SafetyPresetDraft {
+    SafetyPreset::new(SafetyPreset {
         id: SAFETY_PRESET_ID,
         slug: "night-safe".to_owned(),
         icon_key: icon("preset:night-safe"),

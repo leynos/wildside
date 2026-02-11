@@ -40,7 +40,7 @@ pub use catalogue_ingestion_repository::{
 pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
 pub use descriptor_ingestion_repository::{
     DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
-    FixtureDescriptorIngestionRepository, InterestThemeIngestion,
+    FixtureDescriptorIngestionRepository,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,

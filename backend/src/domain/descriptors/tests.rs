@@ -62,7 +62,7 @@ fn safety_preset_rejects_empty_toggle_ids(
     icon_key: SemanticIconIdentifier,
     localizations: LocalizationMap,
 ) {
-    let result = SafetyPreset::new(SafetyPresetDraft {
+    let result = SafetyPreset::new(SafetyPreset {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
@@ -82,7 +82,7 @@ fn safety_preset_rejects_duplicate_toggle_ids(
     localizations: LocalizationMap,
 ) {
     let toggle_id = Uuid::new_v4();
-    let result = SafetyPreset::new(SafetyPresetDraft {
+    let result = SafetyPreset::new(SafetyPreset {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
@@ -101,7 +101,7 @@ fn safety_preset_accepts_unique_toggle_ids(
     icon_key: SemanticIconIdentifier,
     localizations: LocalizationMap,
 ) {
-    let preset = SafetyPreset::new(SafetyPresetDraft {
+    let preset = SafetyPreset::new(SafetyPreset {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
