@@ -2,13 +2,14 @@
 
 use std::collections::BTreeMap;
 
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::localization::{LocalizationMap, LocalizedStringSet};
 use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
+#[fixture]
 fn localizations() -> LocalizationMap {
     let mut values = BTreeMap::new();
     values.insert(
@@ -18,10 +19,12 @@ fn localizations() -> LocalizationMap {
     LocalizationMap::new(values).expect("valid localizations")
 }
 
+#[fixture]
 fn icon_key() -> SemanticIconIdentifier {
     SemanticIconIdentifier::new("category:nature").expect("valid icon key")
 }
 
+#[fixture]
 fn image() -> ImageAsset {
     ImageAsset::new("https://example.test/hero.jpg", "Cliff path").expect("valid image")
 }
@@ -59,15 +62,16 @@ fn image_asset_new_rejects_empty_or_whitespace_alt(#[case] alt: &str) {
     ));
 }
 
-fn route_summary_draft(slug: Option<String>) -> RouteSummaryDraft {
+#[fixture]
+fn route_summary_draft(localizations: LocalizationMap, image: ImageAsset) -> RouteSummaryDraft {
     RouteSummaryDraft {
         id: Uuid::new_v4(),
         route_id: Uuid::new_v4(),
         category_id: Uuid::new_v4(),
         theme_id: Uuid::new_v4(),
-        slug,
-        localizations: localizations(),
-        hero_image: image(),
+        slug: None,
+        localizations,
+        hero_image: image,
         distance_metres: 3_500,
         duration_seconds: 4_200,
         rating: 4.7,
@@ -77,13 +81,35 @@ fn route_summary_draft(slug: Option<String>) -> RouteSummaryDraft {
     }
 }
 
+fn community_pick_draft(
+    route_summary_id: Option<Uuid>,
+    user_id: Option<Uuid>,
+    curator_display_name: impl Into<String>,
+) -> CommunityPickDraft {
+    CommunityPickDraft {
+        id: Uuid::new_v4(),
+        route_summary_id,
+        user_id,
+        localizations: localizations(),
+        curator_display_name: curator_display_name.into(),
+        curator_avatar: image(),
+        rating: 4.0,
+        distance_metres: 1_250,
+        duration_seconds: 2_400,
+        saves: 0,
+    }
+}
+
 #[rstest]
-fn route_category_rejects_invalid_slug() {
+fn route_category_rejects_invalid_slug(
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+) {
     let result = RouteCategory::new(RouteCategoryDraft {
         id: Uuid::new_v4(),
         slug: "Nature Walk".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
+        icon_key,
+        localizations,
         route_count: 10,
     });
 
@@ -96,13 +122,17 @@ fn route_category_rejects_invalid_slug() {
 }
 
 #[rstest]
-fn theme_new_accepts_valid_payload() {
+fn theme_new_accepts_valid_payload(
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    image: ImageAsset,
+) {
     let theme = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
-        image: image(),
+        icon_key,
+        localizations,
+        image,
         walk_count: 25,
         distance_range_metres: [1_000, 6_000],
         rating: 4.2,
@@ -113,13 +143,17 @@ fn theme_new_accepts_valid_payload() {
 }
 
 #[rstest]
-fn theme_rejects_invalid_range() {
+fn theme_rejects_invalid_range(
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    image: ImageAsset,
+) {
     let result = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
-        image: image(),
+        icon_key,
+        localizations,
+        image,
         walk_count: 25,
         distance_range_metres: [6_000, 1_000],
         rating: 4.2,
@@ -135,14 +169,18 @@ fn theme_rejects_invalid_range() {
 }
 
 #[rstest]
-fn route_collection_rejects_empty_difficulty() {
+fn route_collection_rejects_empty_difficulty(
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    image: ImageAsset,
+) {
     let result = RouteCollection::new(RouteCollectionDraft {
         id: Uuid::new_v4(),
         slug: "coastal-collection".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
-        lead_image: image(),
-        map_preview: image(),
+        icon_key,
+        localizations,
+        lead_image: image.clone(),
+        map_preview: image,
         distance_range_metres: [500, 2_500],
         duration_range_seconds: [1_200, 3_600],
         difficulty: "  ".to_owned(),
@@ -161,32 +199,20 @@ fn route_collection_rejects_empty_difficulty() {
 #[case(Some("coastal-route".to_owned()), Some("coastal-route"))]
 #[case(None, None)]
 fn route_summary_accepts_valid_slug_variants(
+    mut route_summary_draft: RouteSummaryDraft,
     #[case] slug_input: Option<String>,
     #[case] expected_slug: Option<&str>,
 ) {
-    let summary =
-        RouteSummary::new(route_summary_draft(slug_input)).expect("valid route summary draft");
+    route_summary_draft.slug = slug_input;
+    let summary = RouteSummary::new(route_summary_draft).expect("valid route summary draft");
 
     assert_eq!(summary.slug.as_deref(), expected_slug);
 }
 
 #[rstest]
-fn route_summary_rejects_negative_distance() {
-    let result = RouteSummary::new(RouteSummaryDraft {
-        id: Uuid::new_v4(),
-        route_id: Uuid::new_v4(),
-        category_id: Uuid::new_v4(),
-        theme_id: Uuid::new_v4(),
-        slug: None,
-        localizations: localizations(),
-        hero_image: image(),
-        distance_metres: -1,
-        duration_seconds: 4_200,
-        rating: 4.7,
-        badge_ids: vec![],
-        difficulty: "easy".to_owned(),
-        interest_theme_ids: vec![],
-    });
+fn route_summary_rejects_negative_distance(mut route_summary_draft: RouteSummaryDraft) {
+    route_summary_draft.distance_metres = -1;
+    let result = RouteSummary::new(route_summary_draft);
 
     assert!(matches!(
         result,
@@ -198,9 +224,8 @@ fn route_summary_rejects_negative_distance() {
 }
 
 #[rstest]
-fn trending_highlight_rejects_empty_delta() {
-    let result =
-        TrendingRouteHighlight::new(Uuid::new_v4(), Uuid::new_v4(), "   ", localizations());
+fn trending_highlight_rejects_empty_delta(localizations: LocalizationMap) {
+    let result = TrendingRouteHighlight::new(Uuid::new_v4(), Uuid::new_v4(), "   ", localizations);
 
     assert!(matches!(
         result,
@@ -212,18 +237,7 @@ fn trending_highlight_rejects_empty_delta() {
 
 #[rstest]
 fn community_pick_rejects_empty_curator_name() {
-    let result = CommunityPick::new(CommunityPickDraft {
-        id: Uuid::new_v4(),
-        route_summary_id: None,
-        user_id: None,
-        localizations: localizations(),
-        curator_display_name: "  ".to_owned(),
-        curator_avatar: image(),
-        rating: 4.5,
-        distance_metres: 600,
-        duration_seconds: 900,
-        saves: 24,
-    });
+    let result = CommunityPick::new(community_pick_draft(None, None, "  "));
 
     assert!(matches!(
         result,
@@ -235,19 +249,8 @@ fn community_pick_rejects_empty_curator_name() {
 
 #[rstest]
 fn community_pick_accepts_optional_references() {
-    let pick = CommunityPick::new(CommunityPickDraft {
-        id: Uuid::new_v4(),
-        route_summary_id: None,
-        user_id: None,
-        localizations: localizations(),
-        curator_display_name: "Trail Team".to_owned(),
-        curator_avatar: image(),
-        rating: 4.0,
-        distance_metres: 1_250,
-        duration_seconds: 2_400,
-        saves: 0,
-    })
-    .expect("valid community pick");
+    let pick = CommunityPick::new(community_pick_draft(None, None, "Trail Team"))
+        .expect("valid community pick");
 
     assert!(pick.route_summary_id.is_none());
     assert!(pick.user_id.is_none());

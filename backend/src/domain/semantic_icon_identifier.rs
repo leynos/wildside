@@ -50,7 +50,10 @@ impl SemanticIconIdentifier {
         if value.trim().is_empty() {
             return Err(SemanticIconIdentifierValidationError::Empty);
         }
-        if value.trim() != value || !is_valid_icon_identifier(value) {
+
+        let is_trimmed = value.trim() == value;
+        let has_valid_format = is_valid_icon_identifier(value);
+        if !is_trimmed || !has_valid_format {
             return Err(SemanticIconIdentifierValidationError::InvalidFormat);
         }
 

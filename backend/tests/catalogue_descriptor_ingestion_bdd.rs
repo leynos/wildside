@@ -31,7 +31,7 @@ use builders::{
     SAFETY_PRESET_ID, SAFETY_TOGGLE_ID, TAG_ID,
 };
 use pg_embed::shared_cluster;
-use snapshots::{build_edge_community_pick, build_ingestion_snapshots, build_tag};
+use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
 use support::provision_template_database;
 
 struct TestContext {
@@ -165,8 +165,14 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
         ctx.last_descriptor_error
     );
 
-    let route_category = ctx
-        .client
+    assert_route_category_stored(&mut ctx.client);
+    assert_tag_stored(&mut ctx.client);
+    assert_summary_hero_image_stored(&mut ctx.client);
+    assert_preset_toggle_ids_stored(&mut ctx.client);
+}
+
+fn assert_route_category_stored(client: &mut Client) {
+    let route_category = client
         .query_one(
             "SELECT slug, icon_key, localizations::text, route_count FROM route_categories WHERE id = $1",
             &[&ROUTE_CATEGORY_ID],
@@ -187,9 +193,10 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
         "Scenic description"
     );
     assert_eq!(category_localizations["fr-FR"]["name"], "Scenic FR");
+}
 
-    let tag = ctx
-        .client
+fn assert_tag_stored(client: &mut Client) {
+    let tag = client
         .query_one(
             "SELECT slug, icon_key, localizations::text FROM tags WHERE id = $1",
             &[&TAG_ID],
@@ -201,9 +208,10 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
         .expect("tag localizations should parse");
     assert_eq!(tag_localizations["en-GB"]["name"], "Family");
     assert_eq!(tag_localizations["fr-FR"]["name"], "Family FR");
+}
 
-    let summary = ctx
-        .client
+fn assert_summary_hero_image_stored(client: &mut Client) {
+    let summary = client
         .query_one(
             "SELECT hero_image::text FROM route_summaries WHERE id = $1",
             &[&ROUTE_SUMMARY_ID],
@@ -213,9 +221,10 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
         serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("hero image JSON");
     assert_eq!(hero_image["url"], "https://example.test/hero.jpg");
     assert_eq!(hero_image["alt"], "Hero image");
+}
 
-    let preset = ctx
-        .client
+fn assert_preset_toggle_ids_stored(client: &mut Client) {
+    let preset = client
         .query_one(
             "SELECT safety_toggle_ids FROM safety_presets WHERE id = $1",
             &[&SAFETY_PRESET_ID],
@@ -238,7 +247,7 @@ fn the_tags_table_is_dropped_and_a_tag_upsert_is_attempted(world: SharedContext)
         )
     };
 
-    let tag = build_tag();
+    let tag = build_ingestion_snapshots().tag;
 
     let result = handle.block_on(async {
         descriptor_repository

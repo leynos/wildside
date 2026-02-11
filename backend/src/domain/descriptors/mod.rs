@@ -63,9 +63,9 @@ impl From<SemanticIconIdentifierValidationError> for DescriptorValidationError {
 }
 
 macro_rules! impl_simple_descriptor_new {
-    ($type_name:ident, $slug_field:literal) => {
+    ($(#[$doc:meta])* $type_name:ident, $slug_field:literal) => {
         impl $type_name {
-            /// Validate and construct the descriptor.
+            $(#[$doc])*
             pub fn new(
                 id: Uuid,
                 slug: impl Into<String>,
@@ -95,7 +95,34 @@ pub struct Tag {
     pub localizations: LocalizationMap,
 }
 
-impl_simple_descriptor_new!(Tag, "tag.slug");
+impl_simple_descriptor_new!(
+    /// Validate and construct the descriptor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{
+    ///     LocalizedStringSet, LocalizationMap, SemanticIconIdentifier, Tag,
+    /// };
+    /// use uuid::Uuid;
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Family friendly", Some("Family".to_owned()), None),
+    /// );
+    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
+    /// let icon = SemanticIconIdentifier::new("tag:family").expect("valid icon");
+    ///
+    /// let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon, localizations)
+    ///     .expect("valid tag");
+    /// assert_eq!(tag.slug, "family-friendly");
+    /// ```
+    Tag,
+    "tag.slug"
+);
 
 /// Badge descriptor shown in route summary metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,7 +135,34 @@ pub struct Badge {
     pub localizations: LocalizationMap,
 }
 
-impl_simple_descriptor_new!(Badge, "badge.slug");
+impl_simple_descriptor_new!(
+    /// Validate and construct the descriptor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{
+    ///     Badge, LocalizedStringSet, LocalizationMap, SemanticIconIdentifier,
+    /// };
+    /// use uuid::Uuid;
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Accessible", None, Some("Step-free".to_owned())),
+    /// );
+    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
+    /// let icon = SemanticIconIdentifier::new("badge:accessible").expect("valid icon");
+    ///
+    /// let badge = Badge::new(Uuid::new_v4(), "accessible", icon, localizations)
+    ///     .expect("valid badge");
+    /// assert_eq!(badge.slug, "accessible");
+    /// ```
+    Badge,
+    "badge.slug"
+);
 
 /// Safety toggle descriptor used by user preferences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,7 +175,34 @@ pub struct SafetyToggle {
     pub localizations: LocalizationMap,
 }
 
-impl_simple_descriptor_new!(SafetyToggle, "safety_toggle.slug");
+impl_simple_descriptor_new!(
+    /// Validate and construct the descriptor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{
+    ///     LocalizedStringSet, LocalizationMap, SafetyToggle, SemanticIconIdentifier,
+    /// };
+    /// use uuid::Uuid;
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Well lit", None, None),
+    /// );
+    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
+    /// let icon = SemanticIconIdentifier::new("safety:well-lit").expect("valid icon");
+    ///
+    /// let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon, localizations)
+    ///     .expect("valid safety toggle");
+    /// assert_eq!(toggle.slug, "well-lit");
+    /// ```
+    SafetyToggle,
+    "safety_toggle.slug"
+);
 
 /// Unvalidated payload used to construct a [`SafetyPreset`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,6 +231,36 @@ pub struct SafetyPreset {
 
 impl SafetyPreset {
     /// Validate and construct a safety preset descriptor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{
+    ///     LocalizedStringSet, LocalizationMap, SafetyPreset, SafetyPresetDraft,
+    ///     SemanticIconIdentifier,
+    /// };
+    /// use uuid::Uuid;
+    ///
+    /// let toggle_id = Uuid::new_v4();
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Night safe", None, None),
+    /// );
+    /// let draft = SafetyPresetDraft {
+    ///     id: Uuid::new_v4(),
+    ///     slug: "night-safe".to_owned(),
+    ///     icon_key: SemanticIconIdentifier::new("preset:night-safe")
+    ///         .expect("valid icon"),
+    ///     localizations: LocalizationMap::new(values).expect("valid localizations"),
+    ///     safety_toggle_ids: vec![toggle_id],
+    /// };
+    ///
+    /// let preset = SafetyPreset::new(draft).expect("valid safety preset");
+    /// assert_eq!(preset.slug, "night-safe");
+    /// ```
     pub fn new(draft: SafetyPresetDraft) -> Result<Self, DescriptorValidationError> {
         let slug = validate_slug(draft.slug, "safety_preset.slug")?;
         ensure_non_empty_unique_toggle_ids(&draft.safety_toggle_ids)?;
