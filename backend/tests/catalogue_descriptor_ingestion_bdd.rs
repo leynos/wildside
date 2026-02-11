@@ -14,7 +14,7 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
@@ -184,16 +184,10 @@ fn assert_route_category_stored(client: &mut Client) {
     assert_eq!(route_category.get::<_, i32>(3), 42);
     let category_localizations = serde_json::from_str::<Value>(&route_category.get::<_, String>(2))
         .expect("route category localizations should parse");
-    assert_eq!(category_localizations["en-GB"]["name"], "Scenic");
     assert_eq!(
-        category_localizations["en-GB"]["shortLabel"],
-        "Scenic short"
+        category_localizations,
+        expected_route_category_localizations_json()
     );
-    assert_eq!(
-        category_localizations["en-GB"]["description"],
-        "Scenic description"
-    );
-    assert_eq!(category_localizations["fr-FR"]["name"], "Scenic FR");
 }
 
 fn assert_tag_stored(client: &mut Client) {
@@ -207,18 +201,7 @@ fn assert_tag_stored(client: &mut Client) {
     assert_eq!(tag.get::<_, String>(1), "tag:family");
     let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
         .expect("tag localizations should parse");
-    assert_eq!(tag_localizations["en-GB"]["name"], "Family");
-    assert_eq!(tag_localizations["en-GB"]["shortLabel"], "Family short");
-    assert_eq!(
-        tag_localizations["en-GB"]["description"],
-        "Family description"
-    );
-    assert_eq!(tag_localizations["fr-FR"]["name"], "Family FR");
-    assert_eq!(tag_localizations["fr-FR"]["shortLabel"], "Family FR court");
-    assert_eq!(
-        tag_localizations["fr-FR"]["description"],
-        "Family FR description"
-    );
+    assert_eq!(tag_localizations, expected_tag_localizations_json());
 }
 
 fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
@@ -230,21 +213,7 @@ fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
         .expect("route summary row should exist");
     let localizations =
         serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("localizations JSON");
-    assert_eq!(localizations["en-GB"]["name"], "Coastal loop");
-    assert_eq!(localizations["en-GB"]["shortLabel"], "Coastal loop short");
-    assert_eq!(
-        localizations["en-GB"]["description"],
-        "Coastal loop description"
-    );
-    assert_eq!(localizations["fr-FR"]["name"], "Coastal loop FR");
-    assert_eq!(
-        localizations["fr-FR"]["shortLabel"],
-        "Coastal loop FR court"
-    );
-    assert_eq!(
-        localizations["fr-FR"]["description"],
-        "Coastal loop FR description"
-    );
+    assert_eq!(localizations, expected_summary_localizations_json());
 
     let hero_image =
         serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
@@ -263,20 +232,85 @@ fn assert_preset_toggle_ids_stored(client: &mut Client) {
     assert_eq!(toggle_ids, vec![SAFETY_TOGGLE_ID]);
 }
 
-#[when("the tags table is dropped and a tag upsert is attempted")]
-fn the_tags_table_is_dropped_and_a_tag_upsert_is_attempted(world: SharedContext) {
-    record_descriptor_error(
-        &world,
-        run_descriptor_operation_with_dropped_table(
-            &world,
-            "DROP TABLE tags;",
-            |repository| async move {
-                let tag = build_ingestion_snapshots().tag;
-                repository.upsert_tags(std::slice::from_ref(&tag)).await
-            },
-        ),
-    );
+fn expected_route_category_localizations_json() -> Value {
+    json!({
+        "en-GB": {
+            "name": "Scenic",
+            "shortLabel": "Scenic short",
+            "description": "Scenic description"
+        },
+        "fr-FR": {
+            "name": "Scenic FR",
+            "shortLabel": "Scenic FR court",
+            "description": "Scenic FR description"
+        }
+    })
 }
+
+fn expected_tag_localizations_json() -> Value {
+    json!({
+        "en-GB": {
+            "name": "Family",
+            "shortLabel": "Family short",
+            "description": "Family description"
+        },
+        "fr-FR": {
+            "name": "Family FR",
+            "shortLabel": "Family FR court",
+            "description": "Family FR description"
+        }
+    })
+}
+
+fn expected_summary_localizations_json() -> Value {
+    json!({
+        "en-GB": {
+            "name": "Coastal loop",
+            "shortLabel": "Coastal loop short",
+            "description": "Coastal loop description"
+        },
+        "fr-FR": {
+            "name": "Coastal loop FR",
+            "shortLabel": "Coastal loop FR court",
+            "description": "Coastal loop FR description"
+        }
+    })
+}
+
+macro_rules! define_drop_table_upsert_step {
+    (
+        $fn_name:ident,
+        $step_name:literal,
+        $record_error_fn:ident,
+        $run_fn:ident,
+        $drop_sql:literal,
+        $snapshot_field:ident,
+        $upsert_method:ident
+    ) => {
+        #[when($step_name)]
+        fn $fn_name(world: SharedContext) {
+            $record_error_fn(
+                &world,
+                $run_fn(&world, $drop_sql, |repository| async move {
+                    let value = build_ingestion_snapshots().$snapshot_field;
+                    repository
+                        .$upsert_method(std::slice::from_ref(&value))
+                        .await
+                }),
+            );
+        }
+    };
+}
+
+define_drop_table_upsert_step!(
+    the_tags_table_is_dropped_and_a_tag_upsert_is_attempted,
+    "the tags table is dropped and a tag upsert is attempted",
+    record_descriptor_error,
+    run_descriptor_operation_with_dropped_table,
+    "DROP TABLE tags;",
+    tag,
+    upsert_tags
+);
 
 #[then("the descriptor repository reports a query error")]
 fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
@@ -288,24 +322,15 @@ fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
     );
 }
 
-#[when("the route categories table is dropped and a route category upsert is attempted")]
-fn the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted(
-    world: SharedContext,
-) {
-    record_catalogue_error(
-        &world,
-        run_catalogue_operation_with_dropped_table(
-            &world,
-            "DROP TABLE route_categories CASCADE;",
-            |repository| async move {
-                let category = build_ingestion_snapshots().category;
-                repository
-                    .upsert_route_categories(std::slice::from_ref(&category))
-                    .await
-            },
-        ),
-    );
-}
+define_drop_table_upsert_step!(
+    the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted,
+    "the route categories table is dropped and a route category upsert is attempted",
+    record_catalogue_error,
+    run_catalogue_operation_with_dropped_table,
+    "DROP TABLE route_categories CASCADE;",
+    category,
+    upsert_route_categories
+);
 
 #[then("the catalogue repository reports a query error")]
 fn the_catalogue_repository_reports_a_query_error(world: SharedContext) {
@@ -446,10 +471,15 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
         )
         .expect("edge community pick row should exist");
 
-    assert_eq!(row.get::<_, Option<Uuid>>(0), None);
-    assert_eq!(row.get::<_, Option<Uuid>>(1), None);
-    assert_eq!(row.get::<_, String>(2), "Edge pick");
-    assert_eq!(row.get::<_, i32>(3), 17);
+    assert_eq!(
+        (
+            row.get::<_, Option<Uuid>>(0),
+            row.get::<_, Option<Uuid>>(1),
+            row.get::<_, String>(2),
+            row.get::<_, i32>(3),
+        ),
+        (None, None, "Edge pick".to_owned(), 17),
+    );
 }
 
 #[scenario(
