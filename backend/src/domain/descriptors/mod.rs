@@ -240,6 +240,7 @@ impl SafetyPreset {
     ///
     /// let preset = SafetyPreset::new(draft).expect("valid safety preset");
     /// assert_eq!(preset.slug, "night-safe");
+    /// assert_eq!(preset.safety_toggle_ids, vec![toggle_id]);
     /// ```
     pub fn new(draft: SafetyPresetDraft) -> Result<Self, DescriptorValidationError> {
         let slug = validate_slug(draft.slug, "safety_preset.slug")?;

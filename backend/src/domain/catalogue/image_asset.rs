@@ -24,6 +24,7 @@ impl ImageAsset {
     /// let image = ImageAsset::new("https://example.test/hero.jpg", "Route hero")
     ///     .expect("valid image asset");
     /// assert_eq!(image.url, "https://example.test/hero.jpg");
+    /// assert_eq!(image.alt, "Route hero");
     /// ```
     pub fn new(
         url: impl Into<String>,

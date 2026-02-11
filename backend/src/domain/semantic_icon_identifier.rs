@@ -51,9 +51,9 @@ impl SemanticIconIdentifier {
             return Err(SemanticIconIdentifierValidationError::Empty);
         }
 
-        let is_trimmed = value.trim() == value;
+        let has_boundary_whitespace = has_leading_or_trailing_whitespace(value);
         let has_valid_format = is_valid_icon_identifier(value);
-        if !is_trimmed || !has_valid_format {
+        if has_boundary_whitespace || !has_valid_format {
             return Err(SemanticIconIdentifierValidationError::InvalidFormat);
         }
 
@@ -85,6 +85,10 @@ impl TryFrom<String> for SemanticIconIdentifier {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::new(value)
     }
+}
+
+fn has_leading_or_trailing_whitespace(value: &str) -> bool {
+    value.trim() != value
 }
 
 fn is_valid_icon_identifier(value: &str) -> bool {
