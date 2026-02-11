@@ -29,6 +29,24 @@ fn image() -> ImageAsset {
     ImageAsset::new("https://example.test/hero.jpg", "Cliff path").expect("valid image")
 }
 
+fn valid_route_summary_draft() -> RouteSummaryDraft {
+    RouteSummaryDraft {
+        id: Uuid::new_v4(),
+        route_id: Uuid::new_v4(),
+        category_id: Uuid::new_v4(),
+        theme_id: Uuid::new_v4(),
+        slug: Some("coastal-route".to_owned()),
+        localizations: localizations(),
+        hero_image: image(),
+        distance_metres: 3_500,
+        duration_seconds: 4_200,
+        rating: 4.7,
+        badge_ids: vec![Uuid::new_v4()],
+        difficulty: "moderate".to_owned(),
+        interest_theme_ids: vec![Uuid::new_v4()],
+    }
+}
+
 #[rstest]
 fn image_asset_new_creates_valid_asset() {
     let asset = ImageAsset::new("https://example.test/promo.jpg", "Rocky coast")
@@ -63,22 +81,8 @@ fn image_asset_new_rejects_empty_or_whitespace_alt(#[case] alt: &str) {
 }
 
 #[fixture]
-fn route_summary_draft(localizations: LocalizationMap, image: ImageAsset) -> RouteSummaryDraft {
-    RouteSummaryDraft {
-        id: Uuid::new_v4(),
-        route_id: Uuid::new_v4(),
-        category_id: Uuid::new_v4(),
-        theme_id: Uuid::new_v4(),
-        slug: None,
-        localizations,
-        hero_image: image,
-        distance_metres: 3_500,
-        duration_seconds: 4_200,
-        rating: 4.7,
-        badge_ids: vec![Uuid::new_v4()],
-        difficulty: "moderate".to_owned(),
-        interest_theme_ids: vec![Uuid::new_v4()],
-    }
+fn route_summary_draft() -> RouteSummaryDraft {
+    valid_route_summary_draft()
 }
 
 fn community_pick_draft(
@@ -196,17 +200,28 @@ fn route_collection_rejects_empty_difficulty(
 }
 
 #[rstest]
-#[case(Some("coastal-route".to_owned()), Some("coastal-route"))]
-#[case(None, None)]
-fn route_summary_accepts_valid_slug_variants(
-    mut route_summary_draft: RouteSummaryDraft,
-    #[case] slug_input: Option<String>,
-    #[case] expected_slug: Option<&str>,
-) {
-    route_summary_draft.slug = slug_input;
-    let summary = RouteSummary::new(route_summary_draft).expect("valid route summary draft");
+fn route_summary_new_accepts_valid_payload() {
+    let summary =
+        RouteSummary::new(valid_route_summary_draft()).expect("valid route summary draft");
 
-    assert_eq!(summary.slug.as_deref(), expected_slug);
+    assert_eq!(summary.slug.as_deref(), Some("coastal-route"));
+}
+
+#[rstest]
+fn route_summary_allows_missing_slug() {
+    let summary = RouteSummary::new(RouteSummaryDraft {
+        slug: None,
+        distance_metres: 2_100,
+        duration_seconds: 3_000,
+        rating: 4.2,
+        badge_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+        difficulty: "easy".to_owned(),
+        interest_theme_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+        ..valid_route_summary_draft()
+    })
+    .expect("valid route summary draft");
+
+    assert_eq!(summary.slug.as_deref(), None);
 }
 
 #[rstest]
