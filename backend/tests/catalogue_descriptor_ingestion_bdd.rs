@@ -297,7 +297,7 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
     let row = ctx
         .client
         .query_one(
-            "SELECT route_summary_id, user_id, localizations->'en-GB'->>'name' FROM community_picks WHERE id = $1",
+            "SELECT route_summary_id, user_id, localizations->'en-GB'->>'name', saves FROM community_picks WHERE id = $1",
             &[&EDGE_COMMUNITY_PICK_ID],
         )
         .expect("edge community pick row should exist");
@@ -305,6 +305,7 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
     assert_eq!(row.get::<_, Option<Uuid>>(0), None);
     assert_eq!(row.get::<_, Option<Uuid>>(1), None);
     assert_eq!(row.get::<_, String>(2), "Edge pick");
+    assert_eq!(row.get::<_, i32>(3), 0);
 }
 
 #[scenario(

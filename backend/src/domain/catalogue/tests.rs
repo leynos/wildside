@@ -26,6 +26,39 @@ fn image() -> ImageAsset {
     ImageAsset::new("https://example.test/hero.jpg", "Cliff path").expect("valid image")
 }
 
+#[rstest]
+fn image_asset_new_creates_valid_asset() {
+    let asset = ImageAsset::new("https://example.test/promo.jpg", "Rocky coast")
+        .expect("image asset should be valid");
+
+    assert_eq!(asset.url, "https://example.test/promo.jpg");
+    assert_eq!(asset.alt, "Rocky coast");
+}
+
+#[rstest]
+#[case("")]
+#[case("   ")]
+fn image_asset_new_rejects_empty_or_whitespace_url(#[case] url: &str) {
+    let result = ImageAsset::new(url, "Alt text");
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::EmptyField { field: "image.url" })
+    ));
+}
+
+#[rstest]
+#[case("")]
+#[case("   ")]
+fn image_asset_new_rejects_empty_or_whitespace_alt(#[case] alt: &str) {
+    let result = ImageAsset::new("https://example.test/promo.jpg", alt);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::EmptyField { field: "image.alt" })
+    ));
+}
+
 fn route_summary_draft(slug: Option<String>) -> RouteSummaryDraft {
     RouteSummaryDraft {
         id: Uuid::new_v4(),
