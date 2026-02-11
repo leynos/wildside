@@ -42,19 +42,18 @@ pub(crate) fn build_ingestion_snapshots() -> IngestionSnapshots {
 }
 
 pub(crate) fn build_edge_community_pick() -> CommunityPick {
-    CommunityPick::new(CommunityPickDraft {
-        id: EDGE_COMMUNITY_PICK_ID,
-        route_summary_id: None,
-        user_id: None,
-        localizations: localizations("Edge pick"),
-        curator_display_name: "Wildside curators".to_owned(),
-        curator_avatar: image("https://example.test/avatar-edge.jpg", "Curator avatar"),
-        rating: 4.0,
-        distance_metres: 1_250,
-        duration_seconds: 2_100,
-        saves: 0,
-    })
-    .expect("edge community pick should be valid")
+    let mut draft = default_community_pick_draft();
+    draft.id = EDGE_COMMUNITY_PICK_ID;
+    draft.route_summary_id = None;
+    draft.user_id = None;
+    draft.localizations = localizations("Edge pick");
+    draft.curator_avatar = image("https://example.test/avatar-edge.jpg", "Curator avatar");
+    draft.rating = 4.0;
+    draft.distance_metres = 1_250;
+    draft.duration_seconds = 2_100;
+    draft.saves = 0;
+
+    build_community_pick(draft)
 }
 
 fn build_route_category() -> RouteCategory {
@@ -128,19 +127,11 @@ fn build_trending_route_highlight() -> TrendingRouteHighlight {
 }
 
 fn build_primary_community_pick() -> CommunityPick {
-    CommunityPick::new(CommunityPickDraft {
-        id: COMMUNITY_PICK_ID,
-        route_summary_id: Some(ROUTE_SUMMARY_ID),
-        user_id: Some(CURATOR_USER_ID),
-        localizations: localizations("Community favourite"),
-        curator_display_name: "Wildside curators".to_owned(),
-        curator_avatar: image("https://example.test/avatar.jpg", "Curator avatar"),
-        rating: 4.4,
-        distance_metres: 3_400,
-        duration_seconds: 4_800,
-        saves: 128,
-    })
-    .expect("community pick should be valid")
+    build_community_pick(default_community_pick_draft())
+}
+
+fn build_community_pick(draft: CommunityPickDraft) -> CommunityPick {
+    CommunityPick::new(draft).expect("community pick should be valid")
 }
 
 fn build_tag_value() -> Tag {
@@ -182,4 +173,19 @@ fn build_safety_preset() -> SafetyPreset {
         safety_toggle_ids: vec![SAFETY_TOGGLE_ID],
     })
     .expect("safety preset should be valid")
+}
+
+fn default_community_pick_draft() -> CommunityPickDraft {
+    CommunityPickDraft {
+        id: COMMUNITY_PICK_ID,
+        route_summary_id: Some(ROUTE_SUMMARY_ID),
+        user_id: Some(CURATOR_USER_ID),
+        localizations: localizations("Community favourite"),
+        curator_display_name: "Wildside curators".to_owned(),
+        curator_avatar: image("https://example.test/avatar.jpg", "Curator avatar"),
+        rating: 4.4,
+        distance_metres: 3_400,
+        duration_seconds: 4_800,
+        saves: 128,
+    }
 }
