@@ -478,20 +478,36 @@ fn the_stored_community_pick_keeps_null_route_and_user_references(world: SharedC
     let row = ctx
         .client
         .query_one(
-            "SELECT route_summary_id, user_id, localizations->'en-GB'->>'name', saves FROM community_picks WHERE id = $1",
+            "SELECT route_summary_id, user_id, localizations::text, curator_avatar::text, saves FROM community_picks WHERE id = $1",
             &[&EDGE_COMMUNITY_PICK_ID],
         )
         .expect("edge community pick row should exist");
 
+    assert_eq!(row.get::<_, Option<Uuid>>(0), None);
+    assert_eq!(row.get::<_, Option<Uuid>>(1), None);
+    let localizations =
+        serde_json::from_str::<Value>(&row.get::<_, String>(2)).expect("edge localizations JSON");
     assert_eq!(
-        (
-            row.get::<_, Option<Uuid>>(0),
-            row.get::<_, Option<Uuid>>(1),
-            row.get::<_, String>(2),
-            row.get::<_, i32>(3),
+        localizations,
+        expected_localizations_json(
+            ("Edge pick", "Edge pick short", "Edge pick description"),
+            (
+                "Edge pick FR",
+                "Edge pick FR court",
+                "Edge pick FR description"
+            ),
         ),
-        (None, None, "Edge pick".to_owned(), 17),
     );
+    let curator_avatar =
+        serde_json::from_str::<Value>(&row.get::<_, String>(3)).expect("curator avatar JSON");
+    assert_eq!(
+        curator_avatar,
+        json!({
+            "url": "https://example.test/avatar-edge.jpg",
+            "alt": "Curator avatar",
+        })
+    );
+    assert_eq!(row.get::<_, i32>(4), 17);
 }
 
 #[scenario(
