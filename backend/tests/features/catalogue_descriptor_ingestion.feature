@@ -7,3 +7,5 @@ Feature: Catalogue and descriptor ingestion
     Then the descriptor repository reports a query error
     When a community pick without route and user references is upserted
     Then the stored community pick keeps null route and user references
+    When the route categories table is dropped and a route category upsert is attempted
+    Then the catalogue repository reports a query error

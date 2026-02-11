@@ -272,6 +272,46 @@ fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
     );
 }
 
+#[when("the route categories table is dropped and a route category upsert is attempted")]
+fn the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted(
+    world: SharedContext,
+) {
+    let (catalogue_repository, handle) = {
+        let mut ctx = world.lock().expect("context lock");
+        ctx.client
+            .batch_execute("DROP TABLE route_categories CASCADE;")
+            .expect("route_categories table should drop");
+        (
+            ctx.catalogue_repository.clone(),
+            ctx.runtime.handle().clone(),
+        )
+    };
+
+    let category = build_ingestion_snapshots().category;
+
+    let result = handle.block_on(async {
+        catalogue_repository
+            .upsert_route_categories(std::slice::from_ref(&category))
+            .await
+    });
+
+    let mut ctx = world.lock().expect("context lock");
+    ctx.last_catalogue_error = result.err();
+}
+
+#[then("the catalogue repository reports a query error")]
+fn the_catalogue_repository_reports_a_query_error(world: SharedContext) {
+    let ctx = world.lock().expect("context lock");
+    assert!(
+        matches!(
+            ctx.last_catalogue_error,
+            Some(CatalogueIngestionRepositoryError::Query { .. })
+        ),
+        "expected CatalogueIngestionRepositoryError::Query, got {:?}",
+        ctx.last_catalogue_error
+    );
+}
+
 #[when("a community pick without route and user references is upserted")]
 fn a_community_pick_without_route_and_user_references_is_upserted(world: SharedContext) {
     let (catalogue_repository, handle) = {
