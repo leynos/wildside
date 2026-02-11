@@ -62,161 +62,130 @@ impl From<SemanticIconIdentifierValidationError> for DescriptorValidationError {
     }
 }
 
-/// Tag descriptor shown in route metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Tag {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
+macro_rules! define_simple_descriptor {
+    (
+        $(#[$struct_attribute:meta])*
+        $type_name:ident,
+        $field_prefix:literal,
+        $doc_example:literal
+    ) => {
+        $(#[$struct_attribute])*
+        pub struct $type_name {
+            pub id: Uuid,
+            pub slug: String,
+            pub icon_key: SemanticIconIdentifier,
+            pub localizations: LocalizationMap,
+        }
+
+        impl $type_name {
+            /// Validate and construct the descriptor.
+            ///
+            /// # Examples
+            #[doc = $doc_example]
+            pub fn new(
+                id: Uuid,
+                slug: impl Into<String>,
+                icon_key: SemanticIconIdentifier,
+                localizations: LocalizationMap,
+            ) -> Result<Self, DescriptorValidationError> {
+                let slug = validate_slug(slug.into(), concat!($field_prefix, ".slug"))?;
+                Ok(Self {
+                    id,
+                    slug,
+                    icon_key,
+                    localizations,
+                })
+            }
+        }
+    };
 }
 
-impl Tag {
-    /// Validate and construct the descriptor.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use std::collections::BTreeMap;
-    ///
-    /// use backend::domain::{
-    ///     LocalizedStringSet, LocalizationMap, SemanticIconIdentifier, Tag,
-    /// };
-    /// use uuid::Uuid;
-    ///
-    /// let mut values = BTreeMap::new();
-    /// values.insert(
-    ///     "en-GB".to_owned(),
-    ///     LocalizedStringSet::new("Family friendly", Some("Family".to_owned()), None),
-    /// );
-    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
-    /// let icon = SemanticIconIdentifier::new("tag:family").expect("valid icon");
-    ///
-    /// let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon, localizations)
-    ///     .expect("valid tag");
-    /// assert_eq!(tag.slug, "family-friendly");
-    /// ```
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "tag.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+define_simple_descriptor!(
+    /// Tag descriptor shown in route metadata.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(deny_unknown_fields)]
+    Tag,
+    "tag",
+    r#"```rust
+use std::collections::BTreeMap;
 
-/// Badge descriptor shown in route summary metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Badge {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-}
+use backend::domain::{
+    LocalizedStringSet, LocalizationMap, SemanticIconIdentifier, Tag,
+};
+use uuid::Uuid;
 
-impl Badge {
-    /// Validate and construct the descriptor.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use std::collections::BTreeMap;
-    ///
-    /// use backend::domain::{
-    ///     Badge, LocalizedStringSet, LocalizationMap, SemanticIconIdentifier,
-    /// };
-    /// use uuid::Uuid;
-    ///
-    /// let mut values = BTreeMap::new();
-    /// values.insert(
-    ///     "en-GB".to_owned(),
-    ///     LocalizedStringSet::new("Accessible", None, Some("Step-free".to_owned())),
-    /// );
-    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
-    /// let icon = SemanticIconIdentifier::new("badge:accessible").expect("valid icon");
-    ///
-    /// let badge = Badge::new(Uuid::new_v4(), "accessible", icon, localizations)
-    ///     .expect("valid badge");
-    /// assert_eq!(badge.slug, "accessible");
-    /// ```
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "badge.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+let mut values = BTreeMap::new();
+values.insert(
+    "en-GB".to_owned(),
+    LocalizedStringSet::new("Family friendly", Some("Family".to_owned()), None),
+);
+let localizations = LocalizationMap::new(values).expect("valid localizations");
+let icon = SemanticIconIdentifier::new("tag:family").expect("valid icon");
 
-/// Safety toggle descriptor used by user preferences.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct SafetyToggle {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-}
+let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon, localizations)
+    .expect("valid tag");
+assert_eq!(tag.slug, "family-friendly");
+```"#
+);
 
-impl SafetyToggle {
-    /// Validate and construct the descriptor.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use std::collections::BTreeMap;
-    ///
-    /// use backend::domain::{
-    ///     LocalizedStringSet, LocalizationMap, SafetyToggle, SemanticIconIdentifier,
-    /// };
-    /// use uuid::Uuid;
-    ///
-    /// let mut values = BTreeMap::new();
-    /// values.insert(
-    ///     "en-GB".to_owned(),
-    ///     LocalizedStringSet::new("Well lit", None, None),
-    /// );
-    /// let localizations = LocalizationMap::new(values).expect("valid localizations");
-    /// let icon = SemanticIconIdentifier::new("safety:well-lit").expect("valid icon");
-    ///
-    /// let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon, localizations)
-    ///     .expect("valid safety toggle");
-    /// assert_eq!(toggle.slug, "well-lit");
-    /// ```
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "safety_toggle.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+define_simple_descriptor!(
+    /// Badge descriptor shown in route summary metadata.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(deny_unknown_fields)]
+    Badge,
+    "badge",
+    r#"```rust
+use std::collections::BTreeMap;
+
+use backend::domain::{
+    Badge, LocalizedStringSet, LocalizationMap, SemanticIconIdentifier,
+};
+use uuid::Uuid;
+
+let mut values = BTreeMap::new();
+values.insert(
+    "en-GB".to_owned(),
+    LocalizedStringSet::new("Accessible", None, Some("Step-free".to_owned())),
+);
+let localizations = LocalizationMap::new(values).expect("valid localizations");
+let icon = SemanticIconIdentifier::new("badge:accessible").expect("valid icon");
+
+let badge = Badge::new(Uuid::new_v4(), "accessible", icon, localizations)
+    .expect("valid badge");
+assert_eq!(badge.slug, "accessible");
+```"#
+);
+
+define_simple_descriptor!(
+    /// Safety toggle descriptor used by user preferences.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(deny_unknown_fields)]
+    SafetyToggle,
+    "safety_toggle",
+    r#"```rust
+use std::collections::BTreeMap;
+
+use backend::domain::{
+    LocalizedStringSet, LocalizationMap, SafetyToggle, SemanticIconIdentifier,
+};
+use uuid::Uuid;
+
+let mut values = BTreeMap::new();
+values.insert(
+    "en-GB".to_owned(),
+    LocalizedStringSet::new("Well lit", None, None),
+);
+let localizations = LocalizationMap::new(values).expect("valid localizations");
+let icon = SemanticIconIdentifier::new("safety:well-lit").expect("valid icon");
+
+let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon, localizations)
+    .expect("valid safety toggle");
+assert_eq!(toggle.slug, "well-lit");
+```"#
+);
 
 /// Interest theme descriptor consumed by user preference flows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
