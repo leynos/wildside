@@ -33,16 +33,14 @@ pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
 #[cfg(test)]
 pub use catalogue_ingestion_repository::MockCatalogueIngestionRepository;
 pub use catalogue_ingestion_repository::{
-    CatalogueIngestionRepository, CatalogueIngestionRepositoryError, CommunityPickIngestion,
-    FixtureCatalogueIngestionRepository, RouteCategoryIngestion, RouteCollectionIngestion,
-    RouteSummaryIngestion, ThemeIngestion, TrendingRouteHighlightIngestion,
+    CatalogueIngestionRepository, CatalogueIngestionRepositoryError,
+    FixtureCatalogueIngestionRepository,
 };
 #[cfg(test)]
 pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
 pub use descriptor_ingestion_repository::{
-    BadgeIngestion, DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
-    FixtureDescriptorIngestionRepository, InterestThemeIngestion, SafetyPresetIngestion,
-    SafetyToggleIngestion, TagIngestion,
+    DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
+    FixtureDescriptorIngestionRepository, InterestThemeIngestion,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,

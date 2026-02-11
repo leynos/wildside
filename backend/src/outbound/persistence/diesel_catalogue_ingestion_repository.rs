@@ -2,11 +2,12 @@
 
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use serde_json::{Map, Value};
 
-use crate::domain::ports::{
-    CatalogueIngestionRepository, CatalogueIngestionRepositoryError, CommunityPickIngestion,
-    RouteCategoryIngestion, RouteCollectionIngestion, RouteSummaryIngestion, ThemeIngestion,
-    TrendingRouteHighlightIngestion,
+use crate::domain::ports::{CatalogueIngestionRepository, CatalogueIngestionRepositoryError};
+use crate::domain::{
+    CommunityPick, ImageAsset, LocalizationMap, LocalizedStringSet, RouteCategory, RouteCollection,
+    RouteSummary, Theme, TrendingRouteHighlight,
 };
 use crate::impl_upsert_methods;
 
@@ -45,90 +46,118 @@ fn map_diesel_error(error: diesel::result::Error) -> CatalogueIngestionRepositor
     ))
 }
 
-impl<'a> From<&'a RouteCategoryIngestion> for NewRouteCategoryRow<'a> {
-    fn from(record: &'a RouteCategoryIngestion) -> Self {
+fn localized_string_set_to_json(localized: &LocalizedStringSet) -> Value {
+    let mut object = Map::with_capacity(3);
+    object.insert("name".to_owned(), Value::String(localized.name.clone()));
+    if let Some(short_label) = &localized.short_label {
+        object.insert("shortLabel".to_owned(), Value::String(short_label.clone()));
+    }
+    if let Some(description) = &localized.description {
+        object.insert("description".to_owned(), Value::String(description.clone()));
+    }
+    Value::Object(object)
+}
+
+fn localization_map_to_json(localizations: &LocalizationMap) -> Value {
+    let values = localizations
+        .as_map()
+        .iter()
+        .map(|(locale, set)| (locale.clone(), localized_string_set_to_json(set)))
+        .collect::<Map<_, _>>();
+    Value::Object(values)
+}
+
+fn image_asset_to_json(image: &ImageAsset) -> Value {
+    Value::Object(Map::from_iter([
+        ("url".to_owned(), Value::String(image.url.clone())),
+        ("alt".to_owned(), Value::String(image.alt.clone())),
+    ]))
+}
+
+impl From<&RouteCategory> for NewRouteCategoryRow {
+    fn from(record: &RouteCategory) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
             route_count: record.route_count,
         }
     }
 }
 
-impl<'a> From<&'a ThemeIngestion> for NewThemeRow<'a> {
-    fn from(record: &'a ThemeIngestion) -> Self {
+impl From<&Theme> for NewThemeRow {
+    fn from(record: &Theme) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
-            image: &record.image,
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
+            image: image_asset_to_json(&record.image),
             walk_count: record.walk_count,
-            distance_range_metres: record.distance_range_metres.as_slice(),
+            distance_range_metres: record.distance_range_metres.to_vec(),
             rating: record.rating,
         }
     }
 }
 
-impl<'a> From<&'a RouteCollectionIngestion> for NewRouteCollectionRow<'a> {
-    fn from(record: &'a RouteCollectionIngestion) -> Self {
+impl From<&RouteCollection> for NewRouteCollectionRow {
+    fn from(record: &RouteCollection) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
-            lead_image: &record.lead_image,
-            map_preview: &record.map_preview,
-            distance_range_metres: record.distance_range_metres.as_slice(),
-            duration_range_seconds: record.duration_range_seconds.as_slice(),
-            difficulty: record.difficulty.as_str(),
-            route_ids: record.route_ids.as_slice(),
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
+            lead_image: image_asset_to_json(&record.lead_image),
+            map_preview: image_asset_to_json(&record.map_preview),
+            distance_range_metres: record.distance_range_metres.to_vec(),
+            duration_range_seconds: record.duration_range_seconds.to_vec(),
+            difficulty: record.difficulty.clone(),
+            route_ids: record.route_ids.clone(),
         }
     }
 }
 
-impl<'a> From<&'a RouteSummaryIngestion> for NewRouteSummaryRow<'a> {
-    fn from(record: &'a RouteSummaryIngestion) -> Self {
+impl From<&RouteSummary> for NewRouteSummaryRow {
+    fn from(record: &RouteSummary) -> Self {
         Self {
             id: record.id,
             route_id: record.route_id,
             category_id: record.category_id,
             theme_id: record.theme_id,
-            slug: record.slug.as_deref(),
-            localizations: &record.localizations,
-            hero_image: &record.hero_image,
+            slug: record.slug.clone(),
+            localizations: localization_map_to_json(&record.localizations),
+            hero_image: image_asset_to_json(&record.hero_image),
             distance_metres: record.distance_metres,
             duration_seconds: record.duration_seconds,
             rating: record.rating,
-            badge_ids: record.badge_ids.as_slice(),
-            difficulty: record.difficulty.as_str(),
-            interest_theme_ids: record.interest_theme_ids.as_slice(),
+            badge_ids: record.badge_ids.clone(),
+            difficulty: record.difficulty.clone(),
+            interest_theme_ids: record.interest_theme_ids.clone(),
         }
     }
 }
 
-impl<'a> From<&'a TrendingRouteHighlightIngestion> for NewTrendingRouteHighlightRow<'a> {
-    fn from(record: &'a TrendingRouteHighlightIngestion) -> Self {
+impl From<&TrendingRouteHighlight> for NewTrendingRouteHighlightRow {
+    fn from(record: &TrendingRouteHighlight) -> Self {
         Self {
             id: record.id,
             route_summary_id: record.route_summary_id,
-            trend_delta: record.trend_delta.as_str(),
-            subtitle_localizations: &record.subtitle_localizations,
+            trend_delta: record.trend_delta.clone(),
+            subtitle_localizations: localization_map_to_json(&record.subtitle_localizations),
         }
     }
 }
 
-impl<'a> From<&'a CommunityPickIngestion> for NewCommunityPickRow<'a> {
-    fn from(record: &'a CommunityPickIngestion) -> Self {
+impl From<&CommunityPick> for NewCommunityPickRow {
+    fn from(record: &CommunityPick) -> Self {
         Self {
             id: record.id,
             route_summary_id: record.route_summary_id,
             user_id: record.user_id,
-            localizations: &record.localizations,
-            curator_display_name: record.curator_display_name.as_str(),
-            curator_avatar: &record.curator_avatar,
+            localizations: localization_map_to_json(&record.localizations),
+            curator_display_name: record.curator_display_name.clone(),
+            curator_avatar: image_asset_to_json(&record.curator_avatar),
             rating: record.rating,
             distance_metres: record.distance_metres,
             duration_seconds: record.duration_seconds,
@@ -146,15 +175,15 @@ impl_upsert_methods! {
         methods: [
             (
                 upsert_route_categories,
-                RouteCategoryIngestion,
-                NewRouteCategoryRow<'_>,
+                RouteCategory,
+                NewRouteCategoryRow,
                 route_categories,
                 [slug, icon_key, localizations, route_count]
             ),
             (
                 upsert_themes,
-                ThemeIngestion,
-                NewThemeRow<'_>,
+                Theme,
+                NewThemeRow,
                 themes,
                 [
                     slug,
@@ -168,8 +197,8 @@ impl_upsert_methods! {
             ),
             (
                 upsert_route_collections,
-                RouteCollectionIngestion,
-                NewRouteCollectionRow<'_>,
+                RouteCollection,
+                NewRouteCollectionRow,
                 route_collections,
                 [
                     slug,
@@ -185,8 +214,8 @@ impl_upsert_methods! {
             ),
             (
                 upsert_route_summaries,
-                RouteSummaryIngestion,
-                NewRouteSummaryRow<'_>,
+                RouteSummary,
+                NewRouteSummaryRow,
                 route_summaries,
                 [
                     route_id,
@@ -205,15 +234,15 @@ impl_upsert_methods! {
             ),
             (
                 upsert_trending_highlights,
-                TrendingRouteHighlightIngestion,
-                NewTrendingRouteHighlightRow<'_>,
+                TrendingRouteHighlight,
+                NewTrendingRouteHighlightRow,
                 trending_route_highlights,
                 [route_summary_id, trend_delta, subtitle_localizations]
             ),
             (
                 upsert_community_picks,
-                CommunityPickIngestion,
-                NewCommunityPickRow<'_>,
+                CommunityPick,
+                NewCommunityPickRow,
                 community_picks,
                 [
                     route_summary_id,

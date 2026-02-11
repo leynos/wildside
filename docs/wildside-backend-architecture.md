@@ -627,6 +627,16 @@ services.
 > `docs/diagrams/er/schema-baseline.svg`. The Mermaid source is the canonical
 > review artefact; the SVG is regenerated from it. Snapshot writes stage files
 > atomically so renderer failures do not leave partial documentation output.
+>
+> **Design decision (2026-02-10):** Roadmap item 3.2.1 moves catalogue and
+> descriptor ingestion payload ownership into the domain by introducing
+> validated read-model entities (`RouteSummary`, `RouteCategory`, `Theme`,
+> `RouteCollection`, `TrendingRouteHighlight`, `CommunityPick`, `Tag`,
+> `Badge`, `SafetyToggle`, and `SafetyPreset`) plus shared value objects
+> (`LocalizationMap` and `SemanticIconIdentifier`). Domain ports now consume
+> these entities directly. JSONB and array serialization remain outbound
+> concerns inside Diesel adapters, preserving hexagonal boundaries while
+> enforcing localisation and icon semantics before persistence.
 
 #### Driving ports (services and queries)
 

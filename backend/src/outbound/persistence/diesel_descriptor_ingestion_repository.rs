@@ -2,11 +2,12 @@
 
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use serde_json::{Map, Value};
 
 use crate::domain::ports::{
-    BadgeIngestion, DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
-    InterestThemeIngestion, SafetyPresetIngestion, SafetyToggleIngestion, TagIngestion,
+    DescriptorIngestionRepository, DescriptorIngestionRepositoryError, InterestThemeIngestion,
 };
+use crate::domain::{Badge, LocalizationMap, LocalizedStringSet, SafetyPreset, SafetyToggle, Tag};
 use crate::impl_upsert_methods;
 
 use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
@@ -24,23 +25,9 @@ pub struct DieselDescriptorIngestionRepository {
 
 impl DieselDescriptorIngestionRepository {
     /// Create a new repository with the given connection pool.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use backend::outbound::persistence::{
-    ///     DbPool, DieselDescriptorIngestionRepository, PoolConfig,
-    /// };
-    ///
-    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pool = DbPool::new(PoolConfig::new("postgres://localhost")).await?;
-    /// let repository = DieselDescriptorIngestionRepository::new(pool);
-    /// # let _ = repository;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[rustfmt::skip]
-    pub fn new(pool: DbPool) -> Self { Self { pool } }
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
 }
 
 fn map_pool_error(error: PoolError) -> DescriptorIngestionRepositoryError {
@@ -54,57 +41,78 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
     ))
 }
 
-impl<'a> From<&'a TagIngestion> for NewTagRow<'a> {
-    fn from(record: &'a TagIngestion) -> Self {
+fn localized_string_set_to_json(localized: &LocalizedStringSet) -> Value {
+    let mut object = Map::with_capacity(3);
+    object.insert("name".to_owned(), Value::String(localized.name.clone()));
+    if let Some(short_label) = &localized.short_label {
+        object.insert("shortLabel".to_owned(), Value::String(short_label.clone()));
+    }
+    if let Some(description) = &localized.description {
+        object.insert("description".to_owned(), Value::String(description.clone()));
+    }
+    Value::Object(object)
+}
+
+fn localization_map_to_json(localizations: &LocalizationMap) -> Value {
+    let values = localizations
+        .as_map()
+        .iter()
+        .map(|(locale, set)| (locale.clone(), localized_string_set_to_json(set)))
+        .collect::<Map<_, _>>();
+    Value::Object(values)
+}
+
+impl From<&Tag> for NewTagRow {
+    fn from(record: &Tag) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl<'a> From<&'a BadgeIngestion> for NewBadgeRow<'a> {
-    fn from(record: &'a BadgeIngestion) -> Self {
+impl From<&Badge> for NewBadgeRow {
+    fn from(record: &Badge) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl<'a> From<&'a SafetyToggleIngestion> for NewSafetyToggleRow<'a> {
-    fn from(record: &'a SafetyToggleIngestion) -> Self {
+impl From<&SafetyToggle> for NewSafetyToggleRow {
+    fn from(record: &SafetyToggle) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
         }
     }
 }
 
-impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
-    fn from(record: &'a SafetyPresetIngestion) -> Self {
+impl From<&SafetyPreset> for NewSafetyPresetRow {
+    fn from(record: &SafetyPreset) -> Self {
         Self {
             id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
-            safety_toggle_ids: record.safety_toggle_ids.as_slice(),
+            slug: record.slug.clone(),
+            icon_key: record.icon_key.as_ref().to_owned(),
+            localizations: localization_map_to_json(&record.localizations),
+            safety_toggle_ids: record.safety_toggle_ids.clone(),
         }
     }
 }
 
-impl<'a> From<&'a InterestThemeIngestion> for NewInterestThemeRow<'a> {
-    fn from(record: &'a InterestThemeIngestion) -> Self {
+impl From<&InterestThemeIngestion> for NewInterestThemeRow {
+    fn from(record: &InterestThemeIngestion) -> Self {
         Self {
             id: record.id,
-            name: record.name.as_str(),
-            description: record.description.as_deref(),
+            name: record.name.clone(),
+            description: record.description.clone(),
         }
     }
 }
@@ -118,29 +126,29 @@ impl_upsert_methods! {
         methods: [
             (
                 upsert_tags,
-                TagIngestion,
-                NewTagRow<'_>,
+                Tag,
+                NewTagRow,
                 tags,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_badges,
-                BadgeIngestion,
-                NewBadgeRow<'_>,
+                Badge,
+                NewBadgeRow,
                 badges,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_toggles,
-                SafetyToggleIngestion,
-                NewSafetyToggleRow<'_>,
+                SafetyToggle,
+                NewSafetyToggleRow,
                 safety_toggles,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_presets,
-                SafetyPresetIngestion,
-                NewSafetyPresetRow<'_>,
+                SafetyPreset,
+                NewSafetyPresetRow,
                 safety_presets,
                 [slug, icon_key, localizations, safety_toggle_ids]
             )
@@ -157,7 +165,7 @@ impl_upsert_methods! {
                     return Ok(());
                 }
                 let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-                let rows: Vec<NewInterestThemeRow<'_>> = records
+                let rows: Vec<NewInterestThemeRow> = records
                     .iter()
                     .map(NewInterestThemeRow::from)
                     .collect();

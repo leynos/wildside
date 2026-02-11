@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETED
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference.
@@ -108,18 +108,25 @@ Observable outcome:
       needed to draft this ExecPlan.
 - [x] (2026-02-10) Create initial ExecPlan draft with constraints, tolerances,
       risks, staged work, and quality gates.
-- [ ] Implement domain modules and value objects for catalogue/descriptor read
+- [x] (2026-02-10) Implement domain modules and value objects for
+      catalogue/descriptor read
       models.
-- [ ] Update domain ports to use new domain-owned types for ingestion payloads.
-- [ ] Update outbound persistence adapters and mappings to compile with new
+- [x] (2026-02-10) Update domain ports to use new domain-owned types for
+      ingestion payloads.
+- [x] (2026-02-10) Update outbound persistence adapters and mappings to compile
+      with new
       domain payloads.
-- [ ] Add/extend unit tests (`rstest`) for happy/unhappy and edge-case domain
+- [x] (2026-02-10) Add/extend unit tests (`rstest`) for happy/unhappy and
+      edge-case domain
       validation paths.
-- [ ] Add/extend behavioural tests (`rstest-bdd`) with embedded PostgreSQL for
+- [x] (2026-02-10) Add/extend behavioural tests (`rstest-bdd`) with embedded
+      PostgreSQL for
       ingest-path coverage.
-- [ ] Record design decisions in `docs/wildside-backend-architecture.md`.
-- [ ] Mark roadmap item 3.2.1 done in `docs/backend-roadmap.md`.
-- [ ] Run and pass `make check-fmt`, `make lint`, and `make test`.
+- [x] (2026-02-10) Record design decisions in
+      `docs/wildside-backend-architecture.md`.
+- [x] (2026-02-10) Mark roadmap item 3.2.1 done in
+      `docs/backend-roadmap.md`.
+- [x] (2026-02-11) Run and pass `make check-fmt`, `make lint`, and `make test`.
 - [ ] Commit gated implementation changes.
 
 ## Surprises & discoveries
@@ -138,6 +145,34 @@ Observable outcome:
   Impact: exact-text fallback (`rg`) is acceptable when semantic index is not
   usable.
 
+- Observation (2026-02-10): A first-cut `catalogue` module exceeded the
+  repository's 400-line code file limit.
+  Evidence: `backend/src/domain/catalogue/mod.rs` reached 460 lines.
+  Impact: Split catalogue entities into focused submodules and kept validation
+  helpers in a dedicated file.
+
+- Observation (2026-02-11): The new behavioural suite timed out under the
+  default nextest slow timeout.
+  Evidence: `catalogue_descriptor_ingestion_bdd` exceeded 60 seconds in early
+  runs.
+  Impact: Added `binary(catalogue_descriptor_ingestion_bdd)` to
+  `.config/nextest.toml` slow-suite overrides (`300s`) alongside other
+  pg-embedded suites.
+
+- Observation (2026-02-11): `rstest-bdd` step fixture names must match exactly;
+  underscore-prefixed parameter names are treated as different fixtures.
+  Evidence: panic reported missing fixture `_world` while scenario provided
+  `world`.
+  Impact: renamed step parameter to `world` and consumed it explicitly.
+
+- Observation (2026-02-11): Baseline schema enforces foreign keys from
+  `route_summaries.route_id` to `routes.id` and from `community_picks.user_id`
+  to `users.id`.
+  Evidence: behavioural test failed with
+  `route_summaries_route_id_fkey` violation when using random UUID fixtures.
+  Impact: seeded deterministic `users`/`routes` rows in the Given step and
+  switched test fixtures to stable IDs.
+
 ## Decision log
 
 - Decision: keep this plan scoped to domain type modelling and ingestion-port
@@ -153,17 +188,30 @@ Observable outcome:
   adapters responsible for JSONB mapping.
   Date/Author: 2026-02-10 / Codex.
 
+- Decision: treat `catalogue_descriptor_ingestion_bdd` as a slow embedded-
+  Postgres suite in nextest profile overrides.
+  Rationale: avoids false timeouts from template database provisioning and
+  aligns scheduler behaviour with existing pg-embedded behavioural binaries.
+  Date/Author: 2026-02-11 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implemented and validated.
 
-Completion criteria for retrospective update:
-
-- Confirm the ten required domain types exist with localisation and semantic
-  icon support.
-- Confirm unit and behavioural coverage captures happy, unhappy, and edge-case
-  paths.
-- Confirm docs and roadmap are updated and quality gates pass.
+- Ten domain entities for roadmap 3.2.1 now live under domain ownership with
+  validated localisation and semantic icon value objects.
+- Ingestion ports consume domain entities directly, while Diesel adapters
+  handle JSONB/array persistence mapping as outbound concerns.
+- Unit coverage (`rstest`) exercises happy/unhappy/edge validation for the new
+  domain types and shared value objects.
+- Behavioural coverage (`rstest-bdd`) validates successful upserts, error
+  propagation, and nullable-edge persistence with embedded PostgreSQL.
+- `docs/wildside-backend-architecture.md` records 3.2.1 design decisions and
+  `docs/backend-roadmap.md` marks 3.2.1 complete.
+- Quality gates passed on 2026-02-11:
+  - `make check-fmt`
+  - `make lint`
+  - `make test`
 
 ## Context and orientation
 
