@@ -7,6 +7,10 @@ use backend::domain::ports::{
     CatalogueIngestionRepository, CatalogueIngestionRepositoryError, DescriptorIngestionRepository,
     DescriptorIngestionRepositoryError,
 };
+use backend::domain::{
+    Badge, CommunityPick, RouteCategory, RouteCollection, RouteSummary, SafetyPreset, SafetyToggle,
+    Tag, Theme, TrendingRouteHighlight,
+};
 use backend::outbound::persistence::{
     DbPool, DieselCatalogueIngestionRepository, DieselDescriptorIngestionRepository, PoolConfig,
 };
@@ -96,6 +100,35 @@ fn a_diesel_backed_catalogue_and_descriptor_ingestion_repository(world: SharedCo
         .expect("fixture route should exist");
 }
 
+fn create_catalogue_fixtures() -> (
+    RouteCategory,
+    Theme,
+    RouteCollection,
+    RouteSummary,
+    TrendingRouteHighlight,
+    CommunityPick,
+) {
+    let snapshots = build_ingestion_snapshots();
+    (
+        snapshots.category,
+        snapshots.theme,
+        snapshots.collection,
+        snapshots.summary,
+        snapshots.highlight,
+        snapshots.pick,
+    )
+}
+
+fn create_descriptor_fixtures() -> (Tag, Badge, SafetyToggle, SafetyPreset) {
+    let snapshots = build_ingestion_snapshots();
+    (
+        snapshots.tag,
+        snapshots.badge,
+        snapshots.toggle,
+        snapshots.preset,
+    )
+}
+
 #[when("the repositories upsert validated catalogue and descriptor snapshots")]
 fn upsert_validated_catalogue_and_descriptor_snapshots(world: SharedContext) {
     let (catalogue_repository, descriptor_repository, handle) = {
@@ -107,42 +140,43 @@ fn upsert_validated_catalogue_and_descriptor_snapshots(world: SharedContext) {
         )
     };
 
-    let snapshots = build_ingestion_snapshots();
+    let (category, theme, collection, summary, highlight, pick) = create_catalogue_fixtures();
+    let (tag, badge, toggle, preset) = create_descriptor_fixtures();
 
     let catalogue_result = handle.block_on(async {
         catalogue_repository
-            .upsert_route_categories(std::slice::from_ref(&snapshots.category))
+            .upsert_route_categories(std::slice::from_ref(&category))
             .await?;
         catalogue_repository
-            .upsert_themes(std::slice::from_ref(&snapshots.theme))
+            .upsert_themes(std::slice::from_ref(&theme))
             .await?;
         catalogue_repository
-            .upsert_route_collections(std::slice::from_ref(&snapshots.collection))
+            .upsert_route_collections(std::slice::from_ref(&collection))
             .await?;
         catalogue_repository
-            .upsert_route_summaries(std::slice::from_ref(&snapshots.summary))
+            .upsert_route_summaries(std::slice::from_ref(&summary))
             .await?;
         catalogue_repository
-            .upsert_trending_highlights(std::slice::from_ref(&snapshots.highlight))
+            .upsert_trending_highlights(std::slice::from_ref(&highlight))
             .await?;
         catalogue_repository
-            .upsert_community_picks(std::slice::from_ref(&snapshots.pick))
+            .upsert_community_picks(std::slice::from_ref(&pick))
             .await?;
         Ok::<(), CatalogueIngestionRepositoryError>(())
     });
 
     let descriptor_result = handle.block_on(async {
         descriptor_repository
-            .upsert_tags(std::slice::from_ref(&snapshots.tag))
+            .upsert_tags(std::slice::from_ref(&tag))
             .await?;
         descriptor_repository
-            .upsert_badges(std::slice::from_ref(&snapshots.badge))
+            .upsert_badges(std::slice::from_ref(&badge))
             .await?;
         descriptor_repository
-            .upsert_safety_toggles(std::slice::from_ref(&snapshots.toggle))
+            .upsert_safety_toggles(std::slice::from_ref(&toggle))
             .await?;
         descriptor_repository
-            .upsert_safety_presets(std::slice::from_ref(&snapshots.preset))
+            .upsert_safety_presets(std::slice::from_ref(&preset))
             .await?;
         Ok::<(), DescriptorIngestionRepositoryError>(())
     });
