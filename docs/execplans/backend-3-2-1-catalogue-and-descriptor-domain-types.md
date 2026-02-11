@@ -13,7 +13,7 @@ execution reference.
 ## Purpose / big picture
 
 Roadmap item 3.2.1 requires first-class domain types for catalogue and
-descriptor read models so persistence payload shapes no longer live as
+descriptor read models, so persistence payload shapes no longer live as
 adapter-centric `serde_json::Value` bags. After this work, the backend domain
 will own strongly typed representations for:
 
@@ -28,7 +28,7 @@ will own strongly typed representations for:
 - `SafetyToggle`
 - `SafetyPreset`
 
-These types will include localisation maps and semantic icon identifiers, and
+These types will include localization maps and semantic icon identifiers, and
 ingestion-facing operations will consume domain-owned types through domain
 ports, keeping persistence details in outbound adapters.
 
@@ -36,8 +36,8 @@ Observable outcome:
 
 - New domain types compile and enforce documented invariants.
 - Unit tests (`rstest`) cover happy and unhappy construction paths.
-- Behavioural tests (`rstest-bdd`) cover database-backed ingest flows with
-  embedded PostgreSQL via `pg-embedded-setup-unpriv`.
+- Behaviour-driven development (BDD) tests (`rstest-bdd`) cover database-backed
+  ingest flows with embedded PostgreSQL via `pg-embedded-setup-unpriv`.
 - `docs/wildside-backend-architecture.md` records design decisions.
 - `docs/backend-roadmap.md` marks task 3.2.1 done once all gates pass.
 - `make check-fmt`, `make lint`, and `make test` succeed.
@@ -53,7 +53,7 @@ Observable outcome:
   - `docs/backend-roadmap.md` section 3.2.1.
   - `docs/wildside-backend-architecture.md` catalogue/descriptor sections.
   - `docs/wildside-pwa-data-model.md` read-model and descriptor shapes.
-- Localisation payloads must be modelled as explicit map types rather than raw
+- Localization payloads must be modelled as explicit map types rather than raw
   strings or frontend class names.
 - Semantic icon identifiers must remain semantic keys (for example,
   `category:nature`) and must not encode presentation class names.
@@ -70,7 +70,8 @@ Observable outcome:
 
 ## Tolerances (exception triggers)
 
-- Scope: if implementation exceeds 16 files or 900 net LOC, stop and reassess.
+- Scope: if implementation exceeds 16 files or 900 net lines of code (LOC),
+  stop and reassess.
 - API drift: if HTTP endpoint contracts must change in this step, stop and
   defer to roadmap task 3.2.3.
 - Dependencies: if a new crate is required, stop and escalate with options.
@@ -81,7 +82,7 @@ Observable outcome:
 
 ## Risks
 
-- Risk: introducing strict validation for localisation keys or icon IDs may
+- Risk: introducing strict validation for localization keys or icon IDs may
   reject legacy fixture data used by ingestion tests.
   Severity: medium
   Likelihood: medium
@@ -99,8 +100,8 @@ Observable outcome:
   of port semantics.
   Severity: medium
   Likelihood: low
-  Mitigation: structure BDD steps around domain ports and observable DB
-  outcomes, not adapter implementation details.
+  Mitigation: structure behaviour-driven development steps around domain ports
+  and observable database outcomes, not adapter implementation details.
 
 ## Progress
 
@@ -181,7 +182,7 @@ Observable outcome:
   Rationale: preserves roadmap sequencing and keeps this change atomic.
   Date/Author: 2026-02-10 / Codex.
 
-- Decision: model localisation and semantic icon identifiers as dedicated domain
+- Decision: model localization and semantic icon identifiers as dedicated domain
   value objects (or aliases/newtypes with validation) rather than raw
   `serde_json::Value`/`String` in domain-facing types.
   Rationale: improves invariants, readability, and testability while keeping
@@ -199,7 +200,7 @@ Observable outcome:
 Implemented and validated.
 
 - Ten domain entities for roadmap 3.2.1 now live under domain ownership with
-  validated localisation and semantic icon value objects.
+  validated localization and semantic icon value objects.
 - Ingestion ports consume domain entities directly, while Diesel adapters
   handle JSONB/array persistence mapping as outbound concerns.
 - Unit coverage (`rstest`) exercises happy/unhappy/edge validation for the new
@@ -220,7 +221,7 @@ Primary roadmap and architecture references:
 - `docs/backend-roadmap.md` (task 3.2.1).
 - `docs/wildside-backend-architecture.md` (catalogue/descriptor persistence
   and design decision log).
-- `docs/wildside-pwa-data-model.md` (canonical model shape for localisation,
+- `docs/wildside-pwa-data-model.md` (canonical model shape for localization,
   icon keys, and read-model entities).
 
 Current backend code relevant to this task:
@@ -276,7 +277,7 @@ maintaining <400 lines per file.
 Stage A: settle domain shape and invariants (no adapter rewiring yet).
 
 - Define shared value objects for:
-  - Localisation map shape.
+  - Localization map shape.
   - Semantic icon identifier.
 - Define the ten required domain types with explicit fields aligned to
   `docs/wildside-pwa-data-model.md` and current migration columns.
@@ -315,14 +316,14 @@ Stage C: update outbound adapters and row mappings.
 
 Go/no-go check for Stage C:
 
-- Contract-style DB-backed tests compile and pass for ingestion adapters.
+- Contract-style database-backed tests compile and pass for ingestion adapters.
 
 Stage D: test coverage expansion (unit + behavioural).
 
 - Unit tests (`rstest`) in new/updated domain modules:
   - Happy paths: valid constructors/builders and serde round-trips where
     applicable.
-  - Unhappy paths: invalid slugs/icon keys/localisation maps or invalid ranges.
+  - Unhappy paths: invalid slugs/icon keys/localization maps or invalid ranges.
   - Edge cases: optional fields (`slug`, `routeId`) and boundary numeric values.
 - Behavioural tests (`rstest-bdd`) with embedded PostgreSQL:
   - Add `backend/tests/catalogue_descriptor_domain_types_bdd.rs`.
@@ -333,7 +334,7 @@ Stage D: test coverage expansion (unit + behavioural).
     - Happy path: domain payloads persisted via ingestion ports/adapters.
     - Unhappy path: unique-constraint or validation failure surfaces as domain
       port error.
-    - Edge path: localisation JSON and icon keys persist intact.
+    - Edge path: localization JSON and icon keys persist intact.
 
 Go/no-go check for Stage D:
 
@@ -344,7 +345,7 @@ Stage E: documentation and roadmap updates.
 - Add a design decision entry in `docs/wildside-backend-architecture.md`
   capturing:
   - Why domain-owned read-model types were introduced.
-  - How localisation/icon semantics are validated.
+  - How localization/icon semantics are validated.
   - Why persistence JSON mapping remains in outbound adapters.
 - Mark roadmap task 3.2.1 as done in `docs/backend-roadmap.md` only after all
   tests and gates pass.
@@ -372,17 +373,20 @@ Run from repository root:
 
 3. Run required quality gates with log capture:
 
-    make check-fmt 2>&1 | tee /tmp/check-fmt-$(get-project)-$(git branch --show).out
+    PROJECT_NAME=wildside
+    BRANCH_NAME=$(git branch --show-current)
 
-    make lint 2>&1 | tee /tmp/lint-$(get-project)-$(git branch --show).out
+    make check-fmt 2>&1 | tee /tmp/check-fmt-${PROJECT_NAME}-${BRANCH_NAME}.out
 
-    make test 2>&1 | tee /tmp/test-$(get-project)-$(git branch --show).out
+    make lint 2>&1 | tee /tmp/lint-${PROJECT_NAME}-${BRANCH_NAME}.out
+
+    make test 2>&1 | tee /tmp/test-${PROJECT_NAME}-${BRANCH_NAME}.out
 
 4. Inspect logs before commit:
 
-    tail -n 40 /tmp/check-fmt-$(get-project)-$(git branch --show).out
-    tail -n 40 /tmp/lint-$(get-project)-$(git branch --show).out
-    tail -n 40 /tmp/test-$(get-project)-$(git branch --show).out
+    tail -n 40 /tmp/check-fmt-${PROJECT_NAME}-${BRANCH_NAME}.out
+    tail -n 40 /tmp/lint-${PROJECT_NAME}-${BRANCH_NAME}.out
+    tail -n 40 /tmp/test-${PROJECT_NAME}-${BRANCH_NAME}.out
 
 5. Update docs and roadmap, then commit once all gates pass.
 
@@ -390,7 +394,7 @@ Run from repository root:
 
 Functional acceptance:
 
-- Domain defines the 10 required catalogue/descriptor types with localisation
+- Domain defines the 10 required catalogue/descriptor types with localization
   maps and semantic icon identifiers.
 - Ingestion operations still flow through domain ports; outbound adapters remain
   the only place mapping to Diesel/JSONB rows.
@@ -404,7 +408,7 @@ Test acceptance:
 - Behavioural tests (`rstest-bdd`) cover:
   - PostgreSQL-backed happy path.
   - At least one unhappy persistence/validation path.
-  - Localisation/icon fidelity.
+  - Localization/icon fidelity.
 
 Quality-gate acceptance:
 
@@ -426,7 +430,7 @@ Documentation acceptance:
   isolating state between runs.
 - If a migration-state issue appears in behavioural tests, reprovision via
   existing helpers in `backend/tests/support/pg_embed.rs` rather than mutating
-  shared global DB state manually.
+  shared global database state manually.
 
 ## Artifacts and notes
 
@@ -443,7 +447,7 @@ Expected artifacts during implementation:
 Primary interfaces to exist after implementation:
 
 - Domain entities for all ten roadmap 3.2.1 types.
-- Domain value object(s) for localisation map and semantic icon identifier.
+- Domain value object(s) for localization map and semantic icon identifier.
 - Updated ingestion port signatures in:
   - `crate::domain::ports::CatalogueIngestionRepository`
   - `crate::domain::ports::DescriptorIngestionRepository`
