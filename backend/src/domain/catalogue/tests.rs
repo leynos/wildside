@@ -26,6 +26,24 @@ fn image() -> ImageAsset {
     ImageAsset::new("https://example.test/hero.jpg", "Cliff path").expect("valid image")
 }
 
+fn route_summary_draft(slug: Option<String>) -> RouteSummaryDraft {
+    RouteSummaryDraft {
+        id: Uuid::new_v4(),
+        route_id: Uuid::new_v4(),
+        category_id: Uuid::new_v4(),
+        theme_id: Uuid::new_v4(),
+        slug,
+        localizations: localizations(),
+        hero_image: image(),
+        distance_metres: 3_500,
+        duration_seconds: 4_200,
+        rating: 4.7,
+        badge_ids: vec![Uuid::new_v4()],
+        difficulty: "moderate".to_owned(),
+        interest_theme_ids: vec![Uuid::new_v4()],
+    }
+}
+
 #[rstest]
 fn route_category_rejects_invalid_slug() {
     let result = RouteCategory::new(RouteCategoryDraft {
@@ -107,47 +125,16 @@ fn route_collection_rejects_empty_difficulty() {
 }
 
 #[rstest]
-fn route_summary_new_accepts_valid_payload() {
-    let summary = RouteSummary::new(RouteSummaryDraft {
-        id: Uuid::new_v4(),
-        route_id: Uuid::new_v4(),
-        category_id: Uuid::new_v4(),
-        theme_id: Uuid::new_v4(),
-        slug: Some("coastal-route".to_owned()),
-        localizations: localizations(),
-        hero_image: image(),
-        distance_metres: 3_500,
-        duration_seconds: 4_200,
-        rating: 4.7,
-        badge_ids: vec![Uuid::new_v4()],
-        difficulty: "moderate".to_owned(),
-        interest_theme_ids: vec![Uuid::new_v4()],
-    })
-    .expect("valid summary");
+#[case(Some("coastal-route".to_owned()), Some("coastal-route"))]
+#[case(None, None)]
+fn route_summary_accepts_valid_slug_variants(
+    #[case] slug_input: Option<String>,
+    #[case] expected_slug: Option<&str>,
+) {
+    let summary =
+        RouteSummary::new(route_summary_draft(slug_input)).expect("valid route summary draft");
 
-    assert_eq!(summary.slug.as_deref(), Some("coastal-route"));
-}
-
-#[rstest]
-fn route_summary_allows_missing_slug() {
-    let summary = RouteSummary::new(RouteSummaryDraft {
-        id: Uuid::new_v4(),
-        route_id: Uuid::new_v4(),
-        category_id: Uuid::new_v4(),
-        theme_id: Uuid::new_v4(),
-        slug: None,
-        localizations: localizations(),
-        hero_image: image(),
-        distance_metres: 500,
-        duration_seconds: 600,
-        rating: 1.0,
-        badge_ids: vec![],
-        difficulty: "easy".to_owned(),
-        interest_theme_ids: vec![],
-    })
-    .expect("summary without slug");
-
-    assert!(summary.slug.is_none());
+    assert_eq!(summary.slug.as_deref(), expected_slug);
 }
 
 #[rstest]

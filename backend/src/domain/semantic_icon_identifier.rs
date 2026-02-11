@@ -35,6 +35,16 @@ pub struct SemanticIconIdentifier(String);
 
 impl SemanticIconIdentifier {
     /// Validate and construct a semantic icon identifier.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::SemanticIconIdentifier;
+    ///
+    /// let icon = SemanticIconIdentifier::new("category:nature")
+    ///     .expect("valid semantic icon identifier");
+    /// assert_eq!(icon.as_ref(), "category:nature");
+    /// ```
     pub fn new(value: impl AsRef<str>) -> Result<Self, SemanticIconIdentifierValidationError> {
         let value = value.as_ref();
         if value.trim().is_empty() {

@@ -2,15 +2,15 @@
 
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use serde_json::{Map, Value};
 
 use crate::domain::ports::{
     DescriptorIngestionRepository, DescriptorIngestionRepositoryError, InterestThemeIngestion,
 };
-use crate::domain::{Badge, LocalizationMap, LocalizedStringSet, SafetyPreset, SafetyToggle, Tag};
+use crate::domain::{Badge, SafetyPreset, SafetyToggle, Tag};
 use crate::impl_upsert_methods;
 
 use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
+use super::json_serializers::localization_map_to_json;
 use super::models::{
     NewBadgeRow, NewInterestThemeRow, NewSafetyPresetRow, NewSafetyToggleRow, NewTagRow,
 };
@@ -39,27 +39,6 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
         error,
         "descriptor ingestion upsert",
     ))
-}
-
-fn localized_string_set_to_json(localized: &LocalizedStringSet) -> Value {
-    let mut object = Map::with_capacity(3);
-    object.insert("name".to_owned(), Value::String(localized.name.clone()));
-    if let Some(short_label) = &localized.short_label {
-        object.insert("shortLabel".to_owned(), Value::String(short_label.clone()));
-    }
-    if let Some(description) = &localized.description {
-        object.insert("description".to_owned(), Value::String(description.clone()));
-    }
-    Value::Object(object)
-}
-
-fn localization_map_to_json(localizations: &LocalizationMap) -> Value {
-    let values = localizations
-        .as_map()
-        .iter()
-        .map(|(locale, set)| (locale.clone(), localized_string_set_to_json(set)))
-        .collect::<Map<_, _>>();
-    Value::Object(values)
 }
 
 impl From<&Tag> for NewTagRow {

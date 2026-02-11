@@ -1,18 +1,13 @@
 //! Validation helpers shared by catalogue read-model entities.
 
 use super::CatalogueValidationError;
+use crate::domain::slug::is_valid_slug;
 
 pub(super) fn validate_slug(
     value: String,
     field: &'static str,
 ) -> Result<String, CatalogueValidationError> {
-    if value.trim() != value || value.is_empty() {
-        return Err(CatalogueValidationError::InvalidSlug { field });
-    }
-    if !value
-        .chars()
-        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-    {
+    if !is_valid_slug(&value) {
         return Err(CatalogueValidationError::InvalidSlug { field });
     }
     Ok(value)

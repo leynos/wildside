@@ -15,6 +15,16 @@ pub struct ImageAsset {
 
 impl ImageAsset {
     /// Create an image asset.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::ImageAsset;
+    ///
+    /// let image = ImageAsset::new("https://example.test/hero.jpg", "Route hero")
+    ///     .expect("valid image asset");
+    /// assert_eq!(image.url, "https://example.test/hero.jpg");
+    /// ```
     pub fn new(
         url: impl Into<String>,
         alt: impl Into<String>,

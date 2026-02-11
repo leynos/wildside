@@ -142,7 +142,7 @@ Observable outcome:
 
 - Observation (2026-02-10): The `grepai` index failed for one query (`failed to
   decode index: EOF`).
-  Evidence: CLI error during semantic search.
+  Evidence: command-line interface (CLI) error during semantic search.
   Impact: exact-text fallback (`rg`) is acceptable when semantic index is not
   usable.
 
@@ -170,7 +170,8 @@ Observable outcome:
   `route_summaries.route_id` to `routes.id` and from `community_picks.user_id`
   to `users.id`.
   Evidence: behavioural test failed with
-  `route_summaries_route_id_fkey` violation when using random UUID fixtures.
+  `route_summaries_route_id_fkey` violation when using random universally
+  unique identifier (UUID) fixtures.
   Impact: seeded deterministic `users`/`routes` rows in the Given step and
   switched test fixtures to stable IDs.
 

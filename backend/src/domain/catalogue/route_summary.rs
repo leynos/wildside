@@ -53,10 +53,10 @@ pub struct RouteSummary {
 impl RouteSummary {
     /// Validate and construct a route summary card.
     pub fn new(draft: RouteSummaryDraft) -> Result<Self, CatalogueValidationError> {
-        let slug = match draft.slug {
-            Some(value) => Some(validate_slug(value, "route_summary.slug")?),
-            None => None,
-        };
+        let slug = draft
+            .slug
+            .map(|value| validate_slug(value, "route_summary.slug"))
+            .transpose()?;
         ensure_non_negative(draft.distance_metres, "route_summary.distance_metres")?;
         ensure_non_negative(draft.duration_seconds, "route_summary.duration_seconds")?;
         ensure_valid_rating(draft.rating, "route_summary.rating")?;

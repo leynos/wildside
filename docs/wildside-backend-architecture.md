@@ -636,7 +636,7 @@ services.
 > (`LocalizationMap` and `SemanticIconIdentifier`). Domain ports now consume
 > these entities directly. JSONB and array serialization remain outbound
 > concerns inside Diesel adapters, preserving hexagonal boundaries while
-> enforcing localisation and icon semantics before persistence.
+> enforcing localization and icon semantics before persistence.
 
 #### Driving ports (services and queries)
 

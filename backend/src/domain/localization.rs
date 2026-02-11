@@ -1,6 +1,6 @@
-//! Localisation primitives shared by catalogue and descriptor domain types.
+//! Localization primitives shared by catalogue and descriptor domain types.
 //!
-//! The backend persists localised copy as JSON, but the domain represents it
+//! The backend persists localized copy as JSON, but the domain represents it
 //! as typed maps so callers can validate structure before persistence.
 
 use std::collections::BTreeMap;
@@ -8,10 +8,10 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Locale code key used in localisation maps (for example `en-GB`).
+/// Locale code key used in localization maps (for example `en-GB`).
 pub type LocaleCode = String;
 
-/// Localised string set for one locale.
+/// Localized string set for one locale.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -23,6 +23,21 @@ pub struct LocalizedStringSet {
 
 impl LocalizedStringSet {
     /// Create a new localized string set.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::LocalizedStringSet;
+    ///
+    /// let set = LocalizedStringSet::new(
+    ///     "Scenic route",
+    ///     Some("Scenic".to_owned()),
+    ///     Some("Coastal and cliff paths".to_owned()),
+    /// );
+    ///
+    /// assert_eq!(set.name, "Scenic route");
+    /// assert_eq!(set.short_label.as_deref(), Some("Scenic"));
+    /// ```
     pub fn new(
         name: impl Into<String>,
         short_label: Option<String>,
@@ -60,13 +75,33 @@ impl fmt::Display for LocalizationValidationError {
 
 impl std::error::Error for LocalizationValidationError {}
 
-/// Localisation map keyed by locale code.
+/// Localization map keyed by locale code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(
+    try_from = "BTreeMap<LocaleCode, LocalizedStringSet>",
+    into = "BTreeMap<LocaleCode, LocalizedStringSet>"
+)]
 pub struct LocalizationMap(BTreeMap<LocaleCode, LocalizedStringSet>);
 
 impl LocalizationMap {
-    /// Validate and create a localisation map.
+    /// Validate and create a localization map.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{LocalizationMap, LocalizedStringSet};
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Scenic route", Some("Scenic".to_owned()), None),
+    /// );
+    ///
+    /// let map = LocalizationMap::new(values).expect("valid localization map");
+    /// assert_eq!(map.as_map().len(), 1);
+    /// ```
     pub fn new(
         values: BTreeMap<LocaleCode, LocalizedStringSet>,
     ) -> Result<Self, LocalizationValidationError> {
@@ -90,7 +125,24 @@ impl LocalizationMap {
         Ok(Self(values))
     }
 
-    /// Borrow the underlying localisation map.
+    /// Borrow the underlying localization map.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{LocalizationMap, LocalizedStringSet};
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Nature walk", None, None),
+    /// );
+    /// let map = LocalizationMap::new(values).expect("valid localization map");
+    ///
+    /// assert!(map.as_map().contains_key("en-GB"));
+    /// ```
     pub fn as_map(&self) -> &BTreeMap<LocaleCode, LocalizedStringSet> {
         &self.0
     }
@@ -104,12 +156,19 @@ impl TryFrom<BTreeMap<LocaleCode, LocalizedStringSet>> for LocalizationMap {
     }
 }
 
+impl From<LocalizationMap> for BTreeMap<LocaleCode, LocalizedStringSet> {
+    fn from(value: LocalizationMap) -> Self {
+        value.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    //! Unit tests for localisation map validation.
+    //! Unit tests for localization map validation.
 
     use super::*;
     use rstest::rstest;
+    use serde_json::json;
 
     #[rstest]
     fn localization_map_accepts_valid_values() {
@@ -154,5 +213,18 @@ mod tests {
 
         let err = LocalizationMap::new(values).expect_err("empty localized name should fail");
         assert!(matches!(err, LocalizationValidationError::EmptyName { .. }));
+    }
+
+    #[rstest]
+    fn localization_map_deserialization_enforces_validation() {
+        let payload = json!({
+            " en-GB ": {
+                "name": "Scenic route"
+            }
+        });
+
+        let err = serde_json::from_value::<LocalizationMap>(payload)
+            .expect_err("invalid locale should fail deserialization");
+        assert!(err.to_string().contains("must not be empty or padded"));
     }
 }

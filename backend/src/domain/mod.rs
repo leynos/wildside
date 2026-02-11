@@ -37,7 +37,7 @@
 //! - SchemaColumn — typed column descriptor used by `SchemaTable`.
 //! - SchemaRelationship — foreign-key edge used by `SchemaDiagram`.
 //! - render_mermaid_er_diagram — deterministic Mermaid ER rendering function.
-//! - LocalizationMap and LocalizedStringSet — validated localisation payloads.
+//! - LocalizationMap and LocalizedStringSet — validated localization payloads.
 //! - SemanticIconIdentifier — validated semantic icon key.
 //! - Catalogue read-model entities (`RouteSummary`, `RouteCategory`, `Theme`,
 //!   `RouteCollection`, `TrendingRouteHighlight`, `CommunityPick`).
@@ -59,6 +59,7 @@ pub mod preferences;
 pub mod preferences_service;
 pub mod route_submission;
 pub mod semantic_icon_identifier;
+mod slug;
 pub mod trace_id;
 pub mod user;
 pub mod user_events;

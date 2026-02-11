@@ -13,6 +13,7 @@ use super::localization::{LocalizationMap, LocalizationValidationError};
 use super::semantic_icon_identifier::{
     SemanticIconIdentifier, SemanticIconIdentifierValidationError,
 };
+use crate::domain::slug::is_valid_slug;
 
 #[cfg(test)]
 mod tests;
@@ -61,6 +62,28 @@ impl From<SemanticIconIdentifierValidationError> for DescriptorValidationError {
     }
 }
 
+macro_rules! impl_simple_descriptor_new {
+    ($type_name:ident, $slug_field:literal) => {
+        impl $type_name {
+            /// Validate and construct the descriptor.
+            pub fn new(
+                id: Uuid,
+                slug: impl Into<String>,
+                icon_key: SemanticIconIdentifier,
+                localizations: LocalizationMap,
+            ) -> Result<Self, DescriptorValidationError> {
+                let slug = validate_slug(slug.into(), $slug_field)?;
+                Ok(Self {
+                    id,
+                    slug,
+                    icon_key,
+                    localizations,
+                })
+            }
+        }
+    };
+}
+
 /// Tag descriptor shown in route metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,23 +95,7 @@ pub struct Tag {
     pub localizations: LocalizationMap,
 }
 
-impl Tag {
-    /// Validate and construct a tag descriptor.
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "tag.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+impl_simple_descriptor_new!(Tag, "tag.slug");
 
 /// Badge descriptor shown in route summary metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,23 +108,7 @@ pub struct Badge {
     pub localizations: LocalizationMap,
 }
 
-impl Badge {
-    /// Validate and construct a badge descriptor.
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "badge.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+impl_simple_descriptor_new!(Badge, "badge.slug");
 
 /// Safety toggle descriptor used by user preferences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,25 +121,9 @@ pub struct SafetyToggle {
     pub localizations: LocalizationMap,
 }
 
-impl SafetyToggle {
-    /// Validate and construct a safety toggle descriptor.
-    pub fn new(
-        id: Uuid,
-        slug: impl Into<String>,
-        icon_key: SemanticIconIdentifier,
-        localizations: LocalizationMap,
-    ) -> Result<Self, DescriptorValidationError> {
-        let slug = validate_slug(slug.into(), "safety_toggle.slug")?;
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-        })
-    }
-}
+impl_simple_descriptor_new!(SafetyToggle, "safety_toggle.slug");
 
-/// Safety preset descriptor combining a validated toggle set.
+/// Unvalidated payload used to construct a [`SafetyPreset`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -164,6 +139,7 @@ pub struct SafetyPresetDraft {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
+#[serde(try_from = "SafetyPresetDraft", into = "SafetyPresetDraft")]
 pub struct SafetyPreset {
     pub id: Uuid,
     pub slug: String,
@@ -188,14 +164,28 @@ impl SafetyPreset {
     }
 }
 
-fn validate_slug(value: String, field: &'static str) -> Result<String, DescriptorValidationError> {
-    if value.trim() != value || value.is_empty() {
-        return Err(DescriptorValidationError::InvalidSlug { field });
+impl TryFrom<SafetyPresetDraft> for SafetyPreset {
+    type Error = DescriptorValidationError;
+
+    fn try_from(value: SafetyPresetDraft) -> Result<Self, Self::Error> {
+        Self::new(value)
     }
-    if !value
-        .chars()
-        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-    {
+}
+
+impl From<SafetyPreset> for SafetyPresetDraft {
+    fn from(value: SafetyPreset) -> Self {
+        Self {
+            id: value.id,
+            slug: value.slug,
+            icon_key: value.icon_key,
+            localizations: value.localizations,
+            safety_toggle_ids: value.safety_toggle_ids,
+        }
+    }
+}
+
+fn validate_slug(value: String, field: &'static str) -> Result<String, DescriptorValidationError> {
+    if !is_valid_slug(&value) {
         return Err(DescriptorValidationError::InvalidSlug { field });
     }
 

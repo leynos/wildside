@@ -43,6 +43,38 @@ pub struct Theme {
 
 impl Theme {
     /// Validate and construct a theme card.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::BTreeMap;
+    ///
+    /// use backend::domain::{
+    ///     ImageAsset, LocalizationMap, LocalizedStringSet, SemanticIconIdentifier, Theme,
+    ///     ThemeDraft,
+    /// };
+    /// use uuid::Uuid;
+    ///
+    /// let mut values = BTreeMap::new();
+    /// values.insert(
+    ///     "en-GB".to_owned(),
+    ///     LocalizedStringSet::new("Coastal", Some("Coast".to_owned()), None),
+    /// );
+    /// let draft = ThemeDraft {
+    ///     id: Uuid::new_v4(),
+    ///     slug: "coastal".to_owned(),
+    ///     icon_key: SemanticIconIdentifier::new("theme:coastal").expect("valid icon"),
+    ///     localizations: LocalizationMap::new(values).expect("valid localization"),
+    ///     image: ImageAsset::new("https://example.test/theme.jpg", "Coastal theme")
+    ///         .expect("valid image"),
+    ///     walk_count: 10,
+    ///     distance_range_metres: [1_000, 5_000],
+    ///     rating: 4.2,
+    /// };
+    ///
+    /// let theme = Theme::new(draft).expect("valid theme");
+    /// assert_eq!(theme.slug, "coastal");
+    /// ```
     pub fn new(draft: ThemeDraft) -> Result<Self, CatalogueValidationError> {
         let slug = validate_slug(draft.slug, "theme.slug")?;
         ensure_non_negative(draft.walk_count, "theme.walk_count")?;

@@ -6,11 +6,6 @@ use backend::domain::ports::{
     CatalogueIngestionRepository, CatalogueIngestionRepositoryError, DescriptorIngestionRepository,
     DescriptorIngestionRepositoryError,
 };
-use backend::domain::{
-    Badge, CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollection,
-    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, SafetyPreset, SafetyPresetDraft,
-    SafetyToggle, Tag, Theme, ThemeDraft, TrendingRouteHighlight,
-};
 use backend::outbound::persistence::{
     DbPool, DieselCatalogueIngestionRepository, DieselDescriptorIngestionRepository, PoolConfig,
 };
@@ -18,6 +13,7 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
+use serde_json::Value;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
@@ -25,15 +21,17 @@ use uuid::Uuid;
 mod builders;
 #[path = "support/pg_embed.rs"]
 mod pg_embed;
+#[path = "support/catalogue_descriptor_snapshots.rs"]
+mod snapshots;
 
 mod support;
 
 use builders::{
-    BADGE_ID, COMMUNITY_PICK_ID, CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, HIGHLIGHT_ID,
-    ROUTE_CATEGORY_ID, ROUTE_COLLECTION_ID, ROUTE_ID, ROUTE_SUMMARY_ID, SAFETY_PRESET_ID,
-    SAFETY_TOGGLE_ID, TAG_ID, THEME_ID, icon, image, localizations,
+    CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_CATEGORY_ID, ROUTE_ID, ROUTE_SUMMARY_ID,
+    SAFETY_PRESET_ID, SAFETY_TOGGLE_ID, TAG_ID,
 };
 use pg_embed::shared_cluster;
+use snapshots::{build_edge_community_pick, build_ingestion_snapshots, build_tag};
 use support::provision_template_database;
 
 struct TestContext {
@@ -108,144 +106,42 @@ fn upsert_validated_catalogue_and_descriptor_snapshots(world: SharedContext) {
         )
     };
 
-    let category = RouteCategory::new(RouteCategoryDraft {
-        id: ROUTE_CATEGORY_ID,
-        slug: "scenic".to_owned(),
-        icon_key: icon("category:scenic"),
-        localizations: localizations("Scenic"),
-        route_count: 42,
-    })
-    .expect("route category should be valid");
-
-    let theme = Theme::new(ThemeDraft {
-        id: THEME_ID,
-        slug: "coastal".to_owned(),
-        icon_key: icon("theme:coastal"),
-        localizations: localizations("Coastal"),
-        image: image("https://example.test/theme.jpg", "Theme image"),
-        walk_count: 23,
-        distance_range_metres: [1_500, 9_000],
-        rating: 4.6,
-    })
-    .expect("theme should be valid");
-
-    let collection = RouteCollection::new(RouteCollectionDraft {
-        id: ROUTE_COLLECTION_ID,
-        slug: "weekend-favourites".to_owned(),
-        icon_key: icon("collection:weekend"),
-        localizations: localizations("Weekend favourites"),
-        lead_image: image("https://example.test/lead.jpg", "Lead image"),
-        map_preview: image("https://example.test/map.jpg", "Map preview"),
-        distance_range_metres: [2_000, 12_000],
-        duration_range_seconds: [1_800, 7_200],
-        difficulty: "moderate".to_owned(),
-        route_ids: vec![Uuid::new_v4()],
-    })
-    .expect("route collection should be valid");
-
-    let summary = RouteSummary::new(RouteSummaryDraft {
-        id: ROUTE_SUMMARY_ID,
-        route_id: ROUTE_ID,
-        category_id: ROUTE_CATEGORY_ID,
-        theme_id: THEME_ID,
-        slug: Some("coastal-loop".to_owned()),
-        localizations: localizations("Coastal loop"),
-        hero_image: image("https://example.test/hero.jpg", "Hero image"),
-        distance_metres: 4_500,
-        duration_seconds: 5_400,
-        rating: 4.5,
-        badge_ids: vec![BADGE_ID],
-        difficulty: "moderate".to_owned(),
-        interest_theme_ids: vec![Uuid::new_v4()],
-    })
-    .expect("route summary should be valid");
-
-    let highlight = TrendingRouteHighlight::new(
-        HIGHLIGHT_ID,
-        ROUTE_SUMMARY_ID,
-        "+12%",
-        localizations("Trending up"),
-    )
-    .expect("highlight should be valid");
-
-    let pick = CommunityPick::new(CommunityPickDraft {
-        id: COMMUNITY_PICK_ID,
-        route_summary_id: Some(ROUTE_SUMMARY_ID),
-        user_id: Some(CURATOR_USER_ID),
-        localizations: localizations("Community favourite"),
-        curator_display_name: "Wildside curators".to_owned(),
-        curator_avatar: image("https://example.test/avatar.jpg", "Curator avatar"),
-        rating: 4.4,
-        distance_metres: 3_400,
-        duration_seconds: 4_800,
-        saves: 128,
-    })
-    .expect("community pick should be valid");
-
-    let tag = Tag::new(
-        TAG_ID,
-        "family-friendly",
-        icon("tag:family"),
-        localizations("Family"),
-    )
-    .expect("tag should be valid");
-    let badge = Badge::new(
-        BADGE_ID,
-        "accessible",
-        icon("badge:accessible"),
-        localizations("Accessible"),
-    )
-    .expect("badge should be valid");
-    let toggle = SafetyToggle::new(
-        SAFETY_TOGGLE_ID,
-        "well-lit",
-        icon("safety:well-lit"),
-        localizations("Well lit"),
-    )
-    .expect("safety toggle should be valid");
-    let preset = SafetyPreset::new(SafetyPresetDraft {
-        id: SAFETY_PRESET_ID,
-        slug: "night-safe".to_owned(),
-        icon_key: icon("preset:night-safe"),
-        localizations: localizations("Night safe"),
-        safety_toggle_ids: vec![SAFETY_TOGGLE_ID],
-    })
-    .expect("safety preset should be valid");
+    let snapshots = build_ingestion_snapshots();
 
     let catalogue_result = handle.block_on(async {
         catalogue_repository
-            .upsert_route_categories(std::slice::from_ref(&category))
+            .upsert_route_categories(std::slice::from_ref(&snapshots.category))
             .await?;
         catalogue_repository
-            .upsert_themes(std::slice::from_ref(&theme))
+            .upsert_themes(std::slice::from_ref(&snapshots.theme))
             .await?;
         catalogue_repository
-            .upsert_route_collections(std::slice::from_ref(&collection))
+            .upsert_route_collections(std::slice::from_ref(&snapshots.collection))
             .await?;
         catalogue_repository
-            .upsert_route_summaries(std::slice::from_ref(&summary))
+            .upsert_route_summaries(std::slice::from_ref(&snapshots.summary))
             .await?;
         catalogue_repository
-            .upsert_trending_highlights(std::slice::from_ref(&highlight))
+            .upsert_trending_highlights(std::slice::from_ref(&snapshots.highlight))
             .await?;
         catalogue_repository
-            .upsert_community_picks(std::slice::from_ref(&pick))
+            .upsert_community_picks(std::slice::from_ref(&snapshots.pick))
             .await?;
         Ok::<(), CatalogueIngestionRepositoryError>(())
     });
 
     let descriptor_result = handle.block_on(async {
         descriptor_repository
-            .upsert_tags(std::slice::from_ref(&tag))
+            .upsert_tags(std::slice::from_ref(&snapshots.tag))
             .await?;
         descriptor_repository
-            .upsert_badges(std::slice::from_ref(&badge))
+            .upsert_badges(std::slice::from_ref(&snapshots.badge))
             .await?;
         descriptor_repository
-            .upsert_safety_toggles(std::slice::from_ref(&toggle))
+            .upsert_safety_toggles(std::slice::from_ref(&snapshots.toggle))
             .await?;
         descriptor_repository
-            .upsert_safety_presets(std::slice::from_ref(&preset))
+            .upsert_safety_presets(std::slice::from_ref(&snapshots.preset))
             .await?;
         Ok::<(), DescriptorIngestionRepositoryError>(())
     });
@@ -272,25 +168,51 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
     let route_category = ctx
         .client
         .query_one(
-            "SELECT slug, icon_key, localizations->'en-GB'->>'name', route_count FROM route_categories WHERE id = $1",
+            "SELECT slug, icon_key, localizations::text, route_count FROM route_categories WHERE id = $1",
             &[&ROUTE_CATEGORY_ID],
         )
         .expect("route category row should exist");
     assert_eq!(route_category.get::<_, String>(0), "scenic");
     assert_eq!(route_category.get::<_, String>(1), "category:scenic");
-    assert_eq!(route_category.get::<_, String>(2), "Scenic");
     assert_eq!(route_category.get::<_, i32>(3), 42);
+    let category_localizations = serde_json::from_str::<Value>(&route_category.get::<_, String>(2))
+        .expect("route category localizations should parse");
+    assert_eq!(category_localizations["en-GB"]["name"], "Scenic");
+    assert_eq!(
+        category_localizations["en-GB"]["shortLabel"],
+        "Scenic short"
+    );
+    assert_eq!(
+        category_localizations["en-GB"]["description"],
+        "Scenic description"
+    );
+    assert_eq!(category_localizations["fr-FR"]["name"], "Scenic FR");
 
     let tag = ctx
         .client
         .query_one(
-            "SELECT slug, icon_key, localizations->'en-GB'->>'name' FROM tags WHERE id = $1",
+            "SELECT slug, icon_key, localizations::text FROM tags WHERE id = $1",
             &[&TAG_ID],
         )
         .expect("tag row should exist");
     assert_eq!(tag.get::<_, String>(0), "family-friendly");
     assert_eq!(tag.get::<_, String>(1), "tag:family");
-    assert_eq!(tag.get::<_, String>(2), "Family");
+    let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
+        .expect("tag localizations should parse");
+    assert_eq!(tag_localizations["en-GB"]["name"], "Family");
+    assert_eq!(tag_localizations["fr-FR"]["name"], "Family FR");
+
+    let summary = ctx
+        .client
+        .query_one(
+            "SELECT hero_image::text FROM route_summaries WHERE id = $1",
+            &[&ROUTE_SUMMARY_ID],
+        )
+        .expect("route summary row should exist");
+    let hero_image =
+        serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("hero image JSON");
+    assert_eq!(hero_image["url"], "https://example.test/hero.jpg");
+    assert_eq!(hero_image["alt"], "Hero image");
 
     let preset = ctx
         .client
@@ -316,13 +238,7 @@ fn the_tags_table_is_dropped_and_a_tag_upsert_is_attempted(world: SharedContext)
         )
     };
 
-    let tag = Tag::new(
-        TAG_ID,
-        "family-friendly",
-        icon("tag:family"),
-        localizations("Family"),
-    )
-    .expect("tag should be valid");
+    let tag = build_tag();
 
     let result = handle.block_on(async {
         descriptor_repository
@@ -357,19 +273,7 @@ fn a_community_pick_without_route_and_user_references_is_upserted(world: SharedC
         )
     };
 
-    let pick = CommunityPick::new(CommunityPickDraft {
-        id: EDGE_COMMUNITY_PICK_ID,
-        route_summary_id: None,
-        user_id: None,
-        localizations: localizations("Edge pick"),
-        curator_display_name: "Wildside curators".to_owned(),
-        curator_avatar: image("https://example.test/avatar-edge.jpg", "Curator avatar"),
-        rating: 4.0,
-        distance_metres: 1_250,
-        duration_seconds: 2_100,
-        saves: 0,
-    })
-    .expect("edge community pick should be valid");
+    let pick = build_edge_community_pick();
 
     let result = handle.block_on(async {
         catalogue_repository
