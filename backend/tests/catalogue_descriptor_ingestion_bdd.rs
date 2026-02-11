@@ -191,7 +191,10 @@ fn assert_route_category_stored(client: &mut Client) {
         .expect("route category localizations should parse");
     assert_eq!(
         category_localizations,
-        expected_route_category_localizations_json()
+        expected_localizations_json(
+            ("Scenic", "Scenic short", "Scenic description"),
+            ("Scenic FR", "Scenic FR court", "Scenic FR description"),
+        )
     );
 }
 
@@ -206,7 +209,13 @@ fn assert_tag_stored(client: &mut Client) {
     assert_eq!(tag.get::<_, String>(1), "tag:family");
     let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
         .expect("tag localizations should parse");
-    assert_eq!(tag_localizations, expected_tag_localizations_json());
+    assert_eq!(
+        tag_localizations,
+        expected_localizations_json(
+            ("Family", "Family short", "Family description"),
+            ("Family FR", "Family FR court", "Family FR description"),
+        )
+    );
 }
 
 fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
@@ -218,7 +227,21 @@ fn assert_summary_localizations_and_hero_image_stored(client: &mut Client) {
         .expect("route summary row should exist");
     let localizations =
         serde_json::from_str::<Value>(&summary.get::<_, String>(0)).expect("localizations JSON");
-    assert_eq!(localizations, expected_summary_localizations_json());
+    assert_eq!(
+        localizations,
+        expected_localizations_json(
+            (
+                "Coastal loop",
+                "Coastal loop short",
+                "Coastal loop description"
+            ),
+            (
+                "Coastal loop FR",
+                "Coastal loop FR court",
+                "Coastal loop FR description",
+            ),
+        )
+    );
 
     let hero_image =
         serde_json::from_str::<Value>(&summary.get::<_, String>(1)).expect("hero image JSON");
@@ -237,47 +260,21 @@ fn assert_preset_toggle_ids_stored(client: &mut Client) {
     assert_eq!(toggle_ids, vec![SAFETY_TOGGLE_ID]);
 }
 
-fn expected_route_category_localizations_json() -> Value {
-    json!({
-        "en-GB": {
-            "name": "Scenic",
-            "shortLabel": "Scenic short",
-            "description": "Scenic description"
-        },
-        "fr-FR": {
-            "name": "Scenic FR",
-            "shortLabel": "Scenic FR court",
-            "description": "Scenic FR description"
-        }
-    })
-}
+type LocalizedCopy<'a> = (&'a str, &'a str, &'a str);
 
-fn expected_tag_localizations_json() -> Value {
+fn expected_localizations_json(en_gb: LocalizedCopy<'_>, fr_fr: LocalizedCopy<'_>) -> Value {
+    let (en_name, en_short_label, en_description) = en_gb;
+    let (fr_name, fr_short_label, fr_description) = fr_fr;
     json!({
         "en-GB": {
-            "name": "Family",
-            "shortLabel": "Family short",
-            "description": "Family description"
+            "name": en_name,
+            "shortLabel": en_short_label,
+            "description": en_description
         },
         "fr-FR": {
-            "name": "Family FR",
-            "shortLabel": "Family FR court",
-            "description": "Family FR description"
-        }
-    })
-}
-
-fn expected_summary_localizations_json() -> Value {
-    json!({
-        "en-GB": {
-            "name": "Coastal loop",
-            "shortLabel": "Coastal loop short",
-            "description": "Coastal loop description"
-        },
-        "fr-FR": {
-            "name": "Coastal loop FR",
-            "shortLabel": "Coastal loop FR court",
-            "description": "Coastal loop FR description"
+            "name": fr_name,
+            "shortLabel": fr_short_label,
+            "description": fr_description
         }
     })
 }
@@ -287,7 +284,7 @@ macro_rules! define_drop_table_upsert_step {
         $fn_name:ident,
         $step_name:literal,
         $record_error_fn:ident,
-        $run_fn:ident,
+        $repository_field:ident,
         $drop_sql:literal,
         $snapshot_field:ident,
         $upsert_method:ident
@@ -296,12 +293,17 @@ macro_rules! define_drop_table_upsert_step {
         fn $fn_name(world: SharedContext) {
             $record_error_fn(
                 &world,
-                $run_fn(&world, $drop_sql, |repository| async move {
-                    let value = build_ingestion_snapshots().$snapshot_field;
-                    repository
-                        .$upsert_method(std::slice::from_ref(&value))
-                        .await
-                }),
+                run_operation_with_dropped_table(
+                    &world,
+                    $drop_sql,
+                    |ctx| ctx.$repository_field.clone(),
+                    |repository| async move {
+                        let value = build_ingestion_snapshots().$snapshot_field;
+                        repository
+                            .$upsert_method(std::slice::from_ref(&value))
+                            .await
+                    },
+                ),
             );
         }
     };
@@ -311,7 +313,7 @@ define_drop_table_upsert_step!(
     the_tags_table_is_dropped_and_a_tag_upsert_is_attempted,
     "the tags table is dropped and a tag upsert is attempted",
     record_descriptor_error,
-    run_descriptor_operation_with_dropped_table,
+    descriptor_repository,
     "DROP TABLE tags;",
     tag,
     upsert_tags
@@ -331,7 +333,7 @@ define_drop_table_upsert_step!(
     the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted,
     "the route categories table is dropped and a route category upsert is attempted",
     record_catalogue_error,
-    run_catalogue_operation_with_dropped_table,
+    catalogue_repository,
     "DROP TABLE route_categories CASCADE;",
     category,
     upsert_route_categories
@@ -358,40 +360,6 @@ fn record_descriptor_error(
 fn record_catalogue_error(world: &SharedContext, error: Option<CatalogueIngestionRepositoryError>) {
     let mut ctx = world.lock().expect("context lock");
     ctx.last_catalogue_error = error;
-}
-
-fn run_descriptor_operation_with_dropped_table<Op, Fut>(
-    world: &SharedContext,
-    drop_table_sql: &str,
-    operation: Op,
-) -> Option<DescriptorIngestionRepositoryError>
-where
-    Op: FnOnce(DieselDescriptorIngestionRepository) -> Fut,
-    Fut: Future<Output = Result<(), DescriptorIngestionRepositoryError>>,
-{
-    run_operation_with_dropped_table(
-        world,
-        drop_table_sql,
-        |ctx| ctx.descriptor_repository.clone(),
-        operation,
-    )
-}
-
-fn run_catalogue_operation_with_dropped_table<Op, Fut>(
-    world: &SharedContext,
-    drop_table_sql: &str,
-    operation: Op,
-) -> Option<CatalogueIngestionRepositoryError>
-where
-    Op: FnOnce(DieselCatalogueIngestionRepository) -> Fut,
-    Fut: Future<Output = Result<(), CatalogueIngestionRepositoryError>>,
-{
-    run_operation_with_dropped_table(
-        world,
-        drop_table_sql,
-        |ctx| ctx.catalogue_repository.clone(),
-        operation,
-    )
 }
 
 fn assert_world_query_error<Error, SelectError, IsQuery>(
