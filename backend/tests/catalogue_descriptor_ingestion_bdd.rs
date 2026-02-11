@@ -265,27 +265,24 @@ fn assert_preset_toggle_ids_stored(client: &mut Client) {
 
 #[when("the tags table is dropped and a tag upsert is attempted")]
 fn the_tags_table_is_dropped_and_a_tag_upsert_is_attempted(world: SharedContext) {
-    let error = run_operation_with_dropped_table(
+    record_descriptor_error(
         &world,
-        "DROP TABLE tags;",
-        |ctx| ctx.descriptor_repository.clone(),
-        |descriptor_repository| async move {
-            let tag = build_ingestion_snapshots().tag;
-            descriptor_repository
-                .upsert_tags(std::slice::from_ref(&tag))
-                .await
-        },
+        run_descriptor_operation_with_dropped_table(
+            &world,
+            "DROP TABLE tags;",
+            |repository| async move {
+                let tag = build_ingestion_snapshots().tag;
+                repository.upsert_tags(std::slice::from_ref(&tag)).await
+            },
+        ),
     );
-
-    let mut ctx = world.lock().expect("context lock");
-    ctx.last_descriptor_error = error;
 }
 
 #[then("the descriptor repository reports a query error")]
 fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    assert_query_error(
-        &ctx.last_descriptor_error,
+    assert_world_query_error(
+        &world,
+        |ctx| &ctx.last_descriptor_error,
         |error| matches!(error, DescriptorIngestionRepositoryError::Query { .. }),
         "DescriptorIngestionRepositoryError::Query",
     );
@@ -295,40 +292,91 @@ fn the_descriptor_repository_reports_a_query_error(world: SharedContext) {
 fn the_route_categories_table_is_dropped_and_a_route_category_upsert_is_attempted(
     world: SharedContext,
 ) {
-    let error = run_operation_with_dropped_table(
+    record_catalogue_error(
         &world,
-        "DROP TABLE route_categories CASCADE;",
-        |ctx| ctx.catalogue_repository.clone(),
-        |catalogue_repository| async move {
-            let category = build_ingestion_snapshots().category;
-            catalogue_repository
-                .upsert_route_categories(std::slice::from_ref(&category))
-                .await
-        },
+        run_catalogue_operation_with_dropped_table(
+            &world,
+            "DROP TABLE route_categories CASCADE;",
+            |repository| async move {
+                let category = build_ingestion_snapshots().category;
+                repository
+                    .upsert_route_categories(std::slice::from_ref(&category))
+                    .await
+            },
+        ),
     );
-
-    let mut ctx = world.lock().expect("context lock");
-    ctx.last_catalogue_error = error;
 }
 
 #[then("the catalogue repository reports a query error")]
 fn the_catalogue_repository_reports_a_query_error(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    assert_query_error(
-        &ctx.last_catalogue_error,
+    assert_world_query_error(
+        &world,
+        |ctx| &ctx.last_catalogue_error,
         |error| matches!(error, CatalogueIngestionRepositoryError::Query { .. }),
         "CatalogueIngestionRepositoryError::Query",
     );
 }
 
-fn assert_query_error<Error, IsQuery>(
-    error: &Option<Error>,
+fn record_descriptor_error(
+    world: &SharedContext,
+    error: Option<DescriptorIngestionRepositoryError>,
+) {
+    let mut ctx = world.lock().expect("context lock");
+    ctx.last_descriptor_error = error;
+}
+
+fn record_catalogue_error(world: &SharedContext, error: Option<CatalogueIngestionRepositoryError>) {
+    let mut ctx = world.lock().expect("context lock");
+    ctx.last_catalogue_error = error;
+}
+
+fn run_descriptor_operation_with_dropped_table<Op, Fut>(
+    world: &SharedContext,
+    drop_table_sql: &str,
+    operation: Op,
+) -> Option<DescriptorIngestionRepositoryError>
+where
+    Op: FnOnce(DieselDescriptorIngestionRepository) -> Fut,
+    Fut: Future<Output = Result<(), DescriptorIngestionRepositoryError>>,
+{
+    run_operation_with_dropped_table(
+        world,
+        drop_table_sql,
+        |ctx| ctx.descriptor_repository.clone(),
+        operation,
+    )
+}
+
+fn run_catalogue_operation_with_dropped_table<Op, Fut>(
+    world: &SharedContext,
+    drop_table_sql: &str,
+    operation: Op,
+) -> Option<CatalogueIngestionRepositoryError>
+where
+    Op: FnOnce(DieselCatalogueIngestionRepository) -> Fut,
+    Fut: Future<Output = Result<(), CatalogueIngestionRepositoryError>>,
+{
+    run_operation_with_dropped_table(
+        world,
+        drop_table_sql,
+        |ctx| ctx.catalogue_repository.clone(),
+        operation,
+    )
+}
+
+fn assert_world_query_error<Error, SelectError, IsQuery>(
+    world: &SharedContext,
+    select_error: SelectError,
     is_query_error: IsQuery,
     expected_error_label: &str,
 ) where
     Error: std::fmt::Debug,
+    SelectError: FnOnce(&TestContext) -> &Option<Error>,
     IsQuery: FnOnce(&Error) -> bool,
 {
+    let ctx = world.lock().expect("context lock");
+    let error = select_error(&ctx);
+
     assert!(
         error.as_ref().is_some_and(is_query_error),
         "expected {expected_error_label}, got {:?}",
