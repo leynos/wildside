@@ -61,10 +61,21 @@ impl From<SemanticIconIdentifierValidationError> for DescriptorValidationError {
     }
 }
 
-macro_rules! impl_simple_descriptor_new {
-    ($(#[$doc:meta])* $type_name:ident, $slug_field:literal) => {
+macro_rules! define_simple_descriptor {
+    ($(#[$new_doc:meta])* $type_name:ident, $slug_field:literal, $type_doc:literal) => {
+        #[doc = $type_doc]
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        #[serde(deny_unknown_fields)]
+        pub struct $type_name {
+            pub id: Uuid,
+            pub slug: String,
+            pub icon_key: SemanticIconIdentifier,
+            pub localizations: LocalizationMap,
+        }
+
         impl $type_name {
-            $(#[$doc])*
+            $(#[$new_doc])*
             pub fn new(
                 id: Uuid,
                 slug: impl Into<String>,
@@ -83,18 +94,7 @@ macro_rules! impl_simple_descriptor_new {
     };
 }
 
-/// Tag descriptor shown in route metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Tag {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-}
-
-impl_simple_descriptor_new!(
+define_simple_descriptor!(
     /// Validate and construct the descriptor.
     ///
     /// # Examples
@@ -120,21 +120,11 @@ impl_simple_descriptor_new!(
     /// assert_eq!(tag.slug, "family-friendly");
     /// ```
     Tag,
-    "tag.slug"
+    "tag.slug",
+    "Tag descriptor shown in route metadata."
 );
 
-/// Badge descriptor shown in route summary metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Badge {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-}
-
-impl_simple_descriptor_new!(
+define_simple_descriptor!(
     /// Validate and construct the descriptor.
     ///
     /// # Examples
@@ -160,21 +150,11 @@ impl_simple_descriptor_new!(
     /// assert_eq!(badge.slug, "accessible");
     /// ```
     Badge,
-    "badge.slug"
+    "badge.slug",
+    "Badge descriptor shown in route summary metadata."
 );
 
-/// Safety toggle descriptor used by user preferences.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct SafetyToggle {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-}
-
-impl_simple_descriptor_new!(
+define_simple_descriptor!(
     /// Validate and construct the descriptor.
     ///
     /// # Examples
@@ -200,7 +180,8 @@ impl_simple_descriptor_new!(
     /// assert_eq!(toggle.slug, "well-lit");
     /// ```
     SafetyToggle,
-    "safety_toggle.slug"
+    "safety_toggle.slug",
+    "Safety toggle descriptor used by user preferences."
 );
 
 /// Unvalidated payload used to construct a [`SafetyPreset`].
