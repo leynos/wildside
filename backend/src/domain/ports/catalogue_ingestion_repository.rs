@@ -12,7 +12,7 @@ use crate::domain::{
 use super::define_port_error;
 
 define_port_error! {
-    /// Errors raised when persisting catalogue ingestion payloads.
+    /// Errors raised when persisting catalogue ingestion records.
     pub enum CatalogueIngestionRepositoryError {
         /// Repository connection could not be established.
         Connection { message: String } =>
@@ -29,7 +29,7 @@ define_port_error! {
 pub trait CatalogueIngestionRepository: Send + Sync {
     /// Persist route category snapshots keyed by category identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_categories(
         &self,
         records: &[RouteCategory],
@@ -37,7 +37,7 @@ pub trait CatalogueIngestionRepository: Send + Sync {
 
     /// Persist theme snapshots keyed by theme identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_themes(
         &self,
         records: &[Theme],
@@ -45,7 +45,7 @@ pub trait CatalogueIngestionRepository: Send + Sync {
 
     /// Persist route collection snapshots keyed by collection identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_collections(
         &self,
         records: &[RouteCollection],
@@ -53,7 +53,7 @@ pub trait CatalogueIngestionRepository: Send + Sync {
 
     /// Persist route summary snapshots keyed by summary identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_summaries(
         &self,
         records: &[RouteSummary],
@@ -61,7 +61,7 @@ pub trait CatalogueIngestionRepository: Send + Sync {
 
     /// Persist trending highlight overlays keyed by highlight identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_trending_highlights(
         &self,
         records: &[TrendingRouteHighlight],
@@ -69,7 +69,7 @@ pub trait CatalogueIngestionRepository: Send + Sync {
 
     /// Persist community pick snapshots keyed by pick identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_community_picks(
         &self,
         records: &[CommunityPick],

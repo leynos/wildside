@@ -32,9 +32,9 @@ mod snapshots;
 mod support;
 
 use builders::{
-    BADGE_ID, COMMUNITY_PICK_ID, CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_CATEGORY_ID,
-    ROUTE_COLLECTION_ID, ROUTE_COLLECTION_ROUTE_ID, ROUTE_ID, ROUTE_SUMMARY_ID, SAFETY_PRESET_ID,
-    SAFETY_TOGGLE_ID, TAG_ID, THEME_ID,
+    BADGE_ID, COMMUNITY_PICK_ID, CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, HIGHLIGHT_ID,
+    ROUTE_CATEGORY_ID, ROUTE_COLLECTION_ID, ROUTE_COLLECTION_ROUTE_ID, ROUTE_ID, ROUTE_SUMMARY_ID,
+    SAFETY_PRESET_ID, SAFETY_TOGGLE_ID, TAG_ID, THEME_ID,
 };
 use pg_embed::shared_cluster;
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
@@ -204,6 +204,7 @@ fn catalogue_and_descriptor_rows_are_stored(world: SharedContext) {
     assert_route_category_stored(&mut ctx.client);
     assert_themes_stored(&mut ctx.client);
     assert_route_collections_stored(&mut ctx.client);
+    assert_trending_highlights_stored(&mut ctx.client);
     assert_community_picks_stored(&mut ctx.client);
     assert_tag_stored(&mut ctx.client);
     assert_badges_stored(&mut ctx.client);
@@ -342,6 +343,33 @@ fn assert_route_collections_stored(client: &mut Client) {
     assert_eq!(
         collection.get::<_, Vec<Uuid>>(8),
         vec![ROUTE_COLLECTION_ROUTE_ID]
+    );
+}
+
+fn assert_trending_highlights_stored(client: &mut Client) {
+    let highlight = client
+        .query_one(
+            "SELECT route_summary_id, trend_delta, subtitle_localizations::text FROM trending_route_highlights WHERE id = $1",
+            &[&HIGHLIGHT_ID],
+        )
+        .expect("trending highlight row should exist");
+    assert_eq!(highlight.get::<_, Uuid>(0), ROUTE_SUMMARY_ID);
+    assert_eq!(highlight.get::<_, String>(1), "+12%");
+
+    let localizations = serde_json::from_str::<Value>(&highlight.get::<_, String>(2))
+        .expect("trending highlight localizations");
+    assert_localizations_json_shape(
+        &localizations,
+        (
+            "Trending up",
+            "Trending up short",
+            "Trending up description",
+        ),
+        (
+            "Trending up FR",
+            "Trending up FR court",
+            "Trending up FR description",
+        ),
     );
 }
 
