@@ -42,6 +42,52 @@ struct DescriptorExpectations<'a> {
     fr_fr: LocalizedCopy<'a>,
 }
 
+struct DescriptorTestCase {
+    table: &'static str,
+    id: Uuid,
+    expectations: DescriptorExpectations<'static>,
+}
+
+const TAG_TEST_CASE: DescriptorTestCase = DescriptorTestCase {
+    table: "tags",
+    id: TAG_ID,
+    expectations: DescriptorExpectations {
+        slug: "family-friendly",
+        icon_key: "tag:family",
+        en_gb: ("Family", "Family short", "Family description"),
+        fr_fr: ("Family FR", "Family FR court", "Family FR description"),
+    },
+};
+
+const BADGE_TEST_CASE: DescriptorTestCase = DescriptorTestCase {
+    table: "badges",
+    id: BADGE_ID,
+    expectations: DescriptorExpectations {
+        slug: "accessible",
+        icon_key: "badge:accessible",
+        en_gb: ("Accessible", "Accessible short", "Accessible description"),
+        fr_fr: (
+            "Accessible FR",
+            "Accessible FR court",
+            "Accessible FR description",
+        ),
+    },
+};
+
+const SAFETY_TOGGLE_TEST_CASE: DescriptorTestCase = DescriptorTestCase {
+    table: "safety_toggles",
+    id: SAFETY_TOGGLE_ID,
+    expectations: DescriptorExpectations {
+        slug: "well-lit",
+        icon_key: "safety:well-lit",
+        en_gb: ("Well lit", "Well lit short", "Well lit description"),
+        fr_fr: (
+            "Well lit FR",
+            "Well lit FR court",
+            "Well lit FR description",
+        ),
+    },
+};
 fn assert_simple_descriptor_stored(
     client: &mut Client,
     table: &str,
@@ -64,14 +110,9 @@ fn assert_simple_descriptor_stored(
 pub(super) fn assert_tag_stored(client: &mut Client) {
     assert_simple_descriptor_stored(
         client,
-        "tags",
-        &TAG_ID,
-        DescriptorExpectations {
-            slug: "family-friendly",
-            icon_key: "tag:family",
-            en_gb: ("Family", "Family short", "Family description"),
-            fr_fr: ("Family FR", "Family FR court", "Family FR description"),
-        },
+        TAG_TEST_CASE.table,
+        &TAG_TEST_CASE.id,
+        TAG_TEST_CASE.expectations,
     );
 }
 
@@ -236,36 +277,18 @@ pub(super) fn assert_community_picks_stored(client: &mut Client) {
 pub(super) fn assert_badges_stored(client: &mut Client) {
     assert_simple_descriptor_stored(
         client,
-        "badges",
-        &BADGE_ID,
-        DescriptorExpectations {
-            slug: "accessible",
-            icon_key: "badge:accessible",
-            en_gb: ("Accessible", "Accessible short", "Accessible description"),
-            fr_fr: (
-                "Accessible FR",
-                "Accessible FR court",
-                "Accessible FR description",
-            ),
-        },
+        BADGE_TEST_CASE.table,
+        &BADGE_TEST_CASE.id,
+        BADGE_TEST_CASE.expectations,
     );
 }
 
 pub(super) fn assert_safety_toggles_stored(client: &mut Client) {
     assert_simple_descriptor_stored(
         client,
-        "safety_toggles",
-        &SAFETY_TOGGLE_ID,
-        DescriptorExpectations {
-            slug: "well-lit",
-            icon_key: "safety:well-lit",
-            en_gb: ("Well lit", "Well lit short", "Well lit description"),
-            fr_fr: (
-                "Well lit FR",
-                "Well lit FR court",
-                "Well lit FR description",
-            ),
-        },
+        SAFETY_TOGGLE_TEST_CASE.table,
+        &SAFETY_TOGGLE_TEST_CASE.id,
+        SAFETY_TOGGLE_TEST_CASE.expectations,
     );
 }
 
