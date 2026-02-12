@@ -236,30 +236,31 @@ fn assert_route_category_stored(client: &mut Client) {
     );
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "review requirement mandates explicit parameters for descriptor assertions"
-)]
+/// Expected values for descriptor assertion.
+struct DescriptorExpectations<'a> {
+    slug: &'a str,
+    icon_key: &'a str,
+    en_gb: LocalizedCopy<'a>,
+    fr_fr: LocalizedCopy<'a>,
+}
+
 fn assert_simple_descriptor_stored(
     client: &mut Client,
     table: &str,
     id: &Uuid,
-    expected_slug: &str,
-    expected_icon_key: &str,
-    en_gb_copy: LocalizedCopy<'_>,
-    fr_fr_copy: LocalizedCopy<'_>,
+    expectations: DescriptorExpectations<'_>,
 ) {
     let query = format!("SELECT slug, icon_key, localizations::text FROM {table} WHERE id = $1");
     let row = client
         .query_one(query.as_str(), &[id])
         .expect("descriptor row should exist");
 
-    assert_eq!(row.get::<_, String>(0), expected_slug);
-    assert_eq!(row.get::<_, String>(1), expected_icon_key);
+    assert_eq!(row.get::<_, String>(0), expectations.slug);
+    assert_eq!(row.get::<_, String>(1), expectations.icon_key);
 
     let localizations = serde_json::from_str::<Value>(&row.get::<_, String>(2))
         .expect("descriptor localizations should parse");
-    assert_localizations_json_shape(&localizations, en_gb_copy, fr_fr_copy);
+    assert_localizations_json_shape(&localizations, expectations.en_gb, expectations.fr_fr);
 }
 
 fn assert_tag_stored(client: &mut Client) {
@@ -267,10 +268,12 @@ fn assert_tag_stored(client: &mut Client) {
         client,
         "tags",
         &TAG_ID,
-        "family-friendly",
-        "tag:family",
-        ("Family", "Family short", "Family description"),
-        ("Family FR", "Family FR court", "Family FR description"),
+        DescriptorExpectations {
+            slug: "family-friendly",
+            icon_key: "tag:family",
+            en_gb: ("Family", "Family short", "Family description"),
+            fr_fr: ("Family FR", "Family FR court", "Family FR description"),
+        },
     );
 }
 
@@ -410,14 +413,16 @@ fn assert_badges_stored(client: &mut Client) {
         client,
         "badges",
         &BADGE_ID,
-        "accessible",
-        "badge:accessible",
-        ("Accessible", "Accessible short", "Accessible description"),
-        (
-            "Accessible FR",
-            "Accessible FR court",
-            "Accessible FR description",
-        ),
+        DescriptorExpectations {
+            slug: "accessible",
+            icon_key: "badge:accessible",
+            en_gb: ("Accessible", "Accessible short", "Accessible description"),
+            fr_fr: (
+                "Accessible FR",
+                "Accessible FR court",
+                "Accessible FR description",
+            ),
+        },
     );
 }
 
@@ -426,14 +431,16 @@ fn assert_safety_toggles_stored(client: &mut Client) {
         client,
         "safety_toggles",
         &SAFETY_TOGGLE_ID,
-        "well-lit",
-        "safety:well-lit",
-        ("Well lit", "Well lit short", "Well lit description"),
-        (
-            "Well lit FR",
-            "Well lit FR court",
-            "Well lit FR description",
-        ),
+        DescriptorExpectations {
+            slug: "well-lit",
+            icon_key: "safety:well-lit",
+            en_gb: ("Well lit", "Well lit short", "Well lit description"),
+            fr_fr: (
+                "Well lit FR",
+                "Well lit FR court",
+                "Well lit FR description",
+            ),
+        },
     );
 }
 
