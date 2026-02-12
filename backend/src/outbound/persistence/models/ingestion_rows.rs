@@ -15,7 +15,7 @@ pub(crate) struct NewRouteCategoryRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
     pub route_count: i32,
 }
 
@@ -26,8 +26,8 @@ pub(crate) struct NewThemeRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
-    pub image: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
+    pub image: serde_json::Value,
     pub walk_count: i32,
     pub distance_range_metres: &'a [i32],
     pub rating: f32,
@@ -40,9 +40,9 @@ pub(crate) struct NewRouteCollectionRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
-    pub lead_image: &'a serde_json::Value,
-    pub map_preview: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
+    pub lead_image: serde_json::Value,
+    pub map_preview: serde_json::Value,
     pub distance_range_metres: &'a [i32],
     pub duration_range_seconds: &'a [i32],
     pub difficulty: &'a str,
@@ -58,8 +58,8 @@ pub(crate) struct NewRouteSummaryRow<'a> {
     pub category_id: Uuid,
     pub theme_id: Uuid,
     pub slug: Option<&'a str>,
-    pub localizations: &'a serde_json::Value,
-    pub hero_image: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
+    pub hero_image: serde_json::Value,
     pub distance_metres: i32,
     pub duration_seconds: i32,
     pub rating: f32,
@@ -75,7 +75,7 @@ pub(crate) struct NewTrendingRouteHighlightRow<'a> {
     pub id: Uuid,
     pub route_summary_id: Uuid,
     pub trend_delta: &'a str,
-    pub subtitle_localizations: &'a serde_json::Value,
+    pub subtitle_localizations: serde_json::Value,
 }
 
 /// Insertable row for community picks.
@@ -85,9 +85,9 @@ pub(crate) struct NewCommunityPickRow<'a> {
     pub id: Uuid,
     pub route_summary_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
     pub curator_display_name: &'a str,
-    pub curator_avatar: &'a serde_json::Value,
+    pub curator_avatar: serde_json::Value,
     pub rating: f32,
     pub distance_metres: i32,
     pub duration_seconds: i32,
@@ -101,7 +101,7 @@ pub(crate) struct NewTagRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
 }
 
 /// Insertable row for badge descriptors.
@@ -111,7 +111,7 @@ pub(crate) struct NewBadgeRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
 }
 
 /// Insertable row for safety toggle descriptors.
@@ -121,7 +121,7 @@ pub(crate) struct NewSafetyToggleRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
 }
 
 /// Insertable row for safety preset descriptors.
@@ -131,7 +131,7 @@ pub(crate) struct NewSafetyPresetRow<'a> {
     pub id: Uuid,
     pub slug: &'a str,
     pub icon_key: &'a str,
-    pub localizations: &'a serde_json::Value,
+    pub localizations: serde_json::Value,
     pub safety_toggle_ids: &'a [Uuid],
 }
 

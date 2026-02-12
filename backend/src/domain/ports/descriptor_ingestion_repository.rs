@@ -3,14 +3,13 @@
 //! Descriptors are stable registries used by catalogue and user preferences.
 //! Keeping these writes behind a domain port preserves adapter boundaries.
 
+use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyToggle, Tag};
 use async_trait::async_trait;
-use serde_json::Value;
-use uuid::Uuid;
 
 use super::define_port_error;
 
 define_port_error! {
-    /// Errors raised when persisting descriptor ingestion payloads.
+    /// Errors raised when persisting descriptor ingestion records.
     pub enum DescriptorIngestionRepositoryError {
         /// Repository connection could not be established.
         Connection { message: String } =>
@@ -21,78 +20,30 @@ define_port_error! {
     }
 }
 
-/// Ingestion payload for tags.
-#[derive(Debug, Clone)]
-pub struct TagIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-}
-
-/// Ingestion payload for badges.
-#[derive(Debug, Clone)]
-pub struct BadgeIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-}
-
-/// Ingestion payload for safety toggles.
-#[derive(Debug, Clone)]
-pub struct SafetyToggleIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-}
-
-/// Ingestion payload for safety presets.
-#[derive(Debug, Clone)]
-pub struct SafetyPresetIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-    pub safety_toggle_ids: Vec<Uuid>,
-}
-
-/// Ingestion payload for interest themes.
-#[derive(Debug, Clone)]
-pub struct InterestThemeIngestion {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-}
-
 /// Port for writing descriptor registries.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait DescriptorIngestionRepository: Send + Sync {
-    async fn upsert_tags(
-        &self,
-        records: &[TagIngestion],
-    ) -> Result<(), DescriptorIngestionRepositoryError>;
+    async fn upsert_tags(&self, records: &[Tag]) -> Result<(), DescriptorIngestionRepositoryError>;
 
     async fn upsert_badges(
         &self,
-        records: &[BadgeIngestion],
+        records: &[Badge],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
     async fn upsert_safety_toggles(
         &self,
-        records: &[SafetyToggleIngestion],
+        records: &[SafetyToggle],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
     async fn upsert_safety_presets(
         &self,
-        records: &[SafetyPresetIngestion],
+        records: &[SafetyPreset],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
     async fn upsert_interest_themes(
         &self,
-        records: &[InterestThemeIngestion],
+        records: &[InterestTheme],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 }
 
@@ -104,35 +55,35 @@ pub struct FixtureDescriptorIngestionRepository;
 impl DescriptorIngestionRepository for FixtureDescriptorIngestionRepository {
     async fn upsert_tags(
         &self,
-        _records: &[TagIngestion],
+        _records: &[Tag],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_badges(
         &self,
-        _records: &[BadgeIngestion],
+        _records: &[Badge],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_safety_toggles(
         &self,
-        _records: &[SafetyToggleIngestion],
+        _records: &[SafetyToggle],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_safety_presets(
         &self,
-        _records: &[SafetyPresetIngestion],
+        _records: &[SafetyPreset],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_interest_themes(
         &self,
-        _records: &[InterestThemeIngestion],
+        _records: &[InterestTheme],
     ) -> Result<(), DescriptorIngestionRepositoryError> {
         Ok(())
     }

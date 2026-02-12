@@ -3,13 +3,12 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use crate::domain::ports::{
-    BadgeIngestion, DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
-    InterestThemeIngestion, SafetyPresetIngestion, SafetyToggleIngestion, TagIngestion,
-};
+use crate::domain::ports::{DescriptorIngestionRepository, DescriptorIngestionRepositoryError};
+use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyToggle, Tag};
 use crate::impl_upsert_methods;
 
 use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
+use super::json_serializers::localization_map_to_json;
 use super::models::{
     NewBadgeRow, NewInterestThemeRow, NewSafetyPresetRow, NewSafetyToggleRow, NewTagRow,
 };
@@ -24,23 +23,9 @@ pub struct DieselDescriptorIngestionRepository {
 
 impl DieselDescriptorIngestionRepository {
     /// Create a new repository with the given connection pool.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use backend::outbound::persistence::{
-    ///     DbPool, DieselDescriptorIngestionRepository, PoolConfig,
-    /// };
-    ///
-    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pool = DbPool::new(PoolConfig::new("postgres://localhost")).await?;
-    /// let repository = DieselDescriptorIngestionRepository::new(pool);
-    /// # let _ = repository;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[rustfmt::skip]
-    pub fn new(pool: DbPool) -> Self { Self { pool } }
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
 }
 
 fn map_pool_error(error: PoolError) -> DescriptorIngestionRepositoryError {
@@ -54,53 +39,53 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
     ))
 }
 
-impl<'a> From<&'a TagIngestion> for NewTagRow<'a> {
-    fn from(record: &'a TagIngestion) -> Self {
+impl<'a> From<&'a Tag> for NewTagRow<'a> {
+    fn from(record: &'a Tag) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
 
-impl<'a> From<&'a BadgeIngestion> for NewBadgeRow<'a> {
-    fn from(record: &'a BadgeIngestion) -> Self {
+impl<'a> From<&'a Badge> for NewBadgeRow<'a> {
+    fn from(record: &'a Badge) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
 
-impl<'a> From<&'a SafetyToggleIngestion> for NewSafetyToggleRow<'a> {
-    fn from(record: &'a SafetyToggleIngestion) -> Self {
+impl<'a> From<&'a SafetyToggle> for NewSafetyToggleRow<'a> {
+    fn from(record: &'a SafetyToggle) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
 
-impl<'a> From<&'a SafetyPresetIngestion> for NewSafetyPresetRow<'a> {
-    fn from(record: &'a SafetyPresetIngestion) -> Self {
+impl<'a> From<&'a SafetyPreset> for NewSafetyPresetRow<'a> {
+    fn from(record: &'a SafetyPreset) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_str(),
-            localizations: &record.localizations,
-            safety_toggle_ids: record.safety_toggle_ids.as_slice(),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
+            safety_toggle_ids: record.safety_toggle_ids(),
         }
     }
 }
 
-impl<'a> From<&'a InterestThemeIngestion> for NewInterestThemeRow<'a> {
-    fn from(record: &'a InterestThemeIngestion) -> Self {
+impl<'a> From<&'a InterestTheme> for NewInterestThemeRow<'a> {
+    fn from(record: &'a InterestTheme) -> Self {
         Self {
             id: record.id,
             name: record.name.as_str(),
@@ -118,28 +103,28 @@ impl_upsert_methods! {
         methods: [
             (
                 upsert_tags,
-                TagIngestion,
+                Tag,
                 NewTagRow<'_>,
                 tags,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_badges,
-                BadgeIngestion,
+                Badge,
                 NewBadgeRow<'_>,
                 badges,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_toggles,
-                SafetyToggleIngestion,
+                SafetyToggle,
                 NewSafetyToggleRow<'_>,
                 safety_toggles,
                 [slug, icon_key, localizations]
             ),
             (
                 upsert_safety_presets,
-                SafetyPresetIngestion,
+                SafetyPreset,
                 NewSafetyPresetRow<'_>,
                 safety_presets,
                 [slug, icon_key, localizations, safety_toggle_ids]
@@ -148,7 +133,7 @@ impl_upsert_methods! {
         keep: {
             async fn upsert_interest_themes(
                 &self,
-                records: &[InterestThemeIngestion],
+                records: &[InterestTheme],
             ) -> Result<(), DescriptorIngestionRepositoryError> {
                 use diesel_async::AsyncConnection as _;
                 use diesel_async::scoped_futures::ScopedFutureExt as _;

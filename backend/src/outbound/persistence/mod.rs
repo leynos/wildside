@@ -38,6 +38,7 @@ mod diesel_route_annotation_repository;
 mod diesel_user_preferences_repository;
 mod diesel_user_repository;
 mod ingestion_upsert_macros;
+mod json_serializers;
 mod models;
 mod pool;
 mod postgres_schema_snapshot_repository;

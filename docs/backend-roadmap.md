@@ -139,7 +139,7 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.2. Catalogue and descriptor read models
 
-- [ ] 3.2.1. Define catalogue and descriptor domain types (`RouteSummary`,
+- [x] 3.2.1. Define catalogue and descriptor domain types (`RouteSummary`,
   `RouteCategory`, `Theme`, `RouteCollection`, `TrendingRouteHighlight`,
   `CommunityPick`, `Tag`, `Badge`, `SafetyToggle`, and `SafetyPreset`) with
   localization maps and semantic icon identifiers.

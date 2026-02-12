@@ -37,19 +37,30 @@
 //! - SchemaColumn — typed column descriptor used by `SchemaTable`.
 //! - SchemaRelationship — foreign-key edge used by `SchemaDiagram`.
 //! - render_mermaid_er_diagram — deterministic Mermaid ER rendering function.
+//! - LocalizationMap and LocalizedStringSet — validated localization payloads.
+//! - SemanticIconIdentifier — validated semantic icon key.
+//! - Catalogue read-model entities (`RouteSummary`, `RouteCategory`, `Theme`,
+//!   `RouteCollection`, `TrendingRouteHighlight`, `CommunityPick`).
+//! - Descriptor entities (`Tag`, `Badge`, `SafetyToggle`, `SafetyPreset`,
+//!   `InterestTheme`).
 
 pub mod annotations;
 pub mod auth;
+pub mod catalogue;
+pub mod descriptors;
 pub mod er_diagram;
 pub mod error;
 #[cfg(feature = "example-data")]
 pub mod example_data;
 pub mod idempotency;
 pub mod interest_theme;
+pub mod localization;
 pub mod ports;
 pub mod preferences;
 pub mod preferences_service;
 pub mod route_submission;
+pub mod semantic_icon_identifier;
+mod slug;
 pub mod trace_id;
 pub mod user;
 pub mod user_events;
@@ -62,6 +73,15 @@ pub use self::annotations::{
     RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
+pub use self::catalogue::{
+    CatalogueValidationError, CommunityPick, CommunityPickDraft, ImageAsset, RouteCategory,
+    RouteCategoryDraft, RouteCollection, RouteCollectionDraft, RouteSummary, RouteSummaryDraft,
+    Theme, ThemeDraft, TrendingRouteHighlight, TrendingRouteHighlightDraft,
+};
+pub use self::descriptors::{
+    Badge, BadgeDraft, DescriptorValidationError, InterestTheme, SafetyPreset, SafetyPresetDraft,
+    SafetyToggle, SafetyToggleDraft, Tag, TagDraft,
+};
 pub use self::er_diagram::{
     SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable, render_mermaid_er_diagram,
 };
@@ -74,11 +94,17 @@ pub use self::idempotency::{
     PayloadHashError, canonicalize_and_hash,
 };
 pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
+pub use self::localization::{
+    LocaleCode, LocalizationMap, LocalizationValidationError, LocalizedStringSet,
+};
 pub use self::preferences::{
     ParseUnitSystemError, UnitSystem, UserPreferences, UserPreferencesBuilder,
 };
 pub use self::preferences_service::UserPreferencesService;
 pub use self::route_submission::RouteSubmissionServiceImpl;
+pub use self::semantic_icon_identifier::{
+    SemanticIconIdentifier, SemanticIconIdentifierValidationError,
+};
 pub use self::trace_id::TraceId;
 pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};

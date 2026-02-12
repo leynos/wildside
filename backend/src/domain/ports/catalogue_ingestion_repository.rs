@@ -4,13 +4,15 @@
 //! ingestion jobs can evolve without leaking persistence details.
 
 use async_trait::async_trait;
-use serde_json::Value;
-use uuid::Uuid;
+
+use crate::domain::{
+    CommunityPick, RouteCategory, RouteCollection, RouteSummary, Theme, TrendingRouteHighlight,
+};
 
 use super::define_port_error;
 
 define_port_error! {
-    /// Errors raised when persisting catalogue ingestion payloads.
+    /// Errors raised when persisting catalogue ingestion records.
     pub enum CatalogueIngestionRepositoryError {
         /// Repository connection could not be established.
         Connection { message: String } =>
@@ -21,136 +23,56 @@ define_port_error! {
     }
 }
 
-/// Ingestion payload for route categories.
-#[derive(Debug, Clone)]
-pub struct RouteCategoryIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-    pub route_count: i32,
-}
-
-/// Ingestion payload for themes.
-#[derive(Debug, Clone)]
-pub struct ThemeIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-    pub image: Value,
-    pub walk_count: i32,
-    pub distance_range_metres: Vec<i32>,
-    pub rating: f32,
-}
-
-/// Ingestion payload for route collections.
-#[derive(Debug, Clone)]
-pub struct RouteCollectionIngestion {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: String,
-    pub localizations: Value,
-    pub lead_image: Value,
-    pub map_preview: Value,
-    pub distance_range_metres: Vec<i32>,
-    pub duration_range_seconds: Vec<i32>,
-    pub difficulty: String,
-    pub route_ids: Vec<Uuid>,
-}
-
-/// Ingestion payload for route summaries.
-#[derive(Debug, Clone)]
-pub struct RouteSummaryIngestion {
-    pub id: Uuid,
-    pub route_id: Uuid,
-    pub category_id: Uuid,
-    pub theme_id: Uuid,
-    pub slug: Option<String>,
-    pub localizations: Value,
-    pub hero_image: Value,
-    pub distance_metres: i32,
-    pub duration_seconds: i32,
-    pub rating: f32,
-    pub badge_ids: Vec<Uuid>,
-    pub difficulty: String,
-    pub interest_theme_ids: Vec<Uuid>,
-}
-
-/// Ingestion payload for trending overlays.
-#[derive(Debug, Clone)]
-pub struct TrendingRouteHighlightIngestion {
-    pub id: Uuid,
-    pub route_summary_id: Uuid,
-    pub trend_delta: String,
-    pub subtitle_localizations: Value,
-}
-
-/// Ingestion payload for community picks.
-#[derive(Debug, Clone)]
-pub struct CommunityPickIngestion {
-    pub id: Uuid,
-    pub route_summary_id: Option<Uuid>,
-    pub user_id: Option<Uuid>,
-    pub localizations: Value,
-    pub curator_display_name: String,
-    pub curator_avatar: Value,
-    pub rating: f32,
-    pub distance_metres: i32,
-    pub duration_seconds: i32,
-    pub saves: i32,
-}
-
 /// Port for writing catalogue snapshots.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait CatalogueIngestionRepository: Send + Sync {
     /// Persist route category snapshots keyed by category identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_categories(
         &self,
-        records: &[RouteCategoryIngestion],
+        records: &[RouteCategory],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
     /// Persist theme snapshots keyed by theme identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_themes(
         &self,
-        records: &[ThemeIngestion],
+        records: &[Theme],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
     /// Persist route collection snapshots keyed by collection identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_collections(
         &self,
-        records: &[RouteCollectionIngestion],
+        records: &[RouteCollection],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
     /// Persist route summary snapshots keyed by summary identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_route_summaries(
         &self,
-        records: &[RouteSummaryIngestion],
+        records: &[RouteSummary],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
     /// Persist trending highlight overlays keyed by highlight identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_trending_highlights(
         &self,
-        records: &[TrendingRouteHighlightIngestion],
+        records: &[TrendingRouteHighlight],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 
     /// Persist community pick snapshots keyed by pick identifier.
     ///
-    /// Existing rows are updated with incoming payload values.
+    /// Existing rows are updated with incoming record values.
     async fn upsert_community_picks(
         &self,
-        records: &[CommunityPickIngestion],
+        records: &[CommunityPick],
     ) -> Result<(), CatalogueIngestionRepositoryError>;
 }
 
@@ -162,42 +84,42 @@ pub struct FixtureCatalogueIngestionRepository;
 impl CatalogueIngestionRepository for FixtureCatalogueIngestionRepository {
     async fn upsert_route_categories(
         &self,
-        _records: &[RouteCategoryIngestion],
+        _records: &[RouteCategory],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_themes(
         &self,
-        _records: &[ThemeIngestion],
+        _records: &[Theme],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_route_collections(
         &self,
-        _records: &[RouteCollectionIngestion],
+        _records: &[RouteCollection],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_route_summaries(
         &self,
-        _records: &[RouteSummaryIngestion],
+        _records: &[RouteSummary],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_trending_highlights(
         &self,
-        _records: &[TrendingRouteHighlightIngestion],
+        _records: &[TrendingRouteHighlight],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
 
     async fn upsert_community_picks(
         &self,
-        _records: &[CommunityPickIngestion],
+        _records: &[CommunityPick],
     ) -> Result<(), CatalogueIngestionRepositoryError> {
         Ok(())
     }
