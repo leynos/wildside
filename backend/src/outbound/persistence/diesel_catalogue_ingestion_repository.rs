@@ -48,11 +48,11 @@ fn map_diesel_error(error: diesel::result::Error) -> CatalogueIngestionRepositor
 impl<'a> From<&'a RouteCategory> for NewRouteCategoryRow<'a> {
     fn from(record: &'a RouteCategory) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
-            route_count: record.route_count,
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
+            route_count: record.route_count(),
         }
     }
 }
@@ -60,14 +60,14 @@ impl<'a> From<&'a RouteCategory> for NewRouteCategoryRow<'a> {
 impl<'a> From<&'a Theme> for NewThemeRow<'a> {
     fn from(record: &'a Theme) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
-            image: image_asset_to_json(&record.image),
-            walk_count: record.walk_count,
-            distance_range_metres: record.distance_range_metres.as_slice(),
-            rating: record.rating,
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
+            image: image_asset_to_json(record.image()),
+            walk_count: record.walk_count(),
+            distance_range_metres: record.distance_range_metres().as_slice(),
+            rating: record.rating(),
         }
     }
 }
@@ -75,16 +75,16 @@ impl<'a> From<&'a Theme> for NewThemeRow<'a> {
 impl<'a> From<&'a RouteCollection> for NewRouteCollectionRow<'a> {
     fn from(record: &'a RouteCollection) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
-            lead_image: image_asset_to_json(&record.lead_image),
-            map_preview: image_asset_to_json(&record.map_preview),
-            distance_range_metres: record.distance_range_metres.as_slice(),
-            duration_range_seconds: record.duration_range_seconds.as_slice(),
-            difficulty: record.difficulty.as_str(),
-            route_ids: record.route_ids.as_slice(),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
+            lead_image: image_asset_to_json(record.lead_image()),
+            map_preview: image_asset_to_json(record.map_preview()),
+            distance_range_metres: record.distance_range_metres().as_slice(),
+            duration_range_seconds: record.duration_range_seconds().as_slice(),
+            difficulty: record.difficulty(),
+            route_ids: record.route_ids(),
         }
     }
 }
@@ -92,19 +92,19 @@ impl<'a> From<&'a RouteCollection> for NewRouteCollectionRow<'a> {
 impl<'a> From<&'a RouteSummary> for NewRouteSummaryRow<'a> {
     fn from(record: &'a RouteSummary) -> Self {
         Self {
-            id: record.id,
-            route_id: record.route_id,
-            category_id: record.category_id,
-            theme_id: record.theme_id,
-            slug: record.slug.as_deref(),
-            localizations: localization_map_to_json(&record.localizations),
-            hero_image: image_asset_to_json(&record.hero_image),
-            distance_metres: record.distance_metres,
-            duration_seconds: record.duration_seconds,
-            rating: record.rating,
-            badge_ids: record.badge_ids.as_slice(),
-            difficulty: record.difficulty.as_str(),
-            interest_theme_ids: record.interest_theme_ids.as_slice(),
+            id: record.id(),
+            route_id: record.route_id(),
+            category_id: record.category_id(),
+            theme_id: record.theme_id(),
+            slug: record.slug(),
+            localizations: localization_map_to_json(record.localizations()),
+            hero_image: image_asset_to_json(record.hero_image()),
+            distance_metres: record.distance_metres(),
+            duration_seconds: record.duration_seconds(),
+            rating: record.rating(),
+            badge_ids: record.badge_ids(),
+            difficulty: record.difficulty(),
+            interest_theme_ids: record.interest_theme_ids(),
         }
     }
 }
@@ -112,10 +112,10 @@ impl<'a> From<&'a RouteSummary> for NewRouteSummaryRow<'a> {
 impl<'a> From<&'a TrendingRouteHighlight> for NewTrendingRouteHighlightRow<'a> {
     fn from(record: &'a TrendingRouteHighlight) -> Self {
         Self {
-            id: record.id,
-            route_summary_id: record.route_summary_id,
-            trend_delta: record.trend_delta.as_str(),
-            subtitle_localizations: localization_map_to_json(&record.subtitle_localizations),
+            id: record.id(),
+            route_summary_id: record.route_summary_id(),
+            trend_delta: record.trend_delta(),
+            subtitle_localizations: localization_map_to_json(record.subtitle_localizations()),
         }
     }
 }
@@ -123,16 +123,16 @@ impl<'a> From<&'a TrendingRouteHighlight> for NewTrendingRouteHighlightRow<'a> {
 impl<'a> From<&'a CommunityPick> for NewCommunityPickRow<'a> {
     fn from(record: &'a CommunityPick) -> Self {
         Self {
-            id: record.id,
-            route_summary_id: record.route_summary_id,
-            user_id: record.user_id,
-            localizations: localization_map_to_json(&record.localizations),
-            curator_display_name: record.curator_display_name.as_str(),
-            curator_avatar: image_asset_to_json(&record.curator_avatar),
-            rating: record.rating,
-            distance_metres: record.distance_metres,
-            duration_seconds: record.duration_seconds,
-            saves: record.saves,
+            id: record.id(),
+            route_summary_id: record.route_summary_id(),
+            user_id: record.user_id(),
+            localizations: localization_map_to_json(record.localizations()),
+            curator_display_name: record.curator_display_name(),
+            curator_avatar: image_asset_to_json(record.curator_avatar()),
+            rating: record.rating(),
+            distance_metres: record.distance_metres(),
+            duration_seconds: record.duration_seconds(),
+            saves: record.saves(),
         }
     }
 }

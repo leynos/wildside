@@ -143,7 +143,7 @@ fn theme_new_accepts_valid_payload(
     })
     .expect("valid theme");
 
-    assert_eq!(theme.slug, "nature");
+    assert_eq!(theme.slug(), "nature");
 }
 
 #[rstest]
@@ -204,7 +204,7 @@ fn route_summary_new_accepts_valid_payload() {
     let summary =
         RouteSummary::new(valid_route_summary_draft()).expect("valid route summary draft");
 
-    assert_eq!(summary.slug.as_deref(), Some("coastal-route"));
+    assert_eq!(summary.slug(), Some("coastal-route"));
 }
 
 #[rstest]
@@ -221,7 +221,7 @@ fn route_summary_allows_missing_slug() {
     })
     .expect("valid route summary draft");
 
-    assert_eq!(summary.slug.as_deref(), None);
+    assert_eq!(summary.slug(), None);
 }
 
 #[rstest]
@@ -253,8 +253,8 @@ fn community_pick_accepts_optional_references() {
     let pick = CommunityPick::new(community_pick_draft(None, None, "Trail Team"))
         .expect("valid community pick");
 
-    assert!(pick.route_summary_id.is_none());
-    assert!(pick.user_id.is_none());
+    assert!(pick.route_summary_id().is_none());
+    assert!(pick.user_id().is_none());
 }
 
 #[rstest]

@@ -42,10 +42,10 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorIngestionReposito
 impl<'a> From<&'a Tag> for NewTagRow<'a> {
     fn from(record: &'a Tag) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
@@ -53,10 +53,10 @@ impl<'a> From<&'a Tag> for NewTagRow<'a> {
 impl<'a> From<&'a Badge> for NewBadgeRow<'a> {
     fn from(record: &'a Badge) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
@@ -64,10 +64,10 @@ impl<'a> From<&'a Badge> for NewBadgeRow<'a> {
 impl<'a> From<&'a SafetyToggle> for NewSafetyToggleRow<'a> {
     fn from(record: &'a SafetyToggle) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
         }
     }
 }
@@ -75,11 +75,11 @@ impl<'a> From<&'a SafetyToggle> for NewSafetyToggleRow<'a> {
 impl<'a> From<&'a SafetyPreset> for NewSafetyPresetRow<'a> {
     fn from(record: &'a SafetyPreset) -> Self {
         Self {
-            id: record.id,
-            slug: record.slug.as_str(),
-            icon_key: record.icon_key.as_ref(),
-            localizations: localization_map_to_json(&record.localizations),
-            safety_toggle_ids: record.safety_toggle_ids.as_slice(),
+            id: record.id(),
+            slug: record.slug(),
+            icon_key: record.icon_key().as_ref(),
+            localizations: localization_map_to_json(record.localizations()),
+            safety_toggle_ids: record.safety_toggle_ids(),
         }
     }
 }

@@ -76,10 +76,11 @@ pub use self::auth::{LoginCredentials, LoginValidationError};
 pub use self::catalogue::{
     CatalogueValidationError, CommunityPick, CommunityPickDraft, ImageAsset, RouteCategory,
     RouteCategoryDraft, RouteCollection, RouteCollectionDraft, RouteSummary, RouteSummaryDraft,
-    Theme, ThemeDraft, TrendingRouteHighlight,
+    Theme, ThemeDraft, TrendingRouteHighlight, TrendingRouteHighlightDraft,
 };
 pub use self::descriptors::{
-    Badge, DescriptorValidationError, InterestTheme, SafetyPreset, SafetyToggle, Tag,
+    Badge, BadgeDraft, DescriptorValidationError, InterestTheme, SafetyPreset, SafetyPresetDraft,
+    SafetyToggle, SafetyToggleDraft, Tag, TagDraft,
 };
 pub use self::er_diagram::{
     SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable, render_mermaid_er_diagram,

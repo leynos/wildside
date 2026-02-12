@@ -31,7 +31,7 @@ fn tag_accepts_valid_payload(icon_key: SemanticIconIdentifier, localizations: Lo
     let tag =
         Tag::new(Uuid::new_v4(), "family-friendly", icon_key, localizations).expect("valid tag");
 
-    assert_eq!(tag.slug, "family-friendly");
+    assert_eq!(tag.slug(), "family-friendly");
 }
 
 #[rstest]
@@ -54,7 +54,7 @@ fn safety_toggle_accepts_valid_payload(
     let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon_key, localizations)
         .expect("valid safety toggle");
 
-    assert_eq!(toggle.slug, "well-lit");
+    assert_eq!(toggle.slug(), "well-lit");
 }
 
 #[rstest]
@@ -62,7 +62,7 @@ fn safety_preset_rejects_empty_toggle_ids(
     icon_key: SemanticIconIdentifier,
     localizations: LocalizationMap,
 ) {
-    let result = SafetyPreset::new(SafetyPreset {
+    let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
@@ -82,7 +82,7 @@ fn safety_preset_rejects_duplicate_toggle_ids(
     localizations: LocalizationMap,
 ) {
     let toggle_id = Uuid::new_v4();
-    let result = SafetyPreset::new(SafetyPreset {
+    let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
@@ -101,7 +101,7 @@ fn safety_preset_accepts_unique_toggle_ids(
     icon_key: SemanticIconIdentifier,
     localizations: LocalizationMap,
 ) {
-    let preset = SafetyPreset::new(SafetyPreset {
+    let preset = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
         icon_key,
@@ -110,7 +110,7 @@ fn safety_preset_accepts_unique_toggle_ids(
     })
     .expect("valid safety preset");
 
-    assert_eq!(preset.safety_toggle_ids.len(), 2);
+    assert_eq!(preset.safety_toggle_ids().len(), 2);
 }
 
 #[rstest]

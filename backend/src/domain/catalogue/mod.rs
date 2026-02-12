@@ -26,7 +26,7 @@ pub use route_category::{RouteCategory, RouteCategoryDraft};
 pub use route_collection::{RouteCollection, RouteCollectionDraft};
 pub use route_summary::{RouteSummary, RouteSummaryDraft};
 pub use theme::{Theme, ThemeDraft};
-pub use trending_route_highlight::TrendingRouteHighlight;
+pub use trending_route_highlight::{TrendingRouteHighlight, TrendingRouteHighlightDraft};
 
 /// Validation errors returned by catalogue read-model constructors.
 #[derive(Debug, Clone, PartialEq)]

@@ -66,15 +66,26 @@ macro_rules! define_simple_descriptor {
     (
         $(#[$struct_attribute:meta])*
         $type_name:ident,
+        $draft_name:ident,
         $field_prefix:literal,
         $doc_example:literal
     ) => {
-        $(#[$struct_attribute])*
-        pub struct $type_name {
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        #[serde(deny_unknown_fields)]
+        pub struct $draft_name {
             pub id: Uuid,
             pub slug: String,
             pub icon_key: SemanticIconIdentifier,
             pub localizations: LocalizationMap,
+        }
+
+        $(#[$struct_attribute])*
+        pub struct $type_name {
+            id: Uuid,
+            slug: String,
+            icon_key: SemanticIconIdentifier,
+            localizations: LocalizationMap,
         }
 
         impl $type_name {
@@ -88,13 +99,42 @@ macro_rules! define_simple_descriptor {
                 icon_key: SemanticIconIdentifier,
                 localizations: LocalizationMap,
             ) -> Result<Self, DescriptorValidationError> {
-                let slug = validate_slug(slug.into(), concat!($field_prefix, ".slug"))?;
-                Ok(Self {
+                Self::try_from($draft_name {
                     id,
-                    slug,
+                    slug: slug.into(),
                     icon_key,
                     localizations,
                 })
+            }
+
+            pub fn id(&self) -> Uuid { self.id }
+            pub fn slug(&self) -> &str { self.slug.as_str() }
+            pub fn icon_key(&self) -> &SemanticIconIdentifier { &self.icon_key }
+            pub fn localizations(&self) -> &LocalizationMap { &self.localizations }
+        }
+
+        impl TryFrom<$draft_name> for $type_name {
+            type Error = DescriptorValidationError;
+
+            fn try_from(value: $draft_name) -> Result<Self, Self::Error> {
+                let slug = validate_slug(value.slug, concat!($field_prefix, ".slug"))?;
+                Ok(Self {
+                    id: value.id,
+                    slug,
+                    icon_key: value.icon_key,
+                    localizations: value.localizations,
+                })
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $type_name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                $draft_name::deserialize(deserializer)?
+                    .try_into()
+                    .map_err(serde::de::Error::custom)
             }
         }
     };
@@ -102,10 +142,11 @@ macro_rules! define_simple_descriptor {
 
 define_simple_descriptor!(
     /// Tag descriptor shown in route metadata.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(rename_all = "camelCase")]
     #[serde(deny_unknown_fields)]
     Tag,
+    TagDraft,
     "tag",
     r#"```rust
 use std::collections::BTreeMap;
@@ -125,16 +166,17 @@ let icon = SemanticIconIdentifier::new("tag:family").expect("valid icon");
 
 let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon, localizations)
     .expect("valid tag");
-assert_eq!(tag.slug, "family-friendly");
+assert_eq!(tag.slug(), "family-friendly");
 ```"#
 );
 
 define_simple_descriptor!(
     /// Badge descriptor shown in route summary metadata.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(rename_all = "camelCase")]
     #[serde(deny_unknown_fields)]
     Badge,
+    BadgeDraft,
     "badge",
     r#"```rust
 use std::collections::BTreeMap;
@@ -154,16 +196,17 @@ let icon = SemanticIconIdentifier::new("badge:accessible").expect("valid icon");
 
 let badge = Badge::new(Uuid::new_v4(), "accessible", icon, localizations)
     .expect("valid badge");
-assert_eq!(badge.slug, "accessible");
+assert_eq!(badge.slug(), "accessible");
 ```"#
 );
 
 define_simple_descriptor!(
     /// Safety toggle descriptor used by user preferences.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(rename_all = "camelCase")]
     #[serde(deny_unknown_fields)]
     SafetyToggle,
+    SafetyToggleDraft,
     "safety_toggle",
     r#"```rust
 use std::collections::BTreeMap;
@@ -183,7 +226,7 @@ let icon = SemanticIconIdentifier::new("safety:well-lit").expect("valid icon");
 
 let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon, localizations)
     .expect("valid safety toggle");
-assert_eq!(toggle.slug, "well-lit");
+assert_eq!(toggle.slug(), "well-lit");
 ```"#
 );
 
@@ -209,16 +252,28 @@ impl InterestTheme {
     }
 }
 
-/// Safety preset descriptor combining a validated toggle set.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// Input payload for validated [`SafetyPreset`] construction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct SafetyPreset {
+pub struct SafetyPresetDraft {
     pub id: Uuid,
     pub slug: String,
     pub icon_key: SemanticIconIdentifier,
     pub localizations: LocalizationMap,
     pub safety_toggle_ids: Vec<Uuid>,
+}
+
+/// Safety preset descriptor combining a validated toggle set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct SafetyPreset {
+    id: Uuid,
+    slug: String,
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    safety_toggle_ids: Vec<Uuid>,
 }
 
 impl SafetyPreset {
@@ -240,7 +295,7 @@ impl SafetyPreset {
     ///     "en-GB".to_owned(),
     ///     LocalizedStringSet::new("Night safe", None, None),
     /// );
-    /// let preset = SafetyPreset::new(SafetyPreset {
+    /// let preset = SafetyPreset::new(backend::domain::SafetyPresetDraft {
     ///     id: Uuid::new_v4(),
     ///     slug: "night-safe".to_owned(),
     ///     icon_key: SemanticIconIdentifier::new("preset:night-safe").expect("valid icon"),
@@ -248,40 +303,45 @@ impl SafetyPreset {
     ///     safety_toggle_ids: vec![toggle_id],
     /// })
     /// .expect("valid safety preset");
-    /// assert_eq!(preset.slug, "night-safe");
-    /// assert_eq!(preset.safety_toggle_ids, vec![toggle_id]);
+    /// assert_eq!(preset.slug(), "night-safe");
+    /// assert_eq!(preset.safety_toggle_ids(), vec![toggle_id]);
     /// ```
-    pub fn new(value: Self) -> Result<Self, DescriptorValidationError> {
-        let Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-            safety_toggle_ids,
-        } = value;
+    pub fn new(draft: SafetyPresetDraft) -> Result<Self, DescriptorValidationError> {
+        Self::try_from(draft)
+    }
 
-        let slug = validate_slug(slug, "safety_preset.slug")?;
-        ensure_non_empty_unique_toggle_ids(&safety_toggle_ids)?;
-
-        Ok(Self {
-            id,
-            slug,
-            icon_key,
-            localizations,
-            safety_toggle_ids,
-        })
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+    pub fn slug(&self) -> &str {
+        self.slug.as_str()
+    }
+    pub fn icon_key(&self) -> &SemanticIconIdentifier {
+        &self.icon_key
+    }
+    pub fn localizations(&self) -> &LocalizationMap {
+        &self.localizations
+    }
+    pub fn safety_toggle_ids(&self) -> &[Uuid] {
+        self.safety_toggle_ids.as_slice()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-struct SafetyPresetSerde {
-    id: Uuid,
-    slug: String,
-    icon_key: SemanticIconIdentifier,
-    localizations: LocalizationMap,
-    safety_toggle_ids: Vec<Uuid>,
+impl TryFrom<SafetyPresetDraft> for SafetyPreset {
+    type Error = DescriptorValidationError;
+
+    fn try_from(value: SafetyPresetDraft) -> Result<Self, Self::Error> {
+        let slug = validate_slug(value.slug, "safety_preset.slug")?;
+        ensure_non_empty_unique_toggle_ids(&value.safety_toggle_ids)?;
+
+        Ok(Self {
+            id: value.id,
+            slug,
+            icon_key: value.icon_key,
+            localizations: value.localizations,
+            safety_toggle_ids: value.safety_toggle_ids,
+        })
+    }
 }
 
 impl<'de> Deserialize<'de> for SafetyPreset {
@@ -289,15 +349,9 @@ impl<'de> Deserialize<'de> for SafetyPreset {
     where
         D: serde::Deserializer<'de>,
     {
-        let value = SafetyPresetSerde::deserialize(deserializer)?;
-        Self::new(Self {
-            id: value.id,
-            slug: value.slug,
-            icon_key: value.icon_key,
-            localizations: value.localizations,
-            safety_toggle_ids: value.safety_toggle_ids,
-        })
-        .map_err(serde::de::Error::custom)
+        SafetyPresetDraft::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
     }
 }
 

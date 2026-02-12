@@ -27,18 +27,18 @@ pub struct ThemeDraft {
 }
 
 /// Theme card for Explore catalogue snapshots.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
-    pub id: Uuid,
-    pub slug: String,
-    pub icon_key: SemanticIconIdentifier,
-    pub localizations: LocalizationMap,
-    pub image: ImageAsset,
-    pub walk_count: i32,
-    pub distance_range_metres: [i32; 2],
-    pub rating: f32,
+    id: Uuid,
+    slug: String,
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    image: ImageAsset,
+    walk_count: i32,
+    distance_range_metres: [i32; 2],
+    rating: f32,
 }
 
 impl Theme {
@@ -73,9 +73,42 @@ impl Theme {
     /// };
     ///
     /// let theme = Theme::new(draft).expect("valid theme");
-    /// assert_eq!(theme.slug, "coastal");
+    /// assert_eq!(theme.slug(), "coastal");
     /// ```
     pub fn new(draft: ThemeDraft) -> Result<Self, CatalogueValidationError> {
+        Self::try_from(draft)
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+    pub fn slug(&self) -> &str {
+        self.slug.as_str()
+    }
+    pub fn icon_key(&self) -> &SemanticIconIdentifier {
+        &self.icon_key
+    }
+    pub fn localizations(&self) -> &LocalizationMap {
+        &self.localizations
+    }
+    pub fn image(&self) -> &ImageAsset {
+        &self.image
+    }
+    pub fn walk_count(&self) -> i32 {
+        self.walk_count
+    }
+    pub fn distance_range_metres(&self) -> &[i32; 2] {
+        &self.distance_range_metres
+    }
+    pub fn rating(&self) -> f32 {
+        self.rating
+    }
+}
+
+impl TryFrom<ThemeDraft> for Theme {
+    type Error = CatalogueValidationError;
+
+    fn try_from(draft: ThemeDraft) -> Result<Self, Self::Error> {
         let slug = validate_slug(draft.slug, "theme.slug")?;
         ensure_non_negative(draft.walk_count, "theme.walk_count")?;
         ensure_non_negative_range(draft.distance_range_metres, "theme.distance_range_metres")?;
@@ -91,5 +124,16 @@ impl Theme {
             distance_range_metres: draft.distance_range_metres,
             rating: draft.rating,
         })
+    }
+}
+
+impl<'de> Deserialize<'de> for Theme {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        ThemeDraft::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
     }
 }

@@ -2,8 +2,8 @@
 
 use backend::domain::{
     Badge, CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollection,
-    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, SafetyPreset, SafetyToggle, Tag, Theme,
-    ThemeDraft, TrendingRouteHighlight,
+    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, SafetyPreset, SafetyPresetDraft,
+    SafetyToggle, Tag, Theme, ThemeDraft, TrendingRouteHighlight,
 };
 use uuid::Uuid;
 
@@ -165,7 +165,7 @@ fn build_safety_toggle() -> SafetyToggle {
 }
 
 fn build_safety_preset() -> SafetyPreset {
-    SafetyPreset::new(SafetyPreset {
+    SafetyPreset::new(SafetyPresetDraft {
         id: SAFETY_PRESET_ID,
         slug: "night-safe".to_owned(),
         icon_key: icon("preset:night-safe"),
