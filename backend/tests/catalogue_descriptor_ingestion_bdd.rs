@@ -236,19 +236,39 @@ fn assert_route_category_stored(client: &mut Client) {
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "review requirement mandates explicit parameters for descriptor assertions"
+)]
+fn assert_simple_descriptor_stored(
+    client: &mut Client,
+    table: &str,
+    id: &Uuid,
+    expected_slug: &str,
+    expected_icon_key: &str,
+    en_gb_copy: LocalizedCopy<'_>,
+    fr_fr_copy: LocalizedCopy<'_>,
+) {
+    let query = format!("SELECT slug, icon_key, localizations::text FROM {table} WHERE id = $1");
+    let row = client
+        .query_one(query.as_str(), &[id])
+        .expect("descriptor row should exist");
+
+    assert_eq!(row.get::<_, String>(0), expected_slug);
+    assert_eq!(row.get::<_, String>(1), expected_icon_key);
+
+    let localizations = serde_json::from_str::<Value>(&row.get::<_, String>(2))
+        .expect("descriptor localizations should parse");
+    assert_localizations_json_shape(&localizations, en_gb_copy, fr_fr_copy);
+}
+
 fn assert_tag_stored(client: &mut Client) {
-    let tag = client
-        .query_one(
-            "SELECT slug, icon_key, localizations::text FROM tags WHERE id = $1",
-            &[&TAG_ID],
-        )
-        .expect("tag row should exist");
-    assert_eq!(tag.get::<_, String>(0), "family-friendly");
-    assert_eq!(tag.get::<_, String>(1), "tag:family");
-    let tag_localizations = serde_json::from_str::<Value>(&tag.get::<_, String>(2))
-        .expect("tag localizations should parse");
-    assert_localizations_json_shape(
-        &tag_localizations,
+    assert_simple_descriptor_stored(
+        client,
+        "tags",
+        &TAG_ID,
+        "family-friendly",
+        "tag:family",
         ("Family", "Family short", "Family description"),
         ("Family FR", "Family FR court", "Family FR description"),
     );
@@ -386,19 +406,12 @@ fn assert_community_picks_stored(client: &mut Client) {
 }
 
 fn assert_badges_stored(client: &mut Client) {
-    let badge = client
-        .query_one(
-            "SELECT slug, icon_key, localizations::text FROM badges WHERE id = $1",
-            &[&BADGE_ID],
-        )
-        .expect("badge row should exist");
-    assert_eq!(badge.get::<_, String>(0), "accessible");
-    assert_eq!(badge.get::<_, String>(1), "badge:accessible");
-
-    let localizations =
-        serde_json::from_str::<Value>(&badge.get::<_, String>(2)).expect("badge localizations");
-    assert_localizations_json_shape(
-        &localizations,
+    assert_simple_descriptor_stored(
+        client,
+        "badges",
+        &BADGE_ID,
+        "accessible",
+        "badge:accessible",
         ("Accessible", "Accessible short", "Accessible description"),
         (
             "Accessible FR",
@@ -409,19 +422,12 @@ fn assert_badges_stored(client: &mut Client) {
 }
 
 fn assert_safety_toggles_stored(client: &mut Client) {
-    let toggle = client
-        .query_one(
-            "SELECT slug, icon_key, localizations::text FROM safety_toggles WHERE id = $1",
-            &[&SAFETY_TOGGLE_ID],
-        )
-        .expect("safety toggle row should exist");
-    assert_eq!(toggle.get::<_, String>(0), "well-lit");
-    assert_eq!(toggle.get::<_, String>(1), "safety:well-lit");
-
-    let localizations = serde_json::from_str::<Value>(&toggle.get::<_, String>(2))
-        .expect("safety toggle localizations");
-    assert_localizations_json_shape(
-        &localizations,
+    assert_simple_descriptor_stored(
+        client,
+        "safety_toggles",
+        &SAFETY_TOGGLE_ID,
+        "well-lit",
+        "safety:well-lit",
         ("Well lit", "Well lit short", "Well lit description"),
         (
             "Well lit FR",
