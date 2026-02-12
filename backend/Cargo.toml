@@ -78,6 +78,7 @@ actix-codec = "0.5.2"
 # Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3.8.1"
 env-lock = "1.0.1"
+libc = "0.2"
 futures = "0.3"
 rstest = "0.26"
 rstest-bdd = "0.5.0"

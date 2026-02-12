@@ -14,6 +14,8 @@
 //! a consistent workspace-backed configuration.
 
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -23,6 +25,15 @@ use pg_embedded_setup_unpriv::{ClusterHandle, TestCluster};
 
 static PG_EMBED_BOOTSTRAP_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static SHARED_CLUSTER_HANDLE: OnceLock<ClusterHandle> = OnceLock::new();
+
+/// PostgreSQL postmaster PID for process-exit cleanup.
+///
+/// Populated once the shared cluster starts; read by the `atexit` handler to
+/// send SIGTERM so orphaned PostgreSQL processes do not survive the test binary.
+/// This is a temporary workaround until `pg-embed-setup-unpriv` provides a
+/// built-in process-exit shutdown mechanism.
+#[cfg(unix)]
+static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 
 /// Maximum number of retry attempts for transient network errors.
 const MAX_RETRIES: u32 = 3;
@@ -100,6 +111,64 @@ fn bootstrap_with_retries<T>(
     Err(last_error)
 }
 
+/// Reads the PostgreSQL postmaster PID from the data directory.
+#[cfg(unix)]
+fn read_postmaster_pid(data_dir: &Path) -> Option<i32> {
+    let dir = Dir::open_ambient_dir(data_dir, ambient_authority()).ok()?;
+    let content = dir.read_to_string("postmaster.pid").ok()?;
+    content.lines().next()?.trim().parse().ok()
+}
+
+/// Sends SIGTERM to the PostgreSQL postmaster and waits for shutdown.
+///
+/// Registered via `libc::atexit` so the shared cluster is stopped when the
+/// test binary exits, even though [`ClusterGuard`] is deliberately forgotten
+/// (because it is `!Send` and cannot be stored in `OnceLock`).
+#[cfg(unix)]
+extern "C" fn stop_postgres_on_exit() {
+    let pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
+    if pid <= 0 {
+        return;
+    }
+
+    // SAFETY: `pid` was read from `postmaster.pid` written by PostgreSQL.
+    // SIGTERM triggers a graceful "smart shutdown"; signal 0 probes liveness.
+    unsafe {
+        if libc::kill(pid, libc::SIGTERM) != 0 {
+            return;
+        }
+    }
+
+    // Wait up to five seconds for PostgreSQL to exit gracefully.
+    for _ in 0..50 {
+        std::thread::sleep(Duration::from_millis(100));
+        // SAFETY: signal 0 checks whether the process still exists.
+        if unsafe { libc::kill(pid, 0) } != 0 {
+            return;
+        }
+    }
+
+    // SAFETY: force-kill after the graceful shutdown budget expires.
+    unsafe {
+        libc::kill(pid, libc::SIGKILL);
+    }
+}
+
+/// Records the postmaster PID and registers an `atexit` handler so the
+/// shared cluster is stopped when the test binary exits.
+#[cfg(unix)]
+fn register_process_exit_cleanup(handle: &ClusterHandle) {
+    let Some(pid) = read_postmaster_pid(&handle.settings().data_dir) else {
+        return;
+    };
+    PG_POSTMASTER_PID.store(pid, Ordering::Relaxed);
+    // SAFETY: `stop_postgres_on_exit` is a valid `extern "C"` function with
+    // no preconditions beyond the atomic PID being set (done above).
+    unsafe {
+        libc::atexit(stop_postgres_on_exit);
+    }
+}
+
 fn init_shared_cluster_handle() -> Result<&'static ClusterHandle, String> {
     if let Some(handle) = SHARED_CLUSTER_HANDLE.get() {
         return Ok(handle);
@@ -113,7 +182,10 @@ fn init_shared_cluster_handle() -> Result<&'static ClusterHandle, String> {
     // `ClusterHandle` is cheap to retain and does not own teardown behaviour;
     // cleanup is bound to `guard`. Forgetting the guard is intentional here so
     // shared-cluster ownership remains process-lifetime for test binaries.
+    // The `atexit` handler compensates by stopping PostgreSQL on process exit.
     std::mem::forget(guard);
+    #[cfg(unix)]
+    register_process_exit_cleanup(&handle);
     let _ = SHARED_CLUSTER_HANDLE.set(handle);
 
     SHARED_CLUSTER_HANDLE
