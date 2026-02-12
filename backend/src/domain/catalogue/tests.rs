@@ -225,20 +225,6 @@ fn route_summary_allows_missing_slug() {
 }
 
 #[rstest]
-fn route_summary_rejects_negative_distance(mut route_summary_draft: RouteSummaryDraft) {
-    route_summary_draft.distance_metres = -1;
-    let result = RouteSummary::new(route_summary_draft);
-
-    assert!(matches!(
-        result,
-        Err(CatalogueValidationError::NegativeValue {
-            field: "route_summary.distance_metres",
-            ..
-        })
-    ));
-}
-
-#[rstest]
 fn trending_highlight_rejects_empty_delta(localizations: LocalizationMap) {
     let result = TrendingRouteHighlight::new(Uuid::new_v4(), Uuid::new_v4(), "   ", localizations);
 
@@ -318,21 +304,6 @@ fn theme_rejects_negative_walk_count() {
 }
 
 #[rstest]
-fn route_summary_rejects_negative_duration_seconds() {
-    let mut draft = route_summary_draft();
-    draft.duration_seconds = -1;
-    let result = RouteSummary::new(draft);
-
-    assert!(matches!(
-        result,
-        Err(CatalogueValidationError::NegativeValue {
-            field: "route_summary.duration_seconds",
-            ..
-        })
-    ));
-}
-
-#[rstest]
 #[case(-0.1)]
 #[case(5.1)]
 fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
@@ -346,6 +317,30 @@ fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
             field: "route_summary.rating",
             ..
         })
+    ));
+}
+
+#[rstest]
+#[case("distance_metres", "route_summary.distance_metres")]
+#[case("duration_seconds", "route_summary.duration_seconds")]
+fn route_summary_rejects_negative_numeric_fields(
+    #[case] field: &str,
+    #[case] expected_error_field: &str,
+) {
+    let mut draft = route_summary_draft();
+    match field {
+        "distance_metres" => draft.distance_metres = -1,
+        "duration_seconds" => draft.duration_seconds = -1,
+        _ => unreachable!("unsupported route summary field"),
+    }
+    let result = RouteSummary::new(draft);
+
+    assert!(matches!(
+        result,
+        Err(CatalogueValidationError::NegativeValue {
+            field: actual_field,
+            ..
+        }) if actual_field == expected_error_field
     ));
 }
 
@@ -367,31 +362,25 @@ fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) {
 }
 
 #[rstest]
-fn community_pick_rejects_negative_duration_seconds() {
+#[case("duration_seconds", "community_pick.duration_seconds")]
+#[case("saves", "community_pick.saves")]
+fn community_pick_rejects_negative_numeric_fields(
+    #[case] field: &str,
+    #[case] expected_error_field: &str,
+) {
     let mut draft = community_pick_draft(None, None, "Trail Team");
-    draft.duration_seconds = -1;
+    match field {
+        "duration_seconds" => draft.duration_seconds = -1,
+        "saves" => draft.saves = -1,
+        _ => unreachable!("unsupported community pick field"),
+    }
     let result = CommunityPick::new(draft);
 
     assert!(matches!(
         result,
         Err(CatalogueValidationError::NegativeValue {
-            field: "community_pick.duration_seconds",
+            field: actual_field,
             ..
-        })
-    ));
-}
-
-#[rstest]
-fn community_pick_rejects_negative_saves() {
-    let mut draft = community_pick_draft(None, None, "Trail Team");
-    draft.saves = -1;
-    let result = CommunityPick::new(draft);
-
-    assert!(matches!(
-        result,
-        Err(CatalogueValidationError::NegativeValue {
-            field: "community_pick.saves",
-            ..
-        })
+        }) if actual_field == expected_error_field
     ));
 }
