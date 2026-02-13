@@ -1,0 +1,141 @@
+//! PostgreSQL-backed descriptor read adapter.
+
+use async_trait::async_trait;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+
+use crate::domain::ports::{DescriptorRepository, DescriptorRepositoryError, DescriptorSnapshot};
+use crate::domain::{InterestTheme, SafetyPresetDraft};
+
+use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
+use super::json_serializers::{json_to_localization_map, json_to_semantic_icon_identifier};
+use super::models::{BadgeRow, InterestThemeRow, SafetyPresetRow, SafetyToggleRow, TagRow};
+use super::pool::{DbPool, PoolError};
+use super::schema::{badges, interest_themes, safety_presets, safety_toggles, tags};
+
+/// Diesel-backed implementation of the descriptor read port.
+#[derive(Clone)]
+pub struct DieselDescriptorRepository {
+    pool: DbPool,
+}
+
+impl DieselDescriptorRepository {
+    /// Create a new repository with the given connection pool.
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+}
+
+fn map_pool_error(error: PoolError) -> DescriptorRepositoryError {
+    DescriptorRepositoryError::connection(map_pool_error_message(error))
+}
+
+fn map_diesel_error(error: diesel::result::Error) -> DescriptorRepositoryError {
+    DescriptorRepositoryError::query(map_diesel_error_message(error, "descriptor read"))
+}
+
+// ---------------------------------------------------------------------------
+// Row-to-domain converters
+// ---------------------------------------------------------------------------
+
+fn row_to_tag(row: TagRow) -> Result<crate::domain::Tag, String> {
+    let localizations = json_to_localization_map(&row.localizations)?;
+    let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
+    crate::domain::Tag::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
+}
+
+fn row_to_badge(row: BadgeRow) -> Result<crate::domain::Badge, String> {
+    let localizations = json_to_localization_map(&row.localizations)?;
+    let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
+    crate::domain::Badge::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
+}
+
+fn row_to_safety_toggle(row: SafetyToggleRow) -> Result<crate::domain::SafetyToggle, String> {
+    let localizations = json_to_localization_map(&row.localizations)?;
+    let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
+    crate::domain::SafetyToggle::new(row.id, row.slug, icon_key, localizations)
+        .map_err(|e| e.to_string())
+}
+
+fn row_to_safety_preset(row: SafetyPresetRow) -> Result<crate::domain::SafetyPreset, String> {
+    let localizations = json_to_localization_map(&row.localizations)?;
+    let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
+    crate::domain::SafetyPreset::new(SafetyPresetDraft {
+        id: row.id,
+        slug: row.slug,
+        icon_key,
+        localizations,
+        safety_toggle_ids: row.safety_toggle_ids,
+    })
+    .map_err(|e| e.to_string())
+}
+
+fn row_to_interest_theme(row: InterestThemeRow) -> InterestTheme {
+    InterestTheme::new(row.id, row.name, row.description)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn collect_rows<T>(
+    results: impl Iterator<Item = Result<T, String>>,
+) -> Result<Vec<T>, DescriptorRepositoryError> {
+    results
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(DescriptorRepositoryError::query)
+}
+
+// ---------------------------------------------------------------------------
+// Trait implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl DescriptorRepository for DieselDescriptorRepository {
+    async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError> {
+        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+
+        let tag_rows: Vec<TagRow> = tags::table
+            .select(TagRow::as_select())
+            .order_by(tags::slug)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        let badge_rows: Vec<BadgeRow> = badges::table
+            .select(BadgeRow::as_select())
+            .order_by(badges::slug)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        let toggle_rows: Vec<SafetyToggleRow> = safety_toggles::table
+            .select(SafetyToggleRow::as_select())
+            .order_by(safety_toggles::slug)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        let preset_rows: Vec<SafetyPresetRow> = safety_presets::table
+            .select(SafetyPresetRow::as_select())
+            .order_by(safety_presets::slug)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        let theme_rows: Vec<InterestThemeRow> = interest_themes::table
+            .select(InterestThemeRow::as_select())
+            .order_by(interest_themes::name)
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        Ok(DescriptorSnapshot {
+            tags: collect_rows(tag_rows.into_iter().map(row_to_tag))?,
+            badges: collect_rows(badge_rows.into_iter().map(row_to_badge))?,
+            safety_toggles: collect_rows(toggle_rows.into_iter().map(row_to_safety_toggle))?,
+            safety_presets: collect_rows(preset_rows.into_iter().map(row_to_safety_preset))?,
+            interest_themes: theme_rows.into_iter().map(row_to_interest_theme).collect(),
+        })
+    }
+}

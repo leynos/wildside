@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (awaiting explicit approval before implementation)
+Status: IN PROGRESS
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference.
@@ -110,15 +110,17 @@ Observable success criteria:
 - [x] (2026-02-12) Mapped existing ingestion ports/adapters and persistence
       test patterns to anchor this plan in current code.
 - [x] (2026-02-12) Drafted this ExecPlan.
-- [ ] Add read-side domain port modules for catalogue and descriptors.
-- [ ] Add Diesel outbound adapters implementing those ports.
-- [ ] Add rstest unit coverage for fixtures, mapping helpers, and unhappy
-      conversion cases.
-- [ ] Add rstest-bdd behavioural contract tests with embedded PostgreSQL,
-      including happy/unhappy/edge scenarios.
-- [ ] Record 3.2.2 design decisions in
+- [x] (2026-02-12) Add read-side domain port modules for catalogue and
+      descriptors (`catalogue_repository.rs`, `descriptor_repository.rs`).
+- [x] (2026-02-12) Add Diesel outbound adapters implementing those ports
+      (`diesel_catalogue_repository.rs`, `diesel_descriptor_repository.rs`).
+- [x] (2026-02-12) Add JSON decode helpers and rstest unit coverage for
+      round-trip, rejection, and edge cases.
+- [x] (2026-02-12) Add rstest-bdd behavioural contract tests with embedded
+      PostgreSQL, including happy/unhappy/edge scenarios.
+- [x] (2026-02-12) Record 3.2.2 design decisions in
       `docs/wildside-backend-architecture.md`.
-- [ ] Mark roadmap item 3.2.2 done in `docs/backend-roadmap.md`.
+- [x] (2026-02-12) Mark roadmap item 3.2.2 done in `docs/backend-roadmap.md`.
 - [ ] Run and pass `make check-fmt`, `make lint`, and `make test`.
 - [ ] Commit the implementation once all gates pass.
 
