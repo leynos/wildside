@@ -20,6 +20,7 @@ filter = """
   | binary(example_data_seeding_bdd)
   | binary(example_data_runs_bdd)
   | binary(catalogue_descriptor_ingestion_bdd)
+  | binary(catalogue_descriptor_read_models_bdd)
   | binary(ports_behaviour)
   | binary(pg_embed_isolation)
   | binary(schema_baseline_bdd)
