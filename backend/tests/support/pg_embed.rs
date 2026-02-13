@@ -35,6 +35,11 @@ static SHARED_CLUSTER_HANDLE: OnceLock<ClusterHandle> = OnceLock::new();
 #[cfg(unix)]
 static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 
+/// Data directory for the shared cluster, used by the `atexit` handler to
+/// re-read `postmaster.pid` and guard against PID reuse.
+#[cfg(unix)]
+static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
 /// Maximum number of retry attempts for transient network errors.
 const MAX_RETRIES: u32 = 3;
 
@@ -123,15 +128,25 @@ fn read_postmaster_pid(data_dir: &Path) -> Option<i32> {
 ///
 /// Registered via `libc::atexit` so the shared cluster is stopped when the
 /// test binary exits, even though [`ClusterGuard`] is deliberately forgotten
-/// (because it is `!Send` and cannot be stored in `OnceLock`).
+/// (because it is `!Send` and cannot be stored in `OnceLock`). Re-reads
+/// `postmaster.pid` at exit time and only signals when the on-disk PID still
+/// matches the stored value, guarding against PID reuse.
 #[cfg(unix)]
 extern "C" fn stop_postgres_on_exit() {
-    let pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
-    if pid <= 0 {
+    let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
+    if stored_pid <= 0 {
         return;
     }
 
-    // SAFETY: `pid` was read from `postmaster.pid` written by PostgreSQL.
+    // Re-read postmaster.pid to guard against PID reuse: if PostgreSQL
+    // exited early and the OS recycled the PID, the file will be absent
+    // or contain a different value.
+    let pid = match PG_DATA_DIR.get().and_then(|dir| read_postmaster_pid(dir)) {
+        Some(current_pid) if current_pid == stored_pid => current_pid,
+        _ => return,
+    };
+
+    // SAFETY: `pid` was validated against the on-disk `postmaster.pid`.
     // SIGTERM triggers a graceful "smart shutdown"; signal 0 probes liveness.
     unsafe {
         if libc::kill(pid, libc::SIGTERM) != 0 {
@@ -155,17 +170,34 @@ extern "C" fn stop_postgres_on_exit() {
 }
 
 /// Records the postmaster PID and registers an `atexit` handler so the
-/// shared cluster is stopped when the test binary exits.
+/// shared cluster is stopped when the test binary exits. Uses
+/// `compare_exchange` to ensure the handler is registered at most once.
 #[cfg(unix)]
 fn register_process_exit_cleanup(handle: &ClusterHandle) {
-    let Some(pid) = read_postmaster_pid(&handle.settings().data_dir) else {
+    let data_dir = &handle.settings().data_dir;
+    let Some(pid) = read_postmaster_pid(data_dir) else {
         return;
     };
-    PG_POSTMASTER_PID.store(pid, Ordering::Relaxed);
+
+    // Only register once: if PG_POSTMASTER_PID is still 0, swap in the real
+    // PID. If it was already set, another call got here first.
+    if PG_POSTMASTER_PID
+        .compare_exchange(0, pid, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    let _ = PG_DATA_DIR.set(data_dir.clone());
+
     // SAFETY: `stop_postgres_on_exit` is a valid `extern "C"` function with
     // no preconditions beyond the atomic PID being set (done above).
-    unsafe {
-        libc::atexit(stop_postgres_on_exit);
+    let rc = unsafe { libc::atexit(stop_postgres_on_exit) };
+    if rc != 0 {
+        eprintln!(
+            "pg-embed: failed to register atexit handler (rc={rc}); \
+             PostgreSQL process (PID {pid}) may outlive the test binary"
+        );
     }
 }
 
