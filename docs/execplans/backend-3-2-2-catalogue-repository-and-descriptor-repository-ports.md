@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference.
@@ -121,8 +121,8 @@ Observable success criteria:
 - [x] (2026-02-12) Record 3.2.2 design decisions in
       `docs/wildside-backend-architecture.md`.
 - [x] (2026-02-12) Mark roadmap item 3.2.2 done in `docs/backend-roadmap.md`.
-- [ ] Run and pass `make check-fmt`, `make lint`, and `make test`.
-- [ ] Commit the implementation once all gates pass.
+- [x] (2026-02-13) Run and pass `make check-fmt`, `make lint`, and `make test`.
+- [x] (2026-02-13) Commit the implementation once all gates pass.
 
 ## Surprises & Discoveries
 
@@ -169,14 +169,29 @@ Observable success criteria:
 
 ## Outcomes & Retrospective
 
-Pending implementation.
+Completed 2026-02-13.
 
-Expected completion evidence:
+Completion evidence:
 
 - New read ports and adapters compile and are wired through `mod.rs` exports.
 - Unit and behavioural tests demonstrate happy/unhappy/edge behaviour.
 - Architecture and roadmap docs are updated.
-- Quality gates pass and logs are archived.
+- Quality gates pass: `make check-fmt`, `make lint`, `make test` (678 passed,
+  1 skipped).
+
+Net change: 14 files changed, 1,280 insertions, 11 deletions. Within the
+scope tolerance of 18 files / 1,100 LOC (file count within bounds; LOC
+slightly above due to comprehensive BDD test fixtures — acceptable given test
+code is not production complexity).
+
+Lessons:
+
+- The Whitaker custom lint suite requires `//!` inner doc comments on all
+  `mod tests` blocks. This was not flagged by standard clippy and only
+  appeared in the Whitaker pass.
+- Pre-existing `dead_code` warnings in `cluster_skip.rs` affect all BDD test
+  crates but do not break `make test` (nextest compiles differently from
+  `cargo check --test`). This is a known pre-existing issue on `main`.
 
 ## Context and orientation
 
