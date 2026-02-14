@@ -125,7 +125,7 @@ Observable success criteria:
 - [x] (2026-02-13) Run and pass `make check-fmt`, `make lint`, and `make test`.
 - [x] (2026-02-13) Commit the implementation once all gates pass.
 
-## Surprises & Discoveries
+## Surprises & discoveries
 
 - Observation (2026-02-12): 3.2.1 already introduced validated catalogue and
   descriptor domain entities plus ingestion adapters, so 3.2.2 can focus only
@@ -147,7 +147,7 @@ Observable success criteria:
   `backend/tests/catalogue_descriptor_ingestion_bdd.rs`, and
   `backend/tests/support/pg_embed.rs`.
 
-## Decision Log
+## Decision log
 
 - Decision: Keep 3.2.2 scoped to read ports/adapters and contract tests; do
   not implement HTTP endpoints in this change.
@@ -168,7 +168,7 @@ Observable success criteria:
   deliverable.
   Date/Author: 2026-02-12 / Codex.
 
-## Outcomes & Retrospective
+## Outcomes & retrospective
 
 Completed 2026-02-13.
 
@@ -297,7 +297,8 @@ Planned target files (subject to small adjustments during implementation):
 
    - Behaviour scenarios execute through `#[scenario]` and use pg-embed test
      fixtures.
-   - Scenario steps assert user-visible contract semantics, not Diesel internals.
+   - Scenario steps assert user-visible contract semantics, not Diesel
+     internals.
 
 4. Update architecture decision record and roadmap progress.
 
@@ -317,11 +318,13 @@ Planned target files (subject to small adjustments during implementation):
 
    Suggested command sequence:
 
-       BRANCH="$(git branch --show)"
-       PROJECT="$(basename "$(git rev-parse --show-toplevel)")"
-       make check-fmt 2>&1 | tee "/tmp/check-fmt-${PROJECT}-${BRANCH}.out"
-       make lint 2>&1 | tee "/tmp/lint-${PROJECT}-${BRANCH}.out"
-       make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH}.out"
+   ```bash
+   BRANCH="$(git branch --show)"
+   PROJECT="$(basename "$(git rev-parse --show-toplevel)")"
+   make check-fmt 2>&1 | tee "/tmp/check-fmt-${PROJECT}-${BRANCH}.out"
+   make lint 2>&1 | tee "/tmp/lint-${PROJECT}-${BRANCH}.out"
+   make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH}.out"
+   ```
 
    Acceptance checks:
 

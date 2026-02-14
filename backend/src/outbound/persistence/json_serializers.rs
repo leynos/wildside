@@ -46,6 +46,14 @@ pub(super) fn image_asset_to_json(image: &ImageAsset) -> Value {
 // ---------------------------------------------------------------------------
 
 /// Decode a JSONB localization map into a validated [`LocalizationMap`].
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let json = serde_json::json!({"en-GB": {"name": "Scenic"}});
+/// let map = json_to_localization_map(&json).unwrap();
+/// assert!(map.as_map().contains_key("en-GB"));
+/// ```
 pub(super) fn json_to_localization_map(value: &Value) -> Result<LocalizationMap, String> {
     let raw: BTreeMap<LocaleCode, LocalizedStringSet> =
         serde_json::from_value(value.clone()).map_err(|e| format!("localization decode: {e}"))?;
@@ -53,6 +61,14 @@ pub(super) fn json_to_localization_map(value: &Value) -> Result<LocalizationMap,
 }
 
 /// Decode a JSONB image asset into a validated [`ImageAsset`].
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let json = serde_json::json!({"url": "https://example.com/img.jpg", "alt": "A photo"});
+/// let asset = json_to_image_asset(&json).unwrap();
+/// assert_eq!(asset.url, "https://example.com/img.jpg");
+/// ```
 pub(super) fn json_to_image_asset(value: &Value) -> Result<ImageAsset, String> {
     let obj = value
         .as_object()
@@ -69,6 +85,13 @@ pub(super) fn json_to_image_asset(value: &Value) -> Result<ImageAsset, String> {
 }
 
 /// Decode a raw icon key string into a validated [`SemanticIconIdentifier`].
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let icon = json_to_semantic_icon_identifier("category:scenic").unwrap();
+/// assert_eq!(icon.to_string(), "category:scenic");
+/// ```
 pub(super) fn json_to_semantic_icon_identifier(
     raw: &str,
 ) -> Result<SemanticIconIdentifier, String> {

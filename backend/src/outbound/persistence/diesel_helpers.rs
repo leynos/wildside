@@ -177,6 +177,15 @@ where
 }
 
 /// Collect row conversion results, mapping the first error through `map_err`.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let results = vec![Ok(1), Ok(2), Ok(3)].into_iter();
+/// let collected: Result<Vec<i32>, String> =
+///     collect_rows(results, |e| format!("failed: {e}"));
+/// assert_eq!(collected.unwrap(), vec![1, 2, 3]);
+/// ```
 pub fn collect_rows<T, E>(
     results: impl Iterator<Item = Result<T, String>>,
     map_err: impl FnOnce(String) -> E,

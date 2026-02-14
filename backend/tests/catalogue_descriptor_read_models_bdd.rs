@@ -49,7 +49,7 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> TestContext {
-    let runtime = Runtime::new().expect("tokio runtime should initialise");
+    let runtime = Runtime::new().expect("tokio runtime should initialize");
     let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let temp_db =
         provision_template_database(cluster).expect("template database should be available");
@@ -59,7 +59,7 @@ fn setup_test_context() -> TestContext {
         .with_min_idle(Some(1));
     let pool = runtime
         .block_on(async { DbPool::new(config).await })
-        .expect("pool should initialise");
+        .expect("pool should initialize");
 
     let client = Client::connect(temp_db.url(), NoTls).expect("postgres client should connect");
 

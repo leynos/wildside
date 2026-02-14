@@ -38,6 +38,14 @@ pub struct DieselCatalogueRepository {
 
 impl DieselCatalogueRepository {
     /// Create a new repository with the given connection pool.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let config = PoolConfig::new("postgres://localhost/mydb");
+    /// let pool = DbPool::new(config).await.unwrap();
+    /// let repo = DieselCatalogueRepository::new(pool);
+    /// ```
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
     }

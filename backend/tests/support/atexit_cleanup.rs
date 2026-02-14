@@ -196,11 +196,10 @@ mod tests {
 
     #[test]
     fn ensure_stable_password_does_not_overwrite_existing_value() {
-        // SAFETY: no threads are accessing env vars in this test.
-        unsafe { std::env::set_var("PG_PASSWORD", "custom_value") };
+        let _guard = env_lock::lock_env([("PG_PASSWORD", Some("custom_value"))]);
         super::ensure_stable_password();
         assert_eq!(
-            std::env::var("PG_PASSWORD").unwrap(),
+            std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
             "custom_value",
             "ensure_stable_password should not overwrite an existing PG_PASSWORD"
         );
