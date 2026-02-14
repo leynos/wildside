@@ -7,7 +7,7 @@ use diesel_async::RunQueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt as _;
 
 use crate::domain::ports::{DescriptorRepository, DescriptorRepositoryError, DescriptorSnapshot};
-use crate::domain::{InterestTheme, SafetyPresetDraft};
+use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyPresetDraft, SafetyToggle, Tag};
 
 use super::diesel_helpers::{collect_rows, map_diesel_error_message, map_pool_error_message};
 use super::json_serializers::{json_to_localization_map, json_to_semantic_icon_identifier};
@@ -48,29 +48,28 @@ fn map_diesel_error(error: diesel::result::Error) -> DescriptorRepositoryError {
 // Row-to-domain converters
 // ---------------------------------------------------------------------------
 
-fn row_to_tag(row: TagRow) -> Result<crate::domain::Tag, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_tag(row: TagRow) -> Result<Tag, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
-    crate::domain::Tag::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
+    Tag::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
 }
 
-fn row_to_badge(row: BadgeRow) -> Result<crate::domain::Badge, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_badge(row: BadgeRow) -> Result<Badge, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
-    crate::domain::Badge::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
+    Badge::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
 }
 
-fn row_to_safety_toggle(row: SafetyToggleRow) -> Result<crate::domain::SafetyToggle, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_safety_toggle(row: SafetyToggleRow) -> Result<SafetyToggle, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
-    crate::domain::SafetyToggle::new(row.id, row.slug, icon_key, localizations)
-        .map_err(|e| e.to_string())
+    SafetyToggle::new(row.id, row.slug, icon_key, localizations).map_err(|e| e.to_string())
 }
 
-fn row_to_safety_preset(row: SafetyPresetRow) -> Result<crate::domain::SafetyPreset, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_safety_preset(row: SafetyPresetRow) -> Result<SafetyPreset, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
-    crate::domain::SafetyPreset::new(SafetyPresetDraft {
+    SafetyPreset::new(SafetyPresetDraft {
         id: row.id,
         slug: row.slug,
         icon_key,

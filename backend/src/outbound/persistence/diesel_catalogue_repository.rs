@@ -11,8 +11,8 @@ use crate::domain::ports::{
     CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
 };
 use crate::domain::{
-    CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollection,
-    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, Theme, ThemeDraft,
+    CatalogueValidationError, CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft,
+    RouteCollection, RouteCollectionDraft, RouteSummary, RouteSummaryDraft, Theme, ThemeDraft,
     TrendingRouteHighlight,
 };
 
@@ -64,7 +64,7 @@ fn map_diesel_error(error: diesel::result::Error) -> CatalogueRepositoryError {
 // ---------------------------------------------------------------------------
 
 fn row_to_route_category(row: RouteCategoryRow) -> Result<RouteCategory, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
     RouteCategory::new(RouteCategoryDraft {
         id: row.id,
@@ -76,8 +76,8 @@ fn row_to_route_category(row: RouteCategoryRow) -> Result<RouteCategory, String>
     .map_err(|e| e.to_string())
 }
 
-fn row_to_theme(row: ThemeRow) -> Result<crate::domain::Theme, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_theme(row: ThemeRow) -> Result<Theme, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
     let image = json_to_image_asset(&row.image)?;
     let distance_range_metres =
@@ -93,13 +93,11 @@ fn row_to_theme(row: ThemeRow) -> Result<crate::domain::Theme, String> {
         rating: row.rating,
     }
     .try_into()
-    .map_err(|e: crate::domain::CatalogueValidationError| e.to_string())
+    .map_err(|e: CatalogueValidationError| e.to_string())
 }
 
-fn row_to_route_collection(
-    row: RouteCollectionRow,
-) -> Result<crate::domain::RouteCollection, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_route_collection(row: RouteCollectionRow) -> Result<RouteCollection, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let icon_key = json_to_semantic_icon_identifier(&row.icon_key)?;
     let lead_image = json_to_image_asset(&row.lead_image)?;
     let map_preview = json_to_image_asset(&row.map_preview)?;
@@ -124,11 +122,11 @@ fn row_to_route_collection(
         route_ids: row.route_ids,
     }
     .try_into()
-    .map_err(|e: crate::domain::CatalogueValidationError| e.to_string())
+    .map_err(|e: CatalogueValidationError| e.to_string())
 }
 
-fn row_to_route_summary(row: RouteSummaryRow) -> Result<crate::domain::RouteSummary, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_route_summary(row: RouteSummaryRow) -> Result<RouteSummary, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let hero_image = json_to_image_asset(&row.hero_image)?;
     RouteSummaryDraft {
         id: row.id,
@@ -146,14 +144,14 @@ fn row_to_route_summary(row: RouteSummaryRow) -> Result<crate::domain::RouteSumm
         interest_theme_ids: row.interest_theme_ids,
     }
     .try_into()
-    .map_err(|e: crate::domain::CatalogueValidationError| e.to_string())
+    .map_err(|e: CatalogueValidationError| e.to_string())
 }
 
 fn row_to_trending_highlight(
     row: TrendingRouteHighlightRow,
-) -> Result<crate::domain::TrendingRouteHighlight, String> {
-    let subtitle_localizations = json_to_localization_map(&row.subtitle_localizations)?;
-    crate::domain::TrendingRouteHighlight::new(
+) -> Result<TrendingRouteHighlight, String> {
+    let subtitle_localizations = json_to_localization_map(row.subtitle_localizations)?;
+    TrendingRouteHighlight::new(
         row.id,
         row.route_summary_id,
         row.trend_delta,
@@ -162,10 +160,10 @@ fn row_to_trending_highlight(
     .map_err(|e| e.to_string())
 }
 
-fn row_to_community_pick(row: CommunityPickRow) -> Result<crate::domain::CommunityPick, String> {
-    let localizations = json_to_localization_map(&row.localizations)?;
+fn row_to_community_pick(row: CommunityPickRow) -> Result<CommunityPick, String> {
+    let localizations = json_to_localization_map(row.localizations)?;
     let curator_avatar = json_to_image_asset(&row.curator_avatar)?;
-    crate::domain::CommunityPick::new(CommunityPickDraft {
+    CommunityPick::new(CommunityPickDraft {
         id: row.id,
         route_summary_id: row.route_summary_id,
         user_id: row.user_id,
@@ -280,6 +278,8 @@ impl DieselCatalogueRepository {
         .map_err(map_diesel_error)
     }
 
+    /// Transform raw database rows into validated domain models, surfacing
+    /// conversion failures as port-level query errors.
     fn convert_catalogue_rows(
         rows: CatalogueRows,
     ) -> Result<ConvertedCatalogueRows, CatalogueRepositoryError> {

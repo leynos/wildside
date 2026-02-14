@@ -47,16 +47,19 @@ pub(super) fn image_asset_to_json(image: &ImageAsset) -> Value {
 
 /// Decode a JSONB localization map into a validated [`LocalizationMap`].
 ///
+/// Accepts the [`Value`] by value so `serde_json::from_value` can consume it
+/// directly, avoiding an unnecessary clone.
+///
 /// # Examples
 ///
 /// ```rust,ignore
 /// let json = serde_json::json!({"en-GB": {"name": "Scenic"}});
-/// let map = json_to_localization_map(&json).unwrap();
+/// let map = json_to_localization_map(json).unwrap();
 /// assert!(map.as_map().contains_key("en-GB"));
 /// ```
-pub(super) fn json_to_localization_map(value: &Value) -> Result<LocalizationMap, String> {
+pub(super) fn json_to_localization_map(value: Value) -> Result<LocalizationMap, String> {
     let raw: BTreeMap<LocaleCode, LocalizedStringSet> =
-        serde_json::from_value(value.clone()).map_err(|e| format!("localization decode: {e}"))?;
+        serde_json::from_value(value).map_err(|e| format!("localization decode: {e}"))?;
     LocalizationMap::new(raw).map_err(|e| format!("localization validation: {e}"))
 }
 
@@ -135,14 +138,14 @@ mod tests {
     #[rstest]
     fn localization_map_round_trips_through_json(sample_localization_map: LocalizationMap) {
         let json = localization_map_to_json(&sample_localization_map);
-        let decoded = json_to_localization_map(&json).expect("decode should succeed");
+        let decoded = json_to_localization_map(json).expect("decode should succeed");
         assert_eq!(decoded, sample_localization_map);
     }
 
     #[rstest]
     fn localization_map_rejects_empty_json_object() {
         let json = json!({});
-        let err = json_to_localization_map(&json).expect_err("empty map should fail");
+        let err = json_to_localization_map(json).expect_err("empty map should fail");
         assert!(
             err.contains("localization validation"),
             "unexpected error: {err}"
@@ -152,7 +155,7 @@ mod tests {
     #[rstest]
     fn localization_map_rejects_missing_name_field() {
         let json = json!({ "en-GB": { "shortLabel": "Short" } });
-        let err = json_to_localization_map(&json).expect_err("missing name should fail");
+        let err = json_to_localization_map(json).expect_err("missing name should fail");
         assert!(
             err.contains("localization decode"),
             "unexpected error: {err}"

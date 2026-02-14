@@ -34,7 +34,7 @@ Observable success criteria:
 
 - Reading catalogue and descriptor snapshots through the new ports returns
   typed domain entities with correct localization data.
-- Persistence faults (for example missing tables) are surfaced as port-level
+- Persistence faults (for example, missing tables) are surfaced as port-level
   `Query` errors.
 - Empty-table cases return empty collections rather than failing.
 
@@ -71,7 +71,7 @@ Observable success criteria:
 - Migration tolerance: if schema changes are required for read ports,
   escalate before creating migrations.
 - Ambiguity tolerance: if architecture doc and roadmap disagree on snapshot
-  shape (for example single vs list community picks), stop and record options.
+  shape (for example, single vs list community picks), stop and record options.
 - Validation tolerance: if any quality gate fails more than three consecutive
   fix attempts, stop and report with logs.
 
@@ -271,7 +271,7 @@ Planned target files (subject to small adjustments during implementation):
 
    Add read-query adapters in outbound persistence. Query all required tables,
    map rows into domain entities, and convert localization/image JSON into typed
-   domain value objects. Constrain ordering deterministically (for example by
+   domain value objects. Constrain ordering deterministically (for example, by
    `slug` or `highlighted_at` where appropriate).
 
    Acceptance checks:
