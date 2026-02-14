@@ -192,28 +192,33 @@ fn all_catalogue_tables_are_truncated(world: SharedContext) {
         .expect("catalogue tables should truncate");
 }
 
+fn insert_malformed_localization(client: &mut Client, table: &str, columns: &str, values: &str) {
+    let sql = format!("INSERT INTO {table} ({columns}) VALUES ({values})");
+    client
+        .execute(&sql, &[])
+        .expect("malformed row should insert");
+}
+
 #[when("a malformed localization row is inserted directly")]
 fn a_malformed_localization_row_is_inserted_directly(world: SharedContext) {
     let mut ctx = world.lock().expect("context lock");
-    ctx.client
-        .execute(
-            "INSERT INTO route_categories (id, slug, icon_key, localizations, route_count) \
-             VALUES (gen_random_uuid(), 'malformed', 'category:malformed', '{}'::jsonb, 0)",
-            &[],
-        )
-        .expect("malformed row should insert");
+    insert_malformed_localization(
+        &mut ctx.client,
+        "route_categories",
+        "id, slug, icon_key, localizations, route_count",
+        "gen_random_uuid(), 'malformed', 'category:malformed', '{}'::jsonb, 0",
+    );
 }
 
 #[when("a malformed descriptor localization row is inserted directly")]
 fn a_malformed_descriptor_localization_row_is_inserted_directly(world: SharedContext) {
     let mut ctx = world.lock().expect("context lock");
-    ctx.client
-        .execute(
-            "INSERT INTO tags (id, slug, icon_key, localizations) \
-             VALUES (gen_random_uuid(), 'malformed', 'tag:malformed', '{}'::jsonb)",
-            &[],
-        )
-        .expect("malformed descriptor row should insert");
+    insert_malformed_localization(
+        &mut ctx.client,
+        "tags",
+        "id, slug, icon_key, localizations",
+        "gen_random_uuid(), 'malformed', 'tag:malformed', '{}'::jsonb",
+    );
 }
 
 fn assert_categories(snapshot: &ExploreCatalogueSnapshot) {
@@ -351,31 +356,38 @@ fn the_explore_snapshot_returns_empty_collections(world: SharedContext) {
     assert_all_catalogue_collections_empty(&snapshot);
 }
 
+fn assert_query_error<T, E>(
+    world: &SharedContext,
+    get_result: impl FnOnce(&TestContext) -> &Option<Result<T, E>>,
+    is_query_variant: impl FnOnce(&Result<T, E>) -> bool,
+) where
+    T: std::fmt::Debug,
+    E: std::fmt::Debug,
+{
+    let ctx = world.lock().expect("context lock");
+    let result = get_result(&ctx).as_ref().expect("snapshot should be set");
+    assert!(
+        is_query_variant(result),
+        "expected Query error, got {:?}",
+        result
+    );
+}
+
 #[then("the catalogue read repository reports a query error")]
 fn the_catalogue_read_repository_reports_a_query_error(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_catalogue_snapshot
-        .as_ref()
-        .expect("snapshot should be set");
-    assert!(
-        matches!(result, Err(CatalogueRepositoryError::Query { .. })),
-        "expected CatalogueRepositoryError::Query, got {:?}",
-        result
+    assert_query_error(
+        &world,
+        |ctx| &ctx.last_catalogue_snapshot,
+        |result| matches!(result, Err(CatalogueRepositoryError::Query { .. })),
     );
 }
 
 #[then("the descriptor read repository reports a query error")]
 fn the_descriptor_read_repository_reports_a_query_error(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let result = ctx
-        .last_descriptor_snapshot
-        .as_ref()
-        .expect("snapshot should be set");
-    assert!(
-        matches!(result, Err(DescriptorRepositoryError::Query { .. })),
-        "expected DescriptorRepositoryError::Query, got {:?}",
-        result
+    assert_query_error(
+        &world,
+        |ctx| &ctx.last_descriptor_snapshot,
+        |result| matches!(result, Err(DescriptorRepositoryError::Query { .. })),
     );
 }
 
