@@ -309,67 +309,67 @@ fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogueSnapshot) {
 }
 
 // ---------------------------------------------------------------------------
+// Snapshot extraction helpers
+// ---------------------------------------------------------------------------
+
+fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
+    world
+        .lock()
+        .expect("context lock")
+        .last_catalogue_snapshot
+        .as_ref()
+        .expect("snapshot should be set")
+        .as_ref()
+        .expect("snapshot should be Ok")
+        .clone()
+}
+
+fn get_descriptor_snapshot(world: &SharedContext) -> DescriptorSnapshot {
+    world
+        .lock()
+        .expect("context lock")
+        .last_descriptor_snapshot
+        .as_ref()
+        .expect("snapshot should be set")
+        .as_ref()
+        .expect("snapshot should be Ok")
+        .clone()
+}
+
+// ---------------------------------------------------------------------------
 // Then steps
 // ---------------------------------------------------------------------------
 
 #[then("the explore snapshot contains expected categories themes and routes")]
 fn the_explore_snapshot_contains_expected_categories_themes_and_routes(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let snapshot = ctx
-        .last_catalogue_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok");
-
-    assert_categories(snapshot);
-    assert_themes(snapshot);
-    assert_collections(snapshot);
-    assert_routes(snapshot);
-    assert_trending(snapshot);
+    let snapshot = get_catalogue_snapshot(&world);
+    assert_categories(&snapshot);
+    assert_themes(&snapshot);
+    assert_collections(&snapshot);
+    assert_routes(&snapshot);
+    assert_trending(&snapshot);
 }
 
 #[then("the community pick is present with correct localization")]
 fn the_community_pick_is_present_with_correct_localization(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let snapshot = ctx
-        .last_catalogue_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok");
-
-    assert_community_pick(snapshot);
+    let snapshot = get_catalogue_snapshot(&world);
+    assert_community_pick(&snapshot);
 }
 
 #[then("the descriptor snapshot contains expected tags badges and presets")]
 fn the_descriptor_snapshot_contains_expected_tags_badges_and_presets(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let snapshot = ctx
-        .last_descriptor_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok");
-
-    assert_tags(snapshot);
-    assert_badges(snapshot);
-    assert_safety_toggles(snapshot);
-    assert_safety_presets(snapshot);
+    let snapshot = get_descriptor_snapshot(&world);
+    assert_tags(&snapshot);
+    assert_badges(&snapshot);
+    assert_safety_toggles(&snapshot);
+    assert_safety_presets(&snapshot);
     // InterestTheme is not seeded via ingestion snapshots, so no assertion here.
 }
 
 #[then("the explore snapshot returns empty collections")]
 fn the_explore_snapshot_returns_empty_collections(world: SharedContext) {
-    let ctx = world.lock().expect("context lock");
-    let snapshot = ctx
-        .last_catalogue_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok");
-
-    assert_all_catalogue_collections_empty(snapshot);
+    let snapshot = get_catalogue_snapshot(&world);
+    assert_all_catalogue_collections_empty(&snapshot);
 }
 
 #[then("the catalogue read repository reports a query error")]
