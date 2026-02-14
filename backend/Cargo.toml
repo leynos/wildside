@@ -83,7 +83,9 @@ rstest = "0.26"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
 insta = { version = "1", features = ["json", "redactions"] }
+# Provides libc::atexit for graceful embedded PostgreSQL cluster shutdown under nextest.
 libc = "0.2"
+tempfile = "3"
 
 [[bin]]
 name = "openapi-dump"

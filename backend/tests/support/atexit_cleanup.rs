@@ -35,6 +35,17 @@ static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 ///
 /// This is a thin wrapper around the library's `shared_cluster_handle()` that
 /// adds cross-process cleanup for nextest compatibility.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let cluster = shared_cluster_handle()
+///     .expect("embedded postgres cluster should be available");
+/// let temp_db = cluster
+///     .create_temporary_database()
+///     .expect("temporary database should be created");
+/// println!("connection URL: {}", temp_db.url());
+/// ```
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
     let handle = pg_embedded_setup_unpriv::test_support::shared_cluster_handle()?;
@@ -54,7 +65,7 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 fn ensure_stable_password() {
     if std::env::var_os("PG_PASSWORD").is_none() {
         // SAFETY: called before the library spawns any threads. The shared
-        // cluster singleton serialises access with a `Mutex`, so this runs at
+        // cluster singleton serializes access with a `Mutex`, so this runs at
         // most once per process.
         unsafe {
             std::env::set_var("PG_PASSWORD", "wildside_embedded_test");
@@ -144,6 +155,54 @@ fn register_process_exit_cleanup(handle: &ClusterHandle) {
             ),
             rc = rc,
             pid = pid
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Unit tests for atexit cleanup helpers.
+
+    use cap_std::ambient_authority;
+    use cap_std::fs::Dir;
+
+    fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
+        let dir = Dir::open_ambient_dir(dir_path, ambient_authority()).expect("open dir");
+        dir.write("postmaster.pid", content).expect("write");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_postmaster_pid_parses_first_line() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_postmaster_pid(dir.path(), "12345\n/some/path\n5432\n");
+        assert_eq!(super::read_postmaster_pid(dir.path()), Some(12345));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_postmaster_pid_returns_none_for_missing_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert_eq!(super::read_postmaster_pid(dir.path()), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_postmaster_pid_returns_none_for_non_numeric_content() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_postmaster_pid(dir.path(), "not-a-number\n");
+        assert_eq!(super::read_postmaster_pid(dir.path()), None);
+    }
+
+    #[test]
+    fn ensure_stable_password_does_not_overwrite_existing_value() {
+        // SAFETY: no threads are accessing env vars in this test.
+        unsafe { std::env::set_var("PG_PASSWORD", "custom_value") };
+        super::ensure_stable_password();
+        assert_eq!(
+            std::env::var("PG_PASSWORD").unwrap(),
+            "custom_value",
+            "ensure_stable_password should not overwrite an existing PG_PASSWORD"
         );
     }
 }

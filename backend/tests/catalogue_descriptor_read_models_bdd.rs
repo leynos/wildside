@@ -81,10 +81,6 @@ fn world() -> SharedContext {
     Arc::new(Mutex::new(setup_test_context()))
 }
 
-// ---------------------------------------------------------------------------
-// Given steps
-// ---------------------------------------------------------------------------
-
 #[given("a Diesel-backed catalogue and descriptor read repository")]
 fn a_diesel_backed_catalogue_and_descriptor_read_repository(world: SharedContext) {
     let mut ctx = world.lock().expect("context lock");
@@ -104,10 +100,6 @@ fn a_diesel_backed_catalogue_and_descriptor_read_repository(world: SharedContext
         )
         .expect("fixture route should exist");
 }
-
-// ---------------------------------------------------------------------------
-// When steps
-// ---------------------------------------------------------------------------
 
 #[when("catalogue and descriptor data is seeded via ingestion")]
 fn catalogue_and_descriptor_data_is_seeded_via_ingestion(world: SharedContext) {
@@ -212,9 +204,17 @@ fn a_malformed_localization_row_is_inserted_directly(world: SharedContext) {
         .expect("malformed row should insert");
 }
 
-// ---------------------------------------------------------------------------
-// Assertion helpers — one function per logical concern
-// ---------------------------------------------------------------------------
+#[when("a malformed descriptor localization row is inserted directly")]
+fn a_malformed_descriptor_localization_row_is_inserted_directly(world: SharedContext) {
+    let mut ctx = world.lock().expect("context lock");
+    ctx.client
+        .execute(
+            "INSERT INTO tags (id, slug, icon_key, localizations) \
+             VALUES (gen_random_uuid(), 'malformed', 'tag:malformed', '{}'::jsonb)",
+            &[],
+        )
+        .expect("malformed descriptor row should insert");
+}
 
 fn assert_categories(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.categories.len(), 1, "expected 1 category");
@@ -256,35 +256,26 @@ fn assert_community_pick(snapshot: &ExploreCatalogueSnapshot) {
         .community_pick
         .as_ref()
         .expect("community pick should be present");
-
     assert_eq!(pick.curator_display_name(), "Wildside curators");
     assert_eq!(pick.saves(), 128);
+    let locales = pick.localizations().as_map();
     assert!(
-        pick.localizations().as_map().contains_key("en-GB"),
+        locales.contains_key("en-GB"),
         "community pick should have en-GB locale"
     );
     assert!(
-        pick.localizations().as_map().contains_key("fr-FR"),
+        locales.contains_key("fr-FR"),
         "community pick should have fr-FR locale"
     );
 }
 
-fn assert_tags(snapshot: &DescriptorSnapshot) {
+fn assert_descriptor_contents(snapshot: &DescriptorSnapshot) {
     assert_eq!(snapshot.tags.len(), 1, "expected 1 tag");
     assert_eq!(snapshot.tags[0].slug(), "family-friendly");
-}
-
-fn assert_badges(snapshot: &DescriptorSnapshot) {
     assert_eq!(snapshot.badges.len(), 1, "expected 1 badge");
     assert_eq!(snapshot.badges[0].slug(), "accessible");
-}
-
-fn assert_safety_toggles(snapshot: &DescriptorSnapshot) {
     assert_eq!(snapshot.safety_toggles.len(), 1, "expected 1 safety toggle");
     assert_eq!(snapshot.safety_toggles[0].slug(), "well-lit");
-}
-
-fn assert_safety_presets(snapshot: &DescriptorSnapshot) {
     assert_eq!(snapshot.safety_presets.len(), 1, "expected 1 safety preset");
     assert_eq!(snapshot.safety_presets[0].slug(), "night-safe");
     assert_eq!(
@@ -307,10 +298,6 @@ fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogueSnapshot) {
         "community pick should be None"
     );
 }
-
-// ---------------------------------------------------------------------------
-// Snapshot extraction helpers
-// ---------------------------------------------------------------------------
 
 fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
     world
@@ -336,10 +323,6 @@ fn get_descriptor_snapshot(world: &SharedContext) -> DescriptorSnapshot {
         .clone()
 }
 
-// ---------------------------------------------------------------------------
-// Then steps
-// ---------------------------------------------------------------------------
-
 #[then("the explore snapshot contains expected categories themes and routes")]
 fn the_explore_snapshot_contains_expected_categories_themes_and_routes(world: SharedContext) {
     let snapshot = get_catalogue_snapshot(&world);
@@ -359,11 +342,7 @@ fn the_community_pick_is_present_with_correct_localization(world: SharedContext)
 #[then("the descriptor snapshot contains expected tags badges and presets")]
 fn the_descriptor_snapshot_contains_expected_tags_badges_and_presets(world: SharedContext) {
     let snapshot = get_descriptor_snapshot(&world);
-    assert_tags(&snapshot);
-    assert_badges(&snapshot);
-    assert_safety_toggles(&snapshot);
-    assert_safety_presets(&snapshot);
-    // InterestTheme is not seeded via ingestion snapshots, so no assertion here.
+    assert_descriptor_contents(&snapshot);
 }
 
 #[then("the explore snapshot returns empty collections")]
@@ -379,7 +358,6 @@ fn the_catalogue_read_repository_reports_a_query_error(world: SharedContext) {
         .last_catalogue_snapshot
         .as_ref()
         .expect("snapshot should be set");
-
     assert!(
         matches!(result, Err(CatalogueRepositoryError::Query { .. })),
         "expected CatalogueRepositoryError::Query, got {:?}",
@@ -387,7 +365,19 @@ fn the_catalogue_read_repository_reports_a_query_error(world: SharedContext) {
     );
 }
 
-// Scenario wiring
+#[then("the descriptor read repository reports a query error")]
+fn the_descriptor_read_repository_reports_a_query_error(world: SharedContext) {
+    let ctx = world.lock().expect("context lock");
+    let result = ctx
+        .last_descriptor_snapshot
+        .as_ref()
+        .expect("snapshot should be set");
+    assert!(
+        matches!(result, Err(DescriptorRepositoryError::Query { .. })),
+        "expected DescriptorRepositoryError::Query, got {:?}",
+        result
+    );
+}
 
 #[scenario(
     path = "tests/features/catalogue_descriptor_read_models.feature",

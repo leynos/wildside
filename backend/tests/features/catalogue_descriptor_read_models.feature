@@ -13,3 +13,6 @@ Feature: Catalogue and descriptor read model repositories
     When a malformed localization row is inserted directly
     And the catalogue snapshot is read
     Then the catalogue read repository reports a query error
+    When a malformed descriptor localization row is inserted directly
+    And the descriptor snapshot is read
+    Then the descriptor read repository reports a query error

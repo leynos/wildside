@@ -80,9 +80,10 @@ mod tests {
     //! Unit tests for JSON decode helpers.
 
     use super::*;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use serde_json::json;
 
+    #[fixture]
     fn sample_localization_map() -> LocalizationMap {
         let mut values = BTreeMap::new();
         values.insert(
@@ -100,6 +101,7 @@ mod tests {
         LocalizationMap::new(values).expect("fixture should be valid")
     }
 
+    #[fixture]
     fn sample_image_asset() -> ImageAsset {
         ImageAsset::new("https://example.test/hero.jpg", "Route hero")
             .expect("fixture should be valid")
@@ -108,11 +110,10 @@ mod tests {
     // -- localization round-trip --
 
     #[rstest]
-    fn localization_map_round_trips_through_json() {
-        let original = sample_localization_map();
-        let json = localization_map_to_json(&original);
+    fn localization_map_round_trips_through_json(sample_localization_map: LocalizationMap) {
+        let json = localization_map_to_json(&sample_localization_map);
         let decoded = json_to_localization_map(&json).expect("decode should succeed");
-        assert_eq!(decoded, original);
+        assert_eq!(decoded, sample_localization_map);
     }
 
     #[rstest]
@@ -138,11 +139,10 @@ mod tests {
     // -- image asset round-trip --
 
     #[rstest]
-    fn image_asset_round_trips_through_json() {
-        let original = sample_image_asset();
-        let json = image_asset_to_json(&original);
+    fn image_asset_round_trips_through_json(sample_image_asset: ImageAsset) {
+        let json = image_asset_to_json(&sample_image_asset);
         let decoded = json_to_image_asset(&json).expect("decode should succeed");
-        assert_eq!(decoded, original);
+        assert_eq!(decoded, sample_image_asset);
     }
 
     #[rstest]

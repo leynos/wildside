@@ -176,6 +176,14 @@ where
     }
 }
 
+/// Collect row conversion results, mapping the first error through `map_err`.
+pub fn collect_rows<T, E>(
+    results: impl Iterator<Item = Result<T, String>>,
+    map_err: impl FnOnce(String) -> E,
+) -> Result<Vec<T>, E> {
+    results.collect::<Result<Vec<_>, _>>().map_err(map_err)
+}
+
 /// Macro for query methods that return `Option<T>`.
 ///
 /// Reduces boilerplate: acquire connection, execute query, map errors, convert row.

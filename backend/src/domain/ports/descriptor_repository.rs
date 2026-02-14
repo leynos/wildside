@@ -41,6 +41,18 @@ pub trait DescriptorRepository: Send + Sync {
     ///
     /// All collections are deterministically ordered (by slug or name).
     /// Empty tables yield empty vectors rather than errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use backend::domain::ports::{DescriptorRepository, FixtureDescriptorRepository};
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// let repo = FixtureDescriptorRepository;
+    /// let snapshot = repo.descriptor_snapshot().await.unwrap();
+    /// assert!(snapshot.tags.is_empty());
+    /// assert!(snapshot.safety_presets.is_empty());
+    /// # });
+    /// ```
     async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError>;
 }
 

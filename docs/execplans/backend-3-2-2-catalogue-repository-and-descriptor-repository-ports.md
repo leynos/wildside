@@ -25,7 +25,7 @@ After this work:
 - Contract tests validate localized JSON payloads map into validated domain
   localization value objects.
 - Unit tests (`rstest`) and behavioural tests (`rstest-bdd`) cover happy,
-  unhappy, and edge paths using `pg-embedded-setup-unpriv`.
+  unhappy, and edge paths using `pg-embed-setup-unpriv`.
 - Backend architecture documentation captures design decisions.
 - `docs/backend-roadmap.md` marks 3.2.2 complete.
 - `make check-fmt`, `make lint`, and `make test` pass.
@@ -63,7 +63,8 @@ Observable success criteria:
 
 ## Tolerances (exception triggers)
 
-- Scope tolerance: if implementation exceeds 18 files or 1,100 net LOC,
+- Scope tolerance: if implementation exceeds 18 files or 1,100 net lines
+  of code (LOC),
   pause and reassess decomposition.
 - API tolerance: if endpoint or response contracts for 3.2.3 are required to
   make 3.2.2 viable, stop and request scope clarification.
@@ -156,8 +157,8 @@ Observable success criteria:
 - Decision: Introduce explicit read snapshot structs for port outputs (rather
   than returning many independent vectors) so 3.2.3 can map endpoint responses
   without leaking adapter concerns.
-  Rationale: The architecture and PWA model both describe a cohesive explore
-  snapshot contract.
+  Rationale: The architecture and Progressive Web App (PWA)
+  model both describe a cohesive explore snapshot contract.
   Date/Author: 2026-02-12 / Codex.
 
 - Decision: Contract tests will include JSONB localization assertions in both

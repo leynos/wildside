@@ -2,12 +2,14 @@
 
 use async_trait::async_trait;
 use diesel::prelude::*;
+use diesel_async::AsyncConnection as _;
 use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt as _;
 
 use crate::domain::ports::{DescriptorRepository, DescriptorRepositoryError, DescriptorSnapshot};
 use crate::domain::{InterestTheme, SafetyPresetDraft};
 
-use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
+use super::diesel_helpers::{collect_rows, map_diesel_error_message, map_pool_error_message};
 use super::json_serializers::{json_to_localization_map, json_to_semantic_icon_identifier};
 use super::models::{BadgeRow, InterestThemeRow, SafetyPresetRow, SafetyToggleRow, TagRow};
 use super::pool::{DbPool, PoolError};
@@ -75,18 +77,6 @@ fn row_to_interest_theme(row: InterestThemeRow) -> InterestTheme {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn collect_rows<T>(
-    results: impl Iterator<Item = Result<T, String>>,
-) -> Result<Vec<T>, DescriptorRepositoryError> {
-    results
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(DescriptorRepositoryError::query)
-}
-
-// ---------------------------------------------------------------------------
 // Trait implementation
 // ---------------------------------------------------------------------------
 
@@ -95,46 +85,56 @@ impl DescriptorRepository for DieselDescriptorRepository {
     async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
-        let tag_rows: Vec<TagRow> = tags::table
-            .select(TagRow::as_select())
-            .order_by(tags::slug)
-            .load(&mut conn)
+        // Read all tables in a single transaction so all SELECTs observe
+        // a consistent MVCC snapshot, preventing mixed-version results
+        // during concurrent ingestion.
+        let (tag_rows, badge_rows, toggle_rows, preset_rows, theme_rows) = conn
+            .transaction(|conn| {
+                async move {
+                    let tags: Vec<TagRow> = tags::table
+                        .select(TagRow::as_select())
+                        .order_by(tags::slug)
+                        .load(conn)
+                        .await?;
+                    let badges: Vec<BadgeRow> = badges::table
+                        .select(BadgeRow::as_select())
+                        .order_by(badges::slug)
+                        .load(conn)
+                        .await?;
+                    let toggles: Vec<SafetyToggleRow> = safety_toggles::table
+                        .select(SafetyToggleRow::as_select())
+                        .order_by(safety_toggles::slug)
+                        .load(conn)
+                        .await?;
+                    let presets: Vec<SafetyPresetRow> = safety_presets::table
+                        .select(SafetyPresetRow::as_select())
+                        .order_by(safety_presets::slug)
+                        .load(conn)
+                        .await?;
+                    let themes: Vec<InterestThemeRow> = interest_themes::table
+                        .select(InterestThemeRow::as_select())
+                        .order_by(interest_themes::name)
+                        .load(conn)
+                        .await?;
+                    Ok((tags, badges, toggles, presets, themes))
+                }
+                .scope_boxed()
+            })
             .await
             .map_err(map_diesel_error)?;
 
-        let badge_rows: Vec<BadgeRow> = badges::table
-            .select(BadgeRow::as_select())
-            .order_by(badges::slug)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let toggle_rows: Vec<SafetyToggleRow> = safety_toggles::table
-            .select(SafetyToggleRow::as_select())
-            .order_by(safety_toggles::slug)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let preset_rows: Vec<SafetyPresetRow> = safety_presets::table
-            .select(SafetyPresetRow::as_select())
-            .order_by(safety_presets::slug)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let theme_rows: Vec<InterestThemeRow> = interest_themes::table
-            .select(InterestThemeRow::as_select())
-            .order_by(interest_themes::name)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
+        let map_err = DescriptorRepositoryError::query;
         Ok(DescriptorSnapshot {
-            tags: collect_rows(tag_rows.into_iter().map(row_to_tag))?,
-            badges: collect_rows(badge_rows.into_iter().map(row_to_badge))?,
-            safety_toggles: collect_rows(toggle_rows.into_iter().map(row_to_safety_toggle))?,
-            safety_presets: collect_rows(preset_rows.into_iter().map(row_to_safety_preset))?,
+            tags: collect_rows(tag_rows.into_iter().map(row_to_tag), map_err)?,
+            badges: collect_rows(badge_rows.into_iter().map(row_to_badge), map_err)?,
+            safety_toggles: collect_rows(
+                toggle_rows.into_iter().map(row_to_safety_toggle),
+                map_err,
+            )?,
+            safety_presets: collect_rows(
+                preset_rows.into_iter().map(row_to_safety_preset),
+                map_err,
+            )?,
             interest_themes: theme_rows.into_iter().map(row_to_interest_theme).collect(),
         })
     }

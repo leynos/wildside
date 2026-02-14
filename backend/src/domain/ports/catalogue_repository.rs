@@ -51,6 +51,18 @@ pub trait CatalogueRepository: Send + Sync {
     /// All entity collections are deterministically ordered (typically by
     /// slug).  An empty catalogue yields empty vectors and `None` for the
     /// community pick rather than an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use backend::domain::ports::{CatalogueRepository, FixtureCatalogueRepository};
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// let repo = FixtureCatalogueRepository;
+    /// let snapshot = repo.explore_snapshot().await.unwrap();
+    /// assert!(snapshot.categories.is_empty());
+    /// assert!(snapshot.community_pick.is_none());
+    /// # });
+    /// ```
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError>;
 }
 
@@ -62,7 +74,7 @@ pub struct FixtureCatalogueRepository;
 impl CatalogueRepository for FixtureCatalogueRepository {
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError> {
         Ok(ExploreCatalogueSnapshot {
-            generated_at: Utc::now(),
+            generated_at: DateTime::<Utc>::default(),
             categories: Vec::new(),
             routes: Vec::new(),
             themes: Vec::new(),

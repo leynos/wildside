@@ -3,7 +3,9 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use diesel::prelude::*;
+use diesel_async::AsyncConnection as _;
 use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt as _;
 
 use crate::domain::ports::{
     CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
@@ -13,7 +15,7 @@ use crate::domain::{
     ThemeDraft,
 };
 
-use super::diesel_helpers::{map_diesel_error_message, map_pool_error_message};
+use super::diesel_helpers::{collect_rows, map_diesel_error_message, map_pool_error_message};
 use super::json_serializers::{
     json_to_image_asset, json_to_localization_map, json_to_semantic_icon_identifier,
 };
@@ -178,14 +180,6 @@ fn vec_to_pair(v: &[i32], field: &str) -> Result<[i32; 2], String> {
         .map_err(|_| format!("{field}: expected exactly 2 elements, got {}", v.len()))
 }
 
-fn collect_rows<T>(
-    results: impl Iterator<Item = Result<T, String>>,
-) -> Result<Vec<T>, CatalogueRepositoryError> {
-    results
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(CatalogueRepositoryError::query)
-}
-
 // ---------------------------------------------------------------------------
 // Trait implementation
 // ---------------------------------------------------------------------------
@@ -195,55 +189,66 @@ impl CatalogueRepository for DieselCatalogueRepository {
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
-        let category_rows: Vec<RouteCategoryRow> = route_categories::table
-            .select(RouteCategoryRow::as_select())
-            .order_by(route_categories::slug)
-            .load(&mut conn)
+        // Read all tables in a single transaction so all SELECTs observe
+        // a consistent MVCC snapshot, preventing mixed-version results
+        // during concurrent ingestion.
+        let (category_rows, theme_rows, collection_rows, summary_rows, trending_rows, pick_row) =
+            conn.transaction(|conn| {
+                async move {
+                    let cats: Vec<RouteCategoryRow> = route_categories::table
+                        .select(RouteCategoryRow::as_select())
+                        .order_by(route_categories::slug)
+                        .load(conn)
+                        .await?;
+                    let themes: Vec<ThemeRow> = themes::table
+                        .select(ThemeRow::as_select())
+                        .order_by(themes::slug)
+                        .load(conn)
+                        .await?;
+                    let colls: Vec<RouteCollectionRow> = route_collections::table
+                        .select(RouteCollectionRow::as_select())
+                        .order_by(route_collections::slug)
+                        .load(conn)
+                        .await?;
+                    let sums: Vec<RouteSummaryRow> = route_summaries::table
+                        .select(RouteSummaryRow::as_select())
+                        .order_by((route_summaries::slug, route_summaries::id))
+                        .load(conn)
+                        .await?;
+                    let trends: Vec<TrendingRouteHighlightRow> = trending_route_highlights::table
+                        .select(TrendingRouteHighlightRow::as_select())
+                        .order_by(trending_route_highlights::highlighted_at.desc())
+                        .load(conn)
+                        .await?;
+                    let pick: Option<CommunityPickRow> = community_picks::table
+                        .select(CommunityPickRow::as_select())
+                        .order_by(community_picks::picked_at.desc())
+                        .first(conn)
+                        .await
+                        .optional()?;
+                    Ok((cats, themes, colls, sums, trends, pick))
+                }
+                .scope_boxed()
+            })
             .await
             .map_err(map_diesel_error)?;
 
-        let theme_rows: Vec<ThemeRow> = themes::table
-            .select(ThemeRow::as_select())
-            .order_by(themes::slug)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let collection_rows: Vec<RouteCollectionRow> = route_collections::table
-            .select(RouteCollectionRow::as_select())
-            .order_by(route_collections::slug)
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let summary_rows: Vec<RouteSummaryRow> = route_summaries::table
-            .select(RouteSummaryRow::as_select())
-            .order_by((route_summaries::slug, route_summaries::id))
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let trending_rows: Vec<TrendingRouteHighlightRow> = trending_route_highlights::table
-            .select(TrendingRouteHighlightRow::as_select())
-            .order_by(trending_route_highlights::highlighted_at.desc())
-            .load(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
-
-        let community_pick_row: Option<CommunityPickRow> = community_picks::table
-            .select(CommunityPickRow::as_select())
-            .order_by(community_picks::picked_at.desc())
-            .first(&mut conn)
-            .await
-            .optional()
-            .map_err(map_diesel_error)?;
-
-        let categories = collect_rows(category_rows.into_iter().map(row_to_route_category))?;
-        let themes = collect_rows(theme_rows.into_iter().map(row_to_theme))?;
-        let collections = collect_rows(collection_rows.into_iter().map(row_to_route_collection))?;
-        let routes = collect_rows(summary_rows.into_iter().map(row_to_route_summary))?;
-        let trending = collect_rows(trending_rows.into_iter().map(row_to_trending_highlight))?;
-        let community_pick = community_pick_row
+        let map_err = CatalogueRepositoryError::query;
+        let categories = collect_rows(
+            category_rows.into_iter().map(row_to_route_category),
+            map_err,
+        )?;
+        let themes = collect_rows(theme_rows.into_iter().map(row_to_theme), map_err)?;
+        let collections = collect_rows(
+            collection_rows.into_iter().map(row_to_route_collection),
+            map_err,
+        )?;
+        let routes = collect_rows(summary_rows.into_iter().map(row_to_route_summary), map_err)?;
+        let trending = collect_rows(
+            trending_rows.into_iter().map(row_to_trending_highlight),
+            map_err,
+        )?;
+        let community_pick = pick_row
             .map(row_to_community_pick)
             .transpose()
             .map_err(CatalogueRepositoryError::query)?;
