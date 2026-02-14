@@ -4,15 +4,16 @@ use async_trait::async_trait;
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::AsyncConnection as _;
-use diesel_async::RunQueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt as _;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::domain::ports::{
     CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
 };
 use crate::domain::{
-    CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollectionDraft, RouteSummaryDraft,
-    ThemeDraft,
+    CommunityPick, CommunityPickDraft, RouteCategory, RouteCategoryDraft, RouteCollection,
+    RouteCollectionDraft, RouteSummary, RouteSummaryDraft, Theme, ThemeDraft,
+    TrendingRouteHighlight,
 };
 
 use super::diesel_helpers::{collect_rows, map_diesel_error_message, map_pool_error_message};
@@ -188,51 +189,94 @@ fn vec_to_pair(v: &[i32], field: &str) -> Result<[i32; 2], String> {
 impl CatalogueRepository for DieselCatalogueRepository {
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+        let rows = self.fetch_catalogue_rows(&mut conn).await?;
+        let (categories, themes, collections, routes, trending, community_pick) =
+            Self::convert_catalogue_rows(rows)?;
 
-        // Read all tables in a single transaction so all SELECTs observe
-        // a consistent MVCC snapshot, preventing mixed-version results
-        // during concurrent ingestion.
+        Ok(ExploreCatalogueSnapshot {
+            generated_at: Utc::now(),
+            categories,
+            routes,
+            themes,
+            collections,
+            trending,
+            community_pick,
+        })
+    }
+}
+
+type CatalogueRows = (
+    Vec<RouteCategoryRow>,
+    Vec<ThemeRow>,
+    Vec<RouteCollectionRow>,
+    Vec<RouteSummaryRow>,
+    Vec<TrendingRouteHighlightRow>,
+    Option<CommunityPickRow>,
+);
+
+type ConvertedCatalogueRows = (
+    Vec<RouteCategory>,
+    Vec<Theme>,
+    Vec<RouteCollection>,
+    Vec<RouteSummary>,
+    Vec<TrendingRouteHighlight>,
+    Option<CommunityPick>,
+);
+
+impl DieselCatalogueRepository {
+    /// Fetch all catalogue rows in a single transaction so all SELECTs observe
+    /// a consistent MVCC snapshot, preventing mixed-version results during
+    /// concurrent ingestion.
+    async fn fetch_catalogue_rows(
+        &self,
+        conn: &mut AsyncPgConnection,
+    ) -> Result<CatalogueRows, CatalogueRepositoryError> {
+        conn.transaction(|conn| {
+            async move {
+                let cats: Vec<RouteCategoryRow> = route_categories::table
+                    .select(RouteCategoryRow::as_select())
+                    .order_by(route_categories::slug)
+                    .load(conn)
+                    .await?;
+                let themes: Vec<ThemeRow> = themes::table
+                    .select(ThemeRow::as_select())
+                    .order_by(themes::slug)
+                    .load(conn)
+                    .await?;
+                let colls: Vec<RouteCollectionRow> = route_collections::table
+                    .select(RouteCollectionRow::as_select())
+                    .order_by(route_collections::slug)
+                    .load(conn)
+                    .await?;
+                let sums: Vec<RouteSummaryRow> = route_summaries::table
+                    .select(RouteSummaryRow::as_select())
+                    .order_by((route_summaries::slug, route_summaries::id))
+                    .load(conn)
+                    .await?;
+                let trends: Vec<TrendingRouteHighlightRow> = trending_route_highlights::table
+                    .select(TrendingRouteHighlightRow::as_select())
+                    .order_by(trending_route_highlights::highlighted_at.desc())
+                    .load(conn)
+                    .await?;
+                let pick: Option<CommunityPickRow> = community_picks::table
+                    .select(CommunityPickRow::as_select())
+                    .order_by(community_picks::picked_at.desc())
+                    .first(conn)
+                    .await
+                    .optional()?;
+                Ok((cats, themes, colls, sums, trends, pick))
+            }
+            .scope_boxed()
+        })
+        .await
+        .map_err(map_diesel_error)
+    }
+
+    fn convert_catalogue_rows(
+        rows: CatalogueRows,
+    ) -> Result<ConvertedCatalogueRows, CatalogueRepositoryError> {
         let (category_rows, theme_rows, collection_rows, summary_rows, trending_rows, pick_row) =
-            conn.transaction(|conn| {
-                async move {
-                    let cats: Vec<RouteCategoryRow> = route_categories::table
-                        .select(RouteCategoryRow::as_select())
-                        .order_by(route_categories::slug)
-                        .load(conn)
-                        .await?;
-                    let themes: Vec<ThemeRow> = themes::table
-                        .select(ThemeRow::as_select())
-                        .order_by(themes::slug)
-                        .load(conn)
-                        .await?;
-                    let colls: Vec<RouteCollectionRow> = route_collections::table
-                        .select(RouteCollectionRow::as_select())
-                        .order_by(route_collections::slug)
-                        .load(conn)
-                        .await?;
-                    let sums: Vec<RouteSummaryRow> = route_summaries::table
-                        .select(RouteSummaryRow::as_select())
-                        .order_by((route_summaries::slug, route_summaries::id))
-                        .load(conn)
-                        .await?;
-                    let trends: Vec<TrendingRouteHighlightRow> = trending_route_highlights::table
-                        .select(TrendingRouteHighlightRow::as_select())
-                        .order_by(trending_route_highlights::highlighted_at.desc())
-                        .load(conn)
-                        .await?;
-                    let pick: Option<CommunityPickRow> = community_picks::table
-                        .select(CommunityPickRow::as_select())
-                        .order_by(community_picks::picked_at.desc())
-                        .first(conn)
-                        .await
-                        .optional()?;
-                    Ok((cats, themes, colls, sums, trends, pick))
-                }
-                .scope_boxed()
-            })
-            .await
-            .map_err(map_diesel_error)?;
-
+            rows;
         let map_err = CatalogueRepositoryError::query;
         let categories = collect_rows(
             category_rows.into_iter().map(row_to_route_category),
@@ -252,15 +296,13 @@ impl CatalogueRepository for DieselCatalogueRepository {
             .map(row_to_community_pick)
             .transpose()
             .map_err(CatalogueRepositoryError::query)?;
-
-        Ok(ExploreCatalogueSnapshot {
-            generated_at: Utc::now(),
+        Ok((
             categories,
-            routes,
             themes,
             collections,
+            routes,
             trending,
             community_pick,
-        })
+        ))
     }
 }
