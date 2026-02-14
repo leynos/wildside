@@ -14,12 +14,9 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
-use pg_embed::shared_cluster;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
 #[derive(Debug)]
@@ -101,11 +98,12 @@ fn skip_if_needed(world: &SnapshotWorld) -> bool {
 
 #[fixture]
 fn world() -> SnapshotWorld {
-    let cluster = match shared_cluster() {
+    let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {
-            let _: Option<()> = handle_cluster_setup_failure(reason.clone());
-            return SnapshotWorld::skipped(reason);
+            let message = reason.to_string();
+            let _: Option<()> = handle_cluster_setup_failure(&message);
+            return SnapshotWorld::skipped(message);
         }
     };
     let database = match provision_template_database(cluster).map_err(|error| error.to_string()) {

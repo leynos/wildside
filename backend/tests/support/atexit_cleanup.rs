@@ -1,0 +1,149 @@
+//! Process-exit cleanup for the shared embedded PostgreSQL cluster.
+//!
+//! `pg-embed-setup-unpriv`'s [`shared_cluster_handle()`] intentionally leaks
+//! the [`ClusterGuard`] so the cluster persists for the process lifetime. In a
+//! single-binary test runner this is fine — the OS reclaims everything at exit.
+//! Under `nextest`, each test binary is a separate process, and a still-running
+//! PostgreSQL blocks subsequent binaries from bootstrapping on the same data
+//! directory.
+//!
+//! This module registers a `libc::atexit` handler that reads `postmaster.pid`,
+//! sends `SIGTERM`, and waits for graceful shutdown, bridging the gap until the
+//! library provides built-in process-exit shutdown.
+
+#[cfg(unix)]
+use std::path::PathBuf;
+#[cfg(unix)]
+use std::sync::OnceLock;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicI32, Ordering};
+#[cfg(unix)]
+use std::time::Duration;
+
+use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
+
+/// Postmaster PID captured at registration time.
+#[cfg(unix)]
+static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
+
+/// Data directory for re-reading `postmaster.pid` at exit time.
+#[cfg(unix)]
+static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Returns the shared cluster handle and registers an atexit handler to stop
+/// PostgreSQL when the test binary exits.
+///
+/// This is a thin wrapper around the library's `shared_cluster_handle()` that
+/// adds cross-process cleanup for nextest compatibility.
+pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
+    ensure_stable_password();
+    let handle = pg_embedded_setup_unpriv::test_support::shared_cluster_handle()?;
+    #[cfg(unix)]
+    register_process_exit_cleanup(handle);
+    Ok(handle)
+}
+
+/// Ensures `PG_PASSWORD` is set to a stable value so the password remains
+/// consistent across process invocations that reuse the same data directory.
+///
+/// `postgresql_embedded::Settings::default()` generates a random password on
+/// each call. When the data directory already exists, `setup()` skips `initdb`,
+/// leaving the cluster configured with the *original* password. Without a
+/// stable override, subsequent nextest processes fail with `28P01 password
+/// authentication failed`.
+fn ensure_stable_password() {
+    if std::env::var_os("PG_PASSWORD").is_none() {
+        // SAFETY: called before the library spawns any threads. The shared
+        // cluster singleton serialises access with a `Mutex`, so this runs at
+        // most once per process.
+        unsafe {
+            std::env::set_var("PG_PASSWORD", "wildside_embedded_test");
+        }
+    }
+}
+
+/// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
+#[cfg(unix)]
+fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
+    let dir = cap_std::fs::Dir::open_ambient_dir(data_dir, cap_std::ambient_authority()).ok()?;
+    let content = dir.read_to_string("postmaster.pid").ok()?;
+    content.lines().next()?.trim().parse().ok()
+}
+
+/// Sends SIGTERM to the PostgreSQL postmaster and waits for shutdown.
+///
+/// Registered via `libc::atexit` so the shared cluster is stopped when the
+/// test binary exits. Re-reads `postmaster.pid` at exit time and only signals
+/// when the on-disk PID still matches the stored value, guarding against PID
+/// reuse.
+#[cfg(unix)]
+extern "C" fn stop_postgres_on_exit() {
+    let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
+    if stored_pid <= 0 {
+        return;
+    }
+
+    // Re-read postmaster.pid to guard against PID reuse.
+    let pid = match PG_DATA_DIR.get().and_then(|dir| read_postmaster_pid(dir)) {
+        Some(current_pid) if current_pid == stored_pid => current_pid,
+        _ => return,
+    };
+
+    // SAFETY: `pid` was validated against the on-disk `postmaster.pid`.
+    // SIGTERM triggers a graceful "smart shutdown"; signal 0 probes liveness.
+    unsafe {
+        if libc::kill(pid, libc::SIGTERM) != 0 {
+            return;
+        }
+    }
+
+    // Wait up to five seconds for PostgreSQL to exit gracefully.
+    for _ in 0..50 {
+        std::thread::sleep(Duration::from_millis(100));
+        // SAFETY: signal 0 checks whether the process still exists.
+        if unsafe { libc::kill(pid, 0) } != 0 {
+            return;
+        }
+    }
+
+    // SAFETY: force-kill after the graceful shutdown budget expires.
+    unsafe {
+        libc::kill(pid, libc::SIGKILL);
+    }
+}
+
+/// Records the postmaster PID and registers an `atexit` handler so the
+/// shared cluster is stopped when the test binary exits. Uses
+/// `compare_exchange` to ensure the handler is registered at most once.
+#[cfg(unix)]
+fn register_process_exit_cleanup(handle: &ClusterHandle) {
+    let data_dir = &handle.settings().data_dir;
+    let Some(pid) = read_postmaster_pid(data_dir) else {
+        return;
+    };
+
+    // Only register once: if PG_POSTMASTER_PID is still 0, swap in the real
+    // PID. If it was already set, another call got here first.
+    if PG_POSTMASTER_PID
+        .compare_exchange(0, pid, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    let _ = PG_DATA_DIR.set(data_dir.clone());
+
+    // SAFETY: `stop_postgres_on_exit` is a valid `extern "C"` function with
+    // no preconditions beyond the atomic PID being set (done above).
+    let rc = unsafe { libc::atexit(stop_postgres_on_exit) };
+    if rc != 0 {
+        eprintln!(
+            concat!(
+                "pg-embed: failed to register atexit handler (rc={rc}); ",
+                "PostgreSQL process (PID {pid}) may outlive the test binary"
+            ),
+            rc = rc,
+            pid = pid
+        );
+    }
+}

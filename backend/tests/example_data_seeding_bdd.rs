@@ -8,9 +8,6 @@
 use rstest_bdd_macros::scenario;
 use support::example_data_seeding_world::{ExampleDataSeedingWorld, world};
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
 // -----------------------------------------------------------------------------

@@ -23,8 +23,6 @@ use uuid::Uuid;
 
 #[path = "support/catalogue_descriptor_builders.rs"]
 mod builders;
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
 #[path = "support/catalogue_descriptor_snapshots.rs"]
 mod snapshots;
 
@@ -43,8 +41,8 @@ use assertions::{
     assert_trending_highlights_stored,
 };
 use builders::{CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_ID};
-use pg_embed::shared_cluster;
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
+use support::atexit_cleanup::shared_cluster_handle;
 use support::provision_template_database;
 
 struct TestContext {
@@ -61,7 +59,7 @@ type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> TestContext {
     let runtime = Runtime::new().expect("tokio runtime should initialize");
-    let cluster = shared_cluster().expect("embedded postgres cluster should be available");
+    let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let temp_db =
         provision_template_database(cluster).expect("template database should be available");
 

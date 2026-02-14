@@ -20,8 +20,6 @@ use tokio::runtime::Runtime;
 
 #[path = "support/catalogue_descriptor_builders.rs"]
 mod builders;
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
 #[expect(
     dead_code,
     reason = "shared module; not all snapshot builders used by this test crate"
@@ -32,8 +30,8 @@ mod snapshots;
 mod support;
 
 use builders::{CURATOR_USER_ID, ROUTE_ID, SAFETY_TOGGLE_ID};
-use pg_embed::shared_cluster;
 use snapshots::build_ingestion_snapshots;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::provision_template_database;
 
 struct TestContext {
@@ -52,7 +50,7 @@ type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> TestContext {
     let runtime = Runtime::new().expect("tokio runtime should initialise");
-    let cluster = shared_cluster().expect("embedded postgres cluster should be available");
+    let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let temp_db =
         provision_template_database(cluster).expect("template database should be available");
 

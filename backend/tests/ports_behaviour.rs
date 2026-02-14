@@ -10,12 +10,9 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use uuid::Uuid;
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
-use pg_embed::shared_cluster;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::format_postgres_error;
 use support::{handle_cluster_setup_failure, provision_template_database};
@@ -101,7 +98,7 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 
 #[fixture]
 fn repo_context() -> Option<RepoContext> {
-    let cluster = match shared_cluster() {
+    let cluster = match shared_cluster_handle() {
         Ok(c) => c,
         Err(reason) => return handle_cluster_setup_failure(reason),
     };

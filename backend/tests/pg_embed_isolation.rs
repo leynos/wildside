@@ -1,16 +1,14 @@
 //! Integration tests for template-cloned database isolation.
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
 use postgres::{Client, NoTls};
+use support::atexit_cleanup::shared_cluster_handle;
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 #[test]
 fn temporary_databases_are_isolated_from_template() {
-    let cluster = match pg_embed::shared_cluster() {
+    let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {
             handle_cluster_setup_failure::<()>(reason);
