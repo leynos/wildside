@@ -26,10 +26,6 @@ mod support;
 use support::atexit_cleanup::shared_cluster_handle;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
-// -----------------------------------------------------------------------------
-// Fixtures
-// -----------------------------------------------------------------------------
-
 const TEST_SEED_KEY: &str = "test-seed";
 const TEST_USER_COUNT: i32 = 12;
 const TEST_SEED_VALUE: i64 = 2026;
@@ -37,10 +33,6 @@ const TEST_SEED_VALUE: i64 = 2026;
 const SECOND_SEED_KEY: &str = "second-seed";
 const SECOND_USER_COUNT: i32 = 5;
 const SECOND_SEED_VALUE: i64 = 42;
-
-// -----------------------------------------------------------------------------
-// Test Context
-// -----------------------------------------------------------------------------
 
 struct TestContext {
     /// Tokio runtime reused for all async operations in this test.
@@ -117,10 +109,6 @@ fn diesel_world() -> Option<SharedContext> {
     }
 }
 
-// -----------------------------------------------------------------------------
-// BDD Helper Functions
-// -----------------------------------------------------------------------------
-
 fn record_seed(world: &SharedContext, seed_key: &str, user_count: i32, seed_value: i64) {
     with_context_async(
         world,
@@ -168,10 +156,6 @@ fn assert_is_seeded(world: &SharedContext, expected: bool) {
         Err(err) => panic!("expected is_seeded={expected}, got error: {err}"),
     }
 }
-
-// -----------------------------------------------------------------------------
-// BDD Step Definitions
-// -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed example data runs repository")]
 fn a_diesel_backed_example_data_runs_repository(_world: SharedContext) {}
@@ -225,10 +209,6 @@ fn is_seeded_returns_true(world: SharedContext) {
 fn is_seeded_returns_false(world: SharedContext) {
     assert_is_seeded(&world, false);
 }
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
 
 #[rstest]
 fn try_record_seed_returns_applied_on_first_insert(diesel_world: Option<SharedContext>) {
