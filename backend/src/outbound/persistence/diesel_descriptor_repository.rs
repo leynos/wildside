@@ -1,6 +1,7 @@
 //! PostgreSQL-backed descriptor read adapter.
 
 use async_trait::async_trait;
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::AsyncConnection as _;
 use diesel_async::RunQueryDsl;
@@ -132,6 +133,7 @@ impl DescriptorRepository for DieselDescriptorRepository {
 
         let map_err = DescriptorRepositoryError::query;
         Ok(DescriptorSnapshot {
+            generated_at: Utc::now(),
             tags: collect_rows(tag_rows.into_iter().map(row_to_tag), map_err)?,
             badges: collect_rows(badge_rows.into_iter().map(row_to_badge), map_err)?,
             safety_toggles: collect_rows(

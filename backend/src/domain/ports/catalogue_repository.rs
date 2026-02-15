@@ -12,6 +12,8 @@ use crate::domain::{
     CommunityPick, RouteCategory, RouteCollection, RouteSummary, Theme, TrendingRouteHighlight,
 };
 
+use crate::domain::Error;
+
 use super::define_port_error;
 
 define_port_error! {
@@ -82,5 +84,14 @@ impl CatalogueRepository for FixtureCatalogueRepository {
             trending: Vec::new(),
             community_pick: None,
         })
+    }
+}
+
+impl From<CatalogueRepositoryError> for Error {
+    fn from(err: CatalogueRepositoryError) -> Self {
+        match err {
+            CatalogueRepositoryError::Connection { message } => Error::service_unavailable(message),
+            CatalogueRepositoryError::Query { message } => Error::internal(message),
+        }
     }
 }

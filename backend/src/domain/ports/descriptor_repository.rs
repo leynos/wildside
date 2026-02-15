@@ -6,8 +6,9 @@
 //! boundary so inbound adapters depend only on domain types.
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
-use crate::domain::{Badge, InterestTheme, SafetyPreset, SafetyToggle, Tag};
+use crate::domain::{Badge, Error, InterestTheme, SafetyPreset, SafetyToggle, Tag};
 
 use super::define_port_error;
 
@@ -26,6 +27,7 @@ define_port_error! {
 /// Cohesive snapshot of all descriptor registries.
 #[derive(Debug, Clone)]
 pub struct DescriptorSnapshot {
+    pub generated_at: DateTime<Utc>,
     pub tags: Vec<Tag>,
     pub badges: Vec<Badge>,
     pub safety_toggles: Vec<SafetyToggle>,
@@ -64,11 +66,23 @@ pub struct FixtureDescriptorRepository;
 impl DescriptorRepository for FixtureDescriptorRepository {
     async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError> {
         Ok(DescriptorSnapshot {
+            generated_at: DateTime::<Utc>::default(),
             tags: Vec::new(),
             badges: Vec::new(),
             safety_toggles: Vec::new(),
             safety_presets: Vec::new(),
             interest_themes: Vec::new(),
         })
+    }
+}
+
+impl From<DescriptorRepositoryError> for Error {
+    fn from(err: DescriptorRepositoryError) -> Self {
+        match err {
+            DescriptorRepositoryError::Connection { message } => {
+                Error::service_unavailable(message)
+            }
+            DescriptorRepositoryError::Query { message } => Error::internal(message),
+        }
     }
 }
