@@ -10,7 +10,11 @@
 )]
 #[path = "adapter_guardrails/doubles.rs"]
 mod doubles;
-// Shared harness has extra fields used by other integration suites.
+// Shared helpers include functions used only by other integration suites.
+#[expect(
+    dead_code,
+    reason = "Shared helpers include functions used only by other integration suites."
+)]
 #[path = "support/bdd_common.rs"]
 mod bdd_common;
 #[expect(

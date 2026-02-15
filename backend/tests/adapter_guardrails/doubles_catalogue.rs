@@ -8,6 +8,10 @@ use backend::domain::ports::{
 
 recording_double! {
     /// Configurable success or failure outcome for RecordingCatalogueRepository.
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "Test-only enum; boxing adds complexity for no meaningful benefit."
+    )]
     pub(crate) enum CatalogueQueryResponse {
         Ok(ExploreCatalogueSnapshot),
         Err(CatalogueRepositoryError),

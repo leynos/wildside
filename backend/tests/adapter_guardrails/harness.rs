@@ -321,39 +321,6 @@ fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescrip
     (catalogue, descriptors)
 }
 
-struct HttpWsStateInputs<'a> {
-    login: &'a RecordingLoginService,
-    users: &'a RecordingUsersQuery,
-    profile: &'a RecordingUserProfileQuery,
-    interests: &'a RecordingUserInterestsCommand,
-    preferences: &'a RecordingUserPreferencesCommand,
-    preferences_query: &'a RecordingUserPreferencesQuery,
-    route_annotations: &'a RecordingRouteAnnotationsCommand,
-    route_annotations_query: &'a RecordingRouteAnnotationsQuery,
-    catalogue: &'a RecordingCatalogueRepository,
-    descriptors: &'a RecordingDescriptorRepository,
-    onboarding: &'a QueueUserOnboarding,
-}
-
-fn create_http_and_ws_state(inputs: HttpWsStateInputs<'_>) -> (HttpState, WsState) {
-    let http_state = HttpState::new(HttpStatePorts {
-        login: Arc::new(inputs.login.clone()),
-        users: Arc::new(inputs.users.clone()),
-        profile: Arc::new(inputs.profile.clone()),
-        interests: Arc::new(inputs.interests.clone()),
-        preferences: Arc::new(inputs.preferences.clone()),
-        preferences_query: Arc::new(inputs.preferences_query.clone()),
-        route_annotations: Arc::new(inputs.route_annotations.clone()),
-        route_annotations_query: Arc::new(inputs.route_annotations_query.clone()),
-        route_submission: Arc::new(FixtureRouteSubmissionService),
-        catalogue: Arc::new(inputs.catalogue.clone()),
-        descriptors: Arc::new(inputs.descriptors.clone()),
-    });
-    let ws_state = crate::ws_support::ws_state(inputs.onboarding.clone());
-
-    (http_state, ws_state)
-}
-
 #[fixture]
 pub(crate) fn world() -> WorldFixture {
     let (runtime, local) = create_runtime_and_local();
@@ -364,19 +331,20 @@ pub(crate) fn world() -> WorldFixture {
     let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
     let (catalogue, descriptors) = create_catalogue_doubles();
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let (http_state, ws_state) = create_http_and_ws_state(HttpWsStateInputs {
-        login: &login,
-        users: &users,
-        profile: &profile,
-        interests: &interests,
-        preferences: &preferences,
-        preferences_query: &preferences_query,
-        route_annotations: &route_annotations,
-        route_annotations_query: &route_annotations_query,
-        catalogue: &catalogue,
-        descriptors: &descriptors,
-        onboarding: &onboarding,
+    let http_state = HttpState::new(HttpStatePorts {
+        login: Arc::new(login.clone()),
+        users: Arc::new(users.clone()),
+        profile: Arc::new(profile.clone()),
+        interests: Arc::new(interests.clone()),
+        preferences: Arc::new(preferences.clone()),
+        preferences_query: Arc::new(preferences_query.clone()),
+        route_annotations: Arc::new(route_annotations.clone()),
+        route_annotations_query: Arc::new(route_annotations_query.clone()),
+        route_submission: Arc::new(FixtureRouteSubmissionService),
+        catalogue: Arc::new(catalogue.clone()),
+        descriptors: Arc::new(descriptors.clone()),
     });
+    let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
         .block_on(&runtime, async {
