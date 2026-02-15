@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / Big Picture
 
@@ -76,18 +76,27 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 ## Progress
 
 - [x] (2026-02-15) Write ExecPlan to `docs/execplans/backend-3-2-3-catalogue-endpoints.md`.
-- [ ] Stage A: Add `generated_at` to `DescriptorSnapshot` and update all consumers.
-- [ ] Stage B: Create catalogue HTTP handler module with response DTOs and error mapping.
-- [ ] Stage C: Wire handlers into HttpState, server, and OpenAPI.
-- [ ] Stage D: Create recording test doubles for catalogue/descriptor ports.
-- [ ] Stage E: Write BDD feature files and step implementations.
-- [ ] Stage F: Write unit tests for handler response mapping.
-- [ ] Stage G: Fix lint warnings, run all gates, record architecture decision.
-- [ ] Stage H: Mark roadmap 3.2.3 as done.
+- [x] (2026-02-15) Stage A: Add `generated_at` to `DescriptorSnapshot` and update all consumers.
+- [x] (2026-02-15) Stage B: Create catalogue HTTP handler module with response DTOs and error mapping.
+- [x] (2026-02-15) Stage C: Wire handlers into HttpState, server, and OpenAPI.
+- [x] (2026-02-15) Stage D: Create recording test doubles for catalogue/descriptor ports.
+- [x] (2026-02-15) Stage E: Write BDD feature files and step implementations.
+- [x] (2026-02-15) Stage F: Unit tests written inline in Stage B (catalogue.rs `#[cfg(test)]`).
+- [x] (2026-02-15) Stage G: Fix lint warnings, run all gates, record architecture decision.
+- [x] (2026-02-15) Stage H: Mark roadmap 3.2.3 as done.
 
 ## Surprises & Discoveries
 
-(None yet.)
+- Observation: `clippy::expect_used` is denied in non-test code via `lib.rs`.
+  Evidence: Clippy rejected `.expect()` calls in `From` impls for response DTOs.
+  Impact: Changed `From<Snapshot>` to `TryFrom<Snapshot>` with `Error = domain::Error`,
+  using a `to_json_value` helper that maps `serde_json` errors to `Error::internal`.
+  Handlers use `?` to propagate, tests use `.unwrap()`.
+
+- Observation: `module-max-lines` custom lint (whitaker) limits modules to 400 lines.
+  Evidence: Adding catalogue doubles wiring pushed `harness.rs` to 413 lines.
+  Impact: Inlined `HttpWsStateInputs` struct into direct `HttpStatePorts` construction
+  in the `world()` function, reducing the file to 381 lines.
 
 ## Decision Log
 
@@ -121,7 +130,26 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 
 ## Outcomes & Retrospective
 
-(To be filled on completion.)
+All stages completed successfully. The two new endpoints are implemented,
+tested with 6 BDD scenarios (happy path, auth enforcement, error surfacing),
+and documented in the architecture document.
+
+Key outcomes:
+- `GET /api/v1/catalogue/explore` and `GET /api/v1/catalogue/descriptors`
+  serve pre-assembled snapshots behind session authentication.
+- `Cache-Control: private, no-cache, must-revalidate` and `generatedAt`
+  metadata enable client-side staleness detection.
+- Response DTOs use `serde_json::Value` wrapper fields to keep `ToSchema`
+  derives out of the domain layer.
+- `TryFrom` conversion pattern avoids `expect()` in non-test code.
+- Harness refactoring (inlining `HttpWsStateInputs`) keeps the shared test
+  harness under the 400-line module limit despite growing port count.
+
+Lessons:
+- When wrapping domain types for OpenAPI, `serde_json::Value` is a pragmatic
+  escape hatch that avoids propagating utoipa derives into the domain.
+- The `recording_double!` macro smoothly handles new ports; the main growth
+  pressure is in the harness's `AdapterWorld` struct and `world()` fixture.
 
 ## Context and Orientation
 
