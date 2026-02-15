@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use crate::domain::ports::{
-    LoginService, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
-    UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery, UserProfileQuery,
-    UsersQuery,
+    CatalogueRepository, DescriptorRepository, LoginService, RouteAnnotationsCommand,
+    RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
+    UserPreferencesQuery, UserProfileQuery, UsersQuery,
 };
 
 /// Parameter object bundling all port implementations for HTTP handlers.
@@ -23,6 +23,8 @@ pub struct HttpStatePorts {
     pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
     pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
     pub route_submission: Arc<dyn RouteSubmissionService>,
+    pub catalogue: Arc<dyn CatalogueRepository>,
+    pub descriptors: Arc<dyn DescriptorRepository>,
 }
 
 /// Dependency bundle for HTTP handlers.
@@ -37,6 +39,8 @@ pub struct HttpState {
     pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
     pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
     pub route_submission: Arc<dyn RouteSubmissionService>,
+    pub catalogue: Arc<dyn CatalogueRepository>,
+    pub descriptors: Arc<dyn DescriptorRepository>,
 }
 
 impl From<HttpStatePorts> for HttpState {
@@ -51,6 +55,8 @@ impl From<HttpStatePorts> for HttpState {
             route_annotations,
             route_annotations_query,
             route_submission,
+            catalogue,
+            descriptors,
         } = ports;
         Self {
             login,
@@ -62,6 +68,8 @@ impl From<HttpStatePorts> for HttpState {
             route_annotations,
             route_annotations_query,
             route_submission,
+            catalogue,
+            descriptors,
         }
     }
 }

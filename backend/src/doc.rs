@@ -12,6 +12,7 @@
 //! The generated specification is used by Swagger UI (debug builds) and
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
+use crate::inbound::http::catalogue::{DescriptorsResponse, ExploreCatalogueResponse};
 use crate::inbound::http::schemas::{
     ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
 };
@@ -66,18 +67,23 @@ impl Modify for SecurityAddon {
         crate::inbound::http::annotations::get_annotations,
         crate::inbound::http::annotations::upsert_note,
         crate::inbound::http::annotations::update_progress,
+        crate::inbound::http::catalogue::get_explore_catalogue,
+        crate::inbound::http::catalogue::get_descriptors,
     ),
     components(schemas(
         UserSchema,
         UserInterestsSchema,
         InterestThemeIdSchema,
         ErrorSchema,
-        ErrorCodeSchema
+        ErrorCodeSchema,
+        ExploreCatalogueResponse,
+        DescriptorsResponse
     )),
     tags(
         (name = "users", description = "Operations related to users"),
         (name = "routes", description = "Operations related to routes"),
-        (name = "health", description = "Endpoints for health checks")
+        (name = "health", description = "Endpoints for health checks"),
+        (name = "catalogue", description = "Catalogue and descriptor read endpoints")
     )
 )]
 pub struct ApiDoc;

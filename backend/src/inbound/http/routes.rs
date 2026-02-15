@@ -119,7 +119,8 @@ mod tests {
     //! Regression coverage for this module.
     use super::*;
     use crate::domain::ports::{
-        FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+        FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
+        FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
         FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
         FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
     };
@@ -151,6 +152,8 @@ mod tests {
             route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
             route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
             route_submission: Arc::new(FixtureRouteSubmissionService),
+            catalogue: Arc::new(FixtureCatalogueRepository),
+            descriptors: Arc::new(FixtureDescriptorRepository),
         });
         App::new()
             .app_data(web::Data::new(state))

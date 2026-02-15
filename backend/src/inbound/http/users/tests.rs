@@ -3,9 +3,10 @@
 use super::*;
 use crate::domain::ErrorCode;
 use crate::domain::ports::{
-    FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
-    FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
-    FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
+    FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
+    FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureRouteSubmissionService,
+    FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
+    FixtureUserProfileQuery, FixtureUsersQuery,
 };
 use crate::inbound::http::state::HttpStatePorts;
 use actix_web::{App, test as actix_test, web};
@@ -81,6 +82,8 @@ fn test_app() -> App<
         route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
         route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
         route_submission: Arc::new(FixtureRouteSubmissionService),
+        catalogue: Arc::new(FixtureCatalogueRepository),
+        descriptors: Arc::new(FixtureDescriptorRepository),
     });
     App::new()
         .app_data(web::Data::new(state))

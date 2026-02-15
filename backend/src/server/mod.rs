@@ -24,17 +24,19 @@ use backend::doc::ApiDoc;
 #[cfg(feature = "metrics")]
 use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::ports::{
-    FixtureLoginService, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
-    FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
-    FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
-    RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService, UserPreferencesCommand,
-    UserPreferencesQuery,
+    CatalogueRepository, DescriptorRepository, FixtureCatalogueRepository,
+    FixtureDescriptorRepository, FixtureLoginService, FixtureRouteAnnotationsCommand,
+    FixtureRouteAnnotationsQuery, FixtureRouteSubmissionService, FixtureUserInterestsCommand,
+    FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
+    FixtureUsersQuery, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
+    UserPreferencesCommand, UserPreferencesQuery,
 };
 use backend::domain::{
     RouteAnnotationsService, RouteSubmissionServiceImpl, UserOnboardingService,
     UserPreferencesService,
 };
 use backend::inbound::http::annotations::{get_annotations, update_progress, upsert_note};
+use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
 use backend::inbound::http::health::{HealthState, live, ready};
 use backend::inbound::http::preferences::{get_preferences, update_preferences};
 use backend::inbound::http::routes::submit_route;
@@ -46,7 +48,8 @@ use backend::inbound::ws::state::WsState;
 use backend::outbound::metrics::PrometheusIdempotencyMetrics;
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
-    DieselRouteAnnotationRepository, DieselUserPreferencesRepository,
+    DieselCatalogueRepository, DieselDescriptorRepository, DieselRouteAnnotationRepository,
+    DieselUserPreferencesRepository,
 };
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
@@ -144,6 +147,21 @@ fn build_user_preferences_services(
     }
 }
 
+fn build_catalogue_services(
+    config: &ServerConfig,
+) -> (Arc<dyn CatalogueRepository>, Arc<dyn DescriptorRepository>) {
+    match &config.db_pool {
+        Some(pool) => (
+            Arc::new(DieselCatalogueRepository::new(pool.clone())),
+            Arc::new(DieselDescriptorRepository::new(pool.clone())),
+        ),
+        None => (
+            Arc::new(FixtureCatalogueRepository),
+            Arc::new(FixtureDescriptorRepository),
+        ),
+    }
+}
+
 fn build_route_annotations_services(
     config: &ServerConfig,
 ) -> (
@@ -220,7 +238,9 @@ fn build_app(
         .service(get_annotations)
         .service(upsert_note)
         .service(update_progress)
-        .service(submit_route);
+        .service(submit_route)
+        .service(get_explore_catalogue)
+        .service(get_descriptors);
 
     let app = App::new()
         .app_data(health_state)
@@ -262,6 +282,7 @@ pub fn create_server(
     let route_submission = build_route_submission_service(&config)?;
     let (preferences, preferences_query) = build_user_preferences_services(&config);
     let (route_annotations, route_annotations_query) = build_route_annotations_services(&config);
+    let (catalogue, descriptors) = build_catalogue_services(&config);
 
     let http_state = web::Data::new(HttpState::new(HttpStatePorts {
         login: Arc::new(FixtureLoginService),
@@ -273,6 +294,8 @@ pub fn create_server(
         route_annotations,
         route_annotations_query,
         route_submission,
+        catalogue,
+        descriptors,
     }));
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {

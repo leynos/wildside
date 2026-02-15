@@ -32,8 +32,9 @@ use crate::doubles::{
 };
 use backend::Trace;
 use backend::domain::ports::{
-    DeleteNoteResponse, FixtureRouteSubmissionService, UpdatePreferencesResponse,
-    UpdateProgressResponse, UpsertNoteResponse,
+    DeleteNoteResponse, FixtureCatalogueRepository, FixtureDescriptorRepository,
+    FixtureRouteSubmissionService, UpdatePreferencesResponse, UpdateProgressResponse,
+    UpsertNoteResponse,
 };
 use backend::domain::{
     DisplayName, InterestThemeId, RouteAnnotations, RouteNote, RouteProgress, UnitSystem, User,
@@ -310,6 +311,8 @@ fn create_http_and_ws_state(inputs: HttpWsStateInputs<'_>) -> (HttpState, WsStat
         route_annotations: Arc::new(inputs.route_annotations.clone()),
         route_annotations_query: Arc::new(inputs.route_annotations_query.clone()),
         route_submission: Arc::new(FixtureRouteSubmissionService),
+        catalogue: Arc::new(FixtureCatalogueRepository),
+        descriptors: Arc::new(FixtureDescriptorRepository),
     });
     let ws_state = crate::ws_support::ws_state(inputs.onboarding.clone());
 
