@@ -637,6 +637,20 @@ services.
 > these entities directly. JSONB and array serialization remain outbound
 > concerns inside Diesel adapters, preserving hexagonal boundaries while
 > enforcing localization and icon semantics before persistence.
+>
+> **Design decision (2026-02-12):** Roadmap item 3.2.2 adds read-side domain
+> ports `CatalogueRepository` and `DescriptorRepository` with cohesive
+> snapshot return types (`ExploreCatalogueSnapshot` and
+> `DescriptorSnapshot`). Diesel adapters query all catalogue and descriptor
+> tables with deterministic ordering (by `slug` for registries,
+> `highlighted_at DESC` for trending, `picked_at DESC LIMIT 1` for the
+> single community pick) and reconstruct validated domain entities through
+> existing Draft constructors and JSON decode helpers. JSONB localization
+> payloads are validated on read via `LocalizationMap::new` so malformed
+> rows surface as typed `Query` errors rather than passing silently through
+> the domain boundary. Snapshot structs are domain-owned so inbound HTTP
+> adapters (3.2.3) can map them to endpoint responses without coupling to
+> the persistence layer.
 
 #### Driving ports (services and queries)
 

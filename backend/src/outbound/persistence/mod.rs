@@ -29,7 +29,9 @@
 //! ```
 
 mod diesel_catalogue_ingestion_repository;
+mod diesel_catalogue_repository;
 mod diesel_descriptor_ingestion_repository;
+mod diesel_descriptor_repository;
 mod diesel_example_data_runs_repository;
 mod diesel_example_data_seed_repository;
 pub(crate) mod diesel_helpers;
@@ -45,7 +47,9 @@ mod postgres_schema_snapshot_repository;
 mod schema;
 
 pub use diesel_catalogue_ingestion_repository::DieselCatalogueIngestionRepository;
+pub use diesel_catalogue_repository::DieselCatalogueRepository;
 pub use diesel_descriptor_ingestion_repository::DieselDescriptorIngestionRepository;
+pub use diesel_descriptor_repository::DieselDescriptorRepository;
 pub use diesel_example_data_runs_repository::DieselExampleDataRunsRepository;
 pub use diesel_example_data_seed_repository::DieselExampleDataSeedRepository;
 pub use diesel_idempotency_repository::DieselIdempotencyRepository;

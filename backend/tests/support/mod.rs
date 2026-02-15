@@ -5,6 +5,7 @@
 //! provides a small, dependency-free (relative to the test crate) home for
 //! common test-only utilities.
 
+pub mod atexit_cleanup;
 mod cluster_skip;
 pub mod embedded_postgres;
 #[cfg(feature = "example-data")]

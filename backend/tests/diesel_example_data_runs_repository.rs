@@ -21,17 +21,10 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
-use pg_embed::shared_cluster;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::{handle_cluster_setup_failure, provision_template_database};
-
-// -----------------------------------------------------------------------------
-// Fixtures
-// -----------------------------------------------------------------------------
 
 const TEST_SEED_KEY: &str = "test-seed";
 const TEST_USER_COUNT: i32 = 12;
@@ -40,10 +33,6 @@ const TEST_SEED_VALUE: i64 = 2026;
 const SECOND_SEED_KEY: &str = "second-seed";
 const SECOND_USER_COUNT: i32 = 5;
 const SECOND_SEED_VALUE: i64 = 42;
-
-// -----------------------------------------------------------------------------
-// Test Context
-// -----------------------------------------------------------------------------
 
 struct TestContext {
     /// Tokio runtime reused for all async operations in this test.
@@ -87,7 +76,7 @@ fn with_context_async<F, R, U>(
 
 fn setup_test_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = shared_cluster()?;
+    let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
 
     let database_url = temp_db.url().to_string();
@@ -119,10 +108,6 @@ fn diesel_world() -> Option<SharedContext> {
         Err(reason) => handle_cluster_setup_failure(reason),
     }
 }
-
-// -----------------------------------------------------------------------------
-// BDD Helper Functions
-// -----------------------------------------------------------------------------
 
 fn record_seed(world: &SharedContext, seed_key: &str, user_count: i32, seed_value: i64) {
     with_context_async(
@@ -171,10 +156,6 @@ fn assert_is_seeded(world: &SharedContext, expected: bool) {
         Err(err) => panic!("expected is_seeded={expected}, got error: {err}"),
     }
 }
-
-// -----------------------------------------------------------------------------
-// BDD Step Definitions
-// -----------------------------------------------------------------------------
 
 #[given("a Diesel-backed example data runs repository")]
 fn a_diesel_backed_example_data_runs_repository(_world: SharedContext) {}
@@ -228,10 +209,6 @@ fn is_seeded_returns_true(world: SharedContext) {
 fn is_seeded_returns_false(world: SharedContext) {
     assert_is_seeded(&world, false);
 }
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
 
 #[rstest]
 fn try_record_seed_returns_applied_on_first_insert(diesel_world: Option<SharedContext>) {

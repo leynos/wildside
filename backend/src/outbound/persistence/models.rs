@@ -242,9 +242,14 @@ pub(crate) struct NewExampleDataRunRow<'a> {
 }
 
 mod ingestion_rows;
+mod read_rows;
 
 pub(crate) use ingestion_rows::{
     NewBadgeRow, NewCommunityPickRow, NewInterestThemeRow, NewRouteCategoryRow,
     NewRouteCollectionRow, NewRouteSummaryRow, NewSafetyPresetRow, NewSafetyToggleRow, NewTagRow,
     NewThemeRow, NewTrendingRouteHighlightRow,
+};
+pub(crate) use read_rows::{
+    BadgeRow, CommunityPickRow, InterestThemeRow, RouteCategoryRow, RouteCollectionRow,
+    RouteSummaryRow, SafetyPresetRow, SafetyToggleRow, TagRow, ThemeRow, TrendingRouteHighlightRow,
 };

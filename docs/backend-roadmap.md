@@ -143,7 +143,7 @@ so persistence details stay confined to outbound adapters.
   `RouteCategory`, `Theme`, `RouteCollection`, `TrendingRouteHighlight`,
   `CommunityPick`, `Tag`, `Badge`, `SafetyToggle`, and `SafetyPreset`) with
   localization maps and semantic icon identifiers.
-- [ ] 3.2.2. Add `CatalogueRepository` and `DescriptorRepository` ports plus
+- [x] 3.2.2. Add `CatalogueRepository` and `DescriptorRepository` ports plus
   persistence adapters with contract tests for localization payloads.
 - [ ] 3.2.3. Implement `GET /api/v1/catalogue/explore` and
   `GET /api/v1/catalogue/descriptors` endpoints backed by the read models, with

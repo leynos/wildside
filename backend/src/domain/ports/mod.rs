@@ -5,7 +5,9 @@ pub(crate) use macros::define_port_error;
 
 mod cache_key;
 mod catalogue_ingestion_repository;
+mod catalogue_repository;
 mod descriptor_ingestion_repository;
+mod descriptor_repository;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
 mod idempotency_metrics;
@@ -37,10 +39,22 @@ pub use catalogue_ingestion_repository::{
     FixtureCatalogueIngestionRepository,
 };
 #[cfg(test)]
+pub use catalogue_repository::MockCatalogueRepository;
+pub use catalogue_repository::{
+    CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
+    FixtureCatalogueRepository,
+};
+#[cfg(test)]
 pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
 pub use descriptor_ingestion_repository::{
     DescriptorIngestionRepository, DescriptorIngestionRepositoryError,
     FixtureDescriptorIngestionRepository,
+};
+#[cfg(test)]
+pub use descriptor_repository::MockDescriptorRepository;
+pub use descriptor_repository::{
+    DescriptorRepository, DescriptorRepositoryError, DescriptorSnapshot,
+    FixtureDescriptorRepository,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,

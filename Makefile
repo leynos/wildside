@@ -36,7 +36,7 @@ MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test typecheck deps lockfile lint-specs \
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs \
         check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
         lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
         lint-architecture workspace-sync
@@ -153,15 +153,18 @@ lint-actions:
 
 PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 
-test: workspace-sync deps typecheck prepare-pg-worker
-	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features
+test: test-rust test-frontend
+
+test-rust: workspace-sync prepare-pg-worker
+	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
+
+test-frontend: deps typecheck
 	pnpm -r --if-present --silent run test
 
 .PHONY: prepare-pg-worker
 prepare-pg-worker:
 	$(RUST_FLAGS_ENV) cargo build -p backend --bin pg_worker
 	install -m 0755 target/debug/pg_worker $(PG_WORKER_PATH)
-	find $(dir $(PG_WORKER_PATH)) -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} +
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml

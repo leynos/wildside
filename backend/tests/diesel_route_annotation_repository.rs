@@ -16,12 +16,9 @@ use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
-use pg_embed::shared_cluster;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
@@ -58,7 +55,7 @@ fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<()
 
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = shared_cluster()?;
+    let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();
 

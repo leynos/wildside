@@ -7,12 +7,9 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
 
-#[path = "support/pg_embed.rs"]
-mod pg_embed;
-
 mod support;
 
-use pg_embed::shared_cluster;
+use support::atexit_cleanup::shared_cluster_handle;
 use support::{format_postgres_error, provision_template_database};
 
 struct BaselineWorld {
@@ -70,7 +67,7 @@ impl BaselineWorld {
 
 #[fixture]
 fn world() -> BaselineWorld {
-    let cluster = shared_cluster().expect("embedded postgres cluster should be available");
+    let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let database = provision_template_database(cluster)
         .map_err(|error: UserPersistenceError| error.to_string())
         .expect("template database should be provisioned");
