@@ -22,8 +22,9 @@ use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 
 use crate::doubles::{
-    DeleteNoteCommandResponse, LoginResponse, QueueUserOnboarding, RecordingLoginService,
-    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
+    CatalogueQueryResponse, DeleteNoteCommandResponse, DescriptorQueryResponse, LoginResponse,
+    QueueUserOnboarding, RecordingCatalogueRepository, RecordingDescriptorRepository,
+    RecordingLoginService, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
     RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
     RecordingUserProfileQuery, RecordingUsersQuery, RouteAnnotationsQueryResponse,
     UpdateProgressCommandResponse, UpsertNoteCommandResponse, UserInterestsResponse,
@@ -32,7 +33,7 @@ use crate::doubles::{
 };
 use backend::Trace;
 use backend::domain::ports::{
-    DeleteNoteResponse, FixtureCatalogueRepository, FixtureDescriptorRepository,
+    DeleteNoteResponse, DescriptorSnapshot, ExploreCatalogueSnapshot,
     FixtureRouteSubmissionService, UpdatePreferencesResponse, UpdateProgressResponse,
     UpsertNoteResponse,
 };
@@ -43,6 +44,10 @@ use backend::domain::{
 use backend::inbound::http::annotations::{
     get_annotations as get_annotations_handler, update_progress as update_progress_handler,
     upsert_note as upsert_note_handler,
+};
+use backend::inbound::http::catalogue::{
+    get_descriptors as get_descriptors_handler,
+    get_explore_catalogue as get_explore_catalogue_handler,
 };
 use backend::inbound::http::preferences::{
     get_preferences as get_preferences_handler, update_preferences as update_preferences_handler,
@@ -69,6 +74,8 @@ pub(crate) struct AdapterWorld {
     pub(crate) preferences_query: RecordingUserPreferencesQuery,
     pub(crate) route_annotations: RecordingRouteAnnotationsCommand,
     pub(crate) route_annotations_query: RecordingRouteAnnotationsQuery,
+    pub(crate) catalogue: RecordingCatalogueRepository,
+    pub(crate) descriptors: RecordingDescriptorRepository,
     pub(crate) onboarding: QueueUserOnboarding,
     pub(crate) last_status: Option<u16>,
     pub(crate) last_body: Option<Value>,
@@ -150,7 +157,9 @@ async fn spawn_adapter_server(
             .service(update_preferences_handler)
             .service(get_annotations_handler)
             .service(upsert_note_handler)
-            .service(update_progress_handler);
+            .service(update_progress_handler)
+            .service(get_explore_catalogue_handler)
+            .service(get_descriptors_handler);
 
         App::new()
             .app_data(http_data.clone())
@@ -288,6 +297,30 @@ fn create_route_annotations_doubles(
     (route_annotations, route_annotations_query)
 }
 
+fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
+    let catalogue =
+        RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(ExploreCatalogueSnapshot {
+            generated_at: chrono::DateTime::<chrono::Utc>::default(),
+            categories: Vec::new(),
+            routes: Vec::new(),
+            themes: Vec::new(),
+            collections: Vec::new(),
+            trending: Vec::new(),
+            community_pick: None,
+        }));
+    let descriptors =
+        RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(DescriptorSnapshot {
+            generated_at: chrono::DateTime::<chrono::Utc>::default(),
+            tags: Vec::new(),
+            badges: Vec::new(),
+            safety_toggles: Vec::new(),
+            safety_presets: Vec::new(),
+            interest_themes: Vec::new(),
+        }));
+
+    (catalogue, descriptors)
+}
+
 struct HttpWsStateInputs<'a> {
     login: &'a RecordingLoginService,
     users: &'a RecordingUsersQuery,
@@ -297,6 +330,8 @@ struct HttpWsStateInputs<'a> {
     preferences_query: &'a RecordingUserPreferencesQuery,
     route_annotations: &'a RecordingRouteAnnotationsCommand,
     route_annotations_query: &'a RecordingRouteAnnotationsQuery,
+    catalogue: &'a RecordingCatalogueRepository,
+    descriptors: &'a RecordingDescriptorRepository,
     onboarding: &'a QueueUserOnboarding,
 }
 
@@ -311,8 +346,8 @@ fn create_http_and_ws_state(inputs: HttpWsStateInputs<'_>) -> (HttpState, WsStat
         route_annotations: Arc::new(inputs.route_annotations.clone()),
         route_annotations_query: Arc::new(inputs.route_annotations_query.clone()),
         route_submission: Arc::new(FixtureRouteSubmissionService),
-        catalogue: Arc::new(FixtureCatalogueRepository),
-        descriptors: Arc::new(FixtureDescriptorRepository),
+        catalogue: Arc::new(inputs.catalogue.clone()),
+        descriptors: Arc::new(inputs.descriptors.clone()),
     });
     let ws_state = crate::ws_support::ws_state(inputs.onboarding.clone());
 
@@ -327,6 +362,7 @@ pub(crate) fn world() -> WorldFixture {
     let interests = create_interests_double(&user_id);
     let (preferences, preferences_query) = create_preferences_doubles(&user_id);
     let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
+    let (catalogue, descriptors) = create_catalogue_doubles();
     let onboarding = QueueUserOnboarding::new(Vec::new());
     let (http_state, ws_state) = create_http_and_ws_state(HttpWsStateInputs {
         login: &login,
@@ -337,6 +373,8 @@ pub(crate) fn world() -> WorldFixture {
         preferences_query: &preferences_query,
         route_annotations: &route_annotations,
         route_annotations_query: &route_annotations_query,
+        catalogue: &catalogue,
+        descriptors: &descriptors,
         onboarding: &onboarding,
     });
 
@@ -359,6 +397,8 @@ pub(crate) fn world() -> WorldFixture {
         preferences_query,
         route_annotations,
         route_annotations_query,
+        catalogue,
+        descriptors,
         onboarding,
         last_status: None,
         last_body: None,
