@@ -75,14 +75,22 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 
 ## Progress
 
-- [x] (2026-02-15) Write ExecPlan to `docs/execplans/backend-3-2-3-catalogue-endpoints.md`.
-- [x] (2026-02-15) Stage A: Add `generated_at` to `DescriptorSnapshot` and update all consumers.
-- [x] (2026-02-15) Stage B: Create catalogue HTTP handler module with response DTOs and error mapping.
-- [x] (2026-02-15) Stage C: Wire handlers into HttpState, server, and OpenAPI.
-- [x] (2026-02-15) Stage D: Create recording test doubles for catalogue/descriptor ports.
-- [x] (2026-02-15) Stage E: Write BDD feature files and step implementations.
-- [x] (2026-02-15) Stage F: Unit tests written inline in Stage B (catalogue.rs `#[cfg(test)]`).
-- [x] (2026-02-15) Stage G: Fix lint warnings, run all gates, record architecture decision.
+- [x] (2026-02-15) Write ExecPlan to
+  `docs/execplans/backend-3-2-3-catalogue-endpoints.md`.
+- [x] (2026-02-15) Stage A: Add `generated_at` to
+  `DescriptorSnapshot` and update all consumers.
+- [x] (2026-02-15) Stage B: Create catalogue HTTP handler
+  module with response DTOs and error mapping.
+- [x] (2026-02-15) Stage C: Wire handlers into HttpState,
+  server, and OpenAPI.
+- [x] (2026-02-15) Stage D: Create recording test doubles
+  for catalogue/descriptor ports.
+- [x] (2026-02-15) Stage E: Write BDD feature files and
+  step implementations.
+- [x] (2026-02-15) Stage F: Unit tests written inline in
+  Stage B (catalogue.rs `#[cfg(test)]`).
+- [x] (2026-02-15) Stage G: Fix lint warnings, run all
+  gates, record architecture decision.
 - [x] (2026-02-15) Stage H: Mark roadmap 3.2.3 as done.
 
 ## Surprises & Discoveries
@@ -135,21 +143,29 @@ tested with 6 BDD scenarios (happy path, auth enforcement, error surfacing),
 and documented in the architecture document.
 
 Key outcomes:
-- `GET /api/v1/catalogue/explore` and `GET /api/v1/catalogue/descriptors`
-  serve pre-assembled snapshots behind session authentication.
-- `Cache-Control: private, no-cache, must-revalidate` and `generatedAt`
-  metadata enable client-side staleness detection.
-- Response DTOs use `serde_json::Value` wrapper fields to keep `ToSchema`
-  derives out of the domain layer.
-- `TryFrom` conversion pattern avoids `expect()` in non-test code.
-- Harness refactoring (inlining `HttpWsStateInputs`) keeps the shared test
-  harness under the 400-line module limit despite growing port count.
+
+- `GET /api/v1/catalogue/explore` and
+  `GET /api/v1/catalogue/descriptors` serve pre-assembled
+  snapshots behind session authentication.
+- `Cache-Control: private, no-cache, must-revalidate` and
+  `generatedAt` metadata enable client-side staleness
+  detection.
+- Response DTOs use `serde_json::Value` wrapper fields to
+  keep `ToSchema` derives out of the domain layer.
+- `TryFrom` conversion pattern avoids `expect()` in
+  non-test code.
+- Harness refactoring (inlining `HttpWsStateInputs`) keeps
+  the shared test harness under the 400-line module limit
+  despite growing port count.
 
 Lessons:
-- When wrapping domain types for OpenAPI, `serde_json::Value` is a pragmatic
-  escape hatch that avoids propagating utoipa derives into the domain.
-- The `recording_double!` macro smoothly handles new ports; the main growth
-  pressure is in the harness's `AdapterWorld` struct and `world()` fixture.
+
+- When wrapping domain types for OpenAPI,
+  `serde_json::Value` is a pragmatic escape hatch that
+  avoids propagating utoipa derives into the domain.
+- The `recording_double!` macro smoothly handles new ports;
+  the main growth pressure is in the harness's
+  `AdapterWorld` struct and `world()` fixture.
 
 ## Context and Orientation
 
