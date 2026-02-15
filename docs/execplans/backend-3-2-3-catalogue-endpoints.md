@@ -101,10 +101,23 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
   using a `to_json_value` helper that maps `serde_json` errors to `Error::internal`.
   Handlers use `?` to propagate, tests use `.unwrap()`.
 
-- Observation: `module-max-lines` custom lint (whitaker) limits modules to 400 lines.
-  Evidence: Adding catalogue doubles wiring pushed `harness.rs` to 413 lines.
-  Impact: Inlined `HttpWsStateInputs` struct into direct `HttpStatePorts` construction
-  in the `world()` function, reducing the file to 381 lines.
+- Observation: `module-max-lines` custom lint (whitaker) limits modules to
+  400 lines.
+  Evidence: Adding catalogue doubles wiring pushed `harness.rs` to 413
+  lines.
+  Impact: Inlined `HttpWsStateInputs` struct into direct `HttpStatePorts`
+  construction in the `world()` function, reducing the file to 381 lines.
+
+- Observation: Catalogue BDD test fixtures used `.expect()` for embedded
+  PostgreSQL setup, causing 180-second CI timeouts when the cluster is
+  unavailable.
+  Evidence: CI failure in `catalogue_descriptor_ingestion_bdd` with
+  `postgresql_embedded::setup() failed: operation timed out after 180.0s`.
+  Impact: Converted `setup_test_context()` to `Result<TestContext, String>`
+  and adopted the `handle_cluster_setup_failure` pattern in both
+  `catalogue_descriptor_ingestion_bdd` and
+  `catalogue_descriptor_read_models_bdd`. Tests now fail fast with a clear
+  diagnostic instead of hanging.
 
 ## Decision Log
 
