@@ -124,27 +124,47 @@ fn build_route_submission_service(
     }
 }
 
+/// Build a command/query service pair backed by a Diesel repository when a pool
+/// is available, falling back to unit-struct fixtures otherwise.
+macro_rules! build_service_pair {
+    (
+        repo: $repo_type:ident,
+        service: $service_type:ident,
+        fixtures: ($fixture_cmd:ident, $fixture_query:ident),
+        traits: ($cmd_trait:ty, $query_trait:ty),
+        pool: $pool:expr
+    ) => {
+        match $pool {
+            Some(pool) => {
+                let repo = Arc::new($repo_type::new(pool.clone()));
+                let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+                let service = Arc::new($service_type::new(repo, idempotency_repo));
+                (
+                    service.clone() as Arc<$cmd_trait>,
+                    service as Arc<$query_trait>,
+                )
+            }
+            None => (
+                Arc::new($fixture_cmd) as Arc<$cmd_trait>,
+                Arc::new($fixture_query) as Arc<$query_trait>,
+            ),
+        }
+    };
+}
+
 fn build_user_preferences_services(
     config: &ServerConfig,
 ) -> (
     Arc<dyn UserPreferencesCommand>,
     Arc<dyn UserPreferencesQuery>,
 ) {
-    match &config.db_pool {
-        Some(pool) => {
-            let preferences_repo = Arc::new(DieselUserPreferencesRepository::new(pool.clone()));
-            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
-            let service = Arc::new(UserPreferencesService::new(
-                preferences_repo,
-                idempotency_repo,
-            ));
-            (service.clone(), service)
-        }
-        None => (
-            Arc::new(FixtureUserPreferencesCommand),
-            Arc::new(FixtureUserPreferencesQuery),
-        ),
-    }
+    build_service_pair!(
+        repo: DieselUserPreferencesRepository,
+        service: UserPreferencesService,
+        fixtures: (FixtureUserPreferencesCommand, FixtureUserPreferencesQuery),
+        traits: (dyn UserPreferencesCommand, dyn UserPreferencesQuery),
+        pool: &config.db_pool
+    )
 }
 
 fn build_catalogue_services(
@@ -168,21 +188,13 @@ fn build_route_annotations_services(
     Arc<dyn RouteAnnotationsCommand>,
     Arc<dyn RouteAnnotationsQuery>,
 ) {
-    match &config.db_pool {
-        Some(pool) => {
-            let annotations_repo = Arc::new(DieselRouteAnnotationRepository::new(pool.clone()));
-            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
-            let service = Arc::new(RouteAnnotationsService::new(
-                annotations_repo,
-                idempotency_repo,
-            ));
-            (service.clone(), service)
-        }
-        None => (
-            Arc::new(FixtureRouteAnnotationsCommand),
-            Arc::new(FixtureRouteAnnotationsQuery),
-        ),
-    }
+    build_service_pair!(
+        repo: DieselRouteAnnotationRepository,
+        service: RouteAnnotationsService,
+        fixtures: (FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery),
+        traits: (dyn RouteAnnotationsCommand, dyn RouteAnnotationsQuery),
+        pool: &config.db_pool
+    )
 }
 
 #[derive(Clone)]
