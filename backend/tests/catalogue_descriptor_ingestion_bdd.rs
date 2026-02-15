@@ -43,7 +43,7 @@ use assertions::{
 use builders::{CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_ID};
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
 use support::atexit_cleanup::shared_cluster_handle;
-use support::provision_template_database;
+use support::{handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
@@ -57,22 +57,21 @@ struct TestContext {
 
 type SharedContext = Arc<Mutex<TestContext>>;
 
-fn setup_test_context() -> TestContext {
-    let runtime = Runtime::new().expect("tokio runtime should initialize");
-    let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
-    let temp_db =
-        provision_template_database(cluster).expect("template database should be available");
+fn setup_test_context() -> Result<TestContext, String> {
+    let runtime = Runtime::new().map_err(|e| e.to_string())?;
+    let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
+    let temp_db = provision_template_database(cluster).map_err(|e| e.to_string())?;
 
     let config = PoolConfig::new(temp_db.url())
         .with_max_size(2)
         .with_min_idle(Some(1));
     let pool = runtime
         .block_on(async { DbPool::new(config).await })
-        .expect("pool should initialize");
+        .map_err(|e| e.to_string())?;
 
-    let client = Client::connect(temp_db.url(), NoTls).expect("postgres client should connect");
+    let client = Client::connect(temp_db.url(), NoTls).map_err(|e| e.to_string())?;
 
-    TestContext {
+    Ok(TestContext {
         runtime,
         catalogue_repository: DieselCatalogueIngestionRepository::new(pool.clone()),
         descriptor_repository: DieselDescriptorIngestionRepository::new(pool),
@@ -80,12 +79,18 @@ fn setup_test_context() -> TestContext {
         last_catalogue_error: None,
         last_descriptor_error: None,
         _database: temp_db,
-    }
+    })
 }
 
 #[fixture]
 fn world() -> SharedContext {
-    Arc::new(Mutex::new(setup_test_context()))
+    match setup_test_context() {
+        Ok(ctx) => Arc::new(Mutex::new(ctx)),
+        Err(reason) => {
+            let _: Option<()> = handle_cluster_setup_failure(&reason);
+            panic!("SKIP-TEST-CLUSTER: {reason}");
+        }
+    }
 }
 
 #[given("a Diesel-backed catalogue and descriptor ingestion repository")]
