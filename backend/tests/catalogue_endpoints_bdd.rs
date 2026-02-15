@@ -85,34 +85,28 @@ fn the_client_requests_the_descriptors(world: &WorldFixture) {
     bdd_common::perform_get_request(world, DESCRIPTORS_PATH);
 }
 
-#[when("the client requests the explore catalogue without a session")]
-fn the_client_requests_the_explore_catalogue_without_a_session(world: &WorldFixture) {
+fn perform_request_without_session(world: &WorldFixture, path: &str) {
     let shared = world.world();
     pwa_http::perform_json_request(
         &shared,
         pwa_http::JsonRequest {
             include_cookie: false,
             method: actix_web::http::Method::GET,
-            path: EXPLORE_PATH,
+            path,
             payload: None,
             idempotency_key: None,
         },
     );
 }
 
+#[when("the client requests the explore catalogue without a session")]
+fn the_client_requests_the_explore_catalogue_without_a_session(world: &WorldFixture) {
+    perform_request_without_session(world, EXPLORE_PATH);
+}
+
 #[when("the client requests the descriptors without a session")]
 fn the_client_requests_the_descriptors_without_a_session(world: &WorldFixture) {
-    let shared = world.world();
-    pwa_http::perform_json_request(
-        &shared,
-        pwa_http::JsonRequest {
-            include_cookie: false,
-            method: actix_web::http::Method::GET,
-            path: DESCRIPTORS_PATH,
-            payload: None,
-            idempotency_key: None,
-        },
-    );
+    perform_request_without_session(world, DESCRIPTORS_PATH);
 }
 
 #[then("the response is ok")]
