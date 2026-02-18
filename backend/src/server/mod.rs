@@ -209,6 +209,64 @@ fn build_catalogue_services(
     }
 }
 
+/// Build the shared HTTP state from configured ports and fixture fallbacks.
+fn build_http_state(
+    config: &ServerConfig,
+    route_submission: Arc<dyn RouteSubmissionService>,
+) -> web::Data<HttpState> {
+    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
+    // to real DB-backed implementations once their adapters are ready.
+    let (preferences, preferences_query) = build_idempotent_service_pair(
+        config,
+        DieselUserPreferencesRepository::new,
+        UserPreferencesService::new,
+        ServicePairFactory {
+            fixtures: (
+                Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
+                Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
+            ),
+            cast: |service| {
+                (
+                    service.clone() as Arc<dyn UserPreferencesCommand>,
+                    service as Arc<dyn UserPreferencesQuery>,
+                )
+            },
+        },
+    );
+    let (route_annotations, route_annotations_query) = build_idempotent_service_pair(
+        config,
+        DieselRouteAnnotationRepository::new,
+        RouteAnnotationsService::new,
+        ServicePairFactory {
+            fixtures: (
+                Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
+                Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
+            ),
+            cast: |service| {
+                (
+                    service.clone() as Arc<dyn RouteAnnotationsCommand>,
+                    service as Arc<dyn RouteAnnotationsQuery>,
+                )
+            },
+        },
+    );
+    let (catalogue, descriptors) = build_catalogue_services(config);
+
+    web::Data::new(HttpState::new(HttpStatePorts {
+        login: Arc::new(FixtureLoginService),
+        users: Arc::new(FixtureUsersQuery),
+        profile: Arc::new(FixtureUserProfileQuery),
+        interests: Arc::new(FixtureUserInterestsCommand),
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
+        route_submission,
+        catalogue,
+        descriptors,
+    }))
+}
+
 #[derive(Clone)]
 struct AppDependencies {
     health_state: web::Data<HealthState>,
@@ -300,59 +358,8 @@ pub fn create_server(
     config: ServerConfig,
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
-
-    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
-    // to real DB-backed implementations once their adapters are ready.
     let route_submission = build_route_submission_service(&config)?;
-    let (preferences, preferences_query) = build_idempotent_service_pair(
-        &config,
-        DieselUserPreferencesRepository::new,
-        UserPreferencesService::new,
-        ServicePairFactory {
-            fixtures: (
-                Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
-                Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
-            ),
-            cast: |service| {
-                (
-                    service.clone() as Arc<dyn UserPreferencesCommand>,
-                    service as Arc<dyn UserPreferencesQuery>,
-                )
-            },
-        },
-    );
-    let (route_annotations, route_annotations_query) = build_idempotent_service_pair(
-        &config,
-        DieselRouteAnnotationRepository::new,
-        RouteAnnotationsService::new,
-        ServicePairFactory {
-            fixtures: (
-                Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
-                Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
-            ),
-            cast: |service| {
-                (
-                    service.clone() as Arc<dyn RouteAnnotationsCommand>,
-                    service as Arc<dyn RouteAnnotationsQuery>,
-                )
-            },
-        },
-    );
-    let (catalogue, descriptors) = build_catalogue_services(&config);
-
-    let http_state = web::Data::new(HttpState::new(HttpStatePorts {
-        login: Arc::new(FixtureLoginService),
-        users: Arc::new(FixtureUsersQuery),
-        profile: Arc::new(FixtureUserProfileQuery),
-        interests: Arc::new(FixtureUserInterestsCommand),
-        preferences,
-        preferences_query,
-        route_annotations,
-        route_annotations_query,
-        route_submission,
-        catalogue,
-        descriptors,
-    }));
+    let http_state = build_http_state(&config, route_submission);
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,
