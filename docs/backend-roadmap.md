@@ -142,9 +142,9 @@ so persistence details stay confined to outbound adapters.
 - [x] 3.2.1. Define catalogue and descriptor domain types (`RouteSummary`,
   `RouteCategory`, `Theme`, `RouteCollection`, `TrendingRouteHighlight`,
   `CommunityPick`, `Tag`, `Badge`, `SafetyToggle`, and `SafetyPreset`) with
-  localisation maps and semantic icon identifiers.
+  localization maps and semantic icon identifiers.
 - [x] 3.2.2. Add `CatalogueRepository` and `DescriptorRepository` ports plus
-  persistence adapters with contract tests for localisation payloads.
+  persistence adapters with contract tests for localization payloads.
 - [x] 3.2.3. Implement `GET /api/v1/catalogue/explore` and
   `GET /api/v1/catalogue/descriptors` endpoints backed by the read models, with
   cache headers and snapshot `generated_at` metadata.
