@@ -163,31 +163,34 @@ where
     make_service(repo, idempotency_repo)
 }
 
-fn build_user_preferences_services(
+/// Shared configuration for building command/query service pairs.
+type ServiceCast<S, Cmd, Query> = fn(Arc<S>) -> (Arc<Cmd>, Arc<Query>);
+
+/// Shared configuration for building command/query service pairs.
+struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
+    fixtures: (Arc<Cmd>, Arc<Query>),
+    cast: ServiceCast<S, Cmd, Query>,
+}
+
+/// Build a command/query pair for services backed by a domain repository and
+/// an idempotency repository.
+fn build_idempotent_service_pair<R, S, Cmd, Query>(
     config: &ServerConfig,
-) -> (
-    Arc<dyn UserPreferencesCommand>,
-    Arc<dyn UserPreferencesQuery>,
-) {
+    make_repo: impl FnOnce(DbPool) -> R,
+    make_service: impl FnOnce(Arc<R>, Arc<DieselIdempotencyRepository>) -> S,
+    pair_factory: ServicePairFactory<S, Cmd, Query>,
+) -> (Arc<Cmd>, Arc<Query>)
+where
+    R: 'static,
+    S: 'static,
+    Cmd: ?Sized + 'static,
+    Query: ?Sized + 'static,
+{
     build_service_pair(
         &config.db_pool,
-        |pool| {
-            build_idempotent_service(
-                pool,
-                DieselUserPreferencesRepository::new,
-                UserPreferencesService::new,
-            )
-        },
-        (
-            Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
-            Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
-        ),
-        |service| {
-            (
-                service.clone() as Arc<dyn UserPreferencesCommand>,
-                service as Arc<dyn UserPreferencesQuery>,
-            )
-        },
+        |pool| build_idempotent_service(pool, make_repo, make_service),
+        pair_factory.fixtures,
+        pair_factory.cast,
     )
 }
 
@@ -204,34 +207,6 @@ fn build_catalogue_services(
             Arc::new(FixtureDescriptorRepository),
         ),
     }
-}
-
-fn build_route_annotations_services(
-    config: &ServerConfig,
-) -> (
-    Arc<dyn RouteAnnotationsCommand>,
-    Arc<dyn RouteAnnotationsQuery>,
-) {
-    build_service_pair(
-        &config.db_pool,
-        |pool| {
-            build_idempotent_service(
-                pool,
-                DieselRouteAnnotationRepository::new,
-                RouteAnnotationsService::new,
-            )
-        },
-        (
-            Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
-            Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
-        ),
-        |service| {
-            (
-                service.clone() as Arc<dyn RouteAnnotationsCommand>,
-                service as Arc<dyn RouteAnnotationsQuery>,
-            )
-        },
-    )
 }
 
 #[derive(Clone)]
@@ -329,8 +304,40 @@ pub fn create_server(
     // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
     // to real DB-backed implementations once their adapters are ready.
     let route_submission = build_route_submission_service(&config)?;
-    let (preferences, preferences_query) = build_user_preferences_services(&config);
-    let (route_annotations, route_annotations_query) = build_route_annotations_services(&config);
+    let (preferences, preferences_query) = build_idempotent_service_pair(
+        &config,
+        DieselUserPreferencesRepository::new,
+        UserPreferencesService::new,
+        ServicePairFactory {
+            fixtures: (
+                Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
+                Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
+            ),
+            cast: |service| {
+                (
+                    service.clone() as Arc<dyn UserPreferencesCommand>,
+                    service as Arc<dyn UserPreferencesQuery>,
+                )
+            },
+        },
+    );
+    let (route_annotations, route_annotations_query) = build_idempotent_service_pair(
+        &config,
+        DieselRouteAnnotationRepository::new,
+        RouteAnnotationsService::new,
+        ServicePairFactory {
+            fixtures: (
+                Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
+                Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
+            ),
+            cast: |service| {
+                (
+                    service.clone() as Arc<dyn RouteAnnotationsCommand>,
+                    service as Arc<dyn RouteAnnotationsQuery>,
+                )
+            },
+        },
+    );
     let (catalogue, descriptors) = build_catalogue_services(&config);
 
     let http_state = web::Data::new(HttpState::new(HttpStatePorts {
