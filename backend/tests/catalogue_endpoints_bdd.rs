@@ -40,6 +40,16 @@ use serde_json::Value;
 const EXPLORE_PATH: &str = "/api/v1/catalogue/explore";
 const DESCRIPTORS_PATH: &str = "/api/v1/catalogue/descriptors";
 
+fn assert_fields_are_empty_arrays(body: &Value, fields: &[&str]) {
+    for field in fields {
+        let arr = body.get(*field).and_then(Value::as_array);
+        assert!(
+            arr.map(|items| items.is_empty()).unwrap_or(false),
+            "{field} should be an empty array"
+        );
+    }
+}
+
 #[fixture]
 fn world() -> WorldFixture {
     harness::world()
@@ -200,13 +210,10 @@ fn the_explore_response_includes_empty_arrays_for_all_collections(world: &WorldF
     let ctx = world.world();
     let ctx = ctx.borrow();
     let body = ctx.last_body.as_ref().expect("response body");
-    for field in ["categories", "routes", "themes", "collections", "trending"] {
-        let arr = body.get(field).and_then(Value::as_array);
-        assert!(
-            arr.map(|a| a.is_empty()).unwrap_or(false),
-            "{field} should be an empty array"
-        );
-    }
+    assert_fields_are_empty_arrays(
+        body,
+        &["categories", "routes", "themes", "collections", "trending"],
+    );
     assert!(
         body.get("communityPick").is_some(),
         "communityPick field should be present"
@@ -218,19 +225,16 @@ fn the_descriptors_response_includes_empty_arrays_for_all_registries(world: &Wor
     let ctx = world.world();
     let ctx = ctx.borrow();
     let body = ctx.last_body.as_ref().expect("response body");
-    for field in [
-        "tags",
-        "badges",
-        "safetyToggles",
-        "safetyPresets",
-        "interestThemes",
-    ] {
-        let arr = body.get(field).and_then(Value::as_array);
-        assert!(
-            arr.map(|a| a.is_empty()).unwrap_or(false),
-            "{field} should be an empty array"
-        );
-    }
+    assert_fields_are_empty_arrays(
+        body,
+        &[
+            "tags",
+            "badges",
+            "safetyToggles",
+            "safetyPresets",
+            "interestThemes",
+        ],
+    );
 }
 
 #[scenario(path = "tests/features/catalogue_endpoints.feature")]
