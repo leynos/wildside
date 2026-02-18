@@ -12,6 +12,7 @@ use utoipa::ToSchema;
 use crate::domain::Error;
 use crate::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
 use crate::inbound::http::ApiResult;
+use crate::inbound::http::cache_control::PRIVATE_NO_CACHE_MUST_REVALIDATE;
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
@@ -133,7 +134,7 @@ pub async fn get_explore_catalogue(
     let snapshot = state.catalogue.explore_snapshot().await?;
     let response = ExploreCatalogueResponse::try_from(snapshot)?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", "private, no-cache, must-revalidate"))
+        .insert_header(("Cache-Control", PRIVATE_NO_CACHE_MUST_REVALIDATE))
         .json(response))
 }
 
@@ -166,7 +167,7 @@ pub async fn get_descriptors(
     let snapshot = state.descriptors.descriptor_snapshot().await?;
     let response = DescriptorsResponse::try_from(snapshot)?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", "private, no-cache, must-revalidate"))
+        .insert_header(("Cache-Control", PRIVATE_NO_CACHE_MUST_REVALIDATE))
         .json(response))
 }
 
@@ -175,32 +176,17 @@ mod tests {
     //! Regression coverage for this module.
     use super::*;
     use crate::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
-    use chrono::{DateTime, Utc};
+    use chrono::DateTime;
     use rstest::{fixture, rstest};
 
     #[fixture]
     fn catalogue_snapshot() -> ExploreCatalogueSnapshot {
-        ExploreCatalogueSnapshot {
-            generated_at: DateTime::<Utc>::default(),
-            categories: Vec::new(),
-            routes: Vec::new(),
-            themes: Vec::new(),
-            collections: Vec::new(),
-            trending: Vec::new(),
-            community_pick: None,
-        }
+        ExploreCatalogueSnapshot::empty()
     }
 
     #[fixture]
     fn descriptor_snapshot() -> DescriptorSnapshot {
-        DescriptorSnapshot {
-            generated_at: DateTime::<Utc>::default(),
-            tags: Vec::new(),
-            badges: Vec::new(),
-            safety_toggles: Vec::new(),
-            safety_presets: Vec::new(),
-            interest_themes: Vec::new(),
-        }
+        DescriptorSnapshot::empty()
     }
 
     #[rstest]

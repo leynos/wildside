@@ -1,6 +1,7 @@
 //! HTTP inbound adapter exposing REST endpoints.
 
 pub mod annotations;
+pub mod cache_control;
 pub mod catalogue;
 pub mod error;
 pub mod health;

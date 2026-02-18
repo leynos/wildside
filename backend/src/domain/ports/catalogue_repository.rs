@@ -44,6 +44,21 @@ pub struct ExploreCatalogueSnapshot {
     pub community_pick: Option<CommunityPick>,
 }
 
+impl ExploreCatalogueSnapshot {
+    /// Construct an empty snapshot for fixture and fallback paths.
+    pub fn empty() -> Self {
+        Self {
+            generated_at: DateTime::<Utc>::default(),
+            categories: Vec::new(),
+            routes: Vec::new(),
+            themes: Vec::new(),
+            collections: Vec::new(),
+            trending: Vec::new(),
+            community_pick: None,
+        }
+    }
+}
+
 /// Port for reading explore catalogue snapshots.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -75,15 +90,7 @@ pub struct FixtureCatalogueRepository;
 #[async_trait]
 impl CatalogueRepository for FixtureCatalogueRepository {
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError> {
-        Ok(ExploreCatalogueSnapshot {
-            generated_at: DateTime::<Utc>::default(),
-            categories: Vec::new(),
-            routes: Vec::new(),
-            themes: Vec::new(),
-            collections: Vec::new(),
-            trending: Vec::new(),
-            community_pick: None,
-        })
+        Ok(ExploreCatalogueSnapshot::empty())
     }
 }
 

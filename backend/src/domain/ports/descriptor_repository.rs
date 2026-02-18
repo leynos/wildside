@@ -35,6 +35,20 @@ pub struct DescriptorSnapshot {
     pub interest_themes: Vec<InterestTheme>,
 }
 
+impl DescriptorSnapshot {
+    /// Construct an empty snapshot for fixture and fallback paths.
+    pub fn empty() -> Self {
+        Self {
+            generated_at: DateTime::<Utc>::default(),
+            tags: Vec::new(),
+            badges: Vec::new(),
+            safety_toggles: Vec::new(),
+            safety_presets: Vec::new(),
+            interest_themes: Vec::new(),
+        }
+    }
+}
+
 /// Port for reading descriptor registries.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -65,14 +79,7 @@ pub struct FixtureDescriptorRepository;
 #[async_trait]
 impl DescriptorRepository for FixtureDescriptorRepository {
     async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError> {
-        Ok(DescriptorSnapshot {
-            generated_at: DateTime::<Utc>::default(),
-            tags: Vec::new(),
-            badges: Vec::new(),
-            safety_toggles: Vec::new(),
-            safety_presets: Vec::new(),
-            interest_themes: Vec::new(),
-        })
+        Ok(DescriptorSnapshot::empty())
     }
 }
 

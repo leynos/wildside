@@ -29,6 +29,7 @@ mod pwa_http;
 mod ws_support;
 
 use backend::domain::ports::{CatalogueRepositoryError, DescriptorRepositoryError};
+use backend::inbound::http::cache_control::PRIVATE_NO_CACHE_MUST_REVALIDATE;
 use chrono::DateTime;
 use doubles::{CatalogueQueryResponse, DescriptorQueryResponse};
 use harness::WorldFixture;
@@ -190,7 +191,7 @@ fn the_response_includes_the_expected_cache_control_header(world: &WorldFixture)
     let ctx = ctx.borrow();
     assert_eq!(
         ctx.last_cache_control.as_deref(),
-        Some("private, no-cache, must-revalidate")
+        Some(PRIVATE_NO_CACHE_MUST_REVALIDATE)
     );
 }
 

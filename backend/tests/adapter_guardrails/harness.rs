@@ -299,25 +299,12 @@ fn create_route_annotations_doubles(
 }
 
 fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
-    let catalogue =
-        RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(ExploreCatalogueSnapshot {
-            generated_at: chrono::DateTime::<chrono::Utc>::default(),
-            categories: Vec::new(),
-            routes: Vec::new(),
-            themes: Vec::new(),
-            collections: Vec::new(),
-            trending: Vec::new(),
-            community_pick: None,
-        }));
-    let descriptors =
-        RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(DescriptorSnapshot {
-            generated_at: chrono::DateTime::<chrono::Utc>::default(),
-            tags: Vec::new(),
-            badges: Vec::new(),
-            safety_toggles: Vec::new(),
-            safety_presets: Vec::new(),
-            interest_themes: Vec::new(),
-        }));
+    let catalogue = RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(
+        ExploreCatalogueSnapshot::empty(),
+    ));
+    let descriptors = RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(
+        DescriptorSnapshot::empty(),
+    ));
 
     (catalogue, descriptors)
 }
