@@ -148,6 +148,21 @@ where
     }
 }
 
+/// Helper to construct a service that depends on both a domain repository
+/// and an idempotency repository, avoiding duplication of Arc wrapping.
+fn build_idempotent_service<R, S>(
+    pool: &DbPool,
+    make_repo: impl FnOnce(DbPool) -> R,
+    make_service: impl FnOnce(Arc<R>, Arc<DieselIdempotencyRepository>) -> S,
+) -> S
+where
+    R: 'static,
+{
+    let repo = Arc::new(make_repo(pool.clone()));
+    let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+    make_service(repo, idempotency_repo)
+}
+
 fn build_user_preferences_services(
     config: &ServerConfig,
 ) -> (
@@ -157,9 +172,11 @@ fn build_user_preferences_services(
     build_service_pair(
         &config.db_pool,
         |pool| {
-            let repo = Arc::new(DieselUserPreferencesRepository::new(pool.clone()));
-            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
-            UserPreferencesService::new(repo, idempotency_repo)
+            build_idempotent_service(
+                pool,
+                DieselUserPreferencesRepository::new,
+                UserPreferencesService::new,
+            )
         },
         (
             Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
@@ -198,9 +215,11 @@ fn build_route_annotations_services(
     build_service_pair(
         &config.db_pool,
         |pool| {
-            let repo = Arc::new(DieselRouteAnnotationRepository::new(pool.clone()));
-            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
-            RouteAnnotationsService::new(repo, idempotency_repo)
+            build_idempotent_service(
+                pool,
+                DieselRouteAnnotationRepository::new,
+                RouteAnnotationsService::new,
+            )
         },
         (
             Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
