@@ -20,6 +20,8 @@ use tokio::runtime::Runtime;
 
 #[path = "support/catalogue_descriptor_builders.rs"]
 mod builders;
+#[path = "support/catalogue_descriptor_read_models_assertions.rs"]
+mod read_models_assertions;
 #[expect(
     dead_code,
     reason = "shared module; not all snapshot builders used by this test crate"
@@ -29,7 +31,12 @@ mod snapshots;
 
 mod support;
 
-use builders::{CURATOR_USER_ID, ROUTE_ID, SAFETY_TOGGLE_ID};
+use builders::{CURATOR_USER_ID, ROUTE_ID};
+use read_models_assertions::{
+    assert_all_catalogue_collections_empty, assert_categories, assert_collections,
+    assert_community_pick, assert_descriptor_contents, assert_query_error, assert_routes,
+    assert_themes, assert_trending, get_catalogue_snapshot, get_descriptor_snapshot,
+};
 use snapshots::build_ingestion_snapshots;
 use support::atexit_cleanup::shared_cluster_handle;
 use support::{handle_cluster_setup_failure, provision_template_database};
@@ -226,113 +233,6 @@ fn a_malformed_descriptor_localization_row_is_inserted_directly(world: SharedCon
     );
 }
 
-fn assert_categories(snapshot: &ExploreCatalogueSnapshot) {
-    assert_eq!(snapshot.categories.len(), 1, "expected 1 category");
-    assert_eq!(snapshot.categories[0].slug(), "scenic");
-    assert_eq!(snapshot.categories[0].route_count(), 42);
-    assert!(
-        snapshot.categories[0]
-            .localizations()
-            .as_map()
-            .contains_key("en-GB"),
-        "category should have en-GB locale"
-    );
-}
-
-fn assert_themes(snapshot: &ExploreCatalogueSnapshot) {
-    assert_eq!(snapshot.themes.len(), 1, "expected 1 theme");
-    assert_eq!(snapshot.themes[0].slug(), "coastal");
-    assert_eq!(snapshot.themes[0].walk_count(), 23);
-}
-
-fn assert_collections(snapshot: &ExploreCatalogueSnapshot) {
-    assert_eq!(snapshot.collections.len(), 1, "expected 1 collection");
-    assert_eq!(snapshot.collections[0].slug(), "weekend-favourites");
-}
-
-fn assert_routes(snapshot: &ExploreCatalogueSnapshot) {
-    assert_eq!(snapshot.routes.len(), 1, "expected 1 route summary");
-    assert_eq!(snapshot.routes[0].slug(), Some("coastal-loop"));
-    assert_eq!(snapshot.routes[0].distance_metres(), 4_500);
-}
-
-fn assert_trending(snapshot: &ExploreCatalogueSnapshot) {
-    assert_eq!(snapshot.trending.len(), 1, "expected 1 trending highlight");
-    assert_eq!(snapshot.trending[0].trend_delta(), "+12%");
-}
-
-fn assert_community_pick(snapshot: &ExploreCatalogueSnapshot) {
-    let pick = snapshot
-        .community_pick
-        .as_ref()
-        .expect("community pick should be present");
-    assert_eq!(pick.curator_display_name(), "Wildside curators");
-    assert_eq!(pick.saves(), 128);
-    let locales = pick.localizations().as_map();
-    assert!(
-        locales.contains_key("en-GB"),
-        "community pick should have en-GB locale"
-    );
-    assert!(
-        locales.contains_key("fr-FR"),
-        "community pick should have fr-FR locale"
-    );
-}
-
-fn assert_descriptor_contents(snapshot: &DescriptorSnapshot) {
-    assert_eq!(snapshot.tags.len(), 1, "expected 1 tag");
-    assert_eq!(snapshot.tags[0].slug(), "family-friendly");
-    assert_eq!(snapshot.badges.len(), 1, "expected 1 badge");
-    assert_eq!(snapshot.badges[0].slug(), "accessible");
-    assert_eq!(snapshot.safety_toggles.len(), 1, "expected 1 safety toggle");
-    assert_eq!(snapshot.safety_toggles[0].slug(), "well-lit");
-    assert_eq!(snapshot.safety_presets.len(), 1, "expected 1 safety preset");
-    assert_eq!(snapshot.safety_presets[0].slug(), "night-safe");
-    assert_eq!(
-        snapshot.safety_presets[0].safety_toggle_ids(),
-        &[SAFETY_TOGGLE_ID]
-    );
-}
-
-fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogueSnapshot) {
-    assert!(snapshot.categories.is_empty(), "categories should be empty");
-    assert!(snapshot.themes.is_empty(), "themes should be empty");
-    assert!(
-        snapshot.collections.is_empty(),
-        "collections should be empty"
-    );
-    assert!(snapshot.routes.is_empty(), "routes should be empty");
-    assert!(snapshot.trending.is_empty(), "trending should be empty");
-    assert!(
-        snapshot.community_pick.is_none(),
-        "community pick should be None"
-    );
-}
-
-fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
-    world
-        .lock()
-        .expect("context lock")
-        .last_catalogue_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok")
-        .clone()
-}
-
-fn get_descriptor_snapshot(world: &SharedContext) -> DescriptorSnapshot {
-    world
-        .lock()
-        .expect("context lock")
-        .last_descriptor_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok")
-        .clone()
-}
-
 #[then("the explore snapshot contains expected categories themes and routes")]
 fn the_explore_snapshot_contains_expected_categories_themes_and_routes(world: SharedContext) {
     let snapshot = get_catalogue_snapshot(&world);
@@ -359,23 +259,6 @@ fn the_descriptor_snapshot_contains_expected_tags_badges_and_presets(world: Shar
 fn the_explore_snapshot_returns_empty_collections(world: SharedContext) {
     let snapshot = get_catalogue_snapshot(&world);
     assert_all_catalogue_collections_empty(&snapshot);
-}
-
-fn assert_query_error<T, E>(
-    world: &SharedContext,
-    get_result: impl FnOnce(&TestContext) -> &Option<Result<T, E>>,
-    is_query_variant: impl FnOnce(&Result<T, E>) -> bool,
-) where
-    T: std::fmt::Debug,
-    E: std::fmt::Debug,
-{
-    let ctx = world.lock().expect("context lock");
-    let result = get_result(&ctx).as_ref().expect("snapshot should be set");
-    assert!(
-        is_query_variant(result),
-        "expected Query error, got {:?}",
-        result
-    );
 }
 
 #[then("the catalogue read repository reports a query error")]

@@ -176,9 +176,10 @@ mod tests {
     use super::*;
     use crate::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
     use chrono::{DateTime, Utc};
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
-    fn fixture_catalogue_snapshot() -> ExploreCatalogueSnapshot {
+    #[fixture]
+    fn catalogue_snapshot() -> ExploreCatalogueSnapshot {
         ExploreCatalogueSnapshot {
             generated_at: DateTime::<Utc>::default(),
             categories: Vec::new(),
@@ -190,7 +191,8 @@ mod tests {
         }
     }
 
-    fn fixture_descriptor_snapshot() -> DescriptorSnapshot {
+    #[fixture]
+    fn descriptor_snapshot() -> DescriptorSnapshot {
         DescriptorSnapshot {
             generated_at: DateTime::<Utc>::default(),
             tags: Vec::new(),
@@ -202,19 +204,17 @@ mod tests {
     }
 
     #[rstest]
-    fn explore_response_maps_generated_at_to_rfc3339() {
-        let snapshot = fixture_catalogue_snapshot();
-        let response = ExploreCatalogueResponse::try_from(snapshot).unwrap();
-        assert!(
-            response.generated_at.contains('T'),
-            "generated_at should be an RFC 3339 timestamp"
-        );
+    fn explore_response_maps_generated_at_to_rfc3339(catalogue_snapshot: ExploreCatalogueSnapshot) {
+        let response = ExploreCatalogueResponse::try_from(catalogue_snapshot)
+            .expect("ExploreCatalogueSnapshot should convert to ExploreCatalogueResponse");
+        DateTime::parse_from_rfc3339(response.generated_at.as_str())
+            .expect("generated_at should be a valid RFC 3339 timestamp");
     }
 
     #[rstest]
-    fn explore_response_maps_empty_catalogue() {
-        let snapshot = fixture_catalogue_snapshot();
-        let response = ExploreCatalogueResponse::try_from(snapshot).unwrap();
+    fn explore_response_maps_empty_catalogue(catalogue_snapshot: ExploreCatalogueSnapshot) {
+        let response = ExploreCatalogueResponse::try_from(catalogue_snapshot)
+            .expect("ExploreCatalogueSnapshot should convert to ExploreCatalogueResponse");
         assert_eq!(response.categories, serde_json::json!([]));
         assert_eq!(response.routes, serde_json::json!([]));
         assert_eq!(response.themes, serde_json::json!([]));
@@ -224,19 +224,17 @@ mod tests {
     }
 
     #[rstest]
-    fn descriptors_response_maps_generated_at_to_rfc3339() {
-        let snapshot = fixture_descriptor_snapshot();
-        let response = DescriptorsResponse::try_from(snapshot).unwrap();
-        assert!(
-            response.generated_at.contains('T'),
-            "generated_at should be an RFC 3339 timestamp"
-        );
+    fn descriptors_response_maps_generated_at_to_rfc3339(descriptor_snapshot: DescriptorSnapshot) {
+        let response = DescriptorsResponse::try_from(descriptor_snapshot)
+            .expect("DescriptorSnapshot should convert to DescriptorsResponse");
+        DateTime::parse_from_rfc3339(response.generated_at.as_str())
+            .expect("generated_at should be a valid RFC 3339 timestamp");
     }
 
     #[rstest]
-    fn descriptors_response_maps_empty_descriptors() {
-        let snapshot = fixture_descriptor_snapshot();
-        let response = DescriptorsResponse::try_from(snapshot).unwrap();
+    fn descriptors_response_maps_empty_descriptors(descriptor_snapshot: DescriptorSnapshot) {
+        let response = DescriptorsResponse::try_from(descriptor_snapshot)
+            .expect("DescriptorSnapshot should convert to DescriptorsResponse");
         assert_eq!(response.tags, serde_json::json!([]));
         assert_eq!(response.badges, serde_json::json!([]));
         assert_eq!(response.safety_toggles, serde_json::json!([]));

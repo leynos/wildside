@@ -8,7 +8,8 @@ Status: COMPLETE
 
 ## Purpose / Big Picture
 
-The PWA needs two session-authenticated read endpoints that return pre-assembled
+The Progressive Web App (PWA) needs two session-authenticated read endpoints
+that return pre-assembled
 snapshots of catalogue and descriptor data. After this change, an authenticated
 client can:
 
@@ -38,7 +39,8 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
   and all domain types must remain stable except for the addition of
   `generated_at` to `DescriptorSnapshot`.
 - `make check-fmt`, `make lint`, and `make test` must all pass.
-- Tests must use `rstest` fixtures and `rstest-bdd` for behavioural scenarios.
+- Tests must use `rstest` fixtures and `rstest-bdd` for
+  behaviour-driven development (BDD) scenarios.
 - No new external crate dependencies.
 
 ## Tolerances (Exception Triggers)
@@ -109,7 +111,8 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
   construction in the `world()` function, reducing the file to 381 lines.
 
 - Observation: Catalogue BDD test fixtures used `.expect()` for embedded
-  PostgreSQL setup, causing 180-second CI timeouts when the cluster is
+  PostgreSQL setup, causing 180-second Continuous Integration (CI) timeouts
+  when the cluster is
   unavailable.
   Evidence: CI failure in `catalogue_descriptor_ingestion_bdd` with
   `postgresql_embedded::setup() failed: operation timed out after 180.0s`.

@@ -48,7 +48,7 @@ use backend::inbound::ws::state::WsState;
 use backend::outbound::metrics::PrometheusIdempotencyMetrics;
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
-    DieselCatalogueRepository, DieselDescriptorRepository, DieselRouteAnnotationRepository,
+    DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselRouteAnnotationRepository,
     DieselUserPreferencesRepository,
 };
 #[cfg(debug_assertions)]
@@ -124,32 +124,28 @@ fn build_route_submission_service(
     }
 }
 
-/// Build a command/query service pair backed by a Diesel repository when a pool
-/// is available, falling back to unit-struct fixtures otherwise.
-macro_rules! build_service_pair {
-    (
-        repo: $repo_type:ident,
-        service: $service_type:ident,
-        fixtures: ($fixture_cmd:ident, $fixture_query:ident),
-        traits: ($cmd_trait:ty, $query_trait:ty),
-        pool: $pool:expr
-    ) => {
-        match $pool {
-            Some(pool) => {
-                let repo = Arc::new($repo_type::new(pool.clone()));
-                let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
-                let service = Arc::new($service_type::new(repo, idempotency_repo));
-                (
-                    service.clone() as Arc<$cmd_trait>,
-                    service as Arc<$query_trait>,
-                )
-            }
-            None => (
-                Arc::new($fixture_cmd) as Arc<$cmd_trait>,
-                Arc::new($fixture_query) as Arc<$query_trait>,
-            ),
+/// Build a command/query service pair using real services when a pool is
+/// available, otherwise using fixture implementations.
+fn build_service_pair<S, Cmd, Query, MakeService, Cast>(
+    pool: &Option<DbPool>,
+    make_service: MakeService,
+    fixtures: (Arc<Cmd>, Arc<Query>),
+    cast: Cast,
+) -> (Arc<Cmd>, Arc<Query>)
+where
+    S: 'static,
+    Cmd: ?Sized + 'static,
+    Query: ?Sized + 'static,
+    MakeService: FnOnce(&DbPool) -> S,
+    Cast: FnOnce(Arc<S>) -> (Arc<Cmd>, Arc<Query>),
+{
+    match pool {
+        Some(pool) => {
+            let service = Arc::new(make_service(pool));
+            cast(service)
         }
-    };
+        None => fixtures,
+    }
 }
 
 fn build_user_preferences_services(
@@ -158,12 +154,23 @@ fn build_user_preferences_services(
     Arc<dyn UserPreferencesCommand>,
     Arc<dyn UserPreferencesQuery>,
 ) {
-    build_service_pair!(
-        repo: DieselUserPreferencesRepository,
-        service: UserPreferencesService,
-        fixtures: (FixtureUserPreferencesCommand, FixtureUserPreferencesQuery),
-        traits: (dyn UserPreferencesCommand, dyn UserPreferencesQuery),
-        pool: &config.db_pool
+    build_service_pair(
+        &config.db_pool,
+        |pool| {
+            let repo = Arc::new(DieselUserPreferencesRepository::new(pool.clone()));
+            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+            UserPreferencesService::new(repo, idempotency_repo)
+        },
+        (
+            Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
+            Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
+        ),
+        |service| {
+            (
+                service.clone() as Arc<dyn UserPreferencesCommand>,
+                service as Arc<dyn UserPreferencesQuery>,
+            )
+        },
     )
 }
 
@@ -188,12 +195,23 @@ fn build_route_annotations_services(
     Arc<dyn RouteAnnotationsCommand>,
     Arc<dyn RouteAnnotationsQuery>,
 ) {
-    build_service_pair!(
-        repo: DieselRouteAnnotationRepository,
-        service: RouteAnnotationsService,
-        fixtures: (FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery),
-        traits: (dyn RouteAnnotationsCommand, dyn RouteAnnotationsQuery),
-        pool: &config.db_pool
+    build_service_pair(
+        &config.db_pool,
+        |pool| {
+            let repo = Arc::new(DieselRouteAnnotationRepository::new(pool.clone()));
+            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+            RouteAnnotationsService::new(repo, idempotency_repo)
+        },
+        (
+            Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
+            Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
+        ),
+        |service| {
+            (
+                service.clone() as Arc<dyn RouteAnnotationsCommand>,
+                service as Arc<dyn RouteAnnotationsQuery>,
+            )
+        },
     )
 }
 

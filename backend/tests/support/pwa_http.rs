@@ -16,16 +16,19 @@ pub(crate) struct JsonRequest<'a> {
     pub(crate) idempotency_key: Option<&'a str>,
 }
 
-pub(crate) fn record_response(
-    world: &SharedWorld,
+struct CapturedResponse {
     status: u16,
+    cache_control: Option<String>,
     trace_id: Option<String>,
     body: Value,
-) {
+}
+
+fn record_response(world: &SharedWorld, captured: CapturedResponse) {
     let mut ctx = world.borrow_mut();
-    ctx.last_status = Some(status);
-    ctx.last_trace_id = trace_id;
-    ctx.last_body = Some(body);
+    ctx.last_status = Some(captured.status);
+    ctx.last_cache_control = captured.cache_control;
+    ctx.last_trace_id = captured.trace_id;
+    ctx.last_body = Some(captured.body);
 }
 
 pub(crate) fn session_cookie(world: &SharedWorld) -> String {
@@ -63,13 +66,14 @@ pub(crate) fn login_and_store_cookie(world: &SharedWorld) {
     let mut ctx = world.borrow_mut();
     ctx.last_status = Some(status);
     ctx.session_cookie = cookie_header;
+    ctx.last_cache_control = None;
     ctx.last_trace_id = None;
     ctx.last_body = None;
 }
 
 pub(crate) fn perform_json_request(world: &SharedWorld, spec: JsonRequest<'_>) {
     let cookie = spec.include_cookie.then(|| session_cookie(world));
-    let (status, trace_id, body) = with_world_async(world, |base_url| async move {
+    let captured = with_world_async(world, |base_url| async move {
         let mut request =
             Client::default().request(spec.method, format!("{base_url}{}", spec.path));
         if let Some(cookie) = cookie {
@@ -83,6 +87,11 @@ pub(crate) fn perform_json_request(world: &SharedWorld, spec: JsonRequest<'_>) {
             None => request.send().await.expect("request"),
         };
         let status = response.status().as_u16();
+        let cache_control = response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let trace_id = response
             .headers()
             .get(TRACE_ID_HEADER)
@@ -90,8 +99,13 @@ pub(crate) fn perform_json_request(world: &SharedWorld, spec: JsonRequest<'_>) {
             .map(|value| value.to_owned());
         let body = response.body().await.expect("body");
         let json: Value = serde_json::from_slice(&body).expect("json body");
-        (status, trace_id, json)
+        CapturedResponse {
+            status,
+            cache_control,
+            trace_id,
+            body: json,
+        }
     });
 
-    record_response(world, status, trace_id, body);
+    record_response(world, captured);
 }

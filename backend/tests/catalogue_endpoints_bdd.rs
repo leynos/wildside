@@ -29,6 +29,7 @@ mod pwa_http;
 mod ws_support;
 
 use backend::domain::ports::{CatalogueRepositoryError, DescriptorRepositoryError};
+use chrono::DateTime;
 use doubles::{CatalogueQueryResponse, DescriptorQueryResponse};
 use harness::WorldFixture;
 use rstest::fixture;
@@ -72,6 +73,28 @@ fn the_descriptor_repository_returns_a_connection_error(world: &WorldFixture) {
         .descriptors
         .set_response(DescriptorQueryResponse::Err(
             DescriptorRepositoryError::connection("test connection failure".to_string()),
+        ));
+}
+
+#[given("the catalogue repository returns a query error")]
+fn the_catalogue_repository_returns_a_query_error(world: &WorldFixture) {
+    world
+        .world()
+        .borrow()
+        .catalogue
+        .set_response(CatalogueQueryResponse::Err(
+            CatalogueRepositoryError::query("test query failure".to_string()),
+        ));
+}
+
+#[given("the descriptor repository returns a query error")]
+fn the_descriptor_repository_returns_a_query_error(world: &WorldFixture) {
+    world
+        .world()
+        .borrow()
+        .descriptors
+        .set_response(DescriptorQueryResponse::Err(
+            DescriptorRepositoryError::query("test query failure".to_string()),
         ));
 }
 
@@ -128,6 +151,26 @@ fn the_response_is_service_unavailable(world: &WorldFixture) {
     assert_eq!(ctx.last_status, Some(503));
 }
 
+#[then("the response is internal server error")]
+fn the_response_is_internal_server_error(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(500));
+    let body = ctx.last_body.as_ref().expect("response body");
+    assert_eq!(
+        body.get("code").and_then(Value::as_str),
+        Some("internal_error")
+    );
+    let message = body
+        .get("message")
+        .and_then(Value::as_str)
+        .expect("message field");
+    assert!(
+        message.contains("query failure"),
+        "message should mention query failure"
+    );
+}
+
 #[then("the response includes a generated_at timestamp")]
 fn the_response_includes_a_generated_at_timestamp(world: &WorldFixture) {
     let ctx = world.world();
@@ -137,9 +180,17 @@ fn the_response_includes_a_generated_at_timestamp(world: &WorldFixture) {
         .get("generatedAt")
         .and_then(Value::as_str)
         .expect("generatedAt field");
-    assert!(
-        generated_at.contains('T'),
-        "generatedAt should be an RFC 3339 timestamp"
+    DateTime::parse_from_rfc3339(generated_at)
+        .expect("generatedAt should be a valid RFC 3339 timestamp");
+}
+
+#[then("the response includes the expected cache-control header")]
+fn the_response_includes_the_expected_cache_control_header(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(
+        ctx.last_cache_control.as_deref(),
+        Some("private, no-cache, must-revalidate")
     );
 }
 

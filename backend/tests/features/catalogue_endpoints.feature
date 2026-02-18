@@ -7,6 +7,7 @@ Feature: Catalogue read endpoints
     And the client has an authenticated session
     When the client requests the explore catalogue
     Then the response is ok
+    And the response includes the expected cache-control header
     And the response includes a generated_at timestamp
     And the explore response includes empty arrays for all collections
 
@@ -15,6 +16,7 @@ Feature: Catalogue read endpoints
     And the client has an authenticated session
     When the client requests the descriptors
     Then the response is ok
+    And the response includes the expected cache-control header
     And the response includes a generated_at timestamp
     And the descriptors response includes empty arrays for all registries
 
@@ -41,3 +43,17 @@ Feature: Catalogue read endpoints
     And the descriptor repository returns a connection error
     When the client requests the descriptors
     Then the response is service unavailable
+
+  Scenario: Explore catalogue surfaces query error as 500
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the catalogue repository returns a query error
+    When the client requests the explore catalogue
+    Then the response is internal server error
+
+  Scenario: Descriptors surfaces query error as 500
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the descriptor repository returns a query error
+    When the client requests the descriptors
+    Then the response is internal server error
