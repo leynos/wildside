@@ -33,9 +33,8 @@ use crate::doubles::{
 };
 use backend::Trace;
 use backend::domain::ports::{
-    DeleteNoteResponse, DescriptorSnapshot, ExploreCatalogueSnapshot,
-    FixtureRouteSubmissionService, UpdatePreferencesResponse, UpdateProgressResponse,
-    UpsertNoteResponse,
+    DeleteNoteResponse, FixtureRouteSubmissionService, UpdatePreferencesResponse,
+    UpdateProgressResponse, UpsertNoteResponse, empty_catalogue_and_descriptor_snapshots,
 };
 use backend::domain::{
     DisplayName, InterestThemeId, RouteAnnotations, RouteNote, RouteProgress, UnitSystem, User,
@@ -299,12 +298,11 @@ fn create_route_annotations_doubles(
 }
 
 fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
-    let catalogue = RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(
-        ExploreCatalogueSnapshot::empty(),
-    ));
-    let descriptors = RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(
-        DescriptorSnapshot::empty(),
-    ));
+    let (catalogue_snapshot, descriptor_snapshot) = empty_catalogue_and_descriptor_snapshots();
+    let catalogue =
+        RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(catalogue_snapshot));
+    let descriptors =
+        RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(descriptor_snapshot));
 
     (catalogue, descriptors)
 }

@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 use crate::domain::Error;
 use crate::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
 use crate::inbound::http::ApiResult;
-use crate::inbound::http::cache_control::PRIVATE_NO_CACHE_MUST_REVALIDATE;
+use crate::inbound::http::cache_control::private_no_cache_header;
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
@@ -134,7 +134,7 @@ pub async fn get_explore_catalogue(
     let snapshot = state.catalogue.explore_snapshot().await?;
     let response = ExploreCatalogueResponse::try_from(snapshot)?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", PRIVATE_NO_CACHE_MUST_REVALIDATE))
+        .insert_header(private_no_cache_header())
         .json(response))
 }
 
@@ -167,7 +167,7 @@ pub async fn get_descriptors(
     let snapshot = state.descriptors.descriptor_snapshot().await?;
     let response = DescriptorsResponse::try_from(snapshot)?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", PRIVATE_NO_CACHE_MUST_REVALIDATE))
+        .insert_header(private_no_cache_header())
         .json(response))
 }
 
@@ -175,18 +175,19 @@ pub async fn get_descriptors(
 mod tests {
     //! Regression coverage for this module.
     use super::*;
+    use crate::domain::ports::empty_catalogue_and_descriptor_snapshots;
     use crate::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
     use chrono::DateTime;
     use rstest::{fixture, rstest};
 
     #[fixture]
     fn catalogue_snapshot() -> ExploreCatalogueSnapshot {
-        ExploreCatalogueSnapshot::empty()
+        empty_catalogue_and_descriptor_snapshots().0
     }
 
     #[fixture]
     fn descriptor_snapshot() -> DescriptorSnapshot {
-        DescriptorSnapshot::empty()
+        empty_catalogue_and_descriptor_snapshots().1
     }
 
     #[rstest]

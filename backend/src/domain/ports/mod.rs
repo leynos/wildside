@@ -122,5 +122,15 @@ pub use user_profile_query::{FixtureUserProfileQuery, UserProfileQuery};
 pub use user_repository::{UserPersistenceError, UserRepository};
 pub use users_query::{FixtureUsersQuery, UsersQuery};
 
+/// Build empty catalogue and descriptor snapshots for fixture-oriented code
+/// paths that need both payloads.
+pub fn empty_catalogue_and_descriptor_snapshots() -> (ExploreCatalogueSnapshot, DescriptorSnapshot)
+{
+    (
+        ExploreCatalogueSnapshot::empty(),
+        DescriptorSnapshot::empty(),
+    )
+}
+
 #[cfg(test)]
 mod tests;
