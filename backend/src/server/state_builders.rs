@@ -24,6 +24,58 @@ use super::ServerConfig;
 
 /// Build a command/query service pair using real services when a pool is
 /// available, otherwise using fixture implementations.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::sync::Arc;
+///
+/// // Dummy builder for examples; in real code this comes from ServerConfig.
+/// fn example_pool() -> DbPool { todo!("provide a test DbPool") }
+///
+/// #[derive(Debug)]
+/// struct DemoService(&'static str);
+///
+/// // `MakeService` closure: convert a `&DbPool` into a concrete service.
+/// let make_service = |_pool: &DbPool| DemoService("db-backed");
+///
+/// // Fixtures used when `pool: &Option<DbPool>` is `None`.
+/// let fixtures = (
+///     Arc::new(String::from("fixture-cmd")),
+///     Arc::new(String::from("fixture-query")),
+/// );
+///
+/// // `cast` closure maps `Arc<DemoService>` into `(Arc<Cmd>, Arc<Query>)`.
+/// let cast = |service: Arc<DemoService>| {
+///     (
+///         Arc::new(format!("{}-cmd", service.0)),
+///         Arc::new(format!("{}-query", service.0)),
+///     )
+/// };
+///
+/// // Branch 1: `Some(pool)` uses `make_service` and `cast`.
+/// let pool = example_pool();
+/// let some_pool: Option<DbPool> = Some(pool);
+/// let from_db = build_service_pair(&some_pool, make_service, fixtures.clone(), cast);
+/// assert_eq!(from_db.0.as_str(), "db-backed-cmd");
+/// assert_eq!(from_db.1.as_str(), "db-backed-query");
+///
+/// // Branch 2: `None` returns the fixture tuple untouched.
+/// let none_pool: Option<DbPool> = None;
+/// let from_fixtures = build_service_pair(
+///     &none_pool,
+///     |_pool: &DbPool| DemoService("unused"),
+///     fixtures.clone(),
+///     |service: Arc<DemoService>| {
+///         (
+///             Arc::new(format!("{}-cmd", service.0)),
+///             Arc::new(format!("{}-query", service.0)),
+///         )
+///     },
+/// );
+/// assert_eq!(from_fixtures.0.as_str(), "fixture-cmd");
+/// assert_eq!(from_fixtures.1.as_str(), "fixture-query");
+/// ```
 fn build_service_pair<S, Cmd, Query, MakeService, Cast>(
     pool: &Option<DbPool>,
     make_service: MakeService,
