@@ -169,6 +169,23 @@ so persistence details stay confined to outbound adapters.
 - [ ] 3.4.3. Configure enrichment provenance persistence (source URL,
   timestamp, and bounding box) and expose it via admin reporting endpoints.
 
+### 3.5. User state port persistence parity
+
+- [ ] 3.5.1. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
+  server state construction with DB-backed adapters that source data from the
+  existing persistence layer (including `DieselUserRepository`), while
+  preserving current session and error-envelope behaviour.
+- [ ] 3.5.2. Replace fixture-backed `UserProfileQuery` and
+  `UserInterestsCommand` wiring with DB-backed adapters that read and update
+  persisted user state, including revision-safe interest updates where
+  applicable.
+- [ ] 3.5.3. Update `backend/src/server/state_builders.rs` so
+  `login/users/profile/interests` select DB-backed implementations when
+  `config.db_pool` is present and retain fixture fallbacks when it is absent.
+- [ ] 3.5.4. Add behavioural and repository-level tests covering the new
+  adapter wiring paths, including DB-present and fixture-fallback startup
+  modes.
+
 ## 4. Pagination infrastructure
 
 Pagination relies on domain repositories exposing ordered queries via ports;
