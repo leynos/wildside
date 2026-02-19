@@ -171,20 +171,29 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.5. User state port persistence parity
 
-- [ ] 3.5.1. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
-  server state construction with DB-backed adapters that source data from the
-  existing persistence layer (including `DieselUserRepository`), while
-  preserving current session and error-envelope behaviour.
-- [ ] 3.5.2. Replace fixture-backed `UserProfileQuery` and
-  `UserInterestsCommand` wiring with DB-backed adapters that read and update
-  persisted user state, including revision-safe interest updates where
-  applicable.
-- [ ] 3.5.3. Update `backend/src/server/state_builders.rs` so
+- [ ] 3.5.1. Audit current schema coverage for login, users, profile, and
+  interests persistence, then document whether new migrations are required for
+  profile and interests storage, revision tracking, and update conflict
+  handling.
+- [ ] 3.5.2. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
+  server state construction with explicit DB-backed concrete types, either by
+  extending `DieselUserRepository` to satisfy those ports directly or by
+  introducing adapter wrappers around it, while preserving current session and
+  error-envelope behaviour.
+- [ ] 3.5.3. Replace fixture-backed `UserProfileQuery` and
+  `UserInterestsCommand` wiring with explicit DB-backed concrete types, and
+  document whether this uses repository extensions (for example
+  `DieselUserRepository`) or dedicated adapters (for example
+  `DieselProfileRepository` and `DieselInterestsRepository`).
+- [ ] 3.5.4. Define and implement the revision-safe interests update strategy
+  (for example optimistic concurrency via expected revision checks), including
+  the persistence contract and error mapping for stale-write conflicts.
+- [ ] 3.5.5. Update `backend/src/server/state_builders.rs` so
   `login/users/profile/interests` select DB-backed implementations when
   `config.db_pool` is present and retain fixture fallbacks when it is absent.
-- [ ] 3.5.4. Add behavioural and repository-level tests covering the new
+- [ ] 3.5.6. Add behavioural and repository-level tests covering the new
   adapter wiring paths, including DB-present and fixture-fallback startup
-  modes.
+  modes, plus revision-conflict cases for interests updates.
 
 ## 4. Pagination infrastructure
 
