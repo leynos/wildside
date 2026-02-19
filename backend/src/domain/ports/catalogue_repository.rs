@@ -12,6 +12,8 @@ use crate::domain::{
     CommunityPick, RouteCategory, RouteCollection, RouteSummary, Theme, TrendingRouteHighlight,
 };
 
+use crate::domain::Error;
+
 use super::define_port_error;
 
 define_port_error! {
@@ -40,6 +42,21 @@ pub struct ExploreCatalogueSnapshot {
     pub collections: Vec<RouteCollection>,
     pub trending: Vec<TrendingRouteHighlight>,
     pub community_pick: Option<CommunityPick>,
+}
+
+impl ExploreCatalogueSnapshot {
+    /// Construct an empty snapshot for fixture and fallback paths.
+    pub fn empty() -> Self {
+        Self {
+            generated_at: DateTime::<Utc>::default(),
+            categories: Vec::new(),
+            routes: Vec::new(),
+            themes: Vec::new(),
+            collections: Vec::new(),
+            trending: Vec::new(),
+            community_pick: None,
+        }
+    }
 }
 
 /// Port for reading explore catalogue snapshots.
@@ -73,14 +90,15 @@ pub struct FixtureCatalogueRepository;
 #[async_trait]
 impl CatalogueRepository for FixtureCatalogueRepository {
     async fn explore_snapshot(&self) -> Result<ExploreCatalogueSnapshot, CatalogueRepositoryError> {
-        Ok(ExploreCatalogueSnapshot {
-            generated_at: DateTime::<Utc>::default(),
-            categories: Vec::new(),
-            routes: Vec::new(),
-            themes: Vec::new(),
-            collections: Vec::new(),
-            trending: Vec::new(),
-            community_pick: None,
-        })
+        Ok(ExploreCatalogueSnapshot::empty())
+    }
+}
+
+impl From<CatalogueRepositoryError> for Error {
+    fn from(err: CatalogueRepositoryError) -> Self {
+        match err {
+            CatalogueRepositoryError::Connection { message } => Error::service_unavailable(message),
+            CatalogueRepositoryError::Query { message } => Error::internal(message),
+        }
     }
 }

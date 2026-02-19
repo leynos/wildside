@@ -1,6 +1,7 @@
 //! Test doubles for driving ports used by the adapter guardrails suite.
 
 mod doubles_annotations;
+mod doubles_catalogue;
 mod doubles_preferences;
 mod doubles_users;
 mod doubles_ws;
@@ -10,6 +11,10 @@ mod recording_double_macro;
 pub(crate) use doubles_annotations::{
     DeleteNoteCommandResponse, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
     RouteAnnotationsQueryResponse, UpdateProgressCommandResponse, UpsertNoteCommandResponse,
+};
+pub(crate) use doubles_catalogue::{
+    CatalogueQueryResponse, DescriptorQueryResponse, RecordingCatalogueRepository,
+    RecordingDescriptorRepository,
 };
 pub(crate) use doubles_preferences::{
     RecordingUserPreferencesCommand, RecordingUserPreferencesQuery, UserPreferencesCommandResponse,

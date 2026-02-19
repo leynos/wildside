@@ -145,7 +145,7 @@ so persistence details stay confined to outbound adapters.
   localization maps and semantic icon identifiers.
 - [x] 3.2.2. Add `CatalogueRepository` and `DescriptorRepository` ports plus
   persistence adapters with contract tests for localization payloads.
-- [ ] 3.2.3. Implement `GET /api/v1/catalogue/explore` and
+- [x] 3.2.3. Implement `GET /api/v1/catalogue/explore` and
   `GET /api/v1/catalogue/descriptors` endpoints backed by the read models, with
   cache headers and snapshot `generated_at` metadata.
 
@@ -168,6 +168,32 @@ so persistence details stay confined to outbound adapters.
   circuit breaking, and metrics wired to the enrichment job counters.
 - [ ] 3.4.3. Configure enrichment provenance persistence (source URL,
   timestamp, and bounding box) and expose it via admin reporting endpoints.
+
+### 3.5. User state port persistence parity
+
+- [ ] 3.5.1. Audit current schema coverage for login, users, profile, and
+  interests persistence, then document whether new migrations are required for
+  profile and interests storage, revision tracking, and update conflict
+  handling.
+- [ ] 3.5.2. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
+  server state construction with explicit DB-backed concrete types, either by
+  extending `DieselUserRepository` to satisfy those ports directly or by
+  introducing adapter wrappers around it, while preserving current session and
+  error-envelope behaviour.
+- [ ] 3.5.3. Replace fixture-backed `UserProfileQuery` and
+  `UserInterestsCommand` wiring with explicit DB-backed concrete types, and
+  document whether this uses repository extensions (for example
+  `DieselUserRepository`) or dedicated adapters (for example
+  `DieselProfileRepository` and `DieselInterestsRepository`).
+- [ ] 3.5.4. Define and implement the revision-safe interests update strategy
+  (for example optimistic concurrency via expected revision checks), including
+  the persistence contract and error mapping for stale-write conflicts.
+- [ ] 3.5.5. Update `backend/src/server/state_builders.rs` so
+  `login/users/profile/interests` select DB-backed implementations when
+  `config.db_pool` is present and retain fixture fallbacks when it is absent.
+- [ ] 3.5.6. Add behavioural and repository-level tests covering the new
+  adapter wiring paths, including DB-present and fixture-fallback startup
+  modes, plus revision-conflict cases for interests updates.
 
 ## 4. Pagination infrastructure
 

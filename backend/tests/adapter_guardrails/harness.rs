@@ -22,8 +22,9 @@ use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 
 use crate::doubles::{
-    DeleteNoteCommandResponse, LoginResponse, QueueUserOnboarding, RecordingLoginService,
-    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
+    CatalogueQueryResponse, DeleteNoteCommandResponse, DescriptorQueryResponse, LoginResponse,
+    QueueUserOnboarding, RecordingCatalogueRepository, RecordingDescriptorRepository,
+    RecordingLoginService, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
     RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
     RecordingUserProfileQuery, RecordingUsersQuery, RouteAnnotationsQueryResponse,
     UpdateProgressCommandResponse, UpsertNoteCommandResponse, UserInterestsResponse,
@@ -33,7 +34,7 @@ use crate::doubles::{
 use backend::Trace;
 use backend::domain::ports::{
     DeleteNoteResponse, FixtureRouteSubmissionService, UpdatePreferencesResponse,
-    UpdateProgressResponse, UpsertNoteResponse,
+    UpdateProgressResponse, UpsertNoteResponse, empty_catalogue_and_descriptor_snapshots,
 };
 use backend::domain::{
     DisplayName, InterestThemeId, RouteAnnotations, RouteNote, RouteProgress, UnitSystem, User,
@@ -42,6 +43,10 @@ use backend::domain::{
 use backend::inbound::http::annotations::{
     get_annotations as get_annotations_handler, update_progress as update_progress_handler,
     upsert_note as upsert_note_handler,
+};
+use backend::inbound::http::catalogue::{
+    get_descriptors as get_descriptors_handler,
+    get_explore_catalogue as get_explore_catalogue_handler,
 };
 use backend::inbound::http::preferences::{
     get_preferences as get_preferences_handler, update_preferences as update_preferences_handler,
@@ -68,9 +73,12 @@ pub(crate) struct AdapterWorld {
     pub(crate) preferences_query: RecordingUserPreferencesQuery,
     pub(crate) route_annotations: RecordingRouteAnnotationsCommand,
     pub(crate) route_annotations_query: RecordingRouteAnnotationsQuery,
+    pub(crate) catalogue: RecordingCatalogueRepository,
+    pub(crate) descriptors: RecordingDescriptorRepository,
     pub(crate) onboarding: QueueUserOnboarding,
     pub(crate) last_status: Option<u16>,
     pub(crate) last_body: Option<Value>,
+    pub(crate) last_cache_control: Option<String>,
     pub(crate) last_trace_id: Option<String>,
     pub(crate) session_cookie: Option<String>,
     pub(crate) last_ws_value: Option<Value>,
@@ -149,7 +157,9 @@ async fn spawn_adapter_server(
             .service(update_preferences_handler)
             .service(get_annotations_handler)
             .service(upsert_note_handler)
-            .service(update_progress_handler);
+            .service(update_progress_handler)
+            .service(get_explore_catalogue_handler)
+            .service(get_descriptors_handler);
 
         App::new()
             .app_data(http_data.clone())
@@ -287,33 +297,14 @@ fn create_route_annotations_doubles(
     (route_annotations, route_annotations_query)
 }
 
-struct HttpWsStateInputs<'a> {
-    login: &'a RecordingLoginService,
-    users: &'a RecordingUsersQuery,
-    profile: &'a RecordingUserProfileQuery,
-    interests: &'a RecordingUserInterestsCommand,
-    preferences: &'a RecordingUserPreferencesCommand,
-    preferences_query: &'a RecordingUserPreferencesQuery,
-    route_annotations: &'a RecordingRouteAnnotationsCommand,
-    route_annotations_query: &'a RecordingRouteAnnotationsQuery,
-    onboarding: &'a QueueUserOnboarding,
-}
+fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
+    let (catalogue_snapshot, descriptor_snapshot) = empty_catalogue_and_descriptor_snapshots();
+    let catalogue =
+        RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(catalogue_snapshot));
+    let descriptors =
+        RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(descriptor_snapshot));
 
-fn create_http_and_ws_state(inputs: HttpWsStateInputs<'_>) -> (HttpState, WsState) {
-    let http_state = HttpState::new(HttpStatePorts {
-        login: Arc::new(inputs.login.clone()),
-        users: Arc::new(inputs.users.clone()),
-        profile: Arc::new(inputs.profile.clone()),
-        interests: Arc::new(inputs.interests.clone()),
-        preferences: Arc::new(inputs.preferences.clone()),
-        preferences_query: Arc::new(inputs.preferences_query.clone()),
-        route_annotations: Arc::new(inputs.route_annotations.clone()),
-        route_annotations_query: Arc::new(inputs.route_annotations_query.clone()),
-        route_submission: Arc::new(FixtureRouteSubmissionService),
-    });
-    let ws_state = crate::ws_support::ws_state(inputs.onboarding.clone());
-
-    (http_state, ws_state)
+    (catalogue, descriptors)
 }
 
 #[fixture]
@@ -324,18 +315,22 @@ pub(crate) fn world() -> WorldFixture {
     let interests = create_interests_double(&user_id);
     let (preferences, preferences_query) = create_preferences_doubles(&user_id);
     let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
+    let (catalogue, descriptors) = create_catalogue_doubles();
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let (http_state, ws_state) = create_http_and_ws_state(HttpWsStateInputs {
-        login: &login,
-        users: &users,
-        profile: &profile,
-        interests: &interests,
-        preferences: &preferences,
-        preferences_query: &preferences_query,
-        route_annotations: &route_annotations,
-        route_annotations_query: &route_annotations_query,
-        onboarding: &onboarding,
+    let http_state = HttpState::new(HttpStatePorts {
+        login: Arc::new(login.clone()),
+        users: Arc::new(users.clone()),
+        profile: Arc::new(profile.clone()),
+        interests: Arc::new(interests.clone()),
+        preferences: Arc::new(preferences.clone()),
+        preferences_query: Arc::new(preferences_query.clone()),
+        route_annotations: Arc::new(route_annotations.clone()),
+        route_annotations_query: Arc::new(route_annotations_query.clone()),
+        route_submission: Arc::new(FixtureRouteSubmissionService),
+        catalogue: Arc::new(catalogue.clone()),
+        descriptors: Arc::new(descriptors.clone()),
     });
+    let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
         .block_on(&runtime, async {
@@ -356,9 +351,12 @@ pub(crate) fn world() -> WorldFixture {
         preferences_query,
         route_annotations,
         route_annotations_query,
+        catalogue,
+        descriptors,
         onboarding,
         last_status: None,
         last_body: None,
+        last_cache_control: None,
         last_trace_id: None,
         session_cookie: None,
         last_ws_value: None,

@@ -161,6 +161,7 @@ flowchart TB
         HttpSession["http/session.rs"]
         HttpError["http/error.rs"]
         HttpHealth["http/health.rs"]
+        HttpCatalogue["http/catalogue.rs"]
 
         Ws["ws"]
         WsSession["ws/session.rs"]
@@ -171,6 +172,7 @@ flowchart TB
     Http --> HttpSession
     Http --> HttpError
     Http --> HttpHealth
+    Http --> HttpCatalogue
 
     Ws --> WsSession
     Ws --> WsMessages
@@ -327,6 +329,13 @@ Module boundaries are enforced by a repo-local lint that runs during
   hyphen-joined seed names for the seed registry CLI, replacing `lexis` to
   avoid licence concerns. The CLI writes registry updates atomically via a
   temporary file and rename to prevent partial writes.
+- **2026-02-15:** `GET /api/v1/catalogue/explore` and
+  `GET /api/v1/catalogue/descriptors` are session-authenticated read endpoints
+  consuming `CatalogueRepository` and `DescriptorRepository` ports. Responses
+  include `Cache-Control: private, no-cache, must-revalidate` and a top-level
+  `generatedAt` RFC 3339 timestamp so clients can detect staleness. Response
+  DTOs wrap domain snapshot types as opaque `serde_json::Value` fields to keep
+  `ToSchema` derives in the inbound layer.
 
 ### Web API and WebSocket Layer (Actix Web)
 
@@ -436,8 +445,8 @@ stability.
 | `PUT`    | `/api/v1/users/me/interests`            | Update the user’s selected interest themes.         | Session cookie |
 | `PUT`    | `/api/v1/users/me/preferences`          | Update interests, safety toggles, and unit system.  | Session cookie |
 | `GET`    | `/api/v1/interest-themes`               | List all available interest themes.                 | Optional       |
-| `GET`    | `/api/v1/catalogue/explore`             | Fetch the Explore catalogue snapshot.               | Optional       |
-| `GET`    | `/api/v1/catalogue/descriptors`         | Fetch descriptor registries (tags, badges, safety). | Optional       |
+| `GET`    | `/api/v1/catalogue/explore`             | Fetch the Explore catalogue snapshot.               | Session cookie |
+| `GET`    | `/api/v1/catalogue/descriptors`         | Fetch descriptor registries (tags, badges, safety). | Session cookie |
 | `POST`   | `/api/v1/routes`                        | Request generation of a personalised walking route. | Session cookie |
 | `GET`    | `/api/v1/routes/{request_id}`           | Poll for completion or fetch a generated route.     | Session cookie |
 | `GET`    | `/api/v1/routes/{route_id}`             | Fetch a generated route plan by ID.                 | Session cookie |

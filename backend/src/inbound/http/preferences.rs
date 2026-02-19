@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::domain::ports::UpdatePreferencesRequest;
 use crate::domain::{Error, UnitSystem, UserPreferences};
 use crate::inbound::http::ApiResult;
+use crate::inbound::http::cache_control::private_no_cache_header;
 use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
@@ -135,7 +136,7 @@ pub async fn get_preferences(
     let user_id = session.require_user_id()?;
     let preferences = state.preferences_query.fetch_preferences(&user_id).await?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", "private, must-revalidate, no-cache"))
+        .insert_header(private_no_cache_header())
         .json(UserPreferencesResponse::from(preferences)))
 }
 
