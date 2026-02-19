@@ -88,11 +88,17 @@ pub(crate) fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogue
     );
 }
 
-pub(crate) fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
-    world
-        .lock()
-        .expect("context lock")
-        .last_catalogue_snapshot
+/// Generic helper to extract and unwrap a snapshot from the shared context.
+fn get_snapshot<T, E>(
+    world: &SharedContext,
+    field_accessor: impl FnOnce(&TestContext) -> &Option<Result<T, E>>,
+) -> T
+where
+    T: Clone,
+    E: std::fmt::Debug,
+{
+    let ctx = world.lock().expect("context lock");
+    field_accessor(&ctx)
         .as_ref()
         .expect("snapshot should be set")
         .as_ref()
@@ -100,16 +106,12 @@ pub(crate) fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueS
         .clone()
 }
 
+pub(crate) fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
+    get_snapshot(world, |ctx| &ctx.last_catalogue_snapshot)
+}
+
 pub(crate) fn get_descriptor_snapshot(world: &SharedContext) -> DescriptorSnapshot {
-    world
-        .lock()
-        .expect("context lock")
-        .last_descriptor_snapshot
-        .as_ref()
-        .expect("snapshot should be set")
-        .as_ref()
-        .expect("snapshot should be Ok")
-        .clone()
+    get_snapshot(world, |ctx| &ctx.last_descriptor_snapshot)
 }
 
 pub(crate) fn assert_query_error<T, E>(
