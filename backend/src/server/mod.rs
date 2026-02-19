@@ -163,10 +163,10 @@ where
     make_service(repo, idempotency_repo)
 }
 
-/// Shared configuration for building command/query service pairs.
+/// Type alias for a function pointer that takes `Arc<S>` and returns `(Arc<Cmd>, Arc<Query>)` for casting/constructing command and query services.
 type ServiceCast<S, Cmd, Query> = fn(Arc<S>) -> (Arc<Cmd>, Arc<Query>);
 
-/// Shared configuration for building command/query service pairs.
+/// Struct holding prepared `fixtures: (Arc<Cmd>, Arc<Query>)` and the cast function `cast: ServiceCast<S, Cmd, Query>` for command/query service pairs.
 struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
     fixtures: (Arc<Cmd>, Arc<Query>),
     cast: ServiceCast<S, Cmd, Query>,
@@ -194,6 +194,9 @@ where
     )
 }
 
+/// Construct and return `(CatalogueRepository, DescriptorRepository)` by selecting
+/// `DieselCatalogueRepository`/`DieselDescriptorRepository` when `config.db_pool` is
+/// present, otherwise selecting `FixtureCatalogueRepository`/`FixtureDescriptorRepository`.
 fn build_catalogue_services(
     config: &ServerConfig,
 ) -> (Arc<dyn CatalogueRepository>, Arc<dyn DescriptorRepository>) {
