@@ -19,6 +19,14 @@ use crate::inbound::http::state::HttpState;
 
 /// Convert a serializable value to `serde_json::Value`, mapping errors to
 /// `domain::Error::internal`.
+///
+/// # Examples
+///
+/// ```ignore
+/// let value = vec!["coastal", "scenic"];
+/// let json = to_json_value(value).expect("serializable value");
+/// assert_eq!(json, serde_json::json!(["coastal", "scenic"]));
+/// ```
 fn to_json_value<T: Serialize>(value: T) -> Result<serde_json::Value, Error> {
     serde_json::to_value(value).map_err(|err| Error::internal(err.to_string()))
 }
@@ -109,7 +117,7 @@ impl TryFrom<DescriptorSnapshot> for DescriptorsResponse {
 #[utoipa::path(
     get,
     path = "/api/v1/catalogue/explore",
-    description = "Return the explore catalogue snapshot for the PWA landing page.",
+    description = "Return the explore catalogue snapshot for the Progressive Web App (PWA) landing page. Example request: GET /api/v1/catalogue/explore",
     responses(
         (
             status = 200,
@@ -142,7 +150,7 @@ pub async fn get_explore_catalogue(
 #[utoipa::path(
     get,
     path = "/api/v1/catalogue/descriptors",
-    description = "Return all descriptor registries for the PWA.",
+    description = "Return all descriptor registries for the Progressive Web App (PWA). Example request: GET /api/v1/catalogue/descriptors",
     responses(
         (
             status = 200,

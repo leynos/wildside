@@ -205,14 +205,51 @@ where
         .clone()
 }
 
+/// Extract the latest catalogue snapshot from the shared test context.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let world: SharedContext = todo!("populate SharedContext in test setup");
+/// let snapshot: ExploreCatalogueSnapshot = get_catalogue_snapshot(&world);
+/// // Panics if the snapshot field is unset or contains an error.
+/// let _ = snapshot;
+/// ```
 pub(crate) fn get_catalogue_snapshot(world: &SharedContext) -> ExploreCatalogueSnapshot {
     get_snapshot(world, |ctx| &ctx.last_catalogue_snapshot)
 }
 
+/// Extract the latest descriptor snapshot from the shared test context.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::DescriptorSnapshot;
+///
+/// let world: SharedContext = todo!("populate SharedContext in test setup");
+/// let snapshot: DescriptorSnapshot = get_descriptor_snapshot(&world);
+/// // Panics if the snapshot field is unset or contains an error.
+/// let _ = snapshot;
+/// ```
 pub(crate) fn get_descriptor_snapshot(world: &SharedContext) -> DescriptorSnapshot {
     get_snapshot(world, |ctx| &ctx.last_descriptor_snapshot)
 }
 
+/// Assert that a stored result matches an expected query-error variant.
+///
+/// # Examples
+///
+/// ```no_run
+/// let world: SharedContext = todo!("populate SharedContext in test setup");
+/// assert_query_error(
+///     &world,
+///     |ctx| &ctx.last_catalogue_snapshot,
+///     |result| result.is_err(),
+/// );
+/// // Panics when the result does not match the predicate.
+/// ```
 pub(crate) fn assert_query_error<T, E>(
     world: &SharedContext,
     get_result: impl FnOnce(&TestContext) -> &Option<Result<T, E>>,

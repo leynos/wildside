@@ -124,6 +124,16 @@ pub use users_query::{FixtureUsersQuery, UsersQuery};
 
 /// Build empty catalogue and descriptor snapshots for fixture-oriented code
 /// paths that need both payloads.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::empty_catalogue_and_descriptor_snapshots;
+///
+/// let (catalogue, descriptors) = empty_catalogue_and_descriptor_snapshots();
+/// assert!(catalogue.categories.is_empty());
+/// assert!(descriptors.tags.is_empty());
+/// ```
 pub fn empty_catalogue_and_descriptor_snapshots() -> (ExploreCatalogueSnapshot, DescriptorSnapshot)
 {
     (
