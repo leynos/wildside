@@ -5,6 +5,17 @@ use backend::domain::ports::{DescriptorSnapshot, ExploreCatalogueSnapshot};
 use crate::builders::SAFETY_TOGGLE_ID;
 use crate::{SharedContext, TestContext};
 
+/// Assert that the snapshot contains the expected category payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects one seeded category.
+/// assert_categories(&snapshot);
+/// ```
 pub(crate) fn assert_categories(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.categories.len(), 1, "expected 1 category");
     assert_eq!(snapshot.categories[0].slug(), "scenic");
@@ -18,28 +29,83 @@ pub(crate) fn assert_categories(snapshot: &ExploreCatalogueSnapshot) {
     );
 }
 
+/// Assert that the snapshot contains the expected theme payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects one seeded theme.
+/// assert_themes(&snapshot);
+/// ```
 pub(crate) fn assert_themes(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.themes.len(), 1, "expected 1 theme");
     assert_eq!(snapshot.themes[0].slug(), "coastal");
     assert_eq!(snapshot.themes[0].walk_count(), 23);
 }
 
+/// Assert that the snapshot contains the expected collection payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects one seeded collection.
+/// assert_collections(&snapshot);
+/// ```
 pub(crate) fn assert_collections(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.collections.len(), 1, "expected 1 collection");
     assert_eq!(snapshot.collections[0].slug(), "weekend-favourites");
 }
 
+/// Assert that the snapshot contains the expected route payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects one seeded route summary.
+/// assert_routes(&snapshot);
+/// ```
 pub(crate) fn assert_routes(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.routes.len(), 1, "expected 1 route summary");
     assert_eq!(snapshot.routes[0].slug(), Some("coastal-loop"));
     assert_eq!(snapshot.routes[0].distance_metres(), 4_500);
 }
 
+/// Assert that the snapshot contains the expected trending payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects one seeded trending item.
+/// assert_trending(&snapshot);
+/// ```
 pub(crate) fn assert_trending(snapshot: &ExploreCatalogueSnapshot) {
     assert_eq!(snapshot.trending.len(), 1, "expected 1 trending highlight");
     assert_eq!(snapshot.trending[0].trend_delta(), "+12%");
 }
 
+/// Assert that the snapshot contains the expected community pick payload.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Panics because the helper expects a seeded community pick.
+/// assert_community_pick(&snapshot);
+/// ```
 pub(crate) fn assert_community_pick(snapshot: &ExploreCatalogueSnapshot) {
     let pick = snapshot
         .community_pick
@@ -58,6 +124,17 @@ pub(crate) fn assert_community_pick(snapshot: &ExploreCatalogueSnapshot) {
     );
 }
 
+/// Assert that all descriptor collections contain the expected seeded values.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::DescriptorSnapshot;
+///
+/// let snapshot = DescriptorSnapshot::empty();
+/// // Panics because the helper expects seeded descriptor rows.
+/// assert_descriptor_contents(&snapshot);
+/// ```
 pub(crate) fn assert_descriptor_contents(snapshot: &DescriptorSnapshot) {
     assert_eq!(snapshot.tags.len(), 1, "expected 1 tag");
     assert_eq!(snapshot.tags[0].slug(), "family-friendly");
@@ -73,6 +150,17 @@ pub(crate) fn assert_descriptor_contents(snapshot: &DescriptorSnapshot) {
     );
 }
 
+/// Assert that all catalogue collections are empty.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let snapshot = ExploreCatalogueSnapshot::empty();
+/// // Succeeds because every collection is empty and `community_pick` is `None`.
+/// assert_all_catalogue_collections_empty(&snapshot);
+/// ```
 pub(crate) fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogueSnapshot) {
     assert!(snapshot.categories.is_empty(), "categories should be empty");
     assert!(snapshot.themes.is_empty(), "themes should be empty");
@@ -89,6 +177,17 @@ pub(crate) fn assert_all_catalogue_collections_empty(snapshot: &ExploreCatalogue
 }
 
 /// Generic helper to extract and unwrap a snapshot from the shared context.
+///
+/// # Examples
+///
+/// ```no_run
+/// use backend::domain::ports::ExploreCatalogueSnapshot;
+///
+/// let world: SharedContext = todo!("populate SharedContext in test setup");
+/// let _snapshot: ExploreCatalogueSnapshot =
+///     get_snapshot(&world, |ctx| &ctx.last_catalogue_snapshot);
+/// // Panics when the field is `None` or `Err`.
+/// ```
 fn get_snapshot<T, E>(
     world: &SharedContext,
     field_accessor: impl FnOnce(&TestContext) -> &Option<Result<T, E>>,
