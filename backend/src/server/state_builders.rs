@@ -100,6 +100,26 @@ where
 
 /// Helper to construct a service that depends on both a domain repository and
 /// an idempotency repository, avoiding duplication of `Arc` wrapping.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use backend::outbound::persistence::{DbPool, DieselIdempotencyRepository};
+/// #[derive(Debug)]
+/// struct DemoRepo;
+/// #[derive(Debug, PartialEq, Eq)]
+/// struct DemoService { label: &'static str }
+/// fn example_pool() -> DbPool { todo!("supply a DbPool for tests") }
+///
+/// let pool = example_pool();
+/// let make_repo = |_pool: DbPool| DemoRepo;
+/// let make_service = |_repo: Arc<DemoRepo>, _idempotency: Arc<DieselIdempotencyRepository>| {
+///     DemoService { label: "constructed" }
+/// };
+/// let service = build_idempotent_service(&pool, make_repo, make_service);
+/// assert_eq!(service.label, "constructed");
+/// ```
 fn build_idempotent_service<R, S>(
     pool: &DbPool,
     make_repo: impl FnOnce(DbPool) -> R,
@@ -128,6 +148,59 @@ struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
 
 /// Build a command/query pair for services backed by a domain repository and
 /// an idempotency repository.
+///
+/// This helper delegates branch selection to `build_service_pair`, and uses
+/// `build_idempotent_service` when `ServerConfig.db_pool` is `Some(pool)`.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::outbound::persistence::{DbPool, DieselIdempotencyRepository};
+/// #[derive(Debug)]
+/// struct DemoRepo;
+/// #[derive(Debug)]
+/// struct DemoService(&'static str);
+/// fn cast_service(service: Arc<DemoService>) -> (Arc<String>, Arc<String>) {
+///     (
+///         Arc::new(format!("{}-cmd", service.0)),
+///         Arc::new(format!("{}-query", service.0)),
+///     )
+/// }
+/// fn base_config() -> ServerConfig {
+///     ServerConfig::new(
+///         Key::generate(),
+///         false,
+///         SameSite::Lax,
+///         "127.0.0.1:0".parse().expect("valid socket address"),
+///     )
+/// }
+/// fn example_pool() -> DbPool { todo!("supply a DbPool for tests") }
+///
+/// let pair_with_db: (Arc<String>, Arc<String>) = build_idempotent_service_pair(
+///     &base_config().with_db_pool(example_pool()),
+///     |_pool: DbPool| DemoRepo,
+///     |_repo: Arc<DemoRepo>, _idem: Arc<DieselIdempotencyRepository>| DemoService("db"),
+///     ServicePairFactory {
+///         fixtures: (Arc::new("fixture-cmd".to_string()), Arc::new("fixture-query".to_string())),
+///         cast: cast_service,
+///     },
+/// );
+/// assert_eq!(pair_with_db.0.as_str(), "db-cmd");
+/// assert_eq!(pair_with_db.1.as_str(), "db-query");
+/// let pair_without_db: (Arc<String>, Arc<String>) = build_idempotent_service_pair(
+///     &base_config(),
+///     |_pool: DbPool| DemoRepo,
+///     |_repo: Arc<DemoRepo>, _idem: Arc<DieselIdempotencyRepository>| DemoService("unused"),
+///     ServicePairFactory {
+///         fixtures: (Arc::new("fixture-cmd".to_string()), Arc::new("fixture-query".to_string())),
+///         cast: cast_service,
+///     },
+/// );
+/// assert_eq!(pair_without_db.0.as_str(), "fixture-cmd");
+/// assert_eq!(pair_without_db.1.as_str(), "fixture-query");
+/// ```
 fn build_idempotent_service_pair<R, S, Cmd, Query>(
     config: &ServerConfig,
     make_repo: impl FnOnce(DbPool) -> R,
@@ -152,6 +225,41 @@ where
 /// selecting `DieselCatalogueRepository`/`DieselDescriptorRepository` when
 /// `config.db_pool` is present, otherwise selecting
 /// `FixtureCatalogueRepository`/`FixtureDescriptorRepository`.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::domain::ports::{CatalogueRepository, DescriptorRepository};
+/// use backend::outbound::persistence::DbPool;
+/// fn base_config() -> ServerConfig {
+///     ServerConfig::new(
+///         Key::generate(),
+///         false,
+///         SameSite::Lax,
+///         "127.0.0.1:0".parse().expect("valid socket address"),
+///     )
+/// }
+/// fn example_pool() -> DbPool { todo!("supply a DbPool for tests") }
+///
+/// let config_with_db = base_config().with_db_pool(example_pool());
+/// let (catalogue_db, descriptors_db): (
+///     Arc<dyn CatalogueRepository>,
+///     Arc<dyn DescriptorRepository>,
+/// ) = build_catalogue_services(&config_with_db);
+/// // `Some(db_pool)` branch uses DieselCatalogueRepository and
+/// // DieselDescriptorRepository, then upcasts to trait objects.
+/// let _ = (catalogue_db, descriptors_db);
+/// let config_without_db = base_config();
+/// let (catalogue_fixture, descriptors_fixture): (
+///     Arc<dyn CatalogueRepository>,
+///     Arc<dyn DescriptorRepository>,
+/// ) = build_catalogue_services(&config_without_db);
+/// // `None` branch uses FixtureCatalogueRepository and
+/// // FixtureDescriptorRepository.
+/// let _ = (catalogue_fixture, descriptors_fixture);
+/// ```
 fn build_catalogue_services(
     config: &ServerConfig,
 ) -> (Arc<dyn CatalogueRepository>, Arc<dyn DescriptorRepository>) {
@@ -168,6 +276,47 @@ fn build_catalogue_services(
 }
 
 /// Build the shared HTTP state from configured ports and fixture fallbacks.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+/// use backend::outbound::persistence::DbPool;
+/// fn base_config() -> ServerConfig {
+///     ServerConfig::new(
+///         Key::generate(),
+///         false,
+///         SameSite::Lax,
+///         "127.0.0.1:0".parse().expect("valid socket address"),
+///     )
+/// }
+/// fn example_pool() -> DbPool { todo!("supply a DbPool for tests") }
+///
+/// let config = base_config().with_db_pool(example_pool());
+/// let route_submission =
+///     Arc::new(FixtureRouteSubmissionService) as Arc<dyn RouteSubmissionService>;
+/// let http_state: actix_web::web::Data<HttpState> = build_http_state(&config, route_submission);
+///
+/// let state = http_state.get_ref();
+/// // All ports are populated: login, users, profile, interests, preferences,
+/// // preferences_query, route_annotations, route_annotations_query,
+/// // route_submission, catalogue, descriptors.
+/// let _login = state.login.clone();
+/// let _preferences = state.preferences.clone();
+/// let _ = (
+///     state.users.clone(),
+///     state.profile.clone(),
+///     state.interests.clone(),
+///     state.preferences_query.clone(),
+///     state.route_annotations.clone(),
+///     state.route_annotations_query.clone(),
+///     state.route_submission.clone(),
+///     state.catalogue.clone(),
+///     state.descriptors.clone(),
+/// );
+/// ```
 pub(super) fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
