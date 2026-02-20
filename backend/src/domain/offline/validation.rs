@@ -131,9 +131,9 @@ fn validate_status_progress(
     status: OfflineBundleStatus,
     progress: f32,
 ) -> Result<(), OfflineValidationError> {
-    let is_status_progress_valid = is_status_progress_valid(status, progress);
+    let is_valid_status_progress = is_status_progress_valid(status, progress);
 
-    if is_status_progress_valid {
+    if is_valid_status_progress {
         Ok(())
     } else {
         Err(OfflineValidationError::InvalidStatusProgress { status, progress })

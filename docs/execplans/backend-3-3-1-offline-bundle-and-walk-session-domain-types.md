@@ -331,11 +331,13 @@ implementation):
    Run required gates with log capture (use `set -o pipefail` and `tee`).
    Suggested command pattern (adapt `<project>` helper as available):
 
-       set -o pipefail
-       BRANCH_SANITIZED="$(git branch --show | tr '/' '-')"
-       make check-fmt | tee "/tmp/check-fmt-<project>-${BRANCH_SANITIZED}.out"
-       make lint | tee "/tmp/lint-<project>-${BRANCH_SANITIZED}.out"
-       make test | tee "/tmp/test-<project>-${BRANCH_SANITIZED}.out"
+   ```bash
+   set -o pipefail
+   BRANCH_SANITIZED="$(git branch --show | tr '/' '-')"
+   make check-fmt | tee "/tmp/check-fmt-<project>-${BRANCH_SANITIZED}.out"
+   make lint | tee "/tmp/lint-<project>-${BRANCH_SANITIZED}.out"
+   make test | tee "/tmp/test-<project>-${BRANCH_SANITIZED}.out"
+   ```
 
    If a gate fails, fix only in-scope issues, rerun the failed gate, then rerun
    the full gate set before commit.

@@ -110,11 +110,11 @@ fn assert_offline_success_and_get_bundles<'a>(
 fn assert_single_bundle_matches(
     bundles: &[OfflineBundle],
     expected_id: &uuid::Uuid,
-    expected_progress: f64,
+    expected_progress: f32,
 ) {
     assert_eq!(bundles.len(), 1);
     assert_eq!(bundles[0].id(), *expected_id);
-    assert_eq!(f64::from(bundles[0].progress()), expected_progress);
+    assert_eq!(bundles[0].progress(), expected_progress);
 }
 
 fn drop_table_and_save<T, E, F>(database_url: &str, table_name: &str, save_fn: F) -> Option<E>
@@ -212,7 +212,7 @@ fn bundles_are_listed_for_the_owner_and_device(world: SharedContext) {
 fn the_owner_listing_includes_the_route_bundle_only(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
     let bundles = assert_offline_success_and_get_bundles(&ctx, "validating owner bundle listing");
-    assert_single_bundle_matches(bundles, &ctx.route_bundle.id(), 1.0);
+    assert_single_bundle_matches(bundles, &ctx.route_bundle.id(), 1.0_f32);
 }
 
 #[when("anonymous bundles are listed for the region device")]
@@ -246,7 +246,7 @@ fn the_anonymous_listing_includes_the_region_bundle_only(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
     let bundles =
         assert_offline_success_and_get_bundles(&ctx, "validating anonymous bundle listing");
-    assert_single_bundle_matches(bundles, &ctx.region_bundle.id(), 0.0);
+    assert_single_bundle_matches(bundles, &ctx.region_bundle.id(), 0.0_f32);
 }
 
 #[when("a completed walk session is saved and queried")]
