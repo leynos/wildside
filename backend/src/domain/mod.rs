@@ -43,6 +43,10 @@
 //!   `RouteCollection`, `TrendingRouteHighlight`, `CommunityPick`).
 //! - Descriptor entities (`Tag`, `Badge`, `SafetyToggle`, `SafetyPreset`,
 //!   `InterestTheme`).
+//! - Offline bundle entities (`OfflineBundle`, `BoundingBox`, `ZoomRange`) and
+//!   related enums (`OfflineBundleKind`, `OfflineBundleStatus`).
+//! - Walk entities (`WalkSession`, `WalkCompletionSummary`) and stat value
+//!   objects (`WalkPrimaryStat`, `WalkSecondaryStat`).
 
 pub mod annotations;
 pub mod auth;
@@ -55,6 +59,7 @@ pub mod example_data;
 pub mod idempotency;
 pub mod interest_theme;
 pub mod localization;
+pub mod offline;
 pub mod ports;
 pub mod preferences;
 pub mod preferences_service;
@@ -66,6 +71,7 @@ pub mod user;
 pub mod user_events;
 pub mod user_interests;
 pub mod user_onboarding;
+pub mod walks;
 
 pub use self::annotations::service::RouteAnnotationsService;
 pub use self::annotations::{
@@ -97,6 +103,10 @@ pub use self::interest_theme::{InterestThemeId, InterestThemeIdValidationError};
 pub use self::localization::{
     LocaleCode, LocalizationMap, LocalizationValidationError, LocalizedStringSet,
 };
+pub use self::offline::{
+    BoundingBox, OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
+    OfflineValidationError, ParseOfflineBundleKindError, ParseOfflineBundleStatusError, ZoomRange,
+};
 pub use self::preferences::{
     ParseUnitSystemError, UnitSystem, UserPreferences, UserPreferencesBuilder,
 };
@@ -110,6 +120,11 @@ pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
 pub use self::user_interests::UserInterests;
 pub use self::user_onboarding::UserOnboardingService;
+pub use self::walks::{
+    WalkCompletionSummary, WalkPrimaryStat, WalkPrimaryStatDraft, WalkPrimaryStatKind,
+    WalkSecondaryStat, WalkSecondaryStatDraft, WalkSecondaryStatKind, WalkSession,
+    WalkSessionDraft, WalkValidationError,
+};
 
 /// HTTP header name used to propagate trace identifiers.
 pub const TRACE_ID_HEADER: &str = "trace-id";

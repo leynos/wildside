@@ -660,6 +660,19 @@ services.
 > the domain boundary. Snapshot structs are domain-owned so inbound HTTP
 > adapters (3.2.3) can map them to endpoint responses without coupling to
 > the persistence layer.
+>
+> **Design decision (2026-02-20):** Roadmap item 3.3.1 introduces domain-owned
+> offline and walk-completion types (`OfflineBundle` and `WalkSession`) plus
+> dedicated driven ports (`OfflineBundleRepository` and
+> `WalkSessionRepository`). `OfflineBundle` now validates bundle scope
+> invariants (route vs region references), bounds ordering, zoom ranges, and
+> status/progress compatibility before persistence. `WalkSession` validates
+> chronological ordering (`ended_at >= started_at`), duplicate stat categories,
+> and duplicate highlighted POI identifiers, and exposes
+> `WalkCompletionSummary` as a derived, completion-only projection. Behavioural
+> contract tests run these repository interfaces against embedded PostgreSQL
+> (`pg-embedded-setup-unpriv`) to prove query-error mapping and persistence
+> round-tripping while keeping all storage mechanics outside the domain module.
 
 #### Driving ports (services and queries)
 
