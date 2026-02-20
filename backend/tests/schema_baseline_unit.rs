@@ -8,6 +8,11 @@ const MIGRATION_UP: &str = include_str!(
 const MIGRATION_DOWN: &str = include_str!(
     "../migrations/2026-02-06-012424_schema_baseline_catalogue_descriptor_user_state/down.sql"
 );
+const OFFLINE_WALK_UP: &str =
+    include_str!("../migrations/2026-02-20-000000_create_offline_bundles_and_walk_sessions/up.sql");
+const OFFLINE_WALK_DOWN: &str = include_str!(
+    "../migrations/2026-02-20-000000_create_offline_bundles_and_walk_sessions/down.sql"
+);
 
 #[rstest]
 fn enables_required_extensions() {
@@ -60,4 +65,40 @@ fn down_migration_restores_route_compatibility_columns() {
     assert!(MIGRATION_DOWN.contains("ADD COLUMN IF NOT EXISTS plan_snapshot JSONB"));
     assert!(MIGRATION_DOWN.contains("CREATE INDEX IF NOT EXISTS idx_routes_request_id"));
     assert!(MIGRATION_DOWN.contains("CREATE TRIGGER update_routes_updated_at"));
+}
+
+#[rstest]
+#[case("CREATE TABLE offline_bundles")]
+#[case("CREATE TABLE walk_sessions")]
+fn creates_offline_and_walk_tables(#[case] table_ddl: &str) {
+    assert!(
+        OFFLINE_WALK_UP.contains(table_ddl),
+        "expected migration to contain: {table_ddl}"
+    );
+}
+
+#[rstest]
+fn enforces_offline_bundle_constraints_and_indexes() {
+    assert!(OFFLINE_WALK_UP.contains("offline_bundles_bounds_valid"));
+    assert!(OFFLINE_WALK_UP.contains("offline_bundles_kind_reference_valid"));
+    assert!(OFFLINE_WALK_UP.contains("offline_bundles_status_progress_valid"));
+    assert!(OFFLINE_WALK_UP.contains("idx_offline_bundles_owner_device_created_at"));
+    assert!(OFFLINE_WALK_UP.contains("idx_offline_bundles_anonymous_device_created_at"));
+    assert!(OFFLINE_WALK_UP.contains("CREATE TRIGGER update_offline_bundles_updated_at"));
+}
+
+#[rstest]
+fn enforces_walk_summary_query_support_and_audit_constraints() {
+    assert!(OFFLINE_WALK_UP.contains("walk_sessions_ended_after_started"));
+    assert!(OFFLINE_WALK_UP.contains("walk_sessions_updated_after_created"));
+    assert!(OFFLINE_WALK_UP.contains("idx_walk_sessions_user_completed_ended_at_desc"));
+    assert!(OFFLINE_WALK_UP.contains("CREATE TRIGGER update_walk_sessions_updated_at"));
+}
+
+#[rstest]
+fn offline_walk_down_migration_drops_schema_objects() {
+    assert!(OFFLINE_WALK_DOWN.contains("DROP TABLE IF EXISTS walk_sessions"));
+    assert!(OFFLINE_WALK_DOWN.contains("DROP TABLE IF EXISTS offline_bundles"));
+    assert!(OFFLINE_WALK_DOWN.contains("DROP TRIGGER IF EXISTS update_walk_sessions_updated_at"));
+    assert!(OFFLINE_WALK_DOWN.contains("DROP TRIGGER IF EXISTS update_offline_bundles_updated_at"));
 }

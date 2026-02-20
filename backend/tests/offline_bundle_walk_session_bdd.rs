@@ -23,13 +23,13 @@ use offline_bundle_walk_session_bdd::contract_checks::{
     assert_offline_delete_and_lookup_contract, assert_walk_lookup_and_summary_filtering_contract,
 };
 use offline_bundle_walk_session_bdd::repository_impl::{
-    PgOfflineBundleRepository, PgWalkSessionRepository, create_contract_tables, drop_table,
+    PgOfflineBundleRepository, PgWalkSessionRepository, drop_table,
 };
 use offline_bundle_walk_session_bdd::test_data::{
     build_region_bundle, build_route_bundle, build_walk_session,
 };
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     offline_repo: PgOfflineBundleRepository,
@@ -48,17 +48,42 @@ struct TestContext {
 
 type SharedContext = Arc<Mutex<TestContext>>;
 
+fn seed_user_and_route(
+    client: &mut Client,
+    user_id: &UserId,
+    route_id: uuid::Uuid,
+) -> Result<(), String> {
+    let user_uuid = *user_id.as_uuid();
+    let display_name = "Offline BDD User";
+    client
+        .execute(
+            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
+            &[&user_uuid, &display_name],
+        )
+        .map_err(|err| format_postgres_error(&err))?;
+    client
+        .execute(
+            concat!(
+                "INSERT INTO routes (id, user_id, path, generation_params) ",
+                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
+            ),
+            &[&route_id, &user_uuid],
+        )
+        .map_err(|err| format_postgres_error(&err))?;
+    Ok(())
+}
+
 fn setup_test_context() -> Result<TestContext, String> {
     let cluster = shared_cluster_handle().map_err(|err| err.to_string())?;
     let temporary_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temporary_db.url().to_owned();
 
     let mut client = Client::connect(temporary_db.url(), NoTls).map_err(|err| err.to_string())?;
-    create_contract_tables(&mut client).map_err(|err| err.to_string())?;
-
-    let shared_client = Arc::new(Mutex::new(client));
     let user_id = UserId::random();
     let route_id = uuid::Uuid::new_v4();
+    seed_user_and_route(&mut client, &user_id, route_id)?;
+
+    let shared_client = Arc::new(Mutex::new(client));
 
     Ok(TestContext {
         offline_repo: PgOfflineBundleRepository::new(shared_client.clone()),

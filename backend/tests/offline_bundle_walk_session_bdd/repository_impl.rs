@@ -251,38 +251,6 @@ impl WalkSessionRepository for PgWalkSessionRepository {
     }
 }
 
-pub fn create_contract_tables(client: &mut Client) -> Result<(), postgres::Error> {
-    client.batch_execute(
-        "CREATE TABLE IF NOT EXISTS offline_bundles (
-            id UUID PRIMARY KEY,
-            owner_user_id UUID NULL,
-            device_id TEXT NOT NULL,
-            kind TEXT NOT NULL,
-            route_id UUID NULL,
-            region_id TEXT NULL,
-            bounds DOUBLE PRECISION[] NOT NULL,
-            min_zoom INTEGER NOT NULL,
-            max_zoom INTEGER NOT NULL,
-            estimated_size_bytes BIGINT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL,
-            status TEXT NOT NULL,
-            progress REAL NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS walk_sessions (
-            id UUID PRIMARY KEY,
-            user_id UUID NOT NULL,
-            route_id UUID NOT NULL,
-            started_at TIMESTAMPTZ NOT NULL,
-            ended_at TIMESTAMPTZ NULL,
-            primary_stats JSONB NOT NULL,
-            secondary_stats JSONB NOT NULL,
-            highlighted_poi_ids UUID[] NOT NULL
-        );",
-    )
-}
-
 pub fn drop_table(database_url: &str, table_name: &str) -> Result<(), postgres::Error> {
     let mut client = Client::connect(database_url, postgres::NoTls)?;
     let escaped_table_name = table_name.replace('"', "\"\"");
