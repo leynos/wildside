@@ -660,6 +660,19 @@ services.
 > the domain boundary. Snapshot structs are domain-owned so inbound HTTP
 > adapters (3.2.3) can map them to endpoint responses without coupling to
 > the persistence layer.
+>
+> **Design decision (2026-02-20):** Roadmap item 3.3.1 introduces domain-owned
+> offline and walk-completion types (`OfflineBundle` and `WalkSession`) plus
+> dedicated driven ports (`OfflineBundleRepository` and
+> `WalkSessionRepository`). `OfflineBundle` now validates bundle scope
+> invariants (route vs region references), bounds ordering, zoom ranges, and
+> status/progress compatibility before persistence. `WalkSession` validates
+> chronological ordering (`ended_at >= started_at`), duplicate stat categories,
+> and duplicate highlighted POI identifiers, and exposes
+> `WalkCompletionSummary` as a derived, completion-only projection. Behavioural
+> contract tests run these repository interfaces against embedded PostgreSQL
+> (`pg-embedded-setup-unpriv`) to prove query-error mapping and persistence
+> round-tripping while keeping all storage mechanics outside the domain module.
 
 #### Driving ports (services and queries)
 
@@ -1493,6 +1506,136 @@ local-first user state. The planned persistence additions include:
   progress), excluding tile bytes.
 - `walk_sessions` for completion summaries and highlighted points of
   interest.
+
+#### Offline bundle and walk completion persistence model
+
+The following E-R diagram captures how offline bundle manifests and walk
+completion records link back to users, routes, and highlighted POIs.
+
+**Caption (text alternative):** E-R diagram showing that `User` owns
+`OfflineBundle` records and completes `WalkSession` records. Each
+`WalkSession` belongs to one `Route`, has many primary and secondary stats,
+and has many highlighted POI links through `HighlightedPoi`, which references
+`PointOfInterest`.
+
+```mermaid
+erDiagram
+    User ||--o{ OfflineBundle : owns
+    User ||--o{ WalkSession : completes
+    Route ||--o{ WalkSession : is_walked_on
+
+    OfflineBundle {
+        uuid id
+        uuid owner_user_id
+        string device_id
+        string kind
+        uuid route_id
+        string region_id
+        float min_lng
+        float min_lat
+        float max_lng
+        float max_lat
+        smallint min_zoom
+        smallint max_zoom
+        bigint estimated_size_bytes
+        timestamptz created_at
+        timestamptz updated_at
+        string status
+        real progress
+    }
+
+    WalkSession {
+        uuid id
+        uuid user_id
+        uuid route_id
+        timestamptz started_at
+        timestamptz ended_at
+    }
+
+    WalkPrimaryStat {
+        uuid session_id
+        string kind
+        double value
+    }
+
+    WalkSecondaryStat {
+        uuid session_id
+        string kind
+        double value
+        string unit
+    }
+
+    HighlightedPoi {
+        uuid session_id
+        uuid poi_id
+    }
+
+    WalkSession ||--o{ WalkPrimaryStat : has_primary
+    WalkSession ||--o{ WalkSecondaryStat : has_secondary
+    WalkSession ||--o{ HighlightedPoi : highlights
+
+    PointOfInterest ||--o{ HighlightedPoi : is_referenced
+
+    User {
+        uuid id
+    }
+
+    Route {
+        uuid id
+    }
+
+    PointOfInterest {
+        uuid id
+    }
+```
+
+#### Walk session save and summary read sequence
+
+The sequence below documents the write and read path for completed walks in the
+hexagonal architecture.
+
+**Caption (text alternative):** Sequence diagram showing two flows. In the
+write flow, the user completes a walk, the PWA posts a session payload, the
+domain validates `WalkSessionDraft`, invalid input returns HTTP 400, and valid
+input is saved through the repository adapter into Postgres with HTTP 201. In
+the read flow, the PWA requests summaries, the repository queries Postgres,
+builds `WalkCompletionSummary` values, and returns HTTP 200.
+
+```mermaid
+sequenceDiagram
+    actor user
+    participant pwa as PWA
+    participant http as BackendHttpApi
+    participant domain as WalkSessionDomain
+    participant repo as WalkSessionRepositoryAdapter
+    participant db as PostgresDB
+
+    user->>pwa: Complete walk on route
+    pwa->>http: POST /walk_sessions with stats and highlighted_poi_ids
+
+    http->>domain: Build WalkSessionDraft
+    domain->>domain: WalkSession::new(draft)
+    alt invalid session
+        domain-->>http: Err WalkValidationError
+        http-->>pwa: 400 Bad Request with validation error
+    else valid session
+        domain->>repo: save(&WalkSession)
+        repo->>db: INSERT walk_sessions and stats
+        db-->>repo: OK
+        repo-->>domain: Ok
+        domain-->>http: Ok
+        http-->>pwa: 201 Created
+    end
+
+    user->>pwa: View past walks
+    pwa->>http: GET /walk_summaries
+    http->>repo: list_completion_summaries_for_user(&UserId)
+    repo->>db: SELECT completed sessions and stats
+    db-->>repo: rows
+    repo->>domain: Build WalkCompletionSummary instances
+    repo-->>http: Vec WalkCompletionSummary
+    http-->>pwa: 200 OK with summaries
+```
 
 All catalogue and descriptor tables retain semantic identifiers (for example
 `icon_key`) and avoid presentation-layer classes so the frontend can map tokens

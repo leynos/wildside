@@ -13,6 +13,7 @@ mod example_data_seed_repository;
 mod idempotency_metrics;
 mod idempotency_repository;
 mod login_service;
+mod offline_bundle_repository;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
@@ -30,6 +31,7 @@ mod user_preferences_repository;
 mod user_profile_query;
 mod user_repository;
 mod users_query;
+mod walk_session_repository;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
 #[cfg(test)]
@@ -76,6 +78,11 @@ pub use idempotency_repository::{
 };
 pub use login_service::{FixtureLoginService, LoginService};
 #[cfg(test)]
+pub use offline_bundle_repository::MockOfflineBundleRepository;
+pub use offline_bundle_repository::{
+    FixtureOfflineBundleRepository, OfflineBundleRepository, OfflineBundleRepositoryError,
+};
+#[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;
 pub use route_annotation_repository::{
     FixtureRouteAnnotationRepository, RouteAnnotationRepository, RouteAnnotationRepositoryError,
@@ -121,6 +128,11 @@ pub use user_preferences_repository::{
 pub use user_profile_query::{FixtureUserProfileQuery, UserProfileQuery};
 pub use user_repository::{UserPersistenceError, UserRepository};
 pub use users_query::{FixtureUsersQuery, UsersQuery};
+#[cfg(test)]
+pub use walk_session_repository::MockWalkSessionRepository;
+pub use walk_session_repository::{
+    FixtureWalkSessionRepository, WalkSessionRepository, WalkSessionRepositoryError,
+};
 
 /// Build empty catalogue and descriptor snapshots for fixture-oriented code
 /// paths that need both payloads.

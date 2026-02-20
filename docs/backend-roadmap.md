@@ -151,7 +151,7 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.3. Offline bundles and walk completion
 
-- [ ] 3.3.1. Add `OfflineBundle` and `WalkSession` domain types plus
+- [x] 3.3.1. Add `OfflineBundle` and `WalkSession` domain types plus
   repositories for manifests and completion summaries.
 - [ ] 3.3.2. Deliver migrations for `offline_bundles` and `walk_sessions` with
   audit timestamps and bounds/zoom metadata.
