@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (planning approved, implementation not started)
+Status: COMPLETED (implementation shipped and gates passing)
 
 There is no `PLANS.md` in this repository, so this ExecPlan is the sole
 execution reference for roadmap item 3.3.2.
@@ -141,19 +141,19 @@ Coordination rules:
       `offline_bundles`/`walk_sessions` is pending.
 - [x] (2026-02-20) Drafted this ExecPlan at
       `docs/execplans/backend-3-3-2-offline-bundles-and-walk-sessions-migrations.md`.
-- [ ] Implement migration SQL for `offline_bundles` and `walk_sessions` with
+- [x] Implement migration SQL for `offline_bundles` and `walk_sessions` with
       audit + bounds/zoom metadata.
-- [ ] Update Diesel schema/models/adapters to consume the migrated tables
+- [x] Update Diesel schema/models/adapters to consume the migrated tables
       through domain ports.
-- [ ] Add and/or refactor `rstest` unit tests for migration contract coverage.
-- [ ] Add and/or refactor `rstest-bdd` behavioural tests to validate migrated
+- [x] Add and/or refactor `rstest` unit tests for migration contract coverage.
+- [x] Add and/or refactor `rstest-bdd` behavioural tests to validate migrated
       schema behaviour (happy/unhappy/edge).
-- [ ] Record 3.3.2 design decisions in
+- [x] Record 3.3.2 design decisions in
       `docs/wildside-backend-architecture.md`.
-- [ ] Mark roadmap item 3.3.2 as done in `docs/backend-roadmap.md`.
-- [ ] Run and pass `make check-fmt`, `make lint`, and `make test` with
+- [x] Mark roadmap item 3.3.2 as done in `docs/backend-roadmap.md`.
+- [x] Run and pass `make check-fmt`, `make lint`, and `make test` with
       branch-scoped logs captured via `tee`.
-- [ ] Commit implementation in focused, gated commits.
+- [x] Commit implementation in focused, gated commits.
 
 ## Surprises & Discoveries
 
@@ -173,6 +173,12 @@ Coordination rules:
   Impact: 3.3.2 documentation should append migration/persistence decisions,
   not duplicate 3.3.1 rationale.
 
+- Observation (2026-02-20): Embedded Postgres cluster startup is flaky under
+  default parallel nextest execution in this worktree.
+  Impact: `make test` can fail with transient
+  `postgresql_embedded::start() failed` panics even when test logic is sound;
+  rerunning with `NEXTEST_TEST_THREADS=1` stabilizes the full suite.
+
 ## Decision log
 
 - Decision: keep this plan strictly scoped to roadmap 3.3.2 and defer endpoint
@@ -189,6 +195,13 @@ Coordination rules:
 - Decision: execute with an explicit three-agent ownership model (migrations,
   adapters, tests/docs) and staged merge order.
   Rationale: reduces context switching and keeps implementation traceable.
+  Date/Author: 2026-02-20 / Codex.
+
+- Decision: run `make test` with `NEXTEST_TEST_THREADS=1` for final gate
+  evidence after parallel cluster-start flakiness appears.
+  Rationale: `pg-embedded-setup-unpriv` cluster boot can race under default
+  nextest parallelism; single-thread execution provides deterministic gate
+  outcomes for this branch.
   Date/Author: 2026-02-20 / Codex.
 
 ## Context and orientation
@@ -360,10 +373,33 @@ Commit policy:
 
 ## Outcomes & retrospective
 
-Pending implementation.
+Shipped versus plan:
 
-This section must capture:
+- Delivered migration DDL for `offline_bundles` and `walk_sessions` with audit
+  timestamps, bounds/zoom metadata, constraints, and query-supporting indexes.
+- Added production outbound adapters
+  (`DieselOfflineBundleRepository`, `DieselWalkSessionRepository`) and Diesel
+  row models while keeping persistence details behind domain ports.
+- Added integration coverage for both adapters against embedded PostgreSQL and
+  retained behavioural (`rstest-bdd`) contract coverage for offline/walk flows.
+- Recorded architecture design decisions for 3.3.2 and marked roadmap item
+  3.3.2 complete.
 
-- what shipped versus planned scope;
-- exact gate outcomes and log file paths;
-- follow-up tasks (if any) for 3.3.3 endpoint wiring.
+Gate outcomes and evidence:
+
+- `make check-fmt` passed.
+  Log: `/tmp/check-fmt-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+- `make lint` passed.
+  Log: `/tmp/lint-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+- Initial `make test` failed because of transient embedded-cluster startup
+  errors under parallel nextest.
+  Log: `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+- Retried with `NEXTEST_TEST_THREADS=1 make test`; passed with
+  `744 tests run: 744 passed, 1 skipped`.
+  Log: `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-threads1.out`
+
+Follow-up tasks:
+
+- 3.3.3 endpoint wiring remains pending (`/api/v1/offline/bundles` and
+  `/api/v1/walk-sessions`) and should reuse the adapters shipped here without
+  changing domain invariants.

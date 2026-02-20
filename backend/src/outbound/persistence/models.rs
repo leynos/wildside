@@ -9,8 +9,8 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::schema::{
-    example_data_runs, idempotency_keys, route_notes, route_progress, routes, user_preferences,
-    users,
+    example_data_runs, idempotency_keys, offline_bundles, route_notes, route_progress, routes,
+    user_preferences, users, walk_sessions,
 };
 
 /// Row struct for reading from the users table.
@@ -97,6 +97,119 @@ pub(crate) struct NewRouteRow<'a> {
     pub user_id: Option<Uuid>,
     pub path: &'a str,
     pub generation_params: &'a serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Offline bundle models
+// ---------------------------------------------------------------------------
+
+/// Row struct for reading from the offline_bundles table.
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = offline_bundles)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub(crate) struct OfflineBundleRow {
+    pub id: Uuid,
+    pub owner_user_id: Option<Uuid>,
+    pub device_id: String,
+    pub kind: String,
+    pub route_id: Option<Uuid>,
+    pub region_id: Option<String>,
+    pub bounds: Vec<f64>,
+    pub min_zoom: i32,
+    pub max_zoom: i32,
+    pub estimated_size_bytes: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub status: String,
+    pub progress: f32,
+}
+
+/// Insertable struct for creating offline bundle records.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = offline_bundles)]
+pub(crate) struct NewOfflineBundleRow<'a> {
+    pub id: Uuid,
+    pub owner_user_id: Option<Uuid>,
+    pub device_id: &'a str,
+    pub kind: &'a str,
+    pub route_id: Option<Uuid>,
+    pub region_id: Option<&'a str>,
+    pub bounds: &'a [f64],
+    pub min_zoom: i32,
+    pub max_zoom: i32,
+    pub estimated_size_bytes: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub status: &'a str,
+    pub progress: f32,
+}
+
+/// Changeset struct for upserting offline bundle records.
+#[derive(Debug, Clone, AsChangeset)]
+#[diesel(table_name = offline_bundles)]
+pub(crate) struct OfflineBundleUpdate<'a> {
+    pub owner_user_id: Option<Uuid>,
+    pub device_id: &'a str,
+    pub kind: &'a str,
+    pub route_id: Option<Uuid>,
+    pub region_id: Option<&'a str>,
+    pub bounds: &'a [f64],
+    pub min_zoom: i32,
+    pub max_zoom: i32,
+    pub estimated_size_bytes: i64,
+    pub updated_at: DateTime<Utc>,
+    pub status: &'a str,
+    pub progress: f32,
+}
+
+// ---------------------------------------------------------------------------
+// Walk session models
+// ---------------------------------------------------------------------------
+
+/// Row struct for reading from the walk_sessions table.
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = walk_sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub(crate) struct WalkSessionRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub route_id: Uuid,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub primary_stats: serde_json::Value,
+    pub secondary_stats: serde_json::Value,
+    pub highlighted_poi_ids: Vec<Uuid>,
+    #[expect(dead_code, reason = "schema field for auditing support")]
+    pub created_at: DateTime<Utc>,
+    #[expect(dead_code, reason = "schema field for auditing support")]
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Insertable struct for creating walk session records.
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = walk_sessions)]
+pub(crate) struct NewWalkSessionRow<'a> {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub route_id: Uuid,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub primary_stats: &'a serde_json::Value,
+    pub secondary_stats: &'a serde_json::Value,
+    pub highlighted_poi_ids: &'a [Uuid],
+}
+
+/// Changeset struct for upserting walk session records.
+#[derive(Debug, Clone, AsChangeset)]
+#[diesel(table_name = walk_sessions)]
+pub(crate) struct WalkSessionUpdate<'a> {
+    pub user_id: Uuid,
+    pub route_id: Uuid,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub primary_stats: &'a serde_json::Value,
+    pub secondary_stats: &'a serde_json::Value,
+    pub highlighted_poi_ids: &'a [Uuid],
 }
 
 // ---------------------------------------------------------------------------

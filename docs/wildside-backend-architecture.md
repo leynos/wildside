@@ -673,6 +673,21 @@ services.
 > contract tests run these repository interfaces against embedded PostgreSQL
 > (`pg-embedded-setup-unpriv`) to prove query-error mapping and persistence
 > round-tripping while keeping all storage mechanics outside the domain module.
+>
+> **Design decision (2026-02-20):** Roadmap item 3.3.2 persists offline and
+> walk-completion data through migration-backed PostgreSQL tables
+> (`offline_bundles` and `walk_sessions`) with explicit audit timestamps,
+> bounds metadata, and zoom metadata. `offline_bundles` stores
+> `[min_lng, min_lat, max_lng, max_lat]` as a constrained float array with
+> `min_zoom`/`max_zoom` range checks and `updated_at` trigger updates.
+> `walk_sessions` stores completion payloads (`primary_stats`,
+> `secondary_stats`, and highlighted POI IDs) with `ended_at >= started_at`
+> constraints plus a completed-session index for summary reads.
+> `DieselOfflineBundleRepository` and `DieselWalkSessionRepository` implement
+> the corresponding driven ports so SQL remains confined to outbound adapters.
+> Adapter/unit tests (`rstest`) and behavioural contracts (`rstest-bdd`) run
+> against `pg-embedded-setup-unpriv` databases, including schema-loss unhappy
+> paths and completion/ordering edge cases.
 
 #### Driving ports (services and queries)
 
