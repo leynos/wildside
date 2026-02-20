@@ -249,7 +249,7 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
 
     fn try_from(draft: OfflineBundleDraft) -> Result<Self, Self::Error> {
         let device_id = validate_device_id(&draft.device_id)?;
-        validate_progress(f64::from(draft.progress))?;
+        validate_progress(draft.progress)?;
         validate_timestamps(draft.created_at, draft.updated_at)?;
         validate_kind_specific(draft.kind, draft.route_id, draft.region_id.clone())?;
         validate_status_progress(draft.status, draft.progress)?;
@@ -273,6 +273,8 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
 }
 
 /// Validates and normalizes the bundle device identifier.
+/// # Examples
+/// `validate_device_id("  ios-phone  ")` returns `"ios-phone"`.
 fn validate_device_id(device_id: &str) -> Result<String, OfflineValidationError> {
     let normalized = device_id.trim().to_owned();
     if normalized.is_empty() {
@@ -282,16 +284,18 @@ fn validate_device_id(device_id: &str) -> Result<String, OfflineValidationError>
 }
 
 /// Validates that bundle progress is within the inclusive range [0.0, 1.0].
-fn validate_progress(progress: f64) -> Result<(), OfflineValidationError> {
+/// # Examples
+/// `validate_progress(0.5)` succeeds, while `validate_progress(1.2)` fails.
+fn validate_progress(progress: f32) -> Result<(), OfflineValidationError> {
     if !(0.0..=1.0).contains(&progress) {
-        return Err(OfflineValidationError::InvalidProgress {
-            progress: progress as f32,
-        });
+        return Err(OfflineValidationError::InvalidProgress { progress });
     }
     Ok(())
 }
 
 /// Validates that update timestamps do not precede creation timestamps.
+/// # Examples
+/// `validate_timestamps(now, now)` succeeds, while `validate_timestamps(now, now - 1s)` fails.
 fn validate_timestamps(
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -303,6 +307,8 @@ fn validate_timestamps(
 }
 
 /// Validates route-bundle requirements for route and region identifiers.
+/// # Examples
+/// A route bundle with `Some(route_id)` and `None` region id succeeds.
 fn validate_route_bundle(
     route_id: Option<uuid::Uuid>,
     region_id: Option<String>,
@@ -317,6 +323,8 @@ fn validate_route_bundle(
 }
 
 /// Validates region-bundle requirements for route and region identifiers.
+/// # Examples
+/// A region bundle with `None` route id and non-blank region id succeeds.
 fn validate_region_bundle(
     route_id: Option<uuid::Uuid>,
     region_id: Option<String>,
@@ -332,6 +340,8 @@ fn validate_region_bundle(
 }
 
 /// Dispatches bundle-kind-specific validation for route and region identifiers.
+/// # Examples
+/// `validate_kind_specific` delegates to route or region validation by bundle kind.
 fn validate_kind_specific(
     kind: OfflineBundleKind,
     route_id: Option<uuid::Uuid>,
@@ -361,16 +371,20 @@ fn validate_status_progress(
     status: OfflineBundleStatus,
     progress: f32,
 ) -> Result<(), OfflineValidationError> {
-    let valid = match status {
+    let is_status_progress_valid = is_status_progress_valid(status, progress);
+
+    if is_status_progress_valid {
+        Ok(())
+    } else {
+        Err(OfflineValidationError::InvalidStatusProgress { status, progress })
+    }
+}
+
+fn is_status_progress_valid(status: OfflineBundleStatus, progress: f32) -> bool {
+    match status {
         OfflineBundleStatus::Queued => progress == 0.0,
         OfflineBundleStatus::Downloading => (0.0..1.0).contains(&progress),
         OfflineBundleStatus::Complete => progress == 1.0,
         OfflineBundleStatus::Failed => (0.0..=1.0).contains(&progress),
-    };
-
-    if valid {
-        Ok(())
-    } else {
-        Err(OfflineValidationError::InvalidStatusProgress { status, progress })
     }
 }

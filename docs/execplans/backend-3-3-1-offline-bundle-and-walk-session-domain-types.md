@@ -78,7 +78,7 @@ Observable success criteria:
 - Sequence tolerance: if production-ready Diesel adapters cannot be validated
   without introducing 3.3.2 migration work, pause and escalate with options.
 - Contract tolerance: if architecture and PWA docs disagree on required
-  `OfflineBundle` or `WalkSession` fields, stop and document alternatives before
+  `OfflineBundle` or `WalkSession` fields, stop, and document alternatives before
   coding.
 - Validation tolerance: if `make check-fmt`, `make lint`, or `make test` fails
   more than three consecutive fix attempts, stop and report with logs.

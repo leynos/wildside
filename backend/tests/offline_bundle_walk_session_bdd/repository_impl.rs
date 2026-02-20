@@ -165,10 +165,10 @@ impl OfflineBundleRepository for PgOfflineBundleRepository {
 impl WalkSessionRepository for PgWalkSessionRepository {
     async fn save(&self, session: &WalkSession) -> Result<(), WalkSessionRepositoryError> {
         let primary_stats = serde_json::to_string(session.primary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialize primary stats: {err}"))
+            WalkSessionRepositoryError::query(format!("serialise primary stats: {err}"))
         })?;
         let secondary_stats = serde_json::to_string(session.secondary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialize secondary stats: {err}"))
+            WalkSessionRepositoryError::query(format!("serialise secondary stats: {err}"))
         })?;
         let started_at = session.started_at().to_rfc3339();
         let ended_at = session.ended_at().map(|value| value.to_rfc3339());
@@ -285,7 +285,8 @@ pub fn create_contract_tables(client: &mut Client) -> Result<(), postgres::Error
 
 pub fn drop_table(database_url: &str, table_name: &str) -> Result<(), postgres::Error> {
     let mut client = Client::connect(database_url, postgres::NoTls)?;
-    let statement = format!("DROP TABLE IF EXISTS {table_name}");
+    let escaped_table_name = table_name.replace('"', "\"\"");
+    let statement = format!(r#"DROP TABLE IF EXISTS "{escaped_table_name}""#);
     client.batch_execute(statement.as_str())
 }
 

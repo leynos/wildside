@@ -68,6 +68,21 @@ fn primary_stat_rejects_negative_value(#[case] kind: WalkPrimaryStatKind) {
 }
 
 #[rstest]
+#[case(WalkPrimaryStatKind::Distance, f64::NAN)]
+#[case(WalkPrimaryStatKind::Distance, f64::INFINITY)]
+#[case(WalkPrimaryStatKind::Duration, f64::NEG_INFINITY)]
+fn primary_stat_rejects_non_finite_value(#[case] kind: WalkPrimaryStatKind, #[case] value: f64) {
+    let result = WalkPrimaryStat::new(kind, value);
+    assert!(matches!(
+        result,
+        Err(WalkValidationError::NegativePrimaryStatValue {
+            kind: actual_kind,
+            ..
+        }) if actual_kind == kind
+    ));
+}
+
+#[rstest]
 #[case(WalkSecondaryStatKind::Energy, Some("kcal"))]
 #[case(WalkSecondaryStatKind::Count, None)]
 fn secondary_stat_rejects_negative_value(
@@ -75,6 +90,25 @@ fn secondary_stat_rejects_negative_value(
     #[case] unit: Option<&str>,
 ) {
     let result = WalkSecondaryStat::new(kind, -5.0, unit.map(str::to_owned));
+    assert!(matches!(
+        result,
+        Err(WalkValidationError::NegativeSecondaryStatValue {
+            kind: actual_kind,
+            ..
+        }) if actual_kind == kind
+    ));
+}
+
+#[rstest]
+#[case(WalkSecondaryStatKind::Energy, f64::NAN, Some("kcal"))]
+#[case(WalkSecondaryStatKind::Energy, f64::INFINITY, Some("kcal"))]
+#[case(WalkSecondaryStatKind::Count, f64::NEG_INFINITY, None)]
+fn secondary_stat_rejects_non_finite_value(
+    #[case] kind: WalkSecondaryStatKind,
+    #[case] value: f64,
+    #[case] unit: Option<&str>,
+) {
+    let result = WalkSecondaryStat::new(kind, value, unit.map(str::to_owned));
     assert!(matches!(
         result,
         Err(WalkValidationError::NegativeSecondaryStatValue {

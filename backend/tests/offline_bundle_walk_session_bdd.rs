@@ -16,11 +16,15 @@ use rstest_bdd_macros::{given, scenario, then, when};
 mod offline_bundle_walk_session_bdd {
     //! Split helpers for offline-bundle and walk-session behavioural tests.
 
+    pub mod contract_checks;
     pub mod repository_impl;
     pub mod test_data;
 }
 mod support;
 
+use offline_bundle_walk_session_bdd::contract_checks::{
+    assert_offline_delete_and_lookup_contract, assert_walk_lookup_and_summary_filtering_contract,
+};
 use offline_bundle_walk_session_bdd::repository_impl::{
     PgOfflineBundleRepository, PgWalkSessionRepository, create_contract_tables, drop_table,
 };
@@ -305,6 +309,26 @@ fn the_walk_session_and_completion_summary_are_returned(world: SharedContext) {
         .expect("summary list should execute");
     assert_eq!(summaries.len(), 1);
     assert_eq!(summaries[0].session_id(), ctx.walk_session.id());
+}
+
+#[when("offline delete and missing lookup contracts are exercised")]
+fn offline_delete_and_missing_lookup_contracts_are_exercised(world: SharedContext) {
+    let (offline_repo, route_bundle) = {
+        let ctx = world.lock().expect("context lock");
+        (ctx.offline_repo.clone(), ctx.route_bundle.clone())
+    };
+    assert_offline_delete_and_lookup_contract(offline_repo, route_bundle);
+}
+
+#[when("walk missing lookup and completion summary filtering contracts are exercised")]
+fn walk_missing_lookup_and_completion_summary_filtering_contracts_are_exercised(
+    world: SharedContext,
+) {
+    let (walk_repo, walk_session) = {
+        let ctx = world.lock().expect("context lock");
+        (ctx.walk_repo.clone(), ctx.walk_session.clone())
+    };
+    assert_walk_lookup_and_summary_filtering_contract(walk_repo, walk_session);
 }
 
 #[when("the offline bundle table is dropped and an offline save is attempted")]

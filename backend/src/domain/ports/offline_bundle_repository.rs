@@ -27,6 +27,13 @@ define_port_error! {
 #[async_trait]
 pub trait OfflineBundleRepository: Send + Sync {
     /// Find a bundle by its id.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let found = repo.find_by_id(&bundle_id).await?;
+    /// assert!(found.is_none() || found.is_some());
+    /// ```
     async fn find_by_id(
         &self,
         bundle_id: &Uuid,
@@ -36,6 +43,13 @@ pub trait OfflineBundleRepository: Send + Sync {
     ///
     /// When `owner_user_id` is `None`, implementations should return anonymous
     /// device-scoped bundles only.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let bundles = repo.list_for_owner_and_device(None, "device-1").await?;
+    /// assert!(bundles.iter().all(|bundle| bundle.owner_user_id().is_none()));
+    /// ```
     async fn list_for_owner_and_device(
         &self,
         owner_user_id: Option<UserId>,
@@ -43,12 +57,25 @@ pub trait OfflineBundleRepository: Send + Sync {
     ) -> Result<Vec<OfflineBundle>, OfflineBundleRepositoryError>;
 
     /// Create or update a bundle manifest.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// repo.save(&bundle).await?;
+    /// ```
     async fn save(&self, bundle: &OfflineBundle) -> Result<(), OfflineBundleRepositoryError>;
 
     /// Delete a bundle manifest.
     ///
     /// Returns `true` when a row was deleted and `false` when the bundle did
     /// not exist.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let was_deleted = repo.delete(&bundle_id).await?;
+    /// assert!(!was_deleted || was_deleted);
+    /// ```
     async fn delete(&self, bundle_id: &Uuid) -> Result<bool, OfflineBundleRepositoryError>;
 }
 
@@ -87,14 +114,15 @@ mod tests {
     //! Regression coverage for this module.
 
     use chrono::Utc;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
     use super::*;
     use crate::domain::{
         BoundingBox, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus, ZoomRange,
     };
 
-    fn build_bundle() -> OfflineBundle {
+    #[fixture]
+    fn bundle_fixture() -> OfflineBundle {
         OfflineBundle::new(OfflineBundleDraft {
             id: Uuid::new_v4(),
             owner_user_id: Some(UserId::random()),
@@ -137,16 +165,16 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_save_and_delete_succeed() {
+    async fn fixture_save_and_delete_succeed(bundle_fixture: OfflineBundle) {
         let repo = FixtureOfflineBundleRepository;
-        let bundle = build_bundle();
+        let bundle = bundle_fixture;
 
         repo.save(&bundle).await.expect("fixture save succeeds");
-        let deleted = repo
+        let was_deleted = repo
             .delete(&bundle.id())
             .await
             .expect("fixture delete succeeds");
-        assert!(!deleted);
+        assert!(!was_deleted);
     }
 
     #[rstest]

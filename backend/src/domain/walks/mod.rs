@@ -46,11 +46,11 @@ impl fmt::Display for WalkValidationError {
         match self {
             Self::NegativePrimaryStatValue { kind, value } => write!(
                 f,
-                "walk primary stat {kind} must be non-negative (got {value})"
+                "walk primary stat {kind} must be finite and non-negative (got {value})"
             ),
             Self::NegativeSecondaryStatValue { kind, value } => write!(
                 f,
-                "walk secondary stat {kind} must be non-negative (got {value})"
+                "walk secondary stat {kind} must be finite and non-negative (got {value})"
             ),
             Self::EmptySecondaryStatUnit => {
                 write!(f, "walk secondary stat unit must not be blank")
@@ -127,7 +127,7 @@ pub struct WalkPrimaryStatDraft {
 
 impl WalkPrimaryStat {
     pub fn new(kind: WalkPrimaryStatKind, value: f64) -> Result<Self, WalkValidationError> {
-        if value < 0.0 {
+        if !value.is_finite() || value < 0.0 {
             return Err(WalkValidationError::NegativePrimaryStatValue { kind, value });
         }
         Ok(Self { kind, value })
@@ -173,7 +173,7 @@ impl WalkSecondaryStat {
         value: f64,
         unit: Option<String>,
     ) -> Result<Self, WalkValidationError> {
-        if value < 0.0 {
+        if !value.is_finite() || value < 0.0 {
             return Err(WalkValidationError::NegativeSecondaryStatValue { kind, value });
         }
 
