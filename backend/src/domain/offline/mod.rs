@@ -248,46 +248,10 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
     type Error = OfflineValidationError;
 
     fn try_from(draft: OfflineBundleDraft) -> Result<Self, Self::Error> {
-        let device_id = draft.device_id.trim().to_owned();
-        if device_id.is_empty() {
-            return Err(OfflineValidationError::EmptyDeviceId);
-        }
-
-        if !(0.0..=1.0).contains(&draft.progress) {
-            return Err(OfflineValidationError::InvalidProgress {
-                progress: draft.progress,
-            });
-        }
-
-        if draft.updated_at < draft.created_at {
-            return Err(OfflineValidationError::UpdatedBeforeCreated);
-        }
-
-        match draft.kind {
-            OfflineBundleKind::Route => {
-                if draft.route_id.is_none() {
-                    return Err(OfflineValidationError::MissingRouteIdForRouteBundle);
-                }
-                if draft.region_id.is_some() {
-                    return Err(OfflineValidationError::UnexpectedRegionIdForRouteBundle);
-                }
-            }
-            OfflineBundleKind::Region => {
-                if draft
-                    .region_id
-                    .as_deref()
-                    .map(str::trim)
-                    .unwrap_or_default()
-                    .is_empty()
-                {
-                    return Err(OfflineValidationError::MissingRegionIdForRegionBundle);
-                }
-                if draft.route_id.is_some() {
-                    return Err(OfflineValidationError::UnexpectedRouteIdForRegionBundle);
-                }
-            }
-        }
-
+        let device_id = validate_device_id(&draft.device_id)?;
+        validate_progress(f64::from(draft.progress))?;
+        validate_timestamps(draft.created_at, draft.updated_at)?;
+        validate_kind_specific(draft.kind, draft.route_id, draft.region_id.clone())?;
         validate_status_progress(draft.status, draft.progress)?;
 
         Ok(Self {
@@ -305,6 +269,77 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
             status: draft.status,
             progress: draft.progress,
         })
+    }
+}
+
+/// Validates and normalizes the bundle device identifier.
+fn validate_device_id(device_id: &str) -> Result<String, OfflineValidationError> {
+    let normalized = device_id.trim().to_owned();
+    if normalized.is_empty() {
+        return Err(OfflineValidationError::EmptyDeviceId);
+    }
+    Ok(normalized)
+}
+
+/// Validates that bundle progress is within the inclusive range [0.0, 1.0].
+fn validate_progress(progress: f64) -> Result<(), OfflineValidationError> {
+    if !(0.0..=1.0).contains(&progress) {
+        return Err(OfflineValidationError::InvalidProgress {
+            progress: progress as f32,
+        });
+    }
+    Ok(())
+}
+
+/// Validates that update timestamps do not precede creation timestamps.
+fn validate_timestamps(
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+) -> Result<(), OfflineValidationError> {
+    if updated_at < created_at {
+        return Err(OfflineValidationError::UpdatedBeforeCreated);
+    }
+    Ok(())
+}
+
+/// Validates route-bundle requirements for route and region identifiers.
+fn validate_route_bundle(
+    route_id: Option<uuid::Uuid>,
+    region_id: Option<String>,
+) -> Result<(), OfflineValidationError> {
+    if route_id.is_none() {
+        return Err(OfflineValidationError::MissingRouteIdForRouteBundle);
+    }
+    if region_id.is_some() {
+        return Err(OfflineValidationError::UnexpectedRegionIdForRouteBundle);
+    }
+    Ok(())
+}
+
+/// Validates region-bundle requirements for route and region identifiers.
+fn validate_region_bundle(
+    route_id: Option<uuid::Uuid>,
+    region_id: Option<String>,
+) -> Result<(), OfflineValidationError> {
+    let region_value = region_id.as_deref().map(str::trim).unwrap_or_default();
+    if region_value.is_empty() {
+        return Err(OfflineValidationError::MissingRegionIdForRegionBundle);
+    }
+    if route_id.is_some() {
+        return Err(OfflineValidationError::UnexpectedRouteIdForRegionBundle);
+    }
+    Ok(())
+}
+
+/// Dispatches bundle-kind-specific validation for route and region identifiers.
+fn validate_kind_specific(
+    kind: OfflineBundleKind,
+    route_id: Option<uuid::Uuid>,
+    region_id: Option<String>,
+) -> Result<(), OfflineValidationError> {
+    match kind {
+        OfflineBundleKind::Route => validate_route_bundle(route_id, region_id),
+        OfflineBundleKind::Region => validate_region_bundle(route_id, region_id),
     }
 }
 
