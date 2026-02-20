@@ -126,6 +126,29 @@ where
     save_fn().err()
 }
 
+/// Executes a drop-table save scenario by extracting inputs and storing the save error.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "scenario helper accepts extraction, save, and storage closures explicitly"
+)]
+fn execute_drop_table_save_scenario<T, E, Repo, Entity>(
+    world: SharedContext,
+    table_name: &str,
+    extract_fn: impl FnOnce(&TestContext) -> (String, Repo, Entity),
+    save_fn: impl FnOnce(Repo, Entity) -> Result<T, E>,
+    store_error_fn: impl FnOnce(&mut TestContext, Option<E>),
+) {
+    let (database_url, repo, entity) = {
+        let ctx = world.lock().expect("context lock");
+        extract_fn(&ctx)
+    };
+
+    let error = drop_table_and_save(&database_url, table_name, || save_fn(repo, entity));
+
+    let mut ctx = world.lock().expect("context lock");
+    store_error_fn(&mut ctx, error);
+}
+
 #[given("postgres-backed offline bundle and walk session repositories")]
 fn postgres_backed_offline_bundle_and_walk_session_repositories(world: SharedContext) {
     drop(world);
@@ -286,19 +309,19 @@ fn the_walk_session_and_completion_summary_are_returned(world: SharedContext) {
 
 #[when("the offline bundle table is dropped and an offline save is attempted")]
 fn the_offline_bundle_table_is_dropped_and_an_offline_save_is_attempted(world: SharedContext) {
-    let (database_url, offline_repo, route_bundle) = {
-        let ctx = world.lock().expect("context lock");
-        (
-            ctx.database_url.clone(),
-            ctx.offline_repo.clone(),
-            ctx.route_bundle.clone(),
-        )
-    };
-
-    world.lock().expect("context lock").last_offline_error =
-        drop_table_and_save(&database_url, "offline_bundles", || {
-            block_on(async { offline_repo.save(&route_bundle).await })
-        });
+    execute_drop_table_save_scenario(
+        world,
+        "offline_bundles",
+        |ctx| {
+            (
+                ctx.database_url.clone(),
+                ctx.offline_repo.clone(),
+                ctx.route_bundle.clone(),
+            )
+        },
+        |offline_repo, route_bundle| block_on(async { offline_repo.save(&route_bundle).await }),
+        |ctx, error| ctx.last_offline_error = error,
+    );
 }
 
 #[then("the offline repository reports a query error")]
@@ -312,19 +335,19 @@ fn the_offline_repository_reports_a_query_error(world: SharedContext) {
 
 #[when("the walk session table is dropped and a walk save is attempted")]
 fn the_walk_session_table_is_dropped_and_a_walk_save_is_attempted(world: SharedContext) {
-    let (database_url, walk_repo, walk_session) = {
-        let ctx = world.lock().expect("context lock");
-        (
-            ctx.database_url.clone(),
-            ctx.walk_repo.clone(),
-            ctx.walk_session.clone(),
-        )
-    };
-
-    world.lock().expect("context lock").last_walk_error =
-        drop_table_and_save(&database_url, "walk_sessions", || {
-            block_on(async { walk_repo.save(&walk_session).await })
-        });
+    execute_drop_table_save_scenario(
+        world,
+        "walk_sessions",
+        |ctx| {
+            (
+                ctx.database_url.clone(),
+                ctx.walk_repo.clone(),
+                ctx.walk_session.clone(),
+            )
+        },
+        |walk_repo, walk_session| block_on(async { walk_repo.save(&walk_session).await }),
+        |ctx, error| ctx.last_walk_error = error,
+    );
 }
 
 #[then("the walk session repository reports a query error")]
