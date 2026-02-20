@@ -1,7 +1,4 @@
 //! Behavioural tests for offline bundle and walk session repositories.
-
-use std::sync::{Arc, Mutex};
-
 use backend::domain::ports::{
     OfflineBundleRepository, OfflineBundleRepositoryError, WalkSessionRepository,
     WalkSessionRepositoryError,
@@ -12,10 +9,10 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
+use std::sync::{Arc, Mutex};
 
 mod offline_bundle_walk_session_bdd {
     //! Split helpers for offline-bundle and walk-session behavioural tests.
-
     pub mod contract_checks;
     pub mod repository_impl;
     pub mod test_data;
@@ -259,27 +256,36 @@ fn a_completed_walk_session_is_saved_and_queried(world: SharedContext) {
         (ctx.walk_repo.clone(), ctx.walk_session.clone())
     };
 
-    let save_result = block_on(async { walk_repo.save(&walk_session).await });
+    let (save_result, find_result, summaries_result) = block_on(async {
+        let save_result = walk_repo.save(&walk_session).await;
+        if save_result.is_err() {
+            return (save_result, Ok(None), Ok(Vec::new()));
+        }
+
+        let find_result = walk_repo.find_by_id(&walk_session.id()).await;
+        if find_result.is_err() {
+            return (save_result, find_result, Ok(Vec::new()));
+        }
+
+        let summaries_result = walk_repo
+            .list_completion_summaries_for_user(walk_session.user_id())
+            .await;
+        (save_result, find_result, summaries_result)
+    });
 
     let mut ctx = world.lock().expect("context lock");
-    ctx.last_walk_error = save_result.err();
-    if ctx.last_walk_error.is_some() {
-        return;
-    }
-
-    let find_result = block_on(async { walk_repo.find_by_id(&walk_session.id()).await });
-    if let Ok(found) = find_result {
-        ctx.last_found_session = Some(found);
-    } else if let Err(err) = find_result {
+    if let Err(err) = save_result {
         ctx.last_walk_error = Some(err);
         return;
     }
 
-    let summaries_result = block_on(async {
-        walk_repo
-            .list_completion_summaries_for_user(walk_session.user_id())
-            .await
-    });
+    match find_result {
+        Ok(found) => ctx.last_found_session = Some(found),
+        Err(err) => {
+            ctx.last_walk_error = Some(err);
+            return;
+        }
+    }
 
     match summaries_result {
         Ok(summaries) => {

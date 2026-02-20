@@ -10,6 +10,7 @@ use futures::executor::block_on;
 
 use super::repository_impl::{PgOfflineBundleRepository, PgWalkSessionRepository};
 
+/// Assert delete and lookup contracts for offline bundles.
 pub fn assert_offline_delete_and_lookup_contract(
     offline_repo: PgOfflineBundleRepository,
     route_bundle: OfflineBundle,
@@ -36,6 +37,7 @@ pub fn assert_offline_delete_and_lookup_contract(
     );
 }
 
+/// Assert walk lookup and summary filtering contracts for walk sessions.
 pub fn assert_walk_lookup_and_summary_filtering_contract(
     walk_repo: PgWalkSessionRepository,
     walk_session: WalkSession,

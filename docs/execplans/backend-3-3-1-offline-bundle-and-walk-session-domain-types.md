@@ -142,7 +142,7 @@ Observable success criteria:
       `docs/backend-roadmap.md`.
 - [x] (2026-02-20) Ran and passed `make check-fmt`, `make lint`, and
       `make test` with captured logs.
-- [ ] Commit gated implementation changes.
+- [x] (2026-02-20) Commit gated implementation changes.
 
 ## Surprises & discoveries
 

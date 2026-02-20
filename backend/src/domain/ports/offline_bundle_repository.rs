@@ -31,8 +31,10 @@ pub trait OfflineBundleRepository: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let found = repo.find_by_id(&bundle_id).await?;
-    /// assert!(found.is_none() || found.is_some());
+    /// repo.save(&bundle).await?;
+    /// let found = repo.find_by_id(&bundle.id()).await?;
+    /// assert!(found.is_some());
+    /// Ok::<(), OfflineBundleRepositoryError>(())
     /// ```
     async fn find_by_id(
         &self,
@@ -62,6 +64,9 @@ pub trait OfflineBundleRepository: Send + Sync {
     ///
     /// ```rust,ignore
     /// repo.save(&bundle).await?;
+    /// let found = repo.find_by_id(&bundle.id()).await?;
+    /// assert!(found.is_some());
+    /// Ok::<(), OfflineBundleRepositoryError>(())
     /// ```
     async fn save(&self, bundle: &OfflineBundle) -> Result<(), OfflineBundleRepositoryError>;
 
@@ -73,8 +78,10 @@ pub trait OfflineBundleRepository: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let was_deleted = repo.delete(&bundle_id).await?;
-    /// assert!(!was_deleted || was_deleted);
+    /// repo.save(&bundle).await?;
+    /// let was_deleted = repo.delete(&bundle.id()).await?;
+    /// assert!(was_deleted);
+    /// Ok::<(), OfflineBundleRepositoryError>(())
     /// ```
     async fn delete(&self, bundle_id: &Uuid) -> Result<bool, OfflineBundleRepositoryError>;
 }
