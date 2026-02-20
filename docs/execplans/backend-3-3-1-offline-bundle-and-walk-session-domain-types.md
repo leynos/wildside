@@ -308,7 +308,7 @@ implementation):
    Behavioural scenarios must include:
 
    - Happy path: create/update/list/delete offline bundle manifests and persist
-     + fetch walk completion sessions.
+     and fetch walk completion sessions.
    - Unhappy path: schema-loss or malformed data results mapped to typed
      `Query` errors.
    - Edge path: optional owner/route fields, zero and full progress, empty
