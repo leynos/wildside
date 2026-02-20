@@ -54,27 +54,33 @@ fn walk_session_constructs_from_valid_draft() {
 }
 
 #[rstest]
-fn primary_stat_rejects_negative_value() {
-    let result = WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, -1.0);
+#[case(WalkPrimaryStatKind::Distance)]
+#[case(WalkPrimaryStatKind::Duration)]
+fn primary_stat_rejects_negative_value(#[case] kind: WalkPrimaryStatKind) {
+    let result = WalkPrimaryStat::new(kind, -1.0);
     assert!(matches!(
         result,
         Err(WalkValidationError::NegativePrimaryStatValue {
-            kind: WalkPrimaryStatKind::Distance,
+            kind: actual_kind,
             ..
-        })
+        }) if actual_kind == kind
     ));
 }
 
 #[rstest]
-fn secondary_stat_rejects_negative_value() {
-    let result =
-        WalkSecondaryStat::new(WalkSecondaryStatKind::Energy, -5.0, Some("kcal".to_owned()));
+#[case(WalkSecondaryStatKind::Energy, Some("kcal"))]
+#[case(WalkSecondaryStatKind::Count, None)]
+fn secondary_stat_rejects_negative_value(
+    #[case] kind: WalkSecondaryStatKind,
+    #[case] unit: Option<&str>,
+) {
+    let result = WalkSecondaryStat::new(kind, -5.0, unit.map(str::to_owned));
     assert!(matches!(
         result,
         Err(WalkValidationError::NegativeSecondaryStatValue {
-            kind: WalkSecondaryStatKind::Energy,
+            kind: actual_kind,
             ..
-        })
+        }) if actual_kind == kind
     ));
 }
 
@@ -101,29 +107,37 @@ fn session_rejects_ended_at_before_started_at() {
 }
 
 #[rstest]
-fn session_rejects_duplicate_primary_stat_kinds() {
+#[case(WalkPrimaryStatKind::Distance)]
+#[case(WalkPrimaryStatKind::Duration)]
+fn session_rejects_duplicate_primary_stat_kinds(#[case] kind: WalkPrimaryStatKind) {
     let mut draft = build_walk_session_draft();
     draft.primary_stats = vec![
-        WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 1200.0).expect("valid primary stat"),
-        WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 900.0).expect("valid primary stat"),
+        WalkPrimaryStat::new(kind, 1200.0).expect("valid primary stat"),
+        WalkPrimaryStat::new(kind, 900.0).expect("valid primary stat"),
     ];
 
     let result = WalkSession::new(draft);
     assert!(matches!(
         result,
         Err(WalkValidationError::DuplicatePrimaryStatKind {
-            kind: WalkPrimaryStatKind::Distance
-        })
+            kind: actual_kind
+        }) if actual_kind == kind
     ));
 }
 
 #[rstest]
-fn session_rejects_duplicate_secondary_stat_kinds() {
+#[case(WalkSecondaryStatKind::Energy, Some("kcal"), Some("kJ"))]
+#[case(WalkSecondaryStatKind::Count, None, None)]
+fn session_rejects_duplicate_secondary_stat_kinds(
+    #[case] kind: WalkSecondaryStatKind,
+    #[case] first_unit: Option<&str>,
+    #[case] second_unit: Option<&str>,
+) {
     let mut draft = build_walk_session_draft();
     draft.secondary_stats = vec![
-        WalkSecondaryStat::new(WalkSecondaryStatKind::Count, 10.0, None)
+        WalkSecondaryStat::new(kind, 10.0, first_unit.map(str::to_owned))
             .expect("valid secondary stat"),
-        WalkSecondaryStat::new(WalkSecondaryStatKind::Count, 14.0, None)
+        WalkSecondaryStat::new(kind, 14.0, second_unit.map(str::to_owned))
             .expect("valid secondary stat"),
     ];
 
@@ -131,8 +145,8 @@ fn session_rejects_duplicate_secondary_stat_kinds() {
     assert!(matches!(
         result,
         Err(WalkValidationError::DuplicateSecondaryStatKind {
-            kind: WalkSecondaryStatKind::Count
-        })
+            kind: actual_kind
+        }) if actual_kind == kind
     ));
 }
 
