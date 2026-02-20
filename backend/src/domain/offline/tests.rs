@@ -64,30 +64,30 @@ fn route_bundle_draft_rejects_empty_device_id(route_bundle_draft: OfflineBundleD
 }
 
 #[rstest]
-fn region_bundle_requires_region_id_and_rejects_route_id(route_bundle_draft: OfflineBundleDraft) {
+#[case::route_id_present_for_region(
+    Some(Uuid::new_v4()),
+    Some("edinburgh-centre".to_owned()),
+    OfflineValidationError::UnexpectedRouteIdForRegionBundle
+)]
+#[case::whitespace_region_id(
+    None,
+    Some("   ".to_owned()),
+    OfflineValidationError::MissingRegionIdForRegionBundle
+)]
+fn region_bundle_validation_errors(
+    route_bundle_draft: OfflineBundleDraft,
+    #[case] route_id: Option<Uuid>,
+    #[case] region_id: Option<String>,
+    #[case] expected_error: OfflineValidationError,
+) {
     let mut draft = route_bundle_draft;
     draft.kind = OfflineBundleKind::Region;
-    draft.route_id = Some(Uuid::new_v4());
-    draft.region_id = Some("edinburgh-centre".to_owned());
+    draft.route_id = route_id;
+    draft.region_id = region_id;
 
     let result = OfflineBundle::new(draft);
-    assert!(matches!(
-        result,
-        Err(OfflineValidationError::UnexpectedRouteIdForRegionBundle)
-    ));
-}
-
-#[rstest]
-fn region_bundle_rejects_whitespace_region_id(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
-    draft.kind = OfflineBundleKind::Region;
-    draft.route_id = None;
-    draft.region_id = Some("   ".to_owned());
-
-    let result = OfflineBundle::new(draft);
-    assert!(matches!(
-        result,
-        Err(OfflineValidationError::MissingRegionIdForRegionBundle)
+    assert!(matches!(result, Err(ref e)
+        if std::mem::discriminant(e) == std::mem::discriminant(&expected_error)
     ));
 }
 
