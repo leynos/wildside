@@ -86,6 +86,46 @@ fn world() -> SharedContext {
     }
 }
 
+fn assert_offline_success_and_get_bundles<'a>(
+    ctx: &'a TestContext,
+    list_description: &str,
+) -> &'a Vec<OfflineBundle> {
+    assert!(
+        ctx.last_offline_error.is_none(),
+        "offline repository returned an error while {list_description}: {:?}",
+        ctx.last_offline_error
+    );
+
+    assert!(
+        ctx.last_offline_bundles.is_some(),
+        "offline bundle list is missing while {list_description}; expected list operation to run"
+    );
+
+    ctx.last_offline_bundles
+        .as_ref()
+        .expect("offline bundle list should be available after assertion")
+}
+
+fn assert_single_bundle_matches(
+    bundles: &[OfflineBundle],
+    expected_id: &uuid::Uuid,
+    expected_progress: f64,
+) {
+    assert_eq!(bundles.len(), 1);
+    assert_eq!(bundles[0].id(), *expected_id);
+    assert_eq!(f64::from(bundles[0].progress()), expected_progress);
+}
+
+fn drop_table_and_save<T, E, F>(database_url: &str, table_name: &str, save_fn: F) -> Option<E>
+where
+    F: FnOnce() -> Result<T, E>,
+{
+    if let Err(err) = drop_table(database_url, table_name) {
+        panic!("failed to drop table '{table_name}' before save attempt: {err}");
+    }
+    save_fn().err()
+}
+
 #[given("postgres-backed offline bundle and walk session repositories")]
 fn postgres_backed_offline_bundle_and_walk_session_repositories(world: SharedContext) {
     drop(world);
@@ -147,19 +187,8 @@ fn bundles_are_listed_for_the_owner_and_device(world: SharedContext) {
 #[then("the owner listing includes the route bundle only")]
 fn the_owner_listing_includes_the_route_bundle_only(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
-    assert!(
-        ctx.last_offline_error.is_none(),
-        "{:?}",
-        ctx.last_offline_error
-    );
-
-    let bundles = ctx
-        .last_offline_bundles
-        .as_ref()
-        .expect("owner list should execute");
-    assert_eq!(bundles.len(), 1);
-    assert_eq!(bundles[0].id(), ctx.route_bundle.id());
-    assert_eq!(bundles[0].progress(), 1.0);
+    let bundles = assert_offline_success_and_get_bundles(&ctx, "validating owner bundle listing");
+    assert_single_bundle_matches(bundles, &ctx.route_bundle.id(), 1.0);
 }
 
 #[when("anonymous bundles are listed for the region device")]
@@ -191,19 +220,9 @@ fn anonymous_bundles_are_listed_for_the_region_device(world: SharedContext) {
 #[then("the anonymous listing includes the region bundle only")]
 fn the_anonymous_listing_includes_the_region_bundle_only(world: SharedContext) {
     let ctx = world.lock().expect("context lock");
-    assert!(
-        ctx.last_offline_error.is_none(),
-        "{:?}",
-        ctx.last_offline_error
-    );
-
-    let bundles = ctx
-        .last_offline_bundles
-        .as_ref()
-        .expect("anonymous list should execute");
-    assert_eq!(bundles.len(), 1);
-    assert_eq!(bundles[0].id(), ctx.region_bundle.id());
-    assert_eq!(bundles[0].progress(), 0.0);
+    let bundles =
+        assert_offline_success_and_get_bundles(&ctx, "validating anonymous bundle listing");
+    assert_single_bundle_matches(bundles, &ctx.region_bundle.id(), 0.0);
 }
 
 #[when("a completed walk session is saved and queried")]
@@ -276,10 +295,10 @@ fn the_offline_bundle_table_is_dropped_and_an_offline_save_is_attempted(world: S
         )
     };
 
-    drop_table(&database_url, "offline_bundles").expect("drop offline table");
-    let result = block_on(async { offline_repo.save(&route_bundle).await });
-
-    world.lock().expect("context lock").last_offline_error = result.err();
+    world.lock().expect("context lock").last_offline_error =
+        drop_table_and_save(&database_url, "offline_bundles", || {
+            block_on(async { offline_repo.save(&route_bundle).await })
+        });
 }
 
 #[then("the offline repository reports a query error")]
@@ -302,10 +321,10 @@ fn the_walk_session_table_is_dropped_and_a_walk_save_is_attempted(world: SharedC
         )
     };
 
-    drop_table(&database_url, "walk_sessions").expect("drop walk table");
-    let result = block_on(async { walk_repo.save(&walk_session).await });
-
-    world.lock().expect("context lock").last_walk_error = result.err();
+    world.lock().expect("context lock").last_walk_error =
+        drop_table_and_save(&database_url, "walk_sessions", || {
+            block_on(async { walk_repo.save(&walk_session).await })
+        });
 }
 
 #[then("the walk session repository reports a query error")]
