@@ -17,7 +17,7 @@ mod diesel_walk_session_repository_test_params;
 mod support;
 
 use crate::support::seed_helpers::seed_user_and_route;
-use diesel_walk_session_repository_test_params::WalkSessionTestParams;
+use diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
 use support::atexit_cleanup::shared_cluster_handle;
 use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 
@@ -69,7 +69,7 @@ fn build_session_with_id(
 
     let mut params = WalkSessionTestParams::new(user_id, route_id, started_at)
         .with_id(id)
-        .with_stats(distance, duration, energy, poi_count);
+        .with_stats(WalkSessionStats::new(distance, duration, energy, poi_count));
     if let Some(ended_at) = ended_at {
         params = params.with_ended_at(ended_at);
     }

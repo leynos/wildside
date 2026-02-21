@@ -7,6 +7,24 @@ use backend::domain::{
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+pub(crate) struct WalkSessionStats {
+    distance: f64,
+    duration: f64,
+    energy: f64,
+    poi_count: f64,
+}
+
+impl WalkSessionStats {
+    pub(crate) fn new(distance: f64, duration: f64, energy: f64, poi_count: f64) -> Self {
+        Self {
+            distance,
+            duration,
+            energy,
+            poi_count,
+        }
+    }
+}
+
 pub(crate) struct WalkSessionTestParams {
     id: Uuid,
     user_id: UserId,
@@ -44,21 +62,11 @@ impl WalkSessionTestParams {
         self
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "test builder intentionally exposes explicit stat values"
-    )]
-    pub(crate) fn with_stats(
-        mut self,
-        distance: f64,
-        duration: f64,
-        energy: f64,
-        poi_count: f64,
-    ) -> Self {
-        self.distance = distance;
-        self.duration = duration;
-        self.energy = energy;
-        self.poi_count = poi_count;
+    pub(crate) fn with_stats(mut self, stats: WalkSessionStats) -> Self {
+        self.distance = stats.distance;
+        self.duration = stats.duration;
+        self.energy = stats.energy;
+        self.poi_count = stats.poi_count;
         self
     }
 
