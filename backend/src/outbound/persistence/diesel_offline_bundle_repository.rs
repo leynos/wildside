@@ -6,7 +6,6 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::domain::ports::{OfflineBundleRepository, OfflineBundleRepositoryError};
@@ -15,6 +14,7 @@ use crate::domain::{
     ZoomRange,
 };
 
+use super::diesel_basic_error_mapping::{map_basic_diesel_error, map_basic_pool_error};
 use super::models::{NewOfflineBundleRow, OfflineBundleRow, OfflineBundleUpdate};
 use super::pool::{DbPool, PoolError};
 use super::schema::offline_bundles;
@@ -34,38 +34,18 @@ impl DieselOfflineBundleRepository {
 
 /// Map pool errors to domain repository errors.
 fn map_pool_error(error: PoolError) -> OfflineBundleRepositoryError {
-    match error {
-        PoolError::Checkout { message } | PoolError::Build { message } => {
-            OfflineBundleRepositoryError::connection(message)
-        }
-    }
+    map_basic_pool_error(error, |message| {
+        OfflineBundleRepositoryError::connection(message)
+    })
 }
 
 /// Map Diesel errors to domain repository errors.
 fn map_diesel_error(error: diesel::result::Error) -> OfflineBundleRepositoryError {
-    use diesel::result::{DatabaseErrorKind, Error as DieselError};
-
-    match &error {
-        DieselError::DatabaseError(kind, info) => {
-            debug!(?kind, message = info.message(), "diesel operation failed");
-        }
-        _ => debug!(
-            error_type = %std::any::type_name_of_val(&error),
-            "diesel operation failed"
-        ),
-    }
-
-    match error {
-        DieselError::NotFound => OfflineBundleRepositoryError::query("record not found"),
-        DieselError::QueryBuilderError(_) => {
-            OfflineBundleRepositoryError::query("database query error")
-        }
-        DieselError::DatabaseError(DatabaseErrorKind::ClosedConnection, _) => {
-            OfflineBundleRepositoryError::connection("database connection error")
-        }
-        DieselError::DatabaseError(_, _) => OfflineBundleRepositoryError::query("database error"),
-        _ => OfflineBundleRepositoryError::query("database error"),
-    }
+    map_basic_diesel_error(
+        error,
+        OfflineBundleRepositoryError::query,
+        OfflineBundleRepositoryError::connection,
+    )
 }
 
 /// Convert a database row into a validated domain offline bundle.
@@ -132,6 +112,84 @@ fn row_to_offline_bundle(
     .map_err(|err| OfflineBundleRepositoryError::query(err.to_string()))
 }
 
+/// Shared row payload for insert and update statements.
+struct OfflineBundleRowPayload<'a> {
+    id: Uuid,
+    owner_user_id: Option<Uuid>,
+    device_id: &'a str,
+    kind: &'a str,
+    route_id: Option<Uuid>,
+    region_id: Option<&'a str>,
+    bounds: [f64; 4],
+    min_zoom: i32,
+    max_zoom: i32,
+    estimated_size_bytes: i64,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    status: &'a str,
+    progress: f32,
+}
+
+impl<'a> OfflineBundleRowPayload<'a> {
+    fn from_bundle(bundle: &'a OfflineBundle) -> Result<Self, OfflineBundleRepositoryError> {
+        let estimated_size_bytes = i64::try_from(bundle.estimated_size_bytes())
+            .map_err(|_| OfflineBundleRepositoryError::query("estimated_size_bytes overflow"))?;
+
+        Ok(Self {
+            id: bundle.id(),
+            owner_user_id: bundle.owner_user_id().map(|value| *value.as_uuid()),
+            device_id: bundle.device_id(),
+            kind: bundle.kind().as_str(),
+            route_id: bundle.route_id(),
+            region_id: bundle.region_id(),
+            bounds: bundle.bounds().as_array(),
+            min_zoom: i32::from(bundle.zoom_range().min_zoom()),
+            max_zoom: i32::from(bundle.zoom_range().max_zoom()),
+            estimated_size_bytes,
+            created_at: bundle.created_at(),
+            updated_at: bundle.updated_at(),
+            status: bundle.status().as_str(),
+            progress: bundle.progress(),
+        })
+    }
+
+    fn to_new_row(&'a self) -> NewOfflineBundleRow<'a> {
+        NewOfflineBundleRow {
+            id: self.id,
+            owner_user_id: self.owner_user_id,
+            device_id: self.device_id,
+            kind: self.kind,
+            route_id: self.route_id,
+            region_id: self.region_id,
+            bounds: self.bounds.as_slice(),
+            min_zoom: self.min_zoom,
+            max_zoom: self.max_zoom,
+            estimated_size_bytes: self.estimated_size_bytes,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            status: self.status,
+            progress: self.progress,
+        }
+    }
+
+    fn to_update_row(&'a self) -> OfflineBundleUpdate<'a> {
+        OfflineBundleUpdate {
+            owner_user_id: self.owner_user_id,
+            device_id: self.device_id,
+            kind: self.kind,
+            route_id: self.route_id,
+            region_id: self.region_id,
+            bounds: self.bounds.as_slice(),
+            min_zoom: self.min_zoom,
+            max_zoom: self.max_zoom,
+            estimated_size_bytes: self.estimated_size_bytes,
+            updated_at: self.updated_at,
+            status: self.status,
+            progress: self.progress,
+        }
+    }
+}
+
 #[async_trait]
 impl OfflineBundleRepository for DieselOfflineBundleRepository {
     async fn find_by_id(
@@ -158,77 +216,32 @@ impl OfflineBundleRepository for DieselOfflineBundleRepository {
     ) -> Result<Vec<OfflineBundle>, OfflineBundleRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
-        let rows: Vec<OfflineBundleRow> = match owner_user_id {
-            Some(owner_user_id) => offline_bundles::table
-                .filter(
-                    offline_bundles::owner_user_id
-                        .eq(owner_user_id.as_uuid())
-                        .and(offline_bundles::device_id.eq(device_id)),
-                )
-                .order((offline_bundles::created_at.asc(), offline_bundles::id.asc()))
-                .select(OfflineBundleRow::as_select())
-                .load(&mut conn)
-                .await
-                .map_err(map_diesel_error)?,
-            None => offline_bundles::table
-                .filter(
-                    offline_bundles::owner_user_id
-                        .is_null()
-                        .and(offline_bundles::device_id.eq(device_id)),
-                )
-                .order((offline_bundles::created_at.asc(), offline_bundles::id.asc()))
-                .select(OfflineBundleRow::as_select())
-                .load(&mut conn)
-                .await
-                .map_err(map_diesel_error)?,
-        };
+        let mut query = offline_bundles::table
+            .filter(offline_bundles::device_id.eq(device_id))
+            .into_boxed();
+
+        if let Some(owner_user_id) = owner_user_id {
+            let owner_uuid = *owner_user_id.as_uuid();
+            query = query.filter(offline_bundles::owner_user_id.eq(owner_uuid));
+        } else {
+            query = query.filter(offline_bundles::owner_user_id.is_null());
+        }
+
+        let rows: Vec<OfflineBundleRow> = query
+            .order((offline_bundles::created_at.asc(), offline_bundles::id.asc()))
+            .select(OfflineBundleRow::as_select())
+            .load(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
 
         rows.into_iter().map(row_to_offline_bundle).collect()
     }
 
     async fn save(&self, bundle: &OfflineBundle) -> Result<(), OfflineBundleRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        let owner_user_id = bundle.owner_user_id().map(|value| *value.as_uuid());
-        let route_id = bundle.route_id();
-        let region_id = bundle.region_id();
-        let bounds = bundle.bounds().as_array();
-        let min_zoom = i32::from(bundle.zoom_range().min_zoom());
-        let max_zoom = i32::from(bundle.zoom_range().max_zoom());
-        let estimated_size_bytes = i64::try_from(bundle.estimated_size_bytes())
-            .map_err(|_| OfflineBundleRepositoryError::query("estimated_size_bytes overflow"))?;
-
-        let new_row = NewOfflineBundleRow {
-            id: bundle.id(),
-            owner_user_id,
-            device_id: bundle.device_id(),
-            kind: bundle.kind().as_str(),
-            route_id,
-            region_id,
-            bounds: bounds.as_slice(),
-            min_zoom,
-            max_zoom,
-            estimated_size_bytes,
-            created_at: bundle.created_at(),
-            updated_at: bundle.updated_at(),
-            status: bundle.status().as_str(),
-            progress: bundle.progress(),
-        };
-
-        let update_row = OfflineBundleUpdate {
-            owner_user_id,
-            device_id: bundle.device_id(),
-            kind: bundle.kind().as_str(),
-            route_id,
-            region_id,
-            bounds: bounds.as_slice(),
-            min_zoom,
-            max_zoom,
-            estimated_size_bytes,
-            updated_at: bundle.updated_at(),
-            status: bundle.status().as_str(),
-            progress: bundle.progress(),
-        };
+        let payload = OfflineBundleRowPayload::from_bundle(bundle)?;
+        let new_row = payload.to_new_row();
+        let update_row = payload.to_update_row();
 
         diesel::insert_into(offline_bundles::table)
             .values(&new_row)

@@ -251,13 +251,6 @@ impl WalkSessionRepository for PgWalkSessionRepository {
     }
 }
 
-pub fn drop_table(database_url: &str, table_name: &str) -> Result<(), postgres::Error> {
-    let mut client = Client::connect(database_url, postgres::NoTls)?;
-    let escaped_table_name = table_name.replace('"', "\"\"");
-    let statement = format!(r#"DROP TABLE IF EXISTS "{escaped_table_name}""#);
-    client.batch_execute(statement.as_str())
-}
-
 fn row_to_offline_bundle(row: Row) -> Result<OfflineBundle, OfflineBundleRepositoryError> {
     let bounds: Vec<f64> = row.get("bounds");
     if bounds.len() != 4 {

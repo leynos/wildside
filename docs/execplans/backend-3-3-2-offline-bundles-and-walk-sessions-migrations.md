@@ -85,7 +85,8 @@ Observable success criteria:
 
 ## Risks
 
-- Risk: migration DDL and domain invariants drift (especially bounds ordering,
+- Risk: migration Data Definition Language (DDL) and domain invariants drift
+  (especially bounds ordering,
   zoom range semantics, and walk completion fields).
   Severity: high.
   Likelihood: medium.
@@ -354,16 +355,20 @@ Update architecture and roadmap documents in the same feature branch:
 
 Run full gates with log capture:
 
-    set -o pipefail
-    BRANCH_SAFE="$(git branch --show | tr '/' '-')"
-    PROJECT="$(get-project 2>/dev/null || basename "$PWD")"
-    make check-fmt 2>&1 | tee "/tmp/check-fmt-${PROJECT}-${BRANCH_SAFE}.out"
-    make lint 2>&1 | tee "/tmp/lint-${PROJECT}-${BRANCH_SAFE}.out"
-    make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH_SAFE}.out"
+```shell
+set -o pipefail
+BRANCH_SAFE="$(git branch --show | tr '/' '-')"
+PROJECT="$(get-project 2>/dev/null || basename "$PWD")"
+make check-fmt 2>&1 | tee "/tmp/check-fmt-${PROJECT}-${BRANCH_SAFE}.out"
+make lint 2>&1 | tee "/tmp/lint-${PROJECT}-${BRANCH_SAFE}.out"
+make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH_SAFE}.out"
+```
 
 If embedded-Postgres flakes under parallel runs:
 
-    NEXTEST_TEST_THREADS=1 make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH_SAFE}.out"
+```shell
+NEXTEST_TEST_THREADS=1 make test 2>&1 | tee "/tmp/test-${PROJECT}-${BRANCH_SAFE}.out"
+```
 
 Commit policy:
 

@@ -45,5 +45,57 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
     summary
 }
 
+/// Seed a user and route fixture row pair for integration tests.
+///
+/// This centralizes common test setup so repository suites share the same
+/// seeding contract and SQL shape.
+// This helper is consumed by only a subset of integration-test crates.
+#[allow(dead_code)]
+pub fn seed_user_and_route(
+    url: &str,
+    user_id: &backend::domain::UserId,
+    route_id: uuid::Uuid,
+    display_name: &str,
+) -> Result<(), String> {
+    let mut client = postgres::Client::connect(url, postgres::NoTls)
+        .map_err(|err| format_postgres_error(&err))?;
+    let user_uuid = *user_id.as_uuid();
+
+    client
+        .execute(
+            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
+            &[&user_uuid, &display_name],
+        )
+        .map_err(|err| format_postgres_error(&err))?;
+
+    client
+        .execute(
+            concat!(
+                "INSERT INTO routes (id, user_id, path, generation_params) ",
+                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
+            ),
+            &[&route_id, &user_uuid],
+        )
+        .map_err(|err| format_postgres_error(&err))?;
+
+    Ok(())
+}
+
+/// Drop a table by name from a test database.
+///
+/// The identifier is escaped so helpers can safely accept test-provided table
+/// names.
+// This helper is consumed by only a subset of integration-test crates.
+#[allow(dead_code)]
+pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
+    let mut client = postgres::Client::connect(url, postgres::NoTls)
+        .map_err(|err| format_postgres_error(&err))?;
+    let escaped_name = table_name.replace('"', "\"\"");
+    let sql = format!(r#"DROP TABLE IF EXISTS "{escaped_name}""#);
+    client
+        .batch_execute(sql.as_str())
+        .map_err(|err| format_postgres_error(&err))
+}
+
 pub use cluster_skip::handle_cluster_setup_failure;
 pub use embedded_postgres::provision_template_database;

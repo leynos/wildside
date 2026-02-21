@@ -6,10 +6,10 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use std::sync::{Arc, Mutex};
 
-use super::repository_impl::{PgOfflineBundleRepository, PgWalkSessionRepository, drop_table};
+use super::repository_impl::{PgOfflineBundleRepository, PgWalkSessionRepository};
 use super::test_data::{build_region_bundle, build_route_bundle, build_walk_session};
 use crate::support::atexit_cleanup::shared_cluster_handle;
-use crate::support::{format_postgres_error, provision_template_database};
+use crate::support::{drop_table, provision_template_database, seed_user_and_route};
 
 pub(crate) struct TestContext {
     pub(crate) offline_repo: PgOfflineBundleRepository,
@@ -28,40 +28,15 @@ pub(crate) struct TestContext {
 
 pub(crate) type SharedContext = Arc<Mutex<TestContext>>;
 
-pub(crate) fn seed_user_and_route(
-    client: &mut Client,
-    user_id: &UserId,
-    route_id: uuid::Uuid,
-) -> Result<(), String> {
-    let user_uuid = *user_id.as_uuid();
-    let display_name = "Offline BDD User";
-    client
-        .execute(
-            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_uuid, &display_name],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-    client
-        .execute(
-            concat!(
-                "INSERT INTO routes (id, user_id, path, generation_params) ",
-                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
-            ),
-            &[&route_id, &user_uuid],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-    Ok(())
-}
-
 pub(crate) fn setup_test_context() -> Result<TestContext, String> {
     let cluster = shared_cluster_handle().map_err(|err| err.to_string())?;
     let temporary_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temporary_db.url().to_owned();
 
-    let mut client = Client::connect(temporary_db.url(), NoTls).map_err(|err| err.to_string())?;
+    let client = Client::connect(temporary_db.url(), NoTls).map_err(|err| err.to_string())?;
     let user_id = UserId::random();
     let route_id = uuid::Uuid::new_v4();
-    seed_user_and_route(&mut client, &user_id, route_id)?;
+    seed_user_and_route(temporary_db.url(), &user_id, route_id, "Offline BDD User")?;
 
     let shared_client = Arc::new(Mutex::new(client));
 

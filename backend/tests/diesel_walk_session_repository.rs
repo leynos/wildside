@@ -11,7 +11,6 @@ use backend::domain::{
 use backend::outbound::persistence::{DbPool, DieselWalkSessionRepository, PoolConfig};
 use chrono::{Duration, Utc};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
-use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -19,7 +18,9 @@ use uuid::Uuid;
 mod support;
 
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::{
+    drop_table, handle_cluster_setup_failure, provision_template_database, seed_user_and_route,
+};
 
 struct TestContext {
     runtime: Runtime,
@@ -30,71 +31,65 @@ struct TestContext {
     _database: TemporaryDatabase,
 }
 
-fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
-    let user_uuid = *user_id.as_uuid();
-    let display_name = "Walk Session Test User";
-
-    client
-        .execute(
-            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_uuid, &display_name],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    client
-        .execute(
-            concat!(
-                "INSERT INTO routes (id, user_id, path, generation_params) ",
-                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
-            ),
-            &[&route_id, &user_uuid],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    Ok(())
-}
-
 fn build_session(
     user_id: UserId,
     route_id: Uuid,
     started_at: chrono::DateTime<chrono::Utc>,
     ended_at: Option<chrono::DateTime<chrono::Utc>>,
 ) -> WalkSession {
+    build_session_with_id(
+        Uuid::new_v4(),
+        user_id,
+        route_id,
+        started_at,
+        ended_at,
+        3650.0,
+        2820.0,
+        320.0,
+        12.0,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "test helper keeps session-field deltas explicit for upsert scenarios"
+)]
+fn build_session_with_id(
+    id: Uuid,
+    user_id: UserId,
+    route_id: Uuid,
+    started_at: chrono::DateTime<chrono::Utc>,
+    ended_at: Option<chrono::DateTime<chrono::Utc>>,
+    distance: f64,
+    duration: f64,
+    energy: f64,
+    poi_count: f64,
+) -> WalkSession {
     WalkSession::new(WalkSessionDraft {
-        id: Uuid::new_v4(),
+        id,
         user_id,
         route_id,
         started_at,
         ended_at,
         primary_stats: vec![
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 3650.0)
+            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, distance)
                 .expect("valid distance stat"),
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Duration, 2820.0)
+            WalkPrimaryStat::new(WalkPrimaryStatKind::Duration, duration)
                 .expect("valid duration stat"),
         ],
         secondary_stats: vec![
             WalkSecondaryStat::new(
                 WalkSecondaryStatKind::Energy,
-                320.0,
+                energy,
                 Some("kcal".to_owned()),
             )
             .expect("valid energy stat"),
-            WalkSecondaryStat::new(WalkSecondaryStatKind::Count, 12.0, None)
+            WalkSecondaryStat::new(WalkSecondaryStatKind::Count, poi_count, None)
                 .expect("valid count stat"),
         ],
         highlighted_poi_ids: vec![Uuid::new_v4()],
     })
     .expect("valid walk session")
-}
-
-fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
-    let escaped_name = table_name.replace('"', "\"\"");
-    let sql = format!(r#"DROP TABLE IF EXISTS "{escaped_name}""#);
-    client
-        .batch_execute(sql.as_str())
-        .map_err(|err| format_postgres_error(&err))
 }
 
 fn setup_context() -> Result<TestContext, String> {
@@ -105,7 +100,12 @@ fn setup_context() -> Result<TestContext, String> {
 
     let user_id = UserId::random();
     let route_id = Uuid::new_v4();
-    seed_user_and_route(database_url.as_str(), &user_id, route_id)?;
+    seed_user_and_route(
+        database_url.as_str(),
+        &user_id,
+        route_id,
+        "Walk Session Test User",
+    )?;
 
     let config = PoolConfig::new(database_url.as_str())
         .with_max_size(2)
@@ -203,6 +203,142 @@ fn walk_repository_save_find_and_summary_filtering(repo_context: Option<TestCont
     );
     assert_eq!(summaries[0].session_id(), latest_completed.id());
     assert_eq!(summaries[1].session_id(), earlier_completed.id());
+}
+
+#[rstest]
+fn walk_repository_upsert_persists_latest_values(repo_context: Option<TestContext>) {
+    let Some(context) = repo_context else {
+        eprintln!("SKIP-TEST-CLUSTER: walk_repository_upsert_persists_latest_values skipped");
+        return;
+    };
+
+    let repository = context.repository.clone();
+    let session_id = Uuid::new_v4();
+    let started_at = Utc::now();
+    let initial_session = build_session_with_id(
+        session_id,
+        context.user_id.clone(),
+        context.route_id,
+        started_at,
+        None,
+        1200.0,
+        900.0,
+        120.0,
+        4.0,
+    );
+    let updated_session = build_session_with_id(
+        session_id,
+        context.user_id.clone(),
+        context.route_id,
+        started_at,
+        Some(started_at + Duration::minutes(30)),
+        2500.0,
+        1800.0,
+        260.0,
+        9.0,
+    );
+
+    context.runtime.block_on(async {
+        repository
+            .save(&initial_session)
+            .await
+            .expect("initial save should succeed");
+        repository
+            .save(&updated_session)
+            .await
+            .expect("upsert save should succeed");
+    });
+
+    let found = context
+        .runtime
+        .block_on(async { repository.find_by_id(&session_id).await })
+        .expect("find by id should succeed")
+        .expect("session should exist after upsert");
+
+    assert_eq!(found.id(), session_id);
+    let found_ended_at = found
+        .ended_at()
+        .expect("upserted session should include completion timestamp");
+    let expected_ended_at = updated_session
+        .ended_at()
+        .expect("updated session should include completion timestamp");
+    let ended_at_delta_nanos = found_ended_at
+        .signed_duration_since(expected_ended_at)
+        .num_nanoseconds()
+        .expect("timestamp difference should fit i64")
+        .abs();
+    assert!(
+        ended_at_delta_nanos < 1_000,
+        "ended_at should round-trip with microsecond precision; delta={ended_at_delta_nanos}ns"
+    );
+    assert_eq!(found.primary_stats(), updated_session.primary_stats());
+    assert_eq!(found.secondary_stats(), updated_session.secondary_stats());
+}
+
+#[rstest]
+fn walk_repository_summary_filters_out_other_users(repo_context: Option<TestContext>) {
+    let Some(context) = repo_context else {
+        eprintln!("SKIP-TEST-CLUSTER: walk_repository_summary_filters_out_other_users skipped");
+        return;
+    };
+
+    let repository = context.repository.clone();
+    let now = Utc::now();
+    let user_a_session = build_session(
+        context.user_id.clone(),
+        context.route_id,
+        now,
+        Some(now + Duration::minutes(20)),
+    );
+
+    let other_user_id = UserId::random();
+    let other_route_id = Uuid::new_v4();
+    seed_user_and_route(
+        context.database_url.as_str(),
+        &other_user_id,
+        other_route_id,
+        "Walk Session Other User",
+    )
+    .expect("other user and route should seed");
+    let user_b_session = build_session(
+        other_user_id.clone(),
+        other_route_id,
+        now + Duration::minutes(5),
+        Some(now + Duration::minutes(25)),
+    );
+
+    context.runtime.block_on(async {
+        repository
+            .save(&user_a_session)
+            .await
+            .expect("saving user A session should succeed");
+        repository
+            .save(&user_b_session)
+            .await
+            .expect("saving user B session should succeed");
+    });
+
+    let summaries = context
+        .runtime
+        .block_on(async {
+            repository
+                .list_completion_summaries_for_user(&context.user_id)
+                .await
+        })
+        .expect("listing summaries for user A should succeed");
+    let summary_ids: Vec<Uuid> = summaries
+        .iter()
+        .map(|summary| summary.session_id())
+        .collect();
+
+    assert!(
+        summary_ids.contains(&user_a_session.id()),
+        "user A's completed session should appear in their summaries"
+    );
+    assert!(
+        !summary_ids.contains(&user_b_session.id()),
+        "user B's session should not appear in user A summaries"
+    );
 }
 
 #[rstest]

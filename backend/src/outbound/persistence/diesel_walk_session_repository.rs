@@ -6,7 +6,6 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::domain::ports::{WalkSessionRepository, WalkSessionRepositoryError};
@@ -15,6 +14,7 @@ use crate::domain::{
     WalkSecondaryStatDraft, WalkSession, WalkSessionDraft,
 };
 
+use super::diesel_basic_error_mapping::{map_basic_diesel_error, map_basic_pool_error};
 use super::models::{NewWalkSessionRow, WalkSessionRow, WalkSessionUpdate};
 use super::pool::{DbPool, PoolError};
 use super::schema::walk_sessions;
@@ -34,38 +34,61 @@ impl DieselWalkSessionRepository {
 
 /// Map pool errors to domain repository errors.
 fn map_pool_error(error: PoolError) -> WalkSessionRepositoryError {
-    match error {
-        PoolError::Checkout { message } | PoolError::Build { message } => {
-            WalkSessionRepositoryError::connection(message)
-        }
-    }
+    map_basic_pool_error(error, |message| {
+        WalkSessionRepositoryError::connection(message)
+    })
 }
 
 /// Map Diesel errors to domain repository errors.
 fn map_diesel_error(error: diesel::result::Error) -> WalkSessionRepositoryError {
-    use diesel::result::{DatabaseErrorKind, Error as DieselError};
+    map_basic_diesel_error(
+        error,
+        WalkSessionRepositoryError::query,
+        WalkSessionRepositoryError::connection,
+    )
+}
 
-    match &error {
-        DieselError::DatabaseError(kind, info) => {
-            debug!(?kind, message = info.message(), "diesel operation failed");
-        }
-        _ => debug!(
-            error_type = %std::any::type_name_of_val(&error),
-            "diesel operation failed"
-        ),
-    }
+fn serialize_primary_stats(
+    session: &WalkSession,
+) -> Result<serde_json::Value, WalkSessionRepositoryError> {
+    serde_json::to_value(session.primary_stats())
+        .map_err(|err| WalkSessionRepositoryError::query(format!("serialise primary stats: {err}")))
+}
 
-    match error {
-        DieselError::NotFound => WalkSessionRepositoryError::query("record not found"),
-        DieselError::QueryBuilderError(_) => {
-            WalkSessionRepositoryError::query("database query error")
-        }
-        DieselError::DatabaseError(DatabaseErrorKind::ClosedConnection, _) => {
-            WalkSessionRepositoryError::connection("database connection error")
-        }
-        DieselError::DatabaseError(_, _) => WalkSessionRepositoryError::query("database error"),
-        _ => WalkSessionRepositoryError::query("database error"),
-    }
+fn serialize_secondary_stats(
+    session: &WalkSession,
+) -> Result<serde_json::Value, WalkSessionRepositoryError> {
+    serde_json::to_value(session.secondary_stats()).map_err(|err| {
+        WalkSessionRepositoryError::query(format!("serialise secondary stats: {err}"))
+    })
+}
+
+fn decode_primary_stats(
+    primary_stats: serde_json::Value,
+) -> Result<Vec<WalkPrimaryStat>, WalkSessionRepositoryError> {
+    let primary_stats_draft: Vec<WalkPrimaryStatDraft> = serde_json::from_value(primary_stats)
+        .map_err(|err| WalkSessionRepositoryError::query(format!("decode primary_stats: {err}")))?;
+
+    primary_stats_draft
+        .into_iter()
+        .map(WalkPrimaryStat::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))
+}
+
+fn decode_secondary_stats(
+    secondary_stats: serde_json::Value,
+) -> Result<Vec<WalkSecondaryStat>, WalkSessionRepositoryError> {
+    let secondary_stats_draft: Vec<WalkSecondaryStatDraft> =
+        serde_json::from_value(secondary_stats).map_err(|err| {
+            WalkSessionRepositoryError::query(format!("decode secondary_stats: {err}"))
+        })?;
+
+    secondary_stats_draft
+        .into_iter()
+        .map(WalkSecondaryStat::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))
 }
 
 /// Convert a database row into a validated domain walk session.
@@ -83,23 +106,8 @@ fn row_to_walk_session(row: WalkSessionRow) -> Result<WalkSession, WalkSessionRe
         updated_at: _,
     } = row;
 
-    let primary_stats_draft: Vec<WalkPrimaryStatDraft> = serde_json::from_value(primary_stats)
-        .map_err(|err| WalkSessionRepositoryError::query(format!("decode primary_stats: {err}")))?;
-    let secondary_stats_draft: Vec<WalkSecondaryStatDraft> =
-        serde_json::from_value(secondary_stats).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("decode secondary_stats: {err}"))
-        })?;
-
-    let primary_stats = primary_stats_draft
-        .into_iter()
-        .map(WalkPrimaryStat::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))?;
-    let secondary_stats = secondary_stats_draft
-        .into_iter()
-        .map(WalkSecondaryStat::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))?;
+    let primary_stats = decode_primary_stats(primary_stats)?;
+    let secondary_stats = decode_secondary_stats(secondary_stats)?;
 
     WalkSession::new(WalkSessionDraft {
         id,
@@ -118,13 +126,8 @@ fn row_to_walk_session(row: WalkSessionRow) -> Result<WalkSession, WalkSessionRe
 impl WalkSessionRepository for DieselWalkSessionRepository {
     async fn save(&self, session: &WalkSession) -> Result<(), WalkSessionRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-
-        let primary_stats = serde_json::to_value(session.primary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialise primary stats: {err}"))
-        })?;
-        let secondary_stats = serde_json::to_value(session.secondary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialise secondary stats: {err}"))
-        })?;
+        let primary_stats = serialize_primary_stats(session)?;
+        let secondary_stats = serialize_secondary_stats(session)?;
 
         let new_row = NewWalkSessionRow {
             id: session.id(),

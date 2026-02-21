@@ -28,6 +28,7 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
+mod diesel_basic_error_mapping;
 mod diesel_catalogue_ingestion_repository;
 mod diesel_catalogue_repository;
 mod diesel_descriptor_ingestion_repository;

@@ -11,7 +11,6 @@ use backend::domain::{
 use backend::outbound::persistence::{DbPool, DieselOfflineBundleRepository, PoolConfig};
 use chrono::Utc;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
-use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -19,7 +18,9 @@ use uuid::Uuid;
 mod support;
 
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::{
+    drop_table, handle_cluster_setup_failure, provision_template_database, seed_user_and_route,
+};
 
 struct TestContext {
     runtime: Runtime,
@@ -28,31 +29,6 @@ struct TestContext {
     route_id: Uuid,
     database_url: String,
     _database: TemporaryDatabase,
-}
-
-fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
-    let user_uuid = *user_id.as_uuid();
-    let display_name = "Offline Bundle Test User";
-
-    client
-        .execute(
-            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_uuid, &display_name],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    client
-        .execute(
-            concat!(
-                "INSERT INTO routes (id, user_id, path, generation_params) ",
-                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
-            ),
-            &[&route_id, &user_uuid],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    Ok(())
 }
 
 #[expect(
@@ -105,6 +81,25 @@ fn build_route_bundle(owner_user_id: UserId, route_id: Uuid) -> OfflineBundle {
     )
 }
 
+fn build_updated_route_bundle(existing_bundle: &OfflineBundle) -> OfflineBundle {
+    OfflineBundle::new(OfflineBundleDraft {
+        id: existing_bundle.id(),
+        owner_user_id: existing_bundle.owner_user_id().cloned(),
+        device_id: existing_bundle.device_id().to_owned(),
+        kind: existing_bundle.kind(),
+        route_id: existing_bundle.route_id(),
+        region_id: existing_bundle.region_id().map(str::to_owned),
+        bounds: existing_bundle.bounds(),
+        zoom_range: existing_bundle.zoom_range(),
+        estimated_size_bytes: existing_bundle.estimated_size_bytes() + 1_000,
+        created_at: existing_bundle.created_at(),
+        updated_at: Utc::now(),
+        status: OfflineBundleStatus::Downloading,
+        progress: 0.5,
+    })
+    .expect("valid updated route bundle")
+}
+
 fn build_region_bundle() -> OfflineBundle {
     build_offline_bundle(
         None,
@@ -120,15 +115,6 @@ fn build_region_bundle() -> OfflineBundle {
     )
 }
 
-fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
-    let escaped_name = table_name.replace('"', "\"\"");
-    let sql = format!(r#"DROP TABLE IF EXISTS "{escaped_name}""#);
-    client
-        .batch_execute(sql.as_str())
-        .map_err(|err| format_postgres_error(&err))
-}
-
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
@@ -137,7 +123,12 @@ fn setup_context() -> Result<TestContext, String> {
 
     let owner_user_id = UserId::random();
     let route_id = Uuid::new_v4();
-    seed_user_and_route(database_url.as_str(), &owner_user_id, route_id)?;
+    seed_user_and_route(
+        database_url.as_str(),
+        &owner_user_id,
+        route_id,
+        "Offline Bundle Test User",
+    )?;
 
     let config = PoolConfig::new(database_url.as_str())
         .with_max_size(2)
@@ -241,6 +232,43 @@ fn offline_repository_save_find_list_delete_contract(repo_context: Option<TestCo
         .block_on(async { repository.delete(&Uuid::new_v4()).await })
         .expect("delete missing bundle should succeed");
     assert!(!missing_delete, "missing delete should report false");
+}
+
+#[rstest]
+fn offline_repository_upsert_existing_bundle(repo_context: Option<TestContext>) {
+    let Some(context) = repo_context else {
+        eprintln!("SKIP-TEST-CLUSTER: offline_repository_upsert_existing_bundle skipped");
+        return;
+    };
+
+    let repository = context.repository.clone();
+    let original_bundle = build_route_bundle(context.owner_user_id.clone(), context.route_id);
+    let updated_bundle = build_updated_route_bundle(&original_bundle);
+
+    context.runtime.block_on(async {
+        repository
+            .save(&original_bundle)
+            .await
+            .expect("initial save should succeed");
+        repository
+            .save(&updated_bundle)
+            .await
+            .expect("upsert save should succeed");
+    });
+
+    let found_bundle = context
+        .runtime
+        .block_on(async { repository.find_by_id(&original_bundle.id()).await })
+        .expect("find after upsert should succeed")
+        .expect("upserted bundle should exist");
+
+    assert_eq!(found_bundle.id(), original_bundle.id());
+    assert_eq!(found_bundle.status(), updated_bundle.status());
+    assert_eq!(found_bundle.progress(), updated_bundle.progress());
+    assert_eq!(
+        found_bundle.estimated_size_bytes(),
+        updated_bundle.estimated_size_bytes()
+    );
 }
 
 #[rstest]

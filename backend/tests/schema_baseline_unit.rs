@@ -89,6 +89,7 @@ fn creates_offline_and_walk_tables(#[case] table_ddl: &str) {
 #[case("offline_bundles_bounds_valid")]
 #[case("offline_bundles_kind_reference_valid")]
 #[case("offline_bundles_status_progress_valid")]
+#[case("bounds[1] IS NOT NULL")]
 #[case("idx_offline_bundles_owner_device_created_at")]
 #[case("idx_offline_bundles_anonymous_device_created_at")]
 #[case("CREATE TRIGGER update_offline_bundles_updated_at")]

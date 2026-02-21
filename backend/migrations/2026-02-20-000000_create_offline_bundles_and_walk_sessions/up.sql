@@ -17,6 +17,10 @@ CREATE TABLE offline_bundles (
     progress REAL NOT NULL CHECK (progress >= 0.0 AND progress <= 1.0),
     CONSTRAINT offline_bundles_bounds_valid CHECK (
         cardinality(bounds) = 4
+        AND bounds[1] IS NOT NULL
+        AND bounds[2] IS NOT NULL
+        AND bounds[3] IS NOT NULL
+        AND bounds[4] IS NOT NULL
         AND bounds[1] BETWEEN -180.0 AND 180.0
         AND bounds[2] BETWEEN -90.0 AND 90.0
         AND bounds[3] BETWEEN -180.0 AND 180.0
