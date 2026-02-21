@@ -63,32 +63,35 @@ fn serialize_secondary_stats(
     })
 }
 
+fn decode_stats<Draft, Domain, E>(
+    stats: serde_json::Value,
+    field_name: &str,
+) -> Result<Vec<Domain>, WalkSessionRepositoryError>
+where
+    Draft: serde::de::DeserializeOwned,
+    Domain: TryFrom<Draft, Error = E>,
+    E: std::fmt::Display,
+{
+    let drafts: Vec<Draft> = serde_json::from_value(stats)
+        .map_err(|err| WalkSessionRepositoryError::query(format!("decode {field_name}: {err}")))?;
+
+    drafts
+        .into_iter()
+        .map(Domain::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))
+}
+
 fn decode_primary_stats(
     primary_stats: serde_json::Value,
 ) -> Result<Vec<WalkPrimaryStat>, WalkSessionRepositoryError> {
-    let primary_stats_draft: Vec<WalkPrimaryStatDraft> = serde_json::from_value(primary_stats)
-        .map_err(|err| WalkSessionRepositoryError::query(format!("decode primary_stats: {err}")))?;
-
-    primary_stats_draft
-        .into_iter()
-        .map(WalkPrimaryStat::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))
+    decode_stats::<WalkPrimaryStatDraft, WalkPrimaryStat, _>(primary_stats, "primary_stats")
 }
 
 fn decode_secondary_stats(
     secondary_stats: serde_json::Value,
 ) -> Result<Vec<WalkSecondaryStat>, WalkSessionRepositoryError> {
-    let secondary_stats_draft: Vec<WalkSecondaryStatDraft> =
-        serde_json::from_value(secondary_stats).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("decode secondary_stats: {err}"))
-        })?;
-
-    secondary_stats_draft
-        .into_iter()
-        .map(WalkSecondaryStat::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| WalkSessionRepositoryError::query(err.to_string()))
+    decode_stats::<WalkSecondaryStatDraft, WalkSecondaryStat, _>(secondary_stats, "secondary_stats")
 }
 
 /// Convert a database row into a validated domain walk session.
