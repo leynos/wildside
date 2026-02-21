@@ -8,6 +8,11 @@ const MIGRATION_UP: &str = include_str!(
 const MIGRATION_DOWN: &str = include_str!(
     "../migrations/2026-02-06-012424_schema_baseline_catalogue_descriptor_user_state/down.sql"
 );
+const OFFLINE_WALK_UP: &str =
+    include_str!("../migrations/2026-02-20-000000_create_offline_bundles_and_walk_sessions/up.sql");
+const OFFLINE_WALK_DOWN: &str = include_str!(
+    "../migrations/2026-02-20-000000_create_offline_bundles_and_walk_sessions/down.sql"
+);
 
 #[rstest]
 fn enables_required_extensions() {
@@ -38,13 +43,17 @@ fn creates_expected_baseline_tables(#[case] table_ddl: &str) {
 }
 
 #[rstest]
-fn creates_expected_spatial_and_json_indexes() {
+#[case("idx_pois_location_gist")]
+#[case("USING GIST (location)")]
+#[case("idx_pois_osm_tags_gin")]
+#[case("USING GIN (osm_tags)")]
+fn creates_expected_spatial_and_json_indexes(#[case] index_fragment: &str) {
     // These static SQL checks intentionally assert specific strings; if the
     // migration DDL is reformatted, update these literals alongside it.
-    assert!(MIGRATION_UP.contains("idx_pois_location_gist"));
-    assert!(MIGRATION_UP.contains("USING GIST (location)"));
-    assert!(MIGRATION_UP.contains("idx_pois_osm_tags_gin"));
-    assert!(MIGRATION_UP.contains("USING GIN (osm_tags)"));
+    assert!(
+        MIGRATION_UP.contains(index_fragment),
+        "expected migration to contain index fragment: {index_fragment}"
+    );
 }
 
 #[rstest]
@@ -55,9 +64,62 @@ fn enforces_composite_and_positional_constraints() {
 }
 
 #[rstest]
-fn down_migration_restores_route_compatibility_columns() {
-    assert!(MIGRATION_DOWN.contains("ADD COLUMN IF NOT EXISTS request_id UUID"));
-    assert!(MIGRATION_DOWN.contains("ADD COLUMN IF NOT EXISTS plan_snapshot JSONB"));
-    assert!(MIGRATION_DOWN.contains("CREATE INDEX IF NOT EXISTS idx_routes_request_id"));
-    assert!(MIGRATION_DOWN.contains("CREATE TRIGGER update_routes_updated_at"));
+#[case("ADD COLUMN IF NOT EXISTS request_id UUID")]
+#[case("ADD COLUMN IF NOT EXISTS plan_snapshot JSONB")]
+#[case("CREATE INDEX IF NOT EXISTS idx_routes_request_id")]
+#[case("CREATE TRIGGER update_routes_updated_at")]
+fn down_migration_restores_route_compatibility_columns(#[case] ddl_fragment: &str) {
+    assert!(
+        MIGRATION_DOWN.contains(ddl_fragment),
+        "expected down migration to contain: {ddl_fragment}"
+    );
+}
+
+#[rstest]
+#[case("CREATE TABLE offline_bundles")]
+#[case("CREATE TABLE walk_sessions")]
+fn creates_offline_and_walk_tables(#[case] table_ddl: &str) {
+    assert!(
+        OFFLINE_WALK_UP.contains(table_ddl),
+        "expected migration to contain: {table_ddl}"
+    );
+}
+
+#[rstest]
+#[case("offline_bundles_bounds_valid")]
+#[case("offline_bundles_kind_reference_valid")]
+#[case("offline_bundles_status_progress_valid")]
+#[case("bounds[1] IS NOT NULL")]
+#[case("idx_offline_bundles_owner_device_created_at")]
+#[case("idx_offline_bundles_anonymous_device_created_at")]
+#[case("CREATE TRIGGER update_offline_bundles_updated_at")]
+fn enforces_offline_bundle_constraints_and_indexes(#[case] constraint_or_index: &str) {
+    assert!(
+        OFFLINE_WALK_UP.contains(constraint_or_index),
+        "expected offline bundle migration to contain: {constraint_or_index}"
+    );
+}
+
+#[rstest]
+#[case("walk_sessions_ended_after_started")]
+#[case("walk_sessions_updated_after_created")]
+#[case("idx_walk_sessions_user_completed_ended_at_desc")]
+#[case("CREATE TRIGGER update_walk_sessions_updated_at")]
+fn enforces_walk_summary_query_support_and_audit_constraints(#[case] constraint_or_index: &str) {
+    assert!(
+        OFFLINE_WALK_UP.contains(constraint_or_index),
+        "expected walk session migration to contain: {constraint_or_index}"
+    );
+}
+
+#[rstest]
+#[case("DROP TABLE IF EXISTS walk_sessions")]
+#[case("DROP TABLE IF EXISTS offline_bundles")]
+#[case("DROP TRIGGER IF EXISTS update_walk_sessions_updated_at")]
+#[case("DROP TRIGGER IF EXISTS update_offline_bundles_updated_at")]
+fn offline_walk_down_migration_drops_schema_objects(#[case] drop_statement: &str) {
+    assert!(
+        OFFLINE_WALK_DOWN.contains(drop_statement),
+        "expected down migration to contain drop statement: {drop_statement}"
+    );
 }

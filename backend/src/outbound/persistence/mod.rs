@@ -28,6 +28,7 @@
 //! let repo = DieselUserRepository::new(pool);
 //! ```
 
+mod diesel_basic_error_mapping;
 mod diesel_catalogue_ingestion_repository;
 mod diesel_catalogue_repository;
 mod diesel_descriptor_ingestion_repository;
@@ -36,9 +37,11 @@ mod diesel_example_data_runs_repository;
 mod diesel_example_data_seed_repository;
 pub(crate) mod diesel_helpers;
 mod diesel_idempotency_repository;
+mod diesel_offline_bundle_repository;
 mod diesel_route_annotation_repository;
 mod diesel_user_preferences_repository;
 mod diesel_user_repository;
+mod diesel_walk_session_repository;
 mod ingestion_upsert_macros;
 mod json_serializers;
 mod models;
@@ -53,8 +56,10 @@ pub use diesel_descriptor_repository::DieselDescriptorRepository;
 pub use diesel_example_data_runs_repository::DieselExampleDataRunsRepository;
 pub use diesel_example_data_seed_repository::DieselExampleDataSeedRepository;
 pub use diesel_idempotency_repository::DieselIdempotencyRepository;
+pub use diesel_offline_bundle_repository::DieselOfflineBundleRepository;
 pub use diesel_route_annotation_repository::DieselRouteAnnotationRepository;
 pub use diesel_user_preferences_repository::DieselUserPreferencesRepository;
 pub use diesel_user_repository::DieselUserRepository;
+pub use diesel_walk_session_repository::DieselWalkSessionRepository;
 pub use pool::{DbPool, PoolConfig, PoolError};
 pub use postgres_schema_snapshot_repository::PostgresSchemaSnapshotRepository;

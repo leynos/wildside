@@ -83,6 +83,44 @@ diesel::table! {
 }
 
 // -----------------------------------------------------------------------------
+// Offline bundle and walk session tables (roadmap 3.3.2)
+// -----------------------------------------------------------------------------
+
+diesel::table! {
+    offline_bundles (id) {
+        id -> Uuid,
+        owner_user_id -> Nullable<Uuid>,
+        device_id -> Text,
+        kind -> Text,
+        route_id -> Nullable<Uuid>,
+        region_id -> Nullable<Text>,
+        bounds -> Array<Float8>,
+        min_zoom -> Int4,
+        max_zoom -> Int4,
+        estimated_size_bytes -> Int8,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+        status -> Text,
+        progress -> Float4,
+    }
+}
+
+diesel::table! {
+    walk_sessions (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        route_id -> Uuid,
+        started_at -> Timestamptz,
+        ended_at -> Nullable<Timestamptz>,
+        primary_stats -> Jsonb,
+        secondary_stats -> Jsonb,
+        highlighted_poi_ids -> Array<Uuid>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Data platform baseline tables (roadmap 3.1.1)
 // -----------------------------------------------------------------------------
 
@@ -259,6 +297,10 @@ diesel::joinable!(route_notes -> routes (route_id));
 diesel::joinable!(route_notes -> users (user_id));
 diesel::joinable!(route_progress -> routes (route_id));
 diesel::joinable!(route_progress -> users (user_id));
+diesel::joinable!(offline_bundles -> users (owner_user_id));
+diesel::joinable!(offline_bundles -> routes (route_id));
+diesel::joinable!(walk_sessions -> users (user_id));
+diesel::joinable!(walk_sessions -> routes (route_id));
 diesel::joinable!(user_interest_themes -> users (user_id));
 diesel::joinable!(user_interest_themes -> interest_themes (theme_id));
 diesel::joinable!(poi_interest_themes -> interest_themes (theme_id));
@@ -276,6 +318,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     example_data_runs,
     idempotency_keys,
     interest_themes,
+    offline_bundles,
     poi_interest_themes,
     pois,
     route_categories,
@@ -293,4 +336,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_interest_themes,
     user_preferences,
     users,
+    walk_sessions,
 );

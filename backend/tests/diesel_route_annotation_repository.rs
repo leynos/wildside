@@ -11,15 +11,15 @@ use backend::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositor
 use backend::domain::{RouteNote, RouteNoteContent, RouteProgress, UserId};
 use backend::outbound::persistence::{DbPool, DieselRouteAnnotationRepository, PoolConfig};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
-use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 mod support;
 
+use crate::support::seed_helpers::seed_user_and_route;
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::{handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
@@ -27,30 +27,6 @@ struct TestContext {
     user_id: UserId,
     route_id: Uuid,
     _database: TemporaryDatabase,
-}
-
-fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
-    let display_name = "Annotation Test User";
-    let user_uuid = *user_id.as_uuid();
-    client
-        .execute(
-            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_uuid, &display_name],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    client
-        .execute(
-            concat!(
-                "INSERT INTO routes (id, user_id, path, generation_params) ",
-                "VALUES ($1, $2, '((0,0),(1,1))'::path, '{}'::jsonb)"
-            ),
-            &[&route_id, &user_uuid],
-        )
-        .map_err(|err| format_postgres_error(&err))?;
-
-    Ok(())
 }
 
 fn setup_context() -> Result<TestContext, String> {
