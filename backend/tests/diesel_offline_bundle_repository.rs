@@ -55,44 +55,69 @@ fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<()
     Ok(())
 }
 
-fn build_route_bundle(owner_user_id: UserId, route_id: Uuid) -> OfflineBundle {
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Test helper keeps each varying bundle field explicit for scenario clarity"
+)]
+fn build_offline_bundle(
+    owner_user_id: Option<UserId>,
+    device_id: &str,
+    kind: OfflineBundleKind,
+    route_id: Option<Uuid>,
+    region_id: Option<String>,
+    bounds: (f64, f64, f64, f64),
+    zoom_range: (u8, u8),
+    estimated_size_bytes: u64,
+    status: OfflineBundleStatus,
+    progress: f32,
+) -> OfflineBundle {
     let now = Utc::now();
     OfflineBundle::new(OfflineBundleDraft {
         id: Uuid::new_v4(),
-        owner_user_id: Some(owner_user_id),
-        device_id: "owner-phone".to_owned(),
-        kind: OfflineBundleKind::Route,
-        route_id: Some(route_id),
-        region_id: None,
-        bounds: BoundingBox::new(-3.24, 55.92, -3.12, 55.99).expect("valid bounds"),
-        zoom_range: ZoomRange::new(11, 15).expect("valid zoom range"),
-        estimated_size_bytes: 42_000,
+        owner_user_id,
+        device_id: device_id.to_owned(),
+        kind,
+        route_id,
+        region_id,
+        bounds: BoundingBox::new(bounds.0, bounds.1, bounds.2, bounds.3).expect("valid bounds"),
+        zoom_range: ZoomRange::new(zoom_range.0, zoom_range.1).expect("valid zoom range"),
+        estimated_size_bytes,
         created_at: now,
         updated_at: now,
-        status: OfflineBundleStatus::Complete,
-        progress: 1.0,
+        status,
+        progress,
     })
-    .expect("valid route bundle")
+    .expect("valid offline bundle")
+}
+
+fn build_route_bundle(owner_user_id: UserId, route_id: Uuid) -> OfflineBundle {
+    build_offline_bundle(
+        Some(owner_user_id),
+        "owner-phone",
+        OfflineBundleKind::Route,
+        Some(route_id),
+        None,
+        (-3.24, 55.92, -3.12, 55.99),
+        (11, 15),
+        42_000,
+        OfflineBundleStatus::Complete,
+        1.0,
+    )
 }
 
 fn build_region_bundle() -> OfflineBundle {
-    let now = Utc::now();
-    OfflineBundle::new(OfflineBundleDraft {
-        id: Uuid::new_v4(),
-        owner_user_id: None,
-        device_id: "shared-tablet".to_owned(),
-        kind: OfflineBundleKind::Region,
-        route_id: None,
-        region_id: Some("edinburgh-old-town".to_owned()),
-        bounds: BoundingBox::new(-3.22, 55.93, -3.16, 55.97).expect("valid bounds"),
-        zoom_range: ZoomRange::new(10, 14).expect("valid zoom range"),
-        estimated_size_bytes: 9_000,
-        created_at: now,
-        updated_at: now,
-        status: OfflineBundleStatus::Queued,
-        progress: 0.0,
-    })
-    .expect("valid region bundle")
+    build_offline_bundle(
+        None,
+        "shared-tablet",
+        OfflineBundleKind::Region,
+        None,
+        Some("edinburgh-old-town".to_owned()),
+        (-3.22, 55.93, -3.16, 55.97),
+        (10, 14),
+        9_000,
+        OfflineBundleStatus::Queued,
+        0.0,
+    )
 }
 
 fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
