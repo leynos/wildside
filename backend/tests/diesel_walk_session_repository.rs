@@ -16,11 +16,10 @@ use uuid::Uuid;
 mod diesel_walk_session_repository_test_params;
 mod support;
 
+use crate::support::seed_helpers::seed_user_and_route;
 use diesel_walk_session_repository_test_params::WalkSessionTestParams;
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{
-    drop_table, handle_cluster_setup_failure, provision_template_database, seed_user_and_route,
-};
+use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
@@ -85,12 +84,7 @@ fn setup_context() -> Result<TestContext, String> {
 
     let user_id = UserId::random();
     let route_id = Uuid::new_v4();
-    seed_user_and_route(
-        database_url.as_str(),
-        &user_id,
-        route_id,
-        "Walk Session Test User",
-    )?;
+    seed_user_and_route(database_url.as_str(), &user_id, route_id)?;
 
     let config = PoolConfig::new(database_url.as_str())
         .with_max_size(2)
@@ -286,7 +280,6 @@ fn walk_repository_summary_filters_out_other_users(repo_context: Option<TestCont
         context.database_url.as_str(),
         &other_user_id,
         other_route_id,
-        "Walk Session Other User",
     )
     .expect("other user and route should seed");
     let user_b_session = build_session(

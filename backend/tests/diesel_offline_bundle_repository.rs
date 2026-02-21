@@ -17,10 +17,9 @@ use uuid::Uuid;
 
 mod support;
 
+use crate::support::seed_helpers::seed_user_and_route;
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{
-    drop_table, handle_cluster_setup_failure, provision_template_database, seed_user_and_route,
-};
+use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
     runtime: Runtime,
@@ -123,12 +122,7 @@ fn setup_context() -> Result<TestContext, String> {
 
     let owner_user_id = UserId::random();
     let route_id = Uuid::new_v4();
-    seed_user_and_route(
-        database_url.as_str(),
-        &owner_user_id,
-        route_id,
-        "Offline Bundle Test User",
-    )?;
+    seed_user_and_route(database_url.as_str(), &owner_user_id, route_id)?;
 
     let config = PoolConfig::new(database_url.as_str())
         .with_max_size(2)

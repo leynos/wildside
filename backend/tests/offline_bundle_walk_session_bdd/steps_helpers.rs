@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use super::repository_impl::{PgOfflineBundleRepository, PgWalkSessionRepository};
 use super::test_data::{build_region_bundle, build_route_bundle, build_walk_session};
 use crate::support::atexit_cleanup::shared_cluster_handle;
-use crate::support::{drop_table, provision_template_database, seed_user_and_route};
+use crate::support::seed_helpers::seed_user_and_route_with_client;
+use crate::support::{drop_table, provision_template_database};
 
 pub(crate) struct TestContext {
     pub(crate) offline_repo: PgOfflineBundleRepository,
@@ -33,10 +34,10 @@ pub(crate) fn setup_test_context() -> Result<TestContext, String> {
     let temporary_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temporary_db.url().to_owned();
 
-    let client = Client::connect(temporary_db.url(), NoTls).map_err(|err| err.to_string())?;
+    let mut client = Client::connect(temporary_db.url(), NoTls).map_err(|err| err.to_string())?;
     let user_id = UserId::random();
     let route_id = uuid::Uuid::new_v4();
-    seed_user_and_route(temporary_db.url(), &user_id, route_id, "Offline BDD User")?;
+    seed_user_and_route_with_client(&mut client, &user_id, route_id)?;
 
     let shared_client = Arc::new(Mutex::new(client));
 
