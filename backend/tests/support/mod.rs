@@ -50,7 +50,14 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
 ///
 /// The identifier is escaped so helpers can safely accept test-provided table
 /// names.
-// This helper is consumed by only a subset of integration-test crates.
+///
+/// # Examples
+///
+/// ```no_run
+/// let url = "postgres://localhost/test";
+/// let result = crate::support::drop_table(url, "offline_bundles");
+/// assert!(result.is_ok());
+/// ```
 pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
     let mut client = postgres::Client::connect(url, postgres::NoTls)
         .map_err(|err| format_postgres_error(&err))?;

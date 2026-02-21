@@ -65,7 +65,6 @@ pub fn seed_user_and_route_with_client(
     seed_user_and_route_with_display_name(client, user_id, route_id, DEFAULT_DISPLAY_NAME)
 }
 
-// Used by a subset of integration-test crates.
 /// Seed a `users` row and matching `routes` row by creating a connection.
 ///
 /// # Examples
@@ -77,12 +76,12 @@ pub fn seed_user_and_route_with_client(
 /// let user_id = UserId::random();
 /// let route_id = Uuid::new_v4();
 ///
-/// crate::support::seed_helpers::seed_user_and_route(
+/// let result = crate::support::seed_helpers::seed_user_and_route(
 ///     "postgres://localhost/test",
 ///     &user_id,
 ///     route_id,
-/// )?;
-/// # Ok::<(), String>(())
+/// );
+/// assert!(result.is_ok());
 /// ```
 pub fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
