@@ -37,7 +37,6 @@ fn seed_user_and_route_with_display_name(
 }
 
 // Used by a subset of integration-test crates.
-#[allow(dead_code)]
 pub fn seed_user_and_route_with_client(
     client: &mut Client,
     user_id: &UserId,
@@ -47,8 +46,11 @@ pub fn seed_user_and_route_with_client(
 }
 
 // Used by a subset of integration-test crates.
-#[allow(dead_code)]
 pub fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
     seed_user_and_route_with_client(&mut client, user_id, route_id)
 }
+
+// Anchor shared helper reachability across independent integration-test crates.
+const _: fn(&mut Client, &UserId, Uuid) -> Result<(), String> = seed_user_and_route_with_client;
+const _: fn(&str, &UserId, Uuid) -> Result<(), String> = seed_user_and_route;
