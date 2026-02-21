@@ -4,19 +4,19 @@
 //! against embedded PostgreSQL using the shared fixture pattern.
 
 use backend::domain::ports::{WalkSessionRepository, WalkSessionRepositoryError};
-use backend::domain::{
-    UserId, WalkPrimaryStat, WalkPrimaryStatKind, WalkSecondaryStat, WalkSecondaryStatKind,
-    WalkSession, WalkSessionDraft,
-};
+use backend::domain::{UserId, WalkSession};
 use backend::outbound::persistence::{DbPool, DieselWalkSessionRepository, PoolConfig};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
+#[path = "diesel_walk_session_repository/test_params.rs"]
+mod diesel_walk_session_repository_test_params;
 mod support;
 
+use diesel_walk_session_repository_test_params::WalkSessionTestParams;
 use support::atexit_cleanup::shared_cluster_handle;
 use support::{
     drop_table, handle_cluster_setup_failure, provision_template_database, seed_user_and_route,
@@ -31,65 +31,50 @@ struct TestContext {
     _database: TemporaryDatabase,
 }
 
+struct WalkSessionBuildSpec {
+    started_at: DateTime<Utc>,
+    ended_at: Option<DateTime<Utc>>,
+    distance: f64,
+    duration: f64,
+    energy: f64,
+    poi_count: f64,
+}
+
 fn build_session(
     user_id: UserId,
     route_id: Uuid,
     started_at: chrono::DateTime<chrono::Utc>,
     ended_at: Option<chrono::DateTime<chrono::Utc>>,
 ) -> WalkSession {
-    build_session_with_id(
-        Uuid::new_v4(),
-        user_id,
-        route_id,
-        started_at,
-        ended_at,
-        3650.0,
-        2820.0,
-        320.0,
-        12.0,
-    )
+    let mut params = WalkSessionTestParams::new(user_id, route_id, started_at);
+    if let Some(ended_at) = ended_at {
+        params = params.with_ended_at(ended_at);
+    }
+    params.build()
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "test helper keeps session-field deltas explicit for upsert scenarios"
-)]
 fn build_session_with_id(
     id: Uuid,
     user_id: UserId,
     route_id: Uuid,
-    started_at: chrono::DateTime<chrono::Utc>,
-    ended_at: Option<chrono::DateTime<chrono::Utc>>,
-    distance: f64,
-    duration: f64,
-    energy: f64,
-    poi_count: f64,
+    spec: WalkSessionBuildSpec,
 ) -> WalkSession {
-    WalkSession::new(WalkSessionDraft {
-        id,
-        user_id,
-        route_id,
+    let WalkSessionBuildSpec {
         started_at,
         ended_at,
-        primary_stats: vec![
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, distance)
-                .expect("valid distance stat"),
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Duration, duration)
-                .expect("valid duration stat"),
-        ],
-        secondary_stats: vec![
-            WalkSecondaryStat::new(
-                WalkSecondaryStatKind::Energy,
-                energy,
-                Some("kcal".to_owned()),
-            )
-            .expect("valid energy stat"),
-            WalkSecondaryStat::new(WalkSecondaryStatKind::Count, poi_count, None)
-                .expect("valid count stat"),
-        ],
-        highlighted_poi_ids: vec![Uuid::new_v4()],
-    })
-    .expect("valid walk session")
+        distance,
+        duration,
+        energy,
+        poi_count,
+    } = spec;
+
+    let mut params = WalkSessionTestParams::new(user_id, route_id, started_at)
+        .with_id(id)
+        .with_stats(distance, duration, energy, poi_count);
+    if let Some(ended_at) = ended_at {
+        params = params.with_ended_at(ended_at);
+    }
+    params.build()
 }
 
 fn setup_context() -> Result<TestContext, String> {
@@ -219,23 +204,27 @@ fn walk_repository_upsert_persists_latest_values(repo_context: Option<TestContex
         session_id,
         context.user_id.clone(),
         context.route_id,
-        started_at,
-        None,
-        1200.0,
-        900.0,
-        120.0,
-        4.0,
+        WalkSessionBuildSpec {
+            started_at,
+            ended_at: None,
+            distance: 1200.0,
+            duration: 900.0,
+            energy: 120.0,
+            poi_count: 4.0,
+        },
     );
     let updated_session = build_session_with_id(
         session_id,
         context.user_id.clone(),
         context.route_id,
-        started_at,
-        Some(started_at + Duration::minutes(30)),
-        2500.0,
-        1800.0,
-        260.0,
-        9.0,
+        WalkSessionBuildSpec {
+            started_at,
+            ended_at: Some(started_at + Duration::minutes(30)),
+            distance: 2500.0,
+            duration: 1800.0,
+            energy: 260.0,
+            poi_count: 9.0,
+        },
     );
 
     context.runtime.block_on(async {
