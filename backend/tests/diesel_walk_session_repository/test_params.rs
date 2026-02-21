@@ -14,6 +14,7 @@ use uuid::Uuid;
 /// ```no_run
 /// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
 /// use chrono::Utc;
+/// use crate::diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
 /// use uuid::Uuid;
 ///
 /// let session = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
@@ -51,6 +52,7 @@ impl WalkSessionStats {
     /// ```no_run
     /// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
     /// use chrono::Utc;
+    /// use crate::diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
     /// use uuid::Uuid;
     ///
     /// let stats = WalkSessionStats::new(2500.0, 1800.0, 260.0, 9.0);
@@ -91,6 +93,7 @@ impl WalkSessionStats {
 /// ```no_run
 /// use backend::domain::UserId;
 /// use chrono::Utc;
+/// use crate::diesel_walk_session_repository_test_params::WalkSessionTestParams;
 /// use uuid::Uuid;
 ///
 /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now());
@@ -117,6 +120,7 @@ impl WalkSessionTestParams {
     /// ```no_run
     /// use backend::domain::UserId;
     /// use chrono::Utc;
+    /// use crate::diesel_walk_session_repository_test_params::WalkSessionTestParams;
     /// use uuid::Uuid;
     ///
     /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now());
@@ -147,6 +151,7 @@ impl WalkSessionTestParams {
     /// ```no_run
     /// use backend::domain::UserId;
     /// use chrono::Utc;
+    /// use crate::diesel_walk_session_repository_test_params::WalkSessionTestParams;
     /// use uuid::Uuid;
     ///
     /// let fixed_id = Uuid::new_v4();
@@ -168,6 +173,7 @@ impl WalkSessionTestParams {
     /// ```no_run
     /// use backend::domain::UserId;
     /// use chrono::{Duration, Utc};
+    /// use crate::diesel_walk_session_repository_test_params::WalkSessionTestParams;
     /// use uuid::Uuid;
     ///
     /// let started_at = Utc::now();
@@ -190,6 +196,7 @@ impl WalkSessionTestParams {
     /// ```no_run
     /// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
     /// use chrono::Utc;
+    /// use crate::diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
     /// use uuid::Uuid;
     ///
     /// let stats = WalkSessionStats::new(1200.0, 900.0, 120.0, 4.0);
@@ -228,6 +235,7 @@ impl WalkSessionTestParams {
     /// ```no_run
     /// use backend::domain::UserId;
     /// use chrono::Utc;
+    /// use crate::diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
     /// use uuid::Uuid;
     ///
     /// let session = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
