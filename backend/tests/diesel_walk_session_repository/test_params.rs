@@ -12,8 +12,29 @@ use uuid::Uuid;
 /// # Examples
 ///
 /// ```no_run
-/// let stats = WalkSessionStats::new(4200.0, 3600.0, 410.0, 18.0);
-/// let _ = stats;
+/// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
+/// use chrono::Utc;
+/// use uuid::Uuid;
+///
+/// let session = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
+///     .with_stats(WalkSessionStats::new(4200.0, 3600.0, 410.0, 18.0))
+///     .build();
+///
+/// let distance = session
+///     .primary_stats()
+///     .iter()
+///     .find(|stat| stat.kind() == WalkPrimaryStatKind::Distance)
+///     .expect("distance stat exists")
+///     .value();
+/// let poi_count = session
+///     .secondary_stats()
+///     .iter()
+///     .find(|stat| stat.kind() == WalkSecondaryStatKind::Count)
+///     .expect("count stat exists")
+///     .value();
+///
+/// assert_eq!(distance, 4200.0);
+/// assert_eq!(poi_count, 18.0);
 /// ```
 pub(crate) struct WalkSessionStats {
     distance: f64,
@@ -28,8 +49,30 @@ impl WalkSessionStats {
     /// # Examples
     ///
     /// ```no_run
+    /// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
+    /// use chrono::Utc;
+    /// use uuid::Uuid;
+    ///
     /// let stats = WalkSessionStats::new(2500.0, 1800.0, 260.0, 9.0);
-    /// let _ = stats;
+    /// let session = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
+    ///     .with_stats(stats)
+    ///     .build();
+    ///
+    /// let distance = session
+    ///     .primary_stats()
+    ///     .iter()
+    ///     .find(|stat| stat.kind() == WalkPrimaryStatKind::Distance)
+    ///     .expect("distance stat exists")
+    ///     .value();
+    /// let poi_count = session
+    ///     .secondary_stats()
+    ///     .iter()
+    ///     .find(|stat| stat.kind() == WalkSecondaryStatKind::Count)
+    ///     .expect("count stat exists")
+    ///     .value();
+    ///
+    /// assert_eq!(distance, 2500.0);
+    /// assert_eq!(poi_count, 9.0);
     /// ```
     pub(crate) fn new(distance: f64, duration: f64, energy: f64, poi_count: f64) -> Self {
         Self {
@@ -77,7 +120,11 @@ impl WalkSessionTestParams {
     /// use uuid::Uuid;
     ///
     /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now());
-    /// let _ = params;
+    /// let session = params.build();
+    ///
+    /// assert!(session.ended_at().is_none());
+    /// assert_eq!(session.primary_stats().len(), 2);
+    /// assert_eq!(session.secondary_stats().len(), 2);
     /// ```
     pub(crate) fn new(user_id: UserId, route_id: Uuid, started_at: DateTime<Utc>) -> Self {
         Self {
@@ -105,7 +152,9 @@ impl WalkSessionTestParams {
     /// let fixed_id = Uuid::new_v4();
     /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
     ///     .with_id(fixed_id);
-    /// let _ = params;
+    /// let session = params.build();
+    ///
+    /// assert_eq!(session.id(), fixed_id);
     /// ```
     pub(crate) fn with_id(mut self, id: Uuid) -> Self {
         self.id = id;
@@ -122,9 +171,12 @@ impl WalkSessionTestParams {
     /// use uuid::Uuid;
     ///
     /// let started_at = Utc::now();
+    /// let ended_at = started_at + Duration::minutes(30);
     /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), started_at)
-    ///     .with_ended_at(started_at + Duration::minutes(30));
-    /// let _ = params;
+    ///     .with_ended_at(ended_at);
+    /// let session = params.build();
+    ///
+    /// assert_eq!(session.ended_at(), Some(ended_at));
     /// ```
     pub(crate) fn with_ended_at(mut self, ended_at: DateTime<Utc>) -> Self {
         self.ended_at = Some(ended_at);
@@ -136,14 +188,30 @@ impl WalkSessionTestParams {
     /// # Examples
     ///
     /// ```no_run
-    /// use backend::domain::UserId;
+    /// use backend::domain::{UserId, WalkPrimaryStatKind, WalkSecondaryStatKind};
     /// use chrono::Utc;
     /// use uuid::Uuid;
     ///
     /// let stats = WalkSessionStats::new(1200.0, 900.0, 120.0, 4.0);
     /// let params = WalkSessionTestParams::new(UserId::random(), Uuid::new_v4(), Utc::now())
     ///     .with_stats(stats);
-    /// let _ = params;
+    /// let session = params.build();
+    ///
+    /// let distance = session
+    ///     .primary_stats()
+    ///     .iter()
+    ///     .find(|stat| stat.kind() == WalkPrimaryStatKind::Distance)
+    ///     .expect("distance stat exists")
+    ///     .value();
+    /// let poi_count = session
+    ///     .secondary_stats()
+    ///     .iter()
+    ///     .find(|stat| stat.kind() == WalkSecondaryStatKind::Count)
+    ///     .expect("count stat exists")
+    ///     .value();
+    ///
+    /// assert_eq!(distance, 1200.0);
+    /// assert_eq!(poi_count, 4.0);
     /// ```
     pub(crate) fn with_stats(mut self, stats: WalkSessionStats) -> Self {
         self.distance = stats.distance;

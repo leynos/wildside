@@ -41,21 +41,18 @@ fn seed_user_and_route_with_display_name(
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use backend::domain::UserId;
 /// use postgres::{Client, NoTls};
 /// use uuid::Uuid;
 ///
-/// let mut client = Client::connect("postgres://localhost/test", NoTls)?;
+/// let mut client = Client::connect("postgres://localhost/test", NoTls)
+///     .expect("connect test database");
 /// let user_id = UserId::random();
 /// let route_id = Uuid::new_v4();
 ///
-/// crate::support::seed_helpers::seed_user_and_route_with_client(
-///     &mut client,
-///     &user_id,
-///     route_id,
-/// )?;
-/// # Ok::<(), String>(())
+/// seed_user_and_route_with_client(&mut client, &user_id, route_id)
+///     .expect("seed user and route fixtures");
 /// ```
 pub fn seed_user_and_route_with_client(
     client: &mut Client,

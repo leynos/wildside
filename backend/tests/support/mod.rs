@@ -53,7 +53,7 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// let url = "postgres://localhost/test";
 /// let result = crate::support::drop_table(url, "offline_bundles");
 /// assert!(result.is_ok());
