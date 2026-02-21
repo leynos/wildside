@@ -24,6 +24,8 @@ filter = """
   | binary(er_snapshots_bdd)
   | binary(example_data_seeding_bdd)
   | binary(example_data_runs_bdd)
+  | binary(diesel_offline_bundle_repository)
+  | binary(diesel_walk_session_repository)
   | binary(catalogue_descriptor_ingestion_bdd)
   | binary(catalogue_descriptor_read_models_bdd)
   | binary(offline_bundle_walk_session_bdd)
