@@ -1,11 +1,15 @@
 //! Walk-session BDD step definitions.
 
+use backend::domain::WalkSession;
 use backend::domain::ports::{WalkSessionRepository, WalkSessionRepositoryError};
 use futures::executor::block_on;
 use rstest_bdd_macros::{then, when};
 
 use super::contract_checks::assert_walk_lookup_and_summary_filtering_contract;
-use super::steps_helpers::{SharedContext, execute_drop_table_save_scenario};
+use super::repository_impl::PgWalkSessionRepository;
+use super::steps_helpers::{
+    ScenarioHandlers, SharedContext, TestContext, execute_drop_table_save_scenario,
+};
 
 #[when("a completed walk session is saved and queried")]
 fn a_completed_walk_session_is_saved_and_queried(world: SharedContext) {
@@ -88,18 +92,24 @@ fn walk_missing_lookup_and_completion_summary_filtering_contracts_are_exercised(
 
 #[when("the walk session table is dropped and a walk save is attempted")]
 fn the_walk_session_table_is_dropped_and_a_walk_save_is_attempted(world: SharedContext) {
-    execute_drop_table_save_scenario(
+    execute_drop_table_save_scenario::<_, _, PgWalkSessionRepository, WalkSession, _, _, _>(
         world,
         "walk_sessions",
-        |ctx| {
-            (
-                ctx.database_url.clone(),
-                ctx.walk_repo.clone(),
-                ctx.walk_session.clone(),
-            )
+        ScenarioHandlers {
+            extract_fn: |ctx: &TestContext| {
+                (
+                    ctx.database_url.clone(),
+                    ctx.walk_repo.clone(),
+                    ctx.walk_session.clone(),
+                )
+            },
+            save_fn: |walk_repo: PgWalkSessionRepository, walk_session: WalkSession| {
+                block_on(async { walk_repo.save(&walk_session).await })
+            },
+            store_error_fn: |ctx: &mut TestContext, error: Option<WalkSessionRepositoryError>| {
+                ctx.last_walk_error = error;
+            },
         },
-        |walk_repo, walk_session| block_on(async { walk_repo.save(&walk_session).await }),
-        |ctx, error| ctx.last_walk_error = error,
     );
 }
 

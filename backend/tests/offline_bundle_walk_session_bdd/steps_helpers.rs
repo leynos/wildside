@@ -100,18 +100,37 @@ where
     save_fn().err()
 }
 
+/// Bundles the scenario callbacks used for drop-table save checks.
+pub(crate) struct ScenarioHandlers<ExtractFn, SaveFn, StoreErrorFn> {
+    pub(crate) extract_fn: ExtractFn,
+    pub(crate) save_fn: SaveFn,
+    pub(crate) store_error_fn: StoreErrorFn,
+}
+
 /// Executes a drop-table save scenario by extracting inputs and storing the save error.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "scenario helper accepts extraction, save, and storage closures explicitly"
-)]
-pub(crate) fn execute_drop_table_save_scenario<T, E, Repo, Entity>(
+pub(crate) fn execute_drop_table_save_scenario<
+    T,
+    E,
+    Repo,
+    Entity,
+    ExtractFn,
+    SaveFn,
+    StoreErrorFn,
+>(
     world: SharedContext,
     table_name: &str,
-    extract_fn: impl FnOnce(&TestContext) -> (String, Repo, Entity),
-    save_fn: impl FnOnce(Repo, Entity) -> Result<T, E>,
-    store_error_fn: impl FnOnce(&mut TestContext, Option<E>),
-) {
+    handlers: ScenarioHandlers<ExtractFn, SaveFn, StoreErrorFn>,
+) where
+    ExtractFn: FnOnce(&TestContext) -> (String, Repo, Entity),
+    SaveFn: FnOnce(Repo, Entity) -> Result<T, E>,
+    StoreErrorFn: FnOnce(&mut TestContext, Option<E>),
+{
+    let ScenarioHandlers {
+        extract_fn,
+        save_fn,
+        store_error_fn,
+    } = handlers;
+
     let (database_url, repo, entity) = {
         let ctx = world.lock().expect("context lock");
         extract_fn(&ctx)

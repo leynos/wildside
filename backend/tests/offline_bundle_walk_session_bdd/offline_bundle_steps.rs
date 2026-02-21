@@ -1,13 +1,15 @@
 //! Offline-bundle BDD step definitions.
 
+use backend::domain::OfflineBundle;
 use backend::domain::ports::{OfflineBundleRepository, OfflineBundleRepositoryError};
 use futures::executor::block_on;
 use rstest_bdd_macros::{given, then, when};
 
 use super::contract_checks::assert_offline_delete_and_lookup_contract;
+use super::repository_impl::PgOfflineBundleRepository;
 use super::steps_helpers::{
-    SharedContext, assert_offline_success_and_get_bundles, assert_single_bundle_matches,
-    execute_drop_table_save_scenario,
+    ScenarioHandlers, SharedContext, TestContext, assert_offline_success_and_get_bundles,
+    assert_single_bundle_matches, execute_drop_table_save_scenario,
 };
 
 #[given("postgres-backed offline bundle and walk session repositories")]
@@ -122,18 +124,24 @@ fn offline_delete_and_missing_lookup_contracts_are_exercised(world: SharedContex
 
 #[when("the offline bundle table is dropped and an offline save is attempted")]
 fn the_offline_bundle_table_is_dropped_and_an_offline_save_is_attempted(world: SharedContext) {
-    execute_drop_table_save_scenario(
+    execute_drop_table_save_scenario::<_, _, PgOfflineBundleRepository, OfflineBundle, _, _, _>(
         world,
         "offline_bundles",
-        |ctx| {
-            (
-                ctx.database_url.clone(),
-                ctx.offline_repo.clone(),
-                ctx.route_bundle.clone(),
-            )
+        ScenarioHandlers {
+            extract_fn: |ctx: &TestContext| {
+                (
+                    ctx.database_url.clone(),
+                    ctx.offline_repo.clone(),
+                    ctx.route_bundle.clone(),
+                )
+            },
+            save_fn: |offline_repo: PgOfflineBundleRepository, route_bundle: OfflineBundle| {
+                block_on(async { offline_repo.save(&route_bundle).await })
+            },
+            store_error_fn: |ctx: &mut TestContext, error: Option<OfflineBundleRepositoryError>| {
+                ctx.last_offline_error = error;
+            },
         },
-        |offline_repo, route_bundle| block_on(async { offline_repo.save(&route_bundle).await }),
-        |ctx, error| ctx.last_offline_error = error,
     );
 }
 
