@@ -207,14 +207,9 @@ where
         user_id: &UserId,
         bundle_payload: OfflineBundlePayload,
     ) -> Result<UpsertOfflineBundleResponse, Error> {
-        Self::validate_bundle_ownership(&bundle_payload, user_id)?;
-        let bundle =
-            crate::domain::OfflineBundle::try_from(bundle_payload.clone()).map_err(|err| {
-                Error::invalid_request(format!("invalid offline bundle payload: {err}"))
-            })?;
         let existing = self
             .bundle_repo
-            .find_by_id(&bundle.id())
+            .find_by_id(&bundle_payload.id)
             .await
             .map_err(map_bundle_repository_error)?;
         if let Some(existing) = existing {
@@ -227,6 +222,10 @@ where
                 }
             }
         }
+        Self::validate_bundle_ownership(&bundle_payload, user_id)?;
+        let bundle = crate::domain::OfflineBundle::try_from(bundle_payload).map_err(|err| {
+            Error::invalid_request(format!("invalid offline bundle payload: {err}"))
+        })?;
 
         self.bundle_repo
             .save(&bundle)
