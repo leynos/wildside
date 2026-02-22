@@ -99,10 +99,26 @@ fn sample_bundle_payload() -> Value {
     })
 }
 
-#[actix_web::test]
-async fn list_offline_bundles_returns_empty_list_for_fixture_query() {
+async fn setup_authenticated_test() -> (
+    impl actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+    actix_web::cookie::Cookie<'static>,
+) {
     let app = actix_test::init_service(test_app()).await;
     let cookie = login_and_get_cookie(&app).await;
+    (app, cookie)
+}
+
+fn assert_bundle_id(body: &Value, expected: &str) {
+    assert_eq!(body.get("bundleId").and_then(Value::as_str), Some(expected));
+}
+
+#[actix_web::test]
+async fn list_offline_bundles_returns_empty_list_for_fixture_query() {
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::get()
         .uri("/api/v1/offline/bundles?deviceId=ios-iphone-15")
@@ -121,8 +137,7 @@ async fn list_offline_bundles_returns_empty_list_for_fixture_query() {
 
 #[actix_web::test]
 async fn list_offline_bundles_rejects_missing_device_id() {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::get()
         .uri("/api/v1/offline/bundles")
@@ -135,8 +150,7 @@ async fn list_offline_bundles_rejects_missing_device_id() {
 
 #[actix_web::test]
 async fn upsert_offline_bundle_returns_stable_bundle_id() {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/offline/bundles")
@@ -147,10 +161,7 @@ async fn upsert_offline_bundle_returns_stable_bundle_id() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = actix_test::read_body_json(response).await;
-    assert_eq!(
-        body.get("bundleId").and_then(Value::as_str),
-        Some("00000000-0000-0000-0000-000000000101")
-    );
+    assert_bundle_id(&body, "00000000-0000-0000-0000-000000000101");
 }
 
 #[rstest]
@@ -158,8 +169,7 @@ async fn upsert_offline_bundle_returns_stable_bundle_id() {
 #[case("")]
 #[actix_web::test]
 async fn upsert_offline_bundle_rejects_invalid_idempotency_key(#[case] invalid_key: &str) {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/offline/bundles")
@@ -174,8 +184,7 @@ async fn upsert_offline_bundle_rejects_invalid_idempotency_key(#[case] invalid_k
 
 #[actix_web::test]
 async fn delete_offline_bundle_returns_requested_id() {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::delete()
         .uri("/api/v1/offline/bundles/00000000-0000-0000-0000-000000000303")
@@ -185,16 +194,12 @@ async fn delete_offline_bundle_returns_requested_id() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = actix_test::read_body_json(response).await;
-    assert_eq!(
-        body.get("bundleId").and_then(Value::as_str),
-        Some("00000000-0000-0000-0000-000000000303")
-    );
+    assert_bundle_id(&body, "00000000-0000-0000-0000-000000000303");
 }
 
 #[actix_web::test]
 async fn delete_offline_bundle_rejects_invalid_bundle_id() {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let (app, cookie) = setup_authenticated_test().await;
 
     let request = actix_test::TestRequest::delete()
         .uri("/api/v1/offline/bundles/not-a-uuid")
