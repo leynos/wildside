@@ -34,6 +34,25 @@ fn sample_create_request() -> CreateWalkSessionRequest {
     }
 }
 
+/// Helper to assert that repository query errors map to InternalError.
+async fn assert_query_error_maps_to_internal<Fut, T>(
+    configure_mock: impl FnOnce(&mut MockWalkSessionRepository),
+    call_service: impl FnOnce(WalkSessionQueryService<MockWalkSessionRepository>) -> Fut,
+) where
+    Fut: std::future::Future<Output = Result<T, crate::domain::Error>>,
+    T: std::fmt::Debug,
+{
+    let mut repo = MockWalkSessionRepository::new();
+    configure_mock(&mut repo);
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let error = call_service(service)
+        .await
+        .expect_err("query errors should map to internal");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
+}
+
 #[tokio::test]
 async fn create_session_persists_and_returns_stable_id() {
     let request = sample_create_request();
@@ -174,42 +193,44 @@ async fn list_completion_summaries_returns_payloads() {
 
 #[tokio::test]
 async fn get_session_maps_query_error_to_internal() {
-    let mut repo = MockWalkSessionRepository::new();
-    repo.expect_find_by_id().times(1).return_once(|_| {
-        Err(WalkSessionRepositoryError::query(
-            "invalid completion summary projection",
-        ))
-    });
-
-    let service = WalkSessionQueryService::new(Arc::new(repo));
-    let error = service
-        .get_session(GetWalkSessionRequest {
-            session_id: Uuid::new_v4(),
-        })
-        .await
-        .expect_err("query errors should map to internal");
-
-    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
+    assert_query_error_maps_to_internal(
+        |repo| {
+            repo.expect_find_by_id().times(1).return_once(|_| {
+                Err(WalkSessionRepositoryError::query(
+                    "invalid completion summary projection",
+                ))
+            });
+        },
+        |service| async move {
+            service
+                .get_session(GetWalkSessionRequest {
+                    session_id: Uuid::new_v4(),
+                })
+                .await
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn list_completion_summaries_maps_query_error_to_internal() {
-    let mut repo = MockWalkSessionRepository::new();
-    repo.expect_list_completion_summaries_for_user()
-        .times(1)
-        .return_once(|_| {
-            Err(WalkSessionRepositoryError::query(
-                "invalid completion summary projection",
-            ))
-        });
-
-    let service = WalkSessionQueryService::new(Arc::new(repo));
-    let error = service
-        .list_completion_summaries(ListWalkCompletionSummariesRequest {
-            user_id: crate::domain::UserId::random(),
-        })
-        .await
-        .expect_err("query errors should map to internal");
-
-    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
+    assert_query_error_maps_to_internal(
+        |repo| {
+            repo.expect_list_completion_summaries_for_user()
+                .times(1)
+                .return_once(|_| {
+                    Err(WalkSessionRepositoryError::query(
+                        "invalid completion summary projection",
+                    ))
+                });
+        },
+        |service| async move {
+            service
+                .list_completion_summaries(ListWalkCompletionSummariesRequest {
+                    user_id: crate::domain::UserId::random(),
+                })
+                .await
+        },
+    )
+    .await;
 }
