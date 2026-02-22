@@ -98,6 +98,15 @@ struct CallRecorder<Req, Resp> {
     response: Arc<Mutex<Resp>>,
 }
 
+impl<Req, Resp> CallRecorder<Req, Resp> {
+    fn new(response: Resp) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            response: Arc::new(Mutex::new(response)),
+        }
+    }
+}
+
 impl<Req, Resp> CallRecorder<Req, Resp>
 where
     Resp: Clone + CommandResponse,
@@ -122,14 +131,8 @@ impl RecordingOfflineBundleCommand {
         delete_response: DeleteOfflineBundleCommandResponse,
     ) -> Self {
         Self {
-            upsert_recorder: CallRecorder {
-                calls: Arc::new(Mutex::new(Vec::new())),
-                response: Arc::new(Mutex::new(upsert_response)),
-            },
-            delete_recorder: CallRecorder {
-                calls: Arc::new(Mutex::new(Vec::new())),
-                response: Arc::new(Mutex::new(delete_response)),
-            },
+            upsert_recorder: CallRecorder::new(upsert_response),
+            delete_recorder: CallRecorder::new(delete_response),
         }
     }
 
@@ -196,14 +199,8 @@ impl RecordingOfflineBundleQuery {
         get_response: OfflineBundleGetQueryResponse,
     ) -> Self {
         Self {
-            list_recorder: CallRecorder {
-                calls: Arc::new(Mutex::new(Vec::new())),
-                response: Arc::new(Mutex::new(list_response)),
-            },
-            get_recorder: CallRecorder {
-                calls: Arc::new(Mutex::new(Vec::new())),
-                response: Arc::new(Mutex::new(get_response)),
-            },
+            list_recorder: CallRecorder::new(list_response),
+            get_recorder: CallRecorder::new(get_response),
         }
     }
 
