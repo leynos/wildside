@@ -183,6 +183,25 @@ fn the_offline_bundle_command_returns_a_deleted_bundle_id(world: &WorldFixture) 
         }),
     );
 }
+#[given("the offline bundle command returns a replayed upsert bundle")]
+fn the_offline_bundle_command_returns_a_replayed_upsert_bundle(world: &WorldFixture) {
+    let bundle = build_bundle_payload();
+    world.world().borrow().offline_bundles.set_upsert_response(
+        UpsertOfflineBundleCommandResponse::Ok(UpsertOfflineBundleResponse {
+            bundle,
+            replayed: true,
+        }),
+    );
+}
+#[given("the offline bundle command returns a replayed deleted bundle id")]
+fn the_offline_bundle_command_returns_a_replayed_deleted_bundle_id(world: &WorldFixture) {
+    world.world().borrow().offline_bundles.set_delete_response(
+        DeleteOfflineBundleCommandResponse::Ok(DeleteOfflineBundleResponse {
+            bundle_id: Uuid::parse_str(BUNDLE_ID).expect("bundle id"),
+            replayed: true,
+        }),
+    );
+}
 #[given("the walk session command returns a completion summary")]
 fn the_walk_session_command_returns_a_completion_summary(world: &WorldFixture) {
     world
@@ -237,6 +256,10 @@ fn the_client_creates_a_walk_session(world: &WorldFixture) {
 #[when("the client lists offline bundles without device id")]
 fn the_client_lists_offline_bundles_without_device_id(world: &WorldFixture) {
     bdd_common::perform_get_request(world, "/api/v1/offline/bundles");
+}
+#[when("the client lists offline bundles with blank device id")]
+fn the_client_lists_offline_bundles_with_blank_device_id(world: &WorldFixture) {
+    bdd_common::perform_get_request(world, "/api/v1/offline/bundles?deviceId=%20%20");
 }
 #[when("the client upserts an offline bundle with invalid idempotency key")]
 fn the_client_upserts_an_offline_bundle_with_invalid_idempotency_key(world: &WorldFixture) {
@@ -380,6 +403,29 @@ fn the_response_is_bad_request(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(400));
+}
+#[then("the response is bad request with device id validation details")]
+fn the_response_is_bad_request_with_device_id_validation_details(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.last_status, Some(400));
+    let body = ctx.last_body.as_ref().expect("response body");
+    let details = body
+        .get("details")
+        .and_then(Value::as_object)
+        .expect("details");
+    assert_eq!(
+        details.get("field").and_then(Value::as_str),
+        Some("deviceId")
+    );
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("invalid_device_id")
+    );
+}
+#[then("the response indicates replayed idempotent result")]
+fn the_response_indicates_replayed_idempotent_result(world: &WorldFixture) {
+    bdd_common::assert_response_replayed(world);
 }
 #[then("the response is unauthorised")]
 fn the_response_is_unauthorised(world: &WorldFixture) {

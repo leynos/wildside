@@ -16,8 +16,9 @@ mod validation;
 
 pub use session::{WalkCompletionSummary, WalkSession, WalkSessionDraft};
 pub use stats::{
-    WalkPrimaryStat, WalkPrimaryStatDraft, WalkPrimaryStatKind, WalkSecondaryStat,
-    WalkSecondaryStatDraft, WalkSecondaryStatKind,
+    ParseWalkPrimaryStatKindError, ParseWalkSecondaryStatKindError, WalkPrimaryStat,
+    WalkPrimaryStatDraft, WalkPrimaryStatKind, WalkSecondaryStat, WalkSecondaryStatDraft,
+    WalkSecondaryStatKind,
 };
 
 /// Validation errors raised by walk session constructors.

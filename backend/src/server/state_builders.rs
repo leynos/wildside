@@ -15,7 +15,8 @@ use backend::domain::ports::{
     WalkSessionQuery,
 };
 use backend::domain::{
-    OfflineBundleService, RouteAnnotationsService, UserPreferencesService, WalkSessionService,
+    OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
+    UserPreferencesService, WalkSessionCommandService, WalkSessionQueryService,
 };
 use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::outbound::persistence::DieselIdempotencyRepository;
@@ -174,42 +175,44 @@ build_idempotent_pair!(
     FixtureRouteAnnotationsQuery
 );
 
-build_idempotent_pair!(
-    build_offline_bundles_pair,
-    dyn OfflineBundleCommand,
-    dyn OfflineBundleQuery,
-    DieselOfflineBundleRepository::new,
-    OfflineBundleService::new,
-    FixtureOfflineBundleCommand,
-    FixtureOfflineBundleQuery
-);
+fn build_offline_bundles_pair(
+    config: &ServerConfig,
+) -> (Arc<dyn OfflineBundleCommand>, Arc<dyn OfflineBundleQuery>) {
+    match &config.db_pool {
+        Some(pool) => {
+            let repo = Arc::new(DieselOfflineBundleRepository::new(pool.clone()));
+            let idempotency_repo = Arc::new(DieselIdempotencyRepository::new(pool.clone()));
+            (
+                Arc::new(OfflineBundleCommandService::new(
+                    repo.clone(),
+                    idempotency_repo,
+                )),
+                Arc::new(OfflineBundleQueryService::new(repo)),
+            )
+        }
+        None => (
+            Arc::new(FixtureOfflineBundleCommand),
+            Arc::new(FixtureOfflineBundleQuery),
+        ),
+    }
+}
 
 fn build_walk_sessions_pair(
     config: &ServerConfig,
 ) -> (Arc<dyn WalkSessionCommand>, Arc<dyn WalkSessionQuery>) {
-    let pair_factory: ServicePairFactory<
-        WalkSessionService<DieselWalkSessionRepository>,
-        dyn WalkSessionCommand,
-        dyn WalkSessionQuery,
-    > = ServicePairFactory {
-        fixtures: (
-            Arc::new(FixtureWalkSessionCommand) as Arc<dyn WalkSessionCommand>,
-            Arc::new(FixtureWalkSessionQuery) as Arc<dyn WalkSessionQuery>,
-        ),
-        cast: |service: Arc<WalkSessionService<DieselWalkSessionRepository>>| {
+    match &config.db_pool {
+        Some(pool) => {
+            let repo = Arc::new(DieselWalkSessionRepository::new(pool.clone()));
             (
-                service.clone() as Arc<dyn WalkSessionCommand>,
-                service as Arc<dyn WalkSessionQuery>,
+                Arc::new(WalkSessionCommandService::new(repo.clone())),
+                Arc::new(WalkSessionQueryService::new(repo)),
             )
-        },
-    };
-
-    build_service_pair(
-        &config.db_pool,
-        |pool| WalkSessionService::new(Arc::new(DieselWalkSessionRepository::new(pool.clone()))),
-        pair_factory.fixtures,
-        pair_factory.cast,
-    )
+        }
+        None => (
+            Arc::new(FixtureWalkSessionCommand),
+            Arc::new(FixtureWalkSessionQuery),
+        ),
+    }
 }
 
 /// Build the shared HTTP state from configured ports and fixture fallbacks.

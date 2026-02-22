@@ -1,7 +1,7 @@
-//! Walk session domain service.
+//! Walk session domain services.
 //!
-//! This service implements walk session driving ports for recording sessions and
-//! reading completion projections.
+//! These services implement walk session driving ports for recording sessions
+//! and reading completion projections.
 
 use std::sync::Arc;
 
@@ -15,37 +15,32 @@ use crate::domain::ports::{
     WalkSessionRepository, WalkSessionRepositoryError,
 };
 
-/// Walk session service implementing command and query driving ports.
+fn map_repository_error(error: WalkSessionRepositoryError) -> Error {
+    match error {
+        WalkSessionRepositoryError::Connection { message } => {
+            Error::service_unavailable(format!("walk session repository unavailable: {message}"))
+        }
+        WalkSessionRepositoryError::Query { message } => {
+            Error::internal(format!("walk session repository error: {message}"))
+        }
+    }
+}
+
+/// Walk session service implementing command driving ports.
 #[derive(Clone)]
-pub struct WalkSessionService<R> {
+pub struct WalkSessionCommandService<R> {
     walk_session_repo: Arc<R>,
 }
 
-impl<R> WalkSessionService<R> {
-    /// Create a new service with the given walk session repository.
+impl<R> WalkSessionCommandService<R> {
+    /// Create a new command service with the walk session repository.
     pub fn new(walk_session_repo: Arc<R>) -> Self {
         Self { walk_session_repo }
     }
 }
 
-impl<R> WalkSessionService<R>
-where
-    R: WalkSessionRepository,
-{
-    fn map_repository_error(error: WalkSessionRepositoryError) -> Error {
-        match error {
-            WalkSessionRepositoryError::Connection { message } => Error::service_unavailable(
-                format!("walk session repository unavailable: {message}"),
-            ),
-            WalkSessionRepositoryError::Query { message } => {
-                Error::internal(format!("walk session repository error: {message}"))
-            }
-        }
-    }
-}
-
 #[async_trait]
-impl<R> WalkSessionCommand for WalkSessionService<R>
+impl<R> WalkSessionCommand for WalkSessionCommandService<R>
 where
     R: WalkSessionRepository,
 {
@@ -60,7 +55,7 @@ where
         self.walk_session_repo
             .save(&session)
             .await
-            .map_err(Self::map_repository_error)?;
+            .map_err(map_repository_error)?;
 
         Ok(CreateWalkSessionResponse {
             session_id: session.id(),
@@ -69,8 +64,21 @@ where
     }
 }
 
+/// Walk session service implementing query driving ports.
+#[derive(Clone)]
+pub struct WalkSessionQueryService<R> {
+    walk_session_repo: Arc<R>,
+}
+
+impl<R> WalkSessionQueryService<R> {
+    /// Create a new query service with the walk session repository.
+    pub fn new(walk_session_repo: Arc<R>) -> Self {
+        Self { walk_session_repo }
+    }
+}
+
 #[async_trait]
-impl<R> WalkSessionQuery for WalkSessionService<R>
+impl<R> WalkSessionQuery for WalkSessionQueryService<R>
 where
     R: WalkSessionRepository,
 {
@@ -82,7 +90,7 @@ where
             .walk_session_repo
             .find_by_id(&request.session_id)
             .await
-            .map_err(Self::map_repository_error)?
+            .map_err(map_repository_error)?
             .ok_or_else(|| {
                 Error::not_found(format!("walk session {} not found", request.session_id))
             })?;
@@ -100,7 +108,7 @@ where
             .walk_session_repo
             .list_completion_summaries_for_user(&request.user_id)
             .await
-            .map_err(Self::map_repository_error)?;
+            .map_err(map_repository_error)?;
 
         Ok(ListWalkCompletionSummariesResponse {
             summaries: summaries.into_iter().map(Into::into).collect(),

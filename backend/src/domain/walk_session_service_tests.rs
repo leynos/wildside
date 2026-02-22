@@ -42,7 +42,7 @@ async fn create_session_persists_and_returns_stable_id() {
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
-    let service = WalkSessionService::new(Arc::new(repo));
+    let service = WalkSessionCommandService::new(Arc::new(repo));
     let response = service
         .create_session(request)
         .await
@@ -63,7 +63,7 @@ async fn create_session_maps_validation_error_to_invalid_request() {
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_save().times(0);
 
-    let service = WalkSessionService::new(Arc::new(repo));
+    let service = WalkSessionCommandService::new(Arc::new(repo));
     let error = service
         .create_session(request)
         .await
@@ -81,7 +81,7 @@ async fn create_session_maps_connection_error_to_service_unavailable() {
         .times(1)
         .return_once(|_| Err(WalkSessionRepositoryError::connection("pool unavailable")));
 
-    let service = WalkSessionService::new(Arc::new(repo));
+    let service = WalkSessionCommandService::new(Arc::new(repo));
     let error = service
         .create_session(request)
         .await
@@ -95,7 +95,7 @@ async fn get_session_returns_not_found_when_missing() {
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
 
-    let service = WalkSessionService::new(Arc::new(repo));
+    let service = WalkSessionQueryService::new(Arc::new(repo));
     let error = service
         .get_session(GetWalkSessionRequest {
             session_id: Uuid::new_v4(),
@@ -138,11 +138,53 @@ async fn list_completion_summaries_returns_payloads() {
         .times(1)
         .return_once(|_| Ok(vec![summary]));
 
-    let service = WalkSessionService::new(Arc::new(repo));
+    let service = WalkSessionQueryService::new(Arc::new(repo));
     let response = service
         .list_completion_summaries(ListWalkCompletionSummariesRequest { user_id })
         .await
         .expect("list succeeds");
 
     assert_eq!(response.summaries.len(), 1);
+}
+
+#[tokio::test]
+async fn get_session_maps_query_error_to_internal() {
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| {
+        Err(WalkSessionRepositoryError::query(
+            "invalid completion summary projection",
+        ))
+    });
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let error = service
+        .get_session(GetWalkSessionRequest {
+            session_id: Uuid::new_v4(),
+        })
+        .await
+        .expect_err("query errors should map to internal");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
+}
+
+#[tokio::test]
+async fn list_completion_summaries_maps_query_error_to_internal() {
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_list_completion_summaries_for_user()
+        .times(1)
+        .return_once(|_| {
+            Err(WalkSessionRepositoryError::query(
+                "invalid completion summary projection",
+            ))
+        });
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let error = service
+        .list_completion_summaries(ListWalkCompletionSummariesRequest {
+            user_id: crate::domain::UserId::random(),
+        })
+        .await
+        .expect_err("query errors should map to internal");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
 }

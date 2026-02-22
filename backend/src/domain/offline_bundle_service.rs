@@ -1,4 +1,4 @@
-//! Offline bundle domain service implementing command/query ports plus
+//! Offline bundle domain services implementing command/query ports plus
 //! idempotency orchestration for mutation operations.
 
 use std::future::Future;
@@ -18,38 +18,53 @@ use crate::domain::ports::{
 };
 use crate::domain::{
     Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
-    MutationType, PayloadHash, UserId, canonicalize_and_hash,
+    MutationType, PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
 };
 
-trait ReplayableResponse {
-    fn mark_replayed(&mut self);
+fn map_bundle_repository_error(error: OfflineBundleRepositoryError) -> Error {
+    match error {
+        OfflineBundleRepositoryError::Connection { message } => {
+            Error::service_unavailable(format!("offline bundle repository unavailable: {message}"))
+        }
+        OfflineBundleRepositoryError::Query { message } => {
+            Error::internal(format!("offline bundle repository error: {message}"))
+        }
+    }
 }
 
-impl ReplayableResponse for UpsertOfflineBundleResponse {
-    fn mark_replayed(&mut self) {
-        self.replayed = true;
+fn map_idempotency_error(error: IdempotencyRepositoryError) -> Error {
+    match error {
+        IdempotencyRepositoryError::Connection { message } => {
+            Error::service_unavailable(format!("idempotency repository unavailable: {message}"))
+        }
+        IdempotencyRepositoryError::Query { message } => {
+            Error::internal(format!("idempotency repository error: {message}"))
+        }
+        IdempotencyRepositoryError::Serialization { message } => Error::internal(format!(
+            "idempotency repository serialization failed: {message}"
+        )),
+        IdempotencyRepositoryError::DuplicateKey { message } => {
+            Error::internal(format!("unexpected idempotency key conflict: {message}"))
+        }
     }
 }
-impl ReplayableResponse for DeleteOfflineBundleResponse {
-    fn mark_replayed(&mut self) {
-        self.replayed = true;
-    }
-}
-/// Context for idempotent mutation execution.
-struct IdempotentMutationParams<'a, P> {
-    idempotency_key: Option<IdempotencyKey>,
-    user_id: &'a UserId,
-    payload: &'a P,
-}
-/// Offline bundle service implementing command and query driving ports.
+
+/// Offline bundle service implementing command driving ports.
 #[derive(Clone)]
-pub struct OfflineBundleService<R, I> {
+pub struct OfflineBundleCommandService<R, I> {
     bundle_repo: Arc<R>,
     idempotency_repo: Arc<I>,
 }
 
-impl<R, I> OfflineBundleService<R, I> {
-    /// Create a new service with bundle and idempotency repositories.
+/// Inputs required for idempotent mutation orchestration.
+struct IdempotentMutationContext {
+    idempotency_key: Option<IdempotencyKey>,
+    user_id: UserId,
+    payload_hash: PayloadHash,
+}
+
+impl<R, I> OfflineBundleCommandService<R, I> {
+    /// Create a new command service with bundle and idempotency repositories.
     pub fn new(bundle_repo: Arc<R>, idempotency_repo: Arc<I>) -> Self {
         Self {
             bundle_repo,
@@ -58,39 +73,11 @@ impl<R, I> OfflineBundleService<R, I> {
     }
 }
 
-impl<R, I> OfflineBundleService<R, I>
+impl<R, I> OfflineBundleCommandService<R, I>
 where
     R: OfflineBundleRepository,
     I: IdempotencyRepository,
 {
-    fn map_bundle_repository_error(error: OfflineBundleRepositoryError) -> Error {
-        match error {
-            OfflineBundleRepositoryError::Connection { message } => Error::service_unavailable(
-                format!("offline bundle repository unavailable: {message}"),
-            ),
-            OfflineBundleRepositoryError::Query { message } => {
-                Error::internal(format!("offline bundle repository error: {message}"))
-            }
-        }
-    }
-
-    fn map_idempotency_error(error: IdempotencyRepositoryError) -> Error {
-        match error {
-            IdempotencyRepositoryError::Connection { message } => {
-                Error::service_unavailable(format!("idempotency repository unavailable: {message}"))
-            }
-            IdempotencyRepositoryError::Query { message } => {
-                Error::internal(format!("idempotency repository error: {message}"))
-            }
-            IdempotencyRepositoryError::Serialization { message } => Error::internal(format!(
-                "idempotency repository serialization failed: {message}"
-            )),
-            IdempotencyRepositoryError::DuplicateKey { message } => {
-                Error::internal(format!("unexpected idempotency key conflict: {message}"))
-            }
-        }
-    }
-
     fn serialize_response<T: Serialize>(response: &T) -> Result<serde_json::Value, Error> {
         serde_json::to_value(response)
             .map_err(|err| Error::internal(format!("failed to serialize response: {err}")))
@@ -101,25 +88,12 @@ where
             .map_err(|err| Error::internal(format!("failed to deserialize response: {err}")))
     }
 
-    fn mark_replayed<T: ReplayableResponse>(mut response: T) -> T {
-        response.mark_replayed();
-        response
-    }
-
     fn hash_payload<T: Serialize>(payload: &T) -> Result<PayloadHash, Error> {
         let json_payload = serde_json::to_value(payload).map_err(|err| {
             Error::internal(format!("failed to serialize idempotency payload: {err}"))
         })?;
         canonicalize_and_hash(&json_payload)
             .map_err(|err| Error::internal(format!("failed to hash idempotency payload: {err}")))
-    }
-
-    fn validate_device_id(device_id: &str) -> Result<String, Error> {
-        let normalized = device_id.trim();
-        if normalized.is_empty() {
-            return Err(Error::invalid_request("deviceId must not be empty"));
-        }
-        Ok(normalized.to_owned())
     }
 
     fn validate_bundle_ownership(
@@ -134,31 +108,25 @@ where
         }
     }
 
-    async fn handle_duplicate_key_race<T>(
+    async fn handle_duplicate_key_race<T, M>(
         &self,
-        idempotency_key: &IdempotencyKey,
-        user_id: &UserId,
-        payload_hash: &PayloadHash,
+        query: &IdempotencyLookupQuery,
+        mark_replayed: &M,
     ) -> Result<T, Error>
     where
-        T: DeserializeOwned + ReplayableResponse,
+        T: DeserializeOwned,
+        M: Fn(T) -> T,
     {
-        let query = IdempotencyLookupQuery::new(
-            idempotency_key.clone(),
-            user_id.clone(),
-            MutationType::Bundles,
-            payload_hash.clone(),
-        );
         let retry_result = self
             .idempotency_repo
-            .lookup(&query)
+            .lookup(query)
             .await
-            .map_err(Self::map_idempotency_error)?;
+            .map_err(map_idempotency_error)?;
 
         match retry_result {
             IdempotencyLookupResult::MatchingPayload(record) => {
                 let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(Self::mark_replayed(response))
+                Ok(mark_replayed(response))
             }
             IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
                 "idempotency key already used with different payload",
@@ -169,27 +137,28 @@ where
         }
     }
 
-    async fn run_idempotent_mutation<P, T, F, Fut>(
+    async fn run_idempotent_mutation<T, F, Fut, M>(
         &self,
-        params: IdempotentMutationParams<'_, P>,
+        context: IdempotentMutationContext,
         operation: F,
+        mark_replayed: M,
     ) -> Result<T, Error>
     where
-        P: Serialize,
-        T: Serialize + DeserializeOwned + ReplayableResponse,
+        T: Serialize + DeserializeOwned,
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<T, Error>>,
+        M: Fn(T) -> T,
     {
-        let IdempotentMutationParams {
+        let IdempotentMutationContext {
             idempotency_key,
             user_id,
-            payload,
-        } = params;
+            payload_hash,
+        } = context;
+
         let Some(idempotency_key) = idempotency_key else {
             return operation().await;
         };
 
-        let payload_hash = Self::hash_payload(payload)?;
         let query = IdempotencyLookupQuery::new(
             idempotency_key.clone(),
             user_id.clone(),
@@ -201,7 +170,7 @@ where
             .idempotency_repo
             .lookup(&query)
             .await
-            .map_err(Self::map_idempotency_error)?;
+            .map_err(map_idempotency_error)?;
 
         match lookup_result {
             IdempotencyLookupResult::NotFound => {
@@ -219,15 +188,14 @@ where
                 match self.idempotency_repo.store(&record).await {
                     Ok(()) => Ok(response),
                     Err(IdempotencyRepositoryError::DuplicateKey { .. }) => {
-                        self.handle_duplicate_key_race(&idempotency_key, user_id, &payload_hash)
-                            .await
+                        self.handle_duplicate_key_race(&query, &mark_replayed).await
                     }
-                    Err(err) => Err(Self::map_idempotency_error(err)),
+                    Err(err) => Err(map_idempotency_error(err)),
                 }
             }
             IdempotencyLookupResult::MatchingPayload(record) => {
                 let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(Self::mark_replayed(response))
+                Ok(mark_replayed(response))
             }
             IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
                 "idempotency key already used with different payload",
@@ -249,7 +217,7 @@ where
         self.bundle_repo
             .save(&bundle)
             .await
-            .map_err(Self::map_bundle_repository_error)?;
+            .map_err(map_bundle_repository_error)?;
 
         Ok(UpsertOfflineBundleResponse {
             bundle: OfflineBundlePayload::from(bundle),
@@ -266,7 +234,7 @@ where
             .bundle_repo
             .find_by_id(&bundle_id)
             .await
-            .map_err(Self::map_bundle_repository_error)?;
+            .map_err(map_bundle_repository_error)?;
         let Some(bundle) = existing else {
             return Err(Error::not_found(format!(
                 "offline bundle {} not found",
@@ -286,7 +254,7 @@ where
             .bundle_repo
             .delete(&bundle_id)
             .await
-            .map_err(Self::map_bundle_repository_error)?;
+            .map_err(map_bundle_repository_error)?;
         if !was_deleted {
             return Err(Error::not_found(format!(
                 "offline bundle {} not found",
@@ -302,7 +270,7 @@ where
 }
 
 #[async_trait]
-impl<R, I> OfflineBundleCommand for OfflineBundleService<R, I>
+impl<R, I> OfflineBundleCommand for OfflineBundleCommandService<R, I>
 where
     R: OfflineBundleRepository,
     I: IdempotencyRepository,
@@ -313,16 +281,20 @@ where
     ) -> Result<UpsertOfflineBundleResponse, Error> {
         let user_id = request.user_id;
         let bundle = request.bundle;
-        let idempotency_key = request.idempotency_key;
         let payload = bundle.clone();
+        let payload_hash = Self::hash_payload(&payload)?;
 
         self.run_idempotent_mutation(
-            IdempotentMutationParams {
-                idempotency_key,
-                user_id: &user_id,
-                payload: &payload,
+            IdempotentMutationContext {
+                idempotency_key: request.idempotency_key,
+                user_id: user_id.clone(),
+                payload_hash,
             },
             || async { self.persist_bundle(&user_id, bundle).await },
+            |mut response: UpsertOfflineBundleResponse| {
+                response.replayed = true;
+                response
+            },
         )
         .await
     }
@@ -332,38 +304,55 @@ where
         request: DeleteOfflineBundleRequest,
     ) -> Result<DeleteOfflineBundleResponse, Error> {
         let payload = json!({ "bundleId": request.bundle_id });
+        let payload_hash = Self::hash_payload(&payload)?;
         let user_id = request.user_id;
         let bundle_id = request.bundle_id;
-        let idempotency_key = request.idempotency_key;
 
         self.run_idempotent_mutation(
-            IdempotentMutationParams {
-                idempotency_key,
-                user_id: &user_id,
-                payload: &payload,
+            IdempotentMutationContext {
+                idempotency_key: request.idempotency_key,
+                user_id: user_id.clone(),
+                payload_hash,
             },
             || async { self.perform_delete(bundle_id, user_id.clone()).await },
+            |mut response: DeleteOfflineBundleResponse| {
+                response.replayed = true;
+                response
+            },
         )
         .await
     }
 }
 
+/// Offline bundle service implementing query driving ports.
+#[derive(Clone)]
+pub struct OfflineBundleQueryService<R> {
+    bundle_repo: Arc<R>,
+}
+
+impl<R> OfflineBundleQueryService<R> {
+    /// Create a new query service with the bundle repository.
+    pub fn new(bundle_repo: Arc<R>) -> Self {
+        Self { bundle_repo }
+    }
+}
+
 #[async_trait]
-impl<R, I> OfflineBundleQuery for OfflineBundleService<R, I>
+impl<R> OfflineBundleQuery for OfflineBundleQueryService<R>
 where
     R: OfflineBundleRepository,
-    I: IdempotencyRepository,
 {
     async fn list_bundles(
         &self,
         request: ListOfflineBundlesRequest,
     ) -> Result<ListOfflineBundlesResponse, Error> {
-        let device_id = Self::validate_device_id(&request.device_id)?;
+        let device_id = normalize_offline_device_id(&request.device_id)
+            .map_err(|_| Error::invalid_request("deviceId must not be empty"))?;
         let bundles = self
             .bundle_repo
             .list_for_owner_and_device(request.owner_user_id, &device_id)
             .await
-            .map_err(Self::map_bundle_repository_error)?;
+            .map_err(map_bundle_repository_error)?;
 
         Ok(ListOfflineBundlesResponse {
             bundles: bundles
@@ -381,7 +370,7 @@ where
             .bundle_repo
             .find_by_id(&request.bundle_id)
             .await
-            .map_err(Self::map_bundle_repository_error)?
+            .map_err(map_bundle_repository_error)?
             .ok_or_else(|| {
                 Error::not_found(format!("offline bundle {} not found", request.bundle_id))
             })?;

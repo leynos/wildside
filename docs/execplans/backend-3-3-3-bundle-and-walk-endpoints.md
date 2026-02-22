@@ -23,7 +23,8 @@ walk completion writes:
 - `DELETE /api/v1/offline/bundles/{bundle_id}`
 - `POST /api/v1/walk-sessions`
 
-After this work, the PWA can sync offline bundle manifests and submit walk
+After this work, the Progressive Web App (PWA) can sync offline bundle
+manifests and submit walk
 sessions through the same session-authenticated API boundary as existing
 preferences and annotation flows. Persistence must remain confined to outbound
 Diesel adapters behind domain ports. Endpoints must return stable identifiers
@@ -84,8 +85,8 @@ Observable success criteria:
 
 ## Risks
 
-- Risk: endpoint DTO shape diverges from `docs/wildside-pwa-data-model.md`,
-  causing client compatibility drift.
+- Risk: endpoint Data Transfer Object (DTO) shape diverges from
+  `docs/wildside-pwa-data-model.md`, causing client compatibility drift.
   Severity: high.
   Likelihood: medium.
   Mitigation: define explicit request/response schema mapping and BDD checks.
@@ -138,7 +139,8 @@ Implementation will use a focused agent team for both design and coding tasks.
 - Agent C: behavioural/unit tests and documentation.
   Owns:
   - handler unit tests and domain service tests
-  - `backend/tests/*` and `backend/tests/features/*` BDD artefacts
+  - `backend/tests/*` and `backend/tests/features/*` Behaviour-Driven
+    Development (BDD) artefacts
   - `docs/wildside-backend-architecture.md`
   - `docs/backend-roadmap.md` checkbox update (only at completion)
 

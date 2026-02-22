@@ -26,6 +26,22 @@ Feature: Offline bundle and walk-session endpoints
     And the offline delete response includes the configured bundle id
     And the offline delete command captures the idempotency key
 
+  Scenario: Offline bundle upsert surfaces replayed idempotency responses
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the offline bundle command returns a replayed upsert bundle
+    When the client upserts an offline bundle with idempotency key
+    Then the response is ok
+    And the response indicates replayed idempotent result
+
+  Scenario: Offline bundle delete surfaces replayed idempotency responses
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And the offline bundle command returns a replayed deleted bundle id
+    When the client deletes an offline bundle with idempotency key
+    Then the response is ok
+    And the response indicates replayed idempotent result
+
   Scenario: Walk session creation returns completion summary
     Given a running server with session middleware
     And the client has an authenticated session
@@ -41,6 +57,12 @@ Feature: Offline bundle and walk-session endpoints
     And the client has an authenticated session
     When the client lists offline bundles without device id
     Then the response is bad request
+
+  Scenario: Offline list rejects blank device id
+    Given a running server with session middleware
+    And the client has an authenticated session
+    When the client lists offline bundles with blank device id
+    Then the response is bad request with device id validation details
 
   Scenario: Offline upsert rejects malformed idempotency key
     Given a running server with session middleware

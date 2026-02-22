@@ -9,7 +9,6 @@
 use std::str::FromStr;
 
 use actix_web::{HttpRequest, delete, get, post, web};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
@@ -20,13 +19,14 @@ use crate::domain::ports::{
 };
 use crate::domain::{
     BoundingBox, Error, OfflineBundleKind, OfflineBundleStatus, UserId, ZoomRange,
+    normalize_offline_device_id,
 };
 use crate::inbound::http::ApiResult;
 use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::validation::{missing_field_error, parse_uuid};
+use crate::inbound::http::validation::{missing_field_error, parse_rfc3339_timestamp, parse_uuid};
 
 /// Query parameters for listing offline bundles.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -124,17 +124,12 @@ fn parse_device_id(query: ListOfflineBundlesQuery) -> Result<String, Error> {
         return Err(missing_field_error("deviceId"));
     };
 
-    let normalized = device_id.trim();
-    if normalized.is_empty() {
-        return Err(
-            Error::invalid_request("deviceId must not be empty").with_details(json!({
-                "field": "deviceId",
-                "code": "invalid_device_id",
-            })),
-        );
-    }
-
-    Ok(normalized.to_owned())
+    normalize_offline_device_id(&device_id).map_err(|_| {
+        Error::invalid_request("deviceId must not be empty").with_details(json!({
+            "field": "deviceId",
+            "code": "invalid_device_id",
+        }))
+    })
 }
 
 fn parse_kind(kind: String) -> Result<OfflineBundleKind, Error> {
@@ -156,20 +151,6 @@ fn parse_status(status: String) -> Result<OfflineBundleStatus, Error> {
                 "code": "invalid_status",
             }))
     })
-}
-
-fn parse_timestamp(value: String, field: &str) -> Result<DateTime<Utc>, Error> {
-    DateTime::parse_from_rfc3339(&value)
-        .map(|timestamp| timestamp.with_timezone(&Utc))
-        .map_err(|_| {
-            Error::invalid_request(format!("{field} must be an RFC 3339 timestamp")).with_details(
-                json!({
-                    "field": field,
-                    "value": value,
-                    "code": "invalid_timestamp",
-                }),
-            )
-        })
 }
 
 fn parse_optional_uuid(value: Option<String>, field: &str) -> Result<Option<uuid::Uuid>, Error> {
@@ -207,8 +188,8 @@ fn parse_bundle_payload(
                 }))
             })?,
         estimated_size_bytes: payload.estimated_size_bytes,
-        created_at: parse_timestamp(payload.created_at, "createdAt")?,
-        updated_at: parse_timestamp(payload.updated_at, "updatedAt")?,
+        created_at: parse_rfc3339_timestamp(payload.created_at, "createdAt")?,
+        updated_at: parse_rfc3339_timestamp(payload.updated_at, "updatedAt")?,
         status: parse_status(payload.status)?,
         progress: payload.progress,
     })

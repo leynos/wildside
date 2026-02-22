@@ -10,7 +10,7 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
     type Error = OfflineValidationError;
 
     fn try_from(draft: OfflineBundleDraft) -> Result<Self, Self::Error> {
-        let device_id = validate_device_id(&draft.device_id)?;
+        let device_id = normalize_device_id(&draft.device_id)?;
         validate_progress(draft.progress)?;
         validate_timestamps(draft.created_at, draft.updated_at)?;
         validate_kind_specific(draft.kind, draft.route_id, draft.region_id.clone())?;
@@ -38,8 +38,8 @@ impl TryFrom<OfflineBundleDraft> for OfflineBundle {
 ///
 /// # Examples
 ///
-/// `validate_device_id("  ios-phone  ")` returns `"ios-phone"`.
-fn validate_device_id(device_id: &str) -> Result<String, OfflineValidationError> {
+/// `normalize_device_id("  ios-phone  ")` returns `"ios-phone"`.
+pub fn normalize_device_id(device_id: &str) -> Result<String, OfflineValidationError> {
     let normalized = device_id.trim().to_owned();
     if normalized.is_empty() {
         return Err(OfflineValidationError::EmptyDeviceId);

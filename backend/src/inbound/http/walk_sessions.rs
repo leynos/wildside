@@ -4,8 +4,9 @@
 //! POST /api/v1/walk-sessions
 //! ```
 
+use std::str::FromStr;
+
 use actix_web::{post, web};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
@@ -22,7 +23,9 @@ use crate::inbound::http::ApiResult;
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::validation::{parse_uuid, parse_uuid_list};
+use crate::inbound::http::validation::{
+    parse_optional_rfc3339_timestamp, parse_rfc3339_timestamp, parse_uuid, parse_uuid_list,
+};
 
 /// Request payload for creating a walk session.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -76,127 +79,51 @@ pub struct WalkCompletionSummaryResponseBody {
     pub highlighted_poi_ids: Vec<String>,
 }
 
-fn parse_timestamp(value: String, field: &str) -> Result<DateTime<Utc>, Error> {
-    DateTime::parse_from_rfc3339(&value)
-        .map(|timestamp| timestamp.with_timezone(&Utc))
-        .map_err(|_| {
-            Error::invalid_request(format!("{field} must be an RFC 3339 timestamp")).with_details(
-                json!({
-                    "field": field,
-                    "value": value,
-                    "code": "invalid_timestamp",
-                }),
-            )
-        })
-}
-
-fn parse_optional_timestamp(
-    value: Option<String>,
-    field: &str,
-) -> Result<Option<DateTime<Utc>>, Error> {
-    value.map(|raw| parse_timestamp(raw, field)).transpose()
-}
-
-/// Configuration for stat kind validation errors.
-struct StatKindErrorConfig {
-    field: &'static str,
-    message: &'static str,
-    code: &'static str,
-}
-
-fn parse_stat_kind<T>(
-    kind: String,
-    index: usize,
-    error_config: StatKindErrorConfig,
-    mapper: impl FnOnce(&str) -> Option<T>,
-) -> Result<T, Error> {
-    mapper(kind.as_str()).ok_or_else(|| {
-        Error::invalid_request(error_config.message).with_details(json!({
-            "field": error_config.field,
-            "index": index,
-            "value": kind,
-            "code": error_config.code,
-        }))
-    })
-}
-
-fn parse_stats_collection<TBody, TKind, TDraft>(
-    stats: Vec<TBody>,
-    parse_kind: impl Fn(String, usize) -> Result<TKind, Error>,
-    extract_kind: impl Fn(&TBody) -> String,
-    build_draft: impl Fn(TBody, TKind) -> TDraft,
-) -> Result<Vec<TDraft>, Error> {
-    stats
-        .into_iter()
-        .enumerate()
-        .map(|(index, stat)| {
-            let kind = parse_kind(extract_kind(&stat), index)?;
-            Ok(build_draft(stat, kind))
-        })
-        .collect()
-}
-
-fn parse_primary_stat_kind(kind: String, index: usize) -> Result<WalkPrimaryStatKind, Error> {
-    parse_stat_kind(
-        kind,
-        index,
-        StatKindErrorConfig {
-            field: "primaryStats",
-            message: "primaryStats kind must be distance or duration",
-            code: "invalid_primary_stat_kind",
-        },
-        |kind| match kind {
-            "distance" => Some(WalkPrimaryStatKind::Distance),
-            "duration" => Some(WalkPrimaryStatKind::Duration),
-            _ => None,
-        },
-    )
-}
-
-fn parse_secondary_stat_kind(kind: String, index: usize) -> Result<WalkSecondaryStatKind, Error> {
-    parse_stat_kind(
-        kind,
-        index,
-        StatKindErrorConfig {
-            field: "secondaryStats",
-            message: "secondaryStats kind must be energy or count",
-            code: "invalid_secondary_stat_kind",
-        },
-        |kind| match kind {
-            "energy" => Some(WalkSecondaryStatKind::Energy),
-            "count" => Some(WalkSecondaryStatKind::Count),
-            _ => None,
-        },
-    )
-}
-
 fn parse_primary_stats(
     stats: Vec<WalkPrimaryStatBody>,
 ) -> Result<Vec<WalkPrimaryStatDraft>, Error> {
-    parse_stats_collection(
-        stats,
-        parse_primary_stat_kind,
-        |stat| stat.kind.clone(),
-        |stat, kind| WalkPrimaryStatDraft {
+    let mut parsed = Vec::with_capacity(stats.len());
+    for (index, stat) in stats.into_iter().enumerate() {
+        let kind = WalkPrimaryStatKind::from_str(stat.kind.as_str()).map_err(|_| {
+            Error::invalid_request("primaryStats kind must be distance or duration").with_details(
+                json!({
+                    "field": "primaryStats",
+                    "index": index,
+                    "value": stat.kind,
+                    "code": "invalid_primary_stat_kind",
+                }),
+            )
+        })?;
+        parsed.push(WalkPrimaryStatDraft {
             kind,
             value: stat.value,
-        },
-    )
+        });
+    }
+    Ok(parsed)
 }
 
 fn parse_secondary_stats(
     stats: Vec<WalkSecondaryStatBody>,
 ) -> Result<Vec<WalkSecondaryStatDraft>, Error> {
-    parse_stats_collection(
-        stats,
-        parse_secondary_stat_kind,
-        |stat| stat.kind.clone(),
-        |stat, kind| WalkSecondaryStatDraft {
+    let mut parsed = Vec::with_capacity(stats.len());
+    for (index, stat) in stats.into_iter().enumerate() {
+        let kind = WalkSecondaryStatKind::from_str(stat.kind.as_str()).map_err(|_| {
+            Error::invalid_request("secondaryStats kind must be energy or count").with_details(
+                json!({
+                    "field": "secondaryStats",
+                    "index": index,
+                    "value": stat.kind,
+                    "code": "invalid_secondary_stat_kind",
+                }),
+            )
+        })?;
+        parsed.push(WalkSecondaryStatDraft {
             kind,
             value: stat.value,
             unit: stat.unit,
-        },
-    )
+        });
+    }
+    Ok(parsed)
 }
 
 fn parse_walk_session_payload(
@@ -207,8 +134,8 @@ fn parse_walk_session_payload(
         id: parse_uuid(payload.id, "id")?,
         user_id,
         route_id: parse_uuid(payload.route_id, "routeId")?,
-        started_at: parse_timestamp(payload.started_at, "startedAt")?,
-        ended_at: parse_optional_timestamp(payload.ended_at, "endedAt")?,
+        started_at: parse_rfc3339_timestamp(payload.started_at, "startedAt")?,
+        ended_at: parse_optional_rfc3339_timestamp(payload.ended_at, "endedAt")?,
         primary_stats: parse_primary_stats(payload.primary_stats)?,
         secondary_stats: parse_secondary_stats(payload.secondary_stats)?,
         highlighted_poi_ids: parse_uuid_list(payload.highlighted_poi_ids, "highlightedPoiIds")?,

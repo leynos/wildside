@@ -1,5 +1,6 @@
 //! Shared validation helpers for inbound HTTP adapters.
 
+use chrono::{DateTime, Utc};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -41,4 +42,27 @@ pub(crate) fn parse_uuid_list(values: Vec<String>, field: &str) -> Result<Vec<Uu
             Uuid::parse_str(&value).map_err(|_| invalid_uuid_index_error(field, index, &value))
         })
         .collect()
+}
+
+pub(crate) fn invalid_timestamp_error(field: &str, value: &str) -> Error {
+    Error::invalid_request(format!("{field} must be an RFC 3339 timestamp")).with_details(json!({
+        "field": field,
+        "value": value,
+        "code": "invalid_timestamp",
+    }))
+}
+
+pub(crate) fn parse_rfc3339_timestamp(value: String, field: &str) -> Result<DateTime<Utc>, Error> {
+    DateTime::parse_from_rfc3339(&value)
+        .map(|timestamp| timestamp.with_timezone(&Utc))
+        .map_err(|_| invalid_timestamp_error(field, &value))
+}
+
+pub(crate) fn parse_optional_rfc3339_timestamp(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<DateTime<Utc>>, Error> {
+    value
+        .map(|raw| parse_rfc3339_timestamp(raw, field))
+        .transpose()
 }

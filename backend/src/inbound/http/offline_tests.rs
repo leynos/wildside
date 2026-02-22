@@ -116,6 +116,21 @@ fn assert_bundle_id(body: &Value, expected: &str) {
     assert_eq!(body.get("bundleId").and_then(Value::as_str), Some(expected));
 }
 
+fn assert_validation_details(body: &Value, expected_field: &str, expected_code: &str) {
+    let details = body
+        .get("details")
+        .and_then(Value::as_object)
+        .expect("validation details object");
+    assert_eq!(
+        details.get("field").and_then(Value::as_str),
+        Some(expected_field)
+    );
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some(expected_code)
+    );
+}
+
 /// Helper to test bundle operations that return a bundleId in the response.
 async fn assert_bundle_operation_returns_id(
     request_builder: actix_test::TestRequest,
@@ -213,6 +228,103 @@ async fn delete_offline_bundle_rejects_invalid_bundle_id() {
     let response = actix_test::call_service(&app, request).await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn upsert_offline_bundle_rejects_invalid_body_fields() {
+    struct Case {
+        name: &'static str,
+        mutate: fn(&mut Value),
+        expected_field: &'static str,
+        expected_code: &'static str,
+    }
+
+    fn invalid_kind(body: &mut Value) {
+        body["kind"] = Value::String("unsupported".to_owned());
+    }
+
+    fn invalid_status(body: &mut Value) {
+        body["status"] = Value::String("bogus".to_owned());
+    }
+
+    fn invalid_created_at(body: &mut Value) {
+        body["createdAt"] = Value::String("not-a-timestamp".to_owned());
+    }
+
+    fn invalid_updated_at(body: &mut Value) {
+        body["updatedAt"] = Value::String("not-a-timestamp".to_owned());
+    }
+
+    fn invalid_bounds(body: &mut Value) {
+        body["bounds"]["minLat"] = Value::from(56.1);
+        body["bounds"]["maxLat"] = Value::from(55.9);
+    }
+
+    fn invalid_zoom_range(body: &mut Value) {
+        body["zoomRange"]["minZoom"] = Value::from(15);
+        body["zoomRange"]["maxZoom"] = Value::from(11);
+    }
+
+    let cases = [
+        Case {
+            name: "kind",
+            mutate: invalid_kind,
+            expected_field: "kind",
+            expected_code: "invalid_kind",
+        },
+        Case {
+            name: "status",
+            mutate: invalid_status,
+            expected_field: "status",
+            expected_code: "invalid_status",
+        },
+        Case {
+            name: "createdAt",
+            mutate: invalid_created_at,
+            expected_field: "createdAt",
+            expected_code: "invalid_timestamp",
+        },
+        Case {
+            name: "updatedAt",
+            mutate: invalid_updated_at,
+            expected_field: "updatedAt",
+            expected_code: "invalid_timestamp",
+        },
+        Case {
+            name: "bounds",
+            mutate: invalid_bounds,
+            expected_field: "bounds",
+            expected_code: "invalid_bounds",
+        },
+        Case {
+            name: "zoomRange",
+            mutate: invalid_zoom_range,
+            expected_field: "zoomRange",
+            expected_code: "invalid_zoom_range",
+        },
+    ];
+
+    for case in cases {
+        let (app, cookie) = setup_authenticated_test().await;
+        let mut payload = sample_bundle_payload();
+        (case.mutate)(&mut payload);
+
+        let request = actix_test::TestRequest::post()
+            .uri("/api/v1/offline/bundles")
+            .cookie(cookie)
+            .set_json(payload)
+            .to_request();
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "case `{}` should return bad request",
+            case.name
+        );
+
+        let body: Value = actix_test::read_body_json(response).await;
+        assert_validation_details(&body, case.expected_field, case.expected_code);
+    }
 }
 
 #[actix_web::test]
