@@ -37,6 +37,19 @@ impl<R> WalkSessionCommandService<R> {
     pub fn new(walk_session_repo: Arc<R>) -> Self {
         Self { walk_session_repo }
     }
+
+    fn validate_session_ownership(
+        session: &crate::domain::WalkSession,
+        expected_user_id: &crate::domain::UserId,
+    ) -> Result<(), Error> {
+        if session.user_id() == expected_user_id {
+            Ok(())
+        } else {
+            Err(Error::forbidden(
+                "walk session owner does not match session user",
+            ))
+        }
+    }
 }
 
 #[async_trait]
@@ -51,6 +64,14 @@ where
         let session = crate::domain::WalkSession::try_from(request.session).map_err(|err| {
             Error::invalid_request(format!("invalid walk session payload: {err}"))
         })?;
+        let existing = self
+            .walk_session_repo
+            .find_by_id(&session.id())
+            .await
+            .map_err(map_repository_error)?;
+        if let Some(existing) = existing {
+            Self::validate_session_ownership(&existing, session.user_id())?;
+        }
 
         self.walk_session_repo
             .save(&session)

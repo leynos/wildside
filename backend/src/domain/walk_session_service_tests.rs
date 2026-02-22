@@ -40,6 +40,7 @@ async fn create_session_persists_and_returns_stable_id() {
     let expected_session_id = request.session.id;
 
     let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
     let service = WalkSessionCommandService::new(Arc::new(repo));
@@ -77,6 +78,7 @@ async fn create_session_maps_connection_error_to_service_unavailable() {
     let request = sample_create_request();
 
     let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save()
         .times(1)
         .return_once(|_| Err(WalkSessionRepositoryError::connection("pool unavailable")));
@@ -88,6 +90,29 @@ async fn create_session_maps_connection_error_to_service_unavailable() {
         .expect_err("service unavailable");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
+}
+
+#[tokio::test]
+async fn create_session_rejects_existing_session_owned_by_different_user() {
+    let request = sample_create_request();
+    let mut existing_payload = request.session.clone();
+    existing_payload.user_id = crate::domain::UserId::random();
+    let existing_session =
+        crate::domain::WalkSession::try_from(existing_payload).expect("valid existing session");
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id()
+        .times(1)
+        .return_once(move |_| Ok(Some(existing_session)));
+    repo.expect_save().times(0);
+
+    let service = WalkSessionCommandService::new(Arc::new(repo));
+    let error = service
+        .create_session(request)
+        .await
+        .expect_err("foreign session id takeover must be forbidden");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
 }
 
 #[tokio::test]
