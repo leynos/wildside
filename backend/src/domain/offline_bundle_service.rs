@@ -1,5 +1,4 @@
-//! Offline bundle domain services implementing command/query ports plus
-//! idempotency orchestration for mutation operations.
+//! Offline bundle domain services implementing command/query ports and idempotency orchestration for mutation operations.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -213,6 +212,21 @@ where
             crate::domain::OfflineBundle::try_from(bundle_payload.clone()).map_err(|err| {
                 Error::invalid_request(format!("invalid offline bundle payload: {err}"))
             })?;
+        let existing = self
+            .bundle_repo
+            .find_by_id(&bundle.id())
+            .await
+            .map_err(map_bundle_repository_error)?;
+        if let Some(existing) = existing {
+            match existing.owner_user_id() {
+                Some(owner_user_id) if owner_user_id == user_id => {}
+                _ => {
+                    return Err(Error::forbidden(
+                        "offline bundle owner does not match session user",
+                    ));
+                }
+            }
+        }
 
         self.bundle_repo
             .save(&bundle)

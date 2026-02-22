@@ -75,6 +75,7 @@ async fn upsert_replays_response_when_duplicate_key_race_finds_record() {
     };
 
     let mut repo = MockOfflineBundleRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
     let mut idempotency_repo = MockIdempotencyRepository::new();
@@ -138,6 +139,7 @@ async fn upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_recor
     };
 
     let mut repo = MockOfflineBundleRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
     let mut idempotency_repo = MockIdempotencyRepository::new();

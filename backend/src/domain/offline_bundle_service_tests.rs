@@ -56,6 +56,7 @@ async fn upsert_persists_bundle_without_idempotency_key() {
     let expected_id = payload.id;
     let mut repo = MockOfflineBundleRepository::new();
 
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
     let service = make_service(repo);
@@ -87,6 +88,7 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() {
     .expect("payload hash");
 
     let mut repo = MockOfflineBundleRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
     let lookup_user_id = user_id.clone();
@@ -119,6 +121,37 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() {
         .expect("upsert succeeds");
 
     assert!(!response.replayed);
+}
+
+#[tokio::test]
+async fn upsert_rejects_existing_bundle_owned_by_different_user() {
+    let payload = sample_bundle_payload();
+    let user_id = payload
+        .owner_user_id
+        .clone()
+        .expect("bundle owner is set for this test");
+    let mut existing_payload = payload.clone();
+    existing_payload.owner_user_id = Some(crate::domain::UserId::random());
+    let existing_bundle =
+        crate::domain::OfflineBundle::try_from(existing_payload).expect("valid existing bundle");
+
+    let mut repo = MockOfflineBundleRepository::new();
+    repo.expect_find_by_id()
+        .times(1)
+        .return_once(move |_| Ok(Some(existing_bundle)));
+    repo.expect_save().times(0);
+
+    let service = make_service(repo);
+    let error = service
+        .upsert_bundle(UpsertOfflineBundleRequest {
+            user_id,
+            bundle: payload,
+            idempotency_key: None,
+        })
+        .await
+        .expect_err("cross-user upsert must be forbidden");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
 }
 
 #[tokio::test]
