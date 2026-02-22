@@ -122,14 +122,13 @@ fn build_catalogue_services(
     }
 }
 
-/// Build the shared HTTP state from configured ports and fixture fallbacks.
-pub(super) fn build_http_state(
+fn build_user_preferences_pair(
     config: &ServerConfig,
-    route_submission: Arc<dyn RouteSubmissionService>,
-) -> web::Data<HttpState> {
-    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
-    // to real DB-backed implementations once their adapters are ready.
-    let (preferences, preferences_query) = build_idempotent_service_pair(
+) -> (
+    Arc<dyn UserPreferencesCommand>,
+    Arc<dyn UserPreferencesQuery>,
+) {
+    build_idempotent_service_pair(
         config,
         DieselUserPreferencesRepository::new,
         UserPreferencesService::new,
@@ -145,8 +144,16 @@ pub(super) fn build_http_state(
                 )
             },
         },
-    );
-    let (route_annotations, route_annotations_query) = build_idempotent_service_pair(
+    )
+}
+
+fn build_route_annotations_pair(
+    config: &ServerConfig,
+) -> (
+    Arc<dyn RouteAnnotationsCommand>,
+    Arc<dyn RouteAnnotationsQuery>,
+) {
+    build_idempotent_service_pair(
         config,
         DieselRouteAnnotationRepository::new,
         RouteAnnotationsService::new,
@@ -162,8 +169,13 @@ pub(super) fn build_http_state(
                 )
             },
         },
-    );
-    let (offline_bundles, offline_bundles_query) = build_idempotent_service_pair(
+    )
+}
+
+fn build_offline_bundles_pair(
+    config: &ServerConfig,
+) -> (Arc<dyn OfflineBundleCommand>, Arc<dyn OfflineBundleQuery>) {
+    build_idempotent_service_pair(
         config,
         DieselOfflineBundleRepository::new,
         OfflineBundleService::new,
@@ -179,21 +191,48 @@ pub(super) fn build_http_state(
                 )
             },
         },
-    );
-    let (walk_sessions, walk_sessions_query) = build_service_pair(
-        &config.db_pool,
-        |pool| WalkSessionService::new(Arc::new(DieselWalkSessionRepository::new(pool.clone()))),
-        (
+    )
+}
+
+fn build_walk_sessions_pair(
+    config: &ServerConfig,
+) -> (Arc<dyn WalkSessionCommand>, Arc<dyn WalkSessionQuery>) {
+    let pair_factory: ServicePairFactory<
+        WalkSessionService<DieselWalkSessionRepository>,
+        dyn WalkSessionCommand,
+        dyn WalkSessionQuery,
+    > = ServicePairFactory {
+        fixtures: (
             Arc::new(FixtureWalkSessionCommand) as Arc<dyn WalkSessionCommand>,
             Arc::new(FixtureWalkSessionQuery) as Arc<dyn WalkSessionQuery>,
         ),
-        |service| {
+        cast: |service: Arc<WalkSessionService<DieselWalkSessionRepository>>| {
             (
                 service.clone() as Arc<dyn WalkSessionCommand>,
                 service as Arc<dyn WalkSessionQuery>,
             )
         },
-    );
+    };
+
+    build_service_pair(
+        &config.db_pool,
+        |pool| WalkSessionService::new(Arc::new(DieselWalkSessionRepository::new(pool.clone()))),
+        pair_factory.fixtures,
+        pair_factory.cast,
+    )
+}
+
+/// Build the shared HTTP state from configured ports and fixture fallbacks.
+pub(super) fn build_http_state(
+    config: &ServerConfig,
+    route_submission: Arc<dyn RouteSubmissionService>,
+) -> web::Data<HttpState> {
+    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
+    // to real DB-backed implementations once their adapters are ready.
+    let (preferences, preferences_query) = build_user_preferences_pair(config);
+    let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
+    let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
+    let (walk_sessions, walk_sessions_query) = build_walk_sessions_pair(config);
     let (catalogue, descriptors) = build_catalogue_services(config);
 
     web::Data::new(HttpState::new_with_extra(
