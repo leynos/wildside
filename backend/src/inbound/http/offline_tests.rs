@@ -131,6 +131,39 @@ fn assert_validation_details(body: &Value, expected_field: &str, expected_code: 
     );
 }
 
+struct ValidationTestCase {
+    name: &'static str,
+    mutate: fn(&mut Value),
+    expected_field: &'static str,
+    expected_code: &'static str,
+}
+
+fn mutate_invalid_kind(body: &mut Value) {
+    body["kind"] = Value::String("unsupported".to_owned());
+}
+
+fn mutate_invalid_status(body: &mut Value) {
+    body["status"] = Value::String("bogus".to_owned());
+}
+
+fn mutate_invalid_created_at(body: &mut Value) {
+    body["createdAt"] = Value::String("not-a-timestamp".to_owned());
+}
+
+fn mutate_invalid_updated_at(body: &mut Value) {
+    body["updatedAt"] = Value::String("not-a-timestamp".to_owned());
+}
+
+fn mutate_invalid_bounds(body: &mut Value) {
+    body["bounds"]["minLat"] = Value::from(56.1);
+    body["bounds"]["maxLat"] = Value::from(55.9);
+}
+
+fn mutate_invalid_zoom_range(body: &mut Value) {
+    body["zoomRange"]["minZoom"] = Value::from(15);
+    body["zoomRange"]["maxZoom"] = Value::from(11);
+}
+
 /// Helper to test bundle operations that return a bundleId in the response.
 async fn assert_bundle_operation_returns_id(
     request_builder: actix_test::TestRequest,
@@ -232,73 +265,40 @@ async fn delete_offline_bundle_rejects_invalid_bundle_id() {
 
 #[actix_web::test]
 async fn upsert_offline_bundle_rejects_invalid_body_fields() {
-    struct Case {
-        name: &'static str,
-        mutate: fn(&mut Value),
-        expected_field: &'static str,
-        expected_code: &'static str,
-    }
-
-    fn invalid_kind(body: &mut Value) {
-        body["kind"] = Value::String("unsupported".to_owned());
-    }
-
-    fn invalid_status(body: &mut Value) {
-        body["status"] = Value::String("bogus".to_owned());
-    }
-
-    fn invalid_created_at(body: &mut Value) {
-        body["createdAt"] = Value::String("not-a-timestamp".to_owned());
-    }
-
-    fn invalid_updated_at(body: &mut Value) {
-        body["updatedAt"] = Value::String("not-a-timestamp".to_owned());
-    }
-
-    fn invalid_bounds(body: &mut Value) {
-        body["bounds"]["minLat"] = Value::from(56.1);
-        body["bounds"]["maxLat"] = Value::from(55.9);
-    }
-
-    fn invalid_zoom_range(body: &mut Value) {
-        body["zoomRange"]["minZoom"] = Value::from(15);
-        body["zoomRange"]["maxZoom"] = Value::from(11);
-    }
-
     let cases = [
-        Case {
+        ValidationTestCase {
             name: "kind",
-            mutate: invalid_kind,
+            mutate: mutate_invalid_kind,
             expected_field: "kind",
             expected_code: "invalid_kind",
         },
-        Case {
+        ValidationTestCase {
             name: "status",
-            mutate: invalid_status,
+            mutate: mutate_invalid_status,
             expected_field: "status",
             expected_code: "invalid_status",
         },
-        Case {
+        ValidationTestCase {
             name: "createdAt",
-            mutate: invalid_created_at,
+            mutate: mutate_invalid_created_at,
             expected_field: "createdAt",
             expected_code: "invalid_timestamp",
         },
-        Case {
+        ValidationTestCase {
             name: "updatedAt",
-            mutate: invalid_updated_at,
+            mutate: mutate_invalid_updated_at,
             expected_field: "updatedAt",
             expected_code: "invalid_timestamp",
         },
-        Case {
+        ValidationTestCase {
             name: "bounds",
-            mutate: invalid_bounds,
+            mutate: mutate_invalid_bounds,
             expected_field: "bounds",
             expected_code: "invalid_bounds",
         },
-        Case {
+        ValidationTestCase {
             name: "zoomRange",
-            mutate: invalid_zoom_range,
+            mutate: mutate_invalid_zoom_range,
             expected_field: "zoomRange",
             expected_code: "invalid_zoom_range",
         },
