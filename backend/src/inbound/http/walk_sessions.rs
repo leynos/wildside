@@ -97,24 +97,25 @@ fn parse_optional_timestamp(
     value.map(|raw| parse_timestamp(raw, field)).transpose()
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "shared helper keeps explicit error metadata parameters at call sites"
-)]
+/// Error metadata for stat kind validation failures.
+struct StatKindErrorMetadata {
+    field: &'static str,
+    error_message: &'static str,
+    error_code: &'static str,
+}
+
 fn parse_stat_kind<T>(
     kind: String,
     index: usize,
-    field: &str,
-    error_message: &str,
-    error_code: &str,
+    metadata: StatKindErrorMetadata,
     mapper: impl FnOnce(&str) -> Option<T>,
 ) -> Result<T, Error> {
     mapper(kind.as_str()).ok_or_else(|| {
-        Error::invalid_request(error_message).with_details(json!({
-            "field": field,
+        Error::invalid_request(metadata.error_message).with_details(json!({
+            "field": metadata.field,
             "index": index,
             "value": kind,
-            "code": error_code,
+            "code": metadata.error_code,
         }))
     })
 }
@@ -139,9 +140,11 @@ fn parse_primary_stat_kind(kind: String, index: usize) -> Result<WalkPrimaryStat
     parse_stat_kind(
         kind,
         index,
-        "primaryStats",
-        "primaryStats kind must be distance or duration",
-        "invalid_primary_stat_kind",
+        StatKindErrorMetadata {
+            field: "primaryStats",
+            error_message: "primaryStats kind must be distance or duration",
+            error_code: "invalid_primary_stat_kind",
+        },
         |kind| match kind {
             "distance" => Some(WalkPrimaryStatKind::Distance),
             "duration" => Some(WalkPrimaryStatKind::Duration),
@@ -154,9 +157,11 @@ fn parse_secondary_stat_kind(kind: String, index: usize) -> Result<WalkSecondary
     parse_stat_kind(
         kind,
         index,
-        "secondaryStats",
-        "secondaryStats kind must be energy or count",
-        "invalid_secondary_stat_kind",
+        StatKindErrorMetadata {
+            field: "secondaryStats",
+            error_message: "secondaryStats kind must be energy or count",
+            error_code: "invalid_secondary_stat_kind",
+        },
         |kind| match kind {
             "energy" => Some(WalkSecondaryStatKind::Energy),
             "count" => Some(WalkSecondaryStatKind::Count),
