@@ -97,69 +97,101 @@ fn parse_optional_timestamp(
     value.map(|raw| parse_timestamp(raw, field)).transpose()
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "shared helper keeps explicit error metadata parameters at call sites"
+)]
+fn parse_stat_kind<T>(
+    kind: String,
+    index: usize,
+    field: &str,
+    error_message: &str,
+    error_code: &str,
+    mapper: impl FnOnce(&str) -> Option<T>,
+) -> Result<T, Error> {
+    mapper(kind.as_str()).ok_or_else(|| {
+        Error::invalid_request(error_message).with_details(json!({
+            "field": field,
+            "index": index,
+            "value": kind,
+            "code": error_code,
+        }))
+    })
+}
+
+fn parse_stats_collection<TBody, TKind, TDraft>(
+    stats: Vec<TBody>,
+    parse_kind: impl Fn(String, usize) -> Result<TKind, Error>,
+    extract_kind: impl Fn(&TBody) -> String,
+    build_draft: impl Fn(TBody, TKind) -> TDraft,
+) -> Result<Vec<TDraft>, Error> {
+    stats
+        .into_iter()
+        .enumerate()
+        .map(|(index, stat)| {
+            let kind = parse_kind(extract_kind(&stat), index)?;
+            Ok(build_draft(stat, kind))
+        })
+        .collect()
+}
+
 fn parse_primary_stat_kind(kind: String, index: usize) -> Result<WalkPrimaryStatKind, Error> {
-    match kind.as_str() {
-        "distance" => Ok(WalkPrimaryStatKind::Distance),
-        "duration" => Ok(WalkPrimaryStatKind::Duration),
-        _ => Err(
-            Error::invalid_request("primaryStats kind must be distance or duration").with_details(
-                json!({
-                    "field": "primaryStats",
-                    "index": index,
-                    "value": kind,
-                    "code": "invalid_primary_stat_kind",
-                }),
-            ),
-        ),
-    }
+    parse_stat_kind(
+        kind,
+        index,
+        "primaryStats",
+        "primaryStats kind must be distance or duration",
+        "invalid_primary_stat_kind",
+        |kind| match kind {
+            "distance" => Some(WalkPrimaryStatKind::Distance),
+            "duration" => Some(WalkPrimaryStatKind::Duration),
+            _ => None,
+        },
+    )
 }
 
 fn parse_secondary_stat_kind(kind: String, index: usize) -> Result<WalkSecondaryStatKind, Error> {
-    match kind.as_str() {
-        "energy" => Ok(WalkSecondaryStatKind::Energy),
-        "count" => Ok(WalkSecondaryStatKind::Count),
-        _ => Err(
-            Error::invalid_request("secondaryStats kind must be energy or count").with_details(
-                json!({
-                    "field": "secondaryStats",
-                    "index": index,
-                    "value": kind,
-                    "code": "invalid_secondary_stat_kind",
-                }),
-            ),
-        ),
-    }
+    parse_stat_kind(
+        kind,
+        index,
+        "secondaryStats",
+        "secondaryStats kind must be energy or count",
+        "invalid_secondary_stat_kind",
+        |kind| match kind {
+            "energy" => Some(WalkSecondaryStatKind::Energy),
+            "count" => Some(WalkSecondaryStatKind::Count),
+            _ => None,
+        },
+    )
 }
 
 fn parse_primary_stats(
     stats: Vec<WalkPrimaryStatBody>,
 ) -> Result<Vec<WalkPrimaryStatDraft>, Error> {
-    stats
-        .into_iter()
-        .enumerate()
-        .map(|(index, stat)| {
-            Ok(WalkPrimaryStatDraft {
-                kind: parse_primary_stat_kind(stat.kind, index)?,
-                value: stat.value,
-            })
-        })
-        .collect()
+    parse_stats_collection(
+        stats,
+        parse_primary_stat_kind,
+        |stat| stat.kind.clone(),
+        |stat, kind| WalkPrimaryStatDraft {
+            kind,
+            value: stat.value,
+        },
+    )
 }
 
 fn parse_secondary_stats(
     stats: Vec<WalkSecondaryStatBody>,
 ) -> Result<Vec<WalkSecondaryStatDraft>, Error> {
-    stats
-        .into_iter()
-        .enumerate()
-        .map(|(index, stat)| {
-            Ok(WalkSecondaryStatDraft {
-                kind: parse_secondary_stat_kind(stat.kind, index)?,
-                value: stat.value,
-                unit: stat.unit,
-            })
-        })
-        .collect()
+    parse_stats_collection(
+        stats,
+        parse_secondary_stat_kind,
+        |stat| stat.kind.clone(),
+        |stat, kind| WalkSecondaryStatDraft {
+            kind,
+            value: stat.value,
+            unit: stat.unit,
+        },
+    )
 }
 
 fn parse_walk_session_payload(
