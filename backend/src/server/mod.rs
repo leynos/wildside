@@ -30,10 +30,14 @@ use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::annotations::{get_annotations, update_progress, upsert_note};
 use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
 use backend::inbound::http::health::{HealthState, live, ready};
+use backend::inbound::http::offline::{
+    delete_offline_bundle, list_offline_bundles, upsert_offline_bundle,
+};
 use backend::inbound::http::preferences::{get_preferences, update_preferences};
 use backend::inbound::http::routes::submit_route;
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
+use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 #[cfg(feature = "metrics")]
@@ -167,7 +171,11 @@ fn build_app(
         .service(update_progress)
         .service(submit_route)
         .service(get_explore_catalogue)
-        .service(get_descriptors);
+        .service(get_descriptors)
+        .service(list_offline_bundles)
+        .service(upsert_offline_bundle)
+        .service(delete_offline_bundle)
+        .service(create_walk_session);
 
     let app = App::new()
         .app_data(health_state)

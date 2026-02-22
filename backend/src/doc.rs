@@ -13,8 +13,17 @@
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
 use crate::inbound::http::catalogue::{DescriptorsResponse, ExploreCatalogueResponse};
+use crate::inbound::http::offline::{
+    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesQuery,
+    ListOfflineBundlesResponseBody, OfflineBundleResponse, UpsertOfflineBundleRequestBody,
+    UpsertOfflineBundleResponseBody, ZoomRangeBody,
+};
 use crate::inbound::http::schemas::{
     ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
+};
+use crate::inbound::http::walk_sessions::{
+    CreateWalkSessionRequestBody, CreateWalkSessionResponseBody, WalkCompletionSummaryResponseBody,
+    WalkPrimaryStatBody, WalkSecondaryStatBody,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
@@ -69,6 +78,10 @@ impl Modify for SecurityAddon {
         crate::inbound::http::annotations::update_progress,
         crate::inbound::http::catalogue::get_explore_catalogue,
         crate::inbound::http::catalogue::get_descriptors,
+        crate::inbound::http::offline::list_offline_bundles,
+        crate::inbound::http::offline::upsert_offline_bundle,
+        crate::inbound::http::offline::delete_offline_bundle,
+        crate::inbound::http::walk_sessions::create_walk_session,
     ),
     components(schemas(
         UserSchema,
@@ -77,13 +90,28 @@ impl Modify for SecurityAddon {
         ErrorSchema,
         ErrorCodeSchema,
         ExploreCatalogueResponse,
-        DescriptorsResponse
+        DescriptorsResponse,
+        ListOfflineBundlesQuery,
+        BoundsBody,
+        ZoomRangeBody,
+        OfflineBundleResponse,
+        ListOfflineBundlesResponseBody,
+        UpsertOfflineBundleRequestBody,
+        UpsertOfflineBundleResponseBody,
+        DeleteOfflineBundleResponseBody,
+        WalkPrimaryStatBody,
+        WalkSecondaryStatBody,
+        WalkCompletionSummaryResponseBody,
+        CreateWalkSessionRequestBody,
+        CreateWalkSessionResponseBody
     )),
     tags(
         (name = "users", description = "Operations related to users"),
         (name = "routes", description = "Operations related to routes"),
         (name = "health", description = "Endpoints for health checks"),
-        (name = "catalogue", description = "Catalogue and descriptor read endpoints")
+        (name = "catalogue", description = "Catalogue and descriptor read endpoints"),
+        (name = "offline", description = "Offline bundle manifest operations"),
+        (name = "walk-sessions", description = "Walk session recording operations")
     )
 )]
 pub struct ApiDoc;

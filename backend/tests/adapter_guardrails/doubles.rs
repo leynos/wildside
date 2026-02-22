@@ -2,6 +2,7 @@
 
 mod doubles_annotations;
 mod doubles_catalogue;
+mod doubles_offline_walk;
 mod doubles_preferences;
 mod doubles_users;
 mod doubles_ws;
@@ -15,6 +16,11 @@ pub(crate) use doubles_annotations::{
 pub(crate) use doubles_catalogue::{
     CatalogueQueryResponse, DescriptorQueryResponse, RecordingCatalogueRepository,
     RecordingDescriptorRepository,
+};
+pub(crate) use doubles_offline_walk::{
+    DeleteOfflineBundleCommandResponse, OfflineBundleGetQueryResponse,
+    OfflineBundleListQueryResponse, RecordingOfflineBundleCommand, RecordingOfflineBundleQuery,
+    RecordingWalkSessionCommand, UpsertOfflineBundleCommandResponse, WalkSessionCommandResponse,
 };
 pub(crate) use doubles_preferences::{
     RecordingUserPreferencesCommand, RecordingUserPreferencesQuery, UserPreferencesCommandResponse,

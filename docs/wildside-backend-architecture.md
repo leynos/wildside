@@ -457,6 +457,13 @@ stability.
 | `GET`    | `/api/v1/offline/bundles`               | List offline bundle manifests.                      | Session cookie |
 | `POST`   | `/api/v1/offline/bundles`               | Create an offline bundle manifest (idempotent).     | Session cookie |
 | `DELETE` | `/api/v1/offline/bundles/{bundle_id}`   | Delete an offline bundle manifest (idempotent).     | Session cookie |
+| `POST`   | `/api/v1/walk-sessions`                 | Record a walk session and completion projection.     | Session cookie |
+
+Offline and walk-session HTTP handlers are inbound adapters only: they parse
+request payloads, delegate to driving ports (`OfflineBundleCommand`,
+`OfflineBundleQuery`, and `WalkSessionCommand`), then map domain responses to
+JSON. Persistence remains behind outbound Diesel adapters and is never called
+directly from handlers.
 
 `PUT /api/v1/users/me/interests` updates the interest subset only and remains
 available for backward compatibility, while
@@ -555,9 +562,10 @@ data without rewriting view components.
 - `RouteAnnotationRepository` (read/write): manages `RouteNote` and
   `RouteProgress` aggregates with revision checks.
 - `OfflineBundleRepository` (read/write): stores offline bundle manifests and
-  progress status per user and device.
+  progress status per user and device, including bounds/zoom metadata and
+  owner scoping used by offline list/delete operations.
 - `WalkSessionRepository` (read/write): persists walk sessions and completion
-  summaries.
+  summaries, including completion-only projections for finished sessions.
 - `IdempotencyRepository` (read/write): persists idempotency keys for outbox
   style mutations (routes, notes, progress, offline bundles, preferences).
   Scopes keys by `MutationType` enum so the same client-generated UUID can be
@@ -688,6 +696,16 @@ services.
 > Adapter/unit tests (`rstest`) and behavioural contracts (`rstest-bdd`) run
 > against `pg-embedded-setup-unpriv` databases, including schema-loss unhappy
 > paths and completion/ordering edge cases.
+>
+> **Design decision (2026-02-22):** Roadmap item 3.3.3 wires
+> `GET/POST/DELETE /api/v1/offline/bundles` and
+> `POST /api/v1/walk-sessions` through explicit driving ports in the domain:
+> `OfflineBundleCommand`, `OfflineBundleQuery`, and `WalkSessionCommand`.
+> Inbound Actix handlers now pass session-scoped requests into these ports and
+> return stable identifiers from domain responses (`bundleId` and `sessionId`),
+> plus idempotency replay metadata for offline mutations. This keeps
+> idempotency policy and ownership checks in domain services while outbound
+> repositories remain the only layer with SQL/persistence details.
 
 #### Driving ports (services and queries)
 
@@ -699,6 +717,12 @@ services.
   idempotency checks.
 - `OfflineBundleCommand` creates, updates, and deletes bundle manifests.
 - `WalkSessionCommand` records walk sessions and returns completion summaries.
+
+`GET/POST/DELETE /api/v1/offline/bundles` is backed by
+`OfflineBundleQuery`/`OfflineBundleCommand`, and
+`POST /api/v1/walk-sessions` is backed by `WalkSessionCommand`. This keeps
+transport parsing, domain orchestration, and persistence concerns separated
+across inbound adapters, driving ports, and driven ports.
 
 All ports retain the existing rules: domain types enforce invariants,
 localizations are stored as `EntityLocalizations`, and adapters map infra
