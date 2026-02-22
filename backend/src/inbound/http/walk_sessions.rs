@@ -97,25 +97,25 @@ fn parse_optional_timestamp(
     value.map(|raw| parse_timestamp(raw, field)).transpose()
 }
 
-/// Error metadata for stat kind validation failures.
-struct StatKindErrorMetadata {
+/// Configuration for stat kind validation errors.
+struct StatKindErrorConfig {
     field: &'static str,
-    error_message: &'static str,
-    error_code: &'static str,
+    message: &'static str,
+    code: &'static str,
 }
 
 fn parse_stat_kind<T>(
     kind: String,
     index: usize,
-    metadata: StatKindErrorMetadata,
+    error_config: StatKindErrorConfig,
     mapper: impl FnOnce(&str) -> Option<T>,
 ) -> Result<T, Error> {
     mapper(kind.as_str()).ok_or_else(|| {
-        Error::invalid_request(metadata.error_message).with_details(json!({
-            "field": metadata.field,
+        Error::invalid_request(error_config.message).with_details(json!({
+            "field": error_config.field,
             "index": index,
             "value": kind,
-            "code": metadata.error_code,
+            "code": error_config.code,
         }))
     })
 }
@@ -140,10 +140,10 @@ fn parse_primary_stat_kind(kind: String, index: usize) -> Result<WalkPrimaryStat
     parse_stat_kind(
         kind,
         index,
-        StatKindErrorMetadata {
+        StatKindErrorConfig {
             field: "primaryStats",
-            error_message: "primaryStats kind must be distance or duration",
-            error_code: "invalid_primary_stat_kind",
+            message: "primaryStats kind must be distance or duration",
+            code: "invalid_primary_stat_kind",
         },
         |kind| match kind {
             "distance" => Some(WalkPrimaryStatKind::Distance),
@@ -157,10 +157,10 @@ fn parse_secondary_stat_kind(kind: String, index: usize) -> Result<WalkSecondary
     parse_stat_kind(
         kind,
         index,
-        StatKindErrorMetadata {
+        StatKindErrorConfig {
             field: "secondaryStats",
-            error_message: "secondaryStats kind must be energy or count",
-            error_code: "invalid_secondary_stat_kind",
+            message: "secondaryStats kind must be energy or count",
+            code: "invalid_secondary_stat_kind",
         },
         |kind| match kind {
             "energy" => Some(WalkSecondaryStatKind::Energy),
