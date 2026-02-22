@@ -78,6 +78,38 @@ struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
     cast: ServiceCast<S, Cmd, Query>,
 }
 
+macro_rules! build_idempotent_pair {
+    (
+        $fn_name:ident,
+        $cmd_trait:ty,
+        $query_trait:ty,
+        $repo_ctor:expr,
+        $service_ctor:expr,
+        $fixture_cmd:path,
+        $fixture_query:path
+    ) => {
+        fn $fn_name(config: &ServerConfig) -> (Arc<$cmd_trait>, Arc<$query_trait>) {
+            build_idempotent_service_pair(
+                config,
+                $repo_ctor,
+                $service_ctor,
+                ServicePairFactory {
+                    fixtures: (
+                        Arc::new($fixture_cmd) as Arc<$cmd_trait>,
+                        Arc::new($fixture_query) as Arc<$query_trait>,
+                    ),
+                    cast: |service| {
+                        (
+                            service.clone() as Arc<$cmd_trait>,
+                            service as Arc<$query_trait>,
+                        )
+                    },
+                },
+            )
+        }
+    };
+}
+
 /// Build a command/query pair for services backed by a domain repository and
 /// an idempotency repository.
 ///
@@ -122,77 +154,35 @@ fn build_catalogue_services(
     }
 }
 
-fn build_user_preferences_pair(
-    config: &ServerConfig,
-) -> (
-    Arc<dyn UserPreferencesCommand>,
-    Arc<dyn UserPreferencesQuery>,
-) {
-    build_idempotent_service_pair(
-        config,
-        DieselUserPreferencesRepository::new,
-        UserPreferencesService::new,
-        ServicePairFactory {
-            fixtures: (
-                Arc::new(FixtureUserPreferencesCommand) as Arc<dyn UserPreferencesCommand>,
-                Arc::new(FixtureUserPreferencesQuery) as Arc<dyn UserPreferencesQuery>,
-            ),
-            cast: |service| {
-                (
-                    service.clone() as Arc<dyn UserPreferencesCommand>,
-                    service as Arc<dyn UserPreferencesQuery>,
-                )
-            },
-        },
-    )
-}
+build_idempotent_pair!(
+    build_user_preferences_pair,
+    dyn UserPreferencesCommand,
+    dyn UserPreferencesQuery,
+    DieselUserPreferencesRepository::new,
+    UserPreferencesService::new,
+    FixtureUserPreferencesCommand,
+    FixtureUserPreferencesQuery
+);
 
-fn build_route_annotations_pair(
-    config: &ServerConfig,
-) -> (
-    Arc<dyn RouteAnnotationsCommand>,
-    Arc<dyn RouteAnnotationsQuery>,
-) {
-    build_idempotent_service_pair(
-        config,
-        DieselRouteAnnotationRepository::new,
-        RouteAnnotationsService::new,
-        ServicePairFactory {
-            fixtures: (
-                Arc::new(FixtureRouteAnnotationsCommand) as Arc<dyn RouteAnnotationsCommand>,
-                Arc::new(FixtureRouteAnnotationsQuery) as Arc<dyn RouteAnnotationsQuery>,
-            ),
-            cast: |service| {
-                (
-                    service.clone() as Arc<dyn RouteAnnotationsCommand>,
-                    service as Arc<dyn RouteAnnotationsQuery>,
-                )
-            },
-        },
-    )
-}
+build_idempotent_pair!(
+    build_route_annotations_pair,
+    dyn RouteAnnotationsCommand,
+    dyn RouteAnnotationsQuery,
+    DieselRouteAnnotationRepository::new,
+    RouteAnnotationsService::new,
+    FixtureRouteAnnotationsCommand,
+    FixtureRouteAnnotationsQuery
+);
 
-fn build_offline_bundles_pair(
-    config: &ServerConfig,
-) -> (Arc<dyn OfflineBundleCommand>, Arc<dyn OfflineBundleQuery>) {
-    build_idempotent_service_pair(
-        config,
-        DieselOfflineBundleRepository::new,
-        OfflineBundleService::new,
-        ServicePairFactory {
-            fixtures: (
-                Arc::new(FixtureOfflineBundleCommand) as Arc<dyn OfflineBundleCommand>,
-                Arc::new(FixtureOfflineBundleQuery) as Arc<dyn OfflineBundleQuery>,
-            ),
-            cast: |service| {
-                (
-                    service.clone() as Arc<dyn OfflineBundleCommand>,
-                    service as Arc<dyn OfflineBundleQuery>,
-                )
-            },
-        },
-    )
-}
+build_idempotent_pair!(
+    build_offline_bundles_pair,
+    dyn OfflineBundleCommand,
+    dyn OfflineBundleQuery,
+    DieselOfflineBundleRepository::new,
+    OfflineBundleService::new,
+    FixtureOfflineBundleCommand,
+    FixtureOfflineBundleQuery
+);
 
 fn build_walk_sessions_pair(
     config: &ServerConfig,
