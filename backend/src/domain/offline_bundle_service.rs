@@ -1,5 +1,4 @@
-//! Offline bundle domain services implementing command/query ports and idempotency orchestration for mutation operations.
-
+//! Offline bundle domain services implementing command/query ports and idempotency orchestration.
 use std::future::Future;
 use std::sync::Arc;
 
@@ -8,45 +7,20 @@ use chrono::Utc;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 
+use crate::domain::offline_bundle_service_support::{
+    IdempotentMutationContext, map_bundle_repository_error, map_idempotency_error,
+};
 use crate::domain::ports::{
     DeleteOfflineBundleRequest, DeleteOfflineBundleResponse, GetOfflineBundleRequest,
     GetOfflineBundleResponse, IdempotencyRepository, IdempotencyRepositoryError,
     ListOfflineBundlesRequest, ListOfflineBundlesResponse, OfflineBundleCommand,
-    OfflineBundlePayload, OfflineBundleQuery, OfflineBundleRepository,
-    OfflineBundleRepositoryError, UpsertOfflineBundleRequest, UpsertOfflineBundleResponse,
+    OfflineBundlePayload, OfflineBundleQuery, OfflineBundleRepository, UpsertOfflineBundleRequest,
+    UpsertOfflineBundleResponse,
 };
 use crate::domain::{
-    Error, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
-    MutationType, PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
+    Error, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
+    PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
 };
-
-fn map_bundle_repository_error(error: OfflineBundleRepositoryError) -> Error {
-    match error {
-        OfflineBundleRepositoryError::Connection { message } => {
-            Error::service_unavailable(format!("offline bundle repository unavailable: {message}"))
-        }
-        OfflineBundleRepositoryError::Query { message } => {
-            Error::internal(format!("offline bundle repository error: {message}"))
-        }
-    }
-}
-
-fn map_idempotency_error(error: IdempotencyRepositoryError) -> Error {
-    match error {
-        IdempotencyRepositoryError::Connection { message } => {
-            Error::service_unavailable(format!("idempotency repository unavailable: {message}"))
-        }
-        IdempotencyRepositoryError::Query { message } => {
-            Error::internal(format!("idempotency repository error: {message}"))
-        }
-        IdempotencyRepositoryError::Serialization { message } => Error::internal(format!(
-            "idempotency repository serialization failed: {message}"
-        )),
-        IdempotencyRepositoryError::DuplicateKey { message } => {
-            Error::internal(format!("unexpected idempotency key conflict: {message}"))
-        }
-    }
-}
 
 /// Offline bundle service implementing command driving ports.
 #[derive(Clone)]
@@ -55,15 +29,24 @@ pub struct OfflineBundleCommandService<R, I> {
     idempotency_repo: Arc<I>,
 }
 
-/// Inputs required for idempotent mutation orchestration.
-struct IdempotentMutationContext {
-    idempotency_key: Option<IdempotencyKey>,
-    user_id: UserId,
-    payload_hash: PayloadHash,
-}
-
 impl<R, I> OfflineBundleCommandService<R, I> {
     /// Create a new command service with bundle and idempotency repositories.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand, UpsertOfflineBundleRequest};
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let service = backend::domain::OfflineBundleCommandService::new(
+    ///     Arc::new(FixtureOfflineBundleRepository),
+    ///     Arc::new(FixtureIdempotencyRepository),
+    /// );
+    /// let request: UpsertOfflineBundleRequest = todo!("construct request payload");
+    /// let _response = service.upsert_bundle(request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(bundle_repo: Arc<R>, idempotency_repo: Arc<I>) -> Self {
         Self {
             bundle_repo,
@@ -234,7 +217,7 @@ where
 
         Ok(UpsertOfflineBundleResponse {
             bundle: OfflineBundlePayload::from(bundle),
-            replayed: false,
+            is_replayed: false,
         })
     }
 
@@ -263,12 +246,12 @@ where
             }
         }
 
-        let was_deleted = self
+        let is_deleted = self
             .bundle_repo
             .delete(&bundle_id)
             .await
             .map_err(map_bundle_repository_error)?;
-        if !was_deleted {
+        if !is_deleted {
             return Err(Error::not_found(format!(
                 "offline bundle {} not found",
                 bundle_id
@@ -277,7 +260,7 @@ where
 
         Ok(DeleteOfflineBundleResponse {
             bundle_id,
-            replayed: false,
+            is_replayed: false,
         })
     }
 }
@@ -305,7 +288,7 @@ where
             },
             || async { self.persist_bundle(&user_id, bundle).await },
             |mut response: UpsertOfflineBundleResponse| {
-                response.replayed = true;
+                response.is_replayed = true;
                 response
             },
         )
@@ -329,7 +312,7 @@ where
             },
             || async { self.perform_delete(bundle_id, user_id.clone()).await },
             |mut response: DeleteOfflineBundleResponse| {
-                response.replayed = true;
+                response.is_replayed = true;
                 response
             },
         )
@@ -345,6 +328,24 @@ pub struct OfflineBundleQueryService<R> {
 
 impl<R> OfflineBundleQueryService<R> {
     /// Create a new query service with the bundle repository.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use backend::domain::ports::{FixtureOfflineBundleRepository, ListOfflineBundlesRequest, OfflineBundleQuery};
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let service = backend::domain::OfflineBundleQueryService::new(Arc::new(FixtureOfflineBundleRepository));
+    /// let response = service
+    ///     .list_bundles(ListOfflineBundlesRequest {
+    ///         owner_user_id: Some(backend::domain::UserId::random()),
+    ///         device_id: "ios-iphone-15".to_owned(),
+    ///     })
+    ///     .await?;
+    /// assert!(response.bundles.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(bundle_repo: Arc<R>) -> Self {
         Self { bundle_repo }
     }

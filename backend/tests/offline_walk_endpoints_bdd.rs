@@ -23,6 +23,8 @@ mod bdd_common;
 )]
 #[path = "adapter_guardrails/harness.rs"]
 mod harness;
+#[path = "support/offline_walk_test_data.rs"]
+mod offline_walk_test_data;
 #[path = "support/pwa_http.rs"]
 mod pwa_http;
 #[path = "support/ws.rs"]
@@ -31,115 +33,21 @@ mod ws_support;
 use actix_web::http::Method;
 use backend::domain::ports::{
     CreateWalkSessionResponse, DeleteOfflineBundleResponse, ListOfflineBundlesResponse,
-    OfflineBundlePayload, UpsertOfflineBundleResponse, WalkCompletionSummaryPayload,
+    UpsertOfflineBundleResponse,
 };
-use backend::domain::{
-    BoundingBox, OfflineBundleKind, OfflineBundleStatus, UserId, WalkPrimaryStatDraft,
-    WalkPrimaryStatKind, WalkSecondaryStatDraft, WalkSecondaryStatKind, ZoomRange,
-};
-use chrono::{DateTime, Utc};
 use doubles::{
     DeleteOfflineBundleCommandResponse, OfflineBundleListQueryResponse,
     UpsertOfflineBundleCommandResponse, WalkSessionCommandResponse,
 };
 use harness::WorldFixture;
+use offline_walk_test_data::{
+    AUTH_USER_ID, BUNDLE_ID, IDEMPOTENCY_KEY, SESSION_ID, build_bundle_payload,
+    build_walk_completion_summary, offline_upsert_payload_json, walk_session_payload_json,
+};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 use uuid::Uuid;
-
-const AUTH_USER_ID: &str = "11111111-1111-1111-1111-111111111111";
-const BUNDLE_ID: &str = "00000000-0000-0000-0000-000000000101";
-const ROUTE_ID: &str = "00000000-0000-0000-0000-000000000202";
-const SESSION_ID: &str = "00000000-0000-0000-0000-000000000501";
-const HIGHLIGHTED_POI_ID: &str = "00000000-0000-0000-0000-000000000503";
-const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
-
-fn fixture_timestamp(value: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(value)
-        .expect("fixture timestamp")
-        .with_timezone(&Utc)
-}
-
-fn build_bundle_payload() -> OfflineBundlePayload {
-    OfflineBundlePayload {
-        id: Uuid::parse_str(BUNDLE_ID).expect("bundle id"),
-        owner_user_id: Some(UserId::new(AUTH_USER_ID).expect("user id")),
-        device_id: "ios-iphone-15".to_owned(),
-        kind: OfflineBundleKind::Route,
-        route_id: Some(Uuid::parse_str(ROUTE_ID).expect("route id")),
-        region_id: None,
-        bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("bounds"),
-        zoom_range: ZoomRange::new(11, 15).expect("zoom range"),
-        estimated_size_bytes: 4_096,
-        created_at: fixture_timestamp("2026-02-01T10:00:00Z"),
-        updated_at: fixture_timestamp("2026-02-01T10:00:00Z"),
-        status: OfflineBundleStatus::Queued,
-        progress: 0.0,
-    }
-}
-
-fn build_walk_completion_summary() -> WalkCompletionSummaryPayload {
-    WalkCompletionSummaryPayload {
-        session_id: Uuid::parse_str(SESSION_ID).expect("session id"),
-        user_id: UserId::new(AUTH_USER_ID).expect("user id"),
-        route_id: Uuid::parse_str(ROUTE_ID).expect("route id"),
-        started_at: fixture_timestamp("2026-02-01T11:00:00Z"),
-        ended_at: fixture_timestamp("2026-02-01T11:40:00Z"),
-        primary_stats: vec![WalkPrimaryStatDraft {
-            kind: WalkPrimaryStatKind::Distance,
-            value: 1_234.0,
-        }],
-        secondary_stats: vec![WalkSecondaryStatDraft {
-            kind: WalkSecondaryStatKind::Energy,
-            value: 120.0,
-            unit: Some("kcal".to_owned()),
-        }],
-        highlighted_poi_ids: vec![Uuid::parse_str(HIGHLIGHTED_POI_ID).expect("poi id")],
-    }
-}
-
-fn offline_upsert_payload_json() -> Value {
-    serde_json::json!({
-        "id": BUNDLE_ID,
-        "deviceId": "ios-iphone-15",
-        "kind": "route",
-        "routeId": ROUTE_ID,
-        "regionId": null,
-        "bounds": {
-            "minLng": -3.2,
-            "minLat": 55.9,
-            "maxLng": -3.0,
-            "maxLat": 56.0
-        },
-        "zoomRange": {
-            "minZoom": 11,
-            "maxZoom": 15
-        },
-        "estimatedSizeBytes": 4096,
-        "createdAt": "2026-02-01T10:00:00Z",
-        "updatedAt": "2026-02-01T10:00:00Z",
-        "status": "queued",
-        "progress": 0.0
-    })
-}
-
-fn walk_session_payload_json() -> Value {
-    serde_json::json!({
-        "id": SESSION_ID,
-        "routeId": ROUTE_ID,
-        "startedAt": "2026-02-01T11:00:00Z",
-        "endedAt": "2026-02-01T11:40:00Z",
-        "primaryStats": [
-            {"kind": "distance", "value": 1234.0},
-            {"kind": "duration", "value": 2400.0}
-        ],
-        "secondaryStats": [
-            {"kind": "energy", "value": 120.0, "unit": "kcal"}
-        ],
-        "highlightedPoiIds": [HIGHLIGHTED_POI_ID]
-    })
-}
 #[fixture]
 fn world() -> WorldFixture {
     harness::world()
@@ -170,7 +78,7 @@ fn the_offline_bundle_command_returns_an_upserted_bundle(world: &WorldFixture) {
     world.world().borrow().offline_bundles.set_upsert_response(
         UpsertOfflineBundleCommandResponse::Ok(UpsertOfflineBundleResponse {
             bundle,
-            replayed: false,
+            is_replayed: false,
         }),
     );
 }
@@ -179,7 +87,7 @@ fn the_offline_bundle_command_returns_a_deleted_bundle_id(world: &WorldFixture) 
     world.world().borrow().offline_bundles.set_delete_response(
         DeleteOfflineBundleCommandResponse::Ok(DeleteOfflineBundleResponse {
             bundle_id: Uuid::parse_str(BUNDLE_ID).expect("bundle id"),
-            replayed: false,
+            is_replayed: false,
         }),
     );
 }
@@ -189,7 +97,7 @@ fn the_offline_bundle_command_returns_a_replayed_upsert_bundle(world: &WorldFixt
     world.world().borrow().offline_bundles.set_upsert_response(
         UpsertOfflineBundleCommandResponse::Ok(UpsertOfflineBundleResponse {
             bundle,
-            replayed: true,
+            is_replayed: true,
         }),
     );
 }
@@ -198,7 +106,7 @@ fn the_offline_bundle_command_returns_a_replayed_deleted_bundle_id(world: &World
     world.world().borrow().offline_bundles.set_delete_response(
         DeleteOfflineBundleCommandResponse::Ok(DeleteOfflineBundleResponse {
             bundle_id: Uuid::parse_str(BUNDLE_ID).expect("bundle id"),
-            replayed: true,
+            is_replayed: true,
         }),
     );
 }

@@ -9,6 +9,14 @@ use std::borrow::Cow;
 ///
 /// Inputs that do not begin with `~`, or inputs with unsupported forms such as
 /// `~other-user`, are returned unchanged.
+///
+/// # Examples
+///
+/// ```rust
+/// use shellexpand::tilde;
+///
+/// assert_eq!(tilde("/tmp/config").as_ref(), "/tmp/config");
+/// ```
 pub fn tilde<SI: ?Sized + AsRef<str>>(input: &SI) -> Cow<'_, str> {
     let value = input.as_ref();
 

@@ -12,7 +12,7 @@ use crate::inbound::http::state::HttpStatePorts;
 use crate::inbound::http::users::LoginRequest;
 use actix_web::http::StatusCode;
 use actix_web::{App, test as actix_test, web};
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -99,6 +99,7 @@ fn sample_bundle_payload() -> Value {
     })
 }
 
+#[fixture]
 async fn setup_authenticated_test() -> (
     impl actix_web::dev::Service<
         actix_http::Request,
@@ -131,13 +132,6 @@ fn assert_validation_details(body: &Value, expected_field: &str, expected_code: 
     );
 }
 
-struct ValidationTestCase {
-    name: &'static str,
-    mutate: fn(&mut Value),
-    expected_field: &'static str,
-    expected_code: &'static str,
-}
-
 fn mutate_invalid_kind(body: &mut Value) {
     body["kind"] = Value::String("unsupported".to_owned());
 }
@@ -164,12 +158,19 @@ fn mutate_invalid_zoom_range(body: &mut Value) {
     body["zoomRange"]["maxZoom"] = Value::from(11);
 }
 
-/// Helper to test bundle operations that return a bundleId in the response.
-async fn assert_bundle_operation_returns_id(
+// Helper to test bundle operations that return a bundleId in the response.
+async fn assert_bundle_operation_returns_id<S>(
+    setup_authenticated_test: (S, actix_web::cookie::Cookie<'static>),
     request_builder: actix_test::TestRequest,
     expected_id: &str,
-) {
-    let (app, cookie) = setup_authenticated_test().await;
+) where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let (app, cookie) = setup_authenticated_test;
 
     let request = request_builder.cookie(cookie).to_request();
     let response = actix_test::call_service(&app, request).await;
@@ -179,9 +180,19 @@ async fn assert_bundle_operation_returns_id(
     assert_bundle_id(&body, expected_id);
 }
 
+#[rstest]
 #[actix_web::test]
-async fn list_offline_bundles_returns_empty_list_for_fixture_query() {
-    let (app, cookie) = setup_authenticated_test().await;
+async fn list_offline_bundles_returns_empty_list_for_fixture_query(
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
+    let (app, cookie) = setup_authenticated_test.await;
 
     let request = actix_test::TestRequest::get()
         .uri("/api/v1/offline/bundles?deviceId=ios-iphone-15")
@@ -198,9 +209,19 @@ async fn list_offline_bundles_returns_empty_list_for_fixture_query() {
     assert!(bundles.is_empty());
 }
 
+#[rstest]
 #[actix_web::test]
-async fn list_offline_bundles_rejects_missing_device_id() {
-    let (app, cookie) = setup_authenticated_test().await;
+async fn list_offline_bundles_rejects_missing_device_id(
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
+    let (app, cookie) = setup_authenticated_test.await;
 
     let request = actix_test::TestRequest::get()
         .uri("/api/v1/offline/bundles")
@@ -211,9 +232,20 @@ async fn list_offline_bundles_rejects_missing_device_id() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+#[rstest]
 #[actix_web::test]
-async fn upsert_offline_bundle_returns_stable_bundle_id() {
+async fn upsert_offline_bundle_returns_stable_bundle_id(
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
     assert_bundle_operation_returns_id(
+        setup_authenticated_test.await,
         actix_test::TestRequest::post()
             .uri("/api/v1/offline/bundles")
             .set_json(sample_bundle_payload()),
@@ -226,8 +258,18 @@ async fn upsert_offline_bundle_returns_stable_bundle_id() {
 #[case("not-a-uuid")]
 #[case("")]
 #[actix_web::test]
-async fn upsert_offline_bundle_rejects_invalid_idempotency_key(#[case] invalid_key: &str) {
-    let (app, cookie) = setup_authenticated_test().await;
+async fn upsert_offline_bundle_rejects_invalid_idempotency_key(
+    #[case] invalid_key: &str,
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
+    let (app, cookie) = setup_authenticated_test.await;
 
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/offline/bundles")
@@ -240,9 +282,20 @@ async fn upsert_offline_bundle_rejects_invalid_idempotency_key(#[case] invalid_k
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+#[rstest]
 #[actix_web::test]
-async fn delete_offline_bundle_returns_requested_id() {
+async fn delete_offline_bundle_returns_requested_id(
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
     assert_bundle_operation_returns_id(
+        setup_authenticated_test.await,
         actix_test::TestRequest::delete()
             .uri("/api/v1/offline/bundles/00000000-0000-0000-0000-000000000303"),
         "00000000-0000-0000-0000-000000000303",
@@ -250,9 +303,19 @@ async fn delete_offline_bundle_returns_requested_id() {
     .await;
 }
 
+#[rstest]
 #[actix_web::test]
-async fn delete_offline_bundle_rejects_invalid_bundle_id() {
-    let (app, cookie) = setup_authenticated_test().await;
+async fn delete_offline_bundle_rejects_invalid_bundle_id(
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
+    let (app, cookie) = setup_authenticated_test.await;
 
     let request = actix_test::TestRequest::delete()
         .uri("/api/v1/offline/bundles/not-a-uuid")
@@ -263,68 +326,61 @@ async fn delete_offline_bundle_rejects_invalid_bundle_id() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+#[rstest]
+#[case(mutate_invalid_kind as fn(&mut Value), "kind", "invalid_kind")]
+#[case(
+    mutate_invalid_status as fn(&mut Value),
+    "status",
+    "invalid_status"
+)]
+#[case(
+    mutate_invalid_created_at as fn(&mut Value),
+    "createdAt",
+    "invalid_timestamp"
+)]
+#[case(
+    mutate_invalid_updated_at as fn(&mut Value),
+    "updatedAt",
+    "invalid_timestamp"
+)]
+#[case(mutate_invalid_bounds as fn(&mut Value), "bounds", "invalid_bounds")]
+#[case(
+    mutate_invalid_zoom_range as fn(&mut Value),
+    "zoomRange",
+    "invalid_zoom_range"
+)]
 #[actix_web::test]
-async fn upsert_offline_bundle_rejects_invalid_body_fields() {
-    let cases = [
-        ValidationTestCase {
-            name: "kind",
-            mutate: mutate_invalid_kind,
-            expected_field: "kind",
-            expected_code: "invalid_kind",
-        },
-        ValidationTestCase {
-            name: "status",
-            mutate: mutate_invalid_status,
-            expected_field: "status",
-            expected_code: "invalid_status",
-        },
-        ValidationTestCase {
-            name: "createdAt",
-            mutate: mutate_invalid_created_at,
-            expected_field: "createdAt",
-            expected_code: "invalid_timestamp",
-        },
-        ValidationTestCase {
-            name: "updatedAt",
-            mutate: mutate_invalid_updated_at,
-            expected_field: "updatedAt",
-            expected_code: "invalid_timestamp",
-        },
-        ValidationTestCase {
-            name: "bounds",
-            mutate: mutate_invalid_bounds,
-            expected_field: "bounds",
-            expected_code: "invalid_bounds",
-        },
-        ValidationTestCase {
-            name: "zoomRange",
-            mutate: mutate_invalid_zoom_range,
-            expected_field: "zoomRange",
-            expected_code: "invalid_zoom_range",
-        },
-    ];
+async fn upsert_offline_bundle_rejects_invalid_body_fields(
+    #[case] mutate: fn(&mut Value),
+    #[case] expected_field: &str,
+    #[case] expected_code: &str,
+    #[future] setup_authenticated_test: (
+        impl actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+        actix_web::cookie::Cookie<'static>,
+    ),
+) {
+    let (app, cookie) = setup_authenticated_test.await;
+    let mut payload = sample_bundle_payload();
+    mutate(&mut payload);
 
-    for case in cases {
-        let (app, cookie) = setup_authenticated_test().await;
-        let mut payload = sample_bundle_payload();
-        (case.mutate)(&mut payload);
+    let request = actix_test::TestRequest::post()
+        .uri("/api/v1/offline/bundles")
+        .cookie(cookie)
+        .set_json(payload)
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "case `{expected_field}` should return bad request"
+    );
 
-        let request = actix_test::TestRequest::post()
-            .uri("/api/v1/offline/bundles")
-            .cookie(cookie)
-            .set_json(payload)
-            .to_request();
-        let response = actix_test::call_service(&app, request).await;
-        assert_eq!(
-            response.status(),
-            StatusCode::BAD_REQUEST,
-            "case `{}` should return bad request",
-            case.name
-        );
-
-        let body: Value = actix_test::read_body_json(response).await;
-        assert_validation_details(&body, case.expected_field, case.expected_code);
-    }
+    let body: Value = actix_test::read_body_json(response).await;
+    assert_validation_details(&body, expected_field, expected_code);
 }
 
 #[actix_web::test]

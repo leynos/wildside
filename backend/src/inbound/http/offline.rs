@@ -1,10 +1,4 @@
-//! Offline bundle HTTP handlers.
-//!
-//! ```text
-//! GET /api/v1/offline/bundles
-//! POST /api/v1/offline/bundles
-//! DELETE /api/v1/offline/bundles/{bundle_id}
-//! ```
+//! Offline bundle HTTP handlers for listing, upserting, and deleting bundles.
 
 use std::str::FromStr;
 
@@ -102,7 +96,8 @@ pub struct ListOfflineBundlesResponseBody {
 #[serde(rename_all = "camelCase")]
 pub struct UpsertOfflineBundleResponseBody {
     pub bundle_id: String,
-    pub replayed: bool,
+    #[serde(rename = "replayed")]
+    pub is_replayed: bool,
     pub bundle: OfflineBundleResponse,
 }
 
@@ -111,7 +106,8 @@ pub struct UpsertOfflineBundleResponseBody {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteOfflineBundleResponseBody {
     pub bundle_id: String,
-    pub replayed: bool,
+    #[serde(rename = "replayed")]
+    pub is_replayed: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,7 +160,12 @@ fn parse_bundle_payload(
     Ok(OfflineBundlePayload {
         id: parse_uuid(payload.id, "id")?,
         owner_user_id: Some(user_id),
-        device_id: payload.device_id,
+        device_id: normalize_offline_device_id(&payload.device_id).map_err(|_| {
+            Error::invalid_request("deviceId must not be empty").with_details(json!({
+                "field": "deviceId",
+                "code": "invalid_device_id",
+            }))
+        })?,
         kind: parse_kind(payload.kind)?,
         route_id: parse_optional_uuid(payload.route_id, "routeId")?,
         region_id: payload.region_id,
@@ -225,6 +226,14 @@ impl From<OfflineBundlePayload> for OfflineBundleResponse {
 }
 
 /// List offline bundle manifests for the authenticated user and device.
+///
+/// # Examples
+/// ```no_run
+/// let query = ListOfflineBundlesQuery { device_id: Some("ios-iphone-15".to_owned()) };
+/// let expected_json_shape = r#"{"bundles":[{"id":"..."}]}"#;
+/// assert_eq!(query.device_id.as_deref(), Some("ios-iphone-15"));
+/// assert!(expected_json_shape.contains("\"bundles\""));
+/// ```
 #[utoipa::path(
     get,
     path = "/api/v1/offline/bundles",
@@ -234,7 +243,7 @@ impl From<OfflineBundlePayload> for OfflineBundleResponse {
     responses(
         (status = 200, description = "Offline bundles", body = ListOfflineBundlesResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
     ),
     tags = ["offline"],
@@ -267,6 +276,16 @@ pub async fn list_offline_bundles(
 }
 
 /// Create or update an offline bundle manifest.
+///
+/// # Examples
+/// ```no_run
+/// let idempotency_header = ("Idempotency-Key", "550e8400-e29b-41d4-a716-446655440000");
+/// let request_json = r#"{"id":"...","deviceId":"ios-iphone-15","kind":"route","routeId":"...","regionId":null}"#;
+/// let expected_json_shape = r#"{"bundleId":"...","replayed":false,"bundle":{"id":"..."}}"#;
+/// assert_eq!(idempotency_header.0, "Idempotency-Key");
+/// assert!(request_json.contains("\"deviceId\""));
+/// assert!(expected_json_shape.contains("\"replayed\""));
+/// ```
 #[utoipa::path(
     post,
     path = "/api/v1/offline/bundles",
@@ -277,7 +296,7 @@ pub async fn list_offline_bundles(
     responses(
         (status = 200, description = "Bundle upserted", body = UpsertOfflineBundleResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),
         (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
@@ -309,12 +328,22 @@ pub async fn upsert_offline_bundle(
 
     Ok(web::Json(UpsertOfflineBundleResponseBody {
         bundle_id: response.bundle.id.to_string(),
-        replayed: response.replayed,
+        is_replayed: response.is_replayed,
         bundle: OfflineBundleResponse::from(response.bundle),
     }))
 }
 
 /// Delete an offline bundle manifest.
+///
+/// # Examples
+/// ```no_run
+/// let request_url = "/api/v1/offline/bundles/00000000-0000-0000-0000-000000000101";
+/// let idempotency_header = ("Idempotency-Key", "550e8400-e29b-41d4-a716-446655440000");
+/// let expected_json_shape = r#"{"bundleId":"...","replayed":false}"#;
+/// assert!(request_url.contains("/api/v1/offline/bundles/"));
+/// assert_eq!(idempotency_header.0, "Idempotency-Key");
+/// assert!(expected_json_shape.contains("\"bundleId\""));
+/// ```
 #[utoipa::path(
     delete,
     path = "/api/v1/offline/bundles/{bundle_id}",
@@ -325,7 +354,7 @@ pub async fn upsert_offline_bundle(
     responses(
         (status = 200, description = "Bundle deleted", body = DeleteOfflineBundleResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),
         (status = 404, description = "Not found", body = ErrorSchema),
         (status = 409, description = "Conflict", body = ErrorSchema),
@@ -358,7 +387,7 @@ pub async fn delete_offline_bundle(
 
     Ok(web::Json(DeleteOfflineBundleResponseBody {
         bundle_id: response.bundle_id.to_string(),
-        replayed: response.replayed,
+        is_replayed: response.is_replayed,
     }))
 }
 

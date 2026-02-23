@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use rstest::rstest;
 use serde_json::json;
 
 use super::*;
@@ -13,7 +14,7 @@ use crate::domain::{
     IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
 };
 
-pub(super) async fn assert_list_bundles_rejects_empty_device_id() {
+pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &str) {
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_list_for_owner_and_device().times(0);
 
@@ -21,28 +22,28 @@ pub(super) async fn assert_list_bundles_rejects_empty_device_id() {
     let error = service
         .list_bundles(ListOfflineBundlesRequest {
             owner_user_id: Some(crate::domain::UserId::random()),
-            device_id: String::new(),
+            device_id: device_id.to_owned(),
         })
         .await
-        .expect_err("empty device id should be rejected");
+        .expect_err("invalid device id should be rejected");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
 }
 
+pub(super) async fn assert_list_bundles_rejects_empty_device_id() {
+    assert_list_bundles_rejects_invalid_device_id("").await;
+}
+
 pub(super) async fn assert_list_bundles_rejects_whitespace_device_id() {
-    let mut repo = MockOfflineBundleRepository::new();
-    repo.expect_list_for_owner_and_device().times(0);
+    assert_list_bundles_rejects_invalid_device_id("  \t\n ").await;
+}
 
-    let service = make_query_service(repo);
-    let error = service
-        .list_bundles(ListOfflineBundlesRequest {
-            owner_user_id: Some(crate::domain::UserId::random()),
-            device_id: "  \t\n ".to_owned(),
-        })
-        .await
-        .expect_err("whitespace device id should be rejected");
-
-    assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
+#[rstest]
+#[case("")]
+#[case("  \t\n ")]
+#[tokio::test]
+async fn list_bundles_rejects_invalid_device_id(#[case] device_id: &str) {
+    assert_list_bundles_rejects_invalid_device_id(device_id).await;
 }
 
 pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds_record() {
@@ -59,7 +60,7 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
     .expect("payload hash");
     let response_snapshot = serde_json::to_value(UpsertOfflineBundleResponse {
         bundle: payload.clone(),
-        replayed: false,
+        is_replayed: false,
     })
     .expect("response snapshot");
     let record = IdempotencyRecord {
@@ -110,7 +111,7 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
         .await
         .expect("replayed response");
 
-    assert!(response.replayed);
+    assert!(response.is_replayed);
 }
 
 pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record()

@@ -40,14 +40,62 @@ pub struct ListWalkCompletionSummariesResponse {
 }
 
 /// Driving port for walk session read operations.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), backend::domain::Error> {
+/// let query = backend::domain::ports::FixtureWalkSessionQuery;
+/// let request = backend::domain::ports::ListWalkCompletionSummariesRequest {
+///     user_id: backend::domain::UserId::random(),
+/// };
+/// let response = query.list_completion_summaries(request).await?;
+/// assert!(response.summaries.is_empty());
+/// # Ok(())
+/// # }
+/// ```
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait WalkSessionQuery: Send + Sync {
+    /// Fetches one persisted walk session by identifier.
+    ///
+    /// Accepts `GetWalkSessionRequest` and returns `GetWalkSessionResponse`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() {
+    /// let query = backend::domain::ports::FixtureWalkSessionQuery;
+    /// let request = backend::domain::ports::GetWalkSessionRequest {
+    ///     session_id: uuid::Uuid::new_v4(),
+    /// };
+    /// let result = query.get_session(request).await;
+    /// assert!(result.is_err());
+    /// # }
+    /// ```
     async fn get_session(
         &self,
         request: GetWalkSessionRequest,
     ) -> Result<GetWalkSessionResponse, Error>;
 
+    /// Lists completion summaries for a user.
+    ///
+    /// Accepts `ListWalkCompletionSummariesRequest` and returns
+    /// `ListWalkCompletionSummariesResponse`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let query = backend::domain::ports::FixtureWalkSessionQuery;
+    /// let request = backend::domain::ports::ListWalkCompletionSummariesRequest {
+    ///     user_id: backend::domain::UserId::random(),
+    /// };
+    /// let response = query.list_completion_summaries(request).await?;
+    /// assert!(response.summaries.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn list_completion_summaries(
         &self,
         request: ListWalkCompletionSummariesRequest,

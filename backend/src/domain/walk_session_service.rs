@@ -34,6 +34,16 @@ pub struct WalkSessionCommandService<R> {
 
 impl<R> WalkSessionCommandService<R> {
     /// Create a new command service with the walk session repository.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// # use std::sync::Arc;
+    /// # struct Repo;
+    /// # // impl WalkSessionRepository for Repo { ... }
+    /// # use backend::domain::WalkSessionCommandService;
+    /// let service = WalkSessionCommandService::new(Arc::new(Repo));
+    /// ```
     pub fn new(walk_session_repo: Arc<R>) -> Self {
         Self { walk_session_repo }
     }
@@ -93,6 +103,16 @@ pub struct WalkSessionQueryService<R> {
 
 impl<R> WalkSessionQueryService<R> {
     /// Create a new query service with the walk session repository.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// # use std::sync::Arc;
+    /// # struct Repo;
+    /// # // impl WalkSessionRepository for Repo { ... }
+    /// # use backend::domain::WalkSessionQueryService;
+    /// let service = WalkSessionQueryService::new(Arc::new(Repo));
+    /// ```
     pub fn new(walk_session_repo: Arc<R>) -> Self {
         Self { walk_session_repo }
     }

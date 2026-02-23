@@ -88,7 +88,8 @@ pub struct UpsertOfflineBundleRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UpsertOfflineBundleResponse {
     pub bundle: OfflineBundlePayload,
-    pub replayed: bool,
+    #[serde(rename = "replayed")]
+    pub is_replayed: bool,
 }
 
 /// Request to delete an offline bundle manifest.
@@ -105,18 +106,57 @@ pub struct DeleteOfflineBundleRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteOfflineBundleResponse {
     pub bundle_id: Uuid,
-    pub replayed: bool,
+    #[serde(rename = "replayed")]
+    pub is_replayed: bool,
 }
 
 /// Driving port for offline bundle mutation operations.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait OfflineBundleCommand: Send + Sync {
+    /// Creates or updates an offline bundle manifest for the authenticated user.
+    ///
+    /// Returns `UpsertOfflineBundleResponse` on success. Returns `Error` for
+    /// validation failures, ownership violations, idempotency conflicts, or
+    /// persistence failures. Callers should handle `Result::Err` by mapping
+    /// the domain error code to the transport/protocol boundary.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let command = backend::domain::ports::FixtureOfflineBundleCommand;
+    /// let request = backend::domain::ports::UpsertOfflineBundleRequest {
+    ///     user_id: backend::domain::UserId::random(),
+    ///     bundle: fixture_bundle_payload(),
+    ///     idempotency_key: None,
+    /// };
+    /// let _response = command.upsert_bundle(request).await?;
+    /// # Ok::<(), backend::domain::Error>(())
+    /// ```
     async fn upsert_bundle(
         &self,
         request: UpsertOfflineBundleRequest,
     ) -> Result<UpsertOfflineBundleResponse, Error>;
 
+    /// Deletes an existing offline bundle manifest for the authenticated user.
+    ///
+    /// Returns `DeleteOfflineBundleResponse` on success. Returns `Error` when
+    /// the bundle is missing, ownership is invalid, idempotency keys conflict,
+    /// or persistence fails. Callers should inspect `Result::Err` and map it
+    /// to the appropriate boundary response.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let command = backend::domain::ports::FixtureOfflineBundleCommand;
+    /// let request = backend::domain::ports::DeleteOfflineBundleRequest {
+    ///     user_id: backend::domain::UserId::random(),
+    ///     bundle_id: uuid::Uuid::new_v4(),
+    ///     idempotency_key: None,
+    /// };
+    /// let _response = command.delete_bundle(request).await?;
+    /// # Ok::<(), backend::domain::Error>(())
+    /// ```
     async fn delete_bundle(
         &self,
         request: DeleteOfflineBundleRequest,
@@ -135,7 +175,7 @@ impl OfflineBundleCommand for FixtureOfflineBundleCommand {
     ) -> Result<UpsertOfflineBundleResponse, Error> {
         Ok(UpsertOfflineBundleResponse {
             bundle: request.bundle,
-            replayed: false,
+            is_replayed: false,
         })
     }
 
@@ -145,7 +185,7 @@ impl OfflineBundleCommand for FixtureOfflineBundleCommand {
     ) -> Result<DeleteOfflineBundleResponse, Error> {
         Ok(DeleteOfflineBundleResponse {
             bundle_id: request.bundle_id,
-            replayed: false,
+            is_replayed: false,
         })
     }
 }
@@ -154,12 +194,20 @@ impl OfflineBundleCommand for FixtureOfflineBundleCommand {
 mod tests {
     //! Regression coverage for this module.
 
-    use chrono::Utc;
-    use rstest::rstest;
+    use chrono::{DateTime, Utc};
+    use rstest::{fixture, rstest};
 
     use super::*;
 
+    fn fixture_timestamp() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .expect("RFC3339 fixture timestamp")
+            .with_timezone(&Utc)
+    }
+
+    #[fixture]
     fn sample_payload() -> OfflineBundlePayload {
+        let timestamp = fixture_timestamp();
         OfflineBundlePayload {
             id: Uuid::new_v4(),
             owner_user_id: Some(UserId::random()),
@@ -170,16 +218,16 @@ mod tests {
             bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
             zoom_range: ZoomRange::new(11, 15).expect("valid zoom"),
             estimated_size_bytes: 1_500,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: timestamp,
+            updated_at: timestamp,
             status: OfflineBundleStatus::Queued,
             progress: 0.0,
         }
     }
 
     #[rstest]
-    fn payload_round_trip_through_domain_entity() {
-        let payload = sample_payload();
+    fn payload_round_trip_through_domain_entity(sample_payload: OfflineBundlePayload) {
+        let payload = sample_payload;
 
         let bundle = OfflineBundle::try_from(payload.clone()).expect("payload is valid");
         let restored = OfflineBundlePayload::from(bundle);
@@ -189,12 +237,13 @@ mod tests {
         assert_eq!(restored.kind, payload.kind);
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn fixture_command_returns_input_bundle() {
+    async fn fixture_command_returns_input_bundle(sample_payload: OfflineBundlePayload) {
         let command = FixtureOfflineBundleCommand;
         let request = UpsertOfflineBundleRequest {
             user_id: UserId::random(),
-            bundle: sample_payload(),
+            bundle: sample_payload,
             idempotency_key: None,
         };
 
@@ -204,7 +253,7 @@ mod tests {
             .expect("fixture upsert succeeds");
 
         assert_eq!(response.bundle.id, request.bundle.id);
-        assert!(!response.replayed);
+        assert!(!response.is_replayed);
     }
 
     #[tokio::test]
@@ -222,6 +271,6 @@ mod tests {
             .expect("fixture delete succeeds");
 
         assert_eq!(response.bundle_id, request.bundle_id);
-        assert!(!response.replayed);
+        assert!(!response.is_replayed);
     }
 }

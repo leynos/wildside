@@ -188,6 +188,38 @@ impl From<CreateWalkSessionResponse> for CreateWalkSessionResponseBody {
 }
 
 /// Record a walk session for the authenticated user.
+///
+/// # Examples
+/// ```no_run
+/// use actix_web::web;
+/// use backend::inbound::http::walk_sessions::{
+///     CreateWalkSessionRequestBody, WalkPrimaryStatBody, create_walk_session,
+/// };
+/// use backend::inbound::http::{ApiResult, state::HttpState};
+/// use backend::inbound::http::session::SessionContext;
+///
+/// async fn call_handler(
+///     state: web::Data<HttpState>,
+///     session: SessionContext,
+/// ) -> ApiResult<web::Json<backend::inbound::http::walk_sessions::CreateWalkSessionResponseBody>>
+/// {
+///     let payload = web::Json(CreateWalkSessionRequestBody {
+///         id: "00000000-0000-0000-0000-000000000501".to_owned(),
+///         route_id: "00000000-0000-0000-0000-000000000202".to_owned(),
+///         started_at: "2026-02-01T11:00:00Z".to_owned(),
+///         ended_at: Some("2026-02-01T11:40:00Z".to_owned()),
+///         primary_stats: vec![WalkPrimaryStatBody {
+///             kind: "distance".to_owned(),
+///             value: 1234.0,
+///         }],
+///         secondary_stats: vec![],
+///         highlighted_poi_ids: vec![],
+///     });
+///
+///     let response = create_walk_session(state, session, payload).await?;
+///     Ok(response)
+/// }
+/// ```
 #[utoipa::path(
     post,
     path = "/api/v1/walk-sessions",
@@ -195,7 +227,7 @@ impl From<CreateWalkSessionResponse> for CreateWalkSessionResponseBody {
     responses(
         (status = 200, description = "Walk session recorded", body = CreateWalkSessionResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
     ),
     tags = ["walk-sessions"],

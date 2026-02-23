@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use rstest::{fixture, rstest};
 use uuid::Uuid;
 
 use super::*;
@@ -11,8 +12,15 @@ use crate::domain::{
     WalkPrimaryStat, WalkPrimaryStatKind, WalkSecondaryStat, WalkSecondaryStatKind,
 };
 
+fn fixture_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+        .expect("RFC3339 fixture timestamp")
+        .with_timezone(&Utc)
+}
+
+#[fixture]
 fn sample_create_request() -> CreateWalkSessionRequest {
-    let started_at = Utc::now();
+    let started_at = fixture_timestamp();
     CreateWalkSessionRequest {
         session: WalkSessionPayload {
             id: Uuid::new_v4(),
@@ -53,9 +61,12 @@ async fn assert_query_error_maps_to_internal<Fut, T>(
     assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
 }
 
+#[rstest]
 #[tokio::test]
-async fn create_session_persists_and_returns_stable_id() {
-    let request = sample_create_request();
+async fn create_session_persists_and_returns_stable_id(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
     let expected_session_id = request.session.id;
 
     let mut repo = MockWalkSessionRepository::new();
@@ -72,9 +83,12 @@ async fn create_session_persists_and_returns_stable_id() {
     assert!(response.completion_summary.is_some());
 }
 
+#[rstest]
 #[tokio::test]
-async fn create_session_maps_validation_error_to_invalid_request() {
-    let mut request = sample_create_request();
+async fn create_session_maps_validation_error_to_invalid_request(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let mut request = sample_create_request;
     request.session.primary_stats = vec![crate::domain::WalkPrimaryStatDraft {
         kind: WalkPrimaryStatKind::Distance,
         value: -1.0,
@@ -92,9 +106,12 @@ async fn create_session_maps_validation_error_to_invalid_request() {
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
 }
 
+#[rstest]
 #[tokio::test]
-async fn create_session_maps_connection_error_to_service_unavailable() {
-    let request = sample_create_request();
+async fn create_session_maps_connection_error_to_service_unavailable(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
 
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
@@ -111,9 +128,12 @@ async fn create_session_maps_connection_error_to_service_unavailable() {
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
 }
 
+#[rstest]
 #[tokio::test]
-async fn create_session_rejects_existing_session_owned_by_different_user() {
-    let request = sample_create_request();
+async fn create_session_rejects_existing_session_owned_by_different_user(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
     let mut existing_payload = request.session.clone();
     existing_payload.user_id = crate::domain::UserId::random();
     let existing_session =
@@ -153,7 +173,7 @@ async fn get_session_returns_not_found_when_missing() {
 #[tokio::test]
 async fn list_completion_summaries_returns_payloads() {
     let user_id = crate::domain::UserId::random();
-    let started_at = Utc::now();
+    let started_at = fixture_timestamp();
     let session = crate::domain::WalkSession::new(crate::domain::WalkSessionDraft {
         id: Uuid::new_v4(),
         user_id: user_id.clone(),

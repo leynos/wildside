@@ -61,6 +61,7 @@ pub mod interest_theme;
 pub mod localization;
 pub mod offline;
 pub mod offline_bundle_service;
+mod offline_bundle_service_support;
 pub mod ports;
 pub mod preferences;
 pub mod preferences_service;

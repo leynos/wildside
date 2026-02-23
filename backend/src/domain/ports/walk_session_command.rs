@@ -148,6 +148,26 @@ pub struct CreateWalkSessionResponse {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait WalkSessionCommand: Send + Sync {
+    /// Creates a walk session and returns its stable identifier plus optional
+    /// completion summary when the payload includes an `ended_at` timestamp.
+    ///
+    /// Accepts `CreateWalkSessionRequest` and returns
+    /// `CreateWalkSessionResponse`. Callers should handle `Result::Err(Error)`
+    /// for validation and persistence failures at the boundary layer.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let command = backend::domain::ports::FixtureWalkSessionCommand;
+    /// let request = backend::domain::ports::CreateWalkSessionRequest {
+    ///     session: fixture_walk_session_payload(),
+    /// };
+    /// let response = command.create_session(request).await?;
+    /// assert!(response.completion_summary.is_some() || response.completion_summary.is_none());
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn create_session(
         &self,
         request: CreateWalkSessionRequest,
@@ -179,13 +199,21 @@ impl WalkSessionCommand for FixtureWalkSessionCommand {
 mod tests {
     //! Regression coverage for this module.
 
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
+    use rstest::{fixture, rstest};
 
     use super::*;
     use crate::domain::{WalkPrimaryStatKind, WalkSecondaryStatKind};
 
+    fn fixture_timestamp() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .expect("RFC3339 fixture timestamp")
+            .with_timezone(&Utc)
+    }
+
+    #[fixture]
     fn sample_payload() -> WalkSessionPayload {
-        let started_at = Utc::now();
+        let started_at = fixture_timestamp();
         WalkSessionPayload {
             id: Uuid::new_v4(),
             user_id: crate::domain::UserId::random(),
@@ -205,11 +233,12 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn fixture_command_preserves_session_id() {
+    async fn fixture_command_preserves_session_id(sample_payload: WalkSessionPayload) {
         let command = FixtureWalkSessionCommand;
         let request = CreateWalkSessionRequest {
-            session: sample_payload(),
+            session: sample_payload,
         };
 
         let response = command
@@ -221,9 +250,10 @@ mod tests {
         assert!(response.completion_summary.is_some());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn payload_round_trip_through_domain_entity() {
-        let payload = sample_payload();
+    async fn payload_round_trip_through_domain_entity(sample_payload: WalkSessionPayload) {
+        let payload = sample_payload;
 
         let session = WalkSession::try_from(payload.clone()).expect("valid session payload");
         let restored = WalkSessionPayload::from(session);

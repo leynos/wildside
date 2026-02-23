@@ -183,11 +183,11 @@ pub(super) fn create_offline_and_walk_doubles(
     let offline_command = RecordingOfflineBundleCommand::new(
         UpsertOfflineBundleCommandResponse::Ok(UpsertOfflineBundleResponse {
             bundle: bundle.clone(),
-            replayed: false,
+            is_replayed: false,
         }),
         DeleteOfflineBundleCommandResponse::Ok(DeleteOfflineBundleResponse {
             bundle_id,
-            replayed: false,
+            is_replayed: false,
         }),
     );
     let offline_query = RecordingOfflineBundleQuery::new(

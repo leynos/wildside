@@ -70,7 +70,7 @@ async fn upsert_persists_bundle_without_idempotency_key() {
         .expect("upsert succeeds");
 
     assert_eq!(response.bundle.id, expected_id);
-    assert!(!response.replayed);
+    assert!(!response.is_replayed);
 }
 
 #[tokio::test]
@@ -120,7 +120,7 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() {
         .await
         .expect("upsert succeeds");
 
-    assert!(!response.replayed);
+    assert!(!response.is_replayed);
 }
 
 #[tokio::test]
@@ -166,7 +166,7 @@ async fn upsert_returns_replayed_response_when_payload_matches() {
     .expect("payload hash");
     let response_snapshot = serde_json::to_value(UpsertOfflineBundleResponse {
         bundle: payload.clone(),
-        replayed: false,
+        is_replayed: false,
     })
     .expect("response snapshot");
     let record = IdempotencyRecord {
@@ -198,7 +198,7 @@ async fn upsert_returns_replayed_response_when_payload_matches() {
         .await
         .expect("replayed response");
 
-    assert!(response.replayed);
+    assert!(response.is_replayed);
 }
 
 #[tokio::test]

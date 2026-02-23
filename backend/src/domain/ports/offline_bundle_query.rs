@@ -41,14 +41,66 @@ pub struct GetOfflineBundleResponse {
 }
 
 /// Driving port for offline bundle read operations.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), backend::domain::Error> {
+/// let query = backend::domain::ports::FixtureOfflineBundleQuery;
+/// let request = backend::domain::ports::ListOfflineBundlesRequest {
+///     owner_user_id: Some(backend::domain::UserId::random()),
+///     device_id: "device-123".to_owned(),
+/// };
+/// let response = query.list_bundles(request).await?;
+/// assert!(response.bundles.is_empty());
+/// # Ok(())
+/// # }
+/// ```
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait OfflineBundleQuery: Send + Sync {
+    /// Lists offline bundles for the owner/device scope supplied by the caller.
+    ///
+    /// Accepts `ListOfflineBundlesRequest` and returns
+    /// `ListOfflineBundlesResponse` containing zero or more
+    /// `OfflineBundlePayload` entries.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let query = backend::domain::ports::FixtureOfflineBundleQuery;
+    /// let request = backend::domain::ports::ListOfflineBundlesRequest {
+    ///     owner_user_id: None,
+    ///     device_id: "device-123".to_owned(),
+    /// };
+    /// let response = query.list_bundles(request).await?;
+    /// assert!(response.bundles.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn list_bundles(
         &self,
         request: ListOfflineBundlesRequest,
     ) -> Result<ListOfflineBundlesResponse, Error>;
 
+    /// Fetches one offline bundle by identifier.
+    ///
+    /// Accepts `GetOfflineBundleRequest` and returns
+    /// `GetOfflineBundleResponse` for the matching bundle.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() {
+    /// let query = backend::domain::ports::FixtureOfflineBundleQuery;
+    /// let request = backend::domain::ports::GetOfflineBundleRequest {
+    ///     bundle_id: uuid::Uuid::new_v4(),
+    /// };
+    /// let result = query.get_bundle(request).await;
+    /// assert!(result.is_err());
+    /// # }
+    /// ```
     async fn get_bundle(
         &self,
         request: GetOfflineBundleRequest,

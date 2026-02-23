@@ -89,7 +89,8 @@ Observable success criteria:
   `docs/wildside-pwa-data-model.md`, causing client compatibility drift.
   Severity: high.
   Likelihood: medium.
-  Mitigation: define explicit request/response schema mapping and BDD checks.
+  Mitigation: define explicit request/response schema mapping and Behaviour-Driven
+  Development (BDD) checks.
 
 - Risk: HTTP handlers call repositories directly without driving-port
   orchestration, leaking idempotency/retry rules into adapters.

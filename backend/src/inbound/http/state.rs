@@ -80,11 +80,78 @@ impl From<HttpStatePorts> for HttpState {
 
 impl HttpState {
     /// Construct state from a core ports bundle.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use std::sync::Arc;
+    ///
+    /// use backend::domain::ports::{
+    ///     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
+    ///     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+    ///     FixtureRouteSubmissionService, FixtureUserInterestsCommand,
+    ///     FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
+    ///     FixtureUsersQuery,
+    /// };
+    /// use backend::inbound::http::state::{HttpState, HttpStatePorts};
+    ///
+    /// let ports = HttpStatePorts {
+    ///     login: Arc::new(FixtureLoginService),
+    ///     users: Arc::new(FixtureUsersQuery),
+    ///     profile: Arc::new(FixtureUserProfileQuery),
+    ///     interests: Arc::new(FixtureUserInterestsCommand),
+    ///     preferences: Arc::new(FixtureUserPreferencesCommand),
+    ///     preferences_query: Arc::new(FixtureUserPreferencesQuery),
+    ///     route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
+    ///     route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
+    ///     route_submission: Arc::new(FixtureRouteSubmissionService),
+    ///     catalogue: Arc::new(FixtureCatalogueRepository),
+    ///     descriptors: Arc::new(FixtureDescriptorRepository),
+    /// };
+    /// let state = HttpState::new(ports);
+    /// let _login = state.login.clone();
+    /// ```
     pub fn new(ports: HttpStatePorts) -> Self {
         Self::new_with_extra(ports, HttpStateExtraPorts::default())
     }
 
     /// Construct state from core and extra ports.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use std::sync::Arc;
+    ///
+    /// use backend::domain::ports::{
+    ///     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
+    ///     FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
+    ///     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
+    ///     FixtureRouteSubmissionService, FixtureUserInterestsCommand,
+    ///     FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
+    ///     FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
+    /// };
+    /// use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
+    ///
+    /// let ports = HttpStatePorts {
+    ///     login: Arc::new(FixtureLoginService),
+    ///     users: Arc::new(FixtureUsersQuery),
+    ///     profile: Arc::new(FixtureUserProfileQuery),
+    ///     interests: Arc::new(FixtureUserInterestsCommand),
+    ///     preferences: Arc::new(FixtureUserPreferencesCommand),
+    ///     preferences_query: Arc::new(FixtureUserPreferencesQuery),
+    ///     route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
+    ///     route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
+    ///     route_submission: Arc::new(FixtureRouteSubmissionService),
+    ///     catalogue: Arc::new(FixtureCatalogueRepository),
+    ///     descriptors: Arc::new(FixtureDescriptorRepository),
+    /// };
+    /// let extras = HttpStateExtraPorts {
+    ///     offline_bundles: Arc::new(FixtureOfflineBundleCommand),
+    ///     offline_bundles_query: Arc::new(FixtureOfflineBundleQuery),
+    ///     walk_sessions: Arc::new(FixtureWalkSessionCommand),
+    ///     walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
+    /// };
+    /// let state = HttpState::new_with_extra(ports, extras);
+    /// let _walk_sessions = state.walk_sessions.clone();
+    /// ```
     pub fn new_with_extra(ports: HttpStatePorts, extras: HttpStateExtraPorts) -> Self {
         let HttpStatePorts {
             login,

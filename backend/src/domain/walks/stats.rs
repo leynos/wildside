@@ -4,6 +4,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::WalkValidationError;
 
@@ -16,7 +17,8 @@ pub enum WalkPrimaryStatKind {
 }
 
 /// Error returned when parsing a primary walk-stat kind from string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("invalid walk primary stat kind")]
 pub struct ParseWalkPrimaryStatKindError;
 
 impl fmt::Display for WalkPrimaryStatKind {
@@ -27,14 +29,6 @@ impl fmt::Display for WalkPrimaryStatKind {
         }
     }
 }
-
-impl fmt::Display for ParseWalkPrimaryStatKindError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("invalid walk primary stat kind")
-    }
-}
-
-impl std::error::Error for ParseWalkPrimaryStatKindError {}
 
 impl FromStr for WalkPrimaryStatKind {
     type Err = ParseWalkPrimaryStatKindError;
@@ -57,7 +51,8 @@ pub enum WalkSecondaryStatKind {
 }
 
 /// Error returned when parsing a secondary walk-stat kind from string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("invalid walk secondary stat kind")]
 pub struct ParseWalkSecondaryStatKindError;
 
 impl fmt::Display for WalkSecondaryStatKind {
@@ -68,14 +63,6 @@ impl fmt::Display for WalkSecondaryStatKind {
         }
     }
 }
-
-impl fmt::Display for ParseWalkSecondaryStatKindError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("invalid walk secondary stat kind")
-    }
-}
-
-impl std::error::Error for ParseWalkSecondaryStatKindError {}
 
 impl FromStr for WalkSecondaryStatKind {
     type Err = ParseWalkSecondaryStatKindError;
