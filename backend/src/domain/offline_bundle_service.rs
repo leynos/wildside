@@ -34,15 +34,20 @@ impl<R, I> OfflineBundleCommandService<R, I> {
     /// Create a new command service with bundle and idempotency repositories.
     /// ```rust,no_run
     /// # use std::sync::Arc;
-    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand};
+    /// # use chrono::{DateTime, Utc};
+    /// # use uuid::Uuid;
+    /// # use backend::domain::{BoundingBox, OfflineBundleKind, OfflineBundleStatus, UserId, ZoomRange};
+    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand, OfflineBundlePayload, UpsertOfflineBundleRequest};
     /// # use mockable::DefaultClock;
     /// # async fn example() -> Result<(), backend::domain::Error> {
     /// let service = backend::domain::OfflineBundleCommandService::new(
-    ///     Arc::new(FixtureOfflineBundleRepository),
-    ///     Arc::new(FixtureIdempotencyRepository),
-    ///     Arc::new(DefaultClock),
+    ///     Arc::new(FixtureOfflineBundleRepository), Arc::new(FixtureIdempotencyRepository), Arc::new(DefaultClock),
     /// );
-    /// let _ = service.upsert_bundle(todo!("construct request payload")).await?;
+    /// let user_id = UserId::random();
+    /// let timestamp = DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z").expect("timestamp").with_timezone(&Utc);
+    /// let request = UpsertOfflineBundleRequest { user_id: user_id.clone(), bundle: OfflineBundlePayload { id: Uuid::new_v4(), owner_user_id: Some(user_id), device_id: "ios-iphone-15".to_owned(), kind: OfflineBundleKind::Route, route_id: Some(Uuid::new_v4()), region_id: None, bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("bounds"), zoom_range: ZoomRange::new(11, 15).expect("zoom"), estimated_size_bytes: 4096, created_at: timestamp, updated_at: timestamp, status: OfflineBundleStatus::Queued, progress: 0.0 }, idempotency_key: None };
+    /// let result = service.upsert_bundle(request).await;
+    /// assert!(matches!(result, Ok(response) if !response.is_replayed));
     /// # Ok(())
     /// # }
     /// ```
@@ -328,20 +333,12 @@ pub struct OfflineBundleQueryService<R> {
 
 impl<R> OfflineBundleQueryService<R> {
     /// Create a new query service with the bundle repository.
-    ///
-    /// # Examples
-    ///
     /// ```rust,no_run
     /// # use std::sync::Arc;
     /// # use backend::domain::ports::{FixtureOfflineBundleRepository, ListOfflineBundlesRequest, OfflineBundleQuery};
     /// # async fn example() -> Result<(), backend::domain::Error> {
     /// let service = backend::domain::OfflineBundleQueryService::new(Arc::new(FixtureOfflineBundleRepository));
-    /// let response = service
-    ///     .list_bundles(ListOfflineBundlesRequest {
-    ///         owner_user_id: Some(backend::domain::UserId::random()),
-    ///         device_id: "ios-iphone-15".to_owned(),
-    ///     })
-    ///     .await?;
+    /// let response = service.list_bundles(ListOfflineBundlesRequest { owner_user_id: Some(backend::domain::UserId::random()), device_id: "ios-iphone-15".to_owned() }).await?;
     /// assert!(response.bundles.is_empty());
     /// # Ok(())
     /// # }

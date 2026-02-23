@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use mockable::DefaultClock;
 use rstest::{fixture, rstest};
 use serde_json::json;
@@ -20,6 +20,7 @@ use crate::domain::{
 
 #[fixture]
 fn sample_bundle_payload() -> OfflineBundlePayload {
+    let timestamp = fixture_timestamp();
     OfflineBundlePayload {
         id: Uuid::new_v4(),
         owner_user_id: Some(crate::domain::UserId::random()),
@@ -30,11 +31,17 @@ fn sample_bundle_payload() -> OfflineBundlePayload {
         bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
         zoom_range: ZoomRange::new(11, 15).expect("valid zoom"),
         estimated_size_bytes: 1_500,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at: timestamp,
+        updated_at: timestamp,
         status: OfflineBundleStatus::Queued,
         progress: 0.0,
     }
+}
+
+fn fixture_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+        .expect("RFC3339 fixture timestamp")
+        .with_timezone(&Utc)
 }
 
 fn make_service(
@@ -198,7 +205,7 @@ async fn upsert_returns_replayed_response_when_payload_matches(
         payload_hash: payload_hash.clone(),
         response_snapshot,
         user_id: user_id.clone(),
-        created_at: Utc::now(),
+        created_at: fixture_timestamp(),
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -298,7 +305,7 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
         payload_hash,
         response_snapshot: json!({"bundleId": bundle_id}),
         user_id: user_id.clone(),
-        created_at: Utc::now(),
+        created_at: fixture_timestamp(),
     };
 
     let mut repo = MockOfflineBundleRepository::new();
