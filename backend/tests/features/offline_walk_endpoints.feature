@@ -73,4 +73,4 @@ Feature: Offline bundle and walk-session endpoints
   Scenario: Walk session creation requires authentication
     Given a running server with session middleware
     When the unauthenticated client creates a walk session
-    Then the response is unauthorised
+    Then the response is unauthorized

@@ -9,19 +9,41 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
+/// Fixture user identifier used for authenticated BDD requests.
 pub const AUTH_USER_ID: &str = "11111111-1111-1111-1111-111111111111";
+/// Fixture offline bundle identifier shared by upsert/list/delete scenarios.
 pub const BUNDLE_ID: &str = "00000000-0000-0000-0000-000000000101";
+/// Fixture route identifier referenced by bundle and walk-session payloads.
 pub const ROUTE_ID: &str = "00000000-0000-0000-0000-000000000202";
+/// Fixture walk-session identifier used by walk-session endpoint scenarios.
 pub const SESSION_ID: &str = "00000000-0000-0000-0000-000000000501";
+/// Fixture highlighted point-of-interest identifier for completion summaries.
 pub const HIGHLIGHTED_POI_ID: &str = "00000000-0000-0000-0000-000000000503";
+/// Fixture idempotency key reused by offline mutation scenarios.
 pub const IDEMPOTENCY_KEY: &str = "550e8400-e29b-41d4-a716-446655440000";
 
+/// Parses an RFC 3339 fixture timestamp into UTC.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let timestamp = fixture_timestamp("2026-02-01T10:00:00Z");
+/// assert_eq!(timestamp.to_rfc3339(), "2026-02-01T10:00:00+00:00");
+/// ```
 pub fn fixture_timestamp(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
         .expect("fixture timestamp")
         .with_timezone(&Utc)
 }
 
+/// Builds the canonical offline bundle payload used by BDD doubles.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let bundle = build_bundle_payload();
+/// assert_eq!(bundle.id.to_string(), BUNDLE_ID);
+/// ```
 pub fn build_bundle_payload() -> OfflineBundlePayload {
     OfflineBundlePayload {
         id: Uuid::parse_str(BUNDLE_ID).expect("bundle id"),
@@ -40,6 +62,14 @@ pub fn build_bundle_payload() -> OfflineBundlePayload {
     }
 }
 
+/// Builds a completion summary payload for walk-session response assertions.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let summary = build_walk_completion_summary();
+/// assert_eq!(summary.session_id.to_string(), SESSION_ID);
+/// ```
 pub fn build_walk_completion_summary() -> WalkCompletionSummaryPayload {
     WalkCompletionSummaryPayload {
         session_id: Uuid::parse_str(SESSION_ID).expect("session id"),
@@ -60,6 +90,14 @@ pub fn build_walk_completion_summary() -> WalkCompletionSummaryPayload {
     }
 }
 
+/// Builds the JSON body used by offline bundle upsert endpoint scenarios.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let body = offline_upsert_payload_json();
+/// assert_eq!(body["id"].as_str(), Some(BUNDLE_ID));
+/// ```
 pub fn offline_upsert_payload_json() -> Value {
     serde_json::json!({
         "id": BUNDLE_ID,
@@ -85,6 +123,14 @@ pub fn offline_upsert_payload_json() -> Value {
     })
 }
 
+/// Builds the JSON body used by walk-session creation endpoint scenarios.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let body = walk_session_payload_json();
+/// assert_eq!(body["id"].as_str(), Some(SESSION_ID));
+/// ```
 pub fn walk_session_payload_json() -> Value {
     serde_json::json!({
         "id": SESSION_ID,

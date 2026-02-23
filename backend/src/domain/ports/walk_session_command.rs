@@ -158,13 +158,36 @@ pub trait WalkSessionCommand: Send + Sync {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # use chrono::{DateTime, Utc};
+    /// # use uuid::Uuid;
+    /// # use backend::domain::{UserId, WalkPrimaryStatDraft, WalkPrimaryStatKind, WalkSecondaryStatDraft, WalkSecondaryStatKind};
+    /// # use backend::domain::ports::{CreateWalkSessionRequest, FixtureWalkSessionCommand, WalkSessionCommand, WalkSessionPayload};
     /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let session_id = Uuid::new_v4();
     /// let command = backend::domain::ports::FixtureWalkSessionCommand;
     /// let request = backend::domain::ports::CreateWalkSessionRequest {
-    ///     session: fixture_walk_session_payload(),
+    ///     session: WalkSessionPayload {
+    ///         id: session_id,
+    ///         user_id: UserId::random(),
+    ///         route_id: Uuid::new_v4(),
+    ///         started_at: DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+    ///             .expect("valid timestamp")
+    ///             .with_timezone(&Utc),
+    ///         ended_at: None,
+    ///         primary_stats: vec![WalkPrimaryStatDraft {
+    ///             kind: WalkPrimaryStatKind::Distance,
+    ///             value: 1_000.0,
+    ///         }],
+    ///         secondary_stats: vec![WalkSecondaryStatDraft {
+    ///             kind: WalkSecondaryStatKind::Energy,
+    ///             value: 120.0,
+    ///             unit: Some("kcal".to_owned()),
+    ///         }],
+    ///         highlighted_poi_ids: vec![Uuid::new_v4()],
+    ///     },
     /// };
     /// let response = command.create_session(request).await?;
-    /// assert!(response.completion_summary.is_some() || response.completion_summary.is_none());
+    /// assert_eq!(response.session_id, session_id);
     /// # Ok(())
     /// # }
     /// ```

@@ -186,6 +186,7 @@ fn build_offline_bundles_pair(
                 Arc::new(OfflineBundleCommandService::new(
                     repo.clone(),
                     idempotency_repo,
+                    Arc::new(mockable::DefaultClock),
                 )),
                 Arc::new(OfflineBundleQueryService::new(repo)),
             )

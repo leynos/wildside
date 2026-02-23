@@ -3,7 +3,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use mockable::Clock;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 
@@ -27,30 +27,30 @@ use crate::domain::{
 pub struct OfflineBundleCommandService<R, I> {
     bundle_repo: Arc<R>,
     idempotency_repo: Arc<I>,
+    clock: Arc<dyn Clock>,
 }
 
 impl<R, I> OfflineBundleCommandService<R, I> {
     /// Create a new command service with bundle and idempotency repositories.
-    ///
-    /// # Examples
-    ///
     /// ```rust,no_run
     /// # use std::sync::Arc;
-    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand, UpsertOfflineBundleRequest};
+    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand};
+    /// # use mockable::DefaultClock;
     /// # async fn example() -> Result<(), backend::domain::Error> {
     /// let service = backend::domain::OfflineBundleCommandService::new(
     ///     Arc::new(FixtureOfflineBundleRepository),
     ///     Arc::new(FixtureIdempotencyRepository),
+    ///     Arc::new(DefaultClock),
     /// );
-    /// let request: UpsertOfflineBundleRequest = todo!("construct request payload");
-    /// let _response = service.upsert_bundle(request).await?;
+    /// let _ = service.upsert_bundle(todo!("construct request payload")).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(bundle_repo: Arc<R>, idempotency_repo: Arc<I>) -> Self {
+    pub fn new(bundle_repo: Arc<R>, idempotency_repo: Arc<I>, clock: Arc<dyn Clock>) -> Self {
         Self {
             bundle_repo,
             idempotency_repo,
+            clock,
         }
     }
 }
@@ -164,7 +164,7 @@ where
                     payload_hash: payload_hash.clone(),
                     response_snapshot,
                     user_id: user_id.clone(),
-                    created_at: Utc::now(),
+                    created_at: self.clock.utc(),
                 };
 
                 match self.idempotency_repo.store(&record).await {

@@ -335,8 +335,8 @@ fn the_response_is_bad_request_with_device_id_validation_details(world: &WorldFi
 fn the_response_indicates_replayed_idempotent_result(world: &WorldFixture) {
     bdd_common::assert_response_replayed(world);
 }
-#[then("the response is unauthorised")]
-fn the_response_is_unauthorised(world: &WorldFixture) {
+#[then("the response is unauthorized")]
+fn the_response_is_unauthorized(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(401));

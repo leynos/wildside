@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use rstest::rstest;
+use mockable::DefaultClock;
+use rstest::{fixture, rstest};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -17,6 +18,7 @@ use crate::domain::{
     IdempotencyRecord, MutationType, OfflineBundleKind, OfflineBundleStatus, ZoomRange,
 };
 
+#[fixture]
 fn sample_bundle_payload() -> OfflineBundlePayload {
     OfflineBundlePayload {
         id: Uuid::new_v4(),
@@ -38,7 +40,11 @@ fn sample_bundle_payload() -> OfflineBundlePayload {
 fn make_service(
     repo: MockOfflineBundleRepository,
 ) -> OfflineBundleCommandService<MockOfflineBundleRepository, FixtureIdempotencyRepository> {
-    OfflineBundleCommandService::new(Arc::new(repo), Arc::new(FixtureIdempotencyRepository))
+    OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(FixtureIdempotencyRepository),
+        Arc::new(DefaultClock),
+    )
 }
 
 fn make_query_service(
@@ -47,9 +53,12 @@ fn make_query_service(
     OfflineBundleQueryService::new(Arc::new(repo))
 }
 
+#[rstest]
 #[tokio::test]
-async fn upsert_persists_bundle_without_idempotency_key() {
-    let payload = sample_bundle_payload();
+async fn upsert_persists_bundle_without_idempotency_key(
+    sample_bundle_payload: OfflineBundlePayload,
+) {
+    let payload = sample_bundle_payload;
     let user_id = payload
         .owner_user_id
         .clone()
@@ -74,9 +83,12 @@ async fn upsert_persists_bundle_without_idempotency_key() {
     assert!(!response.is_replayed);
 }
 
+#[rstest]
 #[tokio::test]
-async fn upsert_with_idempotency_stores_bundle_mutation_record() {
-    let payload = sample_bundle_payload();
+async fn upsert_with_idempotency_stores_bundle_mutation_record(
+    sample_bundle_payload: OfflineBundlePayload,
+) {
+    let payload = sample_bundle_payload;
     let user_id = payload
         .owner_user_id
         .clone()
@@ -111,7 +123,11 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() {
         .times(1)
         .return_once(|_| Ok(()));
 
-    let service = OfflineBundleCommandService::new(Arc::new(repo), Arc::new(idempotency_repo));
+    let service = OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(idempotency_repo),
+        Arc::new(DefaultClock),
+    );
     let response = service
         .upsert_bundle(UpsertOfflineBundleRequest {
             user_id,
@@ -124,9 +140,12 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() {
     assert!(!response.is_replayed);
 }
 
+#[rstest]
 #[tokio::test]
-async fn upsert_rejects_existing_bundle_owned_by_different_user() {
-    let payload = sample_bundle_payload();
+async fn upsert_rejects_existing_bundle_owned_by_different_user(
+    sample_bundle_payload: OfflineBundlePayload,
+) {
+    let payload = sample_bundle_payload;
     let user_id = payload
         .owner_user_id
         .clone()
@@ -155,9 +174,12 @@ async fn upsert_rejects_existing_bundle_owned_by_different_user() {
     assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
 }
 
+#[rstest]
 #[tokio::test]
-async fn upsert_returns_replayed_response_when_payload_matches() {
-    let payload = sample_bundle_payload();
+async fn upsert_returns_replayed_response_when_payload_matches(
+    sample_bundle_payload: OfflineBundlePayload,
+) {
+    let payload = sample_bundle_payload;
     let user_id = crate::domain::UserId::random();
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
@@ -189,7 +211,11 @@ async fn upsert_returns_replayed_response_when_payload_matches() {
         .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
     idempotency_repo.expect_store().times(0);
 
-    let service = OfflineBundleCommandService::new(Arc::new(repo), Arc::new(idempotency_repo));
+    let service = OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(idempotency_repo),
+        Arc::new(DefaultClock),
+    );
     let response = service
         .upsert_bundle(UpsertOfflineBundleRequest {
             user_id,
@@ -285,7 +311,11 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
         .times(1)
         .return_once(move |_| Ok(IdempotencyLookupResult::ConflictingPayload(conflicting)));
 
-    let service = OfflineBundleCommandService::new(Arc::new(repo), Arc::new(idempotency_repo));
+    let service = OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(idempotency_repo),
+        Arc::new(DefaultClock),
+    );
     let error = service
         .delete_bundle(DeleteOfflineBundleRequest {
             user_id,

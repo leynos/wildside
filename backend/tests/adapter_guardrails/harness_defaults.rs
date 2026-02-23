@@ -29,20 +29,52 @@ use crate::doubles::{
     UserPreferencesQueryResponse, UserProfileResponse, UsersResponse, WalkSessionCommandResponse,
 };
 
+/// Returns the canonical authenticated user identifier for harness defaults.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// assert_eq!(user_id.to_string(), "11111111-1111-1111-1111-111111111111");
+/// ```
 pub(super) fn create_fixture_user_id() -> UserId {
     UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id")
 }
 
+/// Parses a UUID fixture value and panics when the fixture is invalid.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let id = fixture_uuid("00000000-0000-0000-0000-000000000101");
+/// assert_eq!(id.to_string(), "00000000-0000-0000-0000-000000000101");
+/// ```
 pub(super) fn fixture_uuid(value: &str) -> Uuid {
     Uuid::parse_str(value).expect("fixture uuid")
 }
 
+/// Parses an RFC 3339 fixture timestamp into UTC.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let timestamp = fixture_timestamp("2026-02-01T10:00:00Z");
+/// assert_eq!(timestamp.to_rfc3339(), "2026-02-01T10:00:00+00:00");
+/// ```
 fn fixture_timestamp(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
         .expect("fixture timestamp")
         .with_timezone(&Utc)
 }
 
+/// Creates the default login, user-list, and profile doubles for a user.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// let (_login, _users, _profile) = create_user_doubles(&user_id);
+/// ```
 pub(super) fn create_user_doubles(
     user_id: &UserId,
 ) -> (
@@ -63,6 +95,14 @@ pub(super) fn create_user_doubles(
     (login, users, profile)
 }
 
+/// Creates a default interests-command double for the supplied user.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// let _interests = create_interests_double(&user_id);
+/// ```
 pub(super) fn create_interests_double(user_id: &UserId) -> RecordingUserInterestsCommand {
     RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
         user_id.clone(),
@@ -73,6 +113,14 @@ pub(super) fn create_interests_double(user_id: &UserId) -> RecordingUserInterest
     )))
 }
 
+/// Creates default command/query doubles for user preferences.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// let (_command, _query) = create_preferences_doubles(&user_id);
+/// ```
 pub(super) fn create_preferences_doubles(
     user_id: &UserId,
 ) -> (
@@ -102,6 +150,14 @@ pub(super) fn create_preferences_doubles(
     (preferences, preferences_query)
 }
 
+/// Creates default command/query doubles for route annotations.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// let (_command, _query) = create_route_annotations_doubles(&user_id);
+/// ```
 pub(super) fn create_route_annotations_doubles(
     user_id: &UserId,
 ) -> (
@@ -142,6 +198,13 @@ pub(super) fn create_route_annotations_doubles(
     (route_annotations, route_annotations_query)
 }
 
+/// Creates default catalogue and descriptor repository doubles.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let (_catalogue, _descriptors) = create_catalogue_doubles();
+/// ```
 pub(super) fn create_catalogue_doubles()
 -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
     let (catalogue_snapshot, descriptor_snapshot) = empty_catalogue_and_descriptor_snapshots();
@@ -153,6 +216,14 @@ pub(super) fn create_catalogue_doubles()
     (catalogue, descriptors)
 }
 
+/// Creates default offline bundle and walk-session doubles.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let user_id = create_fixture_user_id();
+/// let (_offline_cmd, _offline_query, _walk_cmd) = create_offline_and_walk_doubles(&user_id);
+/// ```
 pub(super) fn create_offline_and_walk_doubles(
     user_id: &UserId,
 ) -> (

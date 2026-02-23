@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use mockable::DefaultClock;
 use rstest::rstest;
 use serde_json::json;
 
@@ -13,6 +14,12 @@ use crate::domain::ports::{
 use crate::domain::{
     IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
 };
+
+fn fixture_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+        .expect("RFC3339 fixture timestamp")
+        .with_timezone(&Utc)
+}
 
 pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &str) {
     let mut repo = MockOfflineBundleRepository::new();
@@ -61,7 +68,7 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
         payload_hash: payload_hash.clone(),
         response_snapshot,
         user_id: user_id.clone(),
-        created_at: Utc::now(),
+        created_at: fixture_timestamp(),
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -93,7 +100,11 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
         .times(1)
         .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
 
-    let service = OfflineBundleCommandService::new(Arc::new(repo), Arc::new(idempotency_repo));
+    let service = OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(idempotency_repo),
+        Arc::new(DefaultClock),
+    );
     let response = service
         .upsert_bundle(UpsertOfflineBundleRequest {
             user_id,
@@ -125,7 +136,7 @@ pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds
         payload_hash,
         response_snapshot: json!({"bundleId": payload.id}),
         user_id: user_id.clone(),
-        created_at: Utc::now(),
+        created_at: fixture_timestamp(),
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -151,7 +162,11 @@ pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds
             ))
         });
 
-    let service = OfflineBundleCommandService::new(Arc::new(repo), Arc::new(idempotency_repo));
+    let service = OfflineBundleCommandService::new(
+        Arc::new(repo),
+        Arc::new(idempotency_repo),
+        Arc::new(DefaultClock),
+    );
     let error = service
         .upsert_bundle(UpsertOfflineBundleRequest {
             user_id,
