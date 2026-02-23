@@ -13,8 +13,7 @@ use crate::domain::{
     IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
 };
 
-#[tokio::test]
-async fn list_bundles_rejects_empty_device_id() {
+pub(super) async fn assert_list_bundles_rejects_empty_device_id() {
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_list_for_owner_and_device().times(0);
 
@@ -30,8 +29,7 @@ async fn list_bundles_rejects_empty_device_id() {
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
 }
 
-#[tokio::test]
-async fn list_bundles_rejects_whitespace_device_id() {
+pub(super) async fn assert_list_bundles_rejects_whitespace_device_id() {
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_list_for_owner_and_device().times(0);
 
@@ -47,8 +45,7 @@ async fn list_bundles_rejects_whitespace_device_id() {
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
 }
 
-#[tokio::test]
-async fn upsert_replays_response_when_duplicate_key_race_finds_record() {
+pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds_record() {
     let payload = sample_bundle_payload();
     let user_id = payload
         .owner_user_id
@@ -116,8 +113,8 @@ async fn upsert_replays_response_when_duplicate_key_race_finds_record() {
     assert!(response.replayed);
 }
 
-#[tokio::test]
-async fn upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record() {
+pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record()
+ {
     let payload = sample_bundle_payload();
     let user_id = payload
         .owner_user_id

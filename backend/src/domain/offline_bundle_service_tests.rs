@@ -297,5 +297,25 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
 }
 
+#[tokio::test]
+async fn list_bundles_rejects_empty_device_id() {
+    idempotency_tests::assert_list_bundles_rejects_empty_device_id().await;
+}
+
+#[tokio::test]
+async fn list_bundles_rejects_whitespace_device_id() {
+    idempotency_tests::assert_list_bundles_rejects_whitespace_device_id().await;
+}
+
+#[tokio::test]
+async fn upsert_replays_response_when_duplicate_key_race_finds_record() {
+    idempotency_tests::assert_upsert_replays_response_when_duplicate_key_race_finds_record().await;
+}
+
+#[tokio::test]
+async fn upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record() {
+    idempotency_tests::assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record().await;
+}
+
 #[path = "offline_bundle_service_idempotency_tests.rs"]
 mod idempotency_tests;
