@@ -124,7 +124,7 @@ struct ParsedPreferences {
             headers(("Cache-Control" = String, description = "Cache control header")),
             body = UserPreferencesResponse
         ),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
@@ -151,7 +151,7 @@ pub async fn get_preferences(
     responses(
         (status = 200, description = "Updated preferences", body = UserPreferencesResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
     ),

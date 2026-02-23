@@ -1,5 +1,4 @@
 //! Offline bundle domain services implementing command/query ports and idempotency orchestration.
-use std::future::Future;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,15 +11,16 @@ use crate::domain::offline_bundle_service_support::{
 };
 use crate::domain::ports::{
     DeleteOfflineBundleRequest, DeleteOfflineBundleResponse, GetOfflineBundleRequest,
-    GetOfflineBundleResponse, IdempotencyRepository, IdempotencyRepositoryError,
-    ListOfflineBundlesRequest, ListOfflineBundlesResponse, OfflineBundleCommand,
-    OfflineBundlePayload, OfflineBundleQuery, OfflineBundleRepository, UpsertOfflineBundleRequest,
-    UpsertOfflineBundleResponse,
+    GetOfflineBundleResponse, IdempotencyRepository, ListOfflineBundlesRequest,
+    ListOfflineBundlesResponse, OfflineBundleCommand, OfflineBundlePayload, OfflineBundleQuery,
+    OfflineBundleRepository, UpsertOfflineBundleRequest, UpsertOfflineBundleResponse,
 };
 use crate::domain::{
-    Error, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
-    PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
+    Error, PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
 };
+
+#[path = "offline_bundle_service_idempotency.rs"]
+mod offline_bundle_service_idempotency;
 
 /// Offline bundle service implementing command driving ports.
 #[derive(Clone)]
@@ -91,101 +91,6 @@ where
             Some(owner_user_id) if owner_user_id == user_id => Ok(()),
             _ => Err(Error::forbidden(
                 "offline bundle owner does not match session user",
-            )),
-        }
-    }
-
-    async fn handle_duplicate_key_race<T, M>(
-        &self,
-        query: &IdempotencyLookupQuery,
-        mark_replayed: &M,
-    ) -> Result<T, Error>
-    where
-        T: DeserializeOwned,
-        M: Fn(T) -> T,
-    {
-        let retry_result = self
-            .idempotency_repo
-            .lookup(query)
-            .await
-            .map_err(map_idempotency_error)?;
-
-        match retry_result {
-            IdempotencyLookupResult::MatchingPayload(record) => {
-                let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(mark_replayed(response))
-            }
-            IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
-                "idempotency key already used with different payload",
-            )),
-            IdempotencyLookupResult::NotFound => Err(Error::internal(
-                "idempotency record disappeared during race resolution",
-            )),
-        }
-    }
-
-    async fn run_idempotent_mutation<T, F, Fut, M>(
-        &self,
-        context: IdempotentMutationContext,
-        operation: F,
-        mark_replayed: M,
-    ) -> Result<T, Error>
-    where
-        T: Serialize + DeserializeOwned,
-        F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<T, Error>>,
-        M: Fn(T) -> T,
-    {
-        let IdempotentMutationContext {
-            idempotency_key,
-            user_id,
-            payload_hash,
-        } = context;
-
-        let Some(idempotency_key) = idempotency_key else {
-            return operation().await;
-        };
-
-        let query = IdempotencyLookupQuery::new(
-            idempotency_key.clone(),
-            user_id.clone(),
-            MutationType::Bundles,
-            payload_hash.clone(),
-        );
-
-        let lookup_result = self
-            .idempotency_repo
-            .lookup(&query)
-            .await
-            .map_err(map_idempotency_error)?;
-
-        match lookup_result {
-            IdempotencyLookupResult::NotFound => {
-                let response = operation().await?;
-                let response_snapshot = Self::serialize_response(&response)?;
-                let record = IdempotencyRecord {
-                    key: idempotency_key.clone(),
-                    mutation_type: MutationType::Bundles,
-                    payload_hash: payload_hash.clone(),
-                    response_snapshot,
-                    user_id: user_id.clone(),
-                    created_at: self.clock.utc(),
-                };
-
-                match self.idempotency_repo.store(&record).await {
-                    Ok(()) => Ok(response),
-                    Err(IdempotencyRepositoryError::DuplicateKey { .. }) => {
-                        self.handle_duplicate_key_race(&query, &mark_replayed).await
-                    }
-                    Err(err) => Err(map_idempotency_error(err)),
-                }
-            }
-            IdempotencyLookupResult::MatchingPayload(record) => {
-                let response = Self::deserialize_response(record.response_snapshot)?;
-                Ok(mark_replayed(response))
-            }
-            IdempotencyLookupResult::ConflictingPayload(_) => Err(Error::conflict(
-                "idempotency key already used with different payload",
             )),
         }
     }

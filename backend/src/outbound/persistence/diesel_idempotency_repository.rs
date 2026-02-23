@@ -167,6 +167,41 @@ impl IdempotencyRepository for DieselIdempotencyRepository {
             .map_err(map_diesel_error)
     }
 
+    async fn store_in_progress(
+        &self,
+        record: &IdempotencyRecord,
+    ) -> Result<(), IdempotencyRepositoryError> {
+        self.store(record).await
+    }
+
+    async fn update_response_snapshot(
+        &self,
+        query: &IdempotencyLookupQuery,
+        response_snapshot: &serde_json::Value,
+    ) -> Result<(), IdempotencyRepositoryError> {
+        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+
+        let updated = diesel::update(idempotency_keys::table)
+            .filter(
+                idempotency_keys::key
+                    .eq(query.key.as_uuid())
+                    .and(idempotency_keys::user_id.eq(query.user_id.as_uuid()))
+                    .and(idempotency_keys::mutation_type.eq(query.mutation_type.as_str())),
+            )
+            .set(idempotency_keys::response_snapshot.eq(response_snapshot))
+            .execute(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
+
+        if updated == 0 {
+            return Err(IdempotencyRepositoryError::query(
+                "idempotency record not found during response finalization",
+            ));
+        }
+
+        Ok(())
+    }
+
     async fn cleanup_expired(&self, ttl: Duration) -> Result<u64, IdempotencyRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 

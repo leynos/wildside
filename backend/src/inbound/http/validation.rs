@@ -25,7 +25,7 @@ impl ErrorCode {
 }
 
 /// Newtype wrapper for HTTP field names to provide type safety.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FieldName(&'static str);
 
 impl FieldName {
@@ -99,7 +99,7 @@ pub(crate) fn invalid_uuid_index_error(field: FieldName, index: usize, value: &s
 }
 
 pub(crate) fn parse_uuid(value: String, field: FieldName) -> Result<Uuid, Error> {
-    Uuid::parse_str(&value).map_err(|_| invalid_uuid_error(field.clone(), &value))
+    Uuid::parse_str(&value).map_err(|_| invalid_uuid_error(field, &value))
 }
 
 pub(crate) fn parse_uuid_list(values: Vec<String>, field: FieldName) -> Result<Vec<Uuid>, Error> {
@@ -107,8 +107,7 @@ pub(crate) fn parse_uuid_list(values: Vec<String>, field: FieldName) -> Result<V
         .into_iter()
         .enumerate()
         .map(|(index, value)| {
-            Uuid::parse_str(&value)
-                .map_err(|_| invalid_uuid_index_error(field.clone(), index, &value))
+            Uuid::parse_str(&value).map_err(|_| invalid_uuid_index_error(field, index, &value))
         })
         .collect()
 }
@@ -125,7 +124,7 @@ pub(crate) fn parse_rfc3339_timestamp(
 ) -> Result<DateTime<Utc>, Error> {
     DateTime::parse_from_rfc3339(&value)
         .map(|timestamp| timestamp.with_timezone(&Utc))
-        .map_err(|_| invalid_timestamp_error(field.clone(), &value))
+        .map_err(|_| invalid_timestamp_error(field, &value))
 }
 
 pub(crate) fn parse_optional_rfc3339_timestamp(
@@ -133,6 +132,6 @@ pub(crate) fn parse_optional_rfc3339_timestamp(
     field: FieldName,
 ) -> Result<Option<DateTime<Utc>>, Error> {
     value
-        .map(|raw| parse_rfc3339_timestamp(raw, field.clone()))
+        .map(|raw| parse_rfc3339_timestamp(raw, field))
         .transpose()
 }

@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::ports::{
-    FixtureIdempotencyRepository, MockIdempotencyRepository, MockOfflineBundleRepository,
-    OfflineBundleRepositoryError,
+    FixtureIdempotencyRepository, IdempotencyRepositoryError, MockIdempotencyRepository,
+    MockOfflineBundleRepository, OfflineBundleRepositoryError,
 };
 use crate::domain::{
     BoundingBox, IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult,
@@ -111,24 +111,25 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record(
     repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
     repo.expect_save().times(1).return_once(|_| Ok(()));
 
-    let lookup_user_id = user_id.clone();
-    let lookup_key = idempotency_key.clone();
+    let query_key = idempotency_key.clone();
+    let query_user_id = user_id.clone();
+    let query_payload_hash = payload_hash.clone();
     let mut idempotency_repo = MockIdempotencyRepository::new();
     idempotency_repo
-        .expect_lookup()
-        .withf(move |query: &IdempotencyLookupQuery| {
-            query.key == lookup_key
-                && query.user_id == lookup_user_id
-                && query.mutation_type == MutationType::Bundles
-                && query.payload_hash == payload_hash
-        })
-        .times(1)
-        .return_once(|_| Ok(IdempotencyLookupResult::NotFound));
-    idempotency_repo
-        .expect_store()
+        .expect_store_in_progress()
         .withf(|record: &IdempotencyRecord| record.mutation_type == MutationType::Bundles)
         .times(1)
         .return_once(|_| Ok(()));
+    idempotency_repo
+        .expect_update_response_snapshot()
+        .withf(move |query: &IdempotencyLookupQuery, _snapshot| {
+            query.key == query_key
+                && query.user_id == query_user_id
+                && query.mutation_type == MutationType::Bundles
+                && query.payload_hash == query_payload_hash
+        })
+        .times(1)
+        .return_once(|_, _| Ok(()));
 
     let service = OfflineBundleCommandService::new(
         Arc::new(repo),
@@ -213,10 +214,18 @@ async fn upsert_returns_replayed_response_when_payload_matches(
 
     let mut idempotency_repo = MockIdempotencyRepository::new();
     idempotency_repo
+        .expect_store_in_progress()
+        .times(1)
+        .return_once(|_| {
+            Err(IdempotencyRepositoryError::DuplicateKey {
+                message: "race".to_owned(),
+            })
+        });
+    idempotency_repo
         .expect_lookup()
         .times(1)
         .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
-    idempotency_repo.expect_store().times(0);
+    idempotency_repo.expect_update_response_snapshot().times(0);
 
     let service = OfflineBundleCommandService::new(
         Arc::new(repo),
@@ -313,6 +322,14 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
     repo.expect_delete().times(0);
 
     let mut idempotency_repo = MockIdempotencyRepository::new();
+    idempotency_repo
+        .expect_store_in_progress()
+        .times(1)
+        .return_once(|_| {
+            Err(IdempotencyRepositoryError::DuplicateKey {
+                message: "race".to_owned(),
+            })
+        });
     idempotency_repo
         .expect_lookup()
         .times(1)

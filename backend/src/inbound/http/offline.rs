@@ -116,8 +116,8 @@ struct OfflineBundlePath {
     bundle_id: String,
 }
 
-fn parse_device_id(query: ListOfflineBundlesQuery) -> Result<String, Error> {
-    let Some(device_id) = query.device_id else {
+fn parse_device_id(device_id: Option<String>) -> Result<String, Error> {
+    let Some(device_id) = device_id else {
         return Err(missing_field_error(FieldName::new("deviceId")));
     };
 
@@ -154,7 +154,7 @@ fn parse_optional_uuid(
     value: Option<String>,
     field: FieldName,
 ) -> Result<Option<uuid::Uuid>, Error> {
-    value.map(|raw| parse_uuid(raw, field.clone())).transpose()
+    value.map(|raw| parse_uuid(raw, field)).transpose()
 }
 
 fn parse_bundle_payload(
@@ -164,12 +164,7 @@ fn parse_bundle_payload(
     Ok(OfflineBundlePayload {
         id: parse_uuid(payload.id, FieldName::new("id"))?,
         owner_user_id: Some(user_id),
-        device_id: normalize_offline_device_id(&payload.device_id).map_err(|_| {
-            Error::invalid_request("deviceId must not be empty").with_details(json!({
-                "field": "deviceId",
-                "code": "invalid_device_id",
-            }))
-        })?,
+        device_id: parse_device_id(Some(payload.device_id))?,
         kind: parse_kind(payload.kind)?,
         route_id: parse_optional_uuid(payload.route_id, FieldName::new("routeId"))?,
         region_id: payload.region_id,
@@ -261,7 +256,7 @@ pub async fn list_offline_bundles(
     query: web::Query<ListOfflineBundlesQuery>,
 ) -> ApiResult<web::Json<ListOfflineBundlesResponseBody>> {
     let user_id = session.require_user_id()?;
-    let device_id = parse_device_id(query.into_inner())?;
+    let device_id = parse_device_id(query.into_inner().device_id)?;
     let response = state
         .offline_bundles_query
         .list_bundles(ListOfflineBundlesRequest {

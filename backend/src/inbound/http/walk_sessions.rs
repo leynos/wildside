@@ -32,12 +32,17 @@ use crate::inbound::http::validation::{
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionRequestBody {
+    #[schema(format = "uuid")]
     pub id: String,
+    #[schema(format = "uuid")]
     pub route_id: String,
+    #[schema(format = "date-time")]
     pub started_at: String,
+    #[schema(format = "date-time")]
     pub ended_at: Option<String>,
     pub primary_stats: Vec<WalkPrimaryStatBody>,
     pub secondary_stats: Vec<WalkSecondaryStatBody>,
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub highlighted_poi_ids: Vec<String>,
 }
 
@@ -62,6 +67,7 @@ pub struct WalkSecondaryStatBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionResponseBody {
+    #[schema(format = "uuid")]
     pub session_id: String,
     pub completion_summary: Option<WalkCompletionSummaryResponseBody>,
 }
@@ -70,13 +76,19 @@ pub struct CreateWalkSessionResponseBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkCompletionSummaryResponseBody {
+    #[schema(format = "uuid")]
     pub session_id: String,
+    #[schema(format = "uuid")]
     pub user_id: String,
+    #[schema(format = "uuid")]
     pub route_id: String,
+    #[schema(format = "date-time")]
     pub started_at: String,
+    #[schema(format = "date-time")]
     pub ended_at: String,
     pub primary_stats: Vec<WalkPrimaryStatBody>,
     pub secondary_stats: Vec<WalkSecondaryStatBody>,
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub highlighted_poi_ids: Vec<String>,
 }
 

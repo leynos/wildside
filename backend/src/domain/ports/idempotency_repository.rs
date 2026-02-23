@@ -71,6 +71,25 @@ pub trait IdempotencyRepository: Send + Sync {
     /// incorrect behaviour in concurrent scenarios.
     async fn store(&self, record: &IdempotencyRecord) -> Result<(), IdempotencyRepositoryError>;
 
+    /// Atomically claim an idempotency key before running a side-effect.
+    ///
+    /// This behaves like [`IdempotencyRepository::store`] but the caller should
+    /// provide an in-progress response snapshot marker. When this method returns
+    /// `Ok(())`, the caller owns the claim and may execute the mutation.
+    async fn store_in_progress(
+        &self,
+        record: &IdempotencyRecord,
+    ) -> Result<(), IdempotencyRepositoryError> {
+        self.store(record).await
+    }
+
+    /// Finalize an existing idempotency record by writing its response snapshot.
+    async fn update_response_snapshot(
+        &self,
+        query: &IdempotencyLookupQuery,
+        response_snapshot: &serde_json::Value,
+    ) -> Result<(), IdempotencyRepositoryError>;
+
     /// Remove records older than the specified TTL.
     ///
     /// Returns the number of records deleted.
@@ -94,6 +113,14 @@ impl IdempotencyRepository for FixtureIdempotencyRepository {
     }
 
     async fn store(&self, _record: &IdempotencyRecord) -> Result<(), IdempotencyRepositoryError> {
+        Ok(())
+    }
+
+    async fn update_response_snapshot(
+        &self,
+        _query: &IdempotencyLookupQuery,
+        _response_snapshot: &serde_json::Value,
+    ) -> Result<(), IdempotencyRepositoryError> {
         Ok(())
     }
 

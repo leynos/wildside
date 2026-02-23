@@ -11,9 +11,7 @@ use super::*;
 use crate::domain::ports::{
     IdempotencyRepositoryError, MockIdempotencyRepository, MockOfflineBundleRepository,
 };
-use crate::domain::{
-    IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord, MutationType,
-};
+use crate::domain::{IdempotencyLookupResult, IdempotencyRecord, MutationType};
 
 fn fixture_timestamp() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
@@ -72,28 +70,18 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
     };
 
     let mut repo = MockOfflineBundleRepository::new();
-    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
-    repo.expect_save().times(1).return_once(|_| Ok(()));
+    repo.expect_find_by_id().times(0);
+    repo.expect_save().times(0);
 
     let mut idempotency_repo = MockIdempotencyRepository::new();
-    let idempotency_key_for_first_lookup = idempotency_key.clone();
-    let user_id_for_first_lookup = user_id.clone();
     idempotency_repo
-        .expect_lookup()
-        .withf(move |query: &IdempotencyLookupQuery| {
-            query.key == idempotency_key_for_first_lookup
-                && query.user_id == user_id_for_first_lookup
-                && query.payload_hash == payload_hash
-                && query.mutation_type == MutationType::Bundles
-        })
+        .expect_store_in_progress()
         .times(1)
-        .return_once(|_| Ok(IdempotencyLookupResult::NotFound));
-
-    idempotency_repo.expect_store().times(1).return_once(|_| {
-        Err(IdempotencyRepositoryError::DuplicateKey {
-            message: "race".to_owned(),
-        })
-    });
+        .return_once(|_| {
+            Err(IdempotencyRepositoryError::DuplicateKey {
+                message: "race".to_owned(),
+            })
+        });
 
     idempotency_repo
         .expect_lookup()
@@ -140,19 +128,18 @@ pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds
     };
 
     let mut repo = MockOfflineBundleRepository::new();
-    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
-    repo.expect_save().times(1).return_once(|_| Ok(()));
+    repo.expect_find_by_id().times(0);
+    repo.expect_save().times(0);
 
     let mut idempotency_repo = MockIdempotencyRepository::new();
     idempotency_repo
-        .expect_lookup()
+        .expect_store_in_progress()
         .times(1)
-        .return_once(|_| Ok(IdempotencyLookupResult::NotFound));
-    idempotency_repo.expect_store().times(1).return_once(|_| {
-        Err(IdempotencyRepositoryError::DuplicateKey {
-            message: "race".to_owned(),
-        })
-    });
+        .return_once(|_| {
+            Err(IdempotencyRepositoryError::DuplicateKey {
+                message: "race".to_owned(),
+            })
+        });
     idempotency_repo
         .expect_lookup()
         .times(1)
