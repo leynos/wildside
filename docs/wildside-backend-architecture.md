@@ -707,6 +707,87 @@ services.
 > idempotency policy and ownership checks in domain services while outbound
 > repositories remain the only layer with SQL/persistence details.
 
+For screen readers: The following sequence diagram shows the idempotent offline
+bundle upsert flow, including replay handling and duplicate-key race recovery.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant HTTP as "HTTP Handler"
+    participant Domain as "Domain Service"
+    participant Idempotency as "Idempotency Repo"
+    participant Bundle as "Bundle Repo"
+    Client->>HTTP: POST /api/v1/offline/bundles (Idempotency-Key)
+    HTTP->>HTTP: Parse & validate payload
+    HTTP->>Domain: upsert_bundle(request)
+    Domain->>Domain: Compute payload_hash / idempotency context
+    Domain->>Idempotency: lookup(idempotency_key)
+    alt Matching record found
+        Idempotency-->>Domain: stored response (matching)
+        Domain-->>HTTP: UpsertResponse (is_replayed = true)
+    else Not found
+        Idempotency-->>Domain: NotFound
+        Domain->>Bundle: validate ownership & persist bundle
+        Bundle-->>Domain: Saved bundle
+        Domain->>Idempotency: store(key, serialized_response)
+        Idempotency-->>Domain: Stored
+        Domain-->>HTTP: UpsertResponse (is_replayed = false)
+    else DuplicateKey race
+        Idempotency-->>Domain: DuplicateKey
+        Domain->>Idempotency: lookup(key)
+        alt Payloads match
+            Idempotency-->>Domain: stored response (matching)
+            Domain-->>HTTP: UpsertResponse (is_replayed = true)
+        else Conflicting payload
+            Idempotency-->>Domain: stored response (conflict)
+            Domain-->>HTTP: Error(Conflict)
+        end
+    end
+    HTTP-->>Client: JSON response
+```
+
+*Figure: Offline bundle upsert sequence showing idempotency lookup, persistence,
+and replay/conflict outcomes.*
+
+For screen readers: The following sequence diagram shows authenticated walk
+session creation, including ownership checks when a session identifier already
+exists.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant HTTP as "HTTP Handler"
+    participant Auth as "Session Context"
+    participant Domain as "WalkSession Service"
+    participant WalkRepo as "Walk Session Repo"
+    Client->>HTTP: POST /api/v1/walk-sessions (authenticated)
+    HTTP->>Auth: Resolve user_id from session
+    Auth-->>HTTP: UserId
+    HTTP->>HTTP: Parse & validate payload (UUIDs, timestamps, stat kinds)
+    HTTP->>Domain: create_session(request)
+    Domain->>WalkRepo: find_by_id(session_id)
+    alt Existing session found
+        WalkRepo-->>Domain: Some(session)
+        Domain->>Domain: Validate ownership (user_id)
+        alt Owner mismatch
+            Domain-->>HTTP: Error(Forbidden)
+        else Owner matches
+            Domain-->>HTTP: CreateWalkSessionResponse (existing)
+        end
+    else New session
+        WalkRepo-->>Domain: None
+        Domain->>WalkRepo: persist(new session)
+        WalkRepo-->>Domain: Persisted session
+        Domain-->>HTTP: CreateWalkSessionResponse
+    end
+    HTTP-->>Client: JSON response
+```
+
+*Figure: Walk session creation sequence showing session-authenticated parsing,
+ownership validation, and create-or-return behaviour.*
+
 #### Driving ports (services and queries)
 
 - `ExploreCatalogueQuery` composes catalogue and descriptor repositories into
