@@ -1,5 +1,4 @@
 //! Offline bundle HTTP handlers for listing, upserting, and deleting bundles.
-
 use std::str::FromStr;
 
 use actix_web::{HttpRequest, delete, get, post, web};
@@ -20,7 +19,9 @@ use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::validation::{missing_field_error, parse_rfc3339_timestamp, parse_uuid};
+use crate::inbound::http::validation::{
+    FieldName, missing_field_error, parse_rfc3339_timestamp, parse_uuid,
+};
 
 /// Query parameters for listing offline bundles.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -117,7 +118,7 @@ struct OfflineBundlePath {
 
 fn parse_device_id(query: ListOfflineBundlesQuery) -> Result<String, Error> {
     let Some(device_id) = query.device_id else {
-        return Err(missing_field_error("deviceId"));
+        return Err(missing_field_error(FieldName::new("deviceId")));
     };
 
     normalize_offline_device_id(&device_id).map_err(|_| {
@@ -149,8 +150,11 @@ fn parse_status(status: String) -> Result<OfflineBundleStatus, Error> {
     })
 }
 
-fn parse_optional_uuid(value: Option<String>, field: &str) -> Result<Option<uuid::Uuid>, Error> {
-    value.map(|raw| parse_uuid(raw, field)).transpose()
+fn parse_optional_uuid(
+    value: Option<String>,
+    field: FieldName,
+) -> Result<Option<uuid::Uuid>, Error> {
+    value.map(|raw| parse_uuid(raw, field.clone())).transpose()
 }
 
 fn parse_bundle_payload(
@@ -158,7 +162,7 @@ fn parse_bundle_payload(
     user_id: UserId,
 ) -> Result<OfflineBundlePayload, Error> {
     Ok(OfflineBundlePayload {
-        id: parse_uuid(payload.id, "id")?,
+        id: parse_uuid(payload.id, FieldName::new("id"))?,
         owner_user_id: Some(user_id),
         device_id: normalize_offline_device_id(&payload.device_id).map_err(|_| {
             Error::invalid_request("deviceId must not be empty").with_details(json!({
@@ -167,7 +171,7 @@ fn parse_bundle_payload(
             }))
         })?,
         kind: parse_kind(payload.kind)?,
-        route_id: parse_optional_uuid(payload.route_id, "routeId")?,
+        route_id: parse_optional_uuid(payload.route_id, FieldName::new("routeId"))?,
         region_id: payload.region_id,
         bounds: BoundingBox::new(
             payload.bounds.min_lng,
@@ -189,8 +193,8 @@ fn parse_bundle_payload(
                 }))
             })?,
         estimated_size_bytes: payload.estimated_size_bytes,
-        created_at: parse_rfc3339_timestamp(payload.created_at, "createdAt")?,
-        updated_at: parse_rfc3339_timestamp(payload.updated_at, "updatedAt")?,
+        created_at: parse_rfc3339_timestamp(payload.created_at, FieldName::new("createdAt"))?,
+        updated_at: parse_rfc3339_timestamp(payload.updated_at, FieldName::new("updatedAt"))?,
         status: parse_status(payload.status)?,
         progress: payload.progress,
     })
@@ -374,7 +378,7 @@ pub async fn delete_offline_bundle(
     let user_id = session.require_user_id()?;
     let idempotency_key =
         extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
-    let bundle_id = parse_uuid(path.into_inner().bundle_id, "bundleId")?;
+    let bundle_id = parse_uuid(path.into_inner().bundle_id, FieldName::new("bundleId"))?;
 
     let response = state
         .offline_bundles

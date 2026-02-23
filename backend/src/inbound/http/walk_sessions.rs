@@ -24,7 +24,8 @@ use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 use crate::inbound::http::validation::{
-    parse_optional_rfc3339_timestamp, parse_rfc3339_timestamp, parse_uuid, parse_uuid_list,
+    FieldName, parse_optional_rfc3339_timestamp, parse_rfc3339_timestamp, parse_uuid,
+    parse_uuid_list,
 };
 
 /// Request payload for creating a walk session.
@@ -131,14 +132,17 @@ fn parse_walk_session_payload(
     user_id: UserId,
 ) -> Result<WalkSessionPayload, Error> {
     Ok(WalkSessionPayload {
-        id: parse_uuid(payload.id, "id")?,
+        id: parse_uuid(payload.id, FieldName::new("id"))?,
         user_id,
-        route_id: parse_uuid(payload.route_id, "routeId")?,
-        started_at: parse_rfc3339_timestamp(payload.started_at, "startedAt")?,
-        ended_at: parse_optional_rfc3339_timestamp(payload.ended_at, "endedAt")?,
+        route_id: parse_uuid(payload.route_id, FieldName::new("routeId"))?,
+        started_at: parse_rfc3339_timestamp(payload.started_at, FieldName::new("startedAt"))?,
+        ended_at: parse_optional_rfc3339_timestamp(payload.ended_at, FieldName::new("endedAt"))?,
         primary_stats: parse_primary_stats(payload.primary_stats)?,
         secondary_stats: parse_secondary_stats(payload.secondary_stats)?,
-        highlighted_poi_ids: parse_uuid_list(payload.highlighted_poi_ids, "highlightedPoiIds")?,
+        highlighted_poi_ids: parse_uuid_list(
+            payload.highlighted_poi_ids,
+            FieldName::new("highlightedPoiIds"),
+        )?,
     })
 }
 

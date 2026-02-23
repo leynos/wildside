@@ -11,7 +11,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::{Error, RouteAnnotations, RouteNote, RouteProgress};
-use crate::inbound::http::validation::{missing_field_error, parse_uuid, parse_uuid_list};
+use crate::inbound::http::validation::{
+    FieldName, missing_field_error, parse_uuid, parse_uuid_list,
+};
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RoutePath {
@@ -125,21 +127,23 @@ impl From<RouteAnnotations> for RouteAnnotationsResponse {
 }
 
 pub(super) fn parse_route_id(path: RoutePath) -> Result<Uuid, Error> {
-    parse_uuid(path.route_id, "routeId")
+    parse_uuid(path.route_id, FieldName::new("routeId"))
 }
 
 pub(super) fn parse_note_request(payload: NoteRequest) -> Result<ParsedNoteRequest, Error> {
     let note_id = payload
         .note_id
-        .ok_or_else(|| missing_field_error("noteId"))?;
-    let body = payload.body.ok_or_else(|| missing_field_error("body"))?;
+        .ok_or_else(|| missing_field_error(FieldName::new("noteId")))?;
+    let body = payload
+        .body
+        .ok_or_else(|| missing_field_error(FieldName::new("body")))?;
     let poi_id = payload
         .poi_id
-        .map(|value| parse_uuid(value, "poiId"))
+        .map(|value| parse_uuid(value, FieldName::new("poiId")))
         .transpose()?;
 
     Ok(ParsedNoteRequest {
-        note_id: parse_uuid(note_id, "noteId")?,
+        note_id: parse_uuid(note_id, FieldName::new("noteId"))?,
         poi_id,
         body,
         expected_revision: payload.expected_revision,
@@ -151,7 +155,7 @@ pub(super) fn parse_progress_request(
 ) -> Result<ParsedProgressRequest, Error> {
     let visited_stop_ids = payload
         .visited_stop_ids
-        .ok_or_else(|| missing_field_error("visitedStopIds"))?;
+        .ok_or_else(|| missing_field_error(FieldName::new("visitedStopIds")))?;
 
     if visited_stop_ids.len() > 1_000 {
         return Err(
@@ -166,7 +170,7 @@ pub(super) fn parse_progress_request(
     }
 
     Ok(ParsedProgressRequest {
-        visited_stop_ids: parse_uuid_list(visited_stop_ids, "visitedStopIds")?,
+        visited_stop_ids: parse_uuid_list(visited_stop_ids, FieldName::new("visitedStopIds"))?,
         expected_revision: payload.expected_revision,
     })
 }
