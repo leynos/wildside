@@ -19,6 +19,7 @@ pub use enums::{
     ParseOfflineBundleStatusError,
 };
 pub use geometry::{BoundingBox, ZoomRange};
+pub use validation::normalize_device_id;
 
 /// Validation errors raised by offline bundle constructors.
 #[derive(Debug, Clone, PartialEq)]

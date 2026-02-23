@@ -457,6 +457,13 @@ stability.
 | `GET`    | `/api/v1/offline/bundles`               | List offline bundle manifests.                      | Session cookie |
 | `POST`   | `/api/v1/offline/bundles`               | Create an offline bundle manifest (idempotent).     | Session cookie |
 | `DELETE` | `/api/v1/offline/bundles/{bundle_id}`   | Delete an offline bundle manifest (idempotent).     | Session cookie |
+| `POST`   | `/api/v1/walk-sessions`                 | Record a walk session and completion projection.     | Session cookie |
+
+Offline and walk-session HTTP handlers are inbound adapters only: they parse
+request payloads, delegate to driving ports (`OfflineBundleCommand`,
+`OfflineBundleQuery`, and `WalkSessionCommand`), then map domain responses to
+JSON. Persistence remains behind outbound Diesel adapters and is never called
+directly from handlers.
 
 `PUT /api/v1/users/me/interests` updates the interest subset only and remains
 available for backward compatibility, while
@@ -555,9 +562,10 @@ data without rewriting view components.
 - `RouteAnnotationRepository` (read/write): manages `RouteNote` and
   `RouteProgress` aggregates with revision checks.
 - `OfflineBundleRepository` (read/write): stores offline bundle manifests and
-  progress status per user and device.
+  progress status per user and device, including bounds/zoom metadata and
+  owner scoping used by offline list/delete operations.
 - `WalkSessionRepository` (read/write): persists walk sessions and completion
-  summaries.
+  summaries, including completion-only projections for finished sessions.
 - `IdempotencyRepository` (read/write): persists idempotency keys for outbox
   style mutations (routes, notes, progress, offline bundles, preferences).
   Scopes keys by `MutationType` enum so the same client-generated UUID can be
@@ -688,6 +696,97 @@ services.
 > Adapter/unit tests (`rstest`) and behavioural contracts (`rstest-bdd`) run
 > against `pg-embedded-setup-unpriv` databases, including schema-loss unhappy
 > paths and completion/ordering edge cases.
+>
+> **Design decision (2026-02-22):** Roadmap item 3.3.3 wires
+> `GET/POST/DELETE /api/v1/offline/bundles` and
+> `POST /api/v1/walk-sessions` through explicit driving ports in the domain:
+> `OfflineBundleCommand`, `OfflineBundleQuery`, and `WalkSessionCommand`.
+> Inbound Actix handlers now pass session-scoped requests into these ports and
+> return stable identifiers from domain responses (`bundleId` and `sessionId`),
+> plus idempotency replay metadata for offline mutations. This keeps
+> idempotency policy and ownership checks in domain services while outbound
+> repositories remain the only layer with SQL/persistence details.
+
+For screen readers: The following sequence diagram shows the idempotent offline
+bundle upsert flow, including replay handling and duplicate-key race recovery.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant HTTP as "HTTP Handler"
+    participant Domain as "Domain Service"
+    participant Idempotency as "Idempotency Repo"
+    participant Bundle as "Bundle Repo"
+    Client->>HTTP: POST /api/v1/offline/bundles (Idempotency-Key)
+    HTTP->>HTTP: Parse & validate payload
+    HTTP->>Domain: upsert_bundle(request)
+    Domain->>Domain: Compute payload_hash / idempotency context
+    Domain->>Idempotency: lookup(idempotency_key)
+    alt Matching record found
+        Idempotency-->>Domain: stored response (matching)
+        Domain-->>HTTP: UpsertResponse (is_replayed = true)
+    else Not found
+        Idempotency-->>Domain: NotFound
+        Domain->>Bundle: validate ownership & persist bundle
+        Bundle-->>Domain: Saved bundle
+        Domain->>Idempotency: store(key, serialized_response)
+        Idempotency-->>Domain: Stored
+        Domain-->>HTTP: UpsertResponse (is_replayed = false)
+    else DuplicateKey race
+        Idempotency-->>Domain: DuplicateKey
+        Domain->>Idempotency: lookup(key)
+        alt Payloads match
+            Idempotency-->>Domain: stored response (matching)
+            Domain-->>HTTP: UpsertResponse (is_replayed = true)
+        else Conflicting payload
+            Idempotency-->>Domain: stored response (conflict)
+            Domain-->>HTTP: Error(Conflict)
+        end
+    end
+    HTTP-->>Client: JSON response
+```
+
+*Figure: Offline bundle upsert sequence showing idempotency lookup, persistence,
+and replay/conflict outcomes.*
+
+For screen readers: The following sequence diagram shows authenticated walk
+session creation, including ownership checks when a session identifier already
+exists.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant HTTP as "HTTP Handler"
+    participant Auth as "Session Context"
+    participant Domain as "WalkSession Service"
+    participant WalkRepo as "Walk Session Repo"
+    Client->>HTTP: POST /api/v1/walk-sessions (authenticated)
+    HTTP->>Auth: Resolve user_id from session
+    Auth-->>HTTP: UserId
+    HTTP->>HTTP: Parse & validate payload (UUIDs, timestamps, stat kinds)
+    HTTP->>Domain: create_session(request)
+    Domain->>WalkRepo: find_by_id(session_id)
+    alt Existing session found
+        WalkRepo-->>Domain: Some(session)
+        Domain->>Domain: Validate ownership (user_id)
+        alt Owner mismatch
+            Domain-->>HTTP: Error(Forbidden)
+        else Owner matches
+            Domain-->>HTTP: CreateWalkSessionResponse (existing)
+        end
+    else New session
+        WalkRepo-->>Domain: None
+        Domain->>WalkRepo: persist(new session)
+        WalkRepo-->>Domain: Persisted session
+        Domain-->>HTTP: CreateWalkSessionResponse
+    end
+    HTTP-->>Client: JSON response
+```
+
+*Figure: Walk session creation sequence showing session-authenticated parsing,
+ownership validation, and create-or-return behaviour.*
 
 #### Driving ports (services and queries)
 
@@ -699,6 +798,12 @@ services.
   idempotency checks.
 - `OfflineBundleCommand` creates, updates, and deletes bundle manifests.
 - `WalkSessionCommand` records walk sessions and returns completion summaries.
+
+`GET/POST/DELETE /api/v1/offline/bundles` is backed by
+`OfflineBundleQuery`/`OfflineBundleCommand`, and
+`POST /api/v1/walk-sessions` is backed by `WalkSessionCommand`. This keeps
+transport parsing, domain orchestration, and persistence concerns separated
+across inbound adapters, driving ports, and driven ports.
 
 All ports retain the existing rules: domain types enforce invariants,
 localizations are stored as `EntityLocalizations`, and adapters map infra

@@ -1,0 +1,10 @@
+[package]
+name = "shellexpand"
+version = "3.1.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Minimal local compatibility shim for tilde expansion"
+publish = false
+
+[lib]
+path = "src/lib.rs"

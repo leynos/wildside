@@ -21,25 +21,22 @@ use serde_json::Value;
 use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 
+mod harness_defaults;
+
+use self::harness_defaults::{
+    create_catalogue_doubles, create_fixture_user_id, create_interests_double,
+    create_offline_and_walk_doubles, create_preferences_doubles, create_route_annotations_doubles,
+    create_user_doubles,
+};
 use crate::doubles::{
-    CatalogueQueryResponse, DeleteNoteCommandResponse, DescriptorQueryResponse, LoginResponse,
     QueueUserOnboarding, RecordingCatalogueRepository, RecordingDescriptorRepository,
-    RecordingLoginService, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
+    RecordingLoginService, RecordingOfflineBundleCommand, RecordingOfflineBundleQuery,
+    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
     RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
-    RecordingUserProfileQuery, RecordingUsersQuery, RouteAnnotationsQueryResponse,
-    UpdateProgressCommandResponse, UpsertNoteCommandResponse, UserInterestsResponse,
-    UserPreferencesCommandResponse, UserPreferencesQueryResponse, UserProfileResponse,
-    UsersResponse,
+    RecordingUserProfileQuery, RecordingUsersQuery, RecordingWalkSessionCommand,
 };
 use backend::Trace;
-use backend::domain::ports::{
-    DeleteNoteResponse, FixtureRouteSubmissionService, UpdatePreferencesResponse,
-    UpdateProgressResponse, UpsertNoteResponse, empty_catalogue_and_descriptor_snapshots,
-};
-use backend::domain::{
-    DisplayName, InterestThemeId, RouteAnnotations, RouteNote, RouteProgress, UnitSystem, User,
-    UserId, UserInterests, UserPreferences,
-};
+use backend::domain::ports::{FixtureRouteSubmissionService, FixtureWalkSessionQuery};
 use backend::inbound::http::annotations::{
     get_annotations as get_annotations_handler, update_progress as update_progress_handler,
     upsert_note as upsert_note_handler,
@@ -48,17 +45,22 @@ use backend::inbound::http::catalogue::{
     get_descriptors as get_descriptors_handler,
     get_explore_catalogue as get_explore_catalogue_handler,
 };
+use backend::inbound::http::offline::{
+    delete_offline_bundle as delete_offline_bundle_handler,
+    list_offline_bundles as list_offline_bundles_handler,
+    upsert_offline_bundle as upsert_offline_bundle_handler,
+};
 use backend::inbound::http::preferences::{
     get_preferences as get_preferences_handler, update_preferences as update_preferences_handler,
 };
-use backend::inbound::http::state::{HttpState, HttpStatePorts};
+use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::inbound::http::users::{
     current_user as current_user_handler, list_users as list_users_handler, login as login_handler,
     update_interests as update_interests_handler,
 };
+use backend::inbound::http::walk_sessions::create_walk_session as create_walk_session_handler;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
-use uuid::Uuid;
 
 pub(crate) struct AdapterWorld {
     pub(crate) runtime: Runtime,
@@ -75,6 +77,9 @@ pub(crate) struct AdapterWorld {
     pub(crate) route_annotations_query: RecordingRouteAnnotationsQuery,
     pub(crate) catalogue: RecordingCatalogueRepository,
     pub(crate) descriptors: RecordingDescriptorRepository,
+    pub(crate) offline_bundles: RecordingOfflineBundleCommand,
+    pub(crate) offline_bundles_query: RecordingOfflineBundleQuery,
+    pub(crate) walk_sessions: RecordingWalkSessionCommand,
     pub(crate) onboarding: QueueUserOnboarding,
     pub(crate) last_status: Option<u16>,
     pub(crate) last_body: Option<Value>,
@@ -159,7 +164,11 @@ async fn spawn_adapter_server(
             .service(upsert_note_handler)
             .service(update_progress_handler)
             .service(get_explore_catalogue_handler)
-            .service(get_descriptors_handler);
+            .service(get_descriptors_handler)
+            .service(list_offline_bundles_handler)
+            .service(upsert_offline_bundle_handler)
+            .service(delete_offline_bundle_handler)
+            .service(create_walk_session_handler);
 
         App::new()
             .app_data(http_data.clone())
@@ -190,123 +199,6 @@ fn create_runtime_and_local() -> (Runtime, LocalSet) {
     (runtime, local)
 }
 
-fn create_fixture_user_id() -> UserId {
-    UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id")
-}
-
-fn fixture_uuid(value: &str) -> Uuid {
-    Uuid::parse_str(value).expect("fixture uuid")
-}
-
-fn create_user_doubles(
-    user_id: &UserId,
-) -> (
-    RecordingLoginService,
-    RecordingUsersQuery,
-    RecordingUserProfileQuery,
-) {
-    let login = RecordingLoginService::new(LoginResponse::Ok(user_id.clone()));
-    let users = RecordingUsersQuery::new(UsersResponse::Ok(vec![User::new(
-        UserId::new("22222222-2222-2222-2222-222222222222").expect("fixture user id"),
-        DisplayName::new("Ada Lovelace").expect("fixture display name"),
-    )]));
-    let profile = RecordingUserProfileQuery::new(UserProfileResponse::Ok(User::new(
-        user_id.clone(),
-        DisplayName::new("Ada Lovelace").expect("fixture display name"),
-    )));
-
-    (login, users, profile)
-}
-
-fn create_interests_double(user_id: &UserId) -> RecordingUserInterestsCommand {
-    RecordingUserInterestsCommand::new(UserInterestsResponse::Ok(UserInterests::new(
-        user_id.clone(),
-        vec![
-            InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-                .expect("fixture interest theme id"),
-        ],
-    )))
-}
-
-fn create_preferences_doubles(
-    user_id: &UserId,
-) -> (
-    RecordingUserPreferencesCommand,
-    RecordingUserPreferencesQuery,
-) {
-    let preferences = RecordingUserPreferencesCommand::new(UserPreferencesCommandResponse::Ok(
-        UpdatePreferencesResponse {
-            preferences: UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(vec![fixture_uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")])
-                .safety_toggle_ids(vec![fixture_uuid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")])
-                .unit_system(UnitSystem::Metric)
-                .revision(2)
-                .build(),
-            replayed: false,
-        },
-    ));
-    let preferences_query = RecordingUserPreferencesQuery::new(UserPreferencesQueryResponse::Ok(
-        UserPreferences::builder(user_id.clone())
-            .interest_theme_ids(vec![fixture_uuid("cccccccc-cccc-cccc-cccc-cccccccccccc")])
-            .safety_toggle_ids(vec![fixture_uuid("dddddddd-dddd-dddd-dddd-dddddddddddd")])
-            .unit_system(UnitSystem::Metric)
-            .revision(1)
-            .build(),
-    ));
-
-    (preferences, preferences_query)
-}
-
-fn create_route_annotations_doubles(
-    user_id: &UserId,
-) -> (
-    RecordingRouteAnnotationsCommand,
-    RecordingRouteAnnotationsQuery,
-) {
-    let route_id = fixture_uuid("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
-    let note_id = fixture_uuid("ffffffff-ffff-ffff-ffff-ffffffffffff");
-    let note = RouteNote::builder(note_id, route_id, user_id.clone())
-        .body("First note")
-        .revision(1)
-        .build();
-    let progress = RouteProgress::builder(route_id, user_id.clone())
-        .visited_stop_ids(vec![fixture_uuid("99999999-9999-9999-9999-999999999999")])
-        .revision(1)
-        .build();
-    let route_annotations_query =
-        RecordingRouteAnnotationsQuery::new(RouteAnnotationsQueryResponse::Ok(RouteAnnotations {
-            route_id,
-            notes: vec![note.clone()],
-            progress: Some(progress.clone()),
-        }));
-    let route_annotations = RecordingRouteAnnotationsCommand::new(
-        UpsertNoteCommandResponse::Ok(UpsertNoteResponse {
-            note: note.clone(),
-            replayed: false,
-        }),
-        UpdateProgressCommandResponse::Ok(UpdateProgressResponse {
-            progress: progress.clone(),
-            replayed: false,
-        }),
-        DeleteNoteCommandResponse::Ok(DeleteNoteResponse {
-            deleted: false,
-            replayed: false,
-        }),
-    );
-
-    (route_annotations, route_annotations_query)
-}
-
-fn create_catalogue_doubles() -> (RecordingCatalogueRepository, RecordingDescriptorRepository) {
-    let (catalogue_snapshot, descriptor_snapshot) = empty_catalogue_and_descriptor_snapshots();
-    let catalogue =
-        RecordingCatalogueRepository::new(CatalogueQueryResponse::Ok(catalogue_snapshot));
-    let descriptors =
-        RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(descriptor_snapshot));
-
-    (catalogue, descriptors)
-}
-
 #[fixture]
 pub(crate) fn world() -> WorldFixture {
     let (runtime, local) = create_runtime_and_local();
@@ -316,20 +208,30 @@ pub(crate) fn world() -> WorldFixture {
     let (preferences, preferences_query) = create_preferences_doubles(&user_id);
     let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
     let (catalogue, descriptors) = create_catalogue_doubles();
+    let (offline_bundles, offline_bundles_query, walk_sessions) =
+        create_offline_and_walk_doubles(&user_id);
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let http_state = HttpState::new(HttpStatePorts {
-        login: Arc::new(login.clone()),
-        users: Arc::new(users.clone()),
-        profile: Arc::new(profile.clone()),
-        interests: Arc::new(interests.clone()),
-        preferences: Arc::new(preferences.clone()),
-        preferences_query: Arc::new(preferences_query.clone()),
-        route_annotations: Arc::new(route_annotations.clone()),
-        route_annotations_query: Arc::new(route_annotations_query.clone()),
-        route_submission: Arc::new(FixtureRouteSubmissionService),
-        catalogue: Arc::new(catalogue.clone()),
-        descriptors: Arc::new(descriptors.clone()),
-    });
+    let http_state = HttpState::new_with_extra(
+        HttpStatePorts {
+            login: Arc::new(login.clone()),
+            users: Arc::new(users.clone()),
+            profile: Arc::new(profile.clone()),
+            interests: Arc::new(interests.clone()),
+            preferences: Arc::new(preferences.clone()),
+            preferences_query: Arc::new(preferences_query.clone()),
+            route_annotations: Arc::new(route_annotations.clone()),
+            route_annotations_query: Arc::new(route_annotations_query.clone()),
+            route_submission: Arc::new(FixtureRouteSubmissionService),
+            catalogue: Arc::new(catalogue.clone()),
+            descriptors: Arc::new(descriptors.clone()),
+        },
+        HttpStateExtraPorts {
+            offline_bundles: Arc::new(offline_bundles.clone()),
+            offline_bundles_query: Arc::new(offline_bundles_query.clone()),
+            walk_sessions: Arc::new(walk_sessions.clone()),
+            walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
+        },
+    );
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
@@ -353,6 +255,9 @@ pub(crate) fn world() -> WorldFixture {
         route_annotations_query,
         catalogue,
         descriptors,
+        offline_bundles,
+        offline_bundles_query,
+        walk_sessions,
         onboarding,
         last_status: None,
         last_body: None,

@@ -155,7 +155,7 @@ so persistence details stay confined to outbound adapters.
   repositories for manifests and completion summaries.
 - [x] 3.3.2. Deliver migrations for `offline_bundles` and `walk_sessions` with
   audit timestamps and bounds/zoom metadata.
-- [ ] 3.3.3. Implement `GET/POST/DELETE /api/v1/offline/bundles` and
+- [x] 3.3.3. Implement `GET/POST/DELETE /api/v1/offline/bundles` and
   `POST /api/v1/walk-sessions` endpoints, returning stable identifiers and
   revision updates where applicable.
 

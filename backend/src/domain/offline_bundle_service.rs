@@ -1,0 +1,302 @@
+//! Offline bundle domain services implementing command/query ports and idempotency orchestration.
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use mockable::Clock;
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::json;
+
+use crate::domain::offline_bundle_service_support::{
+    IdempotentMutationContext, map_bundle_repository_error, map_idempotency_error,
+};
+use crate::domain::ports::{
+    DeleteOfflineBundleRequest, DeleteOfflineBundleResponse, GetOfflineBundleRequest,
+    GetOfflineBundleResponse, IdempotencyRepository, ListOfflineBundlesRequest,
+    ListOfflineBundlesResponse, OfflineBundleCommand, OfflineBundlePayload, OfflineBundleQuery,
+    OfflineBundleRepository, UpsertOfflineBundleRequest, UpsertOfflineBundleResponse,
+};
+use crate::domain::{
+    Error, PayloadHash, UserId, canonicalize_and_hash, normalize_offline_device_id,
+};
+
+#[path = "offline_bundle_service_idempotency.rs"]
+mod offline_bundle_service_idempotency;
+
+/// Offline bundle service implementing command driving ports.
+#[derive(Clone)]
+pub struct OfflineBundleCommandService<R, I> {
+    bundle_repo: Arc<R>,
+    idempotency_repo: Arc<I>,
+    clock: Arc<dyn Clock>,
+}
+
+impl<R, I> OfflineBundleCommandService<R, I> {
+    /// Create a new command service with bundle and idempotency repositories.
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use chrono::{DateTime, Utc};
+    /// # use uuid::Uuid;
+    /// # use backend::domain::{BoundingBox, OfflineBundleKind, OfflineBundleStatus, UserId, ZoomRange};
+    /// # use backend::domain::ports::{FixtureIdempotencyRepository, FixtureOfflineBundleRepository, OfflineBundleCommand, OfflineBundlePayload, UpsertOfflineBundleRequest};
+    /// # use mockable::DefaultClock;
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let service = backend::domain::OfflineBundleCommandService::new(
+    ///     Arc::new(FixtureOfflineBundleRepository), Arc::new(FixtureIdempotencyRepository), Arc::new(DefaultClock),
+    /// );
+    /// let user_id = UserId::random();
+    /// let timestamp = DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z").expect("timestamp").with_timezone(&Utc);
+    /// let request = UpsertOfflineBundleRequest { user_id: user_id.clone(), bundle: OfflineBundlePayload { id: Uuid::new_v4(), owner_user_id: Some(user_id), device_id: "ios-iphone-15".to_owned(), kind: OfflineBundleKind::Route, route_id: Some(Uuid::new_v4()), region_id: None, bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("bounds"), zoom_range: ZoomRange::new(11, 15).expect("zoom"), estimated_size_bytes: 4096, created_at: timestamp, updated_at: timestamp, status: OfflineBundleStatus::Queued, progress: 0.0 }, idempotency_key: None };
+    /// let result = service.upsert_bundle(request).await;
+    /// assert!(matches!(result, Ok(response) if !response.is_replayed));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(bundle_repo: Arc<R>, idempotency_repo: Arc<I>, clock: Arc<dyn Clock>) -> Self {
+        Self {
+            bundle_repo,
+            idempotency_repo,
+            clock,
+        }
+    }
+}
+
+impl<R, I> OfflineBundleCommandService<R, I>
+where
+    R: OfflineBundleRepository,
+    I: IdempotencyRepository,
+{
+    fn serialize_response<T: Serialize>(response: &T) -> Result<serde_json::Value, Error> {
+        serde_json::to_value(response)
+            .map_err(|err| Error::internal(format!("failed to serialize response: {err}")))
+    }
+
+    fn deserialize_response<T: DeserializeOwned>(snapshot: serde_json::Value) -> Result<T, Error> {
+        serde_json::from_value(snapshot)
+            .map_err(|err| Error::internal(format!("failed to deserialize response: {err}")))
+    }
+
+    fn hash_payload<T: Serialize>(payload: &T) -> Result<PayloadHash, Error> {
+        let json_payload = serde_json::to_value(payload).map_err(|err| {
+            Error::internal(format!("failed to serialize idempotency payload: {err}"))
+        })?;
+        canonicalize_and_hash(&json_payload)
+            .map_err(|err| Error::internal(format!("failed to hash idempotency payload: {err}")))
+    }
+
+    fn validate_bundle_ownership(
+        bundle: &OfflineBundlePayload,
+        user_id: &UserId,
+    ) -> Result<(), Error> {
+        match bundle.owner_user_id.as_ref() {
+            Some(owner_user_id) if owner_user_id == user_id => Ok(()),
+            _ => Err(Error::forbidden(
+                "offline bundle owner does not match session user",
+            )),
+        }
+    }
+
+    async fn persist_bundle(
+        &self,
+        user_id: &UserId,
+        bundle_payload: OfflineBundlePayload,
+    ) -> Result<UpsertOfflineBundleResponse, Error> {
+        let existing = self
+            .bundle_repo
+            .find_by_id(&bundle_payload.id)
+            .await
+            .map_err(map_bundle_repository_error)?;
+        if let Some(existing) = existing {
+            match existing.owner_user_id() {
+                Some(owner_user_id) if owner_user_id == user_id => {}
+                _ => {
+                    return Err(Error::forbidden(
+                        "offline bundle owner does not match session user",
+                    ));
+                }
+            }
+        }
+        Self::validate_bundle_ownership(&bundle_payload, user_id)?;
+        let bundle = crate::domain::OfflineBundle::try_from(bundle_payload).map_err(|err| {
+            Error::invalid_request(format!("invalid offline bundle payload: {err}"))
+        })?;
+
+        self.bundle_repo
+            .save(&bundle)
+            .await
+            .map_err(map_bundle_repository_error)?;
+
+        Ok(UpsertOfflineBundleResponse {
+            bundle: OfflineBundlePayload::from(bundle),
+            is_replayed: false,
+        })
+    }
+
+    async fn perform_delete(
+        &self,
+        bundle_id: uuid::Uuid,
+        requesting_user_id: UserId,
+    ) -> Result<DeleteOfflineBundleResponse, Error> {
+        let existing = self
+            .bundle_repo
+            .find_by_id(&bundle_id)
+            .await
+            .map_err(map_bundle_repository_error)?;
+        let Some(bundle) = existing else {
+            return Err(Error::not_found(format!(
+                "offline bundle {} not found",
+                bundle_id
+            )));
+        };
+        match bundle.owner_user_id() {
+            Some(owner_user_id) if owner_user_id == &requesting_user_id => {}
+            _ => {
+                return Err(Error::forbidden(
+                    "offline bundle owner does not match session user",
+                ));
+            }
+        }
+
+        let is_deleted = self
+            .bundle_repo
+            .delete(&bundle_id)
+            .await
+            .map_err(map_bundle_repository_error)?;
+        if !is_deleted {
+            return Err(Error::not_found(format!(
+                "offline bundle {} not found",
+                bundle_id
+            )));
+        }
+
+        Ok(DeleteOfflineBundleResponse {
+            bundle_id,
+            is_replayed: false,
+        })
+    }
+}
+
+#[async_trait]
+impl<R, I> OfflineBundleCommand for OfflineBundleCommandService<R, I>
+where
+    R: OfflineBundleRepository,
+    I: IdempotencyRepository,
+{
+    async fn upsert_bundle(
+        &self,
+        request: UpsertOfflineBundleRequest,
+    ) -> Result<UpsertOfflineBundleResponse, Error> {
+        let user_id = request.user_id;
+        let bundle = request.bundle;
+        let payload = bundle.clone();
+        let payload_hash = Self::hash_payload(&payload)?;
+
+        self.run_idempotent_mutation(
+            IdempotentMutationContext {
+                idempotency_key: request.idempotency_key,
+                user_id: user_id.clone(),
+                payload_hash,
+            },
+            || async { self.persist_bundle(&user_id, bundle).await },
+            |mut response: UpsertOfflineBundleResponse| {
+                response.is_replayed = true;
+                response
+            },
+        )
+        .await
+    }
+
+    async fn delete_bundle(
+        &self,
+        request: DeleteOfflineBundleRequest,
+    ) -> Result<DeleteOfflineBundleResponse, Error> {
+        let payload = json!({ "bundleId": request.bundle_id });
+        let payload_hash = Self::hash_payload(&payload)?;
+        let user_id = request.user_id;
+        let bundle_id = request.bundle_id;
+
+        self.run_idempotent_mutation(
+            IdempotentMutationContext {
+                idempotency_key: request.idempotency_key,
+                user_id: user_id.clone(),
+                payload_hash,
+            },
+            || async { self.perform_delete(bundle_id, user_id.clone()).await },
+            |mut response: DeleteOfflineBundleResponse| {
+                response.is_replayed = true;
+                response
+            },
+        )
+        .await
+    }
+}
+
+/// Offline bundle service implementing query driving ports.
+#[derive(Clone)]
+pub struct OfflineBundleQueryService<R> {
+    bundle_repo: Arc<R>,
+}
+
+impl<R> OfflineBundleQueryService<R> {
+    /// Create a new query service with the bundle repository.
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use backend::domain::ports::{FixtureOfflineBundleRepository, ListOfflineBundlesRequest, OfflineBundleQuery};
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// let service = backend::domain::OfflineBundleQueryService::new(Arc::new(FixtureOfflineBundleRepository));
+    /// let response = service.list_bundles(ListOfflineBundlesRequest { owner_user_id: Some(backend::domain::UserId::random()), device_id: "ios-iphone-15".to_owned() }).await?;
+    /// assert!(response.bundles.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(bundle_repo: Arc<R>) -> Self {
+        Self { bundle_repo }
+    }
+}
+
+#[async_trait]
+impl<R> OfflineBundleQuery for OfflineBundleQueryService<R>
+where
+    R: OfflineBundleRepository,
+{
+    async fn list_bundles(
+        &self,
+        request: ListOfflineBundlesRequest,
+    ) -> Result<ListOfflineBundlesResponse, Error> {
+        let device_id = normalize_offline_device_id(&request.device_id)
+            .map_err(|_| Error::invalid_request("deviceId must not be empty"))?;
+        let bundles = self
+            .bundle_repo
+            .list_for_owner_and_device(request.owner_user_id, &device_id)
+            .await
+            .map_err(map_bundle_repository_error)?;
+
+        Ok(ListOfflineBundlesResponse {
+            bundles: bundles
+                .into_iter()
+                .map(OfflineBundlePayload::from)
+                .collect(),
+        })
+    }
+
+    async fn get_bundle(
+        &self,
+        request: GetOfflineBundleRequest,
+    ) -> Result<GetOfflineBundleResponse, Error> {
+        let bundle = self
+            .bundle_repo
+            .find_by_id(&request.bundle_id)
+            .await
+            .map_err(map_bundle_repository_error)?
+            .ok_or_else(|| {
+                Error::not_found(format!("offline bundle {} not found", request.bundle_id))
+            })?;
+
+        Ok(GetOfflineBundleResponse {
+            bundle: OfflineBundlePayload::from(bundle),
+        })
+    }
+}
+
+#[cfg(test)]
+#[path = "offline_bundle_service_tests.rs"]
+mod tests;

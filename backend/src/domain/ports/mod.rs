@@ -13,6 +13,8 @@ mod example_data_seed_repository;
 mod idempotency_metrics;
 mod idempotency_repository;
 mod login_service;
+mod offline_bundle_command;
+mod offline_bundle_query;
 mod offline_bundle_repository;
 mod route_annotation_repository;
 mod route_annotations_command;
@@ -31,6 +33,8 @@ mod user_preferences_repository;
 mod user_profile_query;
 mod user_repository;
 mod users_query;
+mod walk_session_command;
+mod walk_session_query;
 mod walk_session_repository;
 
 pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
@@ -77,6 +81,19 @@ pub use idempotency_repository::{
     FixtureIdempotencyRepository, IdempotencyRepository, IdempotencyRepositoryError,
 };
 pub use login_service::{FixtureLoginService, LoginService};
+#[cfg(test)]
+pub use offline_bundle_command::MockOfflineBundleCommand;
+pub use offline_bundle_command::{
+    DeleteOfflineBundleRequest, DeleteOfflineBundleResponse, FixtureOfflineBundleCommand,
+    OfflineBundleCommand, OfflineBundlePayload, UpsertOfflineBundleRequest,
+    UpsertOfflineBundleResponse,
+};
+#[cfg(test)]
+pub use offline_bundle_query::MockOfflineBundleQuery;
+pub use offline_bundle_query::{
+    FixtureOfflineBundleQuery, GetOfflineBundleRequest, GetOfflineBundleResponse,
+    ListOfflineBundlesRequest, ListOfflineBundlesResponse, OfflineBundleQuery,
+};
 #[cfg(test)]
 pub use offline_bundle_repository::MockOfflineBundleRepository;
 pub use offline_bundle_repository::{
@@ -128,6 +145,18 @@ pub use user_preferences_repository::{
 pub use user_profile_query::{FixtureUserProfileQuery, UserProfileQuery};
 pub use user_repository::{UserPersistenceError, UserRepository};
 pub use users_query::{FixtureUsersQuery, UsersQuery};
+#[cfg(test)]
+pub use walk_session_command::MockWalkSessionCommand;
+pub use walk_session_command::{
+    CreateWalkSessionRequest, CreateWalkSessionResponse, FixtureWalkSessionCommand,
+    WalkCompletionSummaryPayload, WalkSessionCommand, WalkSessionPayload,
+};
+#[cfg(test)]
+pub use walk_session_query::MockWalkSessionQuery;
+pub use walk_session_query::{
+    FixtureWalkSessionQuery, GetWalkSessionRequest, GetWalkSessionResponse,
+    ListWalkCompletionSummariesRequest, ListWalkCompletionSummariesResponse, WalkSessionQuery,
+};
 #[cfg(test)]
 pub use walk_session_repository::MockWalkSessionRepository;
 pub use walk_session_repository::{

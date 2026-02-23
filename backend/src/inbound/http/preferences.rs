@@ -21,7 +21,7 @@ use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::validation::{missing_field_error, parse_uuid_list};
+use crate::inbound::http::validation::{FieldName, missing_field_error, parse_uuid_list};
 
 /// Request payload for updating user preferences.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -85,17 +85,20 @@ fn parse_unit_system(value: String) -> Result<UnitSystem, Error> {
 fn parse_preferences_request(payload: PreferencesRequest) -> Result<ParsedPreferences, Error> {
     let interest_theme_ids = payload
         .interest_theme_ids
-        .ok_or_else(|| missing_field_error("interestThemeIds"))?;
+        .ok_or_else(|| missing_field_error(FieldName::new("interestThemeIds")))?;
     let safety_toggle_ids = payload
         .safety_toggle_ids
-        .ok_or_else(|| missing_field_error("safetyToggleIds"))?;
+        .ok_or_else(|| missing_field_error(FieldName::new("safetyToggleIds")))?;
     let unit_system = payload
         .unit_system
-        .ok_or_else(|| missing_field_error("unitSystem"))?;
+        .ok_or_else(|| missing_field_error(FieldName::new("unitSystem")))?;
 
     Ok(ParsedPreferences {
-        interest_theme_ids: parse_uuid_list(interest_theme_ids, "interestThemeIds")?,
-        safety_toggle_ids: parse_uuid_list(safety_toggle_ids, "safetyToggleIds")?,
+        interest_theme_ids: parse_uuid_list(
+            interest_theme_ids,
+            FieldName::new("interestThemeIds"),
+        )?,
+        safety_toggle_ids: parse_uuid_list(safety_toggle_ids, FieldName::new("safetyToggleIds"))?,
         unit_system: parse_unit_system(unit_system)?,
         expected_revision: payload.expected_revision,
     })
@@ -121,7 +124,7 @@ struct ParsedPreferences {
             headers(("Cache-Control" = String, description = "Cache control header")),
             body = UserPreferencesResponse
         ),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
@@ -148,7 +151,7 @@ pub async fn get_preferences(
     responses(
         (status = 200, description = "Updated preferences", body = UserPreferencesResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
     ),

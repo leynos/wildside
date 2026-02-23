@@ -1,0 +1,256 @@
+//! Tests for walk session service.
+
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use rstest::{fixture, rstest};
+use uuid::Uuid;
+
+use super::*;
+use crate::domain::ports::{MockWalkSessionRepository, WalkSessionRepositoryError};
+use crate::domain::{
+    WalkPrimaryStat, WalkPrimaryStatKind, WalkSecondaryStat, WalkSecondaryStatKind,
+};
+
+fn fixture_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+        .expect("RFC3339 fixture timestamp")
+        .with_timezone(&Utc)
+}
+
+#[fixture]
+fn sample_create_request() -> CreateWalkSessionRequest {
+    let started_at = fixture_timestamp();
+    CreateWalkSessionRequest {
+        session: WalkSessionPayload {
+            id: Uuid::new_v4(),
+            user_id: crate::domain::UserId::random(),
+            route_id: Uuid::new_v4(),
+            started_at,
+            ended_at: Some(started_at),
+            primary_stats: vec![crate::domain::WalkPrimaryStatDraft {
+                kind: WalkPrimaryStatKind::Distance,
+                value: 1000.0,
+            }],
+            secondary_stats: vec![crate::domain::WalkSecondaryStatDraft {
+                kind: WalkSecondaryStatKind::Energy,
+                value: 120.0,
+                unit: Some("kcal".to_owned()),
+            }],
+            highlighted_poi_ids: vec![Uuid::new_v4()],
+        },
+    }
+}
+
+/// Helper to assert that repository query errors map to InternalError.
+async fn assert_query_error_maps_to_internal<Fut, T>(
+    configure_mock: impl FnOnce(&mut MockWalkSessionRepository),
+    call_service: impl FnOnce(WalkSessionQueryService<MockWalkSessionRepository>) -> Fut,
+) where
+    Fut: std::future::Future<Output = Result<T, crate::domain::Error>>,
+    T: std::fmt::Debug,
+{
+    let mut repo = MockWalkSessionRepository::new();
+    configure_mock(&mut repo);
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let error = call_service(service)
+        .await
+        .expect_err("query errors should map to internal");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::InternalError);
+}
+
+#[rstest]
+#[tokio::test]
+async fn create_session_persists_and_returns_stable_id(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
+    let expected_session_id = request.session.id;
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
+    repo.expect_save().times(1).return_once(|_| Ok(()));
+
+    let service = WalkSessionCommandService::new(Arc::new(repo));
+    let response = service
+        .create_session(request)
+        .await
+        .expect("create session succeeds");
+
+    assert_eq!(response.session_id, expected_session_id);
+    assert!(response.completion_summary.is_some());
+}
+
+#[rstest]
+#[tokio::test]
+async fn create_session_maps_validation_error_to_invalid_request(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let mut request = sample_create_request;
+    request.session.primary_stats = vec![crate::domain::WalkPrimaryStatDraft {
+        kind: WalkPrimaryStatKind::Distance,
+        value: -1.0,
+    }];
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_save().times(0);
+
+    let service = WalkSessionCommandService::new(Arc::new(repo));
+    let error = service
+        .create_session(request)
+        .await
+        .expect_err("invalid request");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
+}
+
+#[rstest]
+#[tokio::test]
+async fn create_session_maps_connection_error_to_service_unavailable(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
+    repo.expect_save()
+        .times(1)
+        .return_once(|_| Err(WalkSessionRepositoryError::connection("pool unavailable")));
+
+    let service = WalkSessionCommandService::new(Arc::new(repo));
+    let error = service
+        .create_session(request)
+        .await
+        .expect_err("service unavailable");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
+}
+
+#[rstest]
+#[tokio::test]
+async fn create_session_rejects_existing_session_owned_by_different_user(
+    sample_create_request: CreateWalkSessionRequest,
+) {
+    let request = sample_create_request;
+    let mut existing_payload = request.session.clone();
+    existing_payload.user_id = crate::domain::UserId::random();
+    let existing_session =
+        crate::domain::WalkSession::try_from(existing_payload).expect("valid existing session");
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id()
+        .times(1)
+        .return_once(move |_| Ok(Some(existing_session)));
+    repo.expect_save().times(0);
+
+    let service = WalkSessionCommandService::new(Arc::new(repo));
+    let error = service
+        .create_session(request)
+        .await
+        .expect_err("foreign session id takeover must be forbidden");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
+}
+
+#[tokio::test]
+async fn get_session_returns_not_found_when_missing() {
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let error = service
+        .get_session(GetWalkSessionRequest {
+            session_id: Uuid::new_v4(),
+        })
+        .await
+        .expect_err("not found");
+
+    assert_eq!(error.code(), crate::domain::ErrorCode::NotFound);
+}
+
+#[tokio::test]
+async fn list_completion_summaries_returns_payloads() {
+    let user_id = crate::domain::UserId::random();
+    let started_at = fixture_timestamp();
+    let session = crate::domain::WalkSession::new(crate::domain::WalkSessionDraft {
+        id: Uuid::new_v4(),
+        user_id: user_id.clone(),
+        route_id: Uuid::new_v4(),
+        started_at,
+        ended_at: Some(started_at),
+        primary_stats: vec![
+            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 1000.0)
+                .expect("valid primary stat"),
+        ],
+        secondary_stats: vec![
+            WalkSecondaryStat::new(
+                WalkSecondaryStatKind::Energy,
+                120.0,
+                Some("kcal".to_owned()),
+            )
+            .expect("valid secondary stat"),
+        ],
+        highlighted_poi_ids: vec![Uuid::new_v4()],
+    })
+    .expect("valid session");
+    let summary = session.completion_summary().expect("completion summary");
+
+    let mut repo = MockWalkSessionRepository::new();
+    repo.expect_list_completion_summaries_for_user()
+        .times(1)
+        .return_once(|_| Ok(vec![summary]));
+
+    let service = WalkSessionQueryService::new(Arc::new(repo));
+    let response = service
+        .list_completion_summaries(ListWalkCompletionSummariesRequest { user_id })
+        .await
+        .expect("list succeeds");
+
+    assert_eq!(response.summaries.len(), 1);
+}
+
+#[tokio::test]
+async fn get_session_maps_query_error_to_internal() {
+    assert_query_error_maps_to_internal(
+        |repo| {
+            repo.expect_find_by_id().times(1).return_once(|_| {
+                Err(WalkSessionRepositoryError::query(
+                    "invalid completion summary projection",
+                ))
+            });
+        },
+        |service| async move {
+            service
+                .get_session(GetWalkSessionRequest {
+                    session_id: Uuid::new_v4(),
+                })
+                .await
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn list_completion_summaries_maps_query_error_to_internal() {
+    assert_query_error_maps_to_internal(
+        |repo| {
+            repo.expect_list_completion_summaries_for_user()
+                .times(1)
+                .return_once(|_| {
+                    Err(WalkSessionRepositoryError::query(
+                        "invalid completion summary projection",
+                    ))
+                });
+        },
+        |service| async move {
+            service
+                .list_completion_summaries(ListWalkCompletionSummariesRequest {
+                    user_id: crate::domain::UserId::random(),
+                })
+                .await
+        },
+    )
+    .await;
+}

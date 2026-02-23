@@ -1,8 +1,10 @@
 //! Walk statistic types and constructors.
 
 use std::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::WalkValidationError;
 
@@ -14,11 +16,28 @@ pub enum WalkPrimaryStatKind {
     Duration,
 }
 
+/// Error returned when parsing a primary walk-stat kind from string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("invalid walk primary stat kind")]
+pub struct ParseWalkPrimaryStatKindError;
+
 impl fmt::Display for WalkPrimaryStatKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Distance => f.write_str("distance"),
             Self::Duration => f.write_str("duration"),
+        }
+    }
+}
+
+impl FromStr for WalkPrimaryStatKind {
+    type Err = ParseWalkPrimaryStatKindError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "distance" => Ok(Self::Distance),
+            "duration" => Ok(Self::Duration),
+            _ => Err(ParseWalkPrimaryStatKindError),
         }
     }
 }
@@ -31,11 +50,28 @@ pub enum WalkSecondaryStatKind {
     Count,
 }
 
+/// Error returned when parsing a secondary walk-stat kind from string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("invalid walk secondary stat kind")]
+pub struct ParseWalkSecondaryStatKindError;
+
 impl fmt::Display for WalkSecondaryStatKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Energy => f.write_str("energy"),
             Self::Count => f.write_str("count"),
+        }
+    }
+}
+
+impl FromStr for WalkSecondaryStatKind {
+    type Err = ParseWalkSecondaryStatKindError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "energy" => Ok(Self::Energy),
+            "count" => Ok(Self::Count),
+            _ => Err(ParseWalkSecondaryStatKindError),
         }
     }
 }
