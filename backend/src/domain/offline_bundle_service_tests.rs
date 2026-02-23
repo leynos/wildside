@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use rstest::rstest;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -297,24 +298,32 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
 }
 
-#[tokio::test]
-async fn list_bundles_rejects_empty_device_id() {
-    idempotency_tests::assert_list_bundles_rejects_empty_device_id().await;
+enum IdempotencyRegressionCase {
+    InvalidDeviceId(&'static str),
+    UpsertReplay,
+    UpsertConflict,
 }
 
+#[rstest]
+#[case::empty_device_id(IdempotencyRegressionCase::InvalidDeviceId(""))]
+#[case::whitespace_device_id(IdempotencyRegressionCase::InvalidDeviceId("  \t\n "))]
+#[case::upsert_replay(IdempotencyRegressionCase::UpsertReplay)]
+#[case::upsert_conflict(IdempotencyRegressionCase::UpsertConflict)]
 #[tokio::test]
-async fn list_bundles_rejects_whitespace_device_id() {
-    idempotency_tests::assert_list_bundles_rejects_whitespace_device_id().await;
-}
-
-#[tokio::test]
-async fn upsert_replays_response_when_duplicate_key_race_finds_record() {
-    idempotency_tests::assert_upsert_replays_response_when_duplicate_key_race_finds_record().await;
-}
-
-#[tokio::test]
-async fn upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record() {
-    idempotency_tests::assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record().await;
+async fn idempotency_regression_paths(#[case] case: IdempotencyRegressionCase) {
+    match case {
+        IdempotencyRegressionCase::InvalidDeviceId(device_id) => {
+            idempotency_tests::assert_list_bundles_rejects_invalid_device_id(device_id).await
+        }
+        IdempotencyRegressionCase::UpsertReplay => {
+            idempotency_tests::assert_upsert_replays_response_when_duplicate_key_race_finds_record(
+            )
+            .await
+        }
+        IdempotencyRegressionCase::UpsertConflict => idempotency_tests::
+            assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record()
+            .await,
+    }
 }
 
 #[path = "offline_bundle_service_idempotency_tests.rs"]

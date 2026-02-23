@@ -30,14 +30,6 @@ pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &st
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
 }
 
-pub(super) async fn assert_list_bundles_rejects_empty_device_id() {
-    assert_list_bundles_rejects_invalid_device_id("").await;
-}
-
-pub(super) async fn assert_list_bundles_rejects_whitespace_device_id() {
-    assert_list_bundles_rejects_invalid_device_id("  \t\n ").await;
-}
-
 #[rstest]
 #[case("")]
 #[case("  \t\n ")]
