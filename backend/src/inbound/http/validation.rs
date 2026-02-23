@@ -6,10 +6,23 @@ use uuid::Uuid;
 
 use crate::domain::Error;
 
-/// Error codes for validation failures.
-const ERR_MISSING_FIELD: &str = "missing_field";
-const ERR_INVALID_UUID: &str = "invalid_uuid";
-const ERR_INVALID_TIMESTAMP: &str = "invalid_timestamp";
+/// Validation error codes for HTTP request failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ErrorCode {
+    MissingField,
+    InvalidUuid,
+    InvalidTimestamp,
+}
+
+impl ErrorCode {
+    fn as_str(self) -> &'static str {
+        match self {
+            ErrorCode::MissingField => "missing_field",
+            ErrorCode::InvalidUuid => "invalid_uuid",
+            ErrorCode::InvalidTimestamp => "invalid_timestamp",
+        }
+    }
+}
 
 /// Builder for validation errors with field context.
 struct ValidationError {
@@ -25,44 +38,44 @@ impl ValidationError {
         }
     }
 
-    fn with_code(self, code: &'static str) -> Error {
+    fn with_code(self, code: ErrorCode) -> Error {
         Error::invalid_request(self.message).with_details(json!({
             "field": self.field,
-            "code": code,
+            "code": code.as_str(),
         }))
     }
 
-    fn with_value(self, code: &'static str, value: impl Into<String>) -> Error {
+    fn with_value(self, code: ErrorCode, value: impl Into<String>) -> Error {
         Error::invalid_request(self.message).with_details(json!({
             "field": self.field,
             "value": value.into(),
-            "code": code,
+            "code": code.as_str(),
         }))
     }
 
-    fn with_index(self, code: &'static str, index: usize, value: impl Into<String>) -> Error {
+    fn with_index(self, code: ErrorCode, index: usize, value: impl Into<String>) -> Error {
         Error::invalid_request(self.message).with_details(json!({
             "field": self.field,
             "index": index,
             "value": value.into(),
-            "code": code,
+            "code": code.as_str(),
         }))
     }
 }
 
 pub(crate) fn missing_field_error(field: &str) -> Error {
     ValidationError::new(field, format!("missing required field: {field}"))
-        .with_code(ERR_MISSING_FIELD)
+        .with_code(ErrorCode::MissingField)
 }
 
 pub(crate) fn invalid_uuid_error(field: &str, value: &str) -> Error {
     ValidationError::new(field, format!("{field} must be a valid UUID"))
-        .with_value(ERR_INVALID_UUID, value)
+        .with_value(ErrorCode::InvalidUuid, value)
 }
 
 pub(crate) fn invalid_uuid_index_error(field: &str, index: usize, value: &str) -> Error {
     ValidationError::new(field, format!("{field} must contain valid UUIDs")).with_index(
-        ERR_INVALID_UUID,
+        ErrorCode::InvalidUuid,
         index,
         value,
     )
@@ -84,7 +97,7 @@ pub(crate) fn parse_uuid_list(values: Vec<String>, field: &str) -> Result<Vec<Uu
 
 pub(crate) fn invalid_timestamp_error(field: &str, value: &str) -> Error {
     ValidationError::new(field, format!("{field} must be an RFC 3339 timestamp"))
-        .with_value(ERR_INVALID_TIMESTAMP, value)
+        .with_value(ErrorCode::InvalidTimestamp, value)
 }
 
 pub(crate) fn parse_rfc3339_timestamp(value: String, field: &str) -> Result<DateTime<Utc>, Error> {
