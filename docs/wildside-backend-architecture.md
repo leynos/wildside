@@ -1333,12 +1333,11 @@ route([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11
 By isolating it in a job, the API remains responsive and avoids blocking the
 async runtime.
 
-The same
-[`wildside-engine`](https://github.com/leynos/wildside-engine) repository also
-provides offline ingestion capabilities (`wildside-cli ingest` and
-`wildside-data`) that the backend can reuse for roadmap step `3.4.1` instead
-of reimplementing OSM parsing from scratch. In this design, backend-owned
-ingestion concerns remain explicit:
+The same [`wildside-engine`](https://github.com/leynos/wildside-engine)
+repository also provides offline ingestion capabilities (`wildside-cli ingest`
+and `wildside-data`) that the backend can reuse for roadmap task `3.4.1`
+instead of reimplementing OSM parsing from scratch. In this design, backend-
+owned ingestion concerns remain explicit:
 
 - launch geofence filtering.
 - provenance persistence in PostgreSQL.
@@ -1802,8 +1801,7 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    `wildside-engine` currently provides deterministic POI extraction from OSM
    plus idempotent persistence in its SQLite artefacts. The backend import
    layer maps those results into PostGIS and adds launch geofence filtering
-   plus
-   provenance persistence (`source_url`, input digest, imported timestamp,
+   plus provenance persistence (`source_url`, input digest, imported timestamp,
    geofence ID, and computed bounding box) so reruns remain deterministic and
    auditable per launch region.
 2. **On-demand enrichment:** When the routing domain detects sparse POI
