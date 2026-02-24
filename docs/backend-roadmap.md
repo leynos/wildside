@@ -166,7 +166,8 @@ so persistence details stay confined to outbound adapters.
   [`wildside-engine`](https://github.com/leynos/wildside-engine)
   (`wildside-cli ingest` and `wildside-data`) and documenting backend-owned
   behaviour for launch geofence filtering, provenance persistence (source URL,
-  checksum, timestamp, and bounds), and deterministic reruns keyed by geofence
+  checksum, timestamp, and bounding box), and deterministic reruns keyed by
+  geofence
   and input digests.
 - [ ] 3.4.2. Add Overpass enrichment workers with semaphore-governed quotas,
   circuit breaking, and metrics wired to the enrichment job counters.
