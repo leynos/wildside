@@ -62,6 +62,7 @@ pub mod localization;
 pub mod offline;
 pub mod offline_bundle_service;
 mod offline_bundle_service_support;
+pub mod osm_ingestion;
 pub mod ports;
 pub mod preferences;
 pub mod preferences_service;
@@ -112,6 +113,7 @@ pub use self::offline::{
     OfflineValidationError, ParseOfflineBundleKindError, ParseOfflineBundleStatusError, ZoomRange,
 };
 pub use self::offline_bundle_service::{OfflineBundleCommandService, OfflineBundleQueryService};
+pub use self::osm_ingestion::OsmIngestionCommandService;
 pub use self::preferences::{
     ParseUnitSystemError, UnitSystem, UserPreferences, UserPreferencesBuilder,
 };

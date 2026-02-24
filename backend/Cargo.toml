@@ -34,6 +34,7 @@ diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
 diesel_migrations = "2.2"
 chrono = { version = "0.4", features = ["serde"] }
 mockable = { version = "0.3", features = ["clock"] }
+wildside-data = { git = "https://github.com/leynos/wildside-engine.git", package = "wildside-data", rev = "894aa38cf0f2ddc870b382880b5db936a761020a" }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -98,3 +99,7 @@ path = "src/bin/er_snapshots.rs"
 [[bin]]
 name = "pg_worker"
 path = "src/bin/pg_worker.rs"
+
+[[bin]]
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"

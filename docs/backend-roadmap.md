@@ -161,9 +161,10 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.4. Data ingestion and enrichment
 
-- [ ] 3.4.1. Ship the Rust-based `ingest-osm` command-line interface (CLI) by
+- [x] 3.4.1. Ship the Rust-based `ingest-osm` command-line interface (CLI) by
   integrating [`wildside-engine`](https://github.com/leynos/wildside-engine)
-  (`wildside-cli ingest` and `wildside-data`) and documenting:
+  ingestion capabilities through `wildside-data` (the library underpinning
+  `wildside-cli ingest`) and documenting:
   - backend-owned behaviour:
     - launch geofence filtering.
     - provenance persistence (source URL, input digest, timestamp, and

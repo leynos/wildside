@@ -14,5 +14,6 @@
 pub mod cache;
 #[cfg(feature = "metrics")]
 pub mod metrics;
+pub mod osm_source;
 pub mod persistence;
 pub mod queue;
