@@ -1338,9 +1338,11 @@ The same
 provides offline ingestion capabilities (`wildside-cli ingest` and
 `wildside-data`) that the backend can reuse for roadmap step `3.4.1` instead
 of reimplementing OSM parsing from scratch. In this design, backend-owned
-ingestion concerns remain explicit: launch geofence filtering, provenance
-persistence in PostgreSQL, and rerun determinism guarantees keyed by geofence
-and input digests.
+ingestion concerns remain explicit:
+
+- launch geofence filtering.
+- provenance persistence in PostgreSQL.
+- rerun determinism guarantees keyed by geofence and input digest.
 
 The engine relies on data about POIs and the road network. For the MVP, this
 data is stored in the **PostgreSQL/PostGIS** database and accessed via Diesel.
@@ -1798,9 +1800,10 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    (`wildside-cli ingest` and `wildside-data`) to load curated `.osm.pbf`
    extracts into `pois`.
    `wildside-engine` currently provides deterministic POI extraction from OSM
-   plus idempotent persistence in its SQLite artefacts. The backend import layer
-   maps those results into PostGIS and adds launch geofence filtering plus
-   provenance persistence (`source_url`, checksum, imported timestamp,
+   plus idempotent persistence in its SQLite artefacts. The backend import
+   layer maps those results into PostGIS and adds launch geofence filtering
+   plus
+   provenance persistence (`source_url`, input digest, imported timestamp,
    geofence ID, and computed bounding box) so reruns remain deterministic and
    auditable per launch region.
 2. **On-demand enrichment:** When the routing domain detects sparse POI
