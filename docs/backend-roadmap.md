@@ -162,11 +162,12 @@ so persistence details stay confined to outbound adapters.
 ### 3.4. Data ingestion and enrichment
 
 - [ ] 3.4.1. Ship the Rust-based `ingest-osm` command-line interface (CLI) by
-  integrating `https://github.com/leynos/wildside-engine` (`wildside-cli
-  ingest` and `wildside-data`) and documenting backend-owned behaviour for
-  launch geofence filters, provenance persistence (source URL, checksum,
-  timestamp, bounds), and deterministic reruns keyed by geofence and input
-  digest.
+  integrating
+  [`wildside-engine`](https://github.com/leynos/wildside-engine)
+  (`wildside-cli ingest` and `wildside-data`) and documenting backend-owned
+  behaviour for launch geofence filtering, provenance persistence (source URL,
+  checksum, timestamp, and bounds), and deterministic reruns keyed by geofence
+  and input digests.
 - [ ] 3.4.2. Add Overpass enrichment workers with semaphore-governed quotas,
   circuit breaking, and metrics wired to the enrichment job counters.
 - [ ] 3.4.3. Configure enrichment provenance persistence (source URL,
