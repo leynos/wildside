@@ -161,8 +161,8 @@ diesel::table! {
         bounds_min_lat -> Float8,
         bounds_max_lng -> Float8,
         bounds_max_lat -> Float8,
-        raw_poi_count -> Int4,
-        filtered_poi_count -> Int4,
+        raw_poi_count -> Int8,
+        filtered_poi_count -> Int8,
         created_at -> Timestamptz,
     }
 }

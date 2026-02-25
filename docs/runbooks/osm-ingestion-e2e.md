@@ -10,7 +10,7 @@ OpenStreetMap `.osm.pbf` data into backend storage with launch geofence
 filtering, provenance persistence, and deterministic reruns keyed by
 `(geofence_id, input_digest)`.
 
-Use this runbook when you need to:
+Use this runbook for:
 
 - execute a manual ingestion for a launch region;
 - validate deterministic rerun behaviour;
@@ -21,12 +21,12 @@ Use this runbook when you need to:
 
 Before running ingestion:
 
-- [ ] Ensure you are in the repository root.
+- [ ] Ensure the command runs from the repository root.
 - [ ] Ensure a reachable PostgreSQL instance exists and `DATABASE_URL` is set.
 - [ ] Ensure the backend schema is current (including the
       `osm_ingestion_provenance` table).
-- [ ] Ensure you have an input `.osm.pbf` file and a canonical source URL.
-- [ ] Ensure your geofence identifier and bounds are final for this run.
+- [ ] Ensure an input `.osm.pbf` file and canonical source URL are available.
+- [ ] Ensure the geofence identifier and bounds are final for the run.
 
 Example preflight commands:
 
@@ -112,17 +112,19 @@ Verify POI writes for the geofence bounds:
 psql "$DATABASE_URL" -c "
 SELECT COUNT(*) AS poi_count
 FROM pois
-WHERE ST_X(location) BETWEEN -3.35 AND -3.05
-  AND ST_Y(location) BETWEEN 55.85 AND 56.02;
+WHERE split_part(trim(both '()' FROM location::text), ',', 1)::double precision
+      BETWEEN -3.35 AND -3.05
+  AND split_part(trim(both '()' FROM location::text), ',', 2)::double precision
+      BETWEEN 55.85 AND 56.02;
 "
 ```
 
-If you used different bounds, replace the numeric predicates with your run
+If different bounds were used, replace the numeric predicates with the run
 values.
 
 ## Deterministic rerun verification
 
-Run the exact same ingestion command a second time with the same:
+Run the identical ingestion command a second time with the same:
 
 - `--osm-pbf` file content;
 - `--geofence-id`;
@@ -159,8 +161,8 @@ Expected `provenance_rows` is `1`.
 If a run used incorrect source metadata or geofence settings, correct the
 inputs and rerun ingestion with the intended values.
 
-If you must remove a bad provenance row, delete by both geofence and digest so
-you do not affect unrelated ingestion history:
+If a bad provenance row must be removed, delete by both geofence and digest so
+unrelated ingestion history remains unaffected:
 
 ```bash
 psql "$DATABASE_URL" -c "

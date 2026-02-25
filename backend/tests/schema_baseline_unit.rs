@@ -130,8 +130,13 @@ fn offline_walk_down_migration_drops_schema_objects(#[case] drop_statement: &str
 
 #[rstest]
 #[case("CREATE TABLE IF NOT EXISTS osm_ingestion_provenance")]
+#[case("geofence_id TEXT NOT NULL")]
+#[case("input_digest TEXT NOT NULL")]
+#[case("raw_poi_count BIGINT NOT NULL CHECK (raw_poi_count >= 0)")]
+#[case("filtered_poi_count BIGINT NOT NULL CHECK (filtered_poi_count >= 0)")]
+#[case("CONSTRAINT osm_ingestion_provenance_rerun_unique UNIQUE (geofence_id, input_digest)")]
 #[case("osm_ingestion_provenance_rerun_unique")]
-#[case("idx_osm_ingestion_provenance_geofence_imported_at")]
+#[case("ON osm_ingestion_provenance (geofence_id, imported_at DESC)")]
 fn creates_osm_ingestion_provenance_contract(#[case] ddl_fragment: &str) {
     assert!(
         OSM_PROVENANCE_UP.contains(ddl_fragment),

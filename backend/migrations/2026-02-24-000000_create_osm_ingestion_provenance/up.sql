@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS osm_ingestion_provenance (
     bounds_min_lat DOUBLE PRECISION NOT NULL,
     bounds_max_lng DOUBLE PRECISION NOT NULL,
     bounds_max_lat DOUBLE PRECISION NOT NULL,
-    raw_poi_count INTEGER NOT NULL CHECK (raw_poi_count >= 0),
-    filtered_poi_count INTEGER NOT NULL CHECK (filtered_poi_count >= 0),
+    raw_poi_count BIGINT NOT NULL CHECK (raw_poi_count >= 0),
+    filtered_poi_count BIGINT NOT NULL CHECK (filtered_poi_count >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT osm_ingestion_provenance_bounds_valid CHECK (
         bounds_min_lng >= -180 AND bounds_min_lng <= 180

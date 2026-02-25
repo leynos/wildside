@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use async_trait::async_trait;
 
-use super::define_port_error;
+use super::{OsmPoiIngestionRecord, define_port_error};
 
 /// Persisted provenance record for one geofenced OSM ingestion run.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,10 +51,15 @@ pub trait OsmIngestionProvenanceRepository: Send + Sync {
         input_digest: &str,
     ) -> Result<Option<OsmIngestionProvenanceRecord>, OsmIngestionProvenanceRepositoryError>;
 
-    /// Insert a new provenance row.
-    async fn insert(
+    /// Persist one ingestion batch atomically.
+    ///
+    /// Implementations must write the provenance row and filtered POIs within
+    /// one transaction boundary so rerun-key conflicts and write failures do
+    /// not leave partial ingest state behind.
+    async fn persist_ingestion(
         &self,
-        record: &OsmIngestionProvenanceRecord,
+        provenance: &OsmIngestionProvenanceRecord,
+        poi_records: &[OsmPoiIngestionRecord],
     ) -> Result<(), OsmIngestionProvenanceRepositoryError>;
 }
 
@@ -72,9 +77,10 @@ impl OsmIngestionProvenanceRepository for FixtureOsmIngestionProvenanceRepositor
         Ok(None)
     }
 
-    async fn insert(
+    async fn persist_ingestion(
         &self,
-        _record: &OsmIngestionProvenanceRecord,
+        _provenance: &OsmIngestionProvenanceRecord,
+        _poi_records: &[OsmPoiIngestionRecord],
     ) -> Result<(), OsmIngestionProvenanceRepositoryError> {
         Ok(())
     }

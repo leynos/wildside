@@ -10,9 +10,7 @@ use backend::domain::ports::{
     OsmSourcePoi, OsmSourceReport, OsmSourceRepository, OsmSourceRepositoryError,
 };
 use backend::domain::{ErrorCode, OsmIngestionCommandService};
-use backend::outbound::persistence::{
-    DbPool, DieselOsmIngestionProvenanceRepository, DieselOsmPoiRepository, PoolConfig,
-};
+use backend::outbound::persistence::{DbPool, DieselOsmIngestionProvenanceRepository, PoolConfig};
 use mockable::DefaultClock;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::NoTls;
@@ -69,19 +67,19 @@ impl OsmSourceRepository for FixtureOsmSource {
 struct RuntimeHandle(Arc<Runtime>);
 
 #[derive(Clone)]
-struct DatabaseHandle(#[expect(dead_code)] Arc<TemporaryDatabase>);
+struct DatabaseHandle(
+    #[expect(
+        dead_code,
+        reason = "hold temp database handle so Drop cleans up cluster resources"
+    )]
+    Arc<TemporaryDatabase>,
+);
 
 #[derive(Default, ScenarioState)]
 struct OsmIngestionWorld {
     runtime: Slot<RuntimeHandle>,
-    command: Slot<
-        OsmIngestionCommandService<
-            FixtureOsmSource,
-            DieselOsmPoiRepository,
-            DieselOsmIngestionProvenanceRepository,
-        >,
-    >,
-    _pool: Slot<DbPool>,
+    command:
+        Slot<OsmIngestionCommandService<FixtureOsmSource, DieselOsmIngestionProvenanceRepository>>,
     database_url: Slot<String>,
     last_result: Slot<Result<OsmIngestionOutcome, backend::domain::Error>>,
     baseline_poi_count: Slot<i64>,
@@ -120,14 +118,12 @@ impl OsmIngestionWorld {
 
         let command = OsmIngestionCommandService::new(
             Arc::new(FixtureOsmSource),
-            Arc::new(DieselOsmPoiRepository::new(pool.clone())),
             Arc::new(DieselOsmIngestionProvenanceRepository::new(pool.clone())),
             Arc::new(DefaultClock),
         );
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.command.set(command);
-        self._pool.set(pool);
         self.database_url.set(database_url);
         self._database.set(DatabaseHandle(Arc::new(temp_db)));
     }
@@ -140,12 +136,7 @@ impl OsmIngestionWorld {
         &self,
         operation: impl FnOnce(
             &Runtime,
-            &OsmIngestionCommandService<
-                FixtureOsmSource,
-                DieselOsmPoiRepository,
-                DieselOsmIngestionProvenanceRepository,
-            >,
-            &DbPool,
+            &OsmIngestionCommandService<FixtureOsmSource, DieselOsmIngestionProvenanceRepository>,
             &str,
         ) -> T,
     ) -> Option<T> {
@@ -155,19 +146,13 @@ impl OsmIngestionWorld {
 
         let runtime = self.runtime.get().expect("runtime");
         let command = self.command.get().expect("command");
-        let pool = self._pool.get().expect("pool");
         let database_url = self.database_url.get().expect("database url");
-        Some(operation(
-            &runtime.0,
-            &command,
-            &pool,
-            database_url.as_str(),
-        ))
+        Some(operation(&runtime.0, &command, database_url.as_str()))
     }
 
     fn run_ingest(&self, geofence_id: &str) {
         let geofence_id = geofence_id.to_owned();
-        if let Some(result) = self.execute_async(|runtime, command, _pool, _database_url| {
+        if let Some(result) = self.execute_async(|runtime, command, _database_url| {
             runtime.block_on(async {
                 let request = OsmIngestionRequest {
                     osm_pbf_path: Path::new("fixtures/launch.osm.pbf").to_path_buf(),
@@ -202,6 +187,21 @@ impl OsmIngestionWorld {
         Some((poi_count, provenance_count))
     }
 
+    fn query_poi_count(&self) -> Option<i64> {
+        if self.is_skipped() {
+            return None;
+        }
+
+        let database_url = self.database_url.get().expect("database url");
+        let mut client =
+            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+        let poi_count = client
+            .query_one("SELECT COUNT(*) FROM pois", &[])
+            .expect("poi count query")
+            .get::<_, i64>(0);
+        Some(poi_count)
+    }
+
     fn assert_provenance_row(&self) {
         if self.is_skipped() {
             return;
@@ -228,6 +228,40 @@ impl OsmIngestionWorld {
         assert_eq!(source_url, SOURCE_URL);
         assert_eq!(input_digest, INPUT_DIGEST);
         assert_eq!(bounds, GEOFENCE_BOUNDS);
+    }
+
+    fn assert_poi_rows(&self) {
+        if self.is_skipped() {
+            return;
+        }
+
+        let database_url = self.database_url.get().expect("database url");
+        let mut client =
+            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+        let rows = client
+            .query(
+                "SELECT \
+                     element_type, \
+                     id, \
+                     split_part(trim(both '()' FROM location::text), ',', 1)::double precision, \
+                     split_part(trim(both '()' FROM location::text), ',', 2)::double precision, \
+                     osm_tags->>'name' \
+                 FROM pois ORDER BY id",
+                &[],
+            )
+            .expect("poi rows query");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get::<_, String>(0), "node");
+        assert_eq!(rows[0].get::<_, i64>(1), 100);
+        assert_eq!(rows[0].get::<_, f64>(2), -3.20);
+        assert_eq!(rows[0].get::<_, f64>(3), 55.95);
+        assert_eq!(rows[0].get::<_, String>(4), "Fixture POI");
+        assert_eq!(rows[1].get::<_, String>(0), "way");
+        assert_eq!(rows[1].get::<_, i64>(1), 200);
+        assert_eq!(rows[1].get::<_, f64>(2), -3.19);
+        assert_eq!(rows[1].get::<_, f64>(3), 55.96);
+        assert_eq!(rows[1].get::<_, String>(4), "Fixture POI");
     }
 
     fn drop_provenance_table(&self) {
@@ -280,6 +314,7 @@ fn geofenced_pois_and_provenance_are_persisted(world: &OsmIngestionWorld) {
     };
     assert_eq!(poi_count, 2);
     assert_eq!(provenance_count, 1);
+    world.assert_poi_rows();
     world.assert_provenance_row();
     world.baseline_poi_count.set(poi_count);
     world.baseline_provenance_count.set(provenance_count);
@@ -337,12 +372,37 @@ fn the_command_fails_with_service_unavailable(world: &OsmIngestionWorld) {
     let result = world.last_result.get().expect("result should be set");
     let error = result.as_ref().expect_err("run should fail");
     assert_eq!(error.code(), ErrorCode::ServiceUnavailable);
+    let poi_count = world
+        .query_poi_count()
+        .expect("poi count should be available");
+    assert_eq!(
+        poi_count, 0,
+        "atomic ingest persistence should roll back POI writes on failure"
+    );
 }
 
 #[scenario(
     path = "tests/features/osm_ingestion.feature",
-    name = "OSM ingestion supports execution reruns and missing-schema failures"
+    name = "OSM ingestion persists geofenced POIs and provenance"
 )]
-fn osm_ingestion_supports_execution_reruns_and_missing_schema_failures(world: OsmIngestionWorld) {
+fn osm_ingestion_persists_geofenced_pois_and_provenance(world: OsmIngestionWorld) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/osm_ingestion.feature",
+    name = "OSM ingestion reruns deterministically for the same geofence and digest"
+)]
+fn osm_ingestion_reruns_deterministically_for_the_same_geofence_and_digest(
+    world: OsmIngestionWorld,
+) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/osm_ingestion.feature",
+    name = "OSM ingestion fails when provenance persistence is unavailable"
+)]
+fn osm_ingestion_fails_when_provenance_persistence_is_unavailable(world: OsmIngestionWorld) {
     drop(world);
 }

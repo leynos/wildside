@@ -77,7 +77,7 @@ impl OsmIngestionCommand for FixtureOsmIngestionCommand {
             source_url: request.source_url,
             geofence_id: request.geofence_id,
             input_digest: request.input_digest,
-            imported_at: Utc::now(),
+            imported_at: DateTime::<Utc>::UNIX_EPOCH,
             geofence_bounds: request.geofence_bounds,
             raw_poi_count: 0,
             persisted_poi_count: 0,

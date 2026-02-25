@@ -15,8 +15,8 @@ use crate::domain::Error;
 use crate::domain::ports::{
     OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRecord,
     OsmIngestionProvenanceRepository, OsmIngestionProvenanceRepositoryError, OsmIngestionRequest,
-    OsmIngestionStatus, OsmPoiIngestionRecord, OsmPoiRepository, OsmPoiRepositoryError,
-    OsmSourcePoi, OsmSourceRepository, OsmSourceRepositoryError,
+    OsmIngestionStatus, OsmPoiIngestionRecord, OsmSourcePoi, OsmSourceRepository,
+    OsmSourceRepositoryError,
 };
 
 const WAY_ID_PREFIX: u64 = 1 << 62;
@@ -25,24 +25,17 @@ const TYPE_ID_MASK: u64 = (1 << 62) - 1;
 
 /// Domain service implementing OSM ingestion command behaviour.
 #[derive(Clone)]
-pub struct OsmIngestionCommandService<S, P, R> {
+pub struct OsmIngestionCommandService<S, R> {
     source_repo: Arc<S>,
-    poi_repo: Arc<P>,
     provenance_repo: Arc<R>,
     clock: Arc<dyn Clock>,
 }
 
-impl<S, P, R> OsmIngestionCommandService<S, P, R> {
+impl<S, R> OsmIngestionCommandService<S, R> {
     /// Create a new ingestion service.
-    pub fn new(
-        source_repo: Arc<S>,
-        poi_repo: Arc<P>,
-        provenance_repo: Arc<R>,
-        clock: Arc<dyn Clock>,
-    ) -> Self {
+    pub fn new(source_repo: Arc<S>, provenance_repo: Arc<R>, clock: Arc<dyn Clock>) -> Self {
         Self {
             source_repo,
-            poi_repo,
             provenance_repo,
             clock,
         }
@@ -50,10 +43,9 @@ impl<S, P, R> OsmIngestionCommandService<S, P, R> {
 }
 
 #[async_trait]
-impl<S, P, R> OsmIngestionCommand for OsmIngestionCommandService<S, P, R>
+impl<S, R> OsmIngestionCommand for OsmIngestionCommandService<S, R>
 where
     S: OsmSourceRepository,
-    P: OsmPoiRepository,
     R: OsmIngestionProvenanceRepository,
 {
     async fn ingest(&self, request: OsmIngestionRequest) -> Result<OsmIngestionOutcome, Error> {
@@ -85,11 +77,6 @@ where
         let filtered_poi_count = u64::try_from(filtered_records.len())
             .map_err(|_| Error::internal("filtered POI count exceeds supported range"))?;
 
-        self.poi_repo
-            .upsert_pois(&filtered_records)
-            .await
-            .map_err(map_poi_error)?;
-
         let provenance = OsmIngestionProvenanceRecord {
             geofence_id: request.geofence_id.clone(),
             source_url: request.source_url.clone(),
@@ -100,8 +87,12 @@ where
             filtered_poi_count,
         };
 
-        match self.provenance_repo.insert(&provenance).await {
-            Ok(()) => Ok(to_outcome(OsmIngestionStatus::Executed, provenance)),
+        match self
+            .provenance_repo
+            .persist_ingestion(&provenance, &filtered_records)
+            .await
+        {
+            Ok(()) => {}
             Err(OsmIngestionProvenanceRepositoryError::Conflict { .. }) => {
                 let existing = self
                     .provenance_repo
@@ -113,10 +104,12 @@ where
                             "ingestion provenance conflict occurred but rerun key was not found",
                         )
                     })?;
-                Ok(to_outcome(OsmIngestionStatus::Replayed, existing))
+                return Ok(to_outcome(OsmIngestionStatus::Replayed, existing));
             }
-            Err(error) => Err(map_provenance_error(error)),
+            Err(error) => return Err(map_provenance_error(error)),
         }
+
+        Ok(to_outcome(OsmIngestionStatus::Executed, provenance))
     }
 }
 
@@ -148,26 +141,57 @@ fn is_valid_digest(digest: &str) -> bool {
 
 fn validate_bounds(bounds: [f64; 4]) -> Result<(), Error> {
     let [min_lng, min_lat, max_lng, max_lat] = bounds;
-    let valid_longitude = |value: f64| value.is_finite() && (-180.0..=180.0).contains(&value);
-    let valid_latitude = |value: f64| value.is_finite() && (-90.0..=90.0).contains(&value);
+    validate_longitude_bounds(min_lng, max_lng)?;
+    validate_latitude_bounds(min_lat, max_lat)?;
+    validate_bounds_ordering(min_lng, min_lat, max_lng, max_lat)?;
+    Ok(())
+}
 
-    if !valid_longitude(min_lng) || !valid_longitude(max_lng) {
+fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
+    let valid_longitudes =
+        |min_lng: f64, max_lng: f64| valid_longitude(min_lng) && valid_longitude(max_lng);
+    if !valid_longitudes(min_lng, max_lng) {
         return Err(Error::invalid_request(
             "geofence longitude values must be finite and within [-180, 180]",
         ));
     }
-    if !valid_latitude(min_lat) || !valid_latitude(max_lat) {
+
+    Ok(())
+}
+
+fn validate_latitude_bounds(min_lat: f64, max_lat: f64) -> Result<(), Error> {
+    let valid_latitudes =
+        |min_lat: f64, max_lat: f64| valid_latitude(min_lat) && valid_latitude(max_lat);
+    if !valid_latitudes(min_lat, max_lat) {
         return Err(Error::invalid_request(
             "geofence latitude values must be finite and within [-90, 90]",
         ));
     }
-    if min_lng > max_lng || min_lat > max_lat {
-        return Err(Error::invalid_request(
-            "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]",
-        ));
-    }
 
     Ok(())
+}
+
+fn validate_bounds_ordering(
+    min_lng: f64,
+    min_lat: f64,
+    max_lng: f64,
+    max_lat: f64,
+) -> Result<(), Error> {
+    if min_lng <= max_lng && min_lat <= max_lat {
+        return Ok(());
+    }
+
+    Err(Error::invalid_request(
+        "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]",
+    ))
+}
+
+fn valid_longitude(value: f64) -> bool {
+    value.is_finite() && (-180.0..=180.0).contains(&value)
+}
+
+fn valid_latitude(value: f64) -> bool {
+    value.is_finite() && (-90.0..=90.0).contains(&value)
 }
 
 fn geofence_contains(bounds: [f64; 4], longitude: f64, latitude: f64) -> bool {
@@ -231,15 +255,6 @@ fn map_source_error(error: OsmSourceRepositoryError) -> Error {
     }
 }
 
-fn map_poi_error(error: OsmPoiRepositoryError) -> Error {
-    match error {
-        OsmPoiRepositoryError::Connection { message }
-        | OsmPoiRepositoryError::Query { message } => {
-            Error::service_unavailable(format!("failed to persist geofenced POIs: {message}"))
-        }
-    }
-}
-
 fn map_provenance_error(error: OsmIngestionProvenanceRepositoryError) -> Error {
     match error {
         OsmIngestionProvenanceRepositoryError::Connection { message }
@@ -253,5 +268,5 @@ fn map_provenance_error(error: OsmIngestionProvenanceRepositoryError) -> Error {
 }
 
 #[cfg(test)]
-#[path = "osm_ingestion_tests.rs"]
+#[path = "osm_ingestion_tests/mod.rs"]
 mod tests;

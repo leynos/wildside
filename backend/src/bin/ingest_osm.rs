@@ -1,18 +1,16 @@
+//! Ingest OSM data into backend POI tables with geofence and provenance controls.
 #![cfg_attr(not(any(test, doctest)), deny(clippy::unwrap_used))]
 #![cfg_attr(not(any(test, doctest)), deny(clippy::expect_used))]
-//! Ingest OSM data into backend POI tables with geofence and provenance controls.
 
 use std::env;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use backend::domain::OsmIngestionCommandService;
 use backend::domain::ports::{OsmIngestionCommand, OsmIngestionRequest};
 use backend::outbound::osm_source::WildsideDataOsmSourceRepository;
-use backend::outbound::persistence::{
-    DbPool, DieselOsmIngestionProvenanceRepository, DieselOsmPoiRepository, PoolConfig,
-};
+use backend::outbound::persistence::{DbPool, DieselOsmIngestionProvenanceRepository, PoolConfig};
 use cap_std::{ambient_authority, fs::Dir};
 use clap::Parser;
 use mockable::DefaultClock;
@@ -66,14 +64,9 @@ async fn async_main() -> io::Result<()> {
         .map_err(|error| io::Error::other(format!("create database pool: {error}")))?;
 
     let source_repo = Arc::new(WildsideDataOsmSourceRepository);
-    let poi_repo = Arc::new(DieselOsmPoiRepository::new(pool.clone()));
     let provenance_repo = Arc::new(DieselOsmIngestionProvenanceRepository::new(pool));
-    let command = OsmIngestionCommandService::new(
-        source_repo,
-        poi_repo,
-        provenance_repo,
-        Arc::new(DefaultClock),
-    );
+    let command =
+        OsmIngestionCommandService::new(source_repo, provenance_repo, Arc::new(DefaultClock));
 
     let request = OsmIngestionRequest {
         osm_pbf_path: args.osm_pbf_path,
@@ -118,7 +111,9 @@ fn parse_geofence_bounds(raw: &str) -> Result<[f64; 4], String> {
             "geofence bounds must contain exactly four comma-separated numeric values".to_owned(),
         );
     }
-    Ok([values[0], values[1], values[2], values[3]])
+    values.try_into().map_err(|_| {
+        "geofence bounds must contain exactly four comma-separated numeric values".to_owned()
+    })
 }
 
 fn sha256_file(path: &Path) -> io::Result<String> {
@@ -132,11 +127,20 @@ fn sha256_file(path: &Path) -> io::Result<String> {
             parent.display()
         ))
     })?;
-    let bytes = directory.read(Path::new(file_name)).map_err(|error| {
-        io::Error::other(format!("read input file '{}': {error}", path.display()))
+    let mut file = directory.open(Path::new(file_name)).map_err(|error| {
+        io::Error::other(format!("open input file '{}': {error}", path.display()))
     })?;
     let mut hasher = Sha256::new();
-    hasher.update(bytes);
+    let mut buffer = [0_u8; 8 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| {
+            io::Error::other(format!("read input file '{}': {error}", path.display()))
+        })?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
     Ok(format!("{:x}", hasher.finalize()))
 }
 

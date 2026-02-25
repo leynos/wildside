@@ -116,7 +116,7 @@ Observable success criteria:
   service module exceeds file-length limits.
   Status: mitigated.
   Mitigation applied: extracted tests into
-  `backend/src/domain/osm_ingestion_tests.rs` and kept
+  `backend/src/domain/osm_ingestion_tests/` and kept
   `backend/src/domain/osm_ingestion.rs` under 400 lines while preserving
   `rstest` coverage.
 
@@ -190,7 +190,8 @@ Coordination rules:
       `docs/backend-roadmap.md`.
 - [x] (2026-02-24) Re-ran full quality gates on the final integrated branch:
       `make check-fmt`, `make lint`, and `make test` with retained logs.
-- [ ] Commit final integrated implementation after gate evidence is attached.
+- [x] (2026-02-25) Committed and pushed final integrated implementation after
+      gate evidence was captured.
 
 ## Surprises & Discoveries
 
@@ -387,17 +388,21 @@ Acceptance checks:
 
 Run the full required gate stack and capture evidence logs:
 
-    project="$(get-project)"
-    branch="$(git branch --show)"
-    set -o pipefail
-    make check-fmt 2>&1 | tee "/tmp/check-fmt-${project}-${branch}.out"
-    make lint 2>&1 | tee "/tmp/lint-${project}-${branch}.out"
-    make test 2>&1 | tee "/tmp/test-${project}-${branch}.out"
+```shell
+project="$(get-project)"
+branch="$(git branch --show)"
+set -o pipefail
+make check-fmt 2>&1 | tee "/tmp/check-fmt-${project}-${branch}.out"
+make lint 2>&1 | tee "/tmp/lint-${project}-${branch}.out"
+make test 2>&1 | tee "/tmp/test-${project}-${branch}.out"
+```
 
 If test runtime stability requires it:
 
-    set -o pipefail
-    NEXTEST_TEST_THREADS=1 make test 2>&1 | tee "/tmp/test-${project}-${branch}.out"
+```shell
+set -o pipefail
+NEXTEST_TEST_THREADS=1 make test 2>&1 | tee "/tmp/test-${project}-${branch}.out"
+```
 
 Acceptance checks:
 

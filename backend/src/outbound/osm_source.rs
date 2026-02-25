@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use async_trait::async_trait;
+use tokio::task;
 
 use crate::domain::ports::{
     OsmSourcePoi, OsmSourceReport, OsmSourceRepository, OsmSourceRepositoryError,
@@ -19,7 +20,16 @@ impl OsmSourceRepository for WildsideDataOsmSourceRepository {
         &self,
         path: &Path,
     ) -> Result<OsmSourceReport, OsmSourceRepositoryError> {
-        let report = wildside_data::ingest_osm_pbf_report(path).map_err(map_ingest_error)?;
+        let source_path = path.to_path_buf();
+        let report =
+            task::spawn_blocking(move || wildside_data::ingest_osm_pbf_report(&source_path))
+                .await
+                .map_err(|error| {
+                    OsmSourceRepositoryError::decode(format!(
+                        "failed to join OSM source parsing task: {error}"
+                    ))
+                })?
+                .map_err(map_ingest_error)?;
         let pois = report
             .pois
             .into_iter()

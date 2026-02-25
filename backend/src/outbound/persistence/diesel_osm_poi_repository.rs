@@ -1,7 +1,12 @@
 //! PostgreSQL-backed OSM POI ingestion adapter.
+//!
+//! This adapter batches geofenced POIs into one UPSERT statement so ingest runs
+//! avoid per-row round-trips. Only OSM-owned columns (`location`, `osm_tags`)
+//! are refreshed on conflicts, preserving user-curated `narrative` text and
+//! downstream-computed `popularity_score`.
 
 use diesel::sql_query;
-use diesel::sql_types::{BigInt, Double, Jsonb, Text};
+use diesel::sql_types::{Array, BigInt, Double, Jsonb, Text};
 use diesel_async::RunQueryDsl;
 
 use crate::domain::ports::{OsmPoiIngestionRecord, OsmPoiRepository, OsmPoiRepositoryError};
@@ -24,13 +29,24 @@ impl DieselOsmPoiRepository {
 
 const UPSERT_SQL: &str = r#"
 INSERT INTO pois (element_type, id, location, osm_tags, narrative, popularity_score)
-VALUES ($1, $2, point($3, $4), $5, NULL, 0)
+SELECT
+    source.element_type,
+    source.id,
+    point(source.longitude, source.latitude),
+    source.osm_tags,
+    NULL,
+    0
+FROM unnest(
+    $1::text[],
+    $2::bigint[],
+    $3::double precision[],
+    $4::double precision[],
+    $5::jsonb[]
+) AS source(element_type, id, longitude, latitude, osm_tags)
 ON CONFLICT (element_type, id)
 DO UPDATE SET
     location = EXCLUDED.location,
-    osm_tags = EXCLUDED.osm_tags,
-    narrative = EXCLUDED.narrative,
-    popularity_score = EXCLUDED.popularity_score
+    osm_tags = EXCLUDED.osm_tags
 "#;
 
 fn map_pool_error(error: PoolError) -> OsmPoiRepositoryError {
@@ -51,37 +67,44 @@ impl OsmPoiRepository for DieselOsmPoiRepository {
             return Ok(());
         }
 
-        let serialized_records = records
+        let element_types = records
+            .iter()
+            .map(|record| record.element_type.clone())
+            .collect::<Vec<_>>();
+        let element_ids = records
+            .iter()
+            .map(|record| record.element_id)
+            .collect::<Vec<_>>();
+        let longitudes = records
+            .iter()
+            .map(|record| record.longitude)
+            .collect::<Vec<_>>();
+        let latitudes = records
+            .iter()
+            .map(|record| record.latitude)
+            .collect::<Vec<_>>();
+        let tags = records
             .iter()
             .map(|record| {
-                let tags = serde_json::to_value(&record.tags).map_err(|err| {
+                serde_json::to_value(&record.tags).map_err(|error| {
                     OsmPoiRepositoryError::query(format!(
-                        "failed to serialize OSM tags for {}:{}: {err}",
+                        "failed to serialize OSM tags for {}:{}: {error}",
                         record.element_type, record.element_id
                     ))
-                })?;
-                Ok((
-                    record.element_type.clone(),
-                    record.element_id,
-                    record.longitude,
-                    record.latitude,
-                    tags,
-                ))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        for (element_type, element_id, longitude, latitude, tags) in &serialized_records {
-            sql_query(UPSERT_SQL)
-                .bind::<Text, _>(element_type)
-                .bind::<BigInt, _>(element_id)
-                .bind::<Double, _>(longitude)
-                .bind::<Double, _>(latitude)
-                .bind::<Jsonb, _>(tags)
-                .execute(&mut conn)
-                .await
-                .map_err(map_diesel_error)?;
-        }
+        sql_query(UPSERT_SQL)
+            .bind::<Array<Text>, _>(&element_types)
+            .bind::<Array<BigInt>, _>(&element_ids)
+            .bind::<Array<Double>, _>(&longitudes)
+            .bind::<Array<Double>, _>(&latitudes)
+            .bind::<Array<Jsonb>, _>(&tags)
+            .execute(&mut conn)
+            .await
+            .map_err(map_diesel_error)?;
 
         Ok(())
     }

@@ -47,6 +47,21 @@ define_port_error! {
 #[async_trait]
 pub trait OsmSourceRepository: Send + Sync {
     /// Parse the given OSM PBF file into an in-memory POI report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::path::Path;
+    ///
+    /// use backend::domain::ports::{FixtureOsmSourceRepository, OsmSourceRepository};
+    ///
+    /// let repository = FixtureOsmSourceRepository::default();
+    /// let report = repository
+    ///     .ingest_osm_pbf(Path::new("fixtures/launch.osm.pbf"))
+    ///     .await?;
+    /// assert!(report.pois.is_empty());
+    /// # Ok::<(), backend::domain::ports::OsmSourceRepositoryError>(())
+    /// ```
     async fn ingest_osm_pbf(
         &self,
         path: &Path,
