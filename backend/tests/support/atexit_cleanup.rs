@@ -181,6 +181,7 @@ mod tests {
     use cap_std::ambient_authority;
     use cap_std::fs::Dir;
 
+    #[cfg(unix)]
     fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
         let dir = Dir::open_ambient_dir(dir_path, ambient_authority()).expect("open dir");
         dir.write("postmaster.pid", content).expect("write");
