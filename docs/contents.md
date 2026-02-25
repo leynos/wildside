@@ -60,6 +60,15 @@
   (`../../nile-valley`). This repository keeps the application code, container
   images, and Helm chart that Nile Valley deploys.
 
+## Operational runbooks
+
+- [OSM ingestion end-to-end runbook](runbooks/osm-ingestion-e2e.md) – operator
+  procedure for executing and verifying `ingest-osm` runs, including
+  deterministic reruns. *Audience: backend operators and developers.*
+- [Session signing key rotation](runbooks/session-key-rotation.md) – procedure
+  for rotating backend session signing keys in Kubernetes. *Audience: platform
+  engineers and operators.*
+
 ## Developer guidelines and tooling
 
 - [Documentation style guide](documentation-style-guide.md) – conventions for
