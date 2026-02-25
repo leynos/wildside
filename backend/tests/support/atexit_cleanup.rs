@@ -17,10 +17,12 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicI32, Ordering};
-#[cfg(unix)]
 use std::time::Duration;
 
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
+
+const SHARED_CLUSTER_RETRIES: usize = 5;
+const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
@@ -48,10 +50,23 @@ static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// ```
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
-    let handle = pg_embedded_setup_unpriv::test_support::shared_cluster_handle()?;
-    #[cfg(unix)]
-    register_process_exit_cleanup(handle);
-    Ok(handle)
+    for attempt in 1..=SHARED_CLUSTER_RETRIES {
+        match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
+            Ok(handle) => {
+                #[cfg(unix)]
+                register_process_exit_cleanup(handle);
+                return Ok(handle);
+            }
+            Err(error) => {
+                if attempt == SHARED_CLUSTER_RETRIES {
+                    return Err(error);
+                }
+                std::thread::sleep(SHARED_CLUSTER_RETRY_DELAY);
+            }
+        }
+    }
+
+    unreachable!("retry loop should return success or final error")
 }
 
 /// Ensures `PG_PASSWORD` is set to a stable value so the password remains
