@@ -47,6 +47,32 @@ fn new_test_database_name() -> String {
     format!("test_{}", Uuid::new_v4())
 }
 
+/// Attempts one template-clone provisioning pass for a test database.
+///
+/// Uses `attempt` (typically in the `1..=TEMPLATE_PROVISION_RETRIES` range) to
+/// annotate retry-aware `UserPersistenceError` messages. Returns
+/// `Ok(TemporaryDatabase)` when both template resolution
+/// (`ensure_template_database`) and `ClusterHandle::temporary_database_from_template`
+/// succeed, and returns `Err(UserPersistenceError)` when either step fails.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use backend::domain::ports::UserPersistenceError;
+/// # use pg_embedded_setup_unpriv::{ClusterHandle, TemporaryDatabase};
+/// # use crate::support::embedded_postgres::{
+/// #     provision_template_database_attempt, TEMPLATE_PROVISION_RETRIES,
+/// # };
+/// # let cluster: ClusterHandle = unimplemented!("fixture cluster handle");
+/// let attempt = 1;
+/// assert!(attempt <= TEMPLATE_PROVISION_RETRIES);
+///
+/// let outcome: Result<TemporaryDatabase, UserPersistenceError> =
+///     provision_template_database_attempt(&cluster, attempt);
+///
+/// // `Ok` when template lookup and clone both succeed; otherwise `Err`.
+/// assert!(outcome.is_ok() || outcome.is_err());
+/// ```
 fn provision_template_database_attempt(
     cluster: &ClusterHandle,
     attempt: usize,
