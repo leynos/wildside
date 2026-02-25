@@ -47,6 +47,25 @@ fn new_test_database_name() -> String {
     format!("test_{}", Uuid::new_v4())
 }
 
+fn provision_template_database_attempt(
+    cluster: &ClusterHandle,
+    attempt: usize,
+) -> Result<TemporaryDatabase, UserPersistenceError> {
+    let template_name = ensure_template_database(cluster).map_err(|error| {
+        UserPersistenceError::query(format!(
+            "template check: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error}"
+        ))
+    })?;
+    let db_name = new_test_database_name();
+    cluster
+        .temporary_database_from_template(db_name.as_str(), template_name.as_str())
+        .map_err(|error| {
+            UserPersistenceError::query(format!(
+                "create database from template: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error:?}"
+            ))
+        })
+}
+
 /// Creates or reuses a template database with the latest migrations applied.
 fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersistenceError> {
     let template_name = template_database_name()?;
@@ -77,33 +96,12 @@ pub fn provision_template_database(
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
     let mut last_error = None;
     for attempt in 1..=TEMPLATE_PROVISION_RETRIES {
-        let template_name = match ensure_template_database(cluster) {
-            Ok(name) => name,
-            Err(error) => {
-                last_error = Some(UserPersistenceError::query(format!(
-                    "template check: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error}"
-                )));
-                if attempt < TEMPLATE_PROVISION_RETRIES {
-                    std::thread::sleep(TEMPLATE_PROVISION_RETRY_DELAY);
-                    continue;
-                }
-                break;
-            }
-        };
-
-        let db_name = new_test_database_name();
-        match cluster.temporary_database_from_template(db_name.as_str(), template_name.as_str()) {
+        match provision_template_database_attempt(cluster, attempt) {
             Ok(database) => return Ok(database),
-            Err(error) => {
-                last_error = Some(UserPersistenceError::query(format!(
-                    "create database from template: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error:?}"
-                )));
-                if attempt < TEMPLATE_PROVISION_RETRIES {
-                    std::thread::sleep(TEMPLATE_PROVISION_RETRY_DELAY);
-                    continue;
-                }
-                break;
-            }
+            Err(error) => last_error = Some(error),
+        };
+        if attempt < TEMPLATE_PROVISION_RETRIES {
+            std::thread::sleep(TEMPLATE_PROVISION_RETRY_DELAY);
         }
     }
 
