@@ -25,7 +25,7 @@ impl OsmSourceRepository for WildsideDataOsmSourceRepository {
             task::spawn_blocking(move || wildside_data::ingest_osm_pbf_report(&source_path))
                 .await
                 .map_err(|error| {
-                    OsmSourceRepositoryError::decode(format!(
+                    OsmSourceRepositoryError::read(format!(
                         "failed to join OSM source parsing task: {error}"
                     ))
                 })?

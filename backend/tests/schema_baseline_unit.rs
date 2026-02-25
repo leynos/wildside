@@ -1,4 +1,4 @@
-//! Static contract checks for roadmap 3.1.1 and 3.4.1 migration SQL.
+//! Static contract checks for roadmap 3.1.1, 3.3.2, and 3.4.1 migration SQL.
 
 use rstest::rstest;
 

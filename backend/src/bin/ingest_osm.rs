@@ -106,11 +106,6 @@ fn parse_geofence_bounds(raw: &str) -> Result<[f64; 4], String> {
         .map(str::parse::<f64>)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("failed to parse geofence bounds value: {error}"))?;
-    if values.len() != 4 {
-        return Err(
-            "geofence bounds must contain exactly four comma-separated numeric values".to_owned(),
-        );
-    }
     values.try_into().map_err(|_| {
         "geofence bounds must contain exactly four comma-separated numeric values".to_owned()
     })

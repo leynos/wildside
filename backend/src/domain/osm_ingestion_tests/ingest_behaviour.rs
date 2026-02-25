@@ -56,7 +56,7 @@ async fn ingest_replays_existing_provenance_without_reingesting() {
     assert_eq!(outcome.persisted_poi_count, 3);
 }
 
-fn assert_filtered_poi_records(records: &[OsmPoiIngestionRecord]) -> bool {
+fn is_filtered_poi_records(records: &[OsmPoiIngestionRecord]) -> bool {
     records.len() == 2
         && records
             .iter()
@@ -66,7 +66,7 @@ fn assert_filtered_poi_records(records: &[OsmPoiIngestionRecord]) -> bool {
             .any(|record| record.element_type == "way" && record.element_id == 22)
 }
 
-fn assert_provenance_record_matches_expected(record: &OsmIngestionProvenanceRecord) -> bool {
+fn is_provenance_record_expected(record: &OsmIngestionProvenanceRecord) -> bool {
     record.geofence_id == "launch-a"
         && record.source_url == SOURCE_URL
         && record.input_digest == INPUT_DIGEST
@@ -95,8 +95,7 @@ async fn ingest_filters_pois_by_geofence_and_persists_provenance() {
         .expect_persist_ingestion()
         .times(1)
         .withf(|provenance, poi_records| {
-            assert_provenance_record_matches_expected(provenance)
-                && assert_filtered_poi_records(poi_records)
+            is_provenance_record_expected(provenance) && is_filtered_poi_records(poi_records)
         })
         .return_once(|_, _| Ok(()));
 

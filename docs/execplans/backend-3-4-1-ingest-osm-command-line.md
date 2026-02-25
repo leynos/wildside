@@ -10,7 +10,7 @@ Status: COMPLETE (implementation delivered; documentation closure updated)
 There is no `PLANS.md` in this repository, so this ExecPlan is the primary
 execution reference for roadmap item 3.4.1.
 
-Implementation has completed and this document now records delivered outcomes,
+Implementation has completed, and this document now records delivered outcomes,
 gate evidence, and residual risks.
 
 ## Purpose / big picture
@@ -198,7 +198,7 @@ Coordination rules:
 - Observation (2026-02-24): `wildside-engine` integration landed as a direct
   `wildside-data` dependency in `backend/Cargo.toml` rather than through shell
   invocation of `wildside-cli`.
-  Impact: domain logic stays independent from process execution details, and
+  Impact: domain logic stays independent of process execution details, and
   parser integration is exercised through a typed outbound adapter.
 
 - Observation (2026-02-24): behavioural coverage includes deterministic replay

@@ -148,9 +148,7 @@ fn validate_bounds(bounds: [f64; 4]) -> Result<(), Error> {
 }
 
 fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
-    let valid_longitudes =
-        |min_lng: f64, max_lng: f64| valid_longitude(min_lng) && valid_longitude(max_lng);
-    if !valid_longitudes(min_lng, max_lng) {
+    if !(valid_longitude(min_lng) && valid_longitude(max_lng)) {
         return Err(Error::invalid_request(
             "geofence longitude values must be finite and within [-180, 180]",
         ));
@@ -160,9 +158,7 @@ fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
 }
 
 fn validate_latitude_bounds(min_lat: f64, max_lat: f64) -> Result<(), Error> {
-    let valid_latitudes =
-        |min_lat: f64, max_lat: f64| valid_latitude(min_lat) && valid_latitude(max_lat);
-    if !valid_latitudes(min_lat, max_lat) {
+    if !(valid_latitude(min_lat) && valid_latitude(max_lat)) {
         return Err(Error::invalid_request(
             "geofence latitude values must be finite and within [-90, 90]",
         ));
@@ -186,13 +182,11 @@ fn validate_bounds_ordering(
     ))
 }
 
-fn valid_longitude(value: f64) -> bool {
-    value.is_finite() && (-180.0..=180.0).contains(&value)
-}
+#[rustfmt::skip]
+fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
 
-fn valid_latitude(value: f64) -> bool {
-    value.is_finite() && (-90.0..=90.0).contains(&value)
-}
+#[rustfmt::skip]
+fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
 
 fn geofence_contains(bounds: [f64; 4], longitude: f64, latitude: f64) -> bool {
     let [min_lng, min_lat, max_lng, max_lat] = bounds;

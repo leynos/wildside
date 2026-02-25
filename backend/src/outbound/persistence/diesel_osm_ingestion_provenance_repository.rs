@@ -189,33 +189,24 @@ fn to_poi_upsert_batch(
         return Ok(None);
     }
 
-    let element_types = records
-        .iter()
-        .map(|record| record.element_type.clone())
-        .collect::<Vec<_>>();
-    let element_ids = records
-        .iter()
-        .map(|record| record.element_id)
-        .collect::<Vec<_>>();
-    let longitudes = records
-        .iter()
-        .map(|record| record.longitude)
-        .collect::<Vec<_>>();
-    let latitudes = records
-        .iter()
-        .map(|record| record.latitude)
-        .collect::<Vec<_>>();
-    let tags = records
-        .iter()
-        .map(|record| {
-            serde_json::to_value(&record.tags).map_err(|error| {
-                OsmIngestionProvenanceRepositoryError::query(format!(
-                    "failed to serialize OSM tags for {}:{}: {error}",
-                    record.element_type, record.element_id
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut element_types = Vec::with_capacity(records.len());
+    let mut element_ids = Vec::with_capacity(records.len());
+    let mut longitudes = Vec::with_capacity(records.len());
+    let mut latitudes = Vec::with_capacity(records.len());
+    let mut tags = Vec::with_capacity(records.len());
+
+    for record in records {
+        element_types.push(record.element_type.clone());
+        element_ids.push(record.element_id);
+        longitudes.push(record.longitude);
+        latitudes.push(record.latitude);
+        tags.push(serde_json::to_value(&record.tags).map_err(|error| {
+            OsmIngestionProvenanceRepositoryError::query(format!(
+                "failed to serialize OSM tags for {}:{}: {error}",
+                record.element_type, record.element_id
+            ))
+        })?);
+    }
 
     Ok(Some(PoiUpsertBatch {
         element_types,
