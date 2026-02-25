@@ -47,6 +47,8 @@
 //!   related enums (`OfflineBundleKind`, `OfflineBundleStatus`).
 //! - Walk entities (`WalkSession`, `WalkCompletionSummary`) and stat value
 //!   objects (`WalkPrimaryStat`, `WalkSecondaryStat`).
+//! - OsmIngestionCommandService — orchestration service for OSM PBF ingestion,
+//!   enforcing geofence filtering and provenance persistence.
 
 pub mod annotations;
 pub mod auth;

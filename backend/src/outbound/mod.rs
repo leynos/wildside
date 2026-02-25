@@ -7,6 +7,7 @@
 //! - **cache**: Redis-backed caching (stub implementation pending)
 //! - **queue**: Apalis-backed job queue (stub implementation pending)
 //! - **metrics**: Prometheus-backed metrics exporters (feature-gated)
+//! - **osm_source**: OSM PBF source adapter backed by `wildside-data`
 //!
 //! Adapters are thin translators that convert between domain types and
 //! infrastructure-specific representations. They contain no business logic.
