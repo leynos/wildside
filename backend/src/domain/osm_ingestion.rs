@@ -259,24 +259,37 @@ fn validate_bounds(bounds: [f64; 4]) -> Result<(), Error> {
     Ok(())
 }
 
-fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
-    if !(valid_longitude(min_lng) && valid_longitude(max_lng)) {
-        return Err(Error::invalid_request(
-            "geofence longitude values must be finite and within [-180, 180]",
-        ));
+fn validate_coordinate_bounds<F>(
+    min: f64,
+    max: f64,
+    predicate: F,
+    error_message: &str,
+) -> Result<(), Error>
+where
+    F: Fn(f64) -> bool,
+{
+    if !predicate(min) || !predicate(max) {
+        return Err(Error::invalid_request(error_message));
     }
-
     Ok(())
 }
 
-fn validate_latitude_bounds(min_lat: f64, max_lat: f64) -> Result<(), Error> {
-    if !(valid_latitude(min_lat) && valid_latitude(max_lat)) {
-        return Err(Error::invalid_request(
-            "geofence latitude values must be finite and within [-90, 90]",
-        ));
-    }
+fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
+    validate_coordinate_bounds(
+        min_lng,
+        max_lng,
+        valid_longitude,
+        "geofence longitude values must be finite and within [-180, 180]",
+    )
+}
 
-    Ok(())
+fn validate_latitude_bounds(min_lat: f64, max_lat: f64) -> Result<(), Error> {
+    validate_coordinate_bounds(
+        min_lat,
+        max_lat,
+        valid_latitude,
+        "geofence latitude values must be finite and within [-90, 90]",
+    )
 }
 
 fn validate_bounds_ordering(
