@@ -44,18 +44,12 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
 }
 
 #[rstest]
-fn users_table_with_password_hash_is_recognised_as_credentials_persisted() {
-    let report = UserStateSchemaAuditReport::evaluate(&users_with_inline_credentials_diagram());
-
-    assert_eq!(
-        report.login_coverage,
-        LoginSchemaCoverage::CredentialsPersisted
-    );
-}
-
-#[rstest]
-fn separate_credentials_table_is_recognised_as_credentials_persisted() {
-    let report = UserStateSchemaAuditReport::evaluate(&separate_credentials_table_diagram());
+#[case(users_with_inline_credentials_diagram)]
+#[case(separate_credentials_table_diagram)]
+fn credential_storage_variants_are_recognised_as_persisted(
+    #[case] diagram_provider: fn() -> SchemaDiagram,
+) {
+    let report = UserStateSchemaAuditReport::evaluate(&diagram_provider());
 
     assert_eq!(
         report.login_coverage,

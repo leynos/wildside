@@ -176,18 +176,10 @@ impl UserStateSchemaAuditService {
     /// # Examples
     ///
     /// ```rust
-    /// use backend::domain::{UserStateSchemaAuditReport, UserStateSchemaAuditService};
-    /// use backend::domain::ports::{FixtureSchemaSnapshotRepository, SchemaSnapshotRepository};
+    /// use backend::domain::UserStateSchemaAuditService;
     ///
-    /// let service = UserStateSchemaAuditService::new();
-    /// let repository = FixtureSchemaSnapshotRepository;
-    /// let repository: &dyn SchemaSnapshotRepository = &repository;
-    ///
-    /// let report: UserStateSchemaAuditReport = service
-    ///     .audit(repository)
-    ///     .expect("fixture schema audit should succeed");
-    ///
-    /// assert!(report.profile_storage_migration.is_required());
+    /// let svc = UserStateSchemaAuditService::new();
+    /// let _ = svc;
     /// ```
     pub fn new() -> Self {
         Self
@@ -198,22 +190,38 @@ impl UserStateSchemaAuditService {
     /// # Examples
     ///
     /// ```rust
-    /// use backend::domain::{
-    ///     UserStateSchemaAuditReport, UserStateSchemaAuditService, audit_user_state_schema_coverage,
-    /// };
-    /// use backend::domain::ports::{FixtureSchemaSnapshotRepository, SchemaSnapshotRepository};
+    /// use backend::domain::{MigrationDecision, UserStateSchemaAuditReport, UserStateSchemaAuditService};
+    /// use backend::domain::er_diagram::SchemaDiagram;
+    /// use backend::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
     ///
-    /// let service = UserStateSchemaAuditService::new();
-    /// let repository = FixtureSchemaSnapshotRepository;
-    /// let repository: &dyn SchemaSnapshotRepository = &repository;
+    /// struct InlineRepo {
+    ///     fail: bool,
+    /// }
     ///
-    /// let service_report: UserStateSchemaAuditReport = service
-    ///     .audit(repository)
-    ///     .expect("service-backed schema audit should succeed");
-    /// let helper_report = audit_user_state_schema_coverage(repository)
-    ///     .expect("helper-backed schema audit should succeed");
+    /// impl SchemaSnapshotRepository for InlineRepo {
+    ///     fn load_schema_diagram(&self) -> Result<SchemaDiagram, SchemaSnapshotRepositoryError> {
+    ///         if self.fail {
+    ///             Err(SchemaSnapshotRepositoryError::query("catalog failure"))
+    ///         } else {
+    ///             Ok(SchemaDiagram { tables: vec![], relationships: vec![] })
+    ///         }
+    ///     }
+    /// }
     ///
-    /// assert_eq!(service_report, helper_report);
+    /// let svc = UserStateSchemaAuditService::new();
+    ///
+    /// match svc.audit(&InlineRepo { fail: false }) {
+    ///     Ok(report) => {
+    ///         let report: UserStateSchemaAuditReport = report;
+    ///         assert_eq!(report.profile_storage_migration, MigrationDecision::Required);
+    ///     }
+    ///     Err(error) => panic!("expected success, got error: {error}"),
+    /// }
+    ///
+    /// match svc.audit(&InlineRepo { fail: true }) {
+    ///     Ok(report) => panic!("expected error, got report: {report:?}"),
+    ///     Err(error) => assert!(matches!(error, SchemaSnapshotRepositoryError::Query { .. })),
+    /// }
     /// ```
     pub fn audit(
         &self,
