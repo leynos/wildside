@@ -18,9 +18,9 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
 use std::path::PathBuf;
 #[cfg(unix)]
-use std::sync::OnceLock;
-#[cfg(unix)]
 use std::sync::atomic::{AtomicI32, Ordering};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 #[cfg(unix)]
@@ -43,9 +43,20 @@ static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 #[cfg(unix)]
 static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
+#[cfg(unix)]
+static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
 fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
+    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+        return Ok(());
+    }
+
+    let _init_guard = SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
+        BootstrapError::from(eyre!(
+            "acquire shared cluster process lock init mutex: {error}"
+        ))
+    })?;
     if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
         return Ok(());
     }
@@ -89,12 +100,7 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
         )));
     }
 
-    if SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd).is_err() {
-        // SAFETY: `fd` is valid and must be closed when another caller won `set`.
-        unsafe {
-            libc::close(fd);
-        }
-    }
+    let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
     Ok(())
 }
 
