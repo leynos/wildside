@@ -28,3 +28,16 @@ Feature: Overpass enrichment worker
     And an enrichment job runs for launch-a bounds
     Then the worker reports a successful enrichment outcome
     And the source call count is two
+
+  Scenario: Overpass enrichment reports retry exhaustion after transient failures
+    Given a Diesel-backed Overpass enrichment worker with retry-exhaustion source responses
+    When an enrichment job runs for launch-a bounds
+    Then the worker fails with service unavailable
+    And the source call count is two
+    And an enrichment retry-exhausted metric is recorded
+
+  Scenario: Overpass enrichment semaphore limits concurrent source calls
+    Given a Diesel-backed Overpass enrichment worker with semaphore-blocking source responses
+    When two enrichment jobs run concurrently for launch-a bounds
+    Then both concurrent jobs complete successfully
+    And the max observed concurrent source calls is one

@@ -49,7 +49,10 @@ pub struct OverpassHttpSource {
 
 impl OverpassHttpSource {
     /// Build an adapter using a reqwest client with an explicit request timeout.
-    ///
+    /// ```rust,ignore
+    /// let source = OverpassHttpSource::new(endpoint, timeout);
+    /// assert!(source.is_ok() || source.is_err());
+    /// ```
     /// # Errors
     ///
     /// Returns an error when the reqwest client cannot be constructed.
@@ -58,7 +61,10 @@ impl OverpassHttpSource {
     }
 
     /// Build an adapter with explicit outbound identity and query timeout.
-    ///
+    /// ```rust,ignore
+    /// let source = OverpassHttpSource::with_identity(endpoint, timeout, identity);
+    /// assert!(source.is_ok() || source.is_err());
+    /// ```
     /// # Errors
     ///
     /// Returns an error when the reqwest client cannot be constructed.
@@ -171,6 +177,16 @@ fn validate_bounding_box(bounding_box: &[f64; 4]) -> Result<(), OverpassEnrichme
             "bounding box must be [min_lng, min_lat, max_lng, max_lat]",
         ));
     }
+    if !(-180.0..=180.0).contains(&min_lng) || !(-180.0..=180.0).contains(&max_lng) {
+        return Err(OverpassEnrichmentSourceError::invalid_request(
+            "longitude must be within [-180, 180]",
+        ));
+    }
+    if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
+        return Err(OverpassEnrichmentSourceError::invalid_request(
+            "latitude must be within [-90, 90]",
+        ));
+    }
     Ok(())
 }
 
@@ -227,6 +243,7 @@ fn map_status_error(status: StatusCode, body: &[u8]) -> OverpassEnrichmentSource
         StatusCode::REQUEST_TIMEOUT | StatusCode::GATEWAY_TIMEOUT => {
             OverpassEnrichmentSourceError::timeout(message)
         }
+        _ if status.is_client_error() => OverpassEnrichmentSourceError::invalid_request(message),
         _ => OverpassEnrichmentSourceError::transport(message),
     }
 }
@@ -285,6 +302,7 @@ mod tests {
     #[case::rate_limited(StatusCode::TOO_MANY_REQUESTS, "RateLimited")]
     #[case::request_timeout(StatusCode::REQUEST_TIMEOUT, "Timeout")]
     #[case::gateway_timeout(StatusCode::GATEWAY_TIMEOUT, "Timeout")]
+    #[case::bad_request(StatusCode::BAD_REQUEST, "InvalidRequest")]
     #[case::server_error(StatusCode::INTERNAL_SERVER_ERROR, "Transport")]
     fn maps_http_statuses_to_expected_domain_errors(
         #[case] status: StatusCode,
@@ -302,6 +320,12 @@ mod tests {
                 assert!(
                     matches!(error, OverpassEnrichmentSourceError::Timeout { .. }),
                     "timeout statuses should map to Timeout",
+                );
+            }
+            "InvalidRequest" => {
+                assert!(
+                    matches!(error, OverpassEnrichmentSourceError::InvalidRequest { .. }),
+                    "client statuses should map to InvalidRequest",
                 );
             }
             "Transport" => {
@@ -355,5 +379,18 @@ mod tests {
             matches!(error, OverpassEnrichmentSourceError::Decode { .. }),
             "missing coordinates should map to Decode errors",
         );
+    }
+
+    #[test]
+    fn rejects_bbox_outside_wgs84_ranges() {
+        for bounding_box in [[-181.0, 55.90, -3.10, 56.00], [-3.30, -91.0, -3.10, 56.00]] {
+            let mut request = request(vec!["amenity"]);
+            request.bounding_box = bounding_box;
+            let error = build_overpass_query(&request, 180).expect_err("bbox must fail");
+            assert!(
+                matches!(error, OverpassEnrichmentSourceError::InvalidRequest { .. }),
+                "invalid ranges should map to invalid request",
+            );
+        }
     }
 }

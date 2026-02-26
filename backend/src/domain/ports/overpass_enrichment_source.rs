@@ -68,6 +68,15 @@ define_port_error! {
 
 impl OverpassEnrichmentSourceError {
     /// Return whether retrying this error is expected to help.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::ports::OverpassEnrichmentSourceError;
+    ///
+    /// assert!(OverpassEnrichmentSourceError::transport("temporary").is_retryable());
+    /// assert!(!OverpassEnrichmentSourceError::invalid_request("bad bbox").is_retryable());
+    /// ```
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,

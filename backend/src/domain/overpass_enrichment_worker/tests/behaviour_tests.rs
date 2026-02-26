@@ -1,6 +1,8 @@
 //! Behaviour-focused test cases for the Overpass enrichment worker.
 
 use super::*;
+
+mod persistence_tests;
 #[rstest]
 #[tokio::test]
 async fn happy_path_persists_and_records_success(
@@ -29,6 +31,7 @@ async fn happy_path_persists_and_records_success(
     assert!(metrics.failures.lock().expect("metrics mutex").is_empty());
 }
 
+#[derive(Debug, Clone, Copy)]
 struct QuotaCase {
     max_requests: u32,
     max_transfer_bytes: u64,
@@ -69,39 +72,23 @@ async fn assert_quota_denial_short_circuits_source(
 }
 
 #[rstest]
+#[case::request_limit(QuotaCase {
+    max_requests: 0,
+    max_transfer_bytes: 10,
+    expected_kind: EnrichmentJobFailureKind::QuotaRequestLimit,
+})]
+#[case::transfer_limit(QuotaCase {
+    max_requests: 10,
+    max_transfer_bytes: 0,
+    expected_kind: EnrichmentJobFailureKind::QuotaTransferLimit,
+})]
 #[tokio::test]
-async fn quota_request_limit_denial_short_circuits_source(
+async fn quota_limit_denial_short_circuits_source(
     now: DateTime<Utc>,
     job: OverpassEnrichmentRequest,
+    #[case] case: QuotaCase,
 ) {
-    assert_quota_denial_short_circuits_source(
-        now,
-        job,
-        QuotaCase {
-            max_requests: 0,
-            max_transfer_bytes: 10,
-            expected_kind: EnrichmentJobFailureKind::QuotaRequestLimit,
-        },
-    )
-    .await;
-}
-
-#[rstest]
-#[tokio::test]
-async fn quota_transfer_limit_denial_short_circuits_source(
-    now: DateTime<Utc>,
-    job: OverpassEnrichmentRequest,
-) {
-    assert_quota_denial_short_circuits_source(
-        now,
-        job,
-        QuotaCase {
-            max_requests: 10,
-            max_transfer_bytes: 0,
-            expected_kind: EnrichmentJobFailureKind::QuotaTransferLimit,
-        },
-    )
-    .await;
+    assert_quota_denial_short_circuits_source(now, job, case).await;
 }
 
 #[rstest]

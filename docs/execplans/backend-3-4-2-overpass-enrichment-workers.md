@@ -13,8 +13,9 @@ breaking, and metrics wired to the enrichment job counters`.
 
 ## Purpose / big picture
 
-Roadmap item 3.4.2 adds asynchronous Overpass enrichment workers so sparse POI
-coverage can be improved without blocking request-handling paths. The worker
+Roadmap item 3.4.2 adds asynchronous Overpass enrichment workers so sparse
+points of interest (POI) coverage can be improved without blocking
+request-handling paths. The worker
 flow must honour strict quotas, avoid cascading failures with circuit breaking,
 and emit metrics suitable for production dashboards and alerts.
 
@@ -49,7 +50,8 @@ Observable success criteria:
   enrichment provenance exposure in this change.
 - Preserve hexagonal architecture boundaries:
   - domain defines ports, orchestration rules, and domain error types;
-  - outbound adapters implement persistence, queue, metrics, and Overpass I/O;
+  - outbound adapters implement persistence, queue, metrics, and Overpass
+    input/output (I/O);
   - inbound and worker adapters orchestrate through ports only.
 - Keep dependency direction intact:
   - `domain` must not import `inbound` or `outbound`;
@@ -71,8 +73,8 @@ Observable success criteria:
   split work into a follow-up plan.
 - Storage tolerance: if global quota correctness requires schema changes beyond
   one cohesive migration set, stop and split into a staged migration plan.
-- Churn tolerance: if implementation exceeds 30 files or 2,200 net LOC, stop
-  and re-scope into two sequenced execution milestones.
+- Churn tolerance: if implementation exceeds 30 files or 2,200 net lines of
+  code (LOC), stop and re-scope into two sequenced execution milestones.
 - Behaviour tolerance: if circuit breaker policy cannot be expressed without
   leaking adapter details into domain modules, stop and redesign port surfaces.
 - Gate tolerance: if any required gate (`check-fmt`, `lint`, `test`) fails more
@@ -84,8 +86,8 @@ Observable success criteria:
 
 ## Risks
 
-- Risk: quota state may diverge across worker replicas if implemented process
-  local only.
+- Risk: quota state may diverge across worker replicas if implemented as
+  process-local only.
   Mitigation: define quota storage scope explicitly (shared backend state) and
   test concurrent worker behaviour against that scope.
 
@@ -105,7 +107,8 @@ Observable success criteria:
 
 - Risk: behavioural tests may fail intermittently due to cluster setup.
   Mitigation: reuse `backend/tests/support` shared-cluster helpers and explicit
-  skip handling already used by ingestion BDD suites.
+  skip handling already used by ingestion behaviour-driven development (BDD)
+  suites.
 
 ## Agent team
 
@@ -198,7 +201,7 @@ Validation:
 
 ```bash
 set -o pipefail
-make test | tee /tmp/test-$(get-project)-$(git branch --show)-baseline.out
+make test | tee /tmp/test-$(get-project)-$(git branch --show-current)-baseline.out
 ```
 
 Expected evidence:
@@ -229,7 +232,7 @@ Validation:
 
 ```bash
 set -o pipefail
-make test | tee /tmp/test-$(get-project)-$(git branch --show)-milestone1.out
+make test | tee /tmp/test-$(get-project)-$(git branch --show-current)-milestone1.out
 ```
 
 Expected evidence:
@@ -256,7 +259,7 @@ Validation:
 
 ```bash
 set -o pipefail
-make test | tee /tmp/test-$(get-project)-$(git branch --show)-milestone2.out
+make test | tee /tmp/test-$(get-project)-$(git branch --show-current)-milestone2.out
 ```
 
 Expected evidence:
@@ -269,6 +272,7 @@ Adapter contract tests pass and worker execution paths remain port-driven.
 
 Add `rstest-bdd` scenarios for end-to-end worker behaviour using the embedded
 PostgreSQL support path. Reuse existing support fixtures where possible.
+This uses behaviour-driven development (BDD) scenarios for observable outcomes.
 
 Required scenarios:
 
@@ -289,7 +293,7 @@ Validation:
 
 ```bash
 set -o pipefail
-make test | tee /tmp/test-$(get-project)-$(git branch --show)-milestone3.out
+make test | tee /tmp/test-$(get-project)-$(git branch --show-current)-milestone3.out
 ```
 
 Expected evidence:
@@ -318,9 +322,9 @@ Final validation commands:
 
 ```bash
 set -o pipefail
-make check-fmt | tee /tmp/check-fmt-$(get-project)-$(git branch --show).out
-make lint | tee /tmp/lint-$(get-project)-$(git branch --show).out
-make test | tee /tmp/test-$(get-project)-$(git branch --show).out
+make check-fmt | tee /tmp/check-fmt-$(get-project)-$(git branch --show-current).out
+make lint | tee /tmp/lint-$(get-project)-$(git branch --show-current).out
+make test | tee /tmp/test-$(get-project)-$(git branch --show-current).out
 ```
 
 Expected evidence:

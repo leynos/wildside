@@ -117,7 +117,11 @@ impl OverpassEnrichmentSource for SourceStub {
             .lock()
             .expect("source mutex")
             .pop_front()
-            .unwrap_or_else(|| Ok(OverpassEnrichmentResponse::default()))
+            .unwrap_or_else(|| {
+                Err(OverpassEnrichmentSourceError::invalid_request(
+                    "source script exhausted unexpectedly",
+                ))
+            })
     }
 }
 

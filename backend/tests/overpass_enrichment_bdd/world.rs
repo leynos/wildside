@@ -25,6 +25,7 @@ use crate::{
 };
 
 impl OverpassEnrichmentWorld {
+    /// Build and wire a worker instance for one scenario.
     pub fn setup_worker(
         &self,
         config: OverpassEnrichmentWorkerConfig,
@@ -87,6 +88,7 @@ impl OverpassEnrichmentWorld {
         self._database.set(DatabaseHandle(Arc::new(temp_db)));
     }
 
+    /// Start from default config, apply a mutation closure, and set up a worker.
     pub fn setup_with_config_and_data(
         &self,
         configure: impl FnOnce(&mut OverpassEnrichmentWorkerConfig),
@@ -97,6 +99,7 @@ impl OverpassEnrichmentWorld {
         self.setup_worker(config, source_data);
     }
 
+    /// Return the default worker configuration used by BDD scenarios.
     pub fn default_config(&self) -> OverpassEnrichmentWorkerConfig {
         OverpassEnrichmentWorkerConfig {
             max_concurrent_calls: 2,
@@ -110,6 +113,7 @@ impl OverpassEnrichmentWorld {
         }
     }
 
+    /// Create a deterministic synthetic source response payload.
     pub fn make_response(
         &self,
         poi_count: usize,
@@ -129,10 +133,12 @@ impl OverpassEnrichmentWorld {
         }
     }
 
+    /// Return whether the scenario should be skipped because setup failed.
     pub fn is_skipped(&self) -> bool {
         self.setup_error.get().is_some()
     }
 
+    /// Print the standard skip marker when setup failed and return `true`.
     pub fn skip_if_needed(&self) -> bool {
         if self.is_skipped() {
             eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
@@ -141,6 +147,7 @@ impl OverpassEnrichmentWorld {
         false
     }
 
+    /// Run an operation with runtime, worker, and database URL handles.
     pub fn execute_async<T>(
         &self,
         operation: impl FnOnce(&Runtime, &Arc<OverpassEnrichmentWorker>, &str) -> T,
@@ -155,6 +162,7 @@ impl OverpassEnrichmentWorld {
         Some(operation(&runtime.0, &worker, database_url.as_str()))
     }
 
+    /// Execute one enrichment job for the Launch-A bounds fixture.
     pub fn run_job(&self) {
         if let Some(result) = self.execute_async(|runtime, worker, _database_url| {
             runtime.block_on(async {
@@ -170,6 +178,7 @@ impl OverpassEnrichmentWorld {
         }
     }
 
+    /// Query the persisted POI count from the scenario database.
     pub fn query_poi_count(&self) -> Option<i64> {
         if self.is_skipped() {
             return None;
@@ -185,6 +194,7 @@ impl OverpassEnrichmentWorld {
         Some(count)
     }
 
+    /// Advance the fixture clock by the provided number of seconds.
     pub fn advance_clock_seconds(&self, seconds: i64) {
         if self.is_skipped() {
             return;

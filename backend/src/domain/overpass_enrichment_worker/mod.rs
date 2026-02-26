@@ -127,6 +127,9 @@ pub struct OverpassEnrichmentWorker {
 
 impl OverpassEnrichmentWorker {
     /// Build a worker using default runtime dependencies.
+    /// ```rust,ignore
+    /// let _worker = OverpassEnrichmentWorker::new(ports, clock, config);
+    /// ```
     pub fn new(
         ports: OverpassEnrichmentWorkerPorts,
         clock: Arc<dyn Clock>,
@@ -141,6 +144,9 @@ impl OverpassEnrichmentWorker {
     }
 
     /// Build a worker with injected runtime abstractions.
+    /// ```rust,ignore
+    /// let _worker = OverpassEnrichmentWorker::with_runtime(ports, clock, runtime, config);
+    /// ```
     pub fn with_runtime(
         ports: OverpassEnrichmentWorkerPorts,
         clock: Arc<dyn Clock>,
@@ -174,17 +180,21 @@ impl OverpassEnrichmentWorker {
     }
 
     /// Execute one enrichment job.
+    /// ```rust,ignore
+    /// let outcome = worker.process_job(request).await?;
+    /// assert!(outcome.attempts >= 1);
+    /// # Ok::<(), backend::domain::Error>(())
+    /// ```
     pub async fn process_job(
         &self,
         request: OverpassEnrichmentRequest,
     ) -> Result<OverpassEnrichmentJobOutcome, Error> {
-        let mut last_retryable_error: Option<OverpassEnrichmentSourceError> = None;
+        let max_attempts = self.config.max_attempts.max(1);
 
-        for attempt in 1..=self.config.max_attempts.max(1) {
+        for attempt in 1..=max_attempts {
             match self.run_single_attempt(&request).await {
                 Ok(report) => return self.persist_and_record_success(report, attempt).await,
-                Err(AttemptError::RetryableSource(error)) if attempt < self.config.max_attempts => {
-                    last_retryable_error = Some(error);
+                Err(AttemptError::RetryableSource(_error)) if attempt < max_attempts => {
                     let base_delay = self.retry_base_delay(attempt);
                     let jittered =
                         self.jitter
@@ -221,17 +231,9 @@ impl OverpassEnrichmentWorker {
             }
         }
 
-        self.record_failure_metric(
-            EnrichmentJobFailureKind::RetryExhausted,
-            self.config.max_attempts,
-        )
-        .await;
-        Err(Error::service_unavailable(format!(
-            "overpass retries exhausted: {}",
-            last_retryable_error
-                .map(|error| error.to_string())
-                .unwrap_or_else(|| "unknown retryable source error".to_owned())
-        )))
+        Err(Error::internal(
+            "unreachable enrichment control-flow state encountered",
+        ))
     }
 
     async fn run_single_attempt(
@@ -288,12 +290,11 @@ impl OverpassEnrichmentWorker {
         report: OverpassEnrichmentResponse,
         attempts: u32,
     ) -> Result<OverpassEnrichmentJobOutcome, Error> {
-        let records = report
-            .pois
-            .iter()
-            .cloned()
-            .map(map_overpass_poi)
-            .collect::<Vec<_>>();
+        let OverpassEnrichmentResponse {
+            pois,
+            transfer_bytes,
+        } = report;
+        let records = pois.into_iter().map(map_overpass_poi).collect::<Vec<_>>();
 
         if let Err(error) = self.poi_repository.upsert_pois(&records).await {
             self.record_failure_metric(EnrichmentJobFailureKind::PersistenceFailed, attempts)
@@ -304,14 +305,14 @@ impl OverpassEnrichmentWorker {
         self.record_success_metric(EnrichmentJobSuccess {
             attempt_count: attempts,
             persisted_poi_count: records.len(),
-            transfer_bytes: report.transfer_bytes,
+            transfer_bytes,
         })
         .await;
 
         Ok(OverpassEnrichmentJobOutcome {
             attempts,
             persisted_poi_count: records.len(),
-            transfer_bytes: report.transfer_bytes,
+            transfer_bytes,
         })
     }
 
@@ -368,7 +369,12 @@ fn map_retry_exhausted_error(error: OverpassEnrichmentSourceError) -> Error {
 }
 
 fn map_source_rejected_error(error: OverpassEnrichmentSourceError) -> Error {
-    Error::internal(format!("overpass call failed: {error}"))
+    match error {
+        OverpassEnrichmentSourceError::InvalidRequest { message } => {
+            Error::invalid_request(format!("overpass request rejected: {message}"))
+        }
+        other => Error::internal(format!("overpass call failed: {other}")),
+    }
 }
 
 fn map_persistence_error(error: OsmPoiRepositoryError, attempts: u32) -> Error {

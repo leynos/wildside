@@ -11,16 +11,16 @@ use backend::domain::ports::{
     OverpassEnrichmentResponse, OverpassEnrichmentSource, OverpassEnrichmentSourceError,
 };
 use backend::domain::{
-    BackoffJitter, EnrichmentSleeper, ErrorCode, OverpassEnrichmentJobOutcome,
-    OverpassEnrichmentWorker,
+    BackoffJitter, EnrichmentSleeper, OverpassEnrichmentJobOutcome, OverpassEnrichmentWorker,
 };
 use chrono::{DateTime, Local, TimeDelta, Utc};
 use mockable::Clock;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+use rstest_bdd_macros::ScenarioState;
 use std::time::Duration;
+use tokio::sync::{Mutex as AsyncMutex, Notify, mpsc};
 
 #[path = "overpass_enrichment_bdd/world.rs"]
 mod overpass_enrichment_world;
@@ -83,6 +83,15 @@ impl BackoffJitter for NoJitter {
 struct ScriptedOverpassSource {
     scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,
     calls: AtomicUsize,
+    active: AtomicUsize,
+    max_active: AtomicUsize,
+    blocking: Mutex<Option<BlockingControl>>,
+}
+
+#[derive(Clone)]
+struct BlockingControl {
+    entered: mpsc::UnboundedSender<usize>,
+    release: Arc<Notify>,
 }
 
 impl ScriptedOverpassSource {
@@ -92,11 +101,31 @@ impl ScriptedOverpassSource {
         Self {
             scripted: Mutex::new(scripted.into()),
             calls: AtomicUsize::new(0),
+            active: AtomicUsize::new(0),
+            max_active: AtomicUsize::new(0),
+            blocking: Mutex::new(None),
         }
     }
 
     fn call_count(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
+    }
+
+    fn max_active_count(&self) -> usize {
+        self.max_active.load(Ordering::SeqCst)
+    }
+
+    fn enable_blocking(&self) -> (mpsc::UnboundedReceiver<usize>, Arc<Notify>) {
+        let (entered_tx, entered_rx) = mpsc::unbounded_channel();
+        let release = Arc::new(Notify::new());
+        self.blocking
+            .lock()
+            .expect("blocking mutex")
+            .replace(BlockingControl {
+                entered: entered_tx,
+                release: release.clone(),
+            });
+        (entered_rx, release)
     }
 }
 
@@ -107,11 +136,25 @@ impl OverpassEnrichmentSource for ScriptedOverpassSource {
         _request: &OverpassEnrichmentRequest,
     ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let active_now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+        self.max_active.fetch_max(active_now, Ordering::SeqCst);
+
+        let blocking = self.blocking.lock().expect("blocking mutex").clone();
+        if let Some(BlockingControl { entered, release }) = blocking {
+            entered.send(active_now).expect("send entry");
+            release.notified().await;
+        }
+
+        self.active.fetch_sub(1, Ordering::SeqCst);
         self.scripted
             .lock()
             .expect("source script mutex")
             .pop_front()
-            .unwrap_or_else(|| Ok(OverpassEnrichmentResponse::default()))
+            .unwrap_or_else(|| {
+                Err(OverpassEnrichmentSourceError::invalid_request(
+                    "source script exhausted unexpectedly",
+                ))
+            })
     }
 }
 
@@ -172,226 +215,14 @@ struct OverpassEnrichmentWorld {
     last_result: Slot<Result<OverpassEnrichmentJobOutcome, backend::domain::Error>>,
     _database: Slot<DatabaseHandle>,
     setup_error: Slot<String>,
+    entered_rx: Slot<Arc<AsyncMutex<mpsc::UnboundedReceiver<usize>>>>,
+    release_notify: Slot<Arc<Notify>>,
+    concurrent_results: Slot<Vec<Result<OverpassEnrichmentJobOutcome, backend::domain::Error>>>,
 }
 
 #[fixture]
 fn world() -> OverpassEnrichmentWorld {
     OverpassEnrichmentWorld::default()
 }
-
-#[given("a Diesel-backed Overpass enrichment worker with successful source data")]
-fn a_diesel_backed_overpass_enrichment_worker_with_successful_source_data(
-    world: &OverpassEnrichmentWorld,
-) {
-    let source_data = vec![Ok(world.make_response(2, 768))];
-    world.setup_with_config_and_data(|_config| {}, source_data);
-}
-
-#[given("a Diesel-backed Overpass enrichment worker with exhausted request quota")]
-fn a_diesel_backed_overpass_enrichment_worker_with_exhausted_request_quota(
-    world: &OverpassEnrichmentWorld,
-) {
-    let source_data = vec![Ok(world.make_response(1, 128))];
-    world.setup_with_config_and_data(
-        |config| {
-            config.max_daily_requests = 0;
-        },
-        source_data,
-    );
-}
-
-#[given("a Diesel-backed Overpass enrichment worker with failing source responses")]
-fn a_diesel_backed_overpass_enrichment_worker_with_failing_source_responses(
-    world: &OverpassEnrichmentWorld,
-) {
-    let source_data = vec![
-        Err(OverpassEnrichmentSourceError::transport("boom-1")),
-        Err(OverpassEnrichmentSourceError::transport("boom-2")),
-    ];
-    world.setup_with_config_and_data(
-        |config| {
-            config.max_attempts = 1;
-            config.circuit_failure_threshold = 2;
-            config.circuit_open_cooldown = Duration::from_secs(300);
-        },
-        source_data,
-    );
-}
-
-#[given("a Diesel-backed Overpass enrichment worker with recovery source responses")]
-fn a_diesel_backed_overpass_enrichment_worker_with_recovery_source_responses(
-    world: &OverpassEnrichmentWorld,
-) {
-    let source_data = vec![
-        Err(OverpassEnrichmentSourceError::transport("boom-once")),
-        Ok(world.make_response(1, 256)),
-    ];
-    world.setup_with_config_and_data(
-        |config| {
-            config.max_attempts = 1;
-            config.circuit_failure_threshold = 1;
-            config.circuit_open_cooldown = Duration::from_secs(60);
-        },
-        source_data,
-    );
-}
-
-#[when("an enrichment job runs for launch-a bounds")]
-fn an_enrichment_job_runs_for_launch_a_bounds(world: &OverpassEnrichmentWorld) {
-    world.run_job();
-}
-
-#[when("two enrichment jobs run for launch-a bounds")]
-fn two_enrichment_jobs_run_for_launch_a_bounds(world: &OverpassEnrichmentWorld) {
-    world.run_job();
-    world.run_job();
-}
-
-#[when("a third enrichment job runs for launch-a bounds")]
-fn a_third_enrichment_job_runs_for_launch_a_bounds(world: &OverpassEnrichmentWorld) {
-    world.run_job();
-}
-
-#[when("one enrichment job fails for launch-a bounds")]
-fn one_enrichment_job_fails_for_launch_a_bounds(world: &OverpassEnrichmentWorld) {
-    world.run_job();
-    if world.skip_if_needed() {
-        return;
-    }
-    let result = world.last_result.get().expect("last result should exist");
-    result.as_ref().expect_err("first job should fail");
-}
-
-#[when("the worker clock advances by 61 seconds")]
-fn the_worker_clock_advances_by_61_seconds(world: &OverpassEnrichmentWorld) {
-    world.advance_clock_seconds(61);
-}
-
-#[then("the worker reports a successful enrichment outcome")]
-fn the_worker_reports_a_successful_enrichment_outcome(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-
-    let result = world.last_result.get().expect("last result should be set");
-    let outcome = result.as_ref().expect("job should succeed");
-    assert!(outcome.persisted_poi_count >= 1);
-    assert!(outcome.transfer_bytes >= 1);
-}
-
-#[then("enrichment POIs are persisted")]
-fn enrichment_pois_are_persisted(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-    let poi_count = world
-        .query_poi_count()
-        .expect("POI count should be available");
-    assert!(poi_count >= 1);
-}
-
-#[then("an enrichment success metric is recorded")]
-fn an_enrichment_success_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-
-    let metrics = world.metrics.get().expect("metrics should be set");
-    assert_eq!(metrics.success_count(), 1);
-}
-
-#[then("the worker fails with service unavailable")]
-fn the_worker_fails_with_service_unavailable(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-
-    let result = world.last_result.get().expect("last result should be set");
-    let error = result.as_ref().expect_err("job should fail");
-    assert_eq!(error.code(), ErrorCode::ServiceUnavailable);
-}
-
-#[then("no Overpass source calls were made")]
-fn no_overpass_source_calls_were_made(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-    let source = world.source.get().expect("source should be set");
-    assert_eq!(source.call_count(), 0);
-}
-
-#[then("an enrichment quota failure metric is recorded")]
-fn an_enrichment_quota_failure_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-
-    let metrics = world.metrics.get().expect("metrics should be set");
-    assert!(
-        metrics
-            .failure_kinds()
-            .contains(&EnrichmentJobFailureKind::QuotaRequestLimit),
-        "expected quota failure metric kind"
-    );
-}
-
-#[then("the third job fails fast with service unavailable")]
-fn the_third_job_fails_fast_with_service_unavailable(world: &OverpassEnrichmentWorld) {
-    the_worker_fails_with_service_unavailable(world);
-}
-
-#[then("the source call count is two")]
-fn the_source_call_count_is_two(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-    let source = world.source.get().expect("source should be set");
-    assert_eq!(source.call_count(), 2);
-}
-
-#[then("an enrichment circuit-open metric is recorded")]
-fn an_enrichment_circuit_open_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.skip_if_needed() {
-        return;
-    }
-
-    let metrics = world.metrics.get().expect("metrics should be set");
-    assert!(
-        metrics
-            .failure_kinds()
-            .contains(&EnrichmentJobFailureKind::CircuitOpen),
-        "expected circuit-open failure metric"
-    );
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment persists fetched POIs"
-)]
-fn overpass_enrichment_persists_fetched_pois(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment respects request quota limits"
-)]
-fn overpass_enrichment_respects_request_quota_limits(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment opens the circuit after repeated failures"
-)]
-fn overpass_enrichment_opens_the_circuit_after_repeated_failures(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment recovers after circuit cooldown"
-)]
-fn overpass_enrichment_recovers_after_circuit_cooldown(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
+#[path = "overpass_enrichment_bdd/steps.rs"]
+mod overpass_enrichment_steps;

@@ -78,6 +78,29 @@ pub struct WorkerPolicyState {
 
 impl WorkerPolicyState {
     /// Build policy state rooted at the provided clock instant.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use chrono::{TimeZone, Utc};
+    /// use backend::domain::overpass_enrichment_worker::policy::{
+    ///     CircuitBreakerConfig, DailyQuota, WorkerPolicyState,
+    /// };
+    ///
+    /// let now = Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0).single().expect("valid");
+    /// let _state = WorkerPolicyState::new(
+    ///     now,
+    ///     DailyQuota {
+    ///         max_requests_per_day: 100,
+    ///         max_transfer_bytes_per_day: 1_024,
+    ///     },
+    ///     CircuitBreakerConfig {
+    ///         failure_threshold: 3,
+    ///         open_cooldown: Duration::from_secs(30),
+    ///     },
+    /// );
+    /// ```
     pub fn new(now: DateTime<Utc>, quota: DailyQuota, circuit: CircuitBreakerConfig) -> Self {
         Self {
             quota,
@@ -95,6 +118,35 @@ impl WorkerPolicyState {
     }
 
     /// Attempt to admit one source call.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use chrono::{TimeZone, Utc};
+    /// use backend::domain::overpass_enrichment_worker::policy::{
+    ///     AdmissionDecision, CircuitBreakerConfig, DailyQuota, WorkerPolicyState,
+    /// };
+    ///
+    /// let now = Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0).single().expect("valid");
+    /// let mut state = WorkerPolicyState::new(
+    ///     now,
+    ///     DailyQuota {
+    ///         max_requests_per_day: 1,
+    ///         max_transfer_bytes_per_day: 1_024,
+    ///     },
+    ///     CircuitBreakerConfig {
+    ///         failure_threshold: 2,
+    ///         open_cooldown: Duration::from_secs(30),
+    ///     },
+    /// );
+    ///
+    /// assert_eq!(state.admit_call(now), AdmissionDecision::Allowed);
+    /// assert!(matches!(
+    ///     state.admit_call(now),
+    ///     AdmissionDecision::DeniedByQuota(_)
+    /// ));
+    /// ```
     pub fn admit_call(&mut self, now: DateTime<Utc>) -> AdmissionDecision {
         self.reset_day_if_needed(now);
 
@@ -135,6 +187,31 @@ impl WorkerPolicyState {
     }
 
     /// Record a successful source call.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use chrono::{TimeZone, Utc};
+    /// use backend::domain::overpass_enrichment_worker::policy::{
+    ///     CircuitBreakerConfig, DailyQuota, WorkerPolicyState,
+    /// };
+    ///
+    /// let now = Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0).single().expect("valid");
+    /// let mut state = WorkerPolicyState::new(
+    ///     now,
+    ///     DailyQuota {
+    ///         max_requests_per_day: 10,
+    ///         max_transfer_bytes_per_day: 1_024,
+    ///     },
+    ///     CircuitBreakerConfig {
+    ///         failure_threshold: 1,
+    ///         open_cooldown: Duration::from_secs(30),
+    ///     },
+    /// );
+    /// let _ = state.admit_call(now);
+    /// state.record_success(now, 512);
+    /// ```
     pub fn record_success(&mut self, now: DateTime<Utc>, transfer_bytes: u64) {
         self.reset_day_if_needed(now);
         self.transfer_bytes_used = self.transfer_bytes_used.saturating_add(transfer_bytes);
@@ -145,6 +222,32 @@ impl WorkerPolicyState {
     }
 
     /// Record a failed source call.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use chrono::{TimeZone, Utc};
+    /// use backend::domain::overpass_enrichment_worker::policy::{
+    ///     AdmissionDecision, CircuitBreakerConfig, DailyQuota, WorkerPolicyState,
+    /// };
+    ///
+    /// let now = Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0).single().expect("valid");
+    /// let mut state = WorkerPolicyState::new(
+    ///     now,
+    ///     DailyQuota {
+    ///         max_requests_per_day: 10,
+    ///         max_transfer_bytes_per_day: 1_024,
+    ///     },
+    ///     CircuitBreakerConfig {
+    ///         failure_threshold: 1,
+    ///         open_cooldown: Duration::from_secs(30),
+    ///     },
+    /// );
+    /// assert_eq!(state.admit_call(now), AdmissionDecision::Allowed);
+    /// state.record_failure(now);
+    /// assert!(matches!(state.admit_call(now), AdmissionDecision::DeniedByCircuit));
+    /// ```
     pub fn record_failure(&mut self, now: DateTime<Utc>) {
         self.reset_day_if_needed(now);
 
@@ -178,7 +281,7 @@ impl WorkerPolicyState {
 
     fn reset_day_if_needed(&mut self, now: DateTime<Utc>) {
         let now_day = now.date_naive();
-        if now_day != self.quota_day {
+        if now_day > self.quota_day {
             self.quota_day = now_day;
             self.requests_used = 0;
             self.transfer_bytes_used = 0;
