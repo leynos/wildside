@@ -155,13 +155,14 @@ impl SourceUrl {
     /// assert_eq!(source_url.as_str(), "https://example.test/launch.osm.pbf"); // URL is retained.
     /// ```
     pub fn new(url: String) -> Result<Self, Error> {
-        if url.trim().is_empty() {
+        let trimmed = url.trim();
+        if trimmed.is_empty() {
             return Err(Error::invalid_request("sourceUrl must not be empty"));
         }
-        if Url::parse(&url).is_err() {
+        if Url::parse(trimmed).is_err() {
             return Err(Error::invalid_request("sourceUrl must be a valid URL"));
         }
-        Ok(Self(url))
+        Ok(Self(trimmed.to_owned()))
     }
 
     /// Borrow the URL string.

@@ -74,6 +74,20 @@ fn validate_request_trims_geofence_id() {
 }
 
 #[rstest]
+fn validate_request_trims_source_url() {
+    let request = OsmIngestionRequest {
+        source_url: "  https://example.test/launch.osm.pbf  ".to_owned(),
+        ..request()
+    };
+
+    let validated = validate_request(&request).expect("request should be valid");
+    assert_eq!(
+        validated.source_url.as_str(),
+        "https://example.test/launch.osm.pbf"
+    );
+}
+
+#[rstest]
 #[case::nan_longitude(
     [f64::NAN, 55.90, -3.10, 56.00],
     "geofence longitude values must be finite and within [-180, 180]"
