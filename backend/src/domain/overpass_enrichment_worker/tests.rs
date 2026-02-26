@@ -159,27 +159,31 @@ struct MetricsStub {
     successes: Mutex<Vec<EnrichmentJobSuccess>>,
     failures: Mutex<Vec<EnrichmentJobFailure>>,
 }
+
+impl MetricsStub {
+    fn record<T: Clone>(
+        &self,
+        entries: &Mutex<Vec<T>>,
+        payload: &T,
+    ) -> Result<(), EnrichmentJobMetricsError> {
+        entries.lock().expect("metrics mutex").push(payload.clone());
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl EnrichmentJobMetrics for MetricsStub {
     async fn record_success(
         &self,
         payload: &EnrichmentJobSuccess,
     ) -> Result<(), EnrichmentJobMetricsError> {
-        self.successes
-            .lock()
-            .expect("metrics mutex")
-            .push(payload.clone());
-        Ok(())
+        self.record(&self.successes, payload)
     }
     async fn record_failure(
         &self,
         payload: &EnrichmentJobFailure,
     ) -> Result<(), EnrichmentJobMetricsError> {
-        self.failures
-            .lock()
-            .expect("metrics mutex")
-            .push(payload.clone());
-        Ok(())
+        self.record(&self.failures, payload)
     }
 }
 
