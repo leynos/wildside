@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use backend::domain::ports::{OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassPoi};
+use backend::domain::ports::{
+    OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassEnrichmentSourceError,
+    OverpassPoi,
+};
 use backend::domain::{
     OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
     OverpassEnrichmentWorkerRuntime,
@@ -25,12 +28,7 @@ impl OverpassEnrichmentWorld {
     pub fn setup_worker(
         &self,
         config: OverpassEnrichmentWorkerConfig,
-        source_data: Vec<
-            Result<
-                OverpassEnrichmentResponse,
-                backend::domain::ports::OverpassEnrichmentSourceError,
-            >,
-        >,
+        source_data: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
     ) {
         let runtime = Runtime::new().expect("create runtime");
 
@@ -89,6 +87,16 @@ impl OverpassEnrichmentWorld {
         self._database.set(DatabaseHandle(Arc::new(temp_db)));
     }
 
+    pub fn setup_with_config_and_data(
+        &self,
+        configure: impl FnOnce(&mut OverpassEnrichmentWorkerConfig),
+        source_data: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+    ) {
+        let mut config = self.default_config();
+        configure(&mut config);
+        self.setup_worker(config, source_data);
+    }
+
     pub fn default_config(&self) -> OverpassEnrichmentWorkerConfig {
         OverpassEnrichmentWorkerConfig {
             max_concurrent_calls: 2,
@@ -123,6 +131,14 @@ impl OverpassEnrichmentWorld {
 
     pub fn is_skipped(&self) -> bool {
         self.setup_error.get().is_some()
+    }
+
+    pub fn skip_if_needed(&self) -> bool {
+        if self.is_skipped() {
+            eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+            return true;
+        }
+        false
     }
 
     pub fn execute_async<T>(

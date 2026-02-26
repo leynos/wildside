@@ -184,47 +184,56 @@ fn a_diesel_backed_overpass_enrichment_worker_with_successful_source_data(
     world: &OverpassEnrichmentWorld,
 ) {
     let source_data = vec![Ok(world.make_response(2, 768))];
-    world.setup_worker(world.default_config(), source_data);
+    world.setup_with_config_and_data(|_config| {}, source_data);
 }
 
 #[given("a Diesel-backed Overpass enrichment worker with exhausted request quota")]
 fn a_diesel_backed_overpass_enrichment_worker_with_exhausted_request_quota(
     world: &OverpassEnrichmentWorld,
 ) {
-    let mut config = world.default_config();
-    config.max_daily_requests = 0;
     let source_data = vec![Ok(world.make_response(1, 128))];
-    world.setup_worker(config, source_data);
+    world.setup_with_config_and_data(
+        |config| {
+            config.max_daily_requests = 0;
+        },
+        source_data,
+    );
 }
 
 #[given("a Diesel-backed Overpass enrichment worker with failing source responses")]
 fn a_diesel_backed_overpass_enrichment_worker_with_failing_source_responses(
     world: &OverpassEnrichmentWorld,
 ) {
-    let mut config = world.default_config();
-    config.max_attempts = 1;
-    config.circuit_failure_threshold = 2;
-    config.circuit_open_cooldown = Duration::from_secs(300);
     let source_data = vec![
         Err(OverpassEnrichmentSourceError::transport("boom-1")),
         Err(OverpassEnrichmentSourceError::transport("boom-2")),
     ];
-    world.setup_worker(config, source_data);
+    world.setup_with_config_and_data(
+        |config| {
+            config.max_attempts = 1;
+            config.circuit_failure_threshold = 2;
+            config.circuit_open_cooldown = Duration::from_secs(300);
+        },
+        source_data,
+    );
 }
 
 #[given("a Diesel-backed Overpass enrichment worker with recovery source responses")]
 fn a_diesel_backed_overpass_enrichment_worker_with_recovery_source_responses(
     world: &OverpassEnrichmentWorld,
 ) {
-    let mut config = world.default_config();
-    config.max_attempts = 1;
-    config.circuit_failure_threshold = 1;
-    config.circuit_open_cooldown = Duration::from_secs(60);
     let source_data = vec![
         Err(OverpassEnrichmentSourceError::transport("boom-once")),
         Ok(world.make_response(1, 256)),
     ];
-    world.setup_worker(config, source_data);
+    world.setup_with_config_and_data(
+        |config| {
+            config.max_attempts = 1;
+            config.circuit_failure_threshold = 1;
+            config.circuit_open_cooldown = Duration::from_secs(60);
+        },
+        source_data,
+    );
 }
 
 #[when("an enrichment job runs for launch-a bounds")]
@@ -246,7 +255,7 @@ fn a_third_enrichment_job_runs_for_launch_a_bounds(world: &OverpassEnrichmentWor
 #[when("one enrichment job fails for launch-a bounds")]
 fn one_enrichment_job_fails_for_launch_a_bounds(world: &OverpassEnrichmentWorld) {
     world.run_job();
-    if world.is_skipped() {
+    if world.skip_if_needed() {
         return;
     }
     let result = world.last_result.get().expect("last result should exist");
@@ -260,8 +269,7 @@ fn the_worker_clock_advances_by_61_seconds(world: &OverpassEnrichmentWorld) {
 
 #[then("the worker reports a successful enrichment outcome")]
 fn the_worker_reports_a_successful_enrichment_outcome(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
 
@@ -273,17 +281,18 @@ fn the_worker_reports_a_successful_enrichment_outcome(world: &OverpassEnrichment
 
 #[then("enrichment POIs are persisted")]
 fn enrichment_pois_are_persisted(world: &OverpassEnrichmentWorld) {
-    let Some(poi_count) = world.query_poi_count() else {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
-    };
+    }
+    let poi_count = world
+        .query_poi_count()
+        .expect("POI count should be available");
     assert!(poi_count >= 1);
 }
 
 #[then("an enrichment success metric is recorded")]
 fn an_enrichment_success_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
 
@@ -293,8 +302,7 @@ fn an_enrichment_success_metric_is_recorded(world: &OverpassEnrichmentWorld) {
 
 #[then("the worker fails with service unavailable")]
 fn the_worker_fails_with_service_unavailable(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
 
@@ -305,8 +313,7 @@ fn the_worker_fails_with_service_unavailable(world: &OverpassEnrichmentWorld) {
 
 #[then("no Overpass source calls were made")]
 fn no_overpass_source_calls_were_made(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
     let source = world.source.get().expect("source should be set");
@@ -315,8 +322,7 @@ fn no_overpass_source_calls_were_made(world: &OverpassEnrichmentWorld) {
 
 #[then("an enrichment quota failure metric is recorded")]
 fn an_enrichment_quota_failure_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
 
@@ -336,8 +342,7 @@ fn the_third_job_fails_fast_with_service_unavailable(world: &OverpassEnrichmentW
 
 #[then("the source call count is two")]
 fn the_source_call_count_is_two(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
     let source = world.source.get().expect("source should be set");
@@ -346,8 +351,7 @@ fn the_source_call_count_is_two(world: &OverpassEnrichmentWorld) {
 
 #[then("an enrichment circuit-open metric is recorded")]
 fn an_enrichment_circuit_open_metric_is_recorded(world: &OverpassEnrichmentWorld) {
-    if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+    if world.skip_if_needed() {
         return;
     }
 
