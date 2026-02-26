@@ -12,6 +12,10 @@
 //! library provides built-in process-exit shutdown.
 
 #[cfg(unix)]
+use std::ffi::CString;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
 use std::path::PathBuf;
 #[cfg(unix)]
 use std::sync::OnceLock;
@@ -19,10 +23,16 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 
+#[cfg(unix)]
+use color_eyre::eyre::eyre;
+#[cfg(unix)]
+use pg_embedded_setup_unpriv::BootstrapError;
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 
 const SHARED_CLUSTER_RETRIES: usize = 5;
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
+#[cfg(unix)]
+const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
@@ -31,6 +41,57 @@ static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 /// Data directory for re-reading `postmaster.pid` at exit time.
 #[cfg(unix)]
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+#[cfg(unix)]
+static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
+
+#[cfg(unix)]
+fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
+    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+        return Ok(());
+    }
+
+    let lock_path = std::env::temp_dir().join(SHARED_CLUSTER_LOCK_FILE);
+    let lock_path_bytes = lock_path.as_os_str().as_bytes();
+    let lock_path_cstring = CString::new(lock_path_bytes).map_err(|error| {
+        BootstrapError::from(eyre!(
+            "encode shared cluster lock path '{}': {error}",
+            lock_path.display()
+        ))
+    })?;
+
+    // SAFETY: `lock_path_cstring` is NUL-terminated and lives for the call.
+    let fd = unsafe {
+        libc::open(
+            lock_path_cstring.as_ptr(),
+            libc::O_CREAT | libc::O_RDWR,
+            0o600,
+        )
+    };
+    if fd < 0 {
+        let error = std::io::Error::last_os_error();
+        return Err(BootstrapError::from(eyre!(
+            "open shared cluster lock file '{}': {error}",
+            lock_path.display()
+        )));
+    }
+
+    // SAFETY: `fd` is a valid descriptor from `open` above.
+    let lock_result = unsafe { libc::flock(fd, libc::LOCK_EX) };
+    if lock_result != 0 {
+        let error = std::io::Error::last_os_error();
+        // SAFETY: `fd` is valid and should be closed on lock failure.
+        unsafe {
+            libc::close(fd);
+        }
+        return Err(BootstrapError::from(eyre!(
+            "acquire shared cluster lock '{}': {error}",
+            lock_path.display()
+        )));
+    }
+
+    let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
+    Ok(())
+}
 
 /// Returns the shared cluster handle and registers an atexit handler to stop
 /// PostgreSQL when the test binary exits.
@@ -50,6 +111,8 @@ static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// ```
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
+    #[cfg(unix)]
+    acquire_shared_cluster_process_lock()?;
     for attempt in 1..=SHARED_CLUSTER_RETRIES {
         match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
             Ok(handle) => {
