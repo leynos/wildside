@@ -8,6 +8,7 @@
 //! - **queue**: Apalis-backed job queue (stub implementation pending)
 //! - **metrics**: Prometheus-backed metrics exporters (feature-gated)
 //! - **osm_source**: OSM PBF source adapter backed by `wildside-data`
+//! - **overpass**: HTTP adapter for enrichment POI fetches via Overpass
 //!
 //! Adapters are thin translators that convert between domain types and
 //! infrastructure-specific representations. They contain no business logic.
@@ -16,5 +17,6 @@ pub mod cache;
 #[cfg(feature = "metrics")]
 pub mod metrics;
 pub mod osm_source;
+pub mod overpass;
 pub mod persistence;
 pub mod queue;
