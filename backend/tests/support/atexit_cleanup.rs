@@ -113,7 +113,8 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
     #[cfg(unix)]
     acquire_shared_cluster_process_lock()?;
-    for attempt in 1..=SHARED_CLUSTER_RETRIES {
+    let mut attempt = 1;
+    loop {
         match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
             Ok(handle) => {
                 #[cfg(unix)]
@@ -121,15 +122,14 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
                 return Ok(handle);
             }
             Err(error) => {
-                if attempt == SHARED_CLUSTER_RETRIES {
+                if attempt >= SHARED_CLUSTER_RETRIES {
                     return Err(error);
                 }
                 std::thread::sleep(SHARED_CLUSTER_RETRY_DELAY);
+                attempt += 1;
             }
         }
     }
-
-    unreachable!("retry loop should return success or final error")
 }
 
 /// Ensures `PG_PASSWORD` is set to a stable value so the password remains
