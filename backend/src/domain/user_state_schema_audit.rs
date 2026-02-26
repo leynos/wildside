@@ -107,64 +107,40 @@ impl UserStateSchemaAuditReport {
     /// # Examples
     ///
     /// ```rust
-    /// use backend::domain::{MigrationDecision, UserStateSchemaAuditReport};
+    /// use backend::domain::{EntitySchemaCoverage, MigrationDecision, UserStateSchemaAuditReport};
     /// use backend::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaTable};
     ///
     /// let diagram = SchemaDiagram {
-    ///     tables: vec![
-    ///         SchemaTable {
-    ///             name: "users".to_owned(),
-    ///             columns: vec![
-    ///                 SchemaColumn {
-    ///                     name: "id".to_owned(),
-    ///                     data_type: "uuid".to_owned(),
-    ///                     is_primary_key: true,
-    ///                     is_nullable: false,
-    ///                 },
-    ///                 SchemaColumn {
-    ///                     name: "display_name".to_owned(),
-    ///                     data_type: "text".to_owned(),
-    ///                     is_primary_key: false,
-    ///                     is_nullable: false,
-    ///                 },
-    ///             ],
-    ///         },
-    ///         SchemaTable {
-    ///             name: "user_preferences".to_owned(),
-    ///             columns: vec![
-    ///                 SchemaColumn {
-    ///                     name: "user_id".to_owned(),
-    ///                     data_type: "uuid".to_owned(),
-    ///                     is_primary_key: true,
-    ///                     is_nullable: false,
-    ///                 },
-    ///                 SchemaColumn {
-    ///                     name: "interest_theme_ids".to_owned(),
-    ///                     data_type: "uuid[]".to_owned(),
-    ///                     is_primary_key: false,
-    ///                     is_nullable: false,
-    ///                 },
-    ///                 SchemaColumn {
-    ///                     name: "revision".to_owned(),
-    ///                     data_type: "int4".to_owned(),
-    ///                     is_primary_key: false,
-    ///                     is_nullable: false,
-    ///                 },
-    ///             ],
-    ///         },
-    ///     ],
+    ///     tables: vec![SchemaTable {
+    ///         name: "users".to_owned(),
+    ///         columns: vec![
+    ///             SchemaColumn {
+    ///                 name: "id".to_owned(),
+    ///                 data_type: "uuid".to_owned(),
+    ///                 is_primary_key: true,
+    ///                 is_nullable: false,
+    ///             },
+    ///             SchemaColumn {
+    ///                 name: "display_name".to_owned(),
+    ///                 data_type: "text".to_owned(),
+    ///                 is_primary_key: false,
+    ///                 is_nullable: false,
+    ///             },
+    ///         ],
+    ///     }],
     ///     relationships: vec![],
     /// };
     ///
     /// let report = UserStateSchemaAuditReport::evaluate(&diagram);
+    /// assert_eq!(report.users_coverage, EntitySchemaCoverage::Covered);
     /// assert_eq!(
     ///     report.interests_storage_migration,
-    ///     MigrationDecision::NotRequired
+    ///     MigrationDecision::Required
     /// );
     /// ```
     pub fn evaluate(diagram: &SchemaDiagram) -> Self {
         let users_coverage = assess_users_coverage(diagram);
-        let profile_coverage = users_coverage;
+        let profile_coverage = assess_profile_coverage(diagram);
         let login_coverage = assess_login_coverage(diagram);
         let interests_storage_coverage = assess_interests_storage_coverage(diagram);
         let supports_interests_revision_tracking =
@@ -196,11 +172,49 @@ pub struct UserStateSchemaAuditService;
 
 impl UserStateSchemaAuditService {
     /// Construct a new audit service.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::{UserStateSchemaAuditReport, UserStateSchemaAuditService};
+    /// use backend::domain::ports::{FixtureSchemaSnapshotRepository, SchemaSnapshotRepository};
+    ///
+    /// let service = UserStateSchemaAuditService::new();
+    /// let repository = FixtureSchemaSnapshotRepository;
+    /// let repository: &dyn SchemaSnapshotRepository = &repository;
+    ///
+    /// let report: UserStateSchemaAuditReport = service
+    ///     .audit(repository)
+    ///     .expect("fixture schema audit should succeed");
+    ///
+    /// assert!(report.profile_storage_migration.is_required());
+    /// ```
     pub fn new() -> Self {
         Self
     }
 
     /// Load a schema snapshot and evaluate user-state coverage.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::{
+    ///     UserStateSchemaAuditReport, UserStateSchemaAuditService, audit_user_state_schema_coverage,
+    /// };
+    /// use backend::domain::ports::{FixtureSchemaSnapshotRepository, SchemaSnapshotRepository};
+    ///
+    /// let service = UserStateSchemaAuditService::new();
+    /// let repository = FixtureSchemaSnapshotRepository;
+    /// let repository: &dyn SchemaSnapshotRepository = &repository;
+    ///
+    /// let service_report: UserStateSchemaAuditReport = service
+    ///     .audit(repository)
+    ///     .expect("service-backed schema audit should succeed");
+    /// let helper_report = audit_user_state_schema_coverage(repository)
+    ///     .expect("helper-backed schema audit should succeed");
+    ///
+    /// assert_eq!(service_report, helper_report);
+    /// ```
     pub fn audit(
         &self,
         repository: &dyn SchemaSnapshotRepository,
@@ -230,6 +244,14 @@ pub fn audit_user_state_schema_coverage(
 }
 
 fn assess_users_coverage(diagram: &SchemaDiagram) -> EntitySchemaCoverage {
+    if table_has_columns(diagram, "users", &["id", "display_name"]) {
+        EntitySchemaCoverage::Covered
+    } else {
+        EntitySchemaCoverage::Missing
+    }
+}
+
+fn assess_profile_coverage(diagram: &SchemaDiagram) -> EntitySchemaCoverage {
     if table_has_columns(diagram, "users", &["id", "display_name"]) {
         EntitySchemaCoverage::Covered
     } else {
@@ -290,7 +312,11 @@ fn assess_interests_revision_tracking(
         InterestsStorageCoverage::CanonicalJoinTable => {
             table_has_column(diagram, "user_interest_themes", "revision")
         }
-        InterestsStorageCoverage::Missing | InterestsStorageCoverage::DualModel => false,
+        InterestsStorageCoverage::DualModel => {
+            table_has_column(diagram, "user_preferences", "revision")
+                || table_has_column(diagram, "user_interest_themes", "revision")
+        }
+        InterestsStorageCoverage::Missing => false,
     }
 }
 

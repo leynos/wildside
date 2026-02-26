@@ -23,8 +23,8 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
         report.interests_storage_coverage,
         InterestsStorageCoverage::DualModel
     );
-    assert!(!report.supports_interests_revision_tracking);
-    assert!(!report.supports_update_conflict_handling);
+    assert!(report.supports_interests_revision_tracking);
+    assert!(report.supports_update_conflict_handling);
     assert_eq!(
         report.profile_storage_migration,
         MigrationDecision::NotRequired
@@ -35,11 +35,11 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        MigrationDecision::Required
+        MigrationDecision::NotRequired
     );
     assert_eq!(
         report.update_conflict_handling_migration,
-        MigrationDecision::Required
+        MigrationDecision::NotRequired
     );
 }
 
@@ -168,7 +168,7 @@ fn canonical_join_interests_with_revision_need_no_interests_migrations() {
 #[case(true, false)]
 #[case(false, true)]
 #[case(true, true)]
-fn dual_model_interests_do_not_track_revisions(
+fn dual_model_interests_revision_tracking_follows_schema(
     #[case] preferences_has_revision: bool,
     #[case] join_has_revision: bool,
 ) {
@@ -181,14 +181,30 @@ fn dual_model_interests_do_not_track_revisions(
         report.interests_storage_coverage,
         InterestsStorageCoverage::DualModel
     );
-    assert!(!report.supports_interests_revision_tracking);
+    let expects_revision_tracking = preferences_has_revision || join_has_revision;
+    assert_eq!(
+        report.supports_interests_revision_tracking,
+        expects_revision_tracking
+    );
     assert_eq!(
         report.interests_storage_migration,
         MigrationDecision::Required
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        MigrationDecision::Required
+        if expects_revision_tracking {
+            MigrationDecision::NotRequired
+        } else {
+            MigrationDecision::Required
+        }
+    );
+    assert_eq!(
+        report.update_conflict_handling_migration,
+        if expects_revision_tracking {
+            MigrationDecision::NotRequired
+        } else {
+            MigrationDecision::Required
+        }
     );
 }
 

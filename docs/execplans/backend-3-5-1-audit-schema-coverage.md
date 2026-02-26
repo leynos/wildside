@@ -315,7 +315,7 @@ Work from repository root:
 Use a branch-safe log suffix:
 
 ```bash
-BRANCH_SAFE="$(git branch --show | tr '/' '-')"
+BRANCH_SAFE="$(git branch --show-current | tr '/' '-')"
 ```
 
 Run focused tests while iterating:

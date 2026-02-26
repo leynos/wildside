@@ -737,9 +737,10 @@ services.
 > users/profile storage is covered by the `users` table, and interests storage
 > is ambiguous because both `user_preferences.interest_theme_ids` and
 > `user_interest_themes` are present. Based on that audit, migrations are not
-> required for the current minimal profile model, but are required for
-> interests storage canonicalization, interests revision tracking, and
-> interests stale-write conflict handling. The canonical audit record is
+> required for the current minimal profile model, and interests storage
+> canonicalization still requires migration while baseline revision tracking and
+> stale-write conflict handling are already supported by
+> `user_preferences.revision`. The canonical audit record is
 > documented in `docs/user-state-schema-audit-3-5-1.md`.
 
 For screen readers: The following sequence diagram shows the idempotent offline

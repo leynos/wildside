@@ -162,11 +162,11 @@ fn interests_migration_decisions_are_required(world: &mut UserStateSchemaAuditWo
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        MigrationDecision::Required
+        MigrationDecision::NotRequired
     );
     assert_eq!(
         report.update_conflict_handling_migration,
-        MigrationDecision::Required
+        MigrationDecision::NotRequired
     );
 }
 
