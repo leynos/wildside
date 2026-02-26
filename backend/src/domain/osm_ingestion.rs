@@ -43,12 +43,12 @@ impl GeofenceBounds {
     /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Ordered bounds persist.
     /// ```
     pub fn new(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> Result<Self, Error> {
-        if !validation::valid_longitude(min_lng) || !validation::valid_longitude(max_lng) {
+        if !validation::is_valid_longitude(min_lng) || !validation::is_valid_longitude(max_lng) {
             return Err(Error::invalid_request(
                 "geofence longitude values must be finite and within [-180, 180]",
             ));
         }
-        if !validation::valid_latitude(min_lat) || !validation::valid_latitude(max_lat) {
+        if !validation::is_valid_latitude(min_lat) || !validation::is_valid_latitude(max_lat) {
             return Err(Error::invalid_request(
                 "geofence latitude values must be finite and within [-90, 90]",
             ));
@@ -200,12 +200,12 @@ impl Coordinate {
     /// assert_eq!(coordinate.longitude(), -3.20); // Longitude is retained.
     /// ```
     pub fn new(longitude: f64, latitude: f64) -> Result<Self, Error> {
-        if !validation::valid_longitude(longitude) {
+        if !validation::is_valid_longitude(longitude) {
             return Err(Error::invalid_request(
                 "longitude must be finite and within [-180, 180]",
             ));
         }
-        if !validation::valid_latitude(latitude) {
+        if !validation::is_valid_latitude(latitude) {
             return Err(Error::invalid_request(
                 "latitude must be finite and within [-90, 90]",
             ));

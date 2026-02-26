@@ -8,7 +8,7 @@ pub(super) fn is_valid_digest(digest: &str) -> bool {
 }
 
 #[rustfmt::skip]
-pub(super) fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
+pub(super) fn is_valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
 
 #[rustfmt::skip]
-pub(super) fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
+pub(super) fn is_valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
