@@ -57,21 +57,16 @@ fn new_test_database_name() -> String {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// # use backend::domain::ports::UserPersistenceError;
-/// # use pg_embedded_setup_unpriv::{ClusterHandle, TemporaryDatabase};
-/// # use crate::support::embedded_postgres::{
-/// #     provision_template_database_attempt, TEMPLATE_PROVISION_RETRIES,
-/// # };
-/// # let cluster: ClusterHandle = unimplemented!("fixture cluster handle");
-/// let attempt = 1;
-/// assert!(attempt <= TEMPLATE_PROVISION_RETRIES);
+/// ```text
+/// attempt = 1
+/// provision_template_database_attempt(&cluster, attempt)
+///   -> Ok(TemporaryDatabase { name: "test_1234...", .. })
 ///
-/// let outcome: Result<TemporaryDatabase, UserPersistenceError> =
-///     provision_template_database_attempt(&cluster, attempt);
-///
-/// // `Ok` when template lookup and clone both succeed; otherwise `Err`.
-/// assert!(outcome.is_ok() || outcome.is_err());
+/// attempt = 1
+/// provision_template_database_attempt(&cluster, attempt)
+///   -> Err(UserPersistenceError::query(
+///        "template check: attempt 1/5: ..."
+///      ))
 /// ```
 fn provision_template_database_attempt(
     cluster: &ClusterHandle,
