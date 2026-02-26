@@ -13,13 +13,15 @@ use url::Url;
 
 use crate::domain::Error;
 use crate::domain::ports::{
-    OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRecord,
-    OsmIngestionProvenanceRepository, OsmIngestionProvenanceRepositoryError, OsmIngestionRequest,
-    OsmIngestionStatus, OsmPoiIngestionRecord, OsmSourcePoi, OsmSourceRepository,
+    OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRepository,
+    OsmIngestionRequest, OsmIngestionStatus, OsmPoiIngestionRecord, OsmSourcePoi,
+    OsmSourceRepository,
 };
 
 #[path = "osm_ingestion_mapping.rs"]
 mod mapping;
+#[path = "osm_ingestion_service_helpers.rs"]
+mod service_helpers;
 #[path = "osm_ingestion_validation.rs"]
 mod validation;
 
@@ -238,6 +240,25 @@ pub struct OsmIngestionCommandService<S, R> {
 
 impl<S, R> OsmIngestionCommandService<S, R> {
     /// Create a new ingestion service.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use backend::domain::OsmIngestionCommandService;
+    /// use backend::domain::ports::{
+    ///     FixtureOsmIngestionProvenanceRepository, FixtureOsmSourceRepository,
+    /// };
+    /// use mockable::DefaultClock;
+    ///
+    /// let svc = OsmIngestionCommandService::new(
+    ///     Arc::new(FixtureOsmSourceRepository),
+    ///     Arc::new(FixtureOsmIngestionProvenanceRepository),
+    ///     Arc::new(DefaultClock),
+    /// );
+    /// let _ = svc;
+    /// ```
     pub fn new(source_repo: Arc<S>, provenance_repo: Arc<R>, clock: Arc<dyn Clock>) -> Self {
         Self {
             source_repo,
@@ -256,78 +277,19 @@ where
     async fn ingest(&self, request: OsmIngestionRequest) -> Result<OsmIngestionOutcome, Error> {
         let validated_request = validate_request(&request)?;
 
-        if let Some(existing) = self
-            .provenance_repo
-            .find_by_rerun_key(
-                validated_request.geofence_id.as_str(),
-                validated_request.input_digest.as_str(),
-            )
-            .await
-            .map_err(mapping::map_provenance_error)?
-        {
+        if let Some(existing) = self.lookup_rerun(&validated_request).await? {
             return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
         }
 
-        let source_report = self
-            .source_repo
-            .ingest_osm_pbf(&request.osm_pbf_path)
-            .await
-            .map_err(mapping::map_source_error)?;
-        let raw_poi_count = u64::try_from(source_report.pois.len())
-            .map_err(|_| Error::internal("raw POI count exceeds supported range"))?;
-
-        let filtered_records = source_report
-            .pois
-            .into_iter()
-            .filter(|poi| {
-                Coordinate::new(poi.longitude, poi.latitude)
-                    .map(|coord| validated_request.geofence_bounds.contains(&coord))
-                    .unwrap_or(false)
-            })
-            .map(to_poi_record)
-            .collect::<Result<Vec<_>, _>>()?;
-        let filtered_poi_count = u64::try_from(filtered_records.len())
-            .map_err(|_| Error::internal("filtered POI count exceeds supported range"))?;
-
-        let provenance = OsmIngestionProvenanceRecord {
-            geofence_id: validated_request.geofence_id.as_str().to_owned(),
-            source_url: validated_request.source_url.as_str().to_owned(),
-            input_digest: validated_request.input_digest.as_str().to_owned(),
-            imported_at: self.clock.utc(),
-            geofence_bounds: validated_request.geofence_bounds.as_array(),
-            raw_poi_count,
-            filtered_poi_count,
-        };
-
-        match self
-            .provenance_repo
-            .persist_ingestion(&provenance, &filtered_records)
-            .await
-        {
-            Ok(()) => {}
-            Err(OsmIngestionProvenanceRepositoryError::Conflict { .. }) => {
-                let existing = self
-                    .provenance_repo
-                    .find_by_rerun_key(
-                        validated_request.geofence_id.as_str(),
-                        validated_request.input_digest.as_str(),
-                    )
-                    .await
-                    .map_err(mapping::map_provenance_error)?
-                    .ok_or_else(|| {
-                        Error::service_unavailable(
-                            "ingestion provenance conflict occurred but rerun key was not found",
-                        )
-                    })?;
-                return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
-            }
-            Err(error) => return Err(mapping::map_provenance_error(error)),
-        }
-
-        Ok(mapping::to_outcome(
-            OsmIngestionStatus::Executed,
-            provenance,
-        ))
+        let (source_report, raw_poi_count) = self.load_source(&request.osm_pbf_path).await?;
+        let (filtered_records, filtered_poi_count) =
+            self.filter_to_poi_records(source_report, &validated_request.geofence_bounds)?;
+        let provenance =
+            self.build_provenance(&validated_request, raw_poi_count, filtered_poi_count);
+        let (status, record) = self
+            .persist_or_replay(provenance, &filtered_records, &validated_request)
+            .await?;
+        Ok(mapping::to_outcome(status, record))
     }
 }
 

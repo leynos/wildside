@@ -65,28 +65,30 @@ fn validate_request_rejects_invalid_fields(
 }
 
 #[rstest]
-fn validate_request_trims_geofence_id() {
-    let request = OsmIngestionRequest {
-        geofence_id: "  launch-a  ".to_owned(),
-        ..request()
-    };
+#[case::geofence_id_override(Some("  launch-a  "), None, "launch-a", SOURCE_URL)]
+#[case::source_url_override(
+    None,
+    Some("  https://example.test/launch.osm.pbf  "),
+    "launch-a",
+    "https://example.test/launch.osm.pbf"
+)]
+fn validate_request_trims_fields(
+    #[case] geofence_id_override: Option<&str>,
+    #[case] source_url_override: Option<&str>,
+    #[case] expected_geofence_id: &str,
+    #[case] expected_source_url: &str,
+) {
+    let mut request: OsmIngestionRequest = request();
+    if let Some(geofence_id) = geofence_id_override {
+        request.geofence_id = geofence_id.to_owned();
+    }
+    if let Some(source_url) = source_url_override {
+        request.source_url = source_url.to_owned();
+    }
 
     let validated = validate_request(&request).expect("request should be valid");
-    assert_eq!(validated.geofence_id.as_str(), "launch-a");
-}
-
-#[rstest]
-fn validate_request_trims_source_url() {
-    let request = OsmIngestionRequest {
-        source_url: "  https://example.test/launch.osm.pbf  ".to_owned(),
-        ..request()
-    };
-
-    let validated = validate_request(&request).expect("request should be valid");
-    assert_eq!(
-        validated.source_url.as_str(),
-        "https://example.test/launch.osm.pbf"
-    );
+    assert_eq!(validated.geofence_id.as_str(), expected_geofence_id);
+    assert_eq!(validated.source_url.as_str(), expected_source_url);
 }
 
 #[rstest]
