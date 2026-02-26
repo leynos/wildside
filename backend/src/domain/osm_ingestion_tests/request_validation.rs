@@ -24,7 +24,7 @@ fn geofence_contains_includes_boundaries_and_rejects_non_finite(
         GEOFENCE_BOUNDS[3],
     )
     .expect("fixture bounds should be valid");
-    let actual = geofence_contains(&bounds, longitude, latitude);
+    let actual = bounds.contains(longitude, latitude);
     assert_eq!(actual, expected);
 }
 
@@ -69,6 +69,10 @@ fn validate_request_rejects_invalid_fields(
 )]
 #[case::infinite_latitude(
     [-3.30, f64::INFINITY, -3.10, 56.00],
+    "geofence latitude values must be finite and within [-90, 90]"
+)]
+#[case::negative_infinite_latitude(
+    [-3.30, f64::NEG_INFINITY, -3.10, 56.00],
     "geofence latitude values must be finite and within [-90, 90]"
 )]
 #[case::longitude_out_of_range(

@@ -4,12 +4,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use chrono::{DateTime, TimeZone, Utc};
-use mockable::DefaultClock;
+use chrono::{DateTime, Local, TimeZone, Utc};
+use mockable::Clock;
 
 use super::{
-    GeofenceBounds, RELATION_ID_PREFIX, WAY_ID_PREFIX, decode_element_id, geofence_contains,
-    validate_request,
+    GeofenceBounds, RELATION_ID_PREFIX, WAY_ID_PREFIX, decode_element_id, validate_request,
 };
 use crate::domain::OsmIngestionCommandService;
 use crate::domain::ports::{
@@ -26,6 +25,26 @@ pub(super) fn fixture_timestamp() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 2, 24, 10, 30, 0)
         .single()
         .expect("valid fixture timestamp")
+}
+
+struct FixtureClock {
+    utc_now: DateTime<Utc>,
+}
+
+impl Clock for FixtureClock {
+    fn local(&self) -> DateTime<Local> {
+        self.utc_now.with_timezone(&Local)
+    }
+
+    fn utc(&self) -> DateTime<Utc> {
+        self.utc_now
+    }
+}
+
+pub(super) fn fixture_clock() -> Arc<dyn Clock> {
+    Arc::new(FixtureClock {
+        utc_now: fixture_timestamp(),
+    })
 }
 
 pub(super) fn make_source_poi(
@@ -55,12 +74,9 @@ pub(super) fn request() -> OsmIngestionRequest {
 pub(super) fn make_service(
     source_repo: MockOsmSourceRepository,
     provenance_repo: MockOsmIngestionProvenanceRepository,
+    clock: Arc<dyn Clock>,
 ) -> OsmIngestionCommandService<MockOsmSourceRepository, MockOsmIngestionProvenanceRepository> {
-    OsmIngestionCommandService::new(
-        Arc::new(source_repo),
-        Arc::new(provenance_repo),
-        Arc::new(DefaultClock),
-    )
+    OsmIngestionCommandService::new(Arc::new(source_repo), Arc::new(provenance_repo), clock)
 }
 
 mod decode_element_id;

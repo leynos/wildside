@@ -45,7 +45,7 @@ async fn ingest_replays_existing_provenance_without_reingesting() {
         .return_once(move |_, _| Ok(Some(existing)));
     provenance_repo.expect_persist_ingestion().times(0);
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let outcome = service
         .ingest(request)
         .await
@@ -99,7 +99,7 @@ async fn ingest_filters_pois_by_geofence_and_persists_provenance() {
         })
         .return_once(|_, _| Ok(()));
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let outcome = service
         .ingest(request)
         .await
@@ -157,7 +157,7 @@ async fn ingest_replays_on_provenance_conflict() {
         .in_sequence(&mut sequence)
         .return_once(move |_, _| Ok(Some(existing)));
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let outcome = service
         .ingest(request)
         .await
@@ -205,7 +205,7 @@ async fn ingest_returns_service_unavailable_when_conflict_lookup_is_missing() {
         .in_sequence(&mut sequence)
         .return_once(|_, _| Ok(None));
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let error = service
         .ingest(request)
         .await
@@ -248,7 +248,7 @@ async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() {
             })
         });
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let error = service
         .ingest(request)
         .await
@@ -288,7 +288,7 @@ async fn ingest_maps_source_failures_to_service_unavailable(
         .return_once(|_, _| Ok(None));
     provenance_repo.expect_persist_ingestion().times(0);
 
-    let service = make_service(source_repo, provenance_repo);
+    let service = make_service(source_repo, provenance_repo, fixture_clock());
     let error = service
         .ingest(request)
         .await

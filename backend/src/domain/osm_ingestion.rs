@@ -179,11 +179,9 @@ where
             .pois
             .into_iter()
             .filter(|poi| {
-                geofence_contains(
-                    &validated_request.geofence_bounds,
-                    poi.longitude,
-                    poi.latitude,
-                )
+                validated_request
+                    .geofence_bounds
+                    .contains(poi.longitude, poi.latitude)
             })
             .map(to_poi_record)
             .collect::<Result<Vec<_>, _>>()?;
@@ -313,10 +311,6 @@ fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).c
 #[rustfmt::skip]
 fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
 
-fn geofence_contains(bounds: &GeofenceBounds, longitude: f64, latitude: f64) -> bool {
-    bounds.contains(longitude, latitude)
-}
-
 fn to_poi_record(source_poi: OsmSourcePoi) -> Result<OsmPoiIngestionRecord, Error> {
     let (element_type, element_id) = decode_element_id(source_poi.encoded_element_id)?;
 
@@ -329,6 +323,16 @@ fn to_poi_record(source_poi: OsmSourcePoi) -> Result<OsmPoiIngestionRecord, Erro
     })
 }
 
+/// Decode a packed OSM element identifier into `(element_type, element_id)`.
+///
+/// `encoded_id` uses a bit-prefix scheme where:
+/// - bit 63 (`RELATION_ID_PREFIX`) marks a `"relation"`;
+/// - bit 62 (`WAY_ID_PREFIX`) marks a `"way"`;
+/// - when neither prefix is set, the value is a `"node"` identifier.
+///
+/// `TYPE_ID_MASK` extracts the raw identifier bits for prefixed values. The raw
+/// id is then converted to `i64`, returning an invalid-request error when it
+/// exceeds `i64` range.
 fn decode_element_id(encoded_id: u64) -> Result<(String, i64), Error> {
     let (element_type, raw_id) = if encoded_id & RELATION_ID_PREFIX != 0 {
         ("relation", encoded_id & TYPE_ID_MASK)
