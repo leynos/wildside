@@ -23,6 +23,110 @@ const WAY_ID_PREFIX: u64 = 1 << 62;
 const RELATION_ID_PREFIX: u64 = 1 << 63;
 const TYPE_ID_MASK: u64 = (1 << 62) - 1;
 
+/// Validated geofence bounds in `[min_lng, min_lat, max_lng, max_lat]` order.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeofenceBounds {
+    inner: [f64; 4],
+}
+
+impl GeofenceBounds {
+    /// Construct validated bounds from explicit coordinate values.
+    pub fn new(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> Result<Self, Error> {
+        validate_bounds([min_lng, min_lat, max_lng, max_lat])?;
+        Ok(Self {
+            inner: [min_lng, min_lat, max_lng, max_lat],
+        })
+    }
+
+    /// Return whether a point lies within this geofence.
+    pub fn contains(&self, longitude: f64, latitude: f64) -> bool {
+        let [min_lng, min_lat, max_lng, max_lat] = self.inner;
+        longitude.is_finite()
+            && latitude.is_finite()
+            && longitude >= min_lng
+            && longitude <= max_lng
+            && latitude >= min_lat
+            && latitude <= max_lat
+    }
+
+    /// Expose bounds as a primitive array for port contracts.
+    pub fn as_array(&self) -> [f64; 4] {
+        self.inner
+    }
+}
+
+/// Validated SHA-256 input digest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputDigest {
+    digest: String,
+}
+
+impl InputDigest {
+    /// Construct a validated input digest.
+    pub fn new(digest: String) -> Result<Self, Error> {
+        if !is_valid_digest(&digest) {
+            return Err(Error::invalid_request(
+                "inputDigest must be a 64-character lowercase hexadecimal SHA-256 digest",
+            ));
+        }
+        Ok(Self { digest })
+    }
+
+    /// Borrow the underlying digest string.
+    pub fn as_str(&self) -> &str {
+        &self.digest
+    }
+}
+
+/// Validated geofence identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeofenceId(String);
+
+impl GeofenceId {
+    /// Construct a validated geofence identifier.
+    pub fn new(id: String) -> Result<Self, Error> {
+        if id.trim().is_empty() {
+            return Err(Error::invalid_request("geofenceId must not be empty"));
+        }
+        Ok(Self(id))
+    }
+
+    /// Borrow the identifier string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated source URL used for provenance records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceUrl(String);
+
+impl SourceUrl {
+    /// Construct a validated source URL.
+    pub fn new(url: String) -> Result<Self, Error> {
+        if url.trim().is_empty() {
+            return Err(Error::invalid_request("sourceUrl must not be empty"));
+        }
+        if Url::parse(&url).is_err() {
+            return Err(Error::invalid_request("sourceUrl must be a valid URL"));
+        }
+        Ok(Self(url))
+    }
+
+    /// Borrow the URL string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ValidatedOsmIngestionRequest {
+    source_url: SourceUrl,
+    geofence_id: GeofenceId,
+    geofence_bounds: GeofenceBounds,
+    input_digest: InputDigest,
+}
+
 /// Domain service implementing OSM ingestion command behaviour.
 #[derive(Clone)]
 pub struct OsmIngestionCommandService<S, R> {
@@ -49,11 +153,14 @@ where
     R: OsmIngestionProvenanceRepository,
 {
     async fn ingest(&self, request: OsmIngestionRequest) -> Result<OsmIngestionOutcome, Error> {
-        validate_request(&request)?;
+        let validated_request = validate_request(&request)?;
 
         if let Some(existing) = self
             .provenance_repo
-            .find_by_rerun_key(&request.geofence_id, &request.input_digest)
+            .find_by_rerun_key(
+                validated_request.geofence_id.as_str(),
+                validated_request.input_digest.as_str(),
+            )
             .await
             .map_err(map_provenance_error)?
         {
@@ -71,18 +178,24 @@ where
         let filtered_records = source_report
             .pois
             .into_iter()
-            .filter(|poi| geofence_contains(request.geofence_bounds, poi.longitude, poi.latitude))
+            .filter(|poi| {
+                geofence_contains(
+                    &validated_request.geofence_bounds,
+                    poi.longitude,
+                    poi.latitude,
+                )
+            })
             .map(to_poi_record)
             .collect::<Result<Vec<_>, _>>()?;
         let filtered_poi_count = u64::try_from(filtered_records.len())
             .map_err(|_| Error::internal("filtered POI count exceeds supported range"))?;
 
         let provenance = OsmIngestionProvenanceRecord {
-            geofence_id: request.geofence_id.clone(),
-            source_url: request.source_url.clone(),
-            input_digest: request.input_digest.clone(),
+            geofence_id: validated_request.geofence_id.as_str().to_owned(),
+            source_url: validated_request.source_url.as_str().to_owned(),
+            input_digest: validated_request.input_digest.as_str().to_owned(),
             imported_at: self.clock.utc(),
-            geofence_bounds: request.geofence_bounds,
+            geofence_bounds: validated_request.geofence_bounds.as_array(),
             raw_poi_count,
             filtered_poi_count,
         };
@@ -96,7 +209,10 @@ where
             Err(OsmIngestionProvenanceRepositoryError::Conflict { .. }) => {
                 let existing = self
                     .provenance_repo
-                    .find_by_rerun_key(&request.geofence_id, &request.input_digest)
+                    .find_by_rerun_key(
+                        validated_request.geofence_id.as_str(),
+                        validated_request.input_digest.as_str(),
+                    )
                     .await
                     .map_err(map_provenance_error)?
                     .ok_or_else(|| {
@@ -113,23 +229,19 @@ where
     }
 }
 
-fn validate_request(request: &OsmIngestionRequest) -> Result<(), Error> {
-    if request.source_url.trim().is_empty() {
-        return Err(Error::invalid_request("sourceUrl must not be empty"));
-    }
-    if Url::parse(&request.source_url).is_err() {
-        return Err(Error::invalid_request("sourceUrl must be a valid URL"));
-    }
-    if request.geofence_id.trim().is_empty() {
-        return Err(Error::invalid_request("geofenceId must not be empty"));
-    }
-    if !is_valid_digest(&request.input_digest) {
-        return Err(Error::invalid_request(
-            "inputDigest must be a 64-character lowercase hexadecimal SHA-256 digest",
-        ));
-    }
+fn validate_request(request: &OsmIngestionRequest) -> Result<ValidatedOsmIngestionRequest, Error> {
+    let source_url = SourceUrl::new(request.source_url.clone())?;
+    let geofence_id = GeofenceId::new(request.geofence_id.clone())?;
+    let input_digest = InputDigest::new(request.input_digest.clone())?;
+    let [min_lng, min_lat, max_lng, max_lat] = request.geofence_bounds;
+    let geofence_bounds = GeofenceBounds::new(min_lng, min_lat, max_lng, max_lat)?;
 
-    validate_bounds(request.geofence_bounds)
+    Ok(ValidatedOsmIngestionRequest {
+        source_url,
+        geofence_id,
+        geofence_bounds,
+        input_digest,
+    })
 }
 
 fn is_valid_digest(digest: &str) -> bool {
@@ -188,14 +300,8 @@ fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).c
 #[rustfmt::skip]
 fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
 
-fn geofence_contains(bounds: [f64; 4], longitude: f64, latitude: f64) -> bool {
-    let [min_lng, min_lat, max_lng, max_lat] = bounds;
-    longitude.is_finite()
-        && latitude.is_finite()
-        && longitude >= min_lng
-        && longitude <= max_lng
-        && latitude >= min_lat
-        && latitude <= max_lat
+fn geofence_contains(bounds: &GeofenceBounds, longitude: f64, latitude: f64) -> bool {
+    bounds.contains(longitude, latitude)
 }
 
 fn to_poi_record(source_poi: OsmSourcePoi) -> Result<OsmPoiIngestionRecord, Error> {

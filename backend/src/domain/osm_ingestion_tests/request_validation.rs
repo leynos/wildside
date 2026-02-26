@@ -17,7 +17,14 @@ fn geofence_contains_includes_boundaries_and_rejects_non_finite(
     #[case] latitude: f64,
     #[case] expected: bool,
 ) {
-    let actual = geofence_contains(GEOFENCE_BOUNDS, longitude, latitude);
+    let bounds = GeofenceBounds::new(
+        GEOFENCE_BOUNDS[0],
+        GEOFENCE_BOUNDS[1],
+        GEOFENCE_BOUNDS[2],
+        GEOFENCE_BOUNDS[3],
+    )
+    .expect("fixture bounds should be valid");
+    let actual = geofence_contains(&bounds, longitude, latitude);
     assert_eq!(actual, expected);
 }
 
