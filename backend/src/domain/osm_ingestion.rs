@@ -52,7 +52,8 @@ impl GeofenceBounds {
     /// Return whether a point lies within this geofence.
     /// ```
     /// use backend::domain::osm_ingestion::{Coordinate, GeofenceBounds};
-    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds"); let coordinate = Coordinate::new(-3.10, 56.00).expect("valid coordinate");
+    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds");
+    /// let coordinate = Coordinate::new(-3.10, 56.00).expect("valid coordinate");
     /// assert!(bounds.contains(&coordinate)); // Boundary points are inside.
     /// ```
     pub fn contains(&self, coordinate: &Coordinate) -> bool {
@@ -354,6 +355,7 @@ fn decode_element_id(encoded_id: u64) -> Result<(String, i64), Error> {
     Ok((element_type.to_owned(), element_id))
 }
 
+/// Classifies `encoded_id` into `(type, raw_id)` where type is `node`/`way`/`relation` and `raw_id` has type bits masked off.
 fn classify_element_prefix(encoded_id: u64) -> (&'static str, u64) {
     if encoded_id & RELATION_ID_PREFIX != 0 {
         ("relation", encoded_id & TYPE_ID_MASK)
