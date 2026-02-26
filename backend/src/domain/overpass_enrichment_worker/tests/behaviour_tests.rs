@@ -146,57 +146,123 @@ async fn retry_uses_jittered_exponential_backoff(
     );
 }
 
+struct CircuitBreakerTestFixtureBuilder {
+    now: DateTime<Utc>,
+    source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+    failure_threshold: u32,
+    cooldown_duration: Duration,
+}
+
+impl CircuitBreakerTestFixtureBuilder {
+    fn new(
+        now: DateTime<Utc>,
+        source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+        failure_threshold: u32,
+        cooldown_duration: Duration,
+    ) -> Self {
+        Self {
+            now,
+            source_responses,
+            failure_threshold,
+            cooldown_duration,
+        }
+    }
+
+    fn build(self) -> CircuitBreakerTestFixture {
+        let clock = Arc::new(MutableClock::new(self.now));
+        let source = Arc::new(SourceStub::scripted(self.source_responses));
+
+        let mut cfg = config();
+        cfg.max_attempts = 1;
+        cfg.circuit_failure_threshold = self.failure_threshold;
+        cfg.circuit_open_cooldown = self.cooldown_duration;
+
+        let worker = OverpassEnrichmentWorker::with_runtime(
+            OverpassEnrichmentWorkerPorts::new(
+                source.clone(),
+                Arc::new(RepoStub::new(Vec::new())),
+                Arc::new(MetricsStub::default()),
+            ),
+            clock.clone(),
+            OverpassEnrichmentWorkerRuntime {
+                sleeper: Arc::new(RecordingSleeper::default()),
+                jitter: Arc::new(NoJitter),
+            },
+            cfg,
+        );
+
+        CircuitBreakerTestFixture {
+            worker,
+            source,
+            clock,
+        }
+    }
+}
+
+struct CircuitBreakerTestFixture {
+    worker: OverpassEnrichmentWorker,
+    source: Arc<SourceStub>,
+    clock: Arc<MutableClock>,
+}
+
+impl CircuitBreakerTestFixture {
+    async fn process_job(
+        &self,
+        request: OverpassEnrichmentRequest,
+    ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
+        self.worker.process_job(request).await
+    }
+
+    fn advance_clock(&self, delta: Duration) {
+        self.clock.advance(delta);
+    }
+
+    fn source_call_count(&self) -> usize {
+        self.source.calls.load(Ordering::SeqCst)
+    }
+
+    fn circuit_state(&self) -> CircuitBreakerState {
+        self.worker
+            .policy_state
+            .lock()
+            .expect("policy mutex")
+            .circuit_state()
+    }
+}
+
 #[rstest]
 #[tokio::test]
 async fn circuit_opens_and_blocks_until_cooldown(
     now: DateTime<Utc>,
     job: OverpassEnrichmentRequest,
 ) {
-    let source = Arc::new(SourceStub::scripted(vec![
-        Err(OverpassEnrichmentSourceError::transport("failure-1")),
-        Err(OverpassEnrichmentSourceError::transport("failure-2")),
-    ]));
-    let mut cfg = config();
-    cfg.max_attempts = 1;
-    cfg.circuit_failure_threshold = 2;
-    cfg.circuit_open_cooldown = Duration::from_secs(120);
-    let worker = OverpassEnrichmentWorker::with_runtime(
-        OverpassEnrichmentWorkerPorts::new(
-            source.clone(),
-            Arc::new(RepoStub::new(vec![Ok(())])),
-            Arc::new(MetricsStub::default()),
-        ),
-        Arc::new(MutableClock::new(now)),
-        OverpassEnrichmentWorkerRuntime {
-            sleeper: Arc::new(RecordingSleeper::default()),
-            jitter: Arc::new(NoJitter),
-        },
-        cfg,
-    );
+    let fixture = CircuitBreakerTestFixtureBuilder::new(
+        now,
+        vec![
+            Err(OverpassEnrichmentSourceError::transport("failure-1")),
+            Err(OverpassEnrichmentSourceError::transport("failure-2")),
+        ],
+        2,
+        Duration::from_secs(120),
+    )
+    .build();
 
-    let _ = worker
+    let _ = fixture
         .process_job(job.clone())
         .await
         .expect_err("first fails");
-    let _ = worker
+    let _ = fixture
         .process_job(job.clone())
         .await
         .expect_err("second fails");
-    let blocked = worker
+    let blocked = fixture
         .process_job(job)
         .await
         .expect_err("blocked by open circuit");
 
     assert_eq!(blocked.code(), crate::domain::ErrorCode::ServiceUnavailable);
-    assert_eq!(source.calls.load(Ordering::SeqCst), 2);
-    assert_eq!(
-        worker
-            .policy_state
-            .lock()
-            .expect("policy mutex")
-            .circuit_state(),
-        CircuitBreakerState::Open
-    );
+    assert_eq!(fixture.source_call_count(), 2);
+    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
 }
 
 #[rstest]
@@ -205,53 +271,34 @@ async fn half_open_probe_success_closes_circuit(
     now: DateTime<Utc>,
     job: OverpassEnrichmentRequest,
 ) {
-    let clock = Arc::new(MutableClock::new(now));
-    let source = Arc::new(SourceStub::scripted(vec![
-        Err(OverpassEnrichmentSourceError::transport("failure")),
-        Ok(response(1, 20)),
-        Ok(response(1, 20)),
-    ]));
-    let mut cfg = config();
-    cfg.max_attempts = 1;
-    cfg.circuit_failure_threshold = 1;
-    cfg.circuit_open_cooldown = Duration::from_secs(60);
-    let worker = OverpassEnrichmentWorker::with_runtime(
-        OverpassEnrichmentWorkerPorts::new(
-            source.clone(),
-            Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
-            Arc::new(MetricsStub::default()),
-        ),
-        clock.clone(),
-        OverpassEnrichmentWorkerRuntime {
-            sleeper: Arc::new(RecordingSleeper::default()),
-            jitter: Arc::new(NoJitter),
-        },
-        cfg,
-    );
+    let fixture = CircuitBreakerTestFixtureBuilder::new(
+        now,
+        vec![
+            Err(OverpassEnrichmentSourceError::transport("failure")),
+            Ok(response(1, 20)),
+            Ok(response(1, 20)),
+        ],
+        1,
+        Duration::from_secs(60),
+    )
+    .build();
 
-    let _ = worker
+    let _ = fixture
         .process_job(job.clone())
         .await
         .expect_err("initial failure");
-    clock.advance(Duration::from_secs(61));
-    worker
+    fixture.advance_clock(Duration::from_secs(61));
+    fixture
         .process_job(job.clone())
         .await
         .expect("probe succeeds");
-    worker
+    fixture
         .process_job(job)
         .await
         .expect("closed circuit allows call");
 
-    assert_eq!(source.calls.load(Ordering::SeqCst), 3);
-    assert_eq!(
-        worker
-            .policy_state
-            .lock()
-            .expect("policy mutex")
-            .circuit_state(),
-        CircuitBreakerState::Closed,
-    );
+    assert_eq!(fixture.source_call_count(), 3);
+    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Closed);
 }
 
 #[rstest]
