@@ -43,7 +43,21 @@ impl GeofenceBounds {
     /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Ordered bounds persist.
     /// ```
     pub fn new(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> Result<Self, Error> {
-        validation::validate_bounds([min_lng, min_lat, max_lng, max_lat])?;
+        if !validation::valid_longitude(min_lng) || !validation::valid_longitude(max_lng) {
+            return Err(Error::invalid_request(
+                "geofence longitude values must be finite and within [-180, 180]",
+            ));
+        }
+        if !validation::valid_latitude(min_lat) || !validation::valid_latitude(max_lat) {
+            return Err(Error::invalid_request(
+                "geofence latitude values must be finite and within [-90, 90]",
+            ));
+        }
+        if min_lng > max_lng || min_lat > max_lat {
+            return Err(Error::invalid_request(
+                "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]",
+            ));
+        }
         Ok(Self {
             inner: [min_lng, min_lat, max_lng, max_lat],
         })
