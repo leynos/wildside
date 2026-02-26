@@ -135,7 +135,7 @@ fn offline_walk_down_migration_drops_schema_objects(#[case] drop_statement: &str
 #[case("raw_poi_count BIGINT NOT NULL CHECK (raw_poi_count >= 0)")]
 #[case("filtered_poi_count BIGINT NOT NULL CHECK (filtered_poi_count >= 0)")]
 #[case("CONSTRAINT osm_ingestion_provenance_rerun_unique UNIQUE (geofence_id, input_digest)")]
-#[case("osm_ingestion_provenance_rerun_unique")]
+#[case("idx_osm_ingestion_provenance_geofence_imported_at")]
 #[case("ON osm_ingestion_provenance (geofence_id, imported_at DESC)")]
 fn creates_osm_ingestion_provenance_contract(#[case] ddl_fragment: &str) {
     assert!(

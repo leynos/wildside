@@ -322,7 +322,7 @@ Deliverables:
 
 Acceptance checks:
 
-- duplicate ingest attempts with same key are deterministic;
+- duplicate ingest attempts with the same key are deterministic;
 - provenance rows contain source URL, digest, timestamp, and bounding box;
 - persistence behaviour is accessible only via domain ports.
 
@@ -446,6 +446,6 @@ Retrospective notes:
   constraining SQL and parser details to outbound adapters.
 - Deterministic rerun behaviour is now explicitly enforceable through both
   schema-level and service-level contracts.
-- Remaining risk is environmental: low free space on `/data` can destabilize
+- The remaining risk is environmental: low free space on `/data` can destabilize
   large rebuilds. `cargo clean` before full-suite reruns remains advisable when
   free space drops below 5 GiB.
