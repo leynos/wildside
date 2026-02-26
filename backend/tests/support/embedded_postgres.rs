@@ -74,7 +74,7 @@ fn provision_template_database_attempt(
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
     let template_name = ensure_template_database(cluster).map_err(|error| {
         UserPersistenceError::query(format!(
-            "template check: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error}"
+            "template check: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error:?}"
         ))
     })?;
     let db_name = new_test_database_name();
