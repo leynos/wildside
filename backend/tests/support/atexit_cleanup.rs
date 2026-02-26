@@ -89,7 +89,12 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
         )));
     }
 
-    let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
+    if SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd).is_err() {
+        // SAFETY: `fd` is valid and must be closed when another caller won `set`.
+        unsafe {
+            libc::close(fd);
+        }
+    }
     Ok(())
 }
 
