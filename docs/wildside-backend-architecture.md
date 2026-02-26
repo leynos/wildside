@@ -457,7 +457,7 @@ stability.
 | `GET`    | `/api/v1/offline/bundles`               | List offline bundle manifests.                      | Session cookie |
 | `POST`   | `/api/v1/offline/bundles`               | Create an offline bundle manifest (idempotent).     | Session cookie |
 | `DELETE` | `/api/v1/offline/bundles/{bundle_id}`   | Delete an offline bundle manifest (idempotent).     | Session cookie |
-| `POST`   | `/api/v1/walk-sessions`                 | Record a walk session and completion projection.     | Session cookie |
+| `POST`   | `/api/v1/walk-sessions`                 | Record a walk session and completion projection.    | Session cookie |
 
 Offline and walk-session HTTP handlers are inbound adapters only: they parse
 request payloads, delegate to driving ports (`OfflineBundleCommand`,
@@ -557,6 +557,15 @@ data without rewriting view components.
 - `RouteRepository` (read/write): persists route plans, resolves by
   `request_id` or `route_id`, and lists routes per user.
 - `PoiRepository` (read): hydrates POIs for route plans and map overlays.
+- `OsmPoiRepository` (write): upserts geofence-filtered OSM POIs keyed by
+  `(element_type, id)` while keeping SQL and geometry mapping in outbound
+  adapters.
+- `OsmIngestionProvenanceRepository` (read/write): persists ingestion
+  provenance (`source_url`, `input_digest`, `imported_at`, and geofence bounds)
+  and exposes deterministic rerun lookups by `(geofence_id, input_digest)`.
+- `OsmSourceRepository` (read): extracts POIs from `.osm.pbf` files through the
+  `wildside-data` integration adapter without exposing parser details to the
+  domain.
 - `UserPreferencesRepository` (read/write): stores `UserPreferences` with
   optimistic concurrency via `revision`.
 - `RouteAnnotationRepository` (read/write): manages `RouteNote` and
@@ -706,6 +715,18 @@ services.
 > plus idempotency replay metadata for offline mutations. This keeps
 > idempotency policy and ownership checks in domain services while outbound
 > repositories remain the only layer with SQL/persistence details.
+>
+> **Design decision (2026-02-24):** Roadmap item 3.4.1 introduces the
+> `ingest-osm` CLI as an inbound command adapter (`backend/src/bin/ingest_osm.rs`)
+> backed by a dedicated driving port (`OsmIngestionCommand`). The command
+> delegates to a domain service that enforces backend-owned ingestion behaviour:
+> launch geofence filtering, provenance persistence, and deterministic reruns
+> keyed by `(geofence_id, input_digest)`. Outbound concerns are split into
+> three driven ports: `OsmSourceRepository` (wrapping `wildside-data` ingestion),
+> `OsmPoiRepository` (POI upserts into `pois`), and
+> `OsmIngestionProvenanceRepository` (rerun-key lookup and provenance writes).
+> This keeps parser and SQL details outside the domain while preserving an
+> auditable rerun contract for launch geofences.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.
@@ -798,6 +819,8 @@ ownership validation, and create-or-return behaviour.*
   idempotency checks.
 - `OfflineBundleCommand` creates, updates, and deletes bundle manifests.
 - `WalkSessionCommand` records walk sessions and returns completion summaries.
+- `OsmIngestionCommand` executes the `ingest-osm` workflow and returns
+  executed/replayed outcomes for deterministic reruns.
 
 `GET/POST/DELETE /api/v1/offline/bundles` is backed by
 `OfflineBundleQuery`/`OfflineBundleCommand`, and
@@ -1334,10 +1357,10 @@ By isolating it in a job, the API remains responsive and avoids blocking the
 async runtime.
 
 The same [`wildside-engine`](https://github.com/leynos/wildside-engine)
-repository also provides offline ingestion capabilities (`wildside-cli ingest`
-and `wildside-data`) that the backend can reuse for roadmap task `3.4.1`
-instead of reimplementing OSM parsing from scratch. In this design, backend-
-owned ingestion concerns remain explicit:
+repository also provides offline ingestion capabilities. For roadmap task
+`3.4.1`, the backend reuses the `wildside-data` library APIs (which also power
+`wildside-cli ingest`) instead of reimplementing OSM parsing from scratch. In
+this design, backend-owned ingestion concerns remain explicit:
 
 - launch geofence filtering.
 - provenance persistence in PostgreSQL.

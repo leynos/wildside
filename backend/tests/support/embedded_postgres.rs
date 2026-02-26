@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use backend::domain::ports::UserPersistenceError;
 use diesel::Connection;
@@ -28,6 +29,8 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 static TEMPLATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 const TEMPLATE_NAME_PREFIX: &str = "backend_template";
+const TEMPLATE_PROVISION_RETRIES: usize = 5;
+const TEMPLATE_PROVISION_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 fn migrations_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
@@ -42,6 +45,46 @@ fn template_database_name() -> Result<String, UserPersistenceError> {
 
 fn new_test_database_name() -> String {
     format!("test_{}", Uuid::new_v4())
+}
+
+/// Attempts one template-clone provisioning pass for a test database.
+///
+/// Uses `attempt` (typically in the `1..=TEMPLATE_PROVISION_RETRIES` range) to
+/// annotate retry-aware `UserPersistenceError` messages. Returns
+/// `Ok(TemporaryDatabase)` when both template resolution
+/// (`ensure_template_database`) and `ClusterHandle::temporary_database_from_template`
+/// succeed, and returns `Err(UserPersistenceError)` when either step fails.
+///
+/// # Examples
+///
+/// ```text
+/// attempt = 1
+/// provision_template_database_attempt(&cluster, attempt)
+///   -> Ok(TemporaryDatabase { name: "test_1234...", .. })
+///
+/// attempt = 1
+/// provision_template_database_attempt(&cluster, attempt)
+///   -> Err(UserPersistenceError::query(
+///        "template check: attempt 1/5: ..."
+///      ))
+/// ```
+fn provision_template_database_attempt(
+    cluster: &ClusterHandle,
+    attempt: usize,
+) -> Result<TemporaryDatabase, UserPersistenceError> {
+    let template_name = ensure_template_database(cluster).map_err(|error| {
+        UserPersistenceError::query(format!(
+            "template check: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error:?}"
+        ))
+    })?;
+    let db_name = new_test_database_name();
+    cluster
+        .temporary_database_from_template(db_name.as_str(), template_name.as_str())
+        .map_err(|error| {
+            UserPersistenceError::query(format!(
+                "create database from template: attempt {attempt}/{TEMPLATE_PROVISION_RETRIES}: {error:?}"
+            ))
+        })
 }
 
 /// Creates or reuses a template database with the latest migrations applied.
@@ -69,16 +112,27 @@ fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersi
 }
 
 /// Provisions a temporary database cloned from the migration template.
+///
+/// Retries up to [`TEMPLATE_PROVISION_RETRIES`] times with
+/// [`TEMPLATE_PROVISION_RETRY_DELAY`] between attempts to tolerate transient
+/// cluster errors during parallel test runs.
 pub fn provision_template_database(
     cluster: &ClusterHandle,
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
-    let template_name = ensure_template_database(cluster)?;
-    let db_name = new_test_database_name();
-    cluster
-        .temporary_database_from_template(db_name.as_str(), template_name.as_str())
-        .map_err(|err| {
-            UserPersistenceError::query(format!("create database from template: {err:?}"))
-        })
+    let mut last_error = None;
+    for attempt in 1..=TEMPLATE_PROVISION_RETRIES {
+        match provision_template_database_attempt(cluster, attempt) {
+            Ok(database) => return Ok(database),
+            Err(error) => last_error = Some(error),
+        };
+        if attempt < TEMPLATE_PROVISION_RETRIES {
+            std::thread::sleep(TEMPLATE_PROVISION_RETRY_DELAY);
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        UserPersistenceError::query("create database from template: exhausted retries")
+    }))
 }
 
 /// Runs all pending Diesel migrations against the test database.

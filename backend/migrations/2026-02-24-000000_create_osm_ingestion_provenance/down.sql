@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_osm_ingestion_provenance_geofence_imported_at;
+DROP TABLE IF EXISTS osm_ingestion_provenance;

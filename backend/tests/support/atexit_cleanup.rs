@@ -12,15 +12,27 @@
 //! library provides built-in process-exit shutdown.
 
 #[cfg(unix)]
-use std::path::PathBuf;
+use std::ffi::CString;
 #[cfg(unix)]
-use std::sync::OnceLock;
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::path::PathBuf;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicI32, Ordering};
 #[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
+#[cfg(unix)]
+use color_eyre::eyre::eyre;
+#[cfg(unix)]
+use pg_embedded_setup_unpriv::BootstrapError;
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
+
+const SHARED_CLUSTER_RETRIES: usize = 5;
+const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
+#[cfg(unix)]
+const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
@@ -29,6 +41,68 @@ static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 /// Data directory for re-reading `postmaster.pid` at exit time.
 #[cfg(unix)]
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+#[cfg(unix)]
+static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
+#[cfg(unix)]
+static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
+
+#[cfg(unix)]
+fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
+    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+        return Ok(());
+    }
+
+    let _init_guard = SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
+        BootstrapError::from(eyre!(
+            "acquire shared cluster process lock init mutex: {error}"
+        ))
+    })?;
+    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+        return Ok(());
+    }
+
+    let lock_path = std::env::temp_dir().join(SHARED_CLUSTER_LOCK_FILE);
+    let lock_path_bytes = lock_path.as_os_str().as_bytes();
+    let lock_path_cstring = CString::new(lock_path_bytes).map_err(|error| {
+        BootstrapError::from(eyre!(
+            "encode shared cluster lock path '{}': {error}",
+            lock_path.display()
+        ))
+    })?;
+
+    // SAFETY: `lock_path_cstring` is NUL-terminated and lives for the call.
+    let fd = unsafe {
+        libc::open(
+            lock_path_cstring.as_ptr(),
+            libc::O_CREAT | libc::O_RDWR,
+            0o600,
+        )
+    };
+    if fd < 0 {
+        let error = std::io::Error::last_os_error();
+        return Err(BootstrapError::from(eyre!(
+            "open shared cluster lock file '{}': {error}",
+            lock_path.display()
+        )));
+    }
+
+    // SAFETY: `fd` is a valid descriptor from `open` above.
+    let lock_result = unsafe { libc::flock(fd, libc::LOCK_EX) };
+    if lock_result != 0 {
+        let error = std::io::Error::last_os_error();
+        // SAFETY: `fd` is valid and should be closed on lock failure.
+        unsafe {
+            libc::close(fd);
+        }
+        return Err(BootstrapError::from(eyre!(
+            "acquire shared cluster lock '{}': {error}",
+            lock_path.display()
+        )));
+    }
+
+    let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
+    Ok(())
+}
 
 /// Returns the shared cluster handle and registers an atexit handler to stop
 /// PostgreSQL when the test binary exits.
@@ -48,10 +122,25 @@ static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// ```
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
-    let handle = pg_embedded_setup_unpriv::test_support::shared_cluster_handle()?;
     #[cfg(unix)]
-    register_process_exit_cleanup(handle);
-    Ok(handle)
+    acquire_shared_cluster_process_lock()?;
+    let mut attempt = 1;
+    loop {
+        match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
+            Ok(handle) => {
+                #[cfg(unix)]
+                register_process_exit_cleanup(handle);
+                return Ok(handle);
+            }
+            Err(error) => {
+                if attempt >= SHARED_CLUSTER_RETRIES {
+                    return Err(error);
+                }
+                std::thread::sleep(SHARED_CLUSTER_RETRY_DELAY);
+                attempt += 1;
+            }
+        }
+    }
 }
 
 /// Ensures `PG_PASSWORD` is set to a stable value so the password remains
@@ -166,6 +255,7 @@ mod tests {
     use cap_std::ambient_authority;
     use cap_std::fs::Dir;
 
+    #[cfg(unix)]
     fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
         let dir = Dir::open_ambient_dir(dir_path, ambient_authority()).expect("open dir");
         dir.write("postmaster.pid", content).expect("write");

@@ -16,6 +16,10 @@ mod login_service;
 mod offline_bundle_command;
 mod offline_bundle_query;
 mod offline_bundle_repository;
+mod osm_ingestion_command;
+mod osm_ingestion_provenance_repository;
+mod osm_poi_repository;
+mod osm_source_repository;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
@@ -98,6 +102,29 @@ pub use offline_bundle_query::{
 pub use offline_bundle_repository::MockOfflineBundleRepository;
 pub use offline_bundle_repository::{
     FixtureOfflineBundleRepository, OfflineBundleRepository, OfflineBundleRepositoryError,
+};
+#[cfg(test)]
+pub use osm_ingestion_command::MockOsmIngestionCommand;
+pub use osm_ingestion_command::{
+    FixtureOsmIngestionCommand, OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionRequest,
+    OsmIngestionStatus,
+};
+#[cfg(test)]
+pub use osm_ingestion_provenance_repository::MockOsmIngestionProvenanceRepository;
+pub use osm_ingestion_provenance_repository::{
+    FixtureOsmIngestionProvenanceRepository, OsmIngestionProvenanceRecord,
+    OsmIngestionProvenanceRepository, OsmIngestionProvenanceRepositoryError,
+};
+#[cfg(test)]
+pub use osm_poi_repository::MockOsmPoiRepository;
+pub use osm_poi_repository::{
+    FixtureOsmPoiRepository, OsmPoiIngestionRecord, OsmPoiRepository, OsmPoiRepositoryError,
+};
+#[cfg(test)]
+pub use osm_source_repository::MockOsmSourceRepository;
+pub use osm_source_repository::{
+    FixtureOsmSourceRepository, OsmSourcePoi, OsmSourceReport, OsmSourceRepository,
+    OsmSourceRepositoryError,
 };
 #[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;

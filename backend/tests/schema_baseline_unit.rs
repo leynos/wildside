@@ -1,4 +1,4 @@
-//! Static contract checks for roadmap 3.1.1 migration SQL.
+//! Static contract checks for roadmap 3.1.1, 3.3.2, and 3.4.1 migration SQL.
 
 use rstest::rstest;
 
@@ -13,6 +13,10 @@ const OFFLINE_WALK_UP: &str =
 const OFFLINE_WALK_DOWN: &str = include_str!(
     "../migrations/2026-02-20-000000_create_offline_bundles_and_walk_sessions/down.sql"
 );
+const OSM_PROVENANCE_UP: &str =
+    include_str!("../migrations/2026-02-24-000000_create_osm_ingestion_provenance/up.sql");
+const OSM_PROVENANCE_DOWN: &str =
+    include_str!("../migrations/2026-02-24-000000_create_osm_ingestion_provenance/down.sql");
 
 #[rstest]
 fn enables_required_extensions() {
@@ -121,5 +125,31 @@ fn offline_walk_down_migration_drops_schema_objects(#[case] drop_statement: &str
     assert!(
         OFFLINE_WALK_DOWN.contains(drop_statement),
         "expected down migration to contain drop statement: {drop_statement}"
+    );
+}
+
+#[rstest]
+#[case("CREATE TABLE IF NOT EXISTS osm_ingestion_provenance")]
+#[case("geofence_id TEXT NOT NULL")]
+#[case("input_digest TEXT NOT NULL")]
+#[case("raw_poi_count BIGINT NOT NULL CHECK (raw_poi_count >= 0)")]
+#[case("filtered_poi_count BIGINT NOT NULL CHECK (filtered_poi_count >= 0)")]
+#[case("CONSTRAINT osm_ingestion_provenance_rerun_unique UNIQUE (geofence_id, input_digest)")]
+#[case("idx_osm_ingestion_provenance_geofence_imported_at")]
+#[case("ON osm_ingestion_provenance (geofence_id, imported_at DESC)")]
+fn creates_osm_ingestion_provenance_contract(#[case] ddl_fragment: &str) {
+    assert!(
+        OSM_PROVENANCE_UP.contains(ddl_fragment),
+        "expected OSM provenance migration to contain: {ddl_fragment}"
+    );
+}
+
+#[rstest]
+#[case("DROP INDEX IF EXISTS idx_osm_ingestion_provenance_geofence_imported_at")]
+#[case("DROP TABLE IF EXISTS osm_ingestion_provenance")]
+fn osm_ingestion_provenance_down_migration_drops_schema_objects(#[case] drop_statement: &str) {
+    assert!(
+        OSM_PROVENANCE_DOWN.contains(drop_statement),
+        "expected OSM provenance down migration to contain: {drop_statement}"
     );
 }
