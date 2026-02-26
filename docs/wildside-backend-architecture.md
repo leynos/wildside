@@ -714,7 +714,7 @@ services.
 > return stable identifiers from domain responses (`bundleId` and `sessionId`),
 > plus idempotency replay metadata for offline mutations. This keeps
 > idempotency policy and ownership checks in domain services while outbound
-> repositories remain the only layer with SQL/persistence details.<<<<<<< ours
+> repositories remain the only layer with SQL/persistence details.
 >
 > **Design decision (2026-02-24):** Roadmap item 3.4.1 introduces the
 > `ingest-osm` CLI as an inbound command adapter (`backend/src/bin/ingest_osm.rs`)
@@ -727,9 +727,6 @@ services.
 > `OsmIngestionProvenanceRepository` (rerun-key lookup and provenance writes).
 > This keeps parser and SQL details outside the domain while preserving an
 > auditable rerun contract for launch geofences.
-||||||| original
-
-=======
 >
 > **Design decision (2026-02-26):** Roadmap item 3.5.1 introduces a domain
 > schema-audit operation for user-state persistence using the existing
@@ -744,7 +741,6 @@ services.
 > interests storage canonicalization, interests revision tracking, and
 > interests stale-write conflict handling. The canonical audit record is
 > documented in `docs/user-state-schema-audit-3-5-1.md`.
->>>>>>> theirs
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.

@@ -44,6 +44,26 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
 }
 
 #[rstest]
+fn users_table_with_password_hash_is_recognised_as_credentials_persisted() {
+    let report = UserStateSchemaAuditReport::evaluate(&users_with_inline_credentials_diagram());
+
+    assert_eq!(
+        report.login_coverage,
+        LoginSchemaCoverage::CredentialsPersisted
+    );
+}
+
+#[rstest]
+fn separate_credentials_table_is_recognised_as_credentials_persisted() {
+    let report = UserStateSchemaAuditReport::evaluate(&separate_credentials_table_diagram());
+
+    assert_eq!(
+        report.login_coverage,
+        LoginSchemaCoverage::CredentialsPersisted
+    );
+}
+
+#[rstest]
 fn missing_users_table_requires_users_and_profile_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&diagram(vec![table(
         "user_preferences",
@@ -79,6 +99,96 @@ fn canonical_revisioned_interests_model_needs_no_interests_migrations() {
     assert_eq!(
         report.update_conflict_handling_migration,
         MigrationDecision::NotRequired
+    );
+}
+
+#[rstest]
+fn missing_interests_tables_require_interests_migrations() {
+    let report = UserStateSchemaAuditReport::evaluate(&no_interests_diagram());
+
+    assert_eq!(
+        report.interests_storage_coverage,
+        InterestsStorageCoverage::Missing
+    );
+    assert!(!report.supports_interests_revision_tracking);
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::Required
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::Required
+    );
+    assert_eq!(
+        report.update_conflict_handling_migration,
+        MigrationDecision::Required
+    );
+}
+
+#[rstest]
+fn canonical_join_interests_without_revision_require_revision_migrations() {
+    let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(false));
+
+    assert_eq!(
+        report.interests_storage_coverage,
+        InterestsStorageCoverage::CanonicalJoinTable
+    );
+    assert!(!report.supports_interests_revision_tracking);
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::NotRequired
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::Required
+    );
+}
+
+#[rstest]
+fn canonical_join_interests_with_revision_need_no_interests_migrations() {
+    let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(true));
+
+    assert_eq!(
+        report.interests_storage_coverage,
+        InterestsStorageCoverage::CanonicalJoinTable
+    );
+    assert!(report.supports_interests_revision_tracking);
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::NotRequired
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::NotRequired
+    );
+}
+
+#[rstest]
+#[case(false, false)]
+#[case(true, false)]
+#[case(false, true)]
+#[case(true, true)]
+fn dual_model_interests_do_not_track_revisions(
+    #[case] preferences_has_revision: bool,
+    #[case] join_has_revision: bool,
+) {
+    let report = UserStateSchemaAuditReport::evaluate(&dual_model_interests_diagram(
+        preferences_has_revision,
+        join_has_revision,
+    ));
+
+    assert_eq!(
+        report.interests_storage_coverage,
+        InterestsStorageCoverage::DualModel
+    );
+    assert!(!report.supports_interests_revision_tracking);
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::Required
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::Required
     );
 }
 
@@ -126,6 +236,20 @@ fn baseline_diagram() -> SchemaDiagram {
     ])
 }
 
+fn users_with_inline_credentials_diagram() -> SchemaDiagram {
+    diagram(vec![table(
+        "users",
+        &["id", "display_name", "password_hash"],
+    )])
+}
+
+fn separate_credentials_table_diagram() -> SchemaDiagram {
+    diagram(vec![
+        table("users", &["id", "display_name"]),
+        table("user_credentials", &["user_id", "password_hash"]),
+    ])
+}
+
 fn canonical_interests_diagram() -> SchemaDiagram {
     diagram(vec![
         table("users", &["id", "display_name"]),
@@ -133,6 +257,43 @@ fn canonical_interests_diagram() -> SchemaDiagram {
             "user_preferences",
             &["user_id", "interest_theme_ids", "revision"],
         ),
+    ])
+}
+
+fn no_interests_diagram() -> SchemaDiagram {
+    diagram(vec![table("users", &["id", "display_name"])])
+}
+
+fn canonical_join_interests_diagram(has_revision: bool) -> SchemaDiagram {
+    let mut join_columns = vec!["user_id", "theme_id"];
+    if has_revision {
+        join_columns.push("revision");
+    }
+
+    diagram(vec![
+        table("users", &["id", "display_name"]),
+        table("user_interest_themes", join_columns.as_slice()),
+    ])
+}
+
+fn dual_model_interests_diagram(
+    preferences_has_revision: bool,
+    join_has_revision: bool,
+) -> SchemaDiagram {
+    let mut preferences_columns = vec!["user_id", "interest_theme_ids"];
+    if preferences_has_revision {
+        preferences_columns.push("revision");
+    }
+
+    let mut join_columns = vec!["user_id", "theme_id"];
+    if join_has_revision {
+        join_columns.push("revision");
+    }
+
+    diagram(vec![
+        table("users", &["id", "display_name"]),
+        table("user_preferences", preferences_columns.as_slice()),
+        table("user_interest_themes", join_columns.as_slice()),
     ])
 }
 

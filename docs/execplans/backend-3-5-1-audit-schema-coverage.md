@@ -388,7 +388,7 @@ Documentation and roadmap:
 
 - All commands are re-runnable. Log file names are deterministic per branch
   and action.
-- If bootstrap or tests fail due transient DB state, cleanly stop embedded
+- If bootstrap or tests fail due to transient DB state, cleanly stop embedded
   PostgreSQL, rerun setup, and re-run only the failing target first before
   full gates.
 - If migration recommendation outcomes change mid-implementation, update

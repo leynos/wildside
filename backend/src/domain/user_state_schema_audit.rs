@@ -12,6 +12,14 @@
 use crate::domain::er_diagram::{SchemaDiagram, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 
+/// Recognised credential columns used by login persistence heuristics.
+///
+/// Keep this list in sync with schema conventions and migration decisions
+/// documented in `docs/user-state-schema-audit-3-5-1.md`.
+const LOGIN_CREDENTIAL_COLUMNS: &[&str] = &["password_hash", "password_digest", "credential_hash"];
+/// Recognised credential tables used by login persistence heuristics.
+const LOGIN_CREDENTIAL_TABLES: &[&str] = &["user_credentials", "login_credentials", "credentials"];
+
 /// Migration requirement derived from audit findings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MigrationDecision {
@@ -238,19 +246,17 @@ fn assess_login_coverage(diagram: &SchemaDiagram) -> LoginSchemaCoverage {
 }
 
 fn has_login_credential_storage(diagram: &SchemaDiagram) -> bool {
-    let credential_columns = ["password_hash", "password_digest", "credential_hash"];
-    if credential_columns
+    if LOGIN_CREDENTIAL_COLUMNS
         .iter()
         .any(|column| table_has_column(diagram, "users", column))
     {
         return true;
     }
 
-    let credential_tables = ["user_credentials", "login_credentials", "credentials"];
     diagram.tables.iter().any(|table| {
-        credential_tables.contains(&table.name.as_str())
+        LOGIN_CREDENTIAL_TABLES.contains(&table.name.as_str())
             && table_has_columns_in_table(table, &["user_id"])
-            && credential_columns
+            && LOGIN_CREDENTIAL_COLUMNS
                 .iter()
                 .any(|column| table_has_column_in_table(table, column))
     })
