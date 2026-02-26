@@ -13,9 +13,9 @@ use url::Url;
 
 use crate::domain::Error;
 use crate::domain::ports::{
-    OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRepository,
-    OsmIngestionRequest, OsmIngestionStatus, OsmPoiIngestionRecord, OsmSourcePoi,
-    OsmSourceRepository,
+    OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRecord,
+    OsmIngestionProvenanceRepository, OsmIngestionRequest, OsmIngestionStatus,
+    OsmPoiIngestionRecord, OsmSourcePoi, OsmSourceRepository,
 };
 
 #[path = "osm_ingestion_mapping.rs"]
@@ -277,19 +277,35 @@ where
     async fn ingest(&self, request: OsmIngestionRequest) -> Result<OsmIngestionOutcome, Error> {
         let validated_request = validate_request(&request)?;
 
-        if let Some(existing) = self.lookup_rerun(&validated_request).await? {
+        if let Some(existing) = self.check_for_existing_rerun(&validated_request).await? {
             return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
         }
 
-        let (source_report, raw_poi_count) = self.load_source(&request.osm_pbf_path).await?;
-        let (filtered_records, filtered_poi_count) =
-            self.filter_to_poi_records(source_report, &validated_request.geofence_bounds)?;
-        let provenance =
-            self.build_provenance(&validated_request, raw_poi_count, filtered_poi_count);
-        let (status, record) = self
-            .persist_or_replay(provenance, &filtered_records, &validated_request)
+        let (filtered_records, raw_poi_count, filtered_poi_count) = self
+            .ingest_and_filter_pois(&request, &validated_request)
             .await?;
-        Ok(mapping::to_outcome(status, record))
+
+        let provenance = OsmIngestionProvenanceRecord {
+            geofence_id: validated_request.geofence_id.as_str().to_owned(),
+            source_url: validated_request.source_url.as_str().to_owned(),
+            input_digest: validated_request.input_digest.as_str().to_owned(),
+            imported_at: self.clock.utc(),
+            geofence_bounds: validated_request.geofence_bounds.as_array(),
+            raw_poi_count,
+            filtered_poi_count,
+        };
+
+        if let Some(existing) = self
+            .persist_with_conflict_handling(&provenance, &filtered_records, &validated_request)
+            .await?
+        {
+            return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
+        }
+
+        Ok(mapping::to_outcome(
+            OsmIngestionStatus::Executed,
+            provenance,
+        ))
     }
 }
 
