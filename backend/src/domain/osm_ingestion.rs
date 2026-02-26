@@ -19,6 +19,9 @@ use crate::domain::ports::{
     OsmSourceRepositoryError,
 };
 
+#[path = "osm_ingestion_validation.rs"]
+mod validation;
+
 const WAY_ID_PREFIX: u64 = 1 << 62;
 const RELATION_ID_PREFIX: u64 = 1 << 63;
 const TYPE_ID_MASK: u64 = (1 << 62) - 1;
@@ -31,14 +34,24 @@ pub struct GeofenceBounds {
 
 impl GeofenceBounds {
     /// Construct validated bounds from explicit coordinate values.
+    /// ```
+    /// use backend::domain::osm_ingestion::GeofenceBounds;
+    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds");
+    /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Ordered bounds persist.
+    /// ```
     pub fn new(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> Result<Self, Error> {
-        validate_bounds([min_lng, min_lat, max_lng, max_lat])?;
+        validation::validate_bounds([min_lng, min_lat, max_lng, max_lat])?;
         Ok(Self {
             inner: [min_lng, min_lat, max_lng, max_lat],
         })
     }
 
     /// Return whether a point lies within this geofence.
+    /// ```
+    /// use backend::domain::osm_ingestion::GeofenceBounds;
+    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds");
+    /// assert!(bounds.contains(-3.10, 56.00)); // Boundary points are inside.
+    /// ```
     pub fn contains(&self, longitude: f64, latitude: f64) -> bool {
         let [min_lng, min_lat, max_lng, max_lat] = self.inner;
         longitude.is_finite()
@@ -50,6 +63,11 @@ impl GeofenceBounds {
     }
 
     /// Expose bounds as a primitive array for port contracts.
+    /// ```
+    /// use backend::domain::osm_ingestion::GeofenceBounds;
+    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds");
+    /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Adapter-facing format.
+    /// ```
     pub fn as_array(&self) -> [f64; 4] {
         self.inner
     }
@@ -63,8 +81,16 @@ pub struct InputDigest {
 
 impl InputDigest {
     /// Construct a validated input digest.
+    /// ```
+    /// use backend::domain::osm_ingestion::InputDigest;
+    /// let digest = InputDigest::new(
+    ///     "2e7d2c03a9507ae265ecf5b5356885a53393a2029f7c98f0f8f9f8f2a5f1f7c6".to_owned(),
+    /// )
+    /// .expect("valid digest");
+    /// assert_eq!(digest.as_str().len(), 64); // SHA-256 hex digest length.
+    /// ```
     pub fn new(digest: String) -> Result<Self, Error> {
-        if !is_valid_digest(&digest) {
+        if !validation::is_valid_digest(&digest) {
             return Err(Error::invalid_request(
                 "inputDigest must be a 64-character lowercase hexadecimal SHA-256 digest",
             ));
@@ -73,6 +99,14 @@ impl InputDigest {
     }
 
     /// Borrow the underlying digest string.
+    /// ```
+    /// use backend::domain::osm_ingestion::InputDigest;
+    /// let digest = InputDigest::new(
+    ///     "2e7d2c03a9507ae265ecf5b5356885a53393a2029f7c98f0f8f9f8f2a5f1f7c6".to_owned(),
+    /// )
+    /// .expect("valid digest");
+    /// assert!(digest.as_str().starts_with("2e7d")); // Access canonical digest bytes.
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.digest
     }
@@ -84,14 +118,25 @@ pub struct GeofenceId(String);
 
 impl GeofenceId {
     /// Construct a validated geofence identifier.
+    /// ```
+    /// use backend::domain::osm_ingestion::GeofenceId;
+    /// let geofence_id = GeofenceId::new("  launch-a  ".to_owned()).expect("valid id");
+    /// assert_eq!(geofence_id.as_str(), "launch-a"); // Surrounding whitespace is trimmed.
+    /// ```
     pub fn new(id: String) -> Result<Self, Error> {
-        if id.trim().is_empty() {
+        let trimmed = id.trim();
+        if trimmed.is_empty() {
             return Err(Error::invalid_request("geofenceId must not be empty"));
         }
-        Ok(Self(id))
+        Ok(Self(trimmed.to_owned()))
     }
 
     /// Borrow the identifier string.
+    /// ```
+    /// use backend::domain::osm_ingestion::GeofenceId;
+    /// let geofence_id = GeofenceId::new("launch-a".to_owned()).expect("valid id");
+    /// assert_eq!(geofence_id.as_str(), "launch-a"); // Borrowed without allocation.
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -103,6 +148,12 @@ pub struct SourceUrl(String);
 
 impl SourceUrl {
     /// Construct a validated source URL.
+    /// ```
+    /// use backend::domain::osm_ingestion::SourceUrl;
+    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned())
+    ///     .expect("valid source URL");
+    /// assert_eq!(source_url.as_str(), "https://example.test/launch.osm.pbf"); // URL is retained.
+    /// ```
     pub fn new(url: String) -> Result<Self, Error> {
         if url.trim().is_empty() {
             return Err(Error::invalid_request("sourceUrl must not be empty"));
@@ -114,6 +165,12 @@ impl SourceUrl {
     }
 
     /// Borrow the URL string.
+    /// ```
+    /// use backend::domain::osm_ingestion::SourceUrl;
+    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned())
+    ///     .expect("valid source URL");
+    /// assert!(source_url.as_str().starts_with("https://")); // Borrow validated URL.
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -241,75 +298,6 @@ fn validate_request(request: &OsmIngestionRequest) -> Result<ValidatedOsmIngesti
         input_digest,
     })
 }
-
-fn is_valid_digest(digest: &str) -> bool {
-    digest.len() == 64
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
-}
-
-fn validate_bounds(bounds: [f64; 4]) -> Result<(), Error> {
-    let [min_lng, min_lat, max_lng, max_lat] = bounds;
-    validate_longitude_bounds(min_lng, max_lng)?;
-    validate_latitude_bounds(min_lat, max_lat)?;
-    validate_bounds_ordering(min_lng, min_lat, max_lng, max_lat)?;
-    Ok(())
-}
-
-fn validate_coordinate_bounds<F>(
-    min: f64,
-    max: f64,
-    predicate: F,
-    error_message: &str,
-) -> Result<(), Error>
-where
-    F: Fn(f64) -> bool,
-{
-    if !predicate(min) || !predicate(max) {
-        return Err(Error::invalid_request(error_message));
-    }
-    Ok(())
-}
-
-fn validate_longitude_bounds(min_lng: f64, max_lng: f64) -> Result<(), Error> {
-    validate_coordinate_bounds(
-        min_lng,
-        max_lng,
-        valid_longitude,
-        "geofence longitude values must be finite and within [-180, 180]",
-    )
-}
-
-fn validate_latitude_bounds(min_lat: f64, max_lat: f64) -> Result<(), Error> {
-    validate_coordinate_bounds(
-        min_lat,
-        max_lat,
-        valid_latitude,
-        "geofence latitude values must be finite and within [-90, 90]",
-    )
-}
-
-fn validate_bounds_ordering(
-    min_lng: f64,
-    min_lat: f64,
-    max_lng: f64,
-    max_lat: f64,
-) -> Result<(), Error> {
-    if min_lng <= max_lng && min_lat <= max_lat {
-        return Ok(());
-    }
-
-    Err(Error::invalid_request(
-        "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]",
-    ))
-}
-
-#[rustfmt::skip]
-fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
-
-#[rustfmt::skip]
-fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
 
 fn to_poi_record(source_poi: OsmSourcePoi) -> Result<OsmPoiIngestionRecord, Error> {
     let (element_type, element_id) = decode_element_id(source_poi.encoded_element_id)?;

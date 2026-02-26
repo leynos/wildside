@@ -63,6 +63,17 @@ fn validate_request_rejects_invalid_fields(
 }
 
 #[rstest]
+fn validate_request_trims_geofence_id() {
+    let request = OsmIngestionRequest {
+        geofence_id: "  launch-a  ".to_owned(),
+        ..request()
+    };
+
+    let validated = validate_request(&request).expect("request should be valid");
+    assert_eq!(validated.geofence_id.as_str(), "launch-a");
+}
+
+#[rstest]
 #[case::nan_longitude(
     [f64::NAN, 55.90, -3.10, 56.00],
     "geofence longitude values must be finite and within [-180, 180]"
