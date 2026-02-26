@@ -112,6 +112,10 @@ fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersi
 }
 
 /// Provisions a temporary database cloned from the migration template.
+///
+/// Retries up to [`TEMPLATE_PROVISION_RETRIES`] times with
+/// [`TEMPLATE_PROVISION_RETRY_DELAY`] between attempts to tolerate transient
+/// cluster errors during parallel test runs.
 pub fn provision_template_database(
     cluster: &ClusterHandle,
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
