@@ -8,7 +8,8 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 use mockable::Clock;
 
 use super::{
-    GeofenceBounds, RELATION_ID_PREFIX, WAY_ID_PREFIX, decode_element_id, validate_request,
+    Coordinate, GeofenceBounds, RELATION_ID_PREFIX, WAY_ID_PREFIX, decode_element_id,
+    validate_request,
 };
 use crate::domain::OsmIngestionCommandService;
 use crate::domain::ports::{

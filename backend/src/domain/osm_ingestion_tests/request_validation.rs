@@ -24,7 +24,9 @@ fn geofence_contains_includes_boundaries_and_rejects_non_finite(
         GEOFENCE_BOUNDS[3],
     )
     .expect("fixture bounds should be valid");
-    let actual = bounds.contains(longitude, latitude);
+    let actual = Coordinate::new(longitude, latitude)
+        .map(|coordinate| bounds.contains(&coordinate))
+        .unwrap_or(false);
     assert_eq!(actual, expected);
 }
 

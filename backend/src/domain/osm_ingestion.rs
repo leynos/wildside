@@ -16,9 +16,10 @@ use crate::domain::ports::{
     OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRecord,
     OsmIngestionProvenanceRepository, OsmIngestionProvenanceRepositoryError, OsmIngestionRequest,
     OsmIngestionStatus, OsmPoiIngestionRecord, OsmSourcePoi, OsmSourceRepository,
-    OsmSourceRepositoryError,
 };
 
+#[path = "osm_ingestion_mapping.rs"]
+mod mapping;
 #[path = "osm_ingestion_validation.rs"]
 mod validation;
 
@@ -48,18 +49,16 @@ impl GeofenceBounds {
 
     /// Return whether a point lies within this geofence.
     /// ```
-    /// use backend::domain::osm_ingestion::GeofenceBounds;
-    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds");
-    /// assert!(bounds.contains(-3.10, 56.00)); // Boundary points are inside.
+    /// use backend::domain::osm_ingestion::{Coordinate, GeofenceBounds};
+    /// let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00).expect("valid bounds"); let coordinate = Coordinate::new(-3.10, 56.00).expect("valid coordinate");
+    /// assert!(bounds.contains(&coordinate)); // Boundary points are inside.
     /// ```
-    pub fn contains(&self, longitude: f64, latitude: f64) -> bool {
+    pub fn contains(&self, coordinate: &Coordinate) -> bool {
         let [min_lng, min_lat, max_lng, max_lat] = self.inner;
-        longitude.is_finite()
-            && latitude.is_finite()
-            && longitude >= min_lng
-            && longitude <= max_lng
-            && latitude >= min_lat
-            && latitude <= max_lat
+        coordinate.longitude() >= min_lng
+            && coordinate.longitude() <= max_lng
+            && coordinate.latitude() >= min_lat
+            && coordinate.latitude() <= max_lat
     }
 
     /// Expose bounds as a primitive array for port contracts.
@@ -83,10 +82,7 @@ impl InputDigest {
     /// Construct a validated input digest.
     /// ```
     /// use backend::domain::osm_ingestion::InputDigest;
-    /// let digest = InputDigest::new(
-    ///     "2e7d2c03a9507ae265ecf5b5356885a53393a2029f7c98f0f8f9f8f2a5f1f7c6".to_owned(),
-    /// )
-    /// .expect("valid digest");
+    /// let digest = InputDigest::new("a".repeat(64)).expect("valid digest");
     /// assert_eq!(digest.as_str().len(), 64); // SHA-256 hex digest length.
     /// ```
     pub fn new(digest: String) -> Result<Self, Error> {
@@ -101,11 +97,8 @@ impl InputDigest {
     /// Borrow the underlying digest string.
     /// ```
     /// use backend::domain::osm_ingestion::InputDigest;
-    /// let digest = InputDigest::new(
-    ///     "2e7d2c03a9507ae265ecf5b5356885a53393a2029f7c98f0f8f9f8f2a5f1f7c6".to_owned(),
-    /// )
-    /// .expect("valid digest");
-    /// assert!(digest.as_str().starts_with("2e7d")); // Access canonical digest bytes.
+    /// let digest = InputDigest::new("a".repeat(64)).expect("valid digest");
+    /// assert!(digest.as_str().starts_with('a')); // Access canonical digest bytes.
     /// ```
     pub fn as_str(&self) -> &str {
         &self.digest
@@ -150,8 +143,7 @@ impl SourceUrl {
     /// Construct a validated source URL.
     /// ```
     /// use backend::domain::osm_ingestion::SourceUrl;
-    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned())
-    ///     .expect("valid source URL");
+    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned()).expect("valid source URL");
     /// assert_eq!(source_url.as_str(), "https://example.test/launch.osm.pbf"); // URL is retained.
     /// ```
     pub fn new(url: String) -> Result<Self, Error> {
@@ -168,12 +160,63 @@ impl SourceUrl {
     /// Borrow the URL string.
     /// ```
     /// use backend::domain::osm_ingestion::SourceUrl;
-    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned())
-    ///     .expect("valid source URL");
+    /// let source_url = SourceUrl::new("https://example.test/launch.osm.pbf".to_owned()).expect("valid source URL");
     /// assert!(source_url.as_str().starts_with("https://")); // Borrow validated URL.
     /// ```
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+/// Validated geographic coordinate (longitude, latitude).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Coordinate {
+    longitude: f64,
+    latitude: f64,
+}
+
+impl Coordinate {
+    /// Construct a validated coordinate.
+    /// ```
+    /// use backend::domain::osm_ingestion::Coordinate;
+    /// let coordinate = Coordinate::new(-3.20, 55.95).expect("valid coordinate");
+    /// assert_eq!(coordinate.longitude(), -3.20); // Longitude is retained.
+    /// ```
+    pub fn new(longitude: f64, latitude: f64) -> Result<Self, Error> {
+        if !validation::valid_longitude(longitude) {
+            return Err(Error::invalid_request(
+                "longitude must be finite and within [-180, 180]",
+            ));
+        }
+        if !validation::valid_latitude(latitude) {
+            return Err(Error::invalid_request(
+                "latitude must be finite and within [-90, 90]",
+            ));
+        }
+        Ok(Self {
+            longitude,
+            latitude,
+        })
+    }
+
+    /// Borrow the validated longitude.
+    /// ```
+    /// use backend::domain::osm_ingestion::Coordinate;
+    /// let coordinate = Coordinate::new(-3.20, 55.95).expect("valid coordinate");
+    /// assert_eq!(coordinate.longitude(), -3.20); // Access longitude component.
+    /// ```
+    pub fn longitude(&self) -> f64 {
+        self.longitude
+    }
+
+    /// Borrow the validated latitude.
+    /// ```
+    /// use backend::domain::osm_ingestion::Coordinate;
+    /// let coordinate = Coordinate::new(-3.20, 55.95).expect("valid coordinate");
+    /// assert_eq!(coordinate.latitude(), 55.95); // Access latitude component.
+    /// ```
+    pub fn latitude(&self) -> f64 {
+        self.latitude
     }
 }
 
@@ -220,16 +263,16 @@ where
                 validated_request.input_digest.as_str(),
             )
             .await
-            .map_err(map_provenance_error)?
+            .map_err(mapping::map_provenance_error)?
         {
-            return Ok(to_outcome(OsmIngestionStatus::Replayed, existing));
+            return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
         }
 
         let source_report = self
             .source_repo
             .ingest_osm_pbf(&request.osm_pbf_path)
             .await
-            .map_err(map_source_error)?;
+            .map_err(mapping::map_source_error)?;
         let raw_poi_count = u64::try_from(source_report.pois.len())
             .map_err(|_| Error::internal("raw POI count exceeds supported range"))?;
 
@@ -237,9 +280,9 @@ where
             .pois
             .into_iter()
             .filter(|poi| {
-                validated_request
-                    .geofence_bounds
-                    .contains(poi.longitude, poi.latitude)
+                Coordinate::new(poi.longitude, poi.latitude)
+                    .map(|coord| validated_request.geofence_bounds.contains(&coord))
+                    .unwrap_or(false)
             })
             .map(to_poi_record)
             .collect::<Result<Vec<_>, _>>()?;
@@ -270,18 +313,21 @@ where
                         validated_request.input_digest.as_str(),
                     )
                     .await
-                    .map_err(map_provenance_error)?
+                    .map_err(mapping::map_provenance_error)?
                     .ok_or_else(|| {
                         Error::service_unavailable(
                             "ingestion provenance conflict occurred but rerun key was not found",
                         )
                     })?;
-                return Ok(to_outcome(OsmIngestionStatus::Replayed, existing));
+                return Ok(mapping::to_outcome(OsmIngestionStatus::Replayed, existing));
             }
-            Err(error) => return Err(map_provenance_error(error)),
+            Err(error) => return Err(mapping::map_provenance_error(error)),
         }
 
-        Ok(to_outcome(OsmIngestionStatus::Executed, provenance))
+        Ok(mapping::to_outcome(
+            OsmIngestionStatus::Executed,
+            provenance,
+        ))
     }
 }
 
@@ -334,43 +380,6 @@ fn decode_element_id(encoded_id: u64) -> Result<(String, i64), Error> {
     let element_id = i64::try_from(raw_id)
         .map_err(|_| Error::invalid_request("decoded OSM element identifier exceeds i64 range"))?;
     Ok((element_type.to_owned(), element_id))
-}
-
-fn to_outcome(
-    status: OsmIngestionStatus,
-    record: OsmIngestionProvenanceRecord,
-) -> OsmIngestionOutcome {
-    OsmIngestionOutcome {
-        status,
-        source_url: record.source_url,
-        geofence_id: record.geofence_id,
-        input_digest: record.input_digest,
-        imported_at: record.imported_at,
-        geofence_bounds: record.geofence_bounds,
-        raw_poi_count: record.raw_poi_count,
-        persisted_poi_count: record.filtered_poi_count,
-    }
-}
-
-fn map_source_error(error: OsmSourceRepositoryError) -> Error {
-    match error {
-        OsmSourceRepositoryError::Read { message }
-        | OsmSourceRepositoryError::Decode { message } => {
-            Error::service_unavailable(format!("failed to ingest OSM source: {message}"))
-        }
-    }
-}
-
-fn map_provenance_error(error: OsmIngestionProvenanceRepositoryError) -> Error {
-    match error {
-        OsmIngestionProvenanceRepositoryError::Connection { message }
-        | OsmIngestionProvenanceRepositoryError::Query { message } => {
-            Error::service_unavailable(format!("failed to persist ingestion provenance: {message}"))
-        }
-        OsmIngestionProvenanceRepositoryError::Conflict { message } => {
-            Error::conflict(format!("ingestion rerun key conflict: {message}"))
-        }
-    }
 }
 
 #[cfg(test)]

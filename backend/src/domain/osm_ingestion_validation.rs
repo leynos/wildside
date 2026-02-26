@@ -66,7 +66,7 @@ fn validate_bounds_ordering(
 }
 
 #[rustfmt::skip]
-fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
+pub(super) fn valid_longitude(value: f64) -> bool { value.is_finite() && (-180.0..=180.0).contains(&value) }
 
 #[rustfmt::skip]
-fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
+pub(super) fn valid_latitude(value: f64) -> bool { value.is_finite() && (-90.0..=90.0).contains(&value) }
