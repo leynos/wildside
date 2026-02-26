@@ -37,6 +37,10 @@
 //! - SchemaColumn — typed column descriptor used by `SchemaTable`.
 //! - SchemaRelationship — foreign-key edge used by `SchemaDiagram`.
 //! - render_mermaid_er_diagram — deterministic Mermaid ER rendering function.
+//! - UserStateSchemaAuditReport — schema coverage findings for user-state
+//!   persistence.
+//! - MigrationDecision — required/not-required decision for migration work.
+//! - audit_user_state_schema_coverage — repository-backed schema audit helper.
 //! - LocalizationMap and LocalizedStringSet — validated localization payloads.
 //! - SemanticIconIdentifier — validated semantic icon key.
 //! - Catalogue read-model entities (`RouteSummary`, `RouteCategory`, `Theme`,
@@ -76,6 +80,7 @@ pub mod user;
 pub mod user_events;
 pub mod user_interests;
 pub mod user_onboarding;
+pub mod user_state_schema_audit;
 pub mod walk_session_service;
 pub mod walks;
 
@@ -129,6 +134,10 @@ pub use self::user::{DisplayName, User, UserId, UserValidationError};
 pub use self::user_events::{DisplayNameRejectedEvent, UserCreatedEvent, UserEvent};
 pub use self::user_interests::UserInterests;
 pub use self::user_onboarding::UserOnboardingService;
+pub use self::user_state_schema_audit::{
+    EntitySchemaCoverage, InterestsStorageCoverage, LoginSchemaCoverage, MigrationDecision,
+    UserStateSchemaAuditReport, UserStateSchemaAuditService, audit_user_state_schema_coverage,
+};
 pub use self::walk_session_service::{WalkSessionCommandService, WalkSessionQueryService};
 pub use self::walks::{
     ParseWalkPrimaryStatKindError, ParseWalkSecondaryStatKindError, WalkCompletionSummary,
