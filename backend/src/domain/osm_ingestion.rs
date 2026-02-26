@@ -347,17 +347,21 @@ fn to_poi_record(source_poi: OsmSourcePoi) -> Result<OsmPoiIngestionRecord, Erro
 /// id is then converted to `i64`, returning an invalid-request error when it
 /// exceeds `i64` range.
 fn decode_element_id(encoded_id: u64) -> Result<(String, i64), Error> {
-    let (element_type, raw_id) = if encoded_id & RELATION_ID_PREFIX != 0 {
+    let (element_type, raw_id) = classify_element_prefix(encoded_id);
+
+    let element_id = i64::try_from(raw_id)
+        .map_err(|_| Error::invalid_request("decoded OSM element identifier exceeds i64 range"))?;
+    Ok((element_type.to_owned(), element_id))
+}
+
+fn classify_element_prefix(encoded_id: u64) -> (&'static str, u64) {
+    if encoded_id & RELATION_ID_PREFIX != 0 {
         ("relation", encoded_id & TYPE_ID_MASK)
     } else if encoded_id & WAY_ID_PREFIX != 0 {
         ("way", encoded_id & TYPE_ID_MASK)
     } else {
         ("node", encoded_id)
-    };
-
-    let element_id = i64::try_from(raw_id)
-        .map_err(|_| Error::invalid_request("decoded OSM element identifier exceeds i64 range"))?;
-    Ok((element_type.to_owned(), element_id))
+    }
 }
 
 #[cfg(test)]
