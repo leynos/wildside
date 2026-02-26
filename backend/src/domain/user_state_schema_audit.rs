@@ -1,7 +1,7 @@
 //! User-state schema coverage audit for roadmap 3.5.1.
 //!
 //! This module evaluates schema snapshots from the
-//! [`SchemaSnapshotRepository`](crate::domain::ports::SchemaSnapshotRepository)
+//! [`SchemaSnapshotRepository`]
 //! port and reports whether user-state persistence is covered for:
 //! login credentials, users, profile storage, and interests storage.
 //!
