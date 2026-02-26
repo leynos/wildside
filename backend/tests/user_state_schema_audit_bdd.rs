@@ -60,6 +60,13 @@ fn skip_if_needed(world: &UserStateSchemaAuditWorld) -> bool {
     }
 }
 
+fn get_report_or_skip(world: &UserStateSchemaAuditWorld) -> Option<&UserStateSchemaAuditReport> {
+    if skip_if_needed(world) {
+        return None;
+    }
+    Some(world.report.as_ref().expect("report should be captured"))
+}
+
 #[fixture]
 fn world() -> UserStateSchemaAuditWorld {
     let cluster = match shared_cluster_handle() {
@@ -132,11 +139,9 @@ fn login_credentials_storage_is_reported_as_missing(world: &mut UserStateSchemaA
 
 #[then("users and profile storage are reported as covered")]
 fn users_and_profile_storage_are_reported_as_covered(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    let Some(report) = get_report_or_skip(world) else {
         return;
-    }
-
-    let report = world.report.as_ref().expect("report should be captured");
+    };
     assert_eq!(report.users_coverage, EntitySchemaCoverage::Covered);
     assert_eq!(report.profile_coverage, EntitySchemaCoverage::Covered);
     assert_eq!(
@@ -147,11 +152,9 @@ fn users_and_profile_storage_are_reported_as_covered(world: &mut UserStateSchema
 
 #[then("interests migration decisions are required")]
 fn interests_migration_decisions_are_required(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    let Some(report) = get_report_or_skip(world) else {
         return;
-    }
-
-    let report = world.report.as_ref().expect("report should be captured");
+    };
     assert_eq!(
         report.interests_storage_coverage,
         InterestsStorageCoverage::DualModel
@@ -172,11 +175,9 @@ fn interests_migration_decisions_are_required(world: &mut UserStateSchemaAuditWo
 
 #[then("users and profile migrations are required")]
 fn users_and_profile_migrations_are_required(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    let Some(report) = get_report_or_skip(world) else {
         return;
-    }
-
-    let report = world.report.as_ref().expect("report should be captured");
+    };
     assert_eq!(report.users_coverage, EntitySchemaCoverage::Missing);
     assert_eq!(report.profile_coverage, EntitySchemaCoverage::Missing);
     assert_eq!(
@@ -187,11 +188,9 @@ fn users_and_profile_migrations_are_required(world: &mut UserStateSchemaAuditWor
 
 #[then("interests migration decisions are not required")]
 fn interests_migration_decisions_are_not_required(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    let Some(report) = get_report_or_skip(world) else {
         return;
-    }
-
-    let report = world.report.as_ref().expect("report should be captured");
+    };
     assert_eq!(
         report.interests_storage_coverage,
         InterestsStorageCoverage::CanonicalPreferences
