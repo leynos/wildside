@@ -1846,6 +1846,23 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
 This workflow ensures first-run requests succeed quickly while the dataset
 improves automatically for subsequent users.
 
+##### 3.4.2 Implementation Decision (2026-02-26)
+
+Roadmap item 3.4.2 is implemented with a domain-owned
+`OverpassEnrichmentWorker` and explicit ports so infrastructure concerns remain
+inside outbound adapters:
+
+- `OverpassEnrichmentSource` handles Overpass HTTP transport and response
+  decoding.
+- `OsmPoiRepository` remains the single persistence path for POI `UPSERT`s.
+- `EnrichmentJobMetrics` records enrichment outcomes without exposing
+  Prometheus types to the domain.
+
+Worker policy defaults are set to two concurrent outbound calls (semaphore),
+10,000 requests/day plus 1 GiB/day transfer quota, three retry attempts with
+jittered exponential backoff, and a circuit breaker that opens after three
+consecutive failures before allowing a half-open probe after cooldown.
+
 ### Map Tile Service (Martin)
 
 Wildside serves first-party vector tiles through a dedicated Martin service so
@@ -2038,11 +2055,12 @@ duration (mentioned earlier) specifically measures how long the route
 computation took inside the job
 handler([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L254-L262)).
  We could also measure end-to-end time from request to completion, though that
-might be inferred. For the enrichment jobs, we have a separate counter
-`enrichment_jobs_total` broken down by
-success/failure([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L738-L741)).
- If needed, a gauge for active jobs could be maintained (though Apalis can
-likely report if workers are busy).
+might be inferred. For enrichment, 3.4.2 wires outcomes to both
+`jobs_total{type="Enrichment", status="success|failure"}` and
+`enrichment_jobs_total{status="success|failure"}` so dashboards can aggregate
+across all jobs or inspect enrichment-specific behaviour. If needed, a gauge
+for active jobs could be maintained (though Apalis can likely report if
+workers are busy).
 
 Apalis integrates with the `tracing` crate, so each job run can emit tracing
 spans. We make sure to propagate the trace ID from the enqueuing context: one
@@ -2236,18 +2254,19 @@ monitoring([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde
   computation
   time([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
 
-- **Job Counts:** Counter `jobs_total{type, status}` covering each job type
-  (GenerateRoute, Enrichment) and whether it succeeded, failed, or timed
-  out([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L730-L738)).
-   This helps to alert on excessive failures.
+- **Job Counts:** Counter `jobs_total{type, status}` covering each job type.
+  Current enrichment wiring emits `status="success|failure"` with
+  `type="Enrichment"`, and route generation continues to use the wider status
+  set where needed([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L730-L738)).
+  This helps to alert on excessive failures.
 
 - **WebSocket Connections:** Gauge `websocket_connections_active` for number of
   currently connected
   clients([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L736-L743)).
 
 - **Enrichment outcomes:** Counter `enrichment_jobs_total{status}` for
-  enrichment jobs
-  success/fail([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L738-L741)).
+  enrichment jobs with `status="success|failure"` to mirror the domain worker
+  outcome contract([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L738-L741)).
 
 - **POI Count:** Gauge `pois_total` to track how many POIs are in our
   database(

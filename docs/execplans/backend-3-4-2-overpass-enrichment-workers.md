@@ -341,11 +341,16 @@ All three commands exit 0; retained logs show success without unresolved gates.
       architecture constraints, testing matrix, and documentation guardrails.
 - [x] (2026-02-26) Authored this ExecPlan at
       `docs/execplans/backend-3-4-2-overpass-enrichment-workers.md`.
-- [ ] Implement Milestone 0 baseline confirmation and record findings.
-- [ ] Implement Milestone 1 domain ports and policy modules with unit tests.
-- [ ] Implement Milestone 2 outbound adapters and worker wiring.
-- [ ] Implement Milestone 3 behavioural tests with embedded PostgreSQL.
-- [ ] Implement Milestone 4 documentation closure and final gates.
+- [x] (2026-02-26) Implemented Milestone 0 baseline confirmation using domain,
+      outbound, and BDD seam inspection before edits.
+- [x] (2026-02-26) Implemented Milestone 1 domain ports and worker policy
+      modules with `rstest` unit coverage.
+- [x] (2026-02-26) Implemented Milestone 2 outbound Overpass and Prometheus
+      adapters with targeted unit tests.
+- [x] (2026-02-26) Implemented Milestone 3 behavioural coverage via
+      `rstest-bdd` and embedded PostgreSQL.
+- [x] (2026-02-26) Implemented Milestone 4 documentation closure and final
+      gates (`make check-fmt`, `make lint`, `make test`).
 
 ## Surprises & Discoveries
 
@@ -359,6 +364,12 @@ All three commands exit 0; retained logs show success without unresolved gates.
   embedded PostgreSQL and skip-handling helpers.
   Impact: 3.4.2 behaviour tests can reuse proven fixtures rather than creating
   a second cluster bootstrap path.
+
+- Observation (2026-02-26): `cargo test <filter>` can compile BDD crates
+  without executing the scenario functions when the filter misses generated
+  names.
+  Impact: behavioural evidence should use explicit `--test` invocations for new
+  BDD files.
 
 ## Decision Log
 
@@ -377,13 +388,49 @@ All three commands exit 0; retained logs show success without unresolved gates.
   Rationale: durable gate evidence is required for truthful completion status.
   Date/Author: 2026-02-26 / Codex.
 
+- Decision: keep worker policy (quota + circuit + retry) inside a domain-owned
+  `OverpassEnrichmentWorker` and expose only source/metrics/persistence
+  boundaries through ports.
+  Rationale: preserves hexagonal boundaries while allowing adapter-specific
+  implementations for HTTP and Prometheus.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & Retrospective
 
-Pending implementation.
+Shipped:
 
-Complete this section only after roadmap 3.4.2 is delivered and gated. Record:
+- Domain ports for Overpass source and enrichment metrics.
+- Domain-owned `OverpassEnrichmentWorker` with semaphore admission, daily quota
+  checks, retry backoff with jitter, and circuit breaker transitions.
+- Outbound Overpass HTTP adapter and Prometheus enrichment metrics adapter.
+- `rstest` unit coverage for happy/unhappy/edge policy paths.
+- `rstest-bdd` behavioural coverage using embedded PostgreSQL.
+- Architecture documentation updates for 3.4.2 design decisions.
+- Roadmap closure for item 3.4.2.
 
-- what shipped;
-- what changed versus the initial plan;
-- which risks occurred and how they were mitigated;
-- follow-up work for deferred scope (including roadmap 3.4.3).
+Changes versus initial plan:
+
+- Circuit and quota edge assertions were concentrated in unit tests for
+  determinism, while BDD scenarios focused on persisted behaviour and
+  integration outcomes.
+- Worker runtime composition remains adapter-ready without introducing a full
+  queue runner mode in this milestone.
+
+Risk handling:
+
+- Module-size lint constraints were resolved by splitting worker test and
+  runtime support into dedicated submodules.
+- Clippy argument-count violations were resolved with typed dependency bundles
+  (`OverpassEnrichmentWorkerPorts`, `OverpassEnrichmentWorkerRuntime`,
+  `OverpassHttpIdentity`).
+
+Gate evidence:
+
+- `/tmp/check-fmt-wildside-backend-3-4-2-overpass-enrichment-workers.out`
+- `/tmp/lint-wildside-backend-3-4-2-overpass-enrichment-workers.out`
+- `/tmp/test-wildside-backend-3-4-2-overpass-enrichment-workers.out`
+
+Follow-up scope:
+
+- Roadmap 3.4.3 enrichment provenance persistence and admin reporting endpoints
+  remain pending by design.

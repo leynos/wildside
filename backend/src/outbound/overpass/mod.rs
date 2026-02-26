@@ -6,4 +6,4 @@
 mod dto;
 mod http_source;
 
-pub use http_source::OverpassHttpSource;
+pub use http_source::{OverpassHttpIdentity, OverpassHttpSource};

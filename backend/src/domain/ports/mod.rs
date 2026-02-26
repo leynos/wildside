@@ -8,6 +8,7 @@ mod catalogue_ingestion_repository;
 mod catalogue_repository;
 mod descriptor_ingestion_repository;
 mod descriptor_repository;
+mod enrichment_job_metrics;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
 mod idempotency_metrics;
@@ -20,6 +21,7 @@ mod osm_ingestion_command;
 mod osm_ingestion_provenance_repository;
 mod osm_poi_repository;
 mod osm_source_repository;
+mod overpass_enrichment_source;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
@@ -65,6 +67,12 @@ pub use descriptor_repository::MockDescriptorRepository;
 pub use descriptor_repository::{
     DescriptorRepository, DescriptorRepositoryError, DescriptorSnapshot,
     FixtureDescriptorRepository,
+};
+#[cfg(test)]
+pub use enrichment_job_metrics::MockEnrichmentJobMetrics;
+pub use enrichment_job_metrics::{
+    EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
+    EnrichmentJobMetricsError, EnrichmentJobSuccess, NoOpEnrichmentJobMetrics,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,
@@ -125,6 +133,12 @@ pub use osm_source_repository::MockOsmSourceRepository;
 pub use osm_source_repository::{
     FixtureOsmSourceRepository, OsmSourcePoi, OsmSourceReport, OsmSourceRepository,
     OsmSourceRepositoryError,
+};
+#[cfg(test)]
+pub use overpass_enrichment_source::MockOverpassEnrichmentSource;
+pub use overpass_enrichment_source::{
+    FixtureOverpassEnrichmentSource, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
+    OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
 };
 #[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;

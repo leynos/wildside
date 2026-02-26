@@ -49,6 +49,8 @@
 //!   objects (`WalkPrimaryStat`, `WalkSecondaryStat`).
 //! - OsmIngestionCommandService — orchestration service for OSM PBF ingestion,
 //!   enforcing geofence filtering and provenance persistence.
+//! - OverpassEnrichmentWorker — orchestration for queued Overpass enrichment
+//!   jobs with quota, retry, and circuit breaker policy.
 
 pub mod annotations;
 pub mod auth;
@@ -65,6 +67,7 @@ pub mod offline;
 pub mod offline_bundle_service;
 mod offline_bundle_service_support;
 pub mod osm_ingestion;
+pub mod overpass_enrichment_worker;
 pub mod ports;
 pub mod preferences;
 pub mod preferences_service;
@@ -116,6 +119,11 @@ pub use self::offline::{
 };
 pub use self::offline_bundle_service::{OfflineBundleCommandService, OfflineBundleQueryService};
 pub use self::osm_ingestion::OsmIngestionCommandService;
+pub use self::overpass_enrichment_worker::{
+    AttemptJitter, BackoffJitter, EnrichmentSleeper, OverpassEnrichmentJobOutcome,
+    OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
+    OverpassEnrichmentWorkerRuntime, TokioSleeper,
+};
 pub use self::preferences::{
     ParseUnitSystemError, UnitSystem, UserPreferences, UserPreferencesBuilder,
 };

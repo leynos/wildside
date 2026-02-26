@@ -14,10 +14,37 @@ use crate::domain::ports::{
     OverpassEnrichmentSourceError, OverpassPoi,
 };
 
+const DEFAULT_OVERPASS_QUERY_TIMEOUT_SECONDS: u32 = 180;
+const DEFAULT_USER_AGENT: &str = "wildside-backend-overpass-worker/0.1";
+const DEFAULT_CONTACT: &str = "ops@wildside.invalid";
+
+/// Outbound identity and query timeout settings for Overpass requests.
+pub struct OverpassHttpIdentity {
+    /// HTTP user-agent sent to Overpass.
+    pub user_agent: String,
+    /// Contact header value sent to Overpass.
+    pub contact: String,
+    /// Timeout directive embedded in Overpass query text.
+    pub query_timeout_seconds: u32,
+}
+
+impl Default for OverpassHttpIdentity {
+    fn default() -> Self {
+        Self {
+            user_agent: DEFAULT_USER_AGENT.to_owned(),
+            contact: DEFAULT_CONTACT.to_owned(),
+            query_timeout_seconds: DEFAULT_OVERPASS_QUERY_TIMEOUT_SECONDS,
+        }
+    }
+}
+
 /// Overpass source adapter that performs HTTP POST requests against one endpoint.
 pub struct OverpassHttpSource {
     client: Client,
     endpoint: Url,
+    user_agent: String,
+    contact: String,
+    query_timeout_seconds: u32,
 }
 
 impl OverpassHttpSource {
@@ -27,8 +54,27 @@ impl OverpassHttpSource {
     ///
     /// Returns an error when the reqwest client cannot be constructed.
     pub fn new(endpoint: Url, timeout: Duration) -> Result<Self, reqwest::Error> {
+        Self::with_identity(endpoint, timeout, OverpassHttpIdentity::default())
+    }
+
+    /// Build an adapter with explicit outbound identity and query timeout.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the reqwest client cannot be constructed.
+    pub fn with_identity(
+        endpoint: Url,
+        timeout: Duration,
+        identity: OverpassHttpIdentity,
+    ) -> Result<Self, reqwest::Error> {
         let client = Client::builder().timeout(timeout).build()?;
-        Ok(Self { client, endpoint })
+        Ok(Self {
+            client,
+            endpoint,
+            user_agent: identity.user_agent,
+            contact: identity.contact,
+            query_timeout_seconds: identity.query_timeout_seconds.max(1),
+        })
     }
 }
 
@@ -38,10 +84,12 @@ impl OverpassEnrichmentSource for OverpassHttpSource {
         &self,
         request: &OverpassEnrichmentRequest,
     ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
-        let query = build_overpass_query(request)?;
+        let query = build_overpass_query(request, self.query_timeout_seconds)?;
         let response = self
             .client
             .post(self.endpoint.clone())
+            .header(reqwest::header::USER_AGENT, self.user_agent.as_str())
+            .header("Contact", self.contact.as_str())
             .header(reqwest::header::ACCEPT, "application/json")
             .form(&[("data", query)])
             .send()
@@ -74,6 +122,7 @@ fn parse_pois(body: &[u8]) -> Result<Vec<OverpassPoi>, OverpassEnrichmentSourceE
 
 fn build_overpass_query(
     request: &OverpassEnrichmentRequest,
+    query_timeout_seconds: u32,
 ) -> Result<String, OverpassEnrichmentSourceError> {
     validate_bounding_box(&request.bounding_box)?;
     let bbox = format!(
@@ -102,7 +151,7 @@ fn build_overpass_query(
     }
 
     Ok(format!(
-        "[out:json][timeout:25];\n(\n{query_lines}\n);\nout center tags;",
+        "[out:json][timeout:{query_timeout_seconds}];\n(\n{query_lines}\n);\nout center tags;",
         query_lines = lines.join("\n")
     ))
 }
@@ -145,7 +194,7 @@ fn build_tag_selector(tag: &str) -> Result<String, OverpassEnrichmentSourceError
 
     let escaped_key = escape_quoted(key);
     match maybe_value {
-        Some(value) if value.is_empty() => Err(OverpassEnrichmentSourceError::invalid_request(
+        Some("") => Err(OverpassEnrichmentSourceError::invalid_request(
             "tags must not include empty values",
         )),
         Some(value) => Ok(format!("[\"{escaped_key}\"=\"{}\"]", escape_quoted(value))),
@@ -215,12 +264,16 @@ mod tests {
 
     #[test]
     fn builds_query_with_bbox_reordered_for_overpass() {
-        let query = build_overpass_query(&request(vec!["amenity", "name=coffee \"bar\""]))
+        let query = build_overpass_query(&request(vec!["amenity", "name=coffee \"bar\""]), 180)
             .expect("query should build");
 
         assert!(
             query.contains("node[\"amenity\"](55.9,-3.3,56,-3.1);"),
             "query should include bbox in south,west,north,east order"
+        );
+        assert!(
+            query.starts_with("[out:json][timeout:180];"),
+            "query should include configured timeout"
         );
         assert!(
             query.contains("way[\"name\"=\"coffee \\\"bar\\\"\"](55.9,-3.3,56,-3.1);"),
