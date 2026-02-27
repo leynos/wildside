@@ -68,6 +68,45 @@ fn get_report_or_skip(world: &UserStateSchemaAuditWorld) -> Option<&UserStateSch
     Some(world.report.as_ref().expect("report should be captured"))
 }
 
+/// Assert interests storage coverage and migration decisions.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "BDD assertions are clearer when expected migration outcomes remain explicit"
+)]
+fn assert_interests_migration_state(
+    report: &UserStateSchemaAuditReport,
+    expected_storage_coverage: InterestsStorageCoverage,
+    expected_storage_migration: MigrationDecision,
+    expected_revision_migration: MigrationDecision,
+    expected_conflict_migration: MigrationDecision,
+) {
+    assert_eq!(report.interests_storage_coverage, expected_storage_coverage);
+    assert_eq!(
+        report.interests_storage_migration,
+        expected_storage_migration
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        expected_revision_migration
+    );
+    assert_eq!(
+        report.update_conflict_handling_migration,
+        expected_conflict_migration
+    );
+}
+
+/// Assert users and profile coverage and migration decision.
+fn assert_users_and_profile_state(
+    report: &UserStateSchemaAuditReport,
+    expected_users_coverage: EntitySchemaCoverage,
+    expected_profile_coverage: EntitySchemaCoverage,
+    expected_profile_migration: MigrationDecision,
+) {
+    assert_eq!(report.users_coverage, expected_users_coverage);
+    assert_eq!(report.profile_coverage, expected_profile_coverage);
+    assert_eq!(report.profile_storage_migration, expected_profile_migration);
+}
+
 #[fixture]
 fn world() -> UserStateSchemaAuditWorld {
     let cluster = match shared_cluster_handle() {
@@ -141,11 +180,11 @@ fn users_and_profile_storage_are_reported_as_covered(world: &mut UserStateSchema
     let Some(report) = get_report_or_skip(world) else {
         return;
     };
-    assert_eq!(report.users_coverage, EntitySchemaCoverage::Covered);
-    assert_eq!(report.profile_coverage, EntitySchemaCoverage::Covered);
-    assert_eq!(
-        report.profile_storage_migration,
-        MigrationDecision::NotRequired
+    assert_users_and_profile_state(
+        report,
+        EntitySchemaCoverage::Covered,
+        EntitySchemaCoverage::Covered,
+        MigrationDecision::NotRequired,
     );
 }
 
@@ -154,21 +193,12 @@ fn interests_migration_decisions_are_required(world: &mut UserStateSchemaAuditWo
     let Some(report) = get_report_or_skip(world) else {
         return;
     };
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::DualModel
-    );
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::Required
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.update_conflict_handling_migration,
-        MigrationDecision::NotRequired
+    assert_interests_migration_state(
+        report,
+        InterestsStorageCoverage::DualModel,
+        MigrationDecision::Required,
+        MigrationDecision::NotRequired,
+        MigrationDecision::NotRequired,
     );
 }
 
@@ -177,11 +207,11 @@ fn users_and_profile_migrations_are_required(world: &mut UserStateSchemaAuditWor
     let Some(report) = get_report_or_skip(world) else {
         return;
     };
-    assert_eq!(report.users_coverage, EntitySchemaCoverage::Missing);
-    assert_eq!(report.profile_coverage, EntitySchemaCoverage::Missing);
-    assert_eq!(
-        report.profile_storage_migration,
-        MigrationDecision::Required
+    assert_users_and_profile_state(
+        report,
+        EntitySchemaCoverage::Missing,
+        EntitySchemaCoverage::Missing,
+        MigrationDecision::Required,
     );
 }
 
@@ -190,21 +220,12 @@ fn interests_migration_decisions_are_not_required(world: &mut UserStateSchemaAud
     let Some(report) = get_report_or_skip(world) else {
         return;
     };
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::CanonicalPreferences
-    );
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.update_conflict_handling_migration,
-        MigrationDecision::NotRequired
+    assert_interests_migration_state(
+        report,
+        InterestsStorageCoverage::CanonicalPreferences,
+        MigrationDecision::NotRequired,
+        MigrationDecision::NotRequired,
+        MigrationDecision::NotRequired,
     );
 }
 
