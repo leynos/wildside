@@ -19,7 +19,9 @@ impl MutableClock {
     pub fn advance(&self, delta: Duration) {
         let delta = match TimeDelta::from_std(delta) {
             Ok(delta) => delta,
-            Err(_) => panic!("delta"),
+            Err(error) => {
+                panic!("failed to convert Duration to TimeDelta: {error}; delta={delta:?}",)
+            }
         };
         *self.lock_clock() += delta;
     }

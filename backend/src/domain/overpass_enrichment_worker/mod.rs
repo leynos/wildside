@@ -224,7 +224,7 @@ impl OverpassEnrichmentWorker {
                     return Err(mapping::map_source_rejected_error(error));
                 }
                 Err(AttemptError::StateUnavailable(message)) => {
-                    self.record_failure_metric(EnrichmentJobFailureKind::SourceRejected, attempt)
+                    self.record_failure_metric(EnrichmentJobFailureKind::InternalError, attempt)
                         .await;
                     return Err(Error::internal(message));
                 }

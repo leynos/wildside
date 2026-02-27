@@ -31,6 +31,8 @@ pub enum EnrichmentJobFailureKind {
     RetryExhausted,
     /// Source returned a non-retryable failure.
     SourceRejected,
+    /// Worker runtime state was unavailable (for example poisoned mutexes).
+    InternalError,
     /// Persistence adapter could not upsert fetched POIs.
     PersistenceFailed,
 }
