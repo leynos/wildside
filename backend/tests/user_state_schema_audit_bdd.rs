@@ -126,11 +126,9 @@ fn executing_the_user_state_schema_audit(world: &mut UserStateSchemaAuditWorld) 
 
 #[then("login credentials storage is reported as missing")]
 fn login_credentials_storage_is_reported_as_missing(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    let Some(report) = get_report_or_skip(world) else {
         return;
-    }
-
-    let report = world.report.as_ref().expect("report should be captured");
+    };
     assert_eq!(
         report.login_coverage,
         LoginSchemaCoverage::MissingCredentialStorage
