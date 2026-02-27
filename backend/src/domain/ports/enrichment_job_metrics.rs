@@ -62,12 +62,51 @@ pub struct EnrichmentJobFailure {
 #[async_trait]
 pub trait EnrichmentJobMetrics: Send + Sync {
     /// Record a successful enrichment job run.
+    ///
+    /// ```rust,ignore
+    /// use backend::domain::ports::{
+    ///     EnrichmentJobMetrics, EnrichmentJobMetricsError, EnrichmentJobSuccess,
+    ///     NoOpEnrichmentJobMetrics,
+    /// };
+    ///
+    /// # async fn demo() {
+    /// let metrics = NoOpEnrichmentJobMetrics;
+    /// let payload = EnrichmentJobSuccess {
+    ///     attempt_count: 1,
+    ///     persisted_poi_count: 3,
+    ///     transfer_bytes: 512,
+    /// };
+    ///
+    /// let result = metrics.record_success(&payload).await;
+    /// assert!(result.is_ok());
+    /// let _ = Ok::<(), EnrichmentJobMetricsError>(());
+    /// # }
+    /// ```
     async fn record_success(
         &self,
         payload: &EnrichmentJobSuccess,
     ) -> Result<(), EnrichmentJobMetricsError>;
 
     /// Record a failed enrichment job run.
+    ///
+    /// ```rust,ignore
+    /// use backend::domain::ports::{
+    ///     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
+    ///     EnrichmentJobMetricsError, NoOpEnrichmentJobMetrics,
+    /// };
+    ///
+    /// # async fn demo() {
+    /// let metrics = NoOpEnrichmentJobMetrics;
+    /// let payload = EnrichmentJobFailure {
+    ///     attempt_count: 2,
+    ///     kind: EnrichmentJobFailureKind::RetryExhausted,
+    /// };
+    ///
+    /// let result = metrics.record_failure(&payload).await;
+    /// assert!(result.is_ok());
+    /// let _ = Ok::<(), EnrichmentJobMetricsError>(());
+    /// # }
+    /// ```
     async fn record_failure(
         &self,
         payload: &EnrichmentJobFailure,

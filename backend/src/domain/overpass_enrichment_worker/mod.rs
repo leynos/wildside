@@ -78,12 +78,50 @@ pub struct OverpassEnrichmentJobOutcome {
 #[async_trait]
 pub trait EnrichmentSleeper: Send + Sync {
     /// Suspend execution for `duration`.
+    ///
+    /// ```rust,no_run
+    /// use async_trait::async_trait;
+    /// use backend::domain::EnrichmentSleeper;
+    /// use std::sync::{Arc, Mutex};
+    /// use std::time::Duration;
+    /// #[derive(Default)]
+    /// struct CountingSleeper {
+    ///     calls: Arc<Mutex<u32>>,
+    /// }
+    /// #[async_trait]
+    /// impl EnrichmentSleeper for CountingSleeper {
+    ///     async fn sleep(&self, _duration: Duration) {
+    ///         *self.calls.lock().expect("calls mutex") += 1;
+    ///     }
+    /// }
+    /// # async fn demo() {
+    /// let sleeper = CountingSleeper::default();
+    /// sleeper.sleep(Duration::from_millis(25)).await;
+    /// assert_eq!(*sleeper.calls.lock().expect("calls mutex"), 1);
+    /// # }
+    /// ```
     async fn sleep(&self, duration: Duration);
 }
 
 /// Retry backoff jitter abstraction.
 pub trait BackoffJitter: Send + Sync {
     /// Return a jittered delay from the exponential base delay.
+    ///
+    /// ```rust
+    /// use backend::domain::BackoffJitter;
+    /// use chrono::{TimeZone, Utc};
+    /// use std::time::Duration;
+    /// struct DeterministicJitter;
+    /// impl BackoffJitter for DeterministicJitter {
+    ///     fn jittered_delay(&self, base: Duration, attempt: u32, _now: chrono::DateTime<chrono::Utc>) -> Duration {
+    ///         base + Duration::from_millis(u64::from(attempt) * 5)
+    ///     }
+    /// }
+    /// let jitter = DeterministicJitter;
+    /// let now = Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0).single().expect("valid time");
+    /// let delay = jitter.jittered_delay(Duration::from_millis(100), 2, now);
+    /// assert_eq!(delay, Duration::from_millis(110));
+    /// ```
     fn jittered_delay(&self, base: Duration, attempt: u32, now: DateTime<Utc>) -> Duration;
 }
 
