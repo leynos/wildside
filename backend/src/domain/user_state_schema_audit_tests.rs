@@ -9,38 +9,58 @@ use super::{
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaTable};
 use crate::domain::ports::{MockSchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "The argument layout keeps expected outcomes explicit at each call site"
-)]
-fn assert_interests_migration_decisions(
-    report: &UserStateSchemaAuditReport,
-    expected_storage_coverage: InterestsStorageCoverage,
-    expected_revision_tracking: bool,
-    expected_conflict_handling: Option<bool>,
-    expected_storage_migration: MigrationDecision,
-    expected_revision_tracking_migration: MigrationDecision,
-    expected_conflict_handling_migration: Option<MigrationDecision>,
-) {
-    assert_eq!(report.interests_storage_coverage, expected_storage_coverage);
-    assert_eq!(
-        report.supports_interests_revision_tracking,
-        expected_revision_tracking
-    );
-    if let Some(expected) = expected_conflict_handling {
-        assert_eq!(report.supports_update_conflict_handling, expected);
-    }
+// Custom assertion helpers for common test criteria patterns
+
+fn assert_no_interests_migrations_required(report: &UserStateSchemaAuditReport) {
     assert_eq!(
         report.interests_storage_migration,
-        expected_storage_migration
+        MigrationDecision::NotRequired
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        expected_revision_tracking_migration
+        MigrationDecision::NotRequired
     );
-    if let Some(expected) = expected_conflict_handling_migration {
-        assert_eq!(report.update_conflict_handling_migration, expected);
-    }
+    assert_eq!(
+        report.update_conflict_handling_migration,
+        MigrationDecision::NotRequired
+    );
+}
+
+fn assert_all_interests_migrations_required(report: &UserStateSchemaAuditReport) {
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::Required
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::Required
+    );
+    assert_eq!(
+        report.update_conflict_handling_migration,
+        MigrationDecision::Required
+    );
+}
+
+fn assert_interests_coverage_with_revision_support(
+    report: &UserStateSchemaAuditReport,
+    coverage: InterestsStorageCoverage,
+    supports_revision: bool,
+) {
+    assert_eq!(report.interests_storage_coverage, coverage);
+    assert_eq!(
+        report.supports_interests_revision_tracking,
+        supports_revision
+    );
+    assert_eq!(report.supports_update_conflict_handling, supports_revision);
+}
+
+fn assert_users_and_profile_covered(report: &UserStateSchemaAuditReport) {
+    assert_eq!(report.users_coverage, EntitySchemaCoverage::Covered);
+    assert_eq!(report.profile_coverage, EntitySchemaCoverage::Covered);
+    assert_eq!(
+        report.profile_storage_migration,
+        MigrationDecision::NotRequired
+    );
 }
 
 #[rstest]
@@ -51,17 +71,11 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
         report.login_coverage,
         LoginSchemaCoverage::MissingCredentialStorage
     );
-    assert_eq!(report.users_coverage, EntitySchemaCoverage::Covered);
-    assert_eq!(report.profile_coverage, EntitySchemaCoverage::Covered);
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::DualModel
-    );
-    assert!(report.supports_interests_revision_tracking);
-    assert!(report.supports_update_conflict_handling);
-    assert_eq!(
-        report.profile_storage_migration,
-        MigrationDecision::NotRequired
+    assert_users_and_profile_covered(&report);
+    assert_interests_coverage_with_revision_support(
+        &report,
+        InterestsStorageCoverage::DualModel,
+        true,
     );
     assert_eq!(
         report.interests_storage_migration,
@@ -110,44 +124,42 @@ fn missing_users_table_requires_users_and_profile_migrations() {
 fn canonical_revisioned_interests_model_needs_no_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_interests_diagram());
 
-    assert_interests_migration_decisions(
+    assert_interests_coverage_with_revision_support(
         &report,
         InterestsStorageCoverage::CanonicalPreferences,
         true,
-        Some(true),
-        MigrationDecision::NotRequired,
-        MigrationDecision::NotRequired,
-        Some(MigrationDecision::NotRequired),
     );
+    assert_no_interests_migrations_required(&report);
 }
 
 #[rstest]
 fn missing_interests_tables_require_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&no_interests_diagram());
 
-    assert_interests_migration_decisions(
+    assert_interests_coverage_with_revision_support(
         &report,
         InterestsStorageCoverage::Missing,
         false,
-        None,
-        MigrationDecision::Required,
-        MigrationDecision::Required,
-        Some(MigrationDecision::Required),
     );
+    assert_all_interests_migrations_required(&report);
 }
 
 #[rstest]
 fn canonical_join_interests_without_revision_require_revision_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(false));
 
-    assert_interests_migration_decisions(
+    assert_interests_coverage_with_revision_support(
         &report,
         InterestsStorageCoverage::CanonicalJoinTable,
         false,
-        None,
-        MigrationDecision::NotRequired,
-        MigrationDecision::Required,
-        None,
+    );
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::NotRequired
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::Required
     );
 }
 
@@ -155,14 +167,18 @@ fn canonical_join_interests_without_revision_require_revision_migrations() {
 fn canonical_join_interests_with_revision_need_no_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(true));
 
-    assert_interests_migration_decisions(
+    assert_interests_coverage_with_revision_support(
         &report,
         InterestsStorageCoverage::CanonicalJoinTable,
         true,
-        None,
-        MigrationDecision::NotRequired,
-        MigrationDecision::NotRequired,
-        None,
+    );
+    assert_eq!(
+        report.interests_storage_migration,
+        MigrationDecision::NotRequired
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        MigrationDecision::NotRequired
     );
 }
 
