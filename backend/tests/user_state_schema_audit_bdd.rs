@@ -68,30 +68,31 @@ fn get_report_or_skip(world: &UserStateSchemaAuditWorld) -> Option<&UserStateSch
     Some(world.report.as_ref().expect("report should be captured"))
 }
 
+/// Expected migration decisions for interests-related migrations.
+struct ExpectedInterestsMigrations {
+    storage: MigrationDecision,
+    revision_tracking: MigrationDecision,
+    conflict_handling: MigrationDecision,
+}
+
 /// Assert interests storage coverage and migration decisions.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "BDD assertions are clearer when expected migration outcomes remain explicit"
-)]
 fn assert_interests_migration_state(
     report: &UserStateSchemaAuditReport,
     expected_storage_coverage: InterestsStorageCoverage,
-    expected_storage_migration: MigrationDecision,
-    expected_revision_migration: MigrationDecision,
-    expected_conflict_migration: MigrationDecision,
+    expected_migrations: ExpectedInterestsMigrations,
 ) {
     assert_eq!(report.interests_storage_coverage, expected_storage_coverage);
     assert_eq!(
         report.interests_storage_migration,
-        expected_storage_migration
+        expected_migrations.storage
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        expected_revision_migration
+        expected_migrations.revision_tracking
     );
     assert_eq!(
         report.update_conflict_handling_migration,
-        expected_conflict_migration
+        expected_migrations.conflict_handling
     );
 }
 
@@ -196,9 +197,11 @@ fn interests_migration_decisions_are_required(world: &mut UserStateSchemaAuditWo
     assert_interests_migration_state(
         report,
         InterestsStorageCoverage::DualModel,
-        MigrationDecision::Required,
-        MigrationDecision::NotRequired,
-        MigrationDecision::NotRequired,
+        ExpectedInterestsMigrations {
+            storage: MigrationDecision::Required,
+            revision_tracking: MigrationDecision::NotRequired,
+            conflict_handling: MigrationDecision::NotRequired,
+        },
     );
 }
 
@@ -223,9 +226,11 @@ fn interests_migration_decisions_are_not_required(world: &mut UserStateSchemaAud
     assert_interests_migration_state(
         report,
         InterestsStorageCoverage::CanonicalPreferences,
-        MigrationDecision::NotRequired,
-        MigrationDecision::NotRequired,
-        MigrationDecision::NotRequired,
+        ExpectedInterestsMigrations {
+            storage: MigrationDecision::NotRequired,
+            revision_tracking: MigrationDecision::NotRequired,
+            conflict_handling: MigrationDecision::NotRequired,
+        },
     );
 }
 
