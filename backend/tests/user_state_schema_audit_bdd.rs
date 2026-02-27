@@ -121,7 +121,7 @@ fn world() -> UserStateSchemaAuditWorld {
     let database = match provision_template_database(cluster).map_err(|error| error.to_string()) {
         Ok(database) => database,
         Err(reason) => {
-            let _: Option<()> = handle_cluster_setup_failure(reason.clone());
+            let _: Option<()> = handle_cluster_setup_failure(&reason);
             return UserStateSchemaAuditWorld::skipped(reason);
         }
     };
