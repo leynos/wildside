@@ -53,7 +53,8 @@ impl UserStateSchemaAuditWorld {
 
 fn skip_if_needed(world: &UserStateSchemaAuditWorld) -> bool {
     if world.is_skipped() {
-        eprintln!("SKIP-TEST-CLUSTER: scenario skipped");
+        let reason = world.setup_error.as_deref().unwrap_or("unknown reason");
+        eprintln!("SKIP-TEST-CLUSTER: scenario skipped ({reason})");
         true
     } else {
         false
