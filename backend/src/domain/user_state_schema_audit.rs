@@ -12,12 +12,12 @@
 use crate::domain::er_diagram::{SchemaDiagram, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 
-/// Recognised credential columns used by login persistence heuristics.
+/// Recognized credential columns used by login persistence heuristics.
 ///
 /// Keep this list in sync with schema conventions and migration decisions
 /// documented in `docs/user-state-schema-audit-3-5-1.md`.
 const LOGIN_CREDENTIAL_COLUMNS: &[&str] = &["password_hash", "password_digest", "credential_hash"];
-/// Recognised credential tables used by login persistence heuristics.
+/// Recognized credential tables used by login persistence heuristics.
 const LOGIN_CREDENTIAL_TABLES: &[&str] = &["user_credentials", "login_credentials", "credentials"];
 
 /// Migration requirement derived from audit findings.
