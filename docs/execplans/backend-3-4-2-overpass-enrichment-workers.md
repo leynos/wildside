@@ -438,3 +438,7 @@ Follow-up scope:
 
 - Roadmap 3.4.3 enrichment provenance persistence and admin reporting endpoints
   remain pending by design.
+- Shared cross-replica backing for quota and circuit-breaker state remains
+  pending by design and is tracked in a dedicated follow-up issue, so this
+  document's `Status: COMPLETE` should not be interpreted as multi-replica
+  readiness.

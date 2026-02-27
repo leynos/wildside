@@ -1,6 +1,6 @@
 //! Reqwest-backed Overpass source adapter.
 //!
-//! This adapter owns transport details only: request serialisation, timeout and
+//! This adapter owns transport details only: request serialization, timeout and
 //! HTTP error mapping, and JSON decoding into domain POIs.
 
 use std::time::Duration;

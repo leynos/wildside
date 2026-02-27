@@ -10,16 +10,12 @@ use backend::domain::ports::{
     EnrichmentJobMetricsError, EnrichmentJobSuccess, OverpassEnrichmentRequest,
     OverpassEnrichmentResponse, OverpassEnrichmentSource, OverpassEnrichmentSourceError,
 };
-use backend::domain::{
-    BackoffJitter, EnrichmentSleeper, OverpassEnrichmentJobOutcome, OverpassEnrichmentWorker,
-};
-use chrono::{DateTime, Local, TimeDelta, Utc};
-use mockable::Clock;
+use backend::domain::{OverpassEnrichmentJobOutcome, OverpassEnrichmentWorker};
+use backend::test_support::overpass_enrichment::{ImmediateSleeper, MutableClock, NoJitter};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::ScenarioState;
-use std::time::Duration;
 use tokio::sync::{Mutex as AsyncMutex, Notify, mpsc};
 
 #[path = "overpass_enrichment_bdd/world.rs"]
@@ -39,46 +35,6 @@ struct DatabaseHandle(
     )]
     Arc<TemporaryDatabase>,
 );
-
-struct MutableClock(Mutex<DateTime<Utc>>);
-
-impl MutableClock {
-    fn new(now: DateTime<Utc>) -> Self {
-        Self(Mutex::new(now))
-    }
-
-    fn advance_seconds(&self, seconds: i64) {
-        let mut guard = self.0.lock().expect("clock mutex");
-        *guard += TimeDelta::seconds(seconds);
-    }
-}
-
-impl Clock for MutableClock {
-    fn local(&self) -> DateTime<Local> {
-        self.utc().with_timezone(&Local)
-    }
-
-    fn utc(&self) -> DateTime<Utc> {
-        *self.0.lock().expect("clock mutex")
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct ImmediateSleeper;
-
-#[async_trait]
-impl EnrichmentSleeper for ImmediateSleeper {
-    async fn sleep(&self, _duration: Duration) {}
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct NoJitter;
-
-impl BackoffJitter for NoJitter {
-    fn jittered_delay(&self, base: Duration, _attempt: u32, _now: DateTime<Utc>) -> Duration {
-        base
-    }
-}
 
 struct ScriptedOverpassSource {
     scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,

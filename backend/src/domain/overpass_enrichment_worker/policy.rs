@@ -290,6 +290,8 @@ impl WorkerPolicyState {
 }
 
 fn is_cooldown_elapsed(opened_at: DateTime<Utc>, now: DateTime<Utc>, cooldown: Duration) -> bool {
+    // Fail open when std->chrono conversion fails: this path is unlikely, and
+    // returning true avoids accidentally holding the circuit open forever.
     let Ok(cooldown) = chrono::Duration::from_std(cooldown) else {
         return true;
     };

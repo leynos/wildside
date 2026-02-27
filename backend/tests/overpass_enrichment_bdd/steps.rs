@@ -3,6 +3,7 @@
 use super::*;
 use backend::domain::ErrorCode;
 use rstest_bdd_macros::{given, scenario, then, when};
+use std::time::Duration;
 use tokio::time::timeout;
 
 #[given("a Diesel-backed Overpass enrichment worker with successful source data")]

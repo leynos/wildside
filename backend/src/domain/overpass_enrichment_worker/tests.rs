@@ -6,8 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
-use mockable::Clock;
+use chrono::{DateTime, TimeZone, Utc};
 use rstest::{fixture, rstest};
 use tokio::sync::{Notify, mpsc};
 use tokio::time::timeout;
@@ -15,8 +14,8 @@ use uuid::Uuid;
 
 use super::policy::CircuitBreakerState;
 use super::{
-    BackoffJitter, EnrichmentSleeper, OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig,
-    OverpassEnrichmentWorkerPorts, OverpassEnrichmentWorkerRuntime,
+    OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
+    OverpassEnrichmentWorkerRuntime,
 };
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
@@ -24,45 +23,9 @@ use crate::domain::ports::{
     OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
     OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
 };
-
-struct MutableClock(Mutex<DateTime<Utc>>);
-impl MutableClock {
-    fn new(now: DateTime<Utc>) -> Self {
-        Self(Mutex::new(now))
-    }
-    fn advance(&self, delta: Duration) {
-        *self.0.lock().expect("clock mutex") += TimeDelta::from_std(delta).expect("delta");
-    }
-}
-impl Clock for MutableClock {
-    fn local(&self) -> DateTime<Local> {
-        self.utc().with_timezone(&Local)
-    }
-    fn utc(&self) -> DateTime<Utc> {
-        *self.0.lock().expect("clock mutex")
-    }
-}
-
-#[derive(Default)]
-struct RecordingSleeper(Mutex<Vec<Duration>>);
-#[async_trait]
-impl EnrichmentSleeper for RecordingSleeper {
-    async fn sleep(&self, duration: Duration) {
-        self.0.lock().expect("sleeper mutex").push(duration);
-    }
-}
-struct NoJitter;
-impl BackoffJitter for NoJitter {
-    fn jittered_delay(&self, base: Duration, _attempt: u32, _now: DateTime<Utc>) -> Duration {
-        base
-    }
-}
-struct AttemptOffsetJitter;
-impl BackoffJitter for AttemptOffsetJitter {
-    fn jittered_delay(&self, base: Duration, attempt: u32, _now: DateTime<Utc>) -> Duration {
-        base + Duration::from_millis(u64::from(attempt))
-    }
-}
+use crate::test_support::overpass_enrichment::{
+    AttemptOffsetJitter, MutableClock, NoJitter, RecordingSleeper,
+};
 
 struct SourceStub {
     scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,

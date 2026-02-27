@@ -14,11 +14,11 @@ use tokio::sync::Semaphore;
 use crate::domain::Error;
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics, EnrichmentJobSuccess,
-    OsmPoiIngestionRecord, OsmPoiRepository, OsmPoiRepositoryError, OverpassEnrichmentRequest,
-    OverpassEnrichmentResponse, OverpassEnrichmentSource, OverpassEnrichmentSourceError,
-    OverpassPoi,
+    OsmPoiRepository, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
+    OverpassEnrichmentSource, OverpassEnrichmentSourceError,
 };
 
+mod mapping;
 mod policy;
 mod runtime;
 
@@ -204,12 +204,12 @@ impl OverpassEnrichmentWorker {
                 Err(AttemptError::RetryableSource(error)) => {
                     self.record_failure_metric(EnrichmentJobFailureKind::RetryExhausted, attempt)
                         .await;
-                    return Err(map_retry_exhausted_error(error));
+                    return Err(mapping::map_retry_exhausted_error(error));
                 }
                 Err(AttemptError::QuotaDenied(reason)) => {
-                    let kind = map_quota_failure_kind(reason);
+                    let kind = mapping::map_quota_failure_kind(reason);
                     self.record_failure_metric(kind, attempt).await;
-                    return Err(map_quota_error(reason));
+                    return Err(mapping::map_quota_error(reason));
                 }
                 Err(AttemptError::CircuitOpen) => {
                     self.record_failure_metric(EnrichmentJobFailureKind::CircuitOpen, attempt)
@@ -221,7 +221,7 @@ impl OverpassEnrichmentWorker {
                 Err(AttemptError::SourceRejected(error)) => {
                     self.record_failure_metric(EnrichmentJobFailureKind::SourceRejected, attempt)
                         .await;
-                    return Err(map_source_rejected_error(error));
+                    return Err(mapping::map_source_rejected_error(error));
                 }
                 Err(AttemptError::StateUnavailable(message)) => {
                     self.record_failure_metric(EnrichmentJobFailureKind::SourceRejected, attempt)
@@ -294,12 +294,15 @@ impl OverpassEnrichmentWorker {
             pois,
             transfer_bytes,
         } = report;
-        let records = pois.into_iter().map(map_overpass_poi).collect::<Vec<_>>();
+        let records = pois
+            .into_iter()
+            .map(mapping::map_overpass_poi)
+            .collect::<Vec<_>>();
 
         if let Err(error) = self.poi_repository.upsert_pois(&records).await {
             self.record_failure_metric(EnrichmentJobFailureKind::PersistenceFailed, attempts)
                 .await;
-            return Err(map_persistence_error(error, attempts));
+            return Err(mapping::map_persistence_error(error, attempts));
         }
 
         self.record_success_metric(EnrichmentJobSuccess {
@@ -333,58 +336,6 @@ impl OverpassEnrichmentWorker {
         let base_ms = self.config.initial_backoff.as_millis() as u64;
         let max_ms = self.config.max_backoff.as_millis() as u64;
         Duration::from_millis(base_ms.saturating_mul(u64::from(exponent)).min(max_ms))
-    }
-}
-
-fn map_overpass_poi(poi: OverpassPoi) -> OsmPoiIngestionRecord {
-    OsmPoiIngestionRecord {
-        element_type: poi.element_type,
-        element_id: poi.element_id,
-        longitude: poi.longitude,
-        latitude: poi.latitude,
-        tags: poi.tags,
-    }
-}
-
-fn map_quota_failure_kind(reason: QuotaDenyReason) -> EnrichmentJobFailureKind {
-    match reason {
-        QuotaDenyReason::RequestLimit => EnrichmentJobFailureKind::QuotaRequestLimit,
-        QuotaDenyReason::TransferLimit => EnrichmentJobFailureKind::QuotaTransferLimit,
-    }
-}
-
-fn map_quota_error(reason: QuotaDenyReason) -> Error {
-    match reason {
-        QuotaDenyReason::RequestLimit => {
-            Error::service_unavailable("daily Overpass request quota exhausted")
-        }
-        QuotaDenyReason::TransferLimit => {
-            Error::service_unavailable("daily Overpass transfer quota exhausted")
-        }
-    }
-}
-
-fn map_retry_exhausted_error(error: OverpassEnrichmentSourceError) -> Error {
-    Error::service_unavailable(format!("overpass retries exhausted: {error}"))
-}
-
-fn map_source_rejected_error(error: OverpassEnrichmentSourceError) -> Error {
-    match error {
-        OverpassEnrichmentSourceError::InvalidRequest { message } => {
-            Error::invalid_request(format!("overpass request rejected: {message}"))
-        }
-        other => Error::internal(format!("overpass call failed: {other}")),
-    }
-}
-
-fn map_persistence_error(error: OsmPoiRepositoryError, attempts: u32) -> Error {
-    match error {
-        OsmPoiRepositoryError::Connection { message } => Error::service_unavailable(format!(
-            "enrichment persistence unavailable after {attempts} attempts: {message}"
-        )),
-        OsmPoiRepositoryError::Query { message } => Error::internal(format!(
-            "enrichment persistence failed after {attempts} attempts: {message}"
-        )),
     }
 }
 
