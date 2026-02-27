@@ -124,7 +124,7 @@ async fn retry_uses_jittered_exponential_backoff(
     assert_eq!(out.attempts, 3);
     assert_eq!(source.calls.load(Ordering::SeqCst), 3);
     assert_eq!(
-        sleeper.0.lock().expect("sleeper mutex").as_slice(),
+        sleeper.lock_durations().as_slice(),
         [Duration::from_millis(101), Duration::from_millis(202)]
     );
     assert_eq!(

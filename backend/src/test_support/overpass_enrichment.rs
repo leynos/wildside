@@ -207,22 +207,38 @@ impl EnrichmentSleeper for ImmediateSleeper {
 /// sleeper.sleep(Duration::from_millis(10)).await;
 ///
 /// assert_eq!(
-///     sleeper.0.lock().expect("sleeper mutex").as_slice(),
+///     sleeper.lock_durations().as_slice(),
 ///     [Duration::from_millis(5), Duration::from_millis(10)],
 /// );
 /// # }
 /// ```
-#[derive(Default)]
-pub struct RecordingSleeper(pub Mutex<Vec<Duration>>);
+#[derive(Default, Debug)]
+pub struct RecordingSleeper(Mutex<Vec<Duration>>);
+
+impl RecordingSleeper {
+    /// Lock and return the recorded sleep durations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::test_support::overpass_enrichment::RecordingSleeper;
+    ///
+    /// let sleeper = RecordingSleeper::default();
+    /// assert!(sleeper.lock_durations().is_empty());
+    /// ```
+    pub fn lock_durations(&self) -> std::sync::MutexGuard<'_, Vec<Duration>> {
+        match self.0.lock() {
+            Ok(guard) => guard,
+            Err(error) => panic!("sleeper mutex lock failed: {error:?}"),
+        }
+    }
+}
 
 #[async_trait]
 impl EnrichmentSleeper for RecordingSleeper {
     /// Record the requested sleep duration.
     async fn sleep(&self, duration: Duration) {
-        let mut entries = match self.0.lock() {
-            Ok(entries) => entries,
-            Err(error) => panic!("sleeper mutex lock failed: {error:?}"),
-        };
+        let mut entries = self.lock_durations();
         entries.push(duration);
     }
 }

@@ -358,6 +358,8 @@ impl OverpassEnrichmentWorker {
     }
 
     async fn record_success_metric(&self, payload: EnrichmentJobSuccess) {
+        // Metrics exporter errors are deliberately non-fatal so a failed
+        // counter write does not abort job processing throughput.
         let _ = self.metrics.record_success(&payload).await;
     }
 
@@ -366,6 +368,8 @@ impl OverpassEnrichmentWorker {
             attempt_count: attempts,
             kind,
         };
+        // Metrics exporter errors are deliberately non-fatal so a failed
+        // counter write does not abort job processing throughput.
         let _ = self.metrics.record_failure(&payload).await;
     }
 
