@@ -131,9 +131,7 @@ fn world() -> UserStateSchemaAuditWorld {
 }
 
 #[given("a migrated schema baseline")]
-fn a_migrated_schema_baseline(world: &mut UserStateSchemaAuditWorld) {
-    let _ = world;
-}
+fn a_migrated_schema_baseline(#[from(world)] _world: &mut UserStateSchemaAuditWorld) {}
 
 #[given("the users table is missing")]
 fn the_users_table_is_missing(world: &mut UserStateSchemaAuditWorld) {
