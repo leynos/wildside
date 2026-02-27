@@ -33,6 +33,7 @@ fn assert_no_interests_migrations_required(report: &UserStateSchemaAuditReport) 
     );
 }
 
+/// Assert that all interests-related migrations are marked as required.
 fn assert_all_interests_migrations_required(report: &UserStateSchemaAuditReport) {
     assert_eq!(
         report.interests_storage_migration,
@@ -48,6 +49,7 @@ fn assert_all_interests_migrations_required(report: &UserStateSchemaAuditReport)
     );
 }
 
+/// Assert interests coverage and whether revision/conflict handling is supported.
 fn assert_interests_coverage_with_revision_support(
     report: &UserStateSchemaAuditReport,
     coverage: InterestsStorageCoverage,
@@ -97,7 +99,7 @@ fn baseline_schema_reports_login_gap_and_interests_migrations() {
 #[rstest]
 #[case(users_with_inline_credentials_diagram)]
 #[case(separate_credentials_table_diagram)]
-fn credential_storage_variants_are_recognised_as_persisted(
+fn credential_storage_variants_are_recognized_as_persisted(
     #[case] diagram_provider: fn() -> SchemaDiagram,
 ) {
     let report = UserStateSchemaAuditReport::evaluate(&diagram_provider());
@@ -196,10 +198,10 @@ fn dual_model_interests_revision_tracking_follows_schema(
         report.interests_storage_coverage,
         InterestsStorageCoverage::DualModel
     );
-    let expects_revision_tracking = preferences_has_revision || join_has_revision;
+    let should_support_revision_tracking = preferences_has_revision || join_has_revision;
     assert_eq!(
         report.supports_interests_revision_tracking,
-        expects_revision_tracking
+        should_support_revision_tracking
     );
     assert_eq!(
         report.interests_storage_migration,
@@ -207,7 +209,7 @@ fn dual_model_interests_revision_tracking_follows_schema(
     );
     assert_eq!(
         report.interests_revision_tracking_migration,
-        if expects_revision_tracking {
+        if should_support_revision_tracking {
             MigrationDecision::NotRequired
         } else {
             MigrationDecision::Required
@@ -215,7 +217,7 @@ fn dual_model_interests_revision_tracking_follows_schema(
     );
     assert_eq!(
         report.update_conflict_handling_migration,
-        if expects_revision_tracking {
+        if should_support_revision_tracking {
             MigrationDecision::NotRequired
         } else {
             MigrationDecision::Required
