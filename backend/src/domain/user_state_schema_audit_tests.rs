@@ -9,6 +9,40 @@ use super::{
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaTable};
 use crate::domain::ports::{MockSchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The argument layout keeps expected outcomes explicit at each call site"
+)]
+fn assert_interests_migration_decisions(
+    report: &UserStateSchemaAuditReport,
+    expected_storage_coverage: InterestsStorageCoverage,
+    expected_revision_tracking: bool,
+    expected_conflict_handling: Option<bool>,
+    expected_storage_migration: MigrationDecision,
+    expected_revision_tracking_migration: MigrationDecision,
+    expected_conflict_handling_migration: Option<MigrationDecision>,
+) {
+    assert_eq!(report.interests_storage_coverage, expected_storage_coverage);
+    assert_eq!(
+        report.supports_interests_revision_tracking,
+        expected_revision_tracking
+    );
+    if let Some(expected) = expected_conflict_handling {
+        assert_eq!(report.supports_update_conflict_handling, expected);
+    }
+    assert_eq!(
+        report.interests_storage_migration,
+        expected_storage_migration
+    );
+    assert_eq!(
+        report.interests_revision_tracking_migration,
+        expected_revision_tracking_migration
+    );
+    if let Some(expected) = expected_conflict_handling_migration {
+        assert_eq!(report.update_conflict_handling_migration, expected);
+    }
+}
+
 #[rstest]
 fn baseline_schema_reports_login_gap_and_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&baseline_diagram());
@@ -76,23 +110,14 @@ fn missing_users_table_requires_users_and_profile_migrations() {
 fn canonical_revisioned_interests_model_needs_no_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_interests_diagram());
 
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::CanonicalPreferences
-    );
-    assert!(report.supports_interests_revision_tracking);
-    assert!(report.supports_update_conflict_handling);
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.update_conflict_handling_migration,
-        MigrationDecision::NotRequired
+    assert_interests_migration_decisions(
+        &report,
+        InterestsStorageCoverage::CanonicalPreferences,
+        true,
+        Some(true),
+        MigrationDecision::NotRequired,
+        MigrationDecision::NotRequired,
+        Some(MigrationDecision::NotRequired),
     );
 }
 
@@ -100,22 +125,14 @@ fn canonical_revisioned_interests_model_needs_no_interests_migrations() {
 fn missing_interests_tables_require_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&no_interests_diagram());
 
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::Missing
-    );
-    assert!(!report.supports_interests_revision_tracking);
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::Required
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::Required
-    );
-    assert_eq!(
-        report.update_conflict_handling_migration,
-        MigrationDecision::Required
+    assert_interests_migration_decisions(
+        &report,
+        InterestsStorageCoverage::Missing,
+        false,
+        None,
+        MigrationDecision::Required,
+        MigrationDecision::Required,
+        Some(MigrationDecision::Required),
     );
 }
 
@@ -123,18 +140,14 @@ fn missing_interests_tables_require_interests_migrations() {
 fn canonical_join_interests_without_revision_require_revision_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(false));
 
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::CanonicalJoinTable
-    );
-    assert!(!report.supports_interests_revision_tracking);
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::Required
+    assert_interests_migration_decisions(
+        &report,
+        InterestsStorageCoverage::CanonicalJoinTable,
+        false,
+        None,
+        MigrationDecision::NotRequired,
+        MigrationDecision::Required,
+        None,
     );
 }
 
@@ -142,18 +155,14 @@ fn canonical_join_interests_without_revision_require_revision_migrations() {
 fn canonical_join_interests_with_revision_need_no_interests_migrations() {
     let report = UserStateSchemaAuditReport::evaluate(&canonical_join_interests_diagram(true));
 
-    assert_eq!(
-        report.interests_storage_coverage,
-        InterestsStorageCoverage::CanonicalJoinTable
-    );
-    assert!(report.supports_interests_revision_tracking);
-    assert_eq!(
-        report.interests_storage_migration,
-        MigrationDecision::NotRequired
-    );
-    assert_eq!(
-        report.interests_revision_tracking_migration,
-        MigrationDecision::NotRequired
+    assert_interests_migration_decisions(
+        &report,
+        InterestsStorageCoverage::CanonicalJoinTable,
+        true,
+        None,
+        MigrationDecision::NotRequired,
+        MigrationDecision::NotRequired,
+        None,
     );
 }
 
