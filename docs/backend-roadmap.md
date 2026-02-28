@@ -186,6 +186,12 @@ so persistence details stay confined to outbound adapters.
   extending `DieselUserRepository` to satisfy those ports directly or by
   introducing adapter wrappers around it, while preserving current session and
   error-envelope behaviour.
+  - Execution note (2026-02-28): focused test coverage and architecture docs
+    landed in `backend/tests/diesel_login_users_adapters.rs`,
+    `backend/tests/user_state_startup_modes_bdd.rs`, and
+    `backend/tests/features/user_state_startup_modes.feature`; full-gate replay
+    (`make check-fmt`, `make lint`, `make test`) is still pending, so this
+    checkbox remains open.
 - [ ] 3.5.3. Replace fixture-backed `UserProfileQuery` and
   `UserInterestsCommand` wiring with explicit DB-backed concrete types, and
   document whether this uses repository extensions (for example
