@@ -65,10 +65,10 @@ async fn assert_quota_denial_short_circuits_source(
     let error = worker.process_job(job).await.expect_err("quota denies");
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
     assert_eq!(source.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(
-        metrics.failures.lock().expect("metrics mutex")[0].kind,
-        case.expected_kind
-    );
+    assert_eq!(metrics.successes.lock().expect("metrics mutex").len(), 0);
+    let failures = metrics.failures.lock().expect("metrics mutex");
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].kind, case.expected_kind);
 }
 
 #[rstest]

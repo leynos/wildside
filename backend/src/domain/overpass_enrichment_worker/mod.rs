@@ -142,7 +142,7 @@ pub struct AttemptJitter;
 
 impl BackoffJitter for AttemptJitter {
     fn jittered_delay(&self, base: Duration, attempt: u32, now: DateTime<Utc>) -> Duration {
-        let base_ms = base.as_millis() as u64;
+        let base_ms = u64::try_from(base.as_millis()).unwrap_or(u64::MAX);
         let max_extra = (base_ms / 4).max(1);
         let seed = u64::from(now.timestamp_subsec_nanos()) ^ u64::from(attempt);
         let extra = seed % (max_extra.saturating_add(1));
@@ -375,8 +375,8 @@ impl OverpassEnrichmentWorker {
 
     fn retry_base_delay(&self, attempt: u32) -> Duration {
         let exponent = 2_u32.saturating_pow(attempt.saturating_sub(1));
-        let base_ms = self.config.initial_backoff.as_millis() as u64;
-        let max_ms = self.config.max_backoff.as_millis() as u64;
+        let base_ms = u64::try_from(self.config.initial_backoff.as_millis()).unwrap_or(u64::MAX);
+        let max_ms = u64::try_from(self.config.max_backoff.as_millis()).unwrap_or(u64::MAX);
         Duration::from_millis(base_ms.saturating_mul(u64::from(exponent)).min(max_ms))
     }
 }
