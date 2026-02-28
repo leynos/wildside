@@ -15,16 +15,16 @@ use crate::domain::Error;
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics, EnrichmentJobSuccess,
     OsmPoiRepository, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
-    OverpassEnrichmentSource, OverpassEnrichmentSourceError,
+    OverpassEnrichmentSource,
 };
 
+mod attempt_error;
 mod mapping;
 mod policy;
 mod runtime;
 
-use policy::{
-    AdmissionDecision, CircuitBreakerConfig, DailyQuota, QuotaDenyReason, WorkerPolicyState,
-};
+use attempt_error::AttemptError;
+use policy::{AdmissionDecision, CircuitBreakerConfig, DailyQuota, WorkerPolicyState};
 pub use runtime::{OverpassEnrichmentWorkerPorts, OverpassEnrichmentWorkerRuntime};
 
 /// Worker configuration controlling quota, retries, and breaker behaviour.
@@ -379,14 +379,6 @@ impl OverpassEnrichmentWorker {
         let max_ms = u64::try_from(self.config.max_backoff.as_millis()).unwrap_or(u64::MAX);
         Duration::from_millis(base_ms.saturating_mul(u64::from(exponent)).min(max_ms))
     }
-}
-
-enum AttemptError {
-    RetryableSource(OverpassEnrichmentSourceError),
-    SourceRejected(OverpassEnrichmentSourceError),
-    QuotaDenied(QuotaDenyReason),
-    CircuitOpen,
-    StateUnavailable(String),
 }
 
 #[cfg(test)]

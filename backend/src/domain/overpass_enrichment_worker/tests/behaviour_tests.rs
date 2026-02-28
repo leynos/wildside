@@ -167,7 +167,7 @@ impl CircuitBreakerTestFixtureBuilder {
         let worker = OverpassEnrichmentWorker::with_runtime(
             OverpassEnrichmentWorkerPorts::new(
                 source.clone(),
-                Arc::new(RepoStub::new(Vec::new())),
+                Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
                 Arc::new(MetricsStub::default()),
             ),
             clock.clone(),
