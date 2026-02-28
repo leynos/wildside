@@ -19,8 +19,10 @@ use super::{
 };
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
-    EnrichmentJobMetricsError, EnrichmentJobSuccess, OsmPoiIngestionRecord, OsmPoiRepository,
-    OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
+    EnrichmentJobMetricsError, EnrichmentJobSuccess, EnrichmentProvenanceRecord,
+    EnrichmentProvenanceRepository, EnrichmentProvenanceRepositoryError,
+    ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse, OsmPoiIngestionRecord,
+    OsmPoiRepository, OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
     OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
 };
 use crate::test_support::overpass_enrichment::{
@@ -121,6 +123,49 @@ impl OsmPoiRepository for RepoStub {
     }
 }
 
+struct ProvenanceRepoStub {
+    scripted: Mutex<VecDeque<Result<(), EnrichmentProvenanceRepositoryError>>>,
+    calls: AtomicUsize,
+    persisted: Mutex<Vec<EnrichmentProvenanceRecord>>,
+}
+impl ProvenanceRepoStub {
+    fn new(scripted: Vec<Result<(), EnrichmentProvenanceRepositoryError>>) -> Self {
+        Self {
+            scripted: Mutex::new(scripted.into()),
+            calls: AtomicUsize::new(0),
+            persisted: Mutex::new(Vec::new()),
+        }
+    }
+}
+#[async_trait]
+impl EnrichmentProvenanceRepository for ProvenanceRepoStub {
+    async fn persist(
+        &self,
+        record: &EnrichmentProvenanceRecord,
+    ) -> Result<(), EnrichmentProvenanceRepositoryError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.persisted
+            .lock()
+            .expect("provenance mutex")
+            .push(record.clone());
+        self.scripted
+            .lock()
+            .expect("provenance mutex")
+            .pop_front()
+            .unwrap_or(Ok(()))
+    }
+
+    async fn list_recent(
+        &self,
+        _request: &ListEnrichmentProvenanceRequest,
+    ) -> Result<ListEnrichmentProvenanceResponse, EnrichmentProvenanceRepositoryError> {
+        Ok(ListEnrichmentProvenanceResponse {
+            records: Vec::new(),
+            next_before: None,
+        })
+    }
+}
+
 #[derive(Default)]
 struct MetricsStub {
     successes: Mutex<Vec<EnrichmentJobSuccess>>,
@@ -183,8 +228,21 @@ fn config() -> OverpassEnrichmentWorkerConfig {
 }
 
 fn response(poi_count: usize, transfer_bytes: u64) -> OverpassEnrichmentResponse {
+    response_with_source_url(
+        poi_count,
+        transfer_bytes,
+        "https://overpass.example/api/interpreter",
+    )
+}
+
+fn response_with_source_url(
+    poi_count: usize,
+    transfer_bytes: u64,
+    source_url: &str,
+) -> OverpassEnrichmentResponse {
     OverpassEnrichmentResponse {
         transfer_bytes,
+        source_url: source_url.to_owned(),
         pois: (0..poi_count)
             .map(|idx| OverpassPoi {
                 element_type: "node".to_owned(),

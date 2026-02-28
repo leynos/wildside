@@ -172,7 +172,7 @@ so persistence details stay confined to outbound adapters.
     - deterministic reruns keyed by geofence and input digest.
 - [x] 3.4.2. Add Overpass enrichment workers with semaphore-governed quotas,
   circuit breaking, and metrics wired to the enrichment job counters.
-- [ ] 3.4.3. Configure enrichment provenance persistence (source URL,
+- [x] 3.4.3. Configure enrichment provenance persistence (source URL,
   timestamp, and bounding box) and expose it via admin reporting endpoints.
 
 ### 3.5. User state port persistence parity

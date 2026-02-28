@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 This plan covers roadmap item 3.4.3 only:
 `Configure enrichment provenance persistence (source URL, timestamp, and
@@ -334,12 +334,24 @@ Branch-specific expected evidence paths:
 - [x] (2026-02-28) Ran agent-team planning synthesis for architecture, testing,
       and closure.
 - [x] (2026-02-28) Drafted this implementation ExecPlan artifact.
-- [ ] Implement Milestone 1.
-- [ ] Implement Milestone 2.
-- [ ] Implement Milestone 3.
-- [ ] Implement Milestone 4.
-- [ ] Implement Milestone 5.
-- [ ] Run Milestone 6 and capture evidence.
+- [x] (2026-02-28) Implemented Milestone 1: added
+      `EnrichmentProvenanceRepository` domain port and integrated worker
+      provenance persistence.
+- [x] (2026-02-28) Implemented Milestone 2: added migration
+      `2026-02-28-000000_create_overpass_enrichment_provenance` and Diesel
+      adapter wiring.
+- [x] (2026-02-28) Implemented Milestone 3: shipped
+      `GET /api/v1/admin/enrichment/provenance`, state wiring, and OpenAPI
+      registration.
+- [x] (2026-02-28) Implemented Milestone 4: added `rstest` and `rstest-bdd`
+      happy/unhappy/edge coverage for worker provenance persistence and admin
+      reporting.
+- [x] (2026-02-28) Implemented Milestone 5: updated architecture decisions and
+      marked roadmap item `3.4.3` as done.
+- [x] (2026-02-28) Ran Milestone 6 gates with evidence logs:
+      `/tmp/check-fmt-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`,
+      `/tmp/lint-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`,
+      `/tmp/test-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`.
 
 ## Surprises & Discoveries
 
@@ -349,6 +361,11 @@ Branch-specific expected evidence paths:
   specific to 3.4.1 rerun semantics and should not be reused directly for 3.4.3.
 - Current `HttpState` and app route wiring expose no admin enrichment reporting
   seam.
+- Parallel agent edits introduced overlapping in-flight patches; reconciliation
+  required a manual diff audit and consolidation pass before implementation
+  completion.
+- `rstest-bdd` scenario binding resolution is sensitive to module composition
+  and size constraints, so scenario bindings were split into a dedicated module.
 
 ## Decision Log
 
@@ -371,15 +388,35 @@ Branch-specific expected evidence paths:
   Rationale: this is a key operational behaviour and must be explicit.
   Date/Author: 2026-02-28 / Codex.
 
+- Decision: persist provenance after POI upsert success and fail the job when
+  provenance persistence fails.
+  Rationale: keeps auditability mandatory while preserving existing POI
+  persistence semantics.
+  Date/Author: 2026-02-28 / Codex.
+
+- Decision: keep admin reporting as a direct domain-port query from inbound
+  state rather than introducing a separate application service.
+  Rationale: scope is read-only endpoint exposure and the existing adapter
+  pattern already routes port calls through `HttpState`.
+  Date/Author: 2026-02-28 / Codex.
+
 ## Outcomes & Retrospective
 
-Pending implementation.
+Completed.
 
-Closure notes to capture when complete:
-
-- final endpoint contract and pagination limits shipped;
-- final persistence failure policy shipped;
-- architecture decision section path and date;
-- roadmap checkbox update confirmation;
-- full gate evidence paths and statuses;
-- any deferred follow-up work.
+- Shipped `EnrichmentProvenanceRepository` with persistence and newest-first
+  list semantics behind domain ports.
+- Shipped migration and Diesel adapter for
+  `overpass_enrichment_provenance(source_url, imported_at, bounds_*)`.
+- Shipped authenticated admin reporting endpoint
+  `GET /api/v1/admin/enrichment/provenance` with bounded pagination
+  (`limit` default 50, max 200) and optional RFC3339 `before` cursor.
+- Added worker + endpoint coverage across `rstest` and `rstest-bdd`,
+  including happy, unhappy, and edge paths.
+- Updated `docs/wildside-backend-architecture.md` with the 3.4.3 decision and
+  updated `docs/backend-roadmap.md` to mark `3.4.3` done.
+- Gate evidence:
+  - `make check-fmt`: pass
+  - `make lint`: pass
+  - `make test`: pass
+  (logs at the three `/tmp/...-backend-3-4-3-configure-enrichment-provenance-persistence.out` paths above).

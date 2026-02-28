@@ -563,6 +563,9 @@ data without rewriting view components.
 - `OsmIngestionProvenanceRepository` (read/write): persists ingestion
   provenance (`source_url`, `input_digest`, `imported_at`, and geofence bounds)
   and exposes deterministic rerun lookups by `(geofence_id, input_digest)`.
+- `EnrichmentProvenanceRepository` (read/write): persists Overpass enrichment
+  provenance (`source_url`, `imported_at`, and request bounding box) and
+  exposes newest-first reporting pages for admin observability endpoints.
 - `OsmSourceRepository` (read): extracts POIs from `.osm.pbf` files through the
   `wildside-data` integration adapter without exposing parser details to the
   domain.
@@ -1877,6 +1880,29 @@ Worker policy defaults are set to two concurrent outbound calls (semaphore),
 10,000 requests/day plus 1 GiB/day transfer quota, three retry attempts with
 jittered exponential backoff, and a circuit breaker that opens after three
 consecutive failures before allowing a half-open probe after cooldown.
+
+##### 3.4.3 Design Decision (2026-02-28)
+
+Roadmap item 3.4.3 introduces a dedicated enrichment provenance contract rather
+than reusing ingestion provenance storage. The design keeps the same hexagonal
+boundary discipline as 3.4.2:
+
+- `OverpassEnrichmentWorker` remains domain-owned and writes enrichment
+  provenance through a dedicated driven port.
+- The persistence adapter owns PostgreSQL shape details and stores
+  `{source_url, imported_at, bounds_min_lng, bounds_min_lat, bounds_max_lng,
+  bounds_max_lat}` in deterministic newest-first order.
+- Admin reporting is exposed through an inbound HTTP handler at
+  `GET /api/v1/admin/enrichment/provenance`, with query parameters
+  `limit` (default 50, max 200) and optional `before` (RFC3339 cursor), and a
+  response payload shaped as `{ records, nextBefore? }`.
+
+Failure policy for this endpoint is explicit: unauthenticated requests return
+`401`, query validation failures return `400`, and provenance repository
+availability failures return `503` so operators can distinguish transport
+availability from client input errors.
+
+This section records the design contract implemented for roadmap item 3.4.3.
 
 ### Map Tile Service (Martin)
 

@@ -11,6 +11,7 @@ use crate::domain::ports::{
     UserPreferencesQuery, UserProfileQuery, UsersQuery,
 };
 use crate::domain::ports::{
+    EnrichmentProvenanceRepository, FixtureEnrichmentProvenanceRepository,
     FixtureOfflineBundleCommand, FixtureOfflineBundleQuery, FixtureWalkSessionCommand,
     FixtureWalkSessionQuery, OfflineBundleCommand, OfflineBundleQuery, WalkSessionCommand,
     WalkSessionQuery,
@@ -37,6 +38,7 @@ pub struct HttpStatePorts {
 pub struct HttpStateExtraPorts {
     pub offline_bundles: Arc<dyn OfflineBundleCommand>,
     pub offline_bundles_query: Arc<dyn OfflineBundleQuery>,
+    pub enrichment_provenance: Arc<dyn EnrichmentProvenanceRepository>,
     pub walk_sessions: Arc<dyn WalkSessionCommand>,
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
 }
@@ -46,6 +48,7 @@ impl Default for HttpStateExtraPorts {
         Self {
             offline_bundles: Arc::new(FixtureOfflineBundleCommand),
             offline_bundles_query: Arc::new(FixtureOfflineBundleQuery),
+            enrichment_provenance: Arc::new(FixtureEnrichmentProvenanceRepository),
             walk_sessions: Arc::new(FixtureWalkSessionCommand),
             walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
         }
@@ -68,6 +71,7 @@ pub struct HttpState {
     pub descriptors: Arc<dyn DescriptorRepository>,
     pub offline_bundles: Arc<dyn OfflineBundleCommand>,
     pub offline_bundles_query: Arc<dyn OfflineBundleQuery>,
+    pub enrichment_provenance: Arc<dyn EnrichmentProvenanceRepository>,
     pub walk_sessions: Arc<dyn WalkSessionCommand>,
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
 }
@@ -122,6 +126,7 @@ impl HttpState {
     ///
     /// use backend::domain::ports::{
     ///     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
+    ///     FixtureEnrichmentProvenanceRepository,
     ///     FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
     ///     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
     ///     FixtureRouteSubmissionService, FixtureUserInterestsCommand,
@@ -146,6 +151,7 @@ impl HttpState {
     /// let extras = HttpStateExtraPorts {
     ///     offline_bundles: Arc::new(FixtureOfflineBundleCommand),
     ///     offline_bundles_query: Arc::new(FixtureOfflineBundleQuery),
+    ///     enrichment_provenance: Arc::new(FixtureEnrichmentProvenanceRepository),
     ///     walk_sessions: Arc::new(FixtureWalkSessionCommand),
     ///     walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
     /// };
@@ -169,6 +175,7 @@ impl HttpState {
         let HttpStateExtraPorts {
             offline_bundles,
             offline_bundles_query,
+            enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
         } = extras;
@@ -186,6 +193,7 @@ impl HttpState {
             descriptors,
             offline_bundles,
             offline_bundles_query,
+            enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
         }

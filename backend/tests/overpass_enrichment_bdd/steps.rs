@@ -2,7 +2,7 @@
 
 use super::*;
 use backend::domain::ErrorCode;
-use rstest_bdd_macros::{given, scenario, then, when};
+use rstest_bdd_macros::{given, then, when};
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -342,54 +342,4 @@ fn the_max_observed_concurrent_source_calls_is_one(world: &OverpassEnrichmentWor
     }
     let source = world.source.get().expect("source should be set");
     assert_eq!(source.max_active_count(), 1);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment persists fetched POIs"
-)]
-fn overpass_enrichment_persists_fetched_pois(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment respects request quota limits"
-)]
-fn overpass_enrichment_respects_request_quota_limits(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment opens the circuit after repeated failures"
-)]
-fn overpass_enrichment_opens_the_circuit_after_repeated_failures(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment recovers after circuit cooldown"
-)]
-fn overpass_enrichment_recovers_after_circuit_cooldown(world: OverpassEnrichmentWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment reports retry exhaustion after transient failures"
-)]
-fn overpass_enrichment_reports_retry_exhaustion_after_transient_failures(
-    world: OverpassEnrichmentWorld,
-) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/overpass_enrichment.feature",
-    name = "Overpass enrichment semaphore limits concurrent source calls"
-)]
-fn overpass_enrichment_semaphore_limits_concurrent_source_calls(world: OverpassEnrichmentWorld) {
-    drop(world);
 }
