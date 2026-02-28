@@ -177,7 +177,7 @@ so persistence details stay confined to outbound adapters.
 
 ### 3.5. User state port persistence parity
 
-- [ ] 3.5.1. Audit current schema coverage for login, users, profile, and
+- [x] 3.5.1. Audit current schema coverage for login, users, profile, and
   interests persistence, then document whether new migrations are required for
   profile and interests storage, revision tracking, and update conflict
   handling.

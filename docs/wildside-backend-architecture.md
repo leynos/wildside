@@ -727,6 +727,21 @@ services.
 > `OsmIngestionProvenanceRepository` (rerun-key lookup and provenance writes).
 > This keeps parser and SQL details outside the domain while preserving an
 > auditable rerun contract for launch geofences.
+>
+> **Design decision (2026-02-26):** Roadmap item 3.5.1 introduces a domain
+> schema-audit operation for user-state persistence using the existing
+> `SchemaSnapshotRepository` port. The audit is implemented in
+> `backend::domain::user_state_schema_audit` and evaluated via
+> `UserStateSchemaAuditReport`. Current baseline findings are:
+> login credential persistence is missing in schema-backed storage,
+> users/profile storage is covered by the `users` table, and interests storage
+> is ambiguous because both `user_preferences.interest_theme_ids` and
+> `user_interest_themes` are present. Based on that audit, migrations are not
+> required for the current minimal profile model, and interests storage
+> canonicalization still requires migration while baseline revision tracking and
+> stale-write conflict handling are already supported by
+> `user_preferences.revision`. The canonical audit record is
+> documented in `docs/user-state-schema-audit-3-5-1.md`.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.
