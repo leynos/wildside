@@ -120,6 +120,8 @@ pub mod cap_fs {
     }
 }
 
+pub mod overpass_enrichment;
+
 pub mod er_snapshots {
     //! Shared test doubles for ER snapshot generation tests.
 
