@@ -51,7 +51,7 @@ impl UserStateSchemaAuditWorld {
     }
 }
 
-fn skip_if_needed(world: &UserStateSchemaAuditWorld) -> bool {
+fn should_skip_scenario(world: &UserStateSchemaAuditWorld) -> bool {
     if world.is_skipped() {
         let reason = world.setup_error.as_deref().unwrap_or("unknown reason");
         eprintln!("SKIP-TEST-CLUSTER: scenario skipped ({reason})");
@@ -62,7 +62,7 @@ fn skip_if_needed(world: &UserStateSchemaAuditWorld) -> bool {
 }
 
 fn get_report_or_skip(world: &UserStateSchemaAuditWorld) -> Option<&UserStateSchemaAuditReport> {
-    if skip_if_needed(world) {
+    if should_skip_scenario(world) {
         return None;
     }
     Some(world.report.as_ref().expect("report should be captured"))
@@ -135,7 +135,7 @@ fn a_migrated_schema_baseline(#[from(world)] _world: &mut UserStateSchemaAuditWo
 
 #[given("the users table is missing")]
 fn the_users_table_is_missing(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    if should_skip_scenario(world) {
         return;
     }
 
@@ -144,7 +144,7 @@ fn the_users_table_is_missing(world: &mut UserStateSchemaAuditWorld) {
 
 #[given("interests use a canonical revisioned model")]
 fn interests_use_a_canonical_revisioned_model(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    if should_skip_scenario(world) {
         return;
     }
 
@@ -154,7 +154,7 @@ fn interests_use_a_canonical_revisioned_model(world: &mut UserStateSchemaAuditWo
 
 #[when("executing the user state schema audit")]
 fn executing_the_user_state_schema_audit(world: &mut UserStateSchemaAuditWorld) {
-    if skip_if_needed(world) {
+    if should_skip_scenario(world) {
         return;
     }
 
