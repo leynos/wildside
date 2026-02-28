@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_overpass_enrichment_provenance_imported_at;
+DROP TABLE IF EXISTS overpass_enrichment_provenance;

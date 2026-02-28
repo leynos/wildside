@@ -9,6 +9,7 @@ mod catalogue_repository;
 mod descriptor_ingestion_repository;
 mod descriptor_repository;
 mod enrichment_job_metrics;
+mod enrichment_provenance_repository;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
 mod idempotency_metrics;
@@ -73,6 +74,13 @@ pub use enrichment_job_metrics::MockEnrichmentJobMetrics;
 pub use enrichment_job_metrics::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
     EnrichmentJobMetricsError, EnrichmentJobSuccess, NoOpEnrichmentJobMetrics,
+};
+#[cfg(test)]
+pub use enrichment_provenance_repository::MockEnrichmentProvenanceRepository;
+pub use enrichment_provenance_repository::{
+    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
+    EnrichmentProvenanceRepositoryError, FixtureEnrichmentProvenanceRepository,
+    ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,

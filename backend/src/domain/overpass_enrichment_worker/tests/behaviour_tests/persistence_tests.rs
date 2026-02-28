@@ -15,9 +15,15 @@ async fn assert_persistence_failure_records_metrics_and_maps_error(
 ) {
     let source = Arc::new(SourceStub::scripted(vec![Ok(response(1, 32))]));
     let repo = Arc::new(RepoStub::new(vec![Err(case.repo_error)]));
+    let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(())]));
     let metrics = Arc::new(MetricsStub::default());
     let worker = OverpassEnrichmentWorker::with_runtime(
-        OverpassEnrichmentWorkerPorts::new(source.clone(), repo.clone(), metrics.clone()),
+        OverpassEnrichmentWorkerPorts::new(
+            source.clone(),
+            repo.clone(),
+            provenance_repo.clone(),
+            metrics.clone(),
+        ),
         Arc::new(MutableClock::new(now)),
         OverpassEnrichmentWorkerRuntime {
             sleeper: Arc::new(RecordingSleeper::default()),
@@ -38,6 +44,7 @@ async fn assert_persistence_failure_records_metrics_and_maps_error(
     );
     assert_eq!(source.calls.load(Ordering::SeqCst), 1);
     assert_eq!(repo.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 0);
     assert!(metrics.successes.lock().expect("metrics mutex").is_empty());
     assert_eq!(metrics.failures.lock().expect("metrics mutex").len(), 1);
     assert_eq!(

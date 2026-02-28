@@ -14,6 +14,16 @@ use backend::domain::ports::{
     RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
     UserPreferencesQuery, UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
+use backend::domain::ports::{
+    CatalogueRepository, DescriptorRepository, EnrichmentProvenanceRepository,
+    FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureEnrichmentProvenanceRepository,
+    FixtureLoginService, FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
+    FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureUserInterestsCommand,
+    FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
+    FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, OfflineBundleCommand,
+    OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
+    UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand, WalkSessionQuery,
+};
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
     UserPreferencesService, WalkSessionCommandService, WalkSessionQueryService,
@@ -25,6 +35,11 @@ use backend::outbound::persistence::{
     DieselOfflineBundleRepository, DieselRouteAnnotationRepository, DieselUserInterestsCommand,
     DieselUserPreferencesRepository, DieselUserProfileQuery, DieselUserRepository,
     DieselUsersQuery, DieselWalkSessionRepository,
+};
+use backend::outbound::persistence::{
+    DbPool, DieselCatalogueRepository, DieselDescriptorRepository,
+    DieselEnrichmentProvenanceRepository, DieselOfflineBundleRepository,
+    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
@@ -272,6 +287,15 @@ fn build_walk_sessions_pair(
     }
 }
 
+fn build_enrichment_provenance_repository(
+    config: &ServerConfig,
+) -> Arc<dyn EnrichmentProvenanceRepository> {
+    match &config.db_pool {
+        Some(pool) => Arc::new(DieselEnrichmentProvenanceRepository::new(pool.clone())),
+        None => Arc::new(FixtureEnrichmentProvenanceRepository),
+    }
+}
+
 /// Build the shared HTTP state from configured ports and fixture fallbacks.
 pub(super) fn build_http_state(
     config: &ServerConfig,
@@ -283,6 +307,7 @@ pub(super) fn build_http_state(
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
     let (walk_sessions, walk_sessions_query) = build_walk_sessions_pair(config);
+    let enrichment_provenance = build_enrichment_provenance_repository(config);
     let (catalogue, descriptors) = build_catalogue_services(config);
 
     web::Data::new(HttpState::new_with_extra(
@@ -302,6 +327,7 @@ pub(super) fn build_http_state(
         HttpStateExtraPorts {
             offline_bundles,
             offline_bundles_query,
+            enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
         },

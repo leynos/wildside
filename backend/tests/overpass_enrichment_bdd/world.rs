@@ -11,8 +11,10 @@ use backend::domain::{
     OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
     OverpassEnrichmentWorkerRuntime,
 };
-use backend::outbound::persistence::{DbPool, DieselOsmPoiRepository, PoolConfig};
-use chrono::TimeZone;
+use backend::outbound::persistence::{
+    DbPool, DieselEnrichmentProvenanceRepository, DieselOsmPoiRepository, PoolConfig,
+};
+use chrono::{TimeZone, Utc};
 use postgres::NoTls;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -60,15 +62,15 @@ impl OverpassEnrichmentWorld {
         let source = Arc::new(ScriptedOverpassSource::new(source_data));
         let metrics = Arc::new(RecordingEnrichmentMetrics::default());
         let clock = Arc::new(MutableClock::new(
-            chrono::Utc
-                .with_ymd_and_hms(2026, 2, 26, 12, 0, 0)
+            Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0)
                 .single()
                 .expect("valid fixed time"),
         ));
         let worker = Arc::new(OverpassEnrichmentWorker::with_runtime(
             OverpassEnrichmentWorkerPorts::new(
                 source.clone(),
-                Arc::new(DieselOsmPoiRepository::new(pool)),
+                Arc::new(DieselOsmPoiRepository::new(pool.clone())),
+                Arc::new(DieselEnrichmentProvenanceRepository::new(pool)),
                 metrics.clone(),
             ),
             clock.clone(),
@@ -121,6 +123,7 @@ impl OverpassEnrichmentWorld {
     ) -> OverpassEnrichmentResponse {
         OverpassEnrichmentResponse {
             transfer_bytes,
+            source_url: "https://overpass.example/api/interpreter".to_owned(),
             pois: (0..poi_count)
                 .map(|idx| OverpassPoi {
                     element_type: "node".to_owned(),
@@ -192,6 +195,74 @@ impl OverpassEnrichmentWorld {
             .expect("poi count query")
             .get::<_, i64>(0);
         Some(count)
+    }
+
+    /// Query the persisted enrichment provenance row count.
+    pub fn query_provenance_count(&self) -> Option<i64> {
+        if self.is_skipped() {
+            return None;
+        }
+
+        let database_url = self.database_url.get().expect("database URL should be set");
+        let mut client =
+            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+        let count = client
+            .query_one("SELECT COUNT(*) FROM overpass_enrichment_provenance", &[])
+            .expect("provenance count query")
+            .get::<_, i64>(0);
+        Some(count)
+    }
+
+    /// Query the latest persisted enrichment provenance row.
+    pub fn query_latest_provenance(&self) -> Option<Option<(String, String, [f64; 4])>> {
+        if self.is_skipped() {
+            return None;
+        }
+
+        let database_url = self.database_url.get().expect("database URL should be set");
+        let mut client =
+            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+
+        let row = client
+            .query_opt(
+                concat!(
+                    "SELECT source_url, ",
+                    "to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), ",
+                    "bounds_min_lng, bounds_min_lat, ",
+                    "bounds_max_lng, bounds_max_lat ",
+                    "FROM overpass_enrichment_provenance ",
+                    "ORDER BY imported_at DESC ",
+                    "LIMIT 1"
+                ),
+                &[],
+            )
+            .expect("latest provenance query");
+
+        Some(row.map(|row| {
+            let source_url = row.get::<_, String>(0);
+            let imported_at = row.get::<_, String>(1);
+            let bounding_box = [
+                row.get::<_, f64>(2),
+                row.get::<_, f64>(3),
+                row.get::<_, f64>(4),
+                row.get::<_, f64>(5),
+            ];
+            (source_url, imported_at, bounding_box)
+        }))
+    }
+
+    /// Drop the provenance table to force persistence failures.
+    pub fn drop_provenance_table(&self) {
+        if self.is_skipped() {
+            return;
+        }
+
+        let database_url = self.database_url.get().expect("database URL should be set");
+        let mut client =
+            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+        client
+            .batch_execute("DROP TABLE overpass_enrichment_provenance")
+            .expect("drop provenance table");
     }
 
     /// Advance the fixture clock by the provided number of seconds.

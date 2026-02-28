@@ -3,8 +3,8 @@
 use crate::domain::Error;
 use crate::domain::overpass_enrichment_worker::policy::QuotaDenyReason;
 use crate::domain::ports::{
-    EnrichmentJobFailureKind, OsmPoiIngestionRecord, OsmPoiRepositoryError,
-    OverpassEnrichmentSourceError, OverpassPoi,
+    EnrichmentJobFailureKind, EnrichmentProvenanceRepositoryError, OsmPoiIngestionRecord,
+    OsmPoiRepositoryError, OverpassEnrichmentSourceError, OverpassPoi,
 };
 
 pub(super) fn map_overpass_poi(poi: OverpassPoi) -> OsmPoiIngestionRecord {
@@ -55,6 +55,23 @@ pub(super) fn map_persistence_error(error: OsmPoiRepositoryError, attempts: u32)
         )),
         OsmPoiRepositoryError::Query { message } => Error::internal(format!(
             "enrichment persistence failed after {attempts} attempts: {message}"
+        )),
+    }
+}
+
+pub(super) fn map_provenance_persistence_error(
+    error: EnrichmentProvenanceRepositoryError,
+    attempts: u32,
+) -> Error {
+    match error {
+        EnrichmentProvenanceRepositoryError::Connection { message } => {
+            Error::service_unavailable(format!(
+                "enrichment provenance persistence unavailable after {attempts} attempts: \
+                 {message}"
+            ))
+        }
+        EnrichmentProvenanceRepositoryError::Query { message } => Error::internal(format!(
+            "enrichment provenance persistence failed after {attempts} attempts: {message}"
         )),
     }
 }

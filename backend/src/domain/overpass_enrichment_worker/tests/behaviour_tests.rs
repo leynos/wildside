@@ -3,6 +3,7 @@
 use super::*;
 
 mod persistence_tests;
+mod provenance_tests;
 #[rstest]
 #[tokio::test]
 async fn happy_path_persists_and_records_success(
@@ -11,9 +12,15 @@ async fn happy_path_persists_and_records_success(
 ) {
     let source = Arc::new(SourceStub::scripted(vec![Ok(response(2, 512))]));
     let repo = Arc::new(RepoStub::new(vec![Ok(())]));
+    let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(())]));
     let metrics = Arc::new(MetricsStub::default());
     let worker = OverpassEnrichmentWorker::with_runtime(
-        OverpassEnrichmentWorkerPorts::new(source.clone(), repo.clone(), metrics.clone()),
+        OverpassEnrichmentWorkerPorts::new(
+            source.clone(),
+            repo.clone(),
+            provenance_repo.clone(),
+            metrics.clone(),
+        ),
         Arc::new(MutableClock::new(now)),
         OverpassEnrichmentWorkerRuntime {
             sleeper: Arc::new(RecordingSleeper::default()),
@@ -22,11 +29,20 @@ async fn happy_path_persists_and_records_success(
         config(),
     );
 
-    let out = worker.process_job(job).await.expect("job succeeds");
+    let out = worker.process_job(job.clone()).await.expect("job succeeds");
     assert_eq!(out.attempts, 1);
     assert_eq!(out.persisted_poi_count, 2);
     assert_eq!(source.calls.load(Ordering::SeqCst), 1);
     assert_eq!(repo.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 1);
+    let persisted = provenance_repo.persisted.lock().expect("provenance mutex");
+    assert_eq!(persisted.len(), 1);
+    assert_eq!(
+        persisted[0].source_url,
+        "https://overpass.example/api/interpreter"
+    );
+    assert_eq!(persisted[0].imported_at, now);
+    assert_eq!(persisted[0].bounding_box, job.bounding_box);
     assert_eq!(metrics.successes.lock().expect("metrics mutex").len(), 1);
     assert!(metrics.failures.lock().expect("metrics mutex").is_empty());
 }
@@ -44,6 +60,7 @@ async fn assert_quota_denial_short_circuits_source(
     case: QuotaCase,
 ) {
     let source = Arc::new(SourceStub::scripted(vec![Ok(response(1, 10))]));
+    let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![]));
     let mut cfg = config();
     cfg.max_daily_requests = case.max_requests;
     cfg.max_daily_transfer_bytes = case.max_transfer_bytes;
@@ -52,6 +69,7 @@ async fn assert_quota_denial_short_circuits_source(
         OverpassEnrichmentWorkerPorts::new(
             source.clone(),
             Arc::new(RepoStub::new(vec![Ok(())])),
+            provenance_repo.clone(),
             metrics.clone(),
         ),
         Arc::new(MutableClock::new(now)),
@@ -65,6 +83,7 @@ async fn assert_quota_denial_short_circuits_source(
     let error = worker.process_job(job).await.expect_err("quota denies");
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
     assert_eq!(source.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 0);
     assert_eq!(metrics.successes.lock().expect("metrics mutex").len(), 0);
     let failures = metrics.failures.lock().expect("metrics mutex");
     assert_eq!(failures.len(), 1);
@@ -105,11 +124,13 @@ async fn retry_uses_jittered_exponential_backoff(
         Ok(response(1, 64)),
     ]));
     let sleeper = Arc::new(RecordingSleeper::default());
+    let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(())]));
     let metrics = Arc::new(MetricsStub::default());
     let worker = OverpassEnrichmentWorker::with_runtime(
         OverpassEnrichmentWorkerPorts::new(
             source.clone(),
             Arc::new(RepoStub::new(vec![Ok(())])),
+            provenance_repo,
             metrics.clone(),
         ),
         Arc::new(MutableClock::new(now)),
@@ -168,6 +189,7 @@ impl CircuitBreakerTestFixtureBuilder {
             OverpassEnrichmentWorkerPorts::new(
                 source.clone(),
                 Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
+                Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())])),
                 Arc::new(MetricsStub::default()),
             ),
             clock.clone(),
@@ -308,6 +330,7 @@ async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnri
         OverpassEnrichmentWorkerPorts::new(
             source.clone(),
             Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
+            Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())])),
             Arc::new(MetricsStub::default()),
         ),
         Arc::new(MutableClock::new(now)),

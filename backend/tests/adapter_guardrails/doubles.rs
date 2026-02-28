@@ -2,6 +2,7 @@
 
 mod doubles_annotations;
 mod doubles_catalogue;
+mod doubles_enrichment_reporting;
 mod doubles_offline_walk;
 mod doubles_preferences;
 mod doubles_users;
@@ -16,6 +17,9 @@ pub(crate) use doubles_annotations::{
 pub(crate) use doubles_catalogue::{
     CatalogueQueryResponse, DescriptorQueryResponse, RecordingCatalogueRepository,
     RecordingDescriptorRepository,
+};
+pub(crate) use doubles_enrichment_reporting::{
+    EnrichmentProvenanceListResponse, RecordingEnrichmentProvenanceRepository,
 };
 pub(crate) use doubles_offline_walk::{
     DeleteOfflineBundleCommandResponse, OfflineBundleGetQueryResponse,
