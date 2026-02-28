@@ -743,16 +743,20 @@ services.
 > `user_preferences.revision`. The canonical audit record is
 > documented in `docs/user-state-schema-audit-3-5-1.md`.
 >
-> **Design decision (2026-02-28):** Roadmap item 3.5.2 adds dedicated startup-
-> mode coverage for `LoginService` and `UsersQuery` through
+> **Design decision (2026-02-28):** Roadmap item 3.5.2 replaces fixture-backed
+> `LoginService` and `UsersQuery` wiring in
+> `backend/src/server/state_builders.rs` with explicit DB-backed adapters when
+> `config.db_pool` is present: `DieselLoginService` and `DieselUsersQuery`,
+> both backed by `DieselUserRepository`. This keeps SQL ownership in outbound
+> adapters while preserving fixture fallback when no DB pool is configured.
+> `POST /api/v1/login` preserves session-cookie and unauthorized envelope
+> behaviour, and `GET /api/v1/users` preserves session enforcement and response
+> envelope contracts. Dedicated startup-mode coverage lives in
 > `backend/tests/diesel_login_users_adapters.rs` (`rstest`) and
 > `backend/tests/user_state_startup_modes_bdd.rs` (`rstest-bdd`) with embedded
-> PostgreSQL helpers. The tests exercise happy, unhappy, and edge paths for
-> DB-present and fixture-fallback startup modes while preserving session and
-> error-envelope assertions. Until 3.5.2 adapter wiring lands in
-> `state_builders`, DB-present mode is allowed to observe either DB-backed or
-> fixture fallback response signatures, but envelope invariants remain
-> mandatory.
+> PostgreSQL helpers. Credential-storage schema remains intentionally unchanged
+> in 3.5.2 and continues to be tracked in
+> `docs/user-state-schema-audit-3-5-1.md`.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.

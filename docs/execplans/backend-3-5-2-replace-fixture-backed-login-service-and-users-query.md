@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 This plan covers roadmap item 3.5.2 only:
 `Replace fixture-backed LoginService and UsersQuery wiring in server state
@@ -332,82 +332,92 @@ All required gates pass with retained logs and no unresolved failures.
   audit implications.
 - [x] (2026-02-28 02:36Z) Synthesized agent-team recommendations for design,
   testing, and closure workflow.
-- [x] (2026-02-28 03:25Z) Added new startup-mode test artefacts:
+- [x] (2026-02-28 03:25Z) Added startup-mode test artefacts:
   `backend/tests/diesel_login_users_adapters.rs`,
   `backend/tests/user_state_startup_modes_bdd.rs`, and
   `backend/tests/features/user_state_startup_modes.feature`.
-- [x] (2026-02-28 03:25Z) Ran focused verification and retained logs:
-  - `/tmp/test-diesel-login-users-adapters-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-  - `/tmp/test-user-state-startup-modes-bdd-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-  - `/tmp/check-fmt-focused-backend-tests-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-  - `/tmp/markdownlint-focused-3-5-2-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-- [x] (2026-02-28 03:25Z) Updated architecture and roadmap docs for 3.5.2
-  execution status while keeping roadmap checkbox open pending full gates.
-- [ ] Implement Milestone 0 baseline notes and red tests.
-- [ ] Implement Milestone 1 DB-backed adapters and state-builder wiring.
+- [x] (2026-02-28 03:32Z) Implemented DB-backed adapters:
+  `DieselLoginService` and `DieselUsersQuery`.
+- [x] (2026-02-28 03:35Z) Updated `state_builders` so login/users use DB-backed
+  adapters when `db_pool` is present and fixtures when absent.
+- [x] (2026-02-28 04:03Z) Resolved lint/file-size regressions by removing
+  duplicate in-module server tests and keeping startup-mode validation in
+  integration suites.
+- [x] (2026-02-28 04:06Z) Ran final full gates on the closing tree:
+  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
+  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
+  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
+- [x] Implement Milestone 0 baseline notes and red tests.
+- [x] Implement Milestone 1 DB-backed adapters and state-builder wiring.
 - [x] Implement Milestone 2 unit and behavioural test coverage.
 - [x] Implement Milestone 3 architecture + roadmap documentation updates.
-- [ ] Implement Milestone 4 full gates and evidence capture.
+- [x] Implement Milestone 4 full gates and evidence capture.
 
 ## Surprises & Discoveries
 
-- `state_builders.rs` currently has explicit TODO comments for login/users/
-  profile/interests DB wiring, confirming 3.5.x work is staged.
-- Existing schema audit (3.5.1) confirms login credential persistence is still
-  missing, so 3.5.2 must use a transitional strategy without schema changes.
-- Existing behavioural suites already enforce session and error-envelope
-  expectations, reducing risk of accidental contract drift.
-- `#[path = \"../src/server/*\"]` includes from integration tests failed when
+- `state_builders.rs` had explicit login/users/profile/interests TODO markers,
+  confirming 3.5.x staging boundaries.
+- Existing schema audit (3.5.1) still leaves login credential persistence as a
+  known gap, so 3.5.2 had to preserve a transitional credential strategy.
+- `#[path = "../src/server/*"]` includes from integration tests failed when
   nested under an inline module and resolved under a non-existent
-  `backend/tests/server_harness/` prefix. Flattening the include modules at the
+  `backend/tests/server_harness/` prefix. Flattening include modules at the
   test crate root fixed path resolution and preserved access to
   `pub(super) build_http_state`.
 - Embedded PostgreSQL setup panicked when invoked from async Actix test
   contexts (`Cannot start a runtime from within a runtime`). Converting the
   new suites to synchronous `rstest` tests with explicit runtime helpers
   removed nested runtime contention.
+- Strict lint policy (`no_expect_outside_tests`) did not recognize separate
+  server-module test files as test-only contexts; removing duplicate in-module
+  tests avoided policy churn while keeping startup-mode verification in
+  integration suites.
 
 ## Decision Log
 
 - Decision: choose wrapper adapters (`DieselLoginService`, `DieselUsersQuery`)
-  around `DieselUserRepository` as the preferred 3.5.2 approach.
+  around `DieselUserRepository` as the 3.5.2 implementation path.
   Rationale: keeps repository responsibilities cohesive and aligns with current
-  service-over-repository patterns in state builders.
+  service-over-repository patterns.
 
 - Decision: keep credential-storage schema out of 3.5.2 scope.
   Rationale: roadmap and 3.5.1 audit establish this as an acknowledged gap.
 
 - Decision: roadmap 3.5.2 checkbox flips to done only after final required
   gates are green for the same tree.
-  Rationale: preserves deterministic closure and avoids reporting false green.
+  Rationale: preserves deterministic closure and avoids false-green reporting.
 
-- Decision: DB-present startup-mode tests currently accept either DB-backed or
-  fixture-fallback users signatures while still enforcing session and envelope
-  invariants.
-  Rationale: adapter wiring is owned by the code path outside this test/doc
-  slice; test contracts must remain executable while still surfacing the
-  transitional state.
+- Decision: DB-present startup-mode tests now require DB-backed signatures and
+  DB-absent mode requires fixture signatures.
+  Rationale: adapter wiring is landed in `state_builders`; transitional
+  dual-signature assertions are no longer needed.
 
 ## Outcomes & Retrospective
 
-Planned completion notes (to fill during execution):
+Completed delivery summary:
 
 - What shipped:
-  - New `rstest` coverage for login/users startup modes in
-    `backend/tests/diesel_login_users_adapters.rs`.
-  - New `rstest-bdd` feature + steps for startup modes in
-    `backend/tests/features/user_state_startup_modes.feature` and
-    `backend/tests/user_state_startup_modes_bdd.rs`.
-  - Architecture + roadmap documentation updates for 3.5.2 execution status.
+  - `DieselLoginService` and `DieselUsersQuery` in outbound persistence.
+  - `state_builders` wiring for DB-present login/users adapter selection with
+    fixture fallback when no DB pool is configured.
+  - Startup-mode coverage in:
+    - `backend/tests/diesel_login_users_adapters.rs` (`rstest`)
+    - `backend/tests/features/user_state_startup_modes.feature` (`rstest-bdd`)
+    - `backend/tests/user_state_startup_modes_bdd.rs` (`rstest-bdd`)
+  - Architecture decision update and roadmap 3.5.2 closure.
 - What changed from the draft plan:
-  - Coverage was implemented without code-side adapter wiring changes in this
-    slice, so DB-present behaviour assertions are dual-signature tolerant.
+  - Duplicate in-module server tests were removed after strict lint policy and
+    file-size constraints; integration startup-mode tests remain authoritative.
 - Which risks materialized and how they were mitigated:
-  - Runtime nesting risk materialized during embedded-Postgres setup; mitigated
-    by moving to synchronous tests with explicit runtime boundaries.
+  - Embedded PostgreSQL runtime nesting and include-path friction surfaced in
+    behavioural test setup and were mitigated via synchronous runtime helpers
+    and flattened include paths.
+  - Strict lint policy (`no_expect_outside_tests`) required removing redundant
+    server-module tests that were not recognized as test-only contexts.
 - Final evidence log paths and gate outcomes:
-  - Focused tests and checks are green (see `/tmp` logs listed in `Progress`).
-  - Full gates (`make check-fmt`, `make lint`, `make test`) remain pending.
+  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
+  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
+  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
 - Follow-up work explicitly deferred to 3.5.3+:
-  - 3.5.2 code wiring in `backend/src/server/state_builders.rs` and concrete
-    adapter implementation ownership remain outside this test/doc-only change.
+  - DB-backed parity for `UserProfileQuery` and `UserInterestsCommand` (3.5.3).
+  - Canonical interests persistence and revision-conflict strategy work (3.5.4+).

@@ -181,7 +181,7 @@ so persistence details stay confined to outbound adapters.
   interests persistence, then document whether new migrations are required for
   profile and interests storage, revision tracking, and update conflict
   handling.
-- [ ] 3.5.2. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
+- [x] 3.5.2. Replace fixture-backed `LoginService` and `UsersQuery` wiring in
   server state construction with explicit DB-backed concrete types, either by
   extending `DieselUserRepository` to satisfy those ports directly or by
   introducing adapter wrappers around it, while preserving current session and

@@ -335,10 +335,7 @@ fn the_responses_preserve_a_stable_startup_error_or_fallback_contract(world: &mu
     assert_eq!(login_snapshot.status, 200);
     let users = world.users.as_ref().expect("users response");
     match users.status {
-        200 => assert_eq!(
-            is_fixture_users(users.body.as_ref().expect("users body")),
-            true
-        ),
+        200 => assert!(is_fixture_users(users.body.as_ref().expect("users body"))),
         500 => {
             let body = users.body.as_ref().expect("error body");
             assert_eq!(
