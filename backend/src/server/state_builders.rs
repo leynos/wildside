@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use actix_web::web;
+use async_trait::async_trait;
 
 use backend::domain::ports::{
     CatalogueRepository, DescriptorRepository, FixtureCatalogueRepository,
@@ -10,27 +11,29 @@ use backend::domain::ports::{
     FixtureOfflineBundleQuery, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
     FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
     FixtureUserProfileQuery, FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
-    OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
-    RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand,
-    WalkSessionQuery,
+    LoginService, OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand,
+    RouteAnnotationsQuery, RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery,
+    UserRepository, UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
-    OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
-    UserPreferencesService, WalkSessionCommandService, WalkSessionQueryService,
+    Error, LoginCredentials, OfflineBundleCommandService, OfflineBundleQueryService,
+    RouteAnnotationsService, User, UserId, UserPreferencesService, WalkSessionCommandService,
+    WalkSessionQueryService,
 };
 use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
     DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselOfflineBundleRepository,
-    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselWalkSessionRepository,
+    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselUserRepository,
+    DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
 
 /// Build a command/query service pair using real services when a pool is
 /// available, otherwise using fixture implementations.
-fn build_service_pair<S, Cmd, Query, MakeService, Cast>(
-    pool: &Option<DbPool>,
+fn build_service_pair<Pool, S, Cmd, Query, MakeService, Cast>(
+    pool: &Option<Pool>,
     make_service: MakeService,
     fixtures: (Arc<Cmd>, Arc<Query>),
     cast: Cast,
@@ -39,7 +42,7 @@ where
     S: 'static,
     Cmd: ?Sized + 'static,
     Query: ?Sized + 'static,
-    MakeService: FnOnce(&DbPool) -> S,
+    MakeService: FnOnce(&Pool) -> S,
     Cast: FnOnce(Arc<S>) -> (Arc<Cmd>, Arc<Query>),
 {
     match pool {
@@ -77,6 +80,82 @@ type ServiceCast<S, Cmd, Query> = fn(Arc<S>) -> (Arc<Cmd>, Arc<Query>);
 struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
     fixtures: (Arc<Cmd>, Arc<Query>),
     cast: ServiceCast<S, Cmd, Query>,
+}
+
+const FIXTURE_LOGIN_USERNAME: &str = "admin";
+const FIXTURE_LOGIN_PASSWORD: &str = "password";
+const FIXTURE_LOGIN_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
+
+/// Database-backed login/users adapter.
+///
+/// Login keeps the current fixture credential contract until credential
+/// persistence lands, while users lookup reads from the SQL-backed repository.
+#[derive(Clone)]
+struct DieselLoginUsersAdapter {
+    users: Arc<DieselUserRepository>,
+}
+
+impl DieselLoginUsersAdapter {
+    fn new(pool: DbPool) -> Self {
+        Self {
+            users: Arc::new(DieselUserRepository::new(pool)),
+        }
+    }
+}
+
+#[async_trait]
+impl LoginService for DieselLoginUsersAdapter {
+    async fn authenticate(&self, credentials: &LoginCredentials) -> Result<UserId, Error> {
+        if credentials.username() == FIXTURE_LOGIN_USERNAME
+            && credentials.password() == FIXTURE_LOGIN_PASSWORD
+        {
+            UserId::new(FIXTURE_LOGIN_USER_ID)
+                .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))
+        } else {
+            Err(Error::unauthorized("invalid credentials"))
+        }
+    }
+}
+
+#[async_trait]
+impl UsersQuery for DieselLoginUsersAdapter {
+    async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+        let user = self
+            .users
+            .find_by_id(authenticated_user)
+            .await
+            .map_err(|err| Error::internal(format!("users query failed: {err}")))?;
+        Ok(user.into_iter().collect())
+    }
+}
+
+fn build_login_users_pair_with_pool<Pool, Service>(
+    pool: &Option<Pool>,
+    make_service: impl FnOnce(&Pool) -> Service,
+) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>)
+where
+    Service: LoginService + UsersQuery + 'static,
+{
+    build_service_pair(
+        pool,
+        make_service,
+        (
+            Arc::new(FixtureLoginService) as Arc<dyn LoginService>,
+            Arc::new(FixtureUsersQuery) as Arc<dyn UsersQuery>,
+        ),
+        |service| {
+            (
+                service.clone() as Arc<dyn LoginService>,
+                service as Arc<dyn UsersQuery>,
+            )
+        },
+    )
+}
+
+fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
+    build_login_users_pair_with_pool(&config.db_pool, |pool| {
+        DieselLoginUsersAdapter::new(pool.clone())
+    })
 }
 
 macro_rules! build_idempotent_pair {
@@ -221,8 +300,9 @@ pub(super) fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
+    // TODO(#27): Wire remaining fixture ports (profile, interests)
     // to real DB-backed implementations once their adapters are ready.
+    let (login, users) = build_login_users_pair(config);
     let (preferences, preferences_query) = build_user_preferences_pair(config);
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
@@ -231,8 +311,8 @@ pub(super) fn build_http_state(
 
     web::Data::new(HttpState::new_with_extra(
         HttpStatePorts {
-            login: Arc::new(FixtureLoginService),
-            users: Arc::new(FixtureUsersQuery),
+            login,
+            users,
             profile: Arc::new(FixtureUserProfileQuery),
             interests: Arc::new(FixtureUserInterestsCommand),
             preferences,
@@ -250,4 +330,108 @@ pub(super) fn build_http_state(
             walk_sessions_query,
         },
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use backend::domain::DisplayName;
+    use rstest::rstest;
+
+    const DB_LOGIN_USERNAME: &str = "db-admin";
+    const DB_LOGIN_PASSWORD: &str = "db-password";
+    const DB_LOGIN_USER_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const DB_USER_ID: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const DB_DISPLAY_NAME: &str = "DB Backed User";
+    const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+    const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
+
+    #[derive(Clone, Copy)]
+    struct StubDbBackedLoginUsers;
+
+    #[async_trait]
+    impl LoginService for StubDbBackedLoginUsers {
+        async fn authenticate(&self, credentials: &LoginCredentials) -> Result<UserId, Error> {
+            if credentials.username() == DB_LOGIN_USERNAME
+                && credentials.password() == DB_LOGIN_PASSWORD
+            {
+                UserId::new(DB_LOGIN_USER_ID)
+                    .map_err(|err| Error::internal(format!("invalid db user id: {err}")))
+            } else {
+                Err(Error::unauthorized("invalid credentials"))
+            }
+        }
+    }
+
+    #[async_trait]
+    impl UsersQuery for StubDbBackedLoginUsers {
+        async fn list_users(&self, _authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+            let user_id = UserId::new(DB_USER_ID)
+                .map_err(|err| Error::internal(format!("invalid db user id: {err}")))?;
+            let display_name = DisplayName::new(DB_DISPLAY_NAME)
+                .map_err(|err| Error::internal(format!("invalid db display name: {err}")))?;
+            Ok(vec![User::new(user_id, display_name)])
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn db_pool_present_selects_db_backed_login_and_users() {
+        let (login, users) =
+            build_login_users_pair_with_pool(&Some(()), |_| StubDbBackedLoginUsers);
+
+        let fixture_credentials =
+            LoginCredentials::try_from_parts(FIXTURE_LOGIN_USERNAME, FIXTURE_LOGIN_PASSWORD)
+                .expect("fixture credentials shape");
+        let db_credentials = LoginCredentials::try_from_parts(DB_LOGIN_USERNAME, DB_LOGIN_PASSWORD)
+            .expect("db credentials shape");
+        assert!(login.authenticate(&fixture_credentials).await.is_err());
+
+        let authenticated_user = login
+            .authenticate(&db_credentials)
+            .await
+            .expect("db-backed login should succeed");
+        assert_eq!(authenticated_user.as_ref(), DB_LOGIN_USER_ID);
+
+        let listed_users = users
+            .list_users(&authenticated_user)
+            .await
+            .expect("db-backed users query should succeed");
+        assert_eq!(listed_users.len(), 1);
+        assert_eq!(listed_users[0].id().as_ref(), DB_USER_ID);
+        assert_eq!(listed_users[0].display_name().as_ref(), DB_DISPLAY_NAME);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn db_pool_absent_keeps_fixture_login_and_users() {
+        let (login, users) =
+            build_login_users_pair_with_pool::<(), StubDbBackedLoginUsers>(&None, |_| {
+                StubDbBackedLoginUsers
+            });
+
+        let fixture_credentials =
+            LoginCredentials::try_from_parts(FIXTURE_LOGIN_USERNAME, FIXTURE_LOGIN_PASSWORD)
+                .expect("fixture credentials shape");
+        let db_credentials = LoginCredentials::try_from_parts(DB_LOGIN_USERNAME, DB_LOGIN_PASSWORD)
+            .expect("db credentials shape");
+
+        assert!(login.authenticate(&db_credentials).await.is_err());
+        let authenticated_user = login
+            .authenticate(&fixture_credentials)
+            .await
+            .expect("fixture login should succeed");
+        assert_eq!(authenticated_user.as_ref(), FIXTURE_LOGIN_USER_ID);
+
+        let listed_users = users
+            .list_users(&authenticated_user)
+            .await
+            .expect("fixture users query should succeed");
+        assert_eq!(listed_users.len(), 1);
+        assert_eq!(listed_users[0].id().as_ref(), FIXTURE_USERS_ID);
+        assert_eq!(
+            listed_users[0].display_name().as_ref(),
+            FIXTURE_DISPLAY_NAME
+        );
+    }
 }
