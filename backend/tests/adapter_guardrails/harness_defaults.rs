@@ -218,6 +218,12 @@ pub(super) fn create_catalogue_doubles()
 }
 
 /// Creates a default enrichment provenance reporting double.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let _provenance = create_enrichment_provenance_double();
+/// ```
 pub(super) fn create_enrichment_provenance_double() -> RecordingEnrichmentProvenanceRepository {
     RecordingEnrichmentProvenanceRepository::new(EnrichmentProvenanceListResponse::Ok(
         ListEnrichmentProvenanceResponse {

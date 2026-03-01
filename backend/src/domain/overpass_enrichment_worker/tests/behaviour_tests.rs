@@ -23,33 +23,38 @@ fn assert_successful_job_outcome(
     );
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Helper signature is intentionally explicit to mirror the required test assertion contract."
-)]
-fn assert_stub_call_counts(
-    source: &Arc<SourceStub>,
-    repo: &Arc<RepoStub>,
-    provenance_repo: &Arc<ProvenanceRepoStub>,
-    expected_source: usize,
-    expected_repo: usize,
-    expected_provenance: usize,
-) {
-    let source_calls = source.calls.load(Ordering::SeqCst);
-    let repo_calls = repo.calls.load(Ordering::SeqCst);
-    let provenance_calls = provenance_repo.calls.load(Ordering::SeqCst);
+#[derive(Debug, Clone, Copy)]
+struct StubCallCountExpectations {
+    source: usize,
+    repository: usize,
+    provenance_repository: usize,
+}
+
+struct StubCallCounters<'a> {
+    source: &'a SourceStub,
+    repository: &'a RepoStub,
+    provenance_repository: &'a ProvenanceRepoStub,
+}
+
+fn assert_stub_call_counts(counters: StubCallCounters<'_>, expected: StubCallCountExpectations) {
+    let source_calls = counters.source.calls.load(Ordering::SeqCst);
+    let repo_calls = counters.repository.calls.load(Ordering::SeqCst);
+    let provenance_calls = counters.provenance_repository.calls.load(Ordering::SeqCst);
 
     assert_eq!(
-        source_calls, expected_source,
-        "expected source stub to be called {expected_source} time(s), got {source_calls}"
+        source_calls, expected.source,
+        "expected source stub to be called {} time(s), got {source_calls}",
+        expected.source
     );
     assert_eq!(
-        repo_calls, expected_repo,
-        "expected repository stub to be called {expected_repo} time(s), got {repo_calls}"
+        repo_calls, expected.repository,
+        "expected repository stub to be called {} time(s), got {repo_calls}",
+        expected.repository
     );
     assert_eq!(
-        provenance_calls, expected_provenance,
-        "expected provenance repository stub to be called {expected_provenance} time(s), got {provenance_calls}"
+        provenance_calls, expected.provenance_repository,
+        "expected provenance repository stub to be called {} time(s), got {provenance_calls}",
+        expected.provenance_repository
     );
 }
 
@@ -153,7 +158,18 @@ async fn happy_path_persists_and_records_success(
 
     let out = worker.process_job(job.clone()).await.expect("job succeeds");
     assert_successful_job_outcome(&out, 1, 2);
-    assert_stub_call_counts(&source, &repo, &provenance_repo, 1, 1, 1);
+    assert_stub_call_counts(
+        StubCallCounters {
+            source: source.as_ref(),
+            repository: repo.as_ref(),
+            provenance_repository: provenance_repo.as_ref(),
+        },
+        StubCallCountExpectations {
+            source: 1,
+            repository: 1,
+            provenance_repository: 1,
+        },
+    );
     assert_provenance_recorded(
         provenance_repo.as_ref(),
         "https://overpass.example/api/interpreter",
@@ -199,7 +215,18 @@ async fn assert_quota_denial_short_circuits_source(
 
     let error = worker.process_job(job).await.expect_err("quota denies");
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
-    assert_stub_call_counts(&source, &repo, &provenance_repo, 0, 0, 0);
+    assert_stub_call_counts(
+        StubCallCounters {
+            source: source.as_ref(),
+            repository: repo.as_ref(),
+            provenance_repository: provenance_repo.as_ref(),
+        },
+        StubCallCountExpectations {
+            source: 0,
+            repository: 0,
+            provenance_repository: 0,
+        },
+    );
     assert_metrics_failure(metrics.as_ref(), case.expected_kind);
 }
 
@@ -257,7 +284,18 @@ async fn retry_uses_jittered_exponential_backoff(
 
     let out = worker.process_job(job).await.expect("eventual success");
     assert_successful_job_outcome(&out, 3, 1);
-    assert_stub_call_counts(&source, &repo, &provenance_repo, 3, 1, 1);
+    assert_stub_call_counts(
+        StubCallCounters {
+            source: source.as_ref(),
+            repository: repo.as_ref(),
+            provenance_repository: provenance_repo.as_ref(),
+        },
+        StubCallCountExpectations {
+            source: 3,
+            repository: 1,
+            provenance_repository: 1,
+        },
+    );
     assert_eq!(
         sleeper.lock_durations().as_slice(),
         [Duration::from_millis(101), Duration::from_millis(202)]
@@ -388,12 +426,16 @@ async fn circuit_opens_and_blocks_until_cooldown(
 
     assert_eq!(blocked.code(), crate::domain::ErrorCode::ServiceUnavailable);
     assert_stub_call_counts(
-        &fixture.source,
-        &fixture.repo,
-        &fixture.provenance_repo,
-        2,
-        0,
-        0,
+        StubCallCounters {
+            source: fixture.source.as_ref(),
+            repository: fixture.repo.as_ref(),
+            provenance_repository: fixture.provenance_repo.as_ref(),
+        },
+        StubCallCountExpectations {
+            source: 2,
+            repository: 0,
+            provenance_repository: 0,
+        },
     );
     assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
 }

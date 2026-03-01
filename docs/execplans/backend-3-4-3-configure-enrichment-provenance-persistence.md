@@ -32,7 +32,8 @@ Observable success criteria:
 - successful enrichment jobs write provenance rows with URL, timestamp, and
   bounds;
 - admin reporting endpoint returns provenance rows in deterministic order;
-- unit tests (`rstest`) and behavioural tests (`rstest-bdd`) cover happy,
+- unit tests (`rstest`) and behavioural tests
+  (`rstest-bdd`, behaviour-driven development (BDD)) cover happy,
   unhappy, and edge paths;
 - behavioural suites use existing `pg-embedded-setup-unpriv` cluster patterns;
 - architecture docs record the 3.4.3 decision;
@@ -56,13 +57,16 @@ Observable success criteria:
 
 ## Tolerances (exception triggers)
 
-- If delivering `/api/v1/admin/...` requires a new RBAC model beyond current
+- If delivering `/api/v1/admin/...` requires a new role-based access control
+  (RBAC) model beyond current
   session auth, stop and escalate.
-- If provenance writes require replacing the existing POI persistence contract
+- If provenance writes require replacing the existing point-of-interest (POI)
+  persistence contract
   with a broader transactional port, stop and confirm scope expansion.
 - If historical backfill is required for old enrichment rows, stop and split a
   dedicated backfill task.
-- If file churn exceeds 30 files or about 2,200 net LOC, split into staged
+- If file churn exceeds 30 files or about 2,200 net lines of code (LOC), split
+  into staged
   milestones.
 - If `make check-fmt`, `make lint`, or `make test` fail after three
   consecutive fix attempts, stop with retained logs.
@@ -224,14 +228,15 @@ Done when:
 
 ## Milestone 3 - Admin reporting endpoint and state wiring
 
-Add reporting endpoint through inbound HTTP adapter and domain query port.
+Add reporting endpoint through inbound Hypertext Transfer Protocol (HTTP)
+adapter and domain query port.
 
 Proposed endpoint contract:
 
 - route: `GET /api/v1/admin/enrichment/provenance`;
 - query:
   - `limit` (default 50, max 200);
-  - `before` (optional RFC3339 cursor);
+  - `before` (optional Request for Comments 3339 (RFC 3339) cursor);
 - response:
   - `records: [{ sourceUrl, importedAt, boundingBox }]`;
   - optional `nextBefore`.
@@ -240,7 +245,7 @@ Wiring steps:
 
 - add handler module (for example `backend/src/inbound/http/admin_enrichment.rs`);
 - extend `HttpState` / `HttpStatePorts` for provenance query port;
-- wire DB-backed adapter in `build_http_state` when pool exists;
+- wire database (DB)-backed adapter in `build_http_state` when pool exists;
 - wire fixture/no-op fallback when pool is absent;
 - register route in `build_app`;
 - update OpenAPI surface in `backend/src/doc.rs`.
@@ -410,7 +415,7 @@ Completed.
   `overpass_enrichment_provenance(source_url, imported_at, bounds_*)`.
 - Shipped authenticated admin reporting endpoint
   `GET /api/v1/admin/enrichment/provenance` with bounded pagination
-  (`limit` default 50, max 200) and optional RFC3339 `before` cursor.
+  (`limit` default 50, max 200) and optional RFC 3339 `before` cursor.
 - Added worker + endpoint coverage across `rstest` and `rstest-bdd`,
   including happy, unhappy, and edge paths.
 - Updated `docs/wildside-backend-architecture.md` with the 3.4.3 decision and
@@ -419,4 +424,7 @@ Completed.
   - `make check-fmt`: pass
   - `make lint`: pass
   - `make test`: pass
-  (logs at the three `/tmp/...-backend-3-4-3-configure-enrichment-provenance-persistence.out` paths above).
+- Gate logs:
+  - `/tmp/check-fmt-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`
+  - `/tmp/lint-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`
+  - `/tmp/test-wildside-backend-3-4-3-configure-enrichment-provenance-persistence.out`
