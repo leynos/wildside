@@ -749,7 +749,7 @@ services.
 > `config.db_pool` is present: `DieselLoginService` and `DieselUsersQuery`,
 > both backed by `DieselUserRepository`. This keeps SQL ownership in outbound
 > adapters while preserving fixture fallback when no DB pool is configured.
-> `POST /api/v1/login` preserves session-cookie and unauthorized envelope
+> `POST /api/v1/login` preserves session-cookie and unauthorised envelope
 > behaviour, and `GET /api/v1/users` preserves session enforcement and response
 > envelope contracts. Dedicated startup-mode coverage lives in
 > `backend/tests/diesel_login_users_adapters.rs` (`rstest`) and

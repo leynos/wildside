@@ -25,7 +25,10 @@ use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "server config include exposes members unused in this integration test"
+)]
 #[path = "../src/server/config.rs"]
 mod server_config;
 pub use server_config::ServerConfig;
@@ -311,13 +314,12 @@ fn db_present_mode_supports_login_and_users_with_stable_contracts() {
     assert_eq!(users_snapshot.status, 200);
     let users_body = users_snapshot.body.as_ref().expect("users body");
     let mode = classify_users(users_body);
-    if mode == UsersMode::Db {
-        let users = users_body.as_array().expect("users array");
-        assert!(users.iter().any(|user| {
-            user.get("id").and_then(Value::as_str) == Some(FIXTURE_AUTH_ID)
-                && user.get("displayName").and_then(Value::as_str) == Some(DB_AUTH_DISPLAY_NAME)
-        }));
-    }
+    assert_eq!(mode, UsersMode::Db);
+    let users = users_body.as_array().expect("users array");
+    assert!(users.iter().any(|user| {
+        user.get("id").and_then(Value::as_str) == Some(FIXTURE_AUTH_ID)
+            && user.get("displayName").and_then(Value::as_str) == Some(DB_AUTH_DISPLAY_NAME)
+    }));
 }
 
 #[rstest]

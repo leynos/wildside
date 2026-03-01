@@ -31,7 +31,10 @@ use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "server config include exposes members unused in this integration test"
+)]
 #[path = "../src/server/config.rs"]
 mod server_config;
 pub use server_config::ServerConfig;

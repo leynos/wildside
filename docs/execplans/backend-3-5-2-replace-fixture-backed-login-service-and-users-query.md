@@ -54,7 +54,7 @@ Observable success criteria:
 - Preserve login/session behaviour in inbound handlers:
   - validate credentials shape as today;
   - set session only on successful authentication;
-  - keep unauthorized responses and trace-id envelope behaviour intact.
+  - keep unauthorised responses and trace-id envelope behaviour intact.
 - Preserve users endpoint behaviour shape and camelCase JSON expectations.
 - Do not add schema migrations in 3.5.2. Credential-storage schema remains an
   acknowledged gap from 3.5.1.
@@ -74,7 +74,7 @@ Observable success criteria:
 - Churn tolerance: if implementation exceeds 14 files or 1,100 net LOC,
   re-scope into a follow-up plan before proceeding.
 - Test tolerance: if embedded PostgreSQL tests are unstable under normal
-  parallelism, run serialized for PG suites and record rationale.
+  parallelism, run serialized for PostgreSQL (PG) suites and record rationale.
 - Gate tolerance: if any required gate fails more than three consecutive fix
   loops, stop with logs and root-cause notes.
 
@@ -84,7 +84,7 @@ Observable success criteria:
   Mitigation: use a documented transitional DB-backed login strategy that
   preserves current behaviour and record the gap in architecture decisions.
 
-- Risk: wrapper or repository changes accidentally alter unauthorized envelope
+- Risk: wrapper or repository changes accidentally alter unauthorised envelope
   mapping.
   Mitigation: keep existing handler tests and add explicit unhappy-path
   assertions for code/message/status/trace-id semantics.
@@ -229,7 +229,7 @@ Unit/integration (`rstest`) target additions:
   - valid credentials authenticate;
   - users query returns expected DB-backed user payload.
 - Unhappy paths:
-  - invalid credentials return unauthorized error semantics;
+  - invalid credentials return unauthorised error semantics;
   - DB query/pool failures map to stable domain error categories.
 - Edge paths:
   - missing user row behaviour is deterministic and documented.
@@ -244,7 +244,7 @@ Required behavioural scenarios:
 
 - DB-present startup uses DB-backed login/users path.
 - Fixture-fallback startup uses fixture login/users path.
-- DB-present invalid credentials still produce unauthorized envelope.
+- DB-present invalid credentials still produce unauthorised envelope.
 - DB-present unhappy DB condition preserves stable envelope + trace semantics.
 - Session behaviour remains unchanged across modes.
 
@@ -344,9 +344,12 @@ All required gates pass with retained logs and no unresolved failures.
   duplicate in-module server tests and keeping startup-mode validation in
   integration suites.
 - [x] (2026-02-28 04:06Z) Ran final full gates on the closing tree:
-  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
-  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out`
+  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-`
+    `and-users-query.out`
+  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-`
+    `users-query.out`
+  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-`
+    `users-query.out`
 - [x] Implement Milestone 0 baseline notes and red tests.
 - [x] Implement Milestone 1 DB-backed adapters and state-builder wiring.
 - [x] Implement Milestone 2 unit and behavioural test coverage.
@@ -415,9 +418,12 @@ Completed delivery summary:
   - Strict lint policy (`no_expect_outside_tests`) required removing redundant
     server-module tests that were not recognized as test-only contexts.
 - Final evidence log paths and gate outcomes:
-  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
-  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
-  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-users-query.out` (pass)
+  - `/tmp/check-fmt-wildside-backend-3-5-2-replace-fixture-backed-login-service-`
+    `and-users-query.out` (pass)
+  - `/tmp/lint-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-`
+    `users-query.out` (pass)
+  - `/tmp/test-wildside-backend-3-5-2-replace-fixture-backed-login-service-and-`
+    `users-query.out` (pass)
 - Follow-up work explicitly deferred to 3.5.3+:
   - DB-backed parity for `UserProfileQuery` and `UserInterestsCommand` (3.5.3).
   - Canonical interests persistence and revision-conflict strategy work (3.5.4+).

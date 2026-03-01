@@ -52,6 +52,7 @@ mod models;
 mod pool;
 mod postgres_schema_snapshot_repository;
 mod schema;
+mod user_persistence_error_mapping;
 
 pub use diesel_catalogue_ingestion_repository::DieselCatalogueIngestionRepository;
 pub use diesel_catalogue_repository::DieselCatalogueRepository;

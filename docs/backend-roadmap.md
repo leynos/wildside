@@ -190,8 +190,7 @@ so persistence details stay confined to outbound adapters.
     landed in `backend/tests/diesel_login_users_adapters.rs`,
     `backend/tests/user_state_startup_modes_bdd.rs`, and
     `backend/tests/features/user_state_startup_modes.feature`; full-gate replay
-    (`make check-fmt`, `make lint`, `make test`) is still pending, so this
-    checkbox remains open.
+    (`make check-fmt`, `make lint`, `make test`) completed before closure.
 - [ ] 3.5.3. Replace fixture-backed `UserProfileQuery` and
   `UserInterestsCommand` wiring with explicit DB-backed concrete types, and
   document whether this uses repository extensions (for example

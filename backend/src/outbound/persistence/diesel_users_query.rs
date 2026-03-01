@@ -7,10 +7,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::domain::ports::{UserPersistenceError, UserRepository, UsersQuery};
+use crate::domain::ports::{UserRepository, UsersQuery};
 use crate::domain::{Error, User, UserId};
 
 use super::diesel_user_repository::DieselUserRepository;
+use super::user_persistence_error_mapping::map_user_persistence_error;
+#[cfg(test)]
+use crate::domain::ports::UserPersistenceError;
 
 /// Diesel-backed `UsersQuery` implementation backed by user repository reads.
 #[derive(Clone)]
@@ -32,13 +35,6 @@ impl DieselUsersQuery {
     }
 }
 
-fn map_persistence_error(error: UserPersistenceError) -> Error {
-    match error {
-        UserPersistenceError::Connection { message } => Error::service_unavailable(message),
-        UserPersistenceError::Query { message } => Error::internal(message),
-    }
-}
-
 #[async_trait]
 impl UsersQuery for DieselUsersQuery {
     async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
@@ -46,7 +42,7 @@ impl UsersQuery for DieselUsersQuery {
             .user_repository
             .find_by_id(authenticated_user)
             .await
-            .map_err(map_persistence_error)?;
+            .map_err(map_user_persistence_error)?;
 
         match maybe_user {
             Some(user) => Ok(vec![user]),

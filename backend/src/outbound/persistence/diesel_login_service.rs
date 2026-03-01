@@ -7,15 +7,18 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::domain::ports::{LoginService, UserPersistenceError, UserRepository};
+use crate::domain::ports::{LoginService, UserRepository};
 use crate::domain::{DisplayName, Error, LoginCredentials, User, UserId};
 
 use super::diesel_user_repository::DieselUserRepository;
+use super::user_persistence_error_mapping::map_user_persistence_error;
+#[cfg(test)]
+use crate::domain::ports::UserPersistenceError;
 
 const FIXTURE_USERNAME: &str = "admin";
 const FIXTURE_PASSWORD: &str = "password";
 const FIXTURE_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
-const FIXTURE_DISPLAY_NAME: &str = "Admin User";
+const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
 
 /// Diesel-backed `LoginService` that preserves fixture-authentication semantics.
 #[derive(Clone)]
@@ -41,7 +44,7 @@ impl DieselLoginService {
             .user_repository
             .find_by_id(user_id)
             .await
-            .map_err(map_persistence_error)?;
+            .map_err(map_user_persistence_error)?;
 
         if existing.is_some() {
             return Ok(());
@@ -54,20 +57,13 @@ impl DieselLoginService {
         self.user_repository
             .upsert(&user)
             .await
-            .map_err(map_persistence_error)
+            .map_err(map_user_persistence_error)
     }
 }
 
 fn fixture_user_id() -> Result<UserId, Error> {
     UserId::new(FIXTURE_USER_ID)
         .map_err(|err| Error::internal(format!("invalid fixture user id: {err}")))
-}
-
-fn map_persistence_error(error: UserPersistenceError) -> Error {
-    match error {
-        UserPersistenceError::Connection { message } => Error::service_unavailable(message),
-        UserPersistenceError::Query { message } => Error::internal(message),
-    }
 }
 
 #[async_trait]
