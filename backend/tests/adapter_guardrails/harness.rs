@@ -202,11 +202,7 @@ fn create_runtime_and_local() -> (Runtime, LocalSet) {
     (runtime, local)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Test harness helper signature is intentionally explicit per the required extraction contract."
-)]
-fn build_http_state_for_tests(
+struct HttpStateTestDoubles {
     login: RecordingLoginService,
     users: RecordingUsersQuery,
     profile: RecordingUserProfileQuery,
@@ -221,7 +217,26 @@ fn build_http_state_for_tests(
     offline_bundles: RecordingOfflineBundleCommand,
     offline_bundles_query: RecordingOfflineBundleQuery,
     walk_sessions: RecordingWalkSessionCommand,
-) -> HttpState {
+}
+
+fn build_http_state_for_tests(doubles: HttpStateTestDoubles) -> HttpState {
+    let HttpStateTestDoubles {
+        login,
+        users,
+        profile,
+        interests,
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
+        catalogue,
+        descriptors,
+        enrichment_provenance,
+        offline_bundles,
+        offline_bundles_query,
+        walk_sessions,
+    } = doubles;
+
     HttpState::new_with_extra(
         HttpStatePorts {
             login: Arc::new(login),
@@ -259,22 +274,22 @@ pub(crate) fn world() -> WorldFixture {
     let (offline_bundles, offline_bundles_query, walk_sessions) =
         create_offline_and_walk_doubles(&user_id);
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let http_state = build_http_state_for_tests(
-        login.clone(),
-        users.clone(),
-        profile.clone(),
-        interests.clone(),
-        preferences.clone(),
-        preferences_query.clone(),
-        route_annotations.clone(),
-        route_annotations_query.clone(),
-        catalogue.clone(),
-        descriptors.clone(),
-        enrichment_provenance.clone(),
-        offline_bundles.clone(),
-        offline_bundles_query.clone(),
-        walk_sessions.clone(),
-    );
+    let http_state = build_http_state_for_tests(HttpStateTestDoubles {
+        login: login.clone(),
+        users: users.clone(),
+        profile: profile.clone(),
+        interests: interests.clone(),
+        preferences: preferences.clone(),
+        preferences_query: preferences_query.clone(),
+        route_annotations: route_annotations.clone(),
+        route_annotations_query: route_annotations_query.clone(),
+        catalogue: catalogue.clone(),
+        descriptors: descriptors.clone(),
+        enrichment_provenance: enrichment_provenance.clone(),
+        offline_bundles: offline_bundles.clone(),
+        offline_bundles_query: offline_bundles_query.clone(),
+        walk_sessions: walk_sessions.clone(),
+    });
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
