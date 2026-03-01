@@ -66,6 +66,43 @@ fn fixture_record(
     }
 }
 
+fn assert_record_payload(
+    record: &Value,
+    expected_source_url: &str,
+    expected_imported_at: &str,
+    expected_bounding_box: [f64; 4],
+) {
+    assert_eq!(
+        record.get("sourceUrl").and_then(Value::as_str),
+        Some(expected_source_url)
+    );
+    assert_eq!(
+        record.get("importedAt").and_then(Value::as_str),
+        Some(expected_imported_at)
+    );
+
+    let bounding = record
+        .get("boundingBox")
+        .and_then(Value::as_object)
+        .expect("boundingBox object");
+    assert_eq!(
+        bounding.get("minLng").and_then(Value::as_f64),
+        Some(expected_bounding_box[0])
+    );
+    assert_eq!(
+        bounding.get("minLat").and_then(Value::as_f64),
+        Some(expected_bounding_box[1])
+    );
+    assert_eq!(
+        bounding.get("maxLng").and_then(Value::as_f64),
+        Some(expected_bounding_box[2])
+    );
+    assert_eq!(
+        bounding.get("maxLat").and_then(Value::as_f64),
+        Some(expected_bounding_box[3])
+    );
+}
+
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
     bdd_common::setup_server(world);
@@ -143,6 +180,23 @@ fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invali
     bdd_common::perform_get_request(world, "/api/v1/admin/enrichment/provenance?limit=0");
 }
 
+#[when("the authenticated client requests enrichment provenance reporting with invalid cursor")]
+fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invalid_cursor(
+    world: &WorldFixture,
+) {
+    bdd_common::perform_get_request(
+        world,
+        "/api/v1/admin/enrichment/provenance?before=not-a-timestamp",
+    );
+}
+
+#[when("the authenticated client requests enrichment provenance reporting with over-max limit")]
+fn the_authenticated_client_requests_enrichment_provenance_reporting_with_over_max_limit(
+    world: &WorldFixture,
+) {
+    bdd_common::perform_get_request(world, "/api/v1/admin/enrichment/provenance?limit=201");
+}
+
 #[when("the authenticated client requests enrichment provenance reporting with limit and cursor")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_limit_and_cursor(
     world: &WorldFixture,
@@ -167,21 +221,43 @@ fn the_response_is_ok_with_an_enrichment_provenance_payload(world: &WorldFixture
     assert_eq!(records.len(), 2);
 
     let first = records.first().expect("first record");
-    assert!(first.get("sourceUrl").and_then(Value::as_str).is_some());
-    let imported_at = first
+    let second = records.get(1).expect("second record");
+    let expected_first_imported_at = fixture_timestamp("2026-02-28T12:00:00Z").to_rfc3339();
+    let expected_second_imported_at = fixture_timestamp("2026-02-28T11:58:00Z").to_rfc3339();
+    assert_record_payload(
+        first,
+        "https://overpass.example/api/interpreter?seed=1",
+        &expected_first_imported_at,
+        [-3.2, 55.9, -3.0, 56.0],
+    );
+    assert_record_payload(
+        second,
+        "https://overpass.example/api/interpreter?seed=0",
+        &expected_second_imported_at,
+        [-3.3, 55.8, -3.1, 55.95],
+    );
+
+    let first_imported_at = first
         .get("importedAt")
         .and_then(Value::as_str)
         .expect("importedAt");
-    DateTime::parse_from_rfc3339(imported_at).expect("importedAt RFC3339");
+    let second_imported_at = second
+        .get("importedAt")
+        .and_then(Value::as_str)
+        .expect("importedAt");
+    let first_imported_at =
+        DateTime::parse_from_rfc3339(first_imported_at).expect("first importedAt RFC3339");
+    let second_imported_at =
+        DateTime::parse_from_rfc3339(second_imported_at).expect("second importedAt RFC3339");
+    assert!(
+        first_imported_at > second_imported_at,
+        "expected records to be sorted newest-first by importedAt"
+    );
 
-    let bounding = first
-        .get("boundingBox")
-        .and_then(Value::as_object)
-        .expect("boundingBox object");
-    assert!(bounding.get("minLng").and_then(Value::as_f64).is_some());
-    assert!(bounding.get("minLat").and_then(Value::as_f64).is_some());
-    assert!(bounding.get("maxLng").and_then(Value::as_f64).is_some());
-    assert!(bounding.get("maxLat").and_then(Value::as_f64).is_some());
+    assert_eq!(
+        body.get("nextBefore").and_then(Value::as_str),
+        Some(expected_second_imported_at.as_str())
+    );
 }
 
 #[then("the response is unauthorized")]

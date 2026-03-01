@@ -17,6 +17,18 @@ Feature: Admin enrichment provenance reporting endpoint
     When the authenticated client requests enrichment provenance reporting with invalid limit
     Then the response is bad request
 
+  Scenario: Admin enrichment reporting rejects over-max limit values
+    Given a running server with session middleware
+    And the client has an authenticated session
+    When the authenticated client requests enrichment provenance reporting with over-max limit
+    Then the response is bad request
+
+  Scenario: Admin enrichment reporting rejects invalid before cursors
+    Given a running server with session middleware
+    And the client has an authenticated session
+    When the authenticated client requests enrichment provenance reporting with invalid cursor
+    Then the response is bad request
+
   Scenario: Admin enrichment reporting returns an empty payload when no rows exist
     Given a running server with session middleware
     And the client has an authenticated session
