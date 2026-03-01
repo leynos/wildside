@@ -14,4 +14,4 @@ CREATE TABLE IF NOT EXISTS overpass_enrichment_provenance (
 );
 
 CREATE INDEX IF NOT EXISTS idx_overpass_enrichment_provenance_imported_at
-    ON overpass_enrichment_provenance (imported_at DESC);
+    ON overpass_enrichment_provenance (imported_at DESC, id DESC);
