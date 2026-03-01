@@ -4,11 +4,17 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use actix_http::Request;
 use actix_session::SessionMiddleware;
 use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::CookieSessionStore;
 use actix_web::cookie::{Cookie, Key, SameSite, time::Duration as CookieDuration};
-use actix_web::{App, test as actix_test, web};
+use actix_web::{
+    App,
+    body::BoxBody,
+    dev::{Service, ServiceResponse},
+    test as actix_test, web,
+};
 use backend::domain::TRACE_ID_HEADER;
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 use backend::inbound::http::state::HttpState;
@@ -85,11 +91,17 @@ fn is_fixture_users(body: &Value) -> bool {
     })
 }
 
-async fn run_flow(
+fn parse_json_body(bytes: &[u8]) -> Option<Value> {
+    if bytes.is_empty() {
+        None
+    } else {
+        Some(serde_json::from_slice(bytes).expect("json body"))
+    }
+}
+
+async fn build_test_app_with_session(
     state: web::Data<HttpState>,
-    username: &str,
-    password: &str,
-) -> (Snapshot, Option<Snapshot>) {
+) -> impl Service<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error> {
     let session = SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
         .cookie_name("session".to_owned())
         .cookie_path("/".to_owned())
@@ -100,7 +112,7 @@ async fn run_flow(
         .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
         .build();
 
-    let app = actix_test::init_service(
+    actix_test::init_service(
         App::new().app_data(state).wrap(backend::Trace).service(
             web::scope("/api/v1")
                 .wrap(session)
@@ -108,15 +120,13 @@ async fn run_flow(
                 .service(list_users),
         ),
     )
-    .await;
-    let parse_body = |bytes: &[u8]| {
-        if bytes.is_empty() {
-            None
-        } else {
-            Some(serde_json::from_slice(bytes).expect("json body"))
-        }
-    };
+    .await
+}
 
+async fn execute_and_snapshot_login<S>(app: &S, username: &str, password: &str) -> Snapshot
+where
+    S: Service<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error>,
+{
     let login_req = actix_test::TestRequest::post()
         .uri("/api/v1/login")
         .set_json(&LoginRequest {
@@ -124,8 +134,8 @@ async fn run_flow(
             password: password.to_owned(),
         })
         .to_request();
-    let login_res = actix_test::call_service(&app, login_req).await;
-    let login_snapshot = Snapshot {
+    let login_res = actix_test::call_service(app, login_req).await;
+    Snapshot {
         status: login_res.status().as_u16(),
         trace_id: login_res
             .headers()
@@ -137,19 +147,20 @@ async fn run_flow(
             .cookies()
             .find(|cookie| cookie.name() == "session")
             .map(|cookie| cookie.into_owned()),
-        body: parse_body(actix_test::read_body(login_res).await.as_ref()),
-    };
+        body: parse_json_body(actix_test::read_body(login_res).await.as_ref()),
+    }
+}
 
-    let Some(cookie) = login_snapshot.session_cookie.clone() else {
-        return (login_snapshot, None);
-    };
-
+async fn execute_and_snapshot_users<S>(app: &S, cookie: Cookie<'_>) -> Snapshot
+where
+    S: Service<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error>,
+{
     let users_req = actix_test::TestRequest::get()
         .uri("/api/v1/users")
         .cookie(cookie)
         .to_request();
-    let users_res = actix_test::call_service(&app, users_req).await;
-    let users_snapshot = Snapshot {
+    let users_res = actix_test::call_service(app, users_req).await;
+    Snapshot {
         status: users_res.status().as_u16(),
         trace_id: users_res
             .headers()
@@ -157,8 +168,23 @@ async fn run_flow(
             .and_then(|value| value.to_str().ok())
             .map(ToOwned::to_owned),
         session_cookie: None,
-        body: parse_body(actix_test::read_body(users_res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(users_res).await.as_ref()),
+    }
+}
+
+async fn run_flow(
+    state: web::Data<HttpState>,
+    username: &str,
+    password: &str,
+) -> (Snapshot, Option<Snapshot>) {
+    let app = build_test_app_with_session(state).await;
+    let login_snapshot = execute_and_snapshot_login(&app, username, password).await;
+
+    let Some(cookie) = login_snapshot.session_cookie.clone() else {
+        return (login_snapshot, None);
     };
+
+    let users_snapshot = execute_and_snapshot_users(&app, cookie).await;
 
     (login_snapshot, Some(users_snapshot))
 }
