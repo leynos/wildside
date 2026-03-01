@@ -90,69 +90,72 @@ impl OverpassEnrichmentSource for SourceStub {
     }
 }
 
-struct RepoStub {
-    scripted: Mutex<VecDeque<Result<(), OsmPoiRepositoryError>>>,
-    calls: AtomicUsize,
-    persisted: Mutex<Vec<Vec<OsmPoiIngestionRecord>>>,
+trait ScriptedRepositoryRecord {
+    const MUTEX_MESSAGE: &'static str;
 }
-impl RepoStub {
-    fn new(scripted: Vec<Result<(), OsmPoiRepositoryError>>) -> Self {
+
+impl ScriptedRepositoryRecord for Vec<OsmPoiIngestionRecord> {
+    const MUTEX_MESSAGE: &'static str = "repo mutex";
+}
+
+impl ScriptedRepositoryRecord for EnrichmentProvenanceRecord {
+    const MUTEX_MESSAGE: &'static str = "provenance mutex";
+}
+
+struct ScriptedRepositoryStub<T, E> {
+    scripted: Mutex<VecDeque<Result<(), E>>>,
+    calls: AtomicUsize,
+    persisted: Mutex<Vec<T>>,
+}
+
+impl<T, E> ScriptedRepositoryStub<T, E>
+where
+    T: Clone + ScriptedRepositoryRecord,
+{
+    fn new(scripted: Vec<Result<(), E>>) -> Self {
         Self {
             scripted: Mutex::new(scripted.into()),
             calls: AtomicUsize::new(0),
             persisted: Mutex::new(Vec::new()),
         }
     }
+
+    fn persist_internal(&self, record: &T) -> Result<(), E> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.persisted
+            .lock()
+            .expect(T::MUTEX_MESSAGE)
+            .push(record.clone());
+        self.scripted
+            .lock()
+            .expect(T::MUTEX_MESSAGE)
+            .pop_front()
+            .unwrap_or(Ok(()))
+    }
 }
+
+type RepoStub = ScriptedRepositoryStub<Vec<OsmPoiIngestionRecord>, OsmPoiRepositoryError>;
+
 #[async_trait]
 impl OsmPoiRepository for RepoStub {
     async fn upsert_pois(
         &self,
         records: &[OsmPoiIngestionRecord],
     ) -> Result<(), OsmPoiRepositoryError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        self.persisted
-            .lock()
-            .expect("repo mutex")
-            .push(records.to_vec());
-        self.scripted
-            .lock()
-            .expect("repo mutex")
-            .pop_front()
-            .unwrap_or(Ok(()))
+        self.persist_internal(&records.to_vec())
     }
 }
 
-struct ProvenanceRepoStub {
-    scripted: Mutex<VecDeque<Result<(), EnrichmentProvenanceRepositoryError>>>,
-    calls: AtomicUsize,
-    persisted: Mutex<Vec<EnrichmentProvenanceRecord>>,
-}
-impl ProvenanceRepoStub {
-    fn new(scripted: Vec<Result<(), EnrichmentProvenanceRepositoryError>>) -> Self {
-        Self {
-            scripted: Mutex::new(scripted.into()),
-            calls: AtomicUsize::new(0),
-            persisted: Mutex::new(Vec::new()),
-        }
-    }
-}
+type ProvenanceRepoStub =
+    ScriptedRepositoryStub<EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError>;
+
 #[async_trait]
 impl EnrichmentProvenanceRepository for ProvenanceRepoStub {
     async fn persist(
         &self,
         record: &EnrichmentProvenanceRecord,
     ) -> Result<(), EnrichmentProvenanceRepositoryError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        self.persisted
-            .lock()
-            .expect("provenance mutex")
-            .push(record.clone());
-        self.scripted
-            .lock()
-            .expect("provenance mutex")
-            .pop_front()
-            .unwrap_or(Ok(()))
+        self.persist_internal(record)
     }
 
     async fn list_recent(
