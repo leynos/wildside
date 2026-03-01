@@ -175,7 +175,7 @@ fn osm_ingestion_provenance_down_migration_drops_schema_objects(#[case] drop_sta
 )]
 #[case("CONSTRAINT overpass_enrichment_provenance_bounds_order CHECK")]
 #[case("idx_overpass_enrichment_provenance_imported_at")]
-#[case("ON overpass_enrichment_provenance (imported_at DESC)")]
+#[case("ON overpass_enrichment_provenance (imported_at DESC, id DESC)")]
 fn creates_overpass_enrichment_provenance_contract(#[case] ddl_fragment: &str) {
     assert!(
         ENRICHMENT_PROVENANCE_UP.contains(ddl_fragment),
