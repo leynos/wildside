@@ -212,7 +212,8 @@ Migration shape:
   - coordinate range checks;
   - `min <= max` checks.
 - index:
-  - `idx_overpass_enrichment_provenance_imported_at` on `(imported_at DESC)`.
+  - `idx_overpass_enrichment_provenance_imported_at` on
+    `(imported_at DESC, id DESC)`.
 
 Adapter shape:
 
