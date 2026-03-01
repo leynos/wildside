@@ -5,14 +5,14 @@ use std::sync::Arc;
 use actix_web::web;
 
 use backend::domain::ports::{
-    CatalogueRepository, DescriptorRepository, FixtureCatalogueRepository,
-    FixtureDescriptorRepository, FixtureLoginService, FixtureOfflineBundleCommand,
-    FixtureOfflineBundleQuery, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
-    FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
-    FixtureUserProfileQuery, FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
-    OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
-    RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand,
-    WalkSessionQuery,
+    CatalogueRepository, DescriptorRepository, EnrichmentProvenanceRepository,
+    FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureEnrichmentProvenanceRepository,
+    FixtureLoginService, FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
+    FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureUserInterestsCommand,
+    FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
+    FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, OfflineBundleCommand,
+    OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
+    UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -21,7 +21,8 @@ use backend::domain::{
 use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
-    DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselOfflineBundleRepository,
+    DbPool, DieselCatalogueRepository, DieselDescriptorRepository,
+    DieselEnrichmentProvenanceRepository, DieselOfflineBundleRepository,
     DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselWalkSessionRepository,
 };
 
@@ -216,6 +217,15 @@ fn build_walk_sessions_pair(
     }
 }
 
+fn build_enrichment_provenance_repository(
+    config: &ServerConfig,
+) -> Arc<dyn EnrichmentProvenanceRepository> {
+    match &config.db_pool {
+        Some(pool) => Arc::new(DieselEnrichmentProvenanceRepository::new(pool.clone())),
+        None => Arc::new(FixtureEnrichmentProvenanceRepository),
+    }
+}
+
 /// Build the shared HTTP state from configured ports and fixture fallbacks.
 pub(super) fn build_http_state(
     config: &ServerConfig,
@@ -227,6 +237,7 @@ pub(super) fn build_http_state(
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
     let (walk_sessions, walk_sessions_query) = build_walk_sessions_pair(config);
+    let enrichment_provenance = build_enrichment_provenance_repository(config);
     let (catalogue, descriptors) = build_catalogue_services(config);
 
     web::Data::new(HttpState::new_with_extra(
@@ -246,6 +257,7 @@ pub(super) fn build_http_state(
         HttpStateExtraPorts {
             offline_bundles,
             offline_bundles_query,
+            enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
         },

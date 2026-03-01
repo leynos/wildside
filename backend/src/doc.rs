@@ -12,6 +12,10 @@
 //! The generated specification is used by Swagger UI (debug builds) and
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
+use crate::inbound::http::admin_enrichment::{
+    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceQuery,
+    ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
+};
 use crate::inbound::http::catalogue::{DescriptorsResponse, ExploreCatalogueResponse};
 use crate::inbound::http::offline::{
     BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesQuery,
@@ -78,6 +82,7 @@ impl Modify for SecurityAddon {
         crate::inbound::http::annotations::update_progress,
         crate::inbound::http::catalogue::get_explore_catalogue,
         crate::inbound::http::catalogue::get_descriptors,
+        crate::inbound::http::admin_enrichment::list_enrichment_provenance,
         crate::inbound::http::offline::list_offline_bundles,
         crate::inbound::http::offline::upsert_offline_bundle,
         crate::inbound::http::offline::delete_offline_bundle,
@@ -91,6 +96,10 @@ impl Modify for SecurityAddon {
         ErrorCodeSchema,
         ExploreCatalogueResponse,
         DescriptorsResponse,
+        ListEnrichmentProvenanceQuery,
+        ProvenanceBoundsBody,
+        EnrichmentProvenanceRecordBody,
+        ListEnrichmentProvenanceResponseBody,
         ListOfflineBundlesQuery,
         BoundsBody,
         ZoomRangeBody,
@@ -110,6 +119,7 @@ impl Modify for SecurityAddon {
         (name = "routes", description = "Operations related to routes"),
         (name = "health", description = "Endpoints for health checks"),
         (name = "catalogue", description = "Catalogue and descriptor read endpoints"),
+        (name = "admin", description = "Admin reporting endpoints"),
         (name = "offline", description = "Offline bundle manifest operations"),
         (name = "walk-sessions", description = "Walk session recording operations")
     )

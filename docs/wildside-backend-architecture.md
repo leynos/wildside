@@ -563,6 +563,9 @@ data without rewriting view components.
 - `OsmIngestionProvenanceRepository` (read/write): persists ingestion
   provenance (`source_url`, `input_digest`, `imported_at`, and geofence bounds)
   and exposes deterministic rerun lookups by `(geofence_id, input_digest)`.
+- `EnrichmentProvenanceRepository` (read/write): persists Overpass enrichment
+  provenance (`source_url`, `imported_at`, and request bounding box) and
+  exposes newest-first reporting pages for admin observability endpoints.
 - `OsmSourceRepository` (read): extracts POIs from `.osm.pbf` files through the
   `wildside-data` integration adapter without exposing parser details to the
   domain.
@@ -1877,6 +1880,65 @@ Worker policy defaults are set to two concurrent outbound calls (semaphore),
 10,000 requests/day plus 1 GiB/day transfer quota, three retry attempts with
 jittered exponential backoff, and a circuit breaker that opens after three
 consecutive failures before allowing a half-open probe after cooldown.
+
+##### 3.4.3 Design Decision (2026-02-28)
+
+Roadmap item 3.4.3 introduces a dedicated enrichment provenance contract rather
+than reusing ingestion provenance storage. The design keeps the same hexagonal
+boundary discipline as 3.4.2:
+
+- `OverpassEnrichmentWorker` remains domain-owned and writes enrichment
+  provenance through a dedicated driven port.
+- The persistence adapter owns PostgreSQL shape details and stores
+  `{source_url, imported_at, bounds_min_lng, bounds_min_lat, bounds_max_lng,
+  bounds_max_lat}` in deterministic newest-first order.
+- Admin reporting is exposed through an inbound HTTP handler at
+  `GET /api/v1/admin/enrichment/provenance`, with query parameters
+  `limit` (default 50, max 200) and optional `before` (RFC3339 cursor), and a
+  response payload shaped as `{ records, nextBefore? }`.
+
+Failure policy for this endpoint is explicit: unauthenticated requests return
+`401`, query validation failures return `400`, and provenance repository
+availability failures return `503` so operators can distinguish transport
+availability from client input errors.
+
+This section records the design contract implemented for roadmap item 3.4.3.
+
+##### 3.4.3 Pagination Compatibility Requirements (Phase 4)
+
+Phase 4 introduces the shared keyset pagination crate and opaque cursor model.
+The 3.4.3 enrichment provenance endpoint must adopt that model without
+breaking existing clients that currently use `before` and `nextBefore`.
+
+Compatibility requirements:
+
+- Keep deterministic ordering on `(imported_at DESC, id DESC)` in both
+  repository and SQL indexes. Cursor filters must use the same composite key so
+  page traversal remains lossless.
+- During migration, support both query styles:
+  - legacy timestamp cursor: `before` (current behaviour);
+  - opaque cursor crate token: `cursor` (new behaviour).
+- Treat `before` and `cursor` as mutually exclusive. Requests that provide both
+  must return `400` with a validation error payload.
+- Preserve endpoint-specific limit guardrails (`default 50`, `max 200`) even
+  when the shared pagination crate defaults differ.
+- Add cursor-mode response data without removing legacy fields during the
+  transition. Existing clients must continue to parse the old shape until
+  deprecation is complete.
+- Map pagination decoding and direction errors to HTTP `400` and keep
+  repository transport failures mapped to `503`.
+
+Implementation stages:
+
+1. Introduce dual-mode request handling in domain and inbound adapters.
+2. Implement strict composite keyset filtering for cursor mode while preserving
+   legacy `before` behaviour.
+3. Add transitional response fields (`nextCursor` and links) while retaining
+   `nextBefore`.
+4. Expand behavioural and integration tests to cover legacy and cursor flows,
+   including identical `imported_at` tie boundaries.
+5. Deprecate and remove legacy `before` support in a later release once
+   clients have migrated.
 
 ### Map Tile Service (Martin)
 

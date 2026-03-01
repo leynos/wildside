@@ -27,6 +27,7 @@ use backend::doc::ApiDoc;
 use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
+use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::inbound::http::annotations::{get_annotations, update_progress, upsert_note};
 use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
 use backend::inbound::http::health::{HealthState, live, ready};
@@ -172,6 +173,7 @@ fn build_app(
         .service(submit_route)
         .service(get_explore_catalogue)
         .service(get_descriptors)
+        .service(list_enrichment_provenance)
         .service(list_offline_bundles)
         .service(upsert_offline_bundle)
         .service(delete_offline_bundle)

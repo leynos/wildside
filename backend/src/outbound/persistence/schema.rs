@@ -168,6 +168,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    overpass_enrichment_provenance (id) {
+        id -> Uuid,
+        source_url -> Text,
+        imported_at -> Timestamptz,
+        bounds_min_lng -> Float8,
+        bounds_min_lat -> Float8,
+        bounds_max_lng -> Float8,
+        bounds_max_lat -> Float8,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     poi_interest_themes (poi_element_type, poi_id, theme_id) {
         poi_element_type -> Text,
         poi_id -> Int8,
@@ -337,6 +350,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     interest_themes,
     offline_bundles,
     osm_ingestion_provenance,
+    overpass_enrichment_provenance,
     poi_interest_themes,
     pois,
     route_categories,

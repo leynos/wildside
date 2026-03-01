@@ -3,8 +3,8 @@
 use crate::domain::Error;
 use crate::domain::overpass_enrichment_worker::policy::QuotaDenyReason;
 use crate::domain::ports::{
-    EnrichmentJobFailureKind, OsmPoiIngestionRecord, OsmPoiRepositoryError,
-    OverpassEnrichmentSourceError, OverpassPoi,
+    EnrichmentJobFailureKind, EnrichmentProvenanceRepositoryError, OsmPoiIngestionRecord,
+    OsmPoiRepositoryError, OverpassEnrichmentSourceError, OverpassPoi,
 };
 
 pub(super) fn map_overpass_poi(poi: OverpassPoi) -> OsmPoiIngestionRecord {
@@ -48,13 +48,59 @@ pub(super) fn map_source_rejected_error(error: OverpassEnrichmentSourceError) ->
     }
 }
 
-pub(super) fn map_persistence_error(error: OsmPoiRepositoryError, attempts: u32) -> Error {
-    match error {
-        OsmPoiRepositoryError::Connection { message } => Error::service_unavailable(format!(
-            "enrichment persistence unavailable after {attempts} attempts: {message}"
-        )),
-        OsmPoiRepositoryError::Query { message } => Error::internal(format!(
-            "enrichment persistence failed after {attempts} attempts: {message}"
-        )),
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Helper signature intentionally mirrors the required shared error-mapping inputs."
+)]
+fn map_repository_persistence_error(
+    context: &str,
+    attempts: u32,
+    connection_message: String,
+    query_message: String,
+    is_connection_error: bool,
+) -> Error {
+    if is_connection_error {
+        Error::service_unavailable(format!(
+            "{context} unavailable after {attempts} attempts: {connection_message}"
+        ))
+    } else {
+        Error::internal(format!(
+            "{context} failed after {attempts} attempts: {query_message}"
+        ))
     }
+}
+
+pub(super) fn map_persistence_error(error: OsmPoiRepositoryError, attempts: u32) -> Error {
+    let (connection_message, query_message, is_connection_error) = match error {
+        OsmPoiRepositoryError::Connection { message } => (message, String::new(), true),
+        OsmPoiRepositoryError::Query { message } => (String::new(), message, false),
+    };
+
+    map_repository_persistence_error(
+        "enrichment persistence",
+        attempts,
+        connection_message,
+        query_message,
+        is_connection_error,
+    )
+}
+
+pub(super) fn map_provenance_persistence_error(
+    error: EnrichmentProvenanceRepositoryError,
+    attempts: u32,
+) -> Error {
+    let (connection_message, query_message, is_connection_error) = match error {
+        EnrichmentProvenanceRepositoryError::Connection { message } => {
+            (message, String::new(), true)
+        }
+        EnrichmentProvenanceRepositoryError::Query { message } => (String::new(), message, false),
+    };
+
+    map_repository_persistence_error(
+        "enrichment provenance persistence",
+        attempts,
+        connection_message,
+        query_message,
+        is_connection_error,
+    )
 }

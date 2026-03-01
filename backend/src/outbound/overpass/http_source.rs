@@ -113,6 +113,7 @@ impl OverpassEnrichmentSource for OverpassHttpSource {
         Ok(OverpassEnrichmentResponse {
             pois,
             transfer_bytes,
+            source_url: self.endpoint.to_string(),
         })
     }
 }

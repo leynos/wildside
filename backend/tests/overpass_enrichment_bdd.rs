@@ -181,5 +181,9 @@ struct OverpassEnrichmentWorld {
 fn world() -> OverpassEnrichmentWorld {
     OverpassEnrichmentWorld::default()
 }
+#[path = "overpass_enrichment_bdd/steps_provenance.rs"]
+mod overpass_enrichment_provenance_steps;
 #[path = "overpass_enrichment_bdd/steps.rs"]
 mod overpass_enrichment_steps;
+#[path = "overpass_enrichment_bdd/scenario_bindings.rs"]
+mod overpass_enrichment_zzz_scenarios;

@@ -14,8 +14,8 @@ use tokio::sync::Semaphore;
 use crate::domain::Error;
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics, EnrichmentJobSuccess,
-    OsmPoiRepository, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
-    OverpassEnrichmentSource,
+    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository, OsmPoiRepository,
+    OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassEnrichmentSource,
 };
 
 mod attempt_error;
@@ -25,7 +25,9 @@ mod runtime;
 
 use attempt_error::AttemptError;
 use policy::{AdmissionDecision, CircuitBreakerConfig, DailyQuota, WorkerPolicyState};
-pub use runtime::{OverpassEnrichmentWorkerPorts, OverpassEnrichmentWorkerRuntime};
+pub use runtime::{
+    AttemptJitter, OverpassEnrichmentWorkerPorts, OverpassEnrichmentWorkerRuntime, TokioSleeper,
+};
 
 /// Worker configuration controlling quota, retries, and breaker behaviour.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,35 +127,11 @@ pub trait BackoffJitter: Send + Sync {
     fn jittered_delay(&self, base: Duration, attempt: u32, now: DateTime<Utc>) -> Duration;
 }
 
-/// Tokio-based sleeper implementation.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct TokioSleeper;
-
-#[async_trait]
-impl EnrichmentSleeper for TokioSleeper {
-    async fn sleep(&self, duration: Duration) {
-        tokio::time::sleep(duration).await;
-    }
-}
-
-/// Default deterministic jitter strategy.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct AttemptJitter;
-
-impl BackoffJitter for AttemptJitter {
-    fn jittered_delay(&self, base: Duration, attempt: u32, now: DateTime<Utc>) -> Duration {
-        let base_ms = u64::try_from(base.as_millis()).unwrap_or(u64::MAX);
-        let max_extra = (base_ms / 4).max(1);
-        let seed = u64::from(now.timestamp_subsec_nanos()) ^ u64::from(attempt);
-        let extra = seed % (max_extra.saturating_add(1));
-        Duration::from_millis(base_ms.saturating_add(extra))
-    }
-}
-
 /// Domain-owned Overpass enrichment worker.
 pub struct OverpassEnrichmentWorker {
     source: Arc<dyn OverpassEnrichmentSource>,
     poi_repository: Arc<dyn OsmPoiRepository>,
+    provenance_repository: Arc<dyn EnrichmentProvenanceRepository>,
     metrics: Arc<dyn EnrichmentJobMetrics>,
     clock: Arc<dyn Clock>,
     sleeper: Arc<dyn EnrichmentSleeper>,
@@ -207,6 +185,7 @@ impl OverpassEnrichmentWorker {
         Self {
             source: ports.source,
             poi_repository: ports.poi_repository,
+            provenance_repository: ports.provenance_repository,
             metrics: ports.metrics,
             clock,
             sleeper: runtime.sleeper,
@@ -231,7 +210,11 @@ impl OverpassEnrichmentWorker {
 
         for attempt in 1..=max_attempts {
             match self.run_single_attempt(&request).await {
-                Ok(report) => return self.persist_and_record_success(report, attempt).await,
+                Ok(report) => {
+                    return self
+                        .persist_and_record_success(&request, report, attempt)
+                        .await;
+                }
                 Err(AttemptError::RetryableSource(_error)) if attempt < max_attempts => {
                     let base_delay = self.retry_base_delay(attempt);
                     let jittered =
@@ -325,12 +308,14 @@ impl OverpassEnrichmentWorker {
 
     async fn persist_and_record_success(
         &self,
+        request: &OverpassEnrichmentRequest,
         report: OverpassEnrichmentResponse,
         attempts: u32,
     ) -> Result<OverpassEnrichmentJobOutcome, Error> {
         let OverpassEnrichmentResponse {
             pois,
             transfer_bytes,
+            source_url,
         } = report;
         let records = pois
             .into_iter()
@@ -341,6 +326,17 @@ impl OverpassEnrichmentWorker {
             self.record_failure_metric(EnrichmentJobFailureKind::PersistenceFailed, attempts)
                 .await;
             return Err(mapping::map_persistence_error(error, attempts));
+        }
+
+        let provenance_record = EnrichmentProvenanceRecord {
+            source_url,
+            imported_at: self.clock.utc(),
+            bounding_box: request.bounding_box,
+        };
+        if let Err(error) = self.provenance_repository.persist(&provenance_record).await {
+            self.record_failure_metric(EnrichmentJobFailureKind::PersistenceFailed, attempts)
+                .await;
+            return Err(mapping::map_provenance_persistence_error(error, attempts));
         }
 
         self.record_success_metric(EnrichmentJobSuccess {

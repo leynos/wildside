@@ -172,7 +172,7 @@ so persistence details stay confined to outbound adapters.
     - deterministic reruns keyed by geofence and input digest.
 - [x] 3.4.2. Add Overpass enrichment workers with semaphore-governed quotas,
   circuit breaking, and metrics wired to the enrichment job counters.
-- [ ] 3.4.3. Configure enrichment provenance persistence (source URL,
+- [x] 3.4.3. Configure enrichment provenance persistence (source URL,
   timestamp, and bounding box) and expose it via admin reporting endpoints.
 
 ### 3.5. User state port persistence parity
@@ -227,6 +227,22 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
   responses.
 - [ ] 4.2.3. Ensure pagination telemetry records page size, cursor direction,
   and page traversal counts for analytics.
+- [ ] 4.2.4. Add cursor-based pagination adoption for
+  `GET /api/v1/admin/enrichment/provenance` while preserving current
+  deterministic ordering on `(imported_at, id)` and repository-port boundaries.
+- [ ] 4.2.5. Implement dual query compatibility for admin enrichment reporting:
+  accept legacy `before` and new opaque `cursor` during migration, reject
+  requests that provide both, and map invalid cursor or direction inputs to
+  HTTP `400`.
+- [ ] 4.2.6. Introduce transitional response compatibility for admin enrichment
+  reporting by adding cursor-navigation fields (`nextCursor` and hypermedia
+  links) while retaining `nextBefore` until client migration is complete.
+- [ ] 4.2.7. Extend repository and endpoint tests to prove lossless traversal
+  across `(imported_at, id)` tie boundaries for cursor mode, plus regression
+  coverage that legacy `before` behaviour remains stable during migration.
+- [ ] 4.2.8. Execute and document the deprecation plan for legacy `before` /
+  `nextBefore` support, including removal criteria and release sequencing once
+  consumers have migrated to opaque cursors.
 
 ### 4.3. Documentation and quality gates
 

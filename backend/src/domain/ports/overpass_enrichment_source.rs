@@ -43,6 +43,8 @@ pub struct OverpassEnrichmentResponse {
     pub pois: Vec<OverpassPoi>,
     /// Estimated transfer size in bytes for quota accounting.
     pub transfer_bytes: u64,
+    /// Source URL used by the adapter for this response.
+    pub source_url: String,
 }
 
 define_port_error! {
