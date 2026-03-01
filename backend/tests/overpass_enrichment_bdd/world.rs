@@ -181,8 +181,8 @@ impl OverpassEnrichmentWorld {
         }
     }
 
-    /// Query the persisted POI count from the scenario database.
-    pub fn query_poi_count(&self) -> Option<i64> {
+    /// Generic helper for querying the row count of a single table.
+    fn query_table_count(&self, table_name: &str, description: &str) -> Option<i64> {
         if self.is_skipped() {
             return None;
         }
@@ -190,27 +190,22 @@ impl OverpassEnrichmentWorld {
         let database_url = self.database_url.get().expect("database URL should be set");
         let mut client =
             postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
+        let query = format!("SELECT COUNT(*) FROM {table_name}");
         let count = client
-            .query_one("SELECT COUNT(*) FROM pois", &[])
-            .expect("poi count query")
+            .query_one(query.as_str(), &[])
+            .expect(description)
             .get::<_, i64>(0);
         Some(count)
     }
 
+    /// Query the persisted POI count from the scenario database.
+    pub fn query_poi_count(&self) -> Option<i64> {
+        self.query_table_count("pois", "poi count query")
+    }
+
     /// Query the persisted enrichment provenance row count.
     pub fn query_provenance_count(&self) -> Option<i64> {
-        if self.is_skipped() {
-            return None;
-        }
-
-        let database_url = self.database_url.get().expect("database URL should be set");
-        let mut client =
-            postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
-        let count = client
-            .query_one("SELECT COUNT(*) FROM overpass_enrichment_provenance", &[])
-            .expect("provenance count query")
-            .get::<_, i64>(0);
-        Some(count)
+        self.query_table_count("overpass_enrichment_provenance", "provenance count query")
     }
 
     /// Query the latest persisted enrichment provenance row.
