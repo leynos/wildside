@@ -202,6 +202,50 @@ fn create_runtime_and_local() -> (Runtime, LocalSet) {
     (runtime, local)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Test harness helper signature is intentionally explicit per the required extraction contract."
+)]
+fn build_http_state_for_tests(
+    login: RecordingLoginService,
+    users: RecordingUsersQuery,
+    profile: RecordingUserProfileQuery,
+    interests: RecordingUserInterestsCommand,
+    preferences: RecordingUserPreferencesCommand,
+    preferences_query: RecordingUserPreferencesQuery,
+    route_annotations: RecordingRouteAnnotationsCommand,
+    route_annotations_query: RecordingRouteAnnotationsQuery,
+    catalogue: RecordingCatalogueRepository,
+    descriptors: RecordingDescriptorRepository,
+    enrichment_provenance: RecordingEnrichmentProvenanceRepository,
+    offline_bundles: RecordingOfflineBundleCommand,
+    offline_bundles_query: RecordingOfflineBundleQuery,
+    walk_sessions: RecordingWalkSessionCommand,
+) -> HttpState {
+    HttpState::new_with_extra(
+        HttpStatePorts {
+            login: Arc::new(login),
+            users: Arc::new(users),
+            profile: Arc::new(profile),
+            interests: Arc::new(interests),
+            preferences: Arc::new(preferences),
+            preferences_query: Arc::new(preferences_query),
+            route_annotations: Arc::new(route_annotations),
+            route_annotations_query: Arc::new(route_annotations_query),
+            route_submission: Arc::new(FixtureRouteSubmissionService),
+            catalogue: Arc::new(catalogue),
+            descriptors: Arc::new(descriptors),
+        },
+        HttpStateExtraPorts {
+            offline_bundles: Arc::new(offline_bundles),
+            offline_bundles_query: Arc::new(offline_bundles_query),
+            enrichment_provenance: Arc::new(enrichment_provenance),
+            walk_sessions: Arc::new(walk_sessions),
+            walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
+        },
+    )
+}
+
 #[fixture]
 pub(crate) fn world() -> WorldFixture {
     let (runtime, local) = create_runtime_and_local();
@@ -215,27 +259,21 @@ pub(crate) fn world() -> WorldFixture {
     let (offline_bundles, offline_bundles_query, walk_sessions) =
         create_offline_and_walk_doubles(&user_id);
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let http_state = HttpState::new_with_extra(
-        HttpStatePorts {
-            login: Arc::new(login.clone()),
-            users: Arc::new(users.clone()),
-            profile: Arc::new(profile.clone()),
-            interests: Arc::new(interests.clone()),
-            preferences: Arc::new(preferences.clone()),
-            preferences_query: Arc::new(preferences_query.clone()),
-            route_annotations: Arc::new(route_annotations.clone()),
-            route_annotations_query: Arc::new(route_annotations_query.clone()),
-            route_submission: Arc::new(FixtureRouteSubmissionService),
-            catalogue: Arc::new(catalogue.clone()),
-            descriptors: Arc::new(descriptors.clone()),
-        },
-        HttpStateExtraPorts {
-            offline_bundles: Arc::new(offline_bundles.clone()),
-            offline_bundles_query: Arc::new(offline_bundles_query.clone()),
-            enrichment_provenance: Arc::new(enrichment_provenance.clone()),
-            walk_sessions: Arc::new(walk_sessions.clone()),
-            walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
-        },
+    let http_state = build_http_state_for_tests(
+        login.clone(),
+        users.clone(),
+        profile.clone(),
+        interests.clone(),
+        preferences.clone(),
+        preferences_query.clone(),
+        route_annotations.clone(),
+        route_annotations_query.clone(),
+        catalogue.clone(),
+        descriptors.clone(),
+        enrichment_provenance.clone(),
+        offline_bundles.clone(),
+        offline_bundles_query.clone(),
+        walk_sessions.clone(),
     );
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
