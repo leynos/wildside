@@ -1904,6 +1904,42 @@ availability from client input errors.
 
 This section records the design contract implemented for roadmap item 3.4.3.
 
+##### 3.4.3 Pagination Compatibility Requirements (Phase 4)
+
+Phase 4 introduces the shared keyset pagination crate and opaque cursor model.
+The 3.4.3 enrichment provenance endpoint must adopt that model without
+breaking existing clients that currently use `before` and `nextBefore`.
+
+Compatibility requirements:
+
+- Keep deterministic ordering on `(imported_at DESC, id DESC)` in both
+  repository and SQL indexes. Cursor filters must use the same composite key so
+  page traversal remains lossless.
+- During migration, support both query styles:
+  - legacy timestamp cursor: `before` (current behaviour);
+  - opaque cursor crate token: `cursor` (new behaviour).
+- Treat `before` and `cursor` as mutually exclusive. Requests that provide both
+  must return `400` with a validation error payload.
+- Preserve endpoint-specific limit guardrails (`default 50`, `max 200`) even
+  when the shared pagination crate defaults differ.
+- Add cursor-mode response data without removing legacy fields during the
+  transition. Existing clients must continue to parse the old shape until
+  deprecation is complete.
+- Map pagination decoding and direction errors to HTTP `400` and keep
+  repository transport failures mapped to `503`.
+
+Implementation stages:
+
+1. Introduce dual-mode request handling in domain and inbound adapters.
+2. Implement strict composite keyset filtering for cursor mode while preserving
+   legacy `before` behaviour.
+3. Add transitional response fields (`nextCursor` and links) while retaining
+   `nextBefore`.
+4. Expand behavioural and integration tests to cover legacy and cursor flows,
+   including identical `imported_at` tie boundaries.
+5. Deprecate and remove legacy `before` support in a later release once
+   clients have migrated.
+
 ### Map Tile Service (Martin)
 
 Wildside serves first-party vector tiles through a dedicated Martin service so
