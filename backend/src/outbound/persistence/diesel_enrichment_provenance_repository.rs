@@ -152,16 +152,77 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
             .map_err(map_diesel_error)?;
 
         let has_next = rows.len() > request.limit;
-        if has_next {
-            rows.truncate(request.limit);
+        if !has_next {
+            let records = rows
+                .into_iter()
+                .map(EnrichmentProvenanceRecord::from)
+                .collect::<Vec<_>>();
+            return Ok(ListEnrichmentProvenanceResponse {
+                records,
+                next_before: None,
+            });
         }
 
-        let records = rows
+        let boundary_imported_at = rows[request.limit - 1].imported_at;
+        let boundary_is_split = rows[request.limit].imported_at == boundary_imported_at;
+
+        if !boundary_is_split {
+            rows.truncate(request.limit);
+            let records = rows
+                .into_iter()
+                .map(EnrichmentProvenanceRecord::from)
+                .collect::<Vec<_>>();
+            let next_before = records.last().map(|record| record.imported_at);
+            return Ok(ListEnrichmentProvenanceResponse {
+                records,
+                next_before,
+            });
+        }
+
+        // Avoid splitting a page inside a shared imported_at bucket: this keeps
+        // pagination lossless even when multiple rows share the cursor timestamp.
+        let mut records = rows
             .into_iter()
+            .take_while(|row| row.imported_at > boundary_imported_at)
             .map(EnrichmentProvenanceRecord::from)
             .collect::<Vec<_>>();
-        let next_before = if has_next {
-            records.last().map(|record| record.imported_at)
+
+        let mut boundary_rows_query = overpass_enrichment_provenance::table
+            .select(EnrichmentProvenanceRow::as_select())
+            .filter(overpass_enrichment_provenance::imported_at.eq(boundary_imported_at))
+            .order(overpass_enrichment_provenance::id.desc())
+            .into_boxed();
+
+        if let Some(before) = request.before {
+            boundary_rows_query =
+                boundary_rows_query.filter(overpass_enrichment_provenance::imported_at.lt(before));
+        }
+
+        let boundary_records = boundary_rows_query
+            .load::<EnrichmentProvenanceRow>(&mut conn)
+            .await
+            .map_err(map_diesel_error)?
+            .into_iter()
+            .map(EnrichmentProvenanceRecord::from);
+        records.extend(boundary_records);
+
+        let mut has_older_rows_query = overpass_enrichment_provenance::table
+            .select(overpass_enrichment_provenance::id)
+            .filter(overpass_enrichment_provenance::imported_at.lt(boundary_imported_at))
+            .into_boxed();
+        if let Some(before) = request.before {
+            has_older_rows_query =
+                has_older_rows_query.filter(overpass_enrichment_provenance::imported_at.lt(before));
+        }
+        let has_older_rows = !has_older_rows_query
+            .limit(1)
+            .load::<Uuid>(&mut conn)
+            .await
+            .map_err(map_diesel_error)?
+            .is_empty();
+
+        let next_before = if has_older_rows {
+            Some(boundary_imported_at)
         } else {
             None
         };
