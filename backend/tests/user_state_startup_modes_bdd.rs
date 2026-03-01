@@ -229,8 +229,7 @@ fn the_users_table_is_missing_in_db_present_mode(world: &mut World) {
     drop_users_table(db.database_url.as_str()).expect("drop users table");
 }
 
-#[when("executing a valid login and users request")]
-fn executing_a_valid_login_and_users_request(world: &mut World) {
+fn execute_login_flow(world: &mut World, username: &str, password: &str) {
     if skipped(world) {
         return;
     }
@@ -243,28 +242,19 @@ fn executing_a_valid_login_and_users_request(world: &mut World) {
         None => ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr),
     };
     let state = build_http_state_for_tests(&config, Arc::new(FixtureRouteSubmissionService));
-    let (login_snapshot, users_snapshot) = run_async(run_flow(state, "admin", "password"));
+    let (login_snapshot, users_snapshot) = run_async(run_flow(state, username, password));
     world.login = Some(login_snapshot);
     world.users = users_snapshot;
 }
 
+#[when("executing a valid login and users request")]
+fn executing_a_valid_login_and_users_request(world: &mut World) {
+    execute_login_flow(world, "admin", "password");
+}
+
 #[when("executing an invalid login request")]
 fn executing_an_invalid_login_request(world: &mut World) {
-    if skipped(world) {
-        return;
-    }
-    let pool = world.db.as_ref().map(|db| db.pool.clone());
-    let bind_addr = SocketAddr::from(([127, 0, 0, 1], 0));
-    let config = match pool {
-        Some(pool) => {
-            ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr).with_db_pool(pool)
-        }
-        None => ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr),
-    };
-    let state = build_http_state_for_tests(&config, Arc::new(FixtureRouteSubmissionService));
-    let (login_snapshot, users_snapshot) = run_async(run_flow(state, "admin", "wrong-password"));
-    world.login = Some(login_snapshot);
-    world.users = users_snapshot;
+    execute_login_flow(world, "admin", "wrong-password");
 }
 
 #[then("login succeeds with a session cookie")]
