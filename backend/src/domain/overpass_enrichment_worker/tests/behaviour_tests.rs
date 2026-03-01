@@ -4,6 +4,128 @@ use super::*;
 
 mod persistence_tests;
 mod provenance_tests;
+mod runtime_behaviour_tests;
+
+fn assert_successful_job_outcome(
+    outcome: &crate::domain::OverpassEnrichmentJobOutcome,
+    expected_attempts: u32,
+    expected_poi_count: usize,
+) {
+    assert_eq!(
+        outcome.attempts, expected_attempts,
+        "expected successful job to use {expected_attempts} attempt(s), got {}",
+        outcome.attempts
+    );
+    assert_eq!(
+        outcome.persisted_poi_count, expected_poi_count,
+        "expected successful job to persist {expected_poi_count} POI(s), got {}",
+        outcome.persisted_poi_count
+    );
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Helper signature is intentionally explicit to mirror the required test assertion contract."
+)]
+fn assert_stub_call_counts(
+    source: &Arc<SourceStub>,
+    repo: &Arc<RepoStub>,
+    provenance_repo: &Arc<ProvenanceRepoStub>,
+    expected_source: usize,
+    expected_repo: usize,
+    expected_provenance: usize,
+) {
+    let source_calls = source.calls.load(Ordering::SeqCst);
+    let repo_calls = repo.calls.load(Ordering::SeqCst);
+    let provenance_calls = provenance_repo.calls.load(Ordering::SeqCst);
+
+    assert_eq!(
+        source_calls, expected_source,
+        "expected source stub to be called {expected_source} time(s), got {source_calls}"
+    );
+    assert_eq!(
+        repo_calls, expected_repo,
+        "expected repository stub to be called {expected_repo} time(s), got {repo_calls}"
+    );
+    assert_eq!(
+        provenance_calls, expected_provenance,
+        "expected provenance repository stub to be called {expected_provenance} time(s), got {provenance_calls}"
+    );
+}
+
+fn assert_provenance_recorded(
+    provenance_repo: &ProvenanceRepoStub,
+    expected_source_url: &str,
+    expected_imported_at: DateTime<Utc>,
+    expected_bounding_box: [f64; 4],
+) {
+    let persisted = provenance_repo.persisted.lock().expect("provenance mutex");
+    assert_eq!(
+        persisted.len(),
+        1,
+        "expected exactly one persisted provenance record, got {}",
+        persisted.len()
+    );
+
+    let record = &persisted[0];
+    assert_eq!(
+        record.source_url, expected_source_url,
+        "expected provenance source URL to be `{expected_source_url}`, got `{}`",
+        record.source_url
+    );
+    assert_eq!(
+        record.imported_at, expected_imported_at,
+        "expected provenance timestamp to be {expected_imported_at:?}, got {:?}",
+        record.imported_at
+    );
+    assert_eq!(
+        record.bounding_box, expected_bounding_box,
+        "expected provenance bounding box to be {expected_bounding_box:?}, got {:?}",
+        record.bounding_box
+    );
+}
+
+fn assert_metrics_success(metrics: &MetricsStub, expected_count: usize) {
+    let successes = metrics.successes.lock().expect("metrics mutex");
+    assert_eq!(
+        successes.len(),
+        expected_count,
+        "expected {expected_count} success metric record(s), got {}",
+        successes.len()
+    );
+    drop(successes);
+
+    let failures = metrics.failures.lock().expect("metrics mutex");
+    assert!(
+        failures.is_empty(),
+        "expected no failure metrics when asserting success, found {}",
+        failures.len()
+    );
+}
+
+fn assert_metrics_failure(metrics: &MetricsStub, expected_failure_kind: EnrichmentJobFailureKind) {
+    let successes = metrics.successes.lock().expect("metrics mutex");
+    assert!(
+        successes.is_empty(),
+        "expected no success metrics when asserting failure, found {}",
+        successes.len()
+    );
+    drop(successes);
+
+    let failures = metrics.failures.lock().expect("metrics mutex");
+    assert_eq!(
+        failures.len(),
+        1,
+        "expected exactly one failure metric record, got {}",
+        failures.len()
+    );
+    assert_eq!(
+        failures[0].kind, expected_failure_kind,
+        "expected failure metric kind to be {expected_failure_kind:?}, got {:?}",
+        failures[0].kind
+    );
+}
+
 #[rstest]
 #[tokio::test]
 async fn happy_path_persists_and_records_success(
@@ -30,21 +152,15 @@ async fn happy_path_persists_and_records_success(
     );
 
     let out = worker.process_job(job.clone()).await.expect("job succeeds");
-    assert_eq!(out.attempts, 1);
-    assert_eq!(out.persisted_poi_count, 2);
-    assert_eq!(source.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(repo.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 1);
-    let persisted = provenance_repo.persisted.lock().expect("provenance mutex");
-    assert_eq!(persisted.len(), 1);
-    assert_eq!(
-        persisted[0].source_url,
-        "https://overpass.example/api/interpreter"
+    assert_successful_job_outcome(&out, 1, 2);
+    assert_stub_call_counts(&source, &repo, &provenance_repo, 1, 1, 1);
+    assert_provenance_recorded(
+        provenance_repo.as_ref(),
+        "https://overpass.example/api/interpreter",
+        now,
+        job.bounding_box,
     );
-    assert_eq!(persisted[0].imported_at, now);
-    assert_eq!(persisted[0].bounding_box, job.bounding_box);
-    assert_eq!(metrics.successes.lock().expect("metrics mutex").len(), 1);
-    assert!(metrics.failures.lock().expect("metrics mutex").is_empty());
+    assert_metrics_success(metrics.as_ref(), 1);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,6 +176,7 @@ async fn assert_quota_denial_short_circuits_source(
     case: QuotaCase,
 ) {
     let source = Arc::new(SourceStub::scripted(vec![Ok(response(1, 10))]));
+    let repo = Arc::new(RepoStub::new(vec![Ok(())]));
     let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![]));
     let mut cfg = config();
     cfg.max_daily_requests = case.max_requests;
@@ -68,7 +185,7 @@ async fn assert_quota_denial_short_circuits_source(
     let worker = OverpassEnrichmentWorker::with_runtime(
         OverpassEnrichmentWorkerPorts::new(
             source.clone(),
-            Arc::new(RepoStub::new(vec![Ok(())])),
+            repo.clone(),
             provenance_repo.clone(),
             metrics.clone(),
         ),
@@ -82,12 +199,8 @@ async fn assert_quota_denial_short_circuits_source(
 
     let error = worker.process_job(job).await.expect_err("quota denies");
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
-    assert_eq!(source.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(metrics.successes.lock().expect("metrics mutex").len(), 0);
-    let failures = metrics.failures.lock().expect("metrics mutex");
-    assert_eq!(failures.len(), 1);
-    assert_eq!(failures[0].kind, case.expected_kind);
+    assert_stub_call_counts(&source, &repo, &provenance_repo, 0, 0, 0);
+    assert_metrics_failure(metrics.as_ref(), case.expected_kind);
 }
 
 #[rstest]
@@ -123,14 +236,15 @@ async fn retry_uses_jittered_exponential_backoff(
         Err(OverpassEnrichmentSourceError::timeout("temporary timeout")),
         Ok(response(1, 64)),
     ]));
+    let repo = Arc::new(RepoStub::new(vec![Ok(())]));
     let sleeper = Arc::new(RecordingSleeper::default());
     let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(())]));
     let metrics = Arc::new(MetricsStub::default());
     let worker = OverpassEnrichmentWorker::with_runtime(
         OverpassEnrichmentWorkerPorts::new(
             source.clone(),
-            Arc::new(RepoStub::new(vec![Ok(())])),
-            provenance_repo,
+            repo.clone(),
+            provenance_repo.clone(),
             metrics.clone(),
         ),
         Arc::new(MutableClock::new(now)),
@@ -142,12 +256,13 @@ async fn retry_uses_jittered_exponential_backoff(
     );
 
     let out = worker.process_job(job).await.expect("eventual success");
-    assert_eq!(out.attempts, 3);
-    assert_eq!(source.calls.load(Ordering::SeqCst), 3);
+    assert_successful_job_outcome(&out, 3, 1);
+    assert_stub_call_counts(&source, &repo, &provenance_repo, 3, 1, 1);
     assert_eq!(
         sleeper.lock_durations().as_slice(),
         [Duration::from_millis(101), Duration::from_millis(202)]
     );
+    assert_metrics_success(metrics.as_ref(), 1);
     assert_eq!(
         metrics.successes.lock().expect("metrics mutex")[0].attempt_count,
         3
@@ -179,6 +294,8 @@ impl CircuitBreakerTestFixtureBuilder {
     fn build(self) -> CircuitBreakerTestFixture {
         let clock = Arc::new(MutableClock::new(self.now));
         let source = Arc::new(SourceStub::scripted(self.source_responses));
+        let repo = Arc::new(RepoStub::new(vec![Ok(()), Ok(())]));
+        let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())]));
 
         let mut cfg = config();
         cfg.max_attempts = 1;
@@ -188,8 +305,8 @@ impl CircuitBreakerTestFixtureBuilder {
         let worker = OverpassEnrichmentWorker::with_runtime(
             OverpassEnrichmentWorkerPorts::new(
                 source.clone(),
-                Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
-                Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())])),
+                repo.clone(),
+                provenance_repo.clone(),
                 Arc::new(MetricsStub::default()),
             ),
             clock.clone(),
@@ -203,6 +320,8 @@ impl CircuitBreakerTestFixtureBuilder {
         CircuitBreakerTestFixture {
             worker,
             source,
+            repo,
+            provenance_repo,
             clock,
         }
     }
@@ -211,6 +330,8 @@ impl CircuitBreakerTestFixtureBuilder {
 struct CircuitBreakerTestFixture {
     worker: OverpassEnrichmentWorker,
     source: Arc<SourceStub>,
+    repo: Arc<RepoStub>,
+    provenance_repo: Arc<ProvenanceRepoStub>,
     clock: Arc<MutableClock>,
 }
 
@@ -224,10 +345,6 @@ impl CircuitBreakerTestFixture {
 
     fn advance_clock(&self, delta: Duration) {
         self.clock.advance(delta);
-    }
-
-    fn source_call_count(&self) -> usize {
-        self.source.calls.load(Ordering::SeqCst)
     }
 
     fn circuit_state(&self) -> CircuitBreakerState {
@@ -270,101 +387,13 @@ async fn circuit_opens_and_blocks_until_cooldown(
         .expect_err("blocked by open circuit");
 
     assert_eq!(blocked.code(), crate::domain::ErrorCode::ServiceUnavailable);
-    assert_eq!(fixture.source_call_count(), 2);
-    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
-}
-
-#[rstest]
-#[tokio::test]
-async fn half_open_probe_success_closes_circuit(
-    now: DateTime<Utc>,
-    job: OverpassEnrichmentRequest,
-) {
-    let fixture = CircuitBreakerTestFixtureBuilder::new(
-        now,
-        vec![
-            Err(OverpassEnrichmentSourceError::transport("failure")),
-            Ok(response(1, 20)),
-            Ok(response(1, 20)),
-        ],
-        1,
-        Duration::from_secs(60),
-    )
-    .build();
-
-    let _ = fixture
-        .process_job(job.clone())
-        .await
-        .expect_err("initial failure");
-    fixture.advance_clock(Duration::from_secs(61));
-    fixture
-        .process_job(job.clone())
-        .await
-        .expect("probe succeeds");
-    fixture
-        .process_job(job)
-        .await
-        .expect("closed circuit allows call");
-
-    assert_eq!(fixture.source_call_count(), 3);
-    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Closed);
-}
-
-#[rstest]
-#[tokio::test]
-async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnrichmentRequest) {
-    let (entered_tx, mut entered_rx) = mpsc::unbounded_channel();
-    let release = Arc::new(Notify::new());
-    let source = Arc::new(SourceStub::blocking(
-        vec![
-            Ok(OverpassEnrichmentResponse::default()),
-            Ok(OverpassEnrichmentResponse::default()),
-        ],
-        entered_tx,
-        release.clone(),
-    ));
-    let mut cfg = config();
-    cfg.max_attempts = 1;
-    cfg.max_concurrent_calls = 1;
-    let worker = Arc::new(OverpassEnrichmentWorker::with_runtime(
-        OverpassEnrichmentWorkerPorts::new(
-            source.clone(),
-            Arc::new(RepoStub::new(vec![Ok(()), Ok(())])),
-            Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())])),
-            Arc::new(MetricsStub::default()),
-        ),
-        Arc::new(MutableClock::new(now)),
-        OverpassEnrichmentWorkerRuntime {
-            sleeper: Arc::new(RecordingSleeper::default()),
-            jitter: Arc::new(NoJitter),
-        },
-        cfg,
-    ));
-
-    let first_worker = Arc::clone(&worker);
-    let first_job = job.clone();
-    let first = tokio::spawn(async move { first_worker.process_job(first_job).await });
-    timeout(Duration::from_secs(1), entered_rx.recv())
-        .await
-        .expect("first entered")
-        .expect("entry exists");
-
-    let second_worker = Arc::clone(&worker);
-    let second = tokio::spawn(async move { second_worker.process_job(job).await });
-    assert!(
-        timeout(Duration::from_millis(80), entered_rx.recv())
-            .await
-            .is_err()
+    assert_stub_call_counts(
+        &fixture.source,
+        &fixture.repo,
+        &fixture.provenance_repo,
+        2,
+        0,
+        0,
     );
-
-    release.notify_one();
-    timeout(Duration::from_secs(1), entered_rx.recv())
-        .await
-        .expect("second entered")
-        .expect("entry exists");
-    release.notify_one();
-
-    first.await.expect("first join").expect("first succeeds");
-    second.await.expect("second join").expect("second succeeds");
-    assert_eq!(source.max_active.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
 }
