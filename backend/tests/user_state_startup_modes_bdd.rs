@@ -31,11 +31,11 @@ use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
+#[path = "../src/server/config.rs"]
 #[expect(
     dead_code,
-    reason = "server config include exposes members unused in this integration test"
+    reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
 )]
-#[path = "../src/server/config.rs"]
 mod server_config;
 pub use server_config::ServerConfig;
 
@@ -209,7 +209,7 @@ fn setup_db() -> Result<DbContext, String> {
     })
 }
 
-fn skipped(world: &World) -> bool {
+fn is_skipped(world: &World) -> bool {
     if let Some(reason) = world.skip_reason.as_deref() {
         eprintln!("SKIP-TEST-CLUSTER: scenario skipped ({reason})");
         true
@@ -251,7 +251,7 @@ fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
 
 #[given("the users table is missing in db-present mode")]
 fn the_users_table_is_missing_in_db_present_mode(world: &mut World) {
-    if skipped(world) {
+    if is_skipped(world) {
         return;
     }
     let db = world.db.as_ref().expect("db context");
@@ -259,7 +259,7 @@ fn the_users_table_is_missing_in_db_present_mode(world: &mut World) {
 }
 
 fn execute_login_flow(world: &mut World, username: &str, password: &str) {
-    if skipped(world) {
+    if is_skipped(world) {
         return;
     }
     let pool = world.db.as_ref().map(|db| db.pool.clone());
@@ -288,7 +288,7 @@ fn executing_an_invalid_login_request(world: &mut World) {
 
 #[then("login succeeds with a session cookie")]
 fn login_succeeds_with_a_session_cookie(world: &mut World) {
-    if skipped(world) {
+    if is_skipped(world) {
         return;
     }
     let login_snapshot = world.login.as_ref().expect("login response");
@@ -301,7 +301,7 @@ fn login_succeeds_with_a_session_cookie(world: &mut World) {
 
 #[then("the users response matches fixture fallback payload")]
 fn the_users_response_matches_fixture_fallback_payload(world: &mut World) {
-    if skipped(world) {
+    if is_skipped(world) {
         return;
     }
     let users = world.users.as_ref().expect("users response");
@@ -310,9 +310,9 @@ fn the_users_response_matches_fixture_fallback_payload(world: &mut World) {
     assert!(is_fixture_users(body), "expected fixture fallback payload");
 }
 
-#[then("the login response is unauthorised with stable error envelope")]
-fn the_login_response_is_unauthorised_with_stable_error_envelope(world: &mut World) {
-    if skipped(world) {
+#[then("the login response is unauthorized with stable error envelope")]
+fn the_login_response_is_unauthorized_with_stable_error_envelope(world: &mut World) {
+    if is_skipped(world) {
         return;
     }
     let login_snapshot = world.login.as_ref().expect("login response");
@@ -330,7 +330,7 @@ fn the_login_response_is_unauthorised_with_stable_error_envelope(world: &mut Wor
 
 #[then("the responses preserve a stable startup error or fallback contract")]
 fn the_responses_preserve_a_stable_startup_error_or_fallback_contract(world: &mut World) {
-    if skipped(world) {
+    if is_skipped(world) {
         return;
     }
     let login_snapshot = world.login.as_ref().expect("login response");

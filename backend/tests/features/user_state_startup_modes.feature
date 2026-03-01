@@ -11,7 +11,7 @@ Feature: User state startup modes for login and users endpoints
   Scenario: DB-present startup rejects invalid credentials
     Given db-present startup mode backed by embedded postgres
     When executing an invalid login request
-    Then the login response is unauthorised with stable error envelope
+    Then the login response is unauthorized with stable error envelope
 
   Scenario: DB-present startup remains stable when users schema is missing
     Given db-present startup mode backed by embedded postgres
