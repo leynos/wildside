@@ -10,9 +10,9 @@ use backend::domain::ports::{
     FixtureOfflineBundleQuery, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
     FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
     FixtureUserProfileQuery, FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
-    OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
-    RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand,
-    WalkSessionQuery,
+    LoginService, OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand,
+    RouteAnnotationsQuery, RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery,
+    UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -21,16 +21,18 @@ use backend::domain::{
 use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
-    DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselOfflineBundleRepository,
-    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselWalkSessionRepository,
+    DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselLoginService,
+    DieselOfflineBundleRepository, DieselRouteAnnotationRepository,
+    DieselUserPreferencesRepository, DieselUserRepository, DieselUsersQuery,
+    DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
 
 /// Build a command/query service pair using real services when a pool is
 /// available, otherwise using fixture implementations.
-fn build_service_pair<S, Cmd, Query, MakeService, Cast>(
-    pool: &Option<DbPool>,
+fn build_service_pair<Pool, S, Cmd, Query, MakeService, Cast>(
+    pool: &Option<Pool>,
     make_service: MakeService,
     fixtures: (Arc<Cmd>, Arc<Query>),
     cast: Cast,
@@ -39,7 +41,7 @@ where
     S: 'static,
     Cmd: ?Sized + 'static,
     Query: ?Sized + 'static,
-    MakeService: FnOnce(&DbPool) -> S,
+    MakeService: FnOnce(&Pool) -> S,
     Cast: FnOnce(Arc<S>) -> (Arc<Cmd>, Arc<Query>),
 {
     match pool {
@@ -77,6 +79,32 @@ type ServiceCast<S, Cmd, Query> = fn(Arc<S>) -> (Arc<Cmd>, Arc<Query>);
 struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
     fixtures: (Arc<Cmd>, Arc<Query>),
     cast: ServiceCast<S, Cmd, Query>,
+}
+
+pub(super) fn build_login_users_pair_with_pool<Pool>(
+    pool: &Option<Pool>,
+    make_pair: impl FnOnce(&Pool) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>),
+) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
+    match pool {
+        Some(pool) => make_pair(pool),
+        None => (
+            Arc::new(FixtureLoginService) as Arc<dyn LoginService>,
+            Arc::new(FixtureUsersQuery) as Arc<dyn UsersQuery>,
+        ),
+    }
+}
+
+fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
+    build_login_users_pair_with_pool(&config.db_pool, |pool| {
+        (
+            Arc::new(DieselLoginService::new(DieselUserRepository::new(
+                pool.clone(),
+            ))) as Arc<dyn LoginService>,
+            Arc::new(DieselUsersQuery::new(DieselUserRepository::new(
+                pool.clone(),
+            ))) as Arc<dyn UsersQuery>,
+        )
+    })
 }
 
 macro_rules! build_idempotent_pair {
@@ -221,8 +249,9 @@ pub(super) fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    // TODO(#27): Wire remaining fixture ports (login, users, profile, interests)
+    // TODO(#27): Wire remaining fixture ports (profile, interests)
     // to real DB-backed implementations once their adapters are ready.
+    let (login, users) = build_login_users_pair(config);
     let (preferences, preferences_query) = build_user_preferences_pair(config);
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
@@ -231,8 +260,8 @@ pub(super) fn build_http_state(
 
     web::Data::new(HttpState::new_with_extra(
         HttpStatePorts {
-            login: Arc::new(FixtureLoginService),
-            users: Arc::new(FixtureUsersQuery),
+            login,
+            users,
             profile: Arc::new(FixtureUserProfileQuery),
             interests: Arc::new(FixtureUserInterestsCommand),
             preferences,
