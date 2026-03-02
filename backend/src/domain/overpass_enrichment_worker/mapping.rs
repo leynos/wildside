@@ -1,6 +1,7 @@
 //! Mapping helpers for worker outcomes, failures, and source payloads.
 
 use crate::domain::Error;
+use crate::domain::enrichment_provenance_error_mapping::map_enrichment_provenance_repository_error;
 use crate::domain::overpass_enrichment_worker::policy::QuotaDenyReason;
 use crate::domain::ports::{
     EnrichmentJobFailureKind, EnrichmentProvenanceRepositoryError, OsmPoiIngestionRecord,
@@ -89,18 +90,14 @@ pub(super) fn map_provenance_persistence_error(
     error: EnrichmentProvenanceRepositoryError,
     attempts: u32,
 ) -> Error {
-    let (connection_message, query_message, is_connection_error) = match error {
-        EnrichmentProvenanceRepositoryError::Connection { message } => {
-            (message, String::new(), true)
-        }
-        EnrichmentProvenanceRepositoryError::Query { message } => (String::new(), message, false),
-    };
+    let unavailable_prefix =
+        format!("enrichment provenance persistence unavailable after {attempts} attempts");
+    let failed_prefix =
+        format!("enrichment provenance persistence failed after {attempts} attempts");
 
-    map_repository_persistence_error(
-        "enrichment provenance persistence",
-        attempts,
-        connection_message,
-        query_message,
-        is_connection_error,
+    map_enrichment_provenance_repository_error(
+        error,
+        unavailable_prefix.as_str(),
+        failed_prefix.as_str(),
     )
 }

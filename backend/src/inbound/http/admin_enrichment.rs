@@ -6,6 +6,7 @@ use serde_json::json;
 use utoipa::ToSchema;
 
 use crate::domain::Error;
+use crate::domain::enrichment_provenance_error_mapping::map_enrichment_provenance_repository_error;
 use crate::domain::ports::{
     EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError,
     ListEnrichmentProvenanceRequest,
@@ -92,14 +93,11 @@ fn parse_limit(limit: Option<usize>) -> Result<usize, Error> {
 }
 
 fn map_reporting_error(error: EnrichmentProvenanceRepositoryError) -> Error {
-    match error {
-        EnrichmentProvenanceRepositoryError::Connection { message } => Error::service_unavailable(
-            format!("enrichment provenance reporting unavailable: {message}"),
-        ),
-        EnrichmentProvenanceRepositoryError::Query { message } => {
-            Error::internal(format!("enrichment provenance reporting failed: {message}"))
-        }
-    }
+    map_enrichment_provenance_repository_error(
+        error,
+        "enrichment provenance reporting unavailable",
+        "enrichment provenance reporting failed",
+    )
 }
 
 /// List persisted enrichment provenance records for admin reporting.

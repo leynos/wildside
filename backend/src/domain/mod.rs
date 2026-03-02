@@ -60,6 +60,7 @@ pub mod annotations;
 pub mod auth;
 pub mod catalogue;
 pub mod descriptors;
+pub mod enrichment_provenance_error_mapping;
 pub mod er_diagram;
 pub mod error;
 #[cfg(feature = "example-data")]
