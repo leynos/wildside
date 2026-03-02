@@ -154,7 +154,7 @@ Current code anchors:
 
 ## Milestones
 
-## Milestone 0 - Baseline and red/green seams
+### Milestone 0 - Baseline and red/green seams
 
 Confirm current fixture wiring and capture baseline behaviour before edits.
 Create failing tests first where practical.
@@ -178,7 +178,7 @@ Expected evidence:
 Baseline tests pass; new DB-backed coverage is absent or red before implementation.
 ```
 
-## Milestone 1 - Implement DB-backed login/users adapters and wiring
+### Milestone 1 - Implement DB-backed login/users adapters and wiring
 
 Preferred design decision for 3.5.2: add dedicated outbound adapters wrapping
 `DieselUserRepository` rather than implementing driving ports directly on the
@@ -218,7 +218,7 @@ Expected evidence:
 DB-backed adapters compile, state builders select them in DB mode, and handler contracts remain stable.
 ```
 
-## Milestone 2 - Add and update tests (rstest + rstest-bdd + embedded PG)
+### Milestone 2 - Add and update tests (rstest + rstest-bdd + embedded PG)
 
 Add explicit coverage for both startup modes and behaviour parity.
 
@@ -273,7 +273,7 @@ Expected evidence:
 New unit and behavioural suites pass, proving DB-present and fixture-fallback behaviour.
 ```
 
-## Milestone 3 - Documentation and roadmap closure
+### Milestone 3 - Documentation and roadmap closure
 
 After implementation and tests are green, update docs and roadmap closure state.
 
@@ -301,7 +301,7 @@ Expected evidence:
 Architecture decision is recorded and roadmap reflects only completed 3.5.2 scope.
 ```
 
-## Milestone 4 - Full quality gates and evidence capture
+### Milestone 4 - Full quality gates and evidence capture
 
 Run required gates on the final tree (including docs and roadmap updates).
 
