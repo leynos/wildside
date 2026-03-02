@@ -54,7 +54,7 @@ Observable success criteria:
 - Preserve login/session behaviour in inbound handlers:
   - validate credentials shape as today;
   - set session only on successful authentication;
-  - keep unauthorised responses and trace-id envelope behaviour intact.
+  - keep unauthorized responses and trace-id envelope behaviour intact.
 - Preserve users endpoint behaviour shape and camelCase JSON expectations.
 - Do not add schema migrations in 3.5.2. Credential-storage schema remains an
   acknowledged gap from 3.5.1.
@@ -84,7 +84,7 @@ Observable success criteria:
   Mitigation: use a documented transitional DB-backed login strategy that
   preserves current behaviour and record the gap in architecture decisions.
 
-- Risk: wrapper or repository changes accidentally alter unauthorised envelope
+- Risk: wrapper or repository changes accidentally alter unauthorized envelope
   mapping.
   Mitigation: keep existing handler tests and add explicit unhappy-path
   assertions for code/message/status/trace-id semantics.
@@ -229,7 +229,7 @@ Unit/integration (`rstest`) target additions:
   - valid credentials authenticate;
   - users query returns expected DB-backed user payload.
 - Unhappy paths:
-  - invalid credentials return unauthorised error semantics;
+  - invalid credentials return unauthorized error semantics;
   - DB query/pool failures map to stable domain error categories.
 - Edge paths:
   - missing user row behaviour is deterministic and documented.
@@ -244,7 +244,7 @@ Required behavioural scenarios:
 
 - DB-present startup uses DB-backed login/users path.
 - Fixture-fallback startup uses fixture login/users path.
-- DB-present invalid credentials still produce unauthorised envelope.
+- DB-present invalid credentials still produce unauthorized envelope.
 - DB-present unhappy DB condition preserves stable envelope + trace semantics.
 - Session behaviour remains unchanged across modes.
 
