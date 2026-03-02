@@ -103,6 +103,24 @@ fn assert_record_payload(
     );
 }
 
+fn assert_records_sorted_newest_first(records: &[Value]) {
+    let imported_at = records
+        .iter()
+        .map(|record| {
+            record
+                .get("importedAt")
+                .and_then(Value::as_str)
+                .expect("importedAt")
+        })
+        .map(|value| DateTime::parse_from_rfc3339(value).expect("record importedAt RFC3339"))
+        .collect::<Vec<_>>();
+
+    assert!(
+        imported_at.windows(2).all(|pair| pair[0] >= pair[1]),
+        "expected records to be sorted newest-first by importedAt"
+    );
+}
+
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
     bdd_common::setup_server(world);
@@ -237,22 +255,7 @@ fn the_response_is_ok_with_an_enrichment_provenance_payload(world: &WorldFixture
         [-3.3, 55.8, -3.1, 55.95],
     );
 
-    let first_imported_at = first
-        .get("importedAt")
-        .and_then(Value::as_str)
-        .expect("importedAt");
-    let second_imported_at = second
-        .get("importedAt")
-        .and_then(Value::as_str)
-        .expect("importedAt");
-    let first_imported_at =
-        DateTime::parse_from_rfc3339(first_imported_at).expect("first importedAt RFC3339");
-    let second_imported_at =
-        DateTime::parse_from_rfc3339(second_imported_at).expect("second importedAt RFC3339");
-    assert!(
-        first_imported_at > second_imported_at,
-        "expected records to be sorted newest-first by importedAt"
-    );
+    assert_records_sorted_newest_first(records);
 
     assert_eq!(
         body.get("nextBefore").and_then(Value::as_str),

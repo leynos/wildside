@@ -3,7 +3,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::bb8::PooledConnection;
 use uuid::Uuid;
 
 use crate::domain::ports::{
@@ -26,6 +28,73 @@ impl DieselEnrichmentProvenanceRepository {
     /// Create a repository backed by `pool`.
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
+    }
+
+    fn build_base_query<'a>(&self, request: &'a ListEnrichmentProvenanceRequest) -> BoxedQuery<'a> {
+        let mut query = overpass_enrichment_provenance::table
+            .select(EnrichmentProvenanceRow::as_select())
+            .order((
+                overpass_enrichment_provenance::imported_at.desc(),
+                overpass_enrichment_provenance::id.desc(),
+            ))
+            .into_boxed();
+
+        if let Some(before) = request.before {
+            query = query.filter(overpass_enrichment_provenance::imported_at.lt(before));
+        }
+
+        query
+    }
+
+    async fn load_rows_with_limit(
+        &self,
+        conn: &mut PooledPgConnection<'_>,
+        query: BoxedQuery<'_>,
+        limit: i64,
+    ) -> Result<Vec<EnrichmentProvenanceRow>, EnrichmentProvenanceRepositoryError> {
+        query
+            .limit(limit)
+            .load::<EnrichmentProvenanceRow>(conn)
+            .await
+            .map_err(map_diesel_error)
+    }
+
+    async fn collect_boundary_rows(
+        &self,
+        conn: &mut PooledPgConnection<'_>,
+        boundary_imported_at: DateTime<Utc>,
+        _request: &ListEnrichmentProvenanceRequest,
+    ) -> Result<Vec<EnrichmentProvenanceRecord>, EnrichmentProvenanceRepositoryError> {
+        overpass_enrichment_provenance::table
+            .select(EnrichmentProvenanceRow::as_select())
+            .filter(overpass_enrichment_provenance::imported_at.eq(boundary_imported_at))
+            .order(overpass_enrichment_provenance::id.desc())
+            .load::<EnrichmentProvenanceRow>(conn)
+            .await
+            .map_err(map_diesel_error)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(EnrichmentProvenanceRecord::from)
+                    .collect::<Vec<_>>()
+            })
+    }
+
+    async fn derive_next_before(
+        &self,
+        conn: &mut PooledPgConnection<'_>,
+        boundary_imported_at: DateTime<Utc>,
+        _request: &ListEnrichmentProvenanceRequest,
+    ) -> Result<Option<DateTime<Utc>>, EnrichmentProvenanceRepositoryError> {
+        let has_older_rows = !overpass_enrichment_provenance::table
+            .select(overpass_enrichment_provenance::id)
+            .filter(overpass_enrichment_provenance::imported_at.lt(boundary_imported_at))
+            .limit(1)
+            .load::<Uuid>(conn)
+            .await
+            .map_err(map_diesel_error)?
+            .is_empty();
+
+        Ok(has_older_rows.then_some(boundary_imported_at))
     }
 }
 
@@ -52,6 +121,17 @@ struct NewEnrichmentProvenanceRow<'a> {
     bounds_max_lng: f64,
     bounds_max_lat: f64,
 }
+
+type BoxedQuery<'a> = diesel::dsl::IntoBoxed<
+    'a,
+    diesel::dsl::Select<
+        overpass_enrichment_provenance::table,
+        diesel::dsl::AsSelect<EnrichmentProvenanceRow, diesel::pg::Pg>,
+    >,
+    diesel::pg::Pg,
+>;
+
+type PooledPgConnection<'a> = PooledConnection<'a, AsyncPgConnection>;
 
 fn map_pool_error(error: PoolError) -> EnrichmentProvenanceRepositoryError {
     EnrichmentProvenanceRepositoryError::connection(map_pool_error_message(error))
@@ -133,23 +213,10 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
         })?;
 
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
-        let mut query = overpass_enrichment_provenance::table
-            .select(EnrichmentProvenanceRow::as_select())
-            .order((
-                overpass_enrichment_provenance::imported_at.desc(),
-                overpass_enrichment_provenance::id.desc(),
-            ))
-            .into_boxed();
-
-        if let Some(before) = request.before {
-            query = query.filter(overpass_enrichment_provenance::imported_at.lt(before));
-        }
-
-        let mut rows = query
-            .limit(limit_i64)
-            .load::<EnrichmentProvenanceRow>(&mut conn)
-            .await
-            .map_err(map_diesel_error)?;
+        let query = self.build_base_query(request);
+        let mut rows = self
+            .load_rows_with_limit(&mut conn, query, limit_i64)
+            .await?;
 
         let has_next = rows.len() > request.limit;
         if !has_next {
@@ -187,45 +254,15 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
             .map(EnrichmentProvenanceRecord::from)
             .collect::<Vec<_>>();
 
-        let mut boundary_rows_query = overpass_enrichment_provenance::table
-            .select(EnrichmentProvenanceRow::as_select())
-            .filter(overpass_enrichment_provenance::imported_at.eq(boundary_imported_at))
-            .order(overpass_enrichment_provenance::id.desc())
-            .into_boxed();
-
-        if let Some(before) = request.before {
-            boundary_rows_query =
-                boundary_rows_query.filter(overpass_enrichment_provenance::imported_at.lt(before));
-        }
-
-        let boundary_records = boundary_rows_query
-            .load::<EnrichmentProvenanceRow>(&mut conn)
-            .await
-            .map_err(map_diesel_error)?
-            .into_iter()
-            .map(EnrichmentProvenanceRecord::from);
+        let boundary_records = self
+            .collect_boundary_rows(&mut conn, boundary_imported_at, request)
+            .await?
+            .into_iter();
         records.extend(boundary_records);
 
-        let mut has_older_rows_query = overpass_enrichment_provenance::table
-            .select(overpass_enrichment_provenance::id)
-            .filter(overpass_enrichment_provenance::imported_at.lt(boundary_imported_at))
-            .into_boxed();
-        if let Some(before) = request.before {
-            has_older_rows_query =
-                has_older_rows_query.filter(overpass_enrichment_provenance::imported_at.lt(before));
-        }
-        let has_older_rows = !has_older_rows_query
-            .limit(1)
-            .load::<Uuid>(&mut conn)
-            .await
-            .map_err(map_diesel_error)?
-            .is_empty();
-
-        let next_before = if has_older_rows {
-            Some(boundary_imported_at)
-        } else {
-            None
-        };
+        let next_before = self
+            .derive_next_before(&mut conn, boundary_imported_at, request)
+            .await?;
 
         Ok(ListEnrichmentProvenanceResponse {
             records,
