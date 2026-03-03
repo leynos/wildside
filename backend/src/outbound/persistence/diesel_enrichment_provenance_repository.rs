@@ -63,7 +63,6 @@ impl DieselEnrichmentProvenanceRepository {
         &self,
         conn: &mut PooledPgConnection<'_>,
         boundary_imported_at: DateTime<Utc>,
-        _request: &ListEnrichmentProvenanceRequest,
     ) -> Result<Vec<EnrichmentProvenanceRecord>, EnrichmentProvenanceRepositoryError> {
         overpass_enrichment_provenance::table
             .select(EnrichmentProvenanceRow::as_select())
@@ -83,7 +82,6 @@ impl DieselEnrichmentProvenanceRepository {
         &self,
         conn: &mut PooledPgConnection<'_>,
         boundary_imported_at: DateTime<Utc>,
-        _request: &ListEnrichmentProvenanceRequest,
     ) -> Result<Option<DateTime<Utc>>, EnrichmentProvenanceRepositoryError> {
         let has_older_rows = !overpass_enrichment_provenance::table
             .select(overpass_enrichment_provenance::id)
@@ -255,13 +253,13 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
             .collect::<Vec<_>>();
 
         let boundary_records = self
-            .collect_boundary_rows(&mut conn, boundary_imported_at, request)
+            .collect_boundary_rows(&mut conn, boundary_imported_at)
             .await?
             .into_iter();
         records.extend(boundary_records);
 
         let next_before = self
-            .derive_next_before(&mut conn, boundary_imported_at, request)
+            .derive_next_before(&mut conn, boundary_imported_at)
             .await?;
 
         Ok(ListEnrichmentProvenanceResponse {

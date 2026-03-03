@@ -195,24 +195,21 @@ fn the_unauthenticated_client_requests_enrichment_provenance_reporting(world: &W
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invalid_limit(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(world, "/api/v1/admin/enrichment/provenance?limit=0");
+    bdd_common::perform_get_request(world, &format!("{}?limit=0", ENDPOINT));
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with invalid cursor")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invalid_cursor(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(
-        world,
-        "/api/v1/admin/enrichment/provenance?before=not-a-timestamp",
-    );
+    bdd_common::perform_get_request(world, &format!("{}?before=not-a-timestamp", ENDPOINT));
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with over-max limit")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_over_max_limit(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(world, "/api/v1/admin/enrichment/provenance?limit=201");
+    bdd_common::perform_get_request(world, &format!("{}?limit=201", ENDPOINT));
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with limit and cursor")]
@@ -221,7 +218,7 @@ fn the_authenticated_client_requests_enrichment_provenance_reporting_with_limit_
 ) {
     bdd_common::perform_get_request(
         world,
-        "/api/v1/admin/enrichment/provenance?limit=2&before=2026-02-28T12:00:00Z",
+        &format!("{}?limit=2&before=2026-02-28T12:00:00Z", ENDPOINT),
     );
 }
 
