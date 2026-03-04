@@ -288,6 +288,11 @@ fn the_response_is_ok_with_an_empty_enrichment_provenance_payload(world: &WorldF
         .and_then(Value::as_array)
         .expect("records array");
     assert!(records.is_empty(), "expected empty records array");
+    let next_before = body.get("nextBefore");
+    assert!(
+        next_before.is_none() || next_before == Some(&Value::Null),
+        "expected nextBefore to be absent or null for empty payload, got {next_before:?}"
+    );
 }
 
 #[then("the response includes a nextBefore cursor")]
