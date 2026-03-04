@@ -20,9 +20,10 @@ use backend::domain::ports::{
     FixtureLoginService, FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureUserInterestsCommand,
     FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
-    FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, OfflineBundleCommand,
-    OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
-    UserPreferencesCommand, UserPreferencesQuery, WalkSessionCommand, WalkSessionQuery,
+    FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, LoginService,
+    OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
+    RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery, UsersQuery,
+    WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -38,8 +39,9 @@ use backend::outbound::persistence::{
 };
 use backend::outbound::persistence::{
     DbPool, DieselCatalogueRepository, DieselDescriptorRepository,
-    DieselEnrichmentProvenanceRepository, DieselOfflineBundleRepository,
-    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselWalkSessionRepository,
+    DieselEnrichmentProvenanceRepository, DieselLoginService, DieselOfflineBundleRepository,
+    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselUserRepository,
+    DieselUsersQuery, DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
