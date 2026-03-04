@@ -29,6 +29,19 @@ Feature: Admin enrichment provenance reporting endpoint
     When the authenticated client requests enrichment provenance reporting with invalid cursor
     Then the response is bad request
 
+  Scenario: Admin enrichment reporting accepts composite before cursors
+    Given a running server with session middleware
+    And the client has an authenticated session
+    And persisted enrichment provenance reporting records exist
+    When the authenticated client requests enrichment provenance reporting with a composite cursor
+    Then the enrichment provenance query receives the expected composite cursor
+
+  Scenario: Admin enrichment reporting rejects malformed composite before cursors
+    Given a running server with session middleware
+    And the client has an authenticated session
+    When the authenticated client requests enrichment provenance reporting with a malformed composite cursor
+    Then the response is bad request
+
   Scenario: Admin enrichment reporting returns an empty payload when no rows exist
     Given a running server with session middleware
     And the client has an authenticated session

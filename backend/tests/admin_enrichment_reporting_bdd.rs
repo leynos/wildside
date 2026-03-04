@@ -213,6 +213,35 @@ fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invali
     bdd_common::perform_get_request(world, &format!("{}?before=not-a-timestamp", ENDPOINT));
 }
 
+#[when("the authenticated client requests enrichment provenance reporting with a composite cursor")]
+fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_composite_cursor(
+    world: &WorldFixture,
+) {
+    bdd_common::perform_get_request(
+        world,
+        &format!(
+            "{}?limit=2&before=2026-02-28T12:00:00Z|{}",
+            ENDPOINT,
+            Uuid::from_u128(0x22)
+        ),
+    );
+}
+
+#[when(
+    "the authenticated client requests enrichment provenance reporting with a malformed composite cursor"
+)]
+fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_malformed_composite_cursor(
+    world: &WorldFixture,
+) {
+    bdd_common::perform_get_request(
+        world,
+        &format!(
+            "{}?limit=2&before=2026-02-28T12:00:00Z|not-a-uuid",
+            ENDPOINT
+        ),
+    );
+}
+
 #[when("the authenticated client requests enrichment provenance reporting with over-max limit")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_over_max_limit(
     world: &WorldFixture,
@@ -336,6 +365,25 @@ fn the_enrichment_provenance_query_receives_the_expected_limit_and_cursor(world:
         ListEnrichmentProvenanceRequest::new(
             2,
             Some((fixture_timestamp("2026-02-28T12:00:00Z"), Uuid::max())),
+        )
+    );
+}
+
+#[then("the enrichment provenance query receives the expected composite cursor")]
+fn the_enrichment_provenance_query_receives_the_expected_composite_cursor(world: &WorldFixture) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+
+    let calls = ctx.enrichment_provenance.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0],
+        ListEnrichmentProvenanceRequest::new(
+            2,
+            Some((
+                fixture_timestamp("2026-02-28T12:00:00Z"),
+                Uuid::from_u128(0x22)
+            )),
         )
     );
 }
