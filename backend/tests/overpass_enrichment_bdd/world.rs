@@ -226,7 +226,7 @@ impl OverpassEnrichmentWorld {
                     "bounds_min_lng, bounds_min_lat, ",
                     "bounds_max_lng, bounds_max_lat ",
                     "FROM overpass_enrichment_provenance ",
-                    "ORDER BY imported_at DESC ",
+                    "ORDER BY imported_at DESC, id DESC ",
                     "LIMIT 1"
                 ),
                 &[],

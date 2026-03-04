@@ -126,11 +126,17 @@ where
             .lock()
             .expect(T::MUTEX_MESSAGE)
             .push(record.clone());
-        self.scripted
-            .lock()
-            .expect(T::MUTEX_MESSAGE)
-            .pop_front()
-            .unwrap_or(Ok(()))
+        let mut scripted = self.scripted.lock().expect(T::MUTEX_MESSAGE);
+        if let Some(result) = scripted.pop_front() {
+            result
+        } else {
+            debug_assert!(
+                false,
+                "ScriptedRepositoryStub: no scripted responses left for {}",
+                std::any::type_name::<T>(),
+            );
+            Ok(())
+        }
     }
 }
 

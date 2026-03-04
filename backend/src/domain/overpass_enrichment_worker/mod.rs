@@ -306,6 +306,18 @@ impl OverpassEnrichmentWorker {
         }
     }
 
+    /// Persist POIs first, then persist the corresponding provenance record.
+    ///
+    /// This path currently accepts eventual consistency across the two
+    /// repositories because they are separate ports with no shared
+    /// transaction boundary. If provenance persistence fails after a POI
+    /// upsert, the job fails and records a persistence failure metric so
+    /// callers can retry. Retries are safe because POI persistence is
+    /// idempotent, and a later success will fill the missing provenance row.
+    ///
+    /// This differs from OSM ingestion provenance handling, where provenance
+    /// is treated as the canonical ingestion audit trail and therefore has
+    /// stricter consistency requirements.
     async fn persist_and_record_success(
         &self,
         request: &OverpassEnrichmentRequest,
