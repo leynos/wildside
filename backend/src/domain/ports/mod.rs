@@ -78,7 +78,7 @@ pub use enrichment_job_metrics::{
 #[cfg(test)]
 pub use enrichment_provenance_repository::MockEnrichmentProvenanceRepository;
 pub use enrichment_provenance_repository::{
-    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
+    EnrichmentProvenanceCursor, EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
     EnrichmentProvenanceRepositoryError, FixtureEnrichmentProvenanceRepository,
     ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse,
 };

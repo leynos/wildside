@@ -3,13 +3,12 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel_async::AsyncPgConnection;
-use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8::PooledConnection;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::domain::ports::{
-    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
+    EnrichmentProvenanceCursor, EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
     EnrichmentProvenanceRepositoryError, ListEnrichmentProvenanceRequest,
     ListEnrichmentProvenanceResponse,
 };
@@ -40,7 +39,13 @@ impl DieselEnrichmentProvenanceRepository {
             .into_boxed();
 
         if let Some(before) = request.before {
-            query = query.filter(overpass_enrichment_provenance::imported_at.lt(before));
+            query = query.filter(
+                overpass_enrichment_provenance::imported_at
+                    .lt(before.imported_at)
+                    .or(overpass_enrichment_provenance::imported_at
+                        .eq(before.imported_at)
+                        .and(overpass_enrichment_provenance::id.lt(before.id))),
+            );
         }
 
         query
@@ -63,36 +68,71 @@ impl DieselEnrichmentProvenanceRepository {
         &self,
         conn: &mut PooledPgConnection<'_>,
         boundary_imported_at: DateTime<Utc>,
-    ) -> Result<Vec<EnrichmentProvenanceRecord>, EnrichmentProvenanceRepositoryError> {
-        overpass_enrichment_provenance::table
+        before: Option<EnrichmentProvenanceCursor>,
+    ) -> Result<Vec<EnrichmentProvenanceRow>, EnrichmentProvenanceRepositoryError> {
+        let mut query = overpass_enrichment_provenance::table
             .select(EnrichmentProvenanceRow::as_select())
             .filter(overpass_enrichment_provenance::imported_at.eq(boundary_imported_at))
             .order(overpass_enrichment_provenance::id.desc())
+            .into_boxed();
+
+        if let Some(before) = before
+            && before.imported_at == boundary_imported_at
+        {
+            query = query.filter(overpass_enrichment_provenance::id.lt(before.id));
+        }
+
+        query
             .load::<EnrichmentProvenanceRow>(conn)
             .await
             .map_err(map_diesel_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(EnrichmentProvenanceRecord::from)
-                    .collect::<Vec<_>>()
-            })
     }
 
     async fn derive_next_before(
         &self,
         conn: &mut PooledPgConnection<'_>,
-        boundary_imported_at: DateTime<Utc>,
-    ) -> Result<Option<DateTime<Utc>>, EnrichmentProvenanceRepositoryError> {
+        cursor: EnrichmentProvenanceCursor,
+    ) -> Result<Option<EnrichmentProvenanceCursor>, EnrichmentProvenanceRepositoryError> {
         let has_older_rows = !overpass_enrichment_provenance::table
             .select(overpass_enrichment_provenance::id)
-            .filter(overpass_enrichment_provenance::imported_at.lt(boundary_imported_at))
+            .filter(
+                overpass_enrichment_provenance::imported_at
+                    .lt(cursor.imported_at)
+                    .or(overpass_enrichment_provenance::imported_at
+                        .eq(cursor.imported_at)
+                        .and(overpass_enrichment_provenance::id.lt(cursor.id))),
+            )
             .limit(1)
             .load::<Uuid>(conn)
             .await
             .map_err(map_diesel_error)?
             .is_empty();
 
-        Ok(has_older_rows.then_some(boundary_imported_at))
+        Ok(has_older_rows.then_some(cursor))
+    }
+
+    fn split_boundary_page_rows(
+        rows: Vec<EnrichmentProvenanceRow>,
+        boundary_rows: Vec<EnrichmentProvenanceRow>,
+        limit: usize,
+        boundary_imported_at: DateTime<Utc>,
+    ) -> (
+        Vec<EnrichmentProvenanceRow>,
+        Option<EnrichmentProvenanceCursor>,
+    ) {
+        let mut page_rows = rows
+            .into_iter()
+            .take_while(|row| row.imported_at > boundary_imported_at)
+            .collect::<Vec<_>>();
+
+        let remaining = limit.saturating_sub(page_rows.len());
+        page_rows.extend(boundary_rows.into_iter().take(remaining));
+
+        let next_before = page_rows
+            .last()
+            .map(|row| EnrichmentProvenanceCursor::new(row.imported_at, row.id));
+
+        (page_rows, next_before)
     }
 }
 
@@ -233,38 +273,116 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
 
         if !boundary_is_split {
             rows.truncate(request.limit);
+            let next_before = rows
+                .last()
+                .map(|row| EnrichmentProvenanceCursor::new(row.imported_at, row.id));
             let records = rows
                 .into_iter()
                 .map(EnrichmentProvenanceRecord::from)
                 .collect::<Vec<_>>();
-            let next_before = records.last().map(|record| record.imported_at);
             return Ok(ListEnrichmentProvenanceResponse {
                 records,
                 next_before,
             });
         }
 
-        // Avoid splitting a page inside a shared imported_at bucket: this keeps
-        // pagination lossless even when multiple rows share the cursor timestamp.
-        let mut records = rows
+        let boundary_rows = self
+            .collect_boundary_rows(&mut conn, boundary_imported_at, request.before)
+            .await?;
+        let (page_rows, cursor) = Self::split_boundary_page_rows(
+            rows,
+            boundary_rows,
+            request.limit,
+            boundary_imported_at,
+        );
+        let records = page_rows
             .into_iter()
-            .take_while(|row| row.imported_at > boundary_imported_at)
             .map(EnrichmentProvenanceRecord::from)
             .collect::<Vec<_>>();
-
-        let boundary_records = self
-            .collect_boundary_rows(&mut conn, boundary_imported_at)
-            .await?
-            .into_iter();
-        records.extend(boundary_records);
-
-        let next_before = self
-            .derive_next_before(&mut conn, boundary_imported_at)
-            .await?;
+        let next_before = if let Some(cursor) = cursor {
+            self.derive_next_before(&mut conn, cursor).await?
+        } else {
+            None
+        };
 
         Ok(ListEnrichmentProvenanceResponse {
             records,
             next_before,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Unit tests for split-boundary page capping behaviour.
+
+    use chrono::TimeZone;
+    use rstest::rstest;
+
+    use super::*;
+
+    fn row(id: Uuid, imported_at: DateTime<Utc>) -> EnrichmentProvenanceRow {
+        EnrichmentProvenanceRow {
+            id,
+            source_url: "https://overpass.example/api/interpreter".to_owned(),
+            imported_at,
+            bounds_min_lng: -3.2,
+            bounds_min_lat: 55.9,
+            bounds_max_lng: -3.0,
+            bounds_max_lat: 56.0,
+            created_at: imported_at,
+        }
+    }
+
+    #[rstest]
+    fn split_boundary_caps_page_and_advances_cursor_inside_bucket() {
+        let boundary = Utc
+            .with_ymd_and_hms(2026, 3, 1, 12, 0, 0)
+            .single()
+            .expect("valid timestamp");
+        let newer = Utc
+            .with_ymd_and_hms(2026, 3, 1, 12, 1, 0)
+            .single()
+            .expect("valid timestamp");
+
+        let id_a = Uuid::from_u128(10);
+        let id_b = Uuid::from_u128(9);
+        let id_c = Uuid::from_u128(8);
+        let id_d = Uuid::from_u128(7);
+
+        // First query page (limit + 1) includes one newer row and two boundary rows.
+        let rows = vec![
+            row(Uuid::from_u128(11), newer),
+            row(id_a, boundary),
+            row(id_b, boundary),
+        ];
+        let boundary_rows = vec![
+            row(id_a, boundary),
+            row(id_b, boundary),
+            row(id_c, boundary),
+            row(id_d, boundary),
+        ];
+
+        let (page_rows, cursor) = DieselEnrichmentProvenanceRepository::split_boundary_page_rows(
+            rows,
+            boundary_rows,
+            3,
+            boundary,
+        );
+
+        assert_eq!(
+            page_rows.len(),
+            3,
+            "split boundary path must enforce page limit"
+        );
+        assert_eq!(page_rows[1].id, id_a);
+        assert_eq!(page_rows[2].id, id_b);
+
+        let cursor = cursor.expect("cursor should be present");
+        assert_eq!(cursor.imported_at, boundary);
+        assert_eq!(
+            cursor.id, id_b,
+            "cursor id must track last returned row inside boundary bucket"
+        );
     }
 }

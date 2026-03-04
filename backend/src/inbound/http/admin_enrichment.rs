@@ -1,24 +1,27 @@
 //! Admin endpoint for enrichment provenance reporting.
 
 use actix_web::{HttpResponse, get, web};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::domain::Error;
 use crate::domain::enrichment_provenance_error_mapping::map_enrichment_provenance_repository_error;
 use crate::domain::ports::{
-    EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError,
+    EnrichmentProvenanceCursor, EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError,
     ListEnrichmentProvenanceRequest,
 };
 use crate::inbound::http::ApiResult;
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use crate::inbound::http::validation::{FieldName, parse_optional_rfc3339_timestamp};
+use crate::inbound::http::validation::{FieldName, parse_rfc3339_timestamp, parse_uuid};
 
 const DEFAULT_LIMIT: usize = 50;
 const MAX_LIMIT: usize = 200;
+const BEFORE_CURSOR_SEPARATOR: char = '|';
 
 /// Query parameters for enrichment provenance reporting.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -26,7 +29,7 @@ const MAX_LIMIT: usize = 200;
 pub struct ListEnrichmentProvenanceQuery {
     /// Maximum number of rows to return. Defaults to 50, maximum 200.
     pub limit: Option<usize>,
-    /// Optional exclusive RFC3339 cursor applied to `importedAt`.
+    /// Optional exclusive cursor `RFC3339|UUID` for `(importedAt,id)`.
     pub before: Option<String>,
 }
 
@@ -100,13 +103,38 @@ fn map_reporting_error(error: EnrichmentProvenanceRepositoryError) -> Error {
     )
 }
 
+fn parse_before_cursor(value: Option<String>) -> Result<Option<(DateTime<Utc>, Uuid)>, Error> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+
+    let field = FieldName::new("before");
+    if let Some((timestamp_raw, id_raw)) = raw.split_once(BEFORE_CURSOR_SEPARATOR) {
+        let timestamp = parse_rfc3339_timestamp(timestamp_raw.to_owned(), field)?;
+        let id = parse_uuid(id_raw.to_owned(), field)?;
+        return Ok(Some((timestamp, id)));
+    }
+
+    let timestamp = parse_rfc3339_timestamp(raw, field)?;
+    Ok(Some((timestamp, Uuid::max())))
+}
+
+fn encode_before_cursor(cursor: EnrichmentProvenanceCursor) -> String {
+    format!(
+        "{}{}{}",
+        cursor.imported_at.to_rfc3339(),
+        BEFORE_CURSOR_SEPARATOR,
+        cursor.id
+    )
+}
+
 /// List persisted enrichment provenance records for admin reporting.
 #[utoipa::path(
     get,
     path = "/api/v1/admin/enrichment/provenance",
     params(
         ("limit" = Option<usize>, Query, description = "Number of records to return, default 50, max 200"),
-        ("before" = Option<String>, Query, description = "Exclusive RFC3339 cursor for importedAt")
+        ("before" = Option<String>, Query, description = "Exclusive cursor RFC3339|UUID for importedAt/id ordering")
     ),
     responses(
         (status = 200, description = "Enrichment provenance records", body = ListEnrichmentProvenanceResponseBody),
@@ -128,7 +156,7 @@ pub async fn list_enrichment_provenance(
     let _user_id = session.require_user_id()?;
     let query = query.into_inner();
     let limit = parse_limit(query.limit)?;
-    let before = parse_optional_rfc3339_timestamp(query.before, FieldName::new("before"))?;
+    let before = parse_before_cursor(query.before)?;
 
     let response = state
         .enrichment_provenance
@@ -142,7 +170,7 @@ pub async fn list_enrichment_provenance(
             .into_iter()
             .map(EnrichmentProvenanceRecordBody::from)
             .collect(),
-        next_before: response.next_before.map(|value| value.to_rfc3339()),
+        next_before: response.next_before.map(encode_before_cursor),
     };
 
     Ok(HttpResponse::Ok().json(payload))

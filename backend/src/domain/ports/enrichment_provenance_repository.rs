@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 use super::define_port_error;
 
@@ -16,19 +17,44 @@ pub struct EnrichmentProvenanceRecord {
     pub bounding_box: [f64; 4],
 }
 
+/// Stable cursor for keyset pagination of enrichment provenance records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnrichmentProvenanceCursor {
+    /// Imported timestamp component of the ordering key.
+    pub imported_at: DateTime<Utc>,
+    /// Tie-breaker component of the ordering key.
+    pub id: Uuid,
+}
+
+impl EnrichmentProvenanceCursor {
+    /// Construct a cursor from ordering key components.
+    pub const fn new(imported_at: DateTime<Utc>, id: Uuid) -> Self {
+        Self { imported_at, id }
+    }
+
+    /// Return cursor components as a tuple.
+    pub const fn into_tuple(self) -> (DateTime<Utc>, Uuid) {
+        (self.imported_at, self.id)
+    }
+}
+
 /// Query parameters for listing recently imported enrichment provenance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ListEnrichmentProvenanceRequest {
     /// Maximum rows to return.
     pub limit: usize,
-    /// Optional exclusive cursor for imported timestamp.
-    pub before: Option<DateTime<Utc>>,
+    /// Optional exclusive composite cursor for `(imported_at, id)`.
+    pub before: Option<EnrichmentProvenanceCursor>,
 }
 
 impl ListEnrichmentProvenanceRequest {
     /// Construct a request for listing recent enrichment provenance rows.
-    pub const fn new(limit: usize, before: Option<DateTime<Utc>>) -> Self {
-        Self { limit, before }
+    pub fn new(limit: usize, before: Option<(DateTime<Utc>, Uuid)>) -> Self {
+        Self {
+            limit,
+            before: before
+                .map(|(imported_at, id)| EnrichmentProvenanceCursor::new(imported_at, id)),
+        }
     }
 }
 
@@ -38,7 +64,7 @@ pub struct ListEnrichmentProvenanceResponse {
     /// Newest-first records.
     pub records: Vec<EnrichmentProvenanceRecord>,
     /// Optional cursor for the next page.
-    pub next_before: Option<DateTime<Utc>>,
+    pub next_before: Option<EnrichmentProvenanceCursor>,
 }
 
 define_port_error! {

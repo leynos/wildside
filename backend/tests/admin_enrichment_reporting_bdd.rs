@@ -31,7 +31,7 @@ mod ws_support;
 
 use actix_web::http::Method;
 use backend::domain::ports::{
-    EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError,
+    EnrichmentProvenanceCursor, EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError,
     ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse,
 };
 use chrono::{DateTime, Utc};
@@ -40,6 +40,7 @@ use harness::WorldFixture;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
+use uuid::Uuid;
 
 const ENDPOINT: &str = "/api/v1/admin/enrichment/provenance";
 
@@ -64,6 +65,10 @@ fn fixture_record(
         imported_at: fixture_timestamp(imported_at),
         bounding_box,
     }
+}
+
+fn fixture_cursor(imported_at: &str, id: Uuid) -> EnrichmentProvenanceCursor {
+    EnrichmentProvenanceCursor::new(fixture_timestamp(imported_at), id)
 }
 
 fn assert_record_payload(
@@ -147,7 +152,10 @@ fn persisted_enrichment_provenance_reporting_records_exist(world: &WorldFixture)
                     [-3.3, 55.8, -3.1, 55.95],
                 ),
             ],
-            next_before: Some(fixture_timestamp("2026-02-28T11:58:00Z")),
+            next_before: Some(fixture_cursor(
+                "2026-02-28T11:58:00Z",
+                Uuid::from_u128(0x11),
+            )),
         }),
     );
 }
@@ -254,9 +262,10 @@ fn the_response_is_ok_with_an_enrichment_provenance_payload(world: &WorldFixture
 
     assert_records_sorted_newest_first(records);
 
+    let expected_next_before = format!("{}|{}", expected_second_imported_at, Uuid::from_u128(0x11));
     assert_eq!(
         body.get("nextBefore").and_then(Value::as_str),
-        Some(expected_second_imported_at.as_str())
+        Some(expected_next_before.as_str())
     );
 }
 
@@ -324,7 +333,10 @@ fn the_enrichment_provenance_query_receives_the_expected_limit_and_cursor(world:
     assert_eq!(calls.len(), 1);
     assert_eq!(
         calls[0],
-        ListEnrichmentProvenanceRequest::new(2, Some(fixture_timestamp("2026-02-28T12:00:00Z")))
+        ListEnrichmentProvenanceRequest::new(
+            2,
+            Some((fixture_timestamp("2026-02-28T12:00:00Z"), Uuid::max())),
+        )
     );
 }
 

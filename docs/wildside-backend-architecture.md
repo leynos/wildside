@@ -1920,8 +1920,11 @@ boundary discipline as 3.4.2:
   bounds_max_lat}` in deterministic newest-first order.
 - Admin reporting is exposed through an inbound HTTP handler at
   `GET /api/v1/admin/enrichment/provenance`, with query parameters
-  `limit` (default 50, max 200) and optional `before` (RFC3339 cursor), and a
-  response payload shaped as `{ records, nextBefore? }`.
+  `limit` (default 50, max 200) and optional `before`
+  (`RFC3339|UUID` composite cursor; legacy RFC3339 is accepted as
+  `RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff`), and a response payload
+  shaped as `{ records, nextBefore? }` where `nextBefore` is emitted in
+  `RFC3339|UUID` form.
 
 Failure policy for this endpoint is explicit: unauthenticated requests return
 `401`, query validation failures return `400`, and provenance repository
