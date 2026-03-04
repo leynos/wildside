@@ -191,20 +191,25 @@ so persistence details stay confined to outbound adapters.
     `backend/tests/user_state_startup_modes_bdd.rs`, and
     `backend/tests/features/user_state_startup_modes.feature`; full-gate replay
     (`make check-fmt`, `make lint`, `make test`) completed before closure.
-- [ ] 3.5.3. Replace fixture-backed `UserProfileQuery` and
+- [x] 3.5.3. Replace fixture-backed `UserProfileQuery` and
   `UserInterestsCommand` wiring with explicit DB-backed concrete types, and
   document whether this uses repository extensions (for example
   `DieselUserRepository`) or dedicated adapters (for example
   `DieselProfileRepository` and `DieselInterestsRepository`).
+  - Execution note (2026-03-04): implementation closed with dedicated adapters
+    for profile/interests wiring and architecture decision-log updates;
+    coordinator-owned gate evidence references are tracked in the 3.5.3
+    ExecPlan closure notes.
 - [ ] 3.5.4. Define and implement the revision-safe interests update strategy
   (for example optimistic concurrency via expected revision checks), including
   the persistence contract and error mapping for stale-write conflicts.
-- [ ] 3.5.5. Update `backend/src/server/state_builders.rs` so
-  `login/users/profile/interests` select DB-backed implementations when
-  `config.db_pool` is present and retain fixture fallbacks when it is absent.
-- [ ] 3.5.6. Add behavioural and repository-level tests covering the new
-  adapter wiring paths, including DB-present and fixture-fallback startup
-  modes, plus revision-conflict cases for interests updates.
+- [ ] 3.5.5. Harden `backend/src/server/state_builders.rs` startup-mode
+  composition with explicit helper seams and regression assertions so
+  DB-present versus fixture-fallback adapter selection remains deterministic as
+  user-state wiring evolves.
+- [ ] 3.5.6. Expand behavioural and repository-level regression coverage for the
+  full login/users/profile/interests startup matrix, and include
+  revision-conflict interests scenarios after 3.5.4 lands.
 
 ## 4. Pagination infrastructure
 

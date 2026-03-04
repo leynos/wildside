@@ -757,6 +757,17 @@ services.
 > PostgreSQL helpers. Credential-storage schema remains intentionally unchanged
 > in 3.5.2 and continues to be tracked in
 > `docs/user-state-schema-audit-3-5-1.md`.
+>
+> **Design decision (2026-03-04):** Roadmap item 3.5.3 closes profile and
+> interests adapter parity by choosing dedicated outbound adapters instead of
+> extending `DieselUserRepository` to implement `UserProfileQuery` and
+> `UserInterestsCommand` directly. DB-present startup now resolves profile and
+> interests via explicit adapter types (`DieselUserProfileQuery` and
+> `DieselUserInterestsCommand`), while DB-absent startup keeps fixture fallback
+> behaviour. This strategy preserves repository cohesion, localizes dual-model
+> interests persistence mapping to the interests adapter, and avoids growing
+> `DieselUserRepository` into a mixed-responsibility type. Revision-safe
+> stale-write conflict semantics remain deferred to roadmap item 3.5.4.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.

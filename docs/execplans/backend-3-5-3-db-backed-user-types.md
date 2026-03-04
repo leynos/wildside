@@ -5,7 +5,7 @@ This Execution Plan (ExecPlan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: DRAFT
+Status: IMPLEMENTATION COMPLETE (coordinator evidence handoff pending)
 
 This plan covers roadmap item 3.5.3 only:
 `Replace fixture-backed UserProfileQuery and UserInterestsCommand wiring with
@@ -111,55 +111,84 @@ Observable success criteria:
   `state_builders`, ports, and startup-mode suites.
 - [x] (2026-03-04 13:50Z) Drafted this ExecPlan at
   `docs/execplans/backend-3-5-3-db-backed-user-types.md`.
-- [ ] Implement DB-backed profile/interests adapters and state wiring.
-- [ ] Add/extend `rstest` and `rstest-bdd` coverage for happy/unhappy/edge
-  paths.
-- [ ] Record architecture decision and mark roadmap item 3.5.3 done.
-- [ ] Run full gates (`make check-fmt`, `make lint`, `make test`) and capture
-  evidence logs.
+- [x] (2026-03-04 21:22Z) Implemented DB-backed profile/interests adapters and
+  DB-present wiring while preserving fixture fallback in DB-absent mode.
+- [x] (2026-03-04 21:22Z) Added/updated `rstest` and `rstest-bdd` coverage for
+  startup-mode happy/unhappy/edge behaviour.
+- [x] (2026-03-04 21:22Z) Recorded the 3.5.3 adapter-strategy decision in
+  architecture documentation and marked roadmap item 3.5.3 done.
+- [ ] (coordinator handoff) Append final gate evidence from the closing tree:
+  `make check-fmt`, `make lint`, and `make test`.
+- [ ] (coordinator handoff) Fill exact evidence paths and outcomes:
+  - `TODO(coordinator): /tmp/check-fmt-$(get-project)-$(git branch --show).out`
+  - `TODO(coordinator): /tmp/lint-$(get-project)-$(git branch --show).out`
+  - `TODO(coordinator): /tmp/test-$(get-project)-$(git branch --show).out`
+  - `TODO(coordinator): final gate outcomes for each log (pass/fail)`
 
 ## Surprises & discoveries
 
-- Observation: `build_http_state` still has an explicit TODO for profile and
-  interests fixture wiring.
-  Evidence: `backend/src/server/state_builders.rs`.
-  Impact: 3.5.3 can stay focused on these two ports without broad refactoring.
+- Observation: dual-model interests persistence (`user_preferences` and
+  `user_interest_themes`) made repository-extension wiring lower cohesion than
+  dedicated adapter wiring.
+  Evidence: 3.5.1 schema-audit notes and outbound persistence schema mapping.
+  Impact: 3.5.3 explicitly chose dedicated adapters and deferred canonical
+  revision-conflict semantics to 3.5.4.
 
-- Observation: there are no existing outbound concrete types for
-  `UserProfileQuery` or `UserInterestsCommand`.
-  Evidence: `backend/src/outbound/persistence/mod.rs` exports none.
-  Impact: 3.5.3 requires new concrete adapters or repository trait
-  implementations.
+- Observation: startup-mode assertions needed to stay mode-specific instead of
+  generic parity checks once DB-present profile/interests signatures diverged
+  from fixtures.
+  Evidence: startup-mode behavioural scenarios and adapter-level tests.
+  Impact: test coverage now asserts DB-present versus fixture-fallback outcomes
+  explicitly, reducing regression ambiguity.
 
-- Observation: interests storage is currently dual-model in schema.
-  Evidence: `docs/user-state-schema-audit-3-5-1.md` and
-  `backend/src/outbound/persistence/schema.rs`.
-  Impact: adapter strategy must be documented clearly to avoid hidden coupling.
+- Observation: final gate evidence ownership is centralized by the coordinator
+  for cross-agent closure consistency.
+  Evidence: agent-team handoff model in this rollout.
+  Impact: this ExecPlan records implementation-complete status with explicit
+  placeholders for coordinator-attached gate logs.
 
 ## Decision Log
 
-- Decision: keep this ExecPlan in `DRAFT` until implementation is requested and
-  explicitly approved.
-  Rationale: `execplans` workflow separates drafting from execution.
-  Date/Author: 2026-03-04 / Codex.
+- Decision: choose dedicated adapters (`DieselUserProfileQuery` and
+  `DieselUserInterestsCommand`) instead of extending `DieselUserRepository` with
+  profile/interests driving-port implementations.
+  Rationale: keeps repository responsibilities cohesive and localizes
+  profile/interests persistence mapping to dedicated adapter seams.
+  Date/Author: 2026-03-04 / implementation team.
 
-- Decision: plan assumes dedicated adapters are the preferred default
-  (`DieselUserProfileQuery`, `DieselUserInterestsCommand`) and requires an
-  explicit architecture note if repository extension is chosen instead.
-  Rationale: aligns with 3.5.2 adapter-wrapping pattern and keeps boundaries
-  explicit.
-  Date/Author: 2026-03-04 / Codex.
+- Decision: keep revision-safe stale-write conflict semantics out of 3.5.3 and
+  defer them to roadmap item 3.5.4.
+  Rationale: prevents scope bleed while preserving the roadmap sequence from
+  parity wiring (3.5.3) to revision strategy (3.5.4).
+  Date/Author: 2026-03-04 / implementation team.
+
+- Decision: move this plan from `DRAFT` to implementation-complete status with
+  explicit coordinator-owned placeholders for final gate evidence.
+  Rationale: implementation and documentation closure are complete for 3.5.3,
+  while gate evidence publication is centralized in coordinator replay logs.
+  Date/Author: 2026-03-04 / docs owner.
 
 ## Outcomes & retrospective
 
-Pending implementation.
+Completed delivery summary:
 
-Completion notes must include:
-
-- chosen adapter strategy and rationale;
-- test artefacts added for 3.5.3;
-- gate evidence log paths;
-- any deferred follow-up work for 3.5.4+.
+- What shipped:
+  - DB-backed adapter parity for `UserProfileQuery` and
+    `UserInterestsCommand` in DB-present startup mode.
+  - Fixture fallback preserved for DB-absent startup mode.
+  - Startup-mode and adapter-level test coverage updated for happy/unhappy/edge
+    contracts.
+  - Architecture decision-log update and roadmap item 3.5.3 closure.
+- Coordinator handoff still required:
+  - attach final gate evidence log paths for the closing tree:
+    - `TODO(coordinator): /tmp/check-fmt-$(get-project)-$(git branch --show).out`
+    - `TODO(coordinator): /tmp/lint-$(get-project)-$(git branch --show).out`
+    - `TODO(coordinator): /tmp/test-$(get-project)-$(git branch --show).out`
+  - annotate each gate result as `pass` or `fail` once replay is complete.
+- Follow-up scope explicitly deferred:
+  - 3.5.4 revision-safe interests update contract and stale-write mapping.
+  - 3.5.5 state-builder hardening work beyond 3.5.3 parity closure.
+  - 3.5.6 expanded regression matrix including post-3.5.4 conflict cases.
 
 ## Context and orientation
 
@@ -240,7 +269,7 @@ Expected red evidence after adding new tests:
 New profile/interests DB-present expectations fail while fixture wiring remains.
 ```
 
-2. Implement adapters and DB-present wiring.
+1. Implement adapters and DB-present wiring.
 
 Create concrete types (preferred names):
 
@@ -252,7 +281,7 @@ Update:
 - `backend/src/outbound/persistence/mod.rs` exports.
 - `backend/src/server/state_builders.rs` DB-present profile/interests wiring.
 
-3. Add integration and behavioural suites.
+1. Add integration and behavioural suites.
 
 Add or extend:
 
@@ -266,7 +295,7 @@ Add or extend:
 Use `backend/tests/support/embedded_postgres.rs` helpers and
 `handle_cluster_setup_failure` skip semantics.
 
-4. Run targeted suites before full gates.
+1. Run targeted suites before full gates.
 
 ```bash
 set -o pipefail
@@ -278,12 +307,12 @@ cargo nextest run -p backend --test user_state_profile_interests_startup_modes_b
   2>&1 | tee /tmp/3-5-3-profile-interests-bdd.out
 ```
 
-5. Documentation and closure.
+1. Documentation and closure.
 
 Update architecture design decisions to state the chosen adapter strategy and
 why. Then mark roadmap 3.5.3 `[x]` only.
 
-6. Final quality gates.
+1. Final quality gates.
 
 ```bash
 set -o pipefail
@@ -380,6 +409,7 @@ and `pg-embedded-setup-unpriv` test helpers.
 
 ## Revision note
 
-Initial draft created for roadmap 3.5.3 planning. The draft codifies current
-wiring gaps, proposes a dedicated-adapter default, and defines explicit
-validation and closure gates.
+Initial draft was upgraded to implementation-complete status on 2026-03-04.
+The revision captures the final 3.5.3 adapter-strategy decision (dedicated
+adapters), roadmap closure updates, and explicit coordinator placeholders for
+closing-tree gate evidence paths and outcomes.

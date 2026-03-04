@@ -11,8 +11,8 @@ use backend::domain::ports::{
     FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
     FixtureUserProfileQuery, FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
     LoginService, OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand,
-    RouteAnnotationsQuery, RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery,
-    UsersQuery, WalkSessionCommand, WalkSessionQuery,
+    RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
+    UserPreferencesQuery, UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -22,9 +22,9 @@ use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePor
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
     DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselLoginService,
-    DieselOfflineBundleRepository, DieselRouteAnnotationRepository,
-    DieselUserPreferencesRepository, DieselUserRepository, DieselUsersQuery,
-    DieselWalkSessionRepository,
+    DieselOfflineBundleRepository, DieselRouteAnnotationRepository, DieselUserInterestsCommand,
+    DieselUserPreferencesRepository, DieselUserProfileQuery, DieselUserRepository,
+    DieselUsersQuery, DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
@@ -105,6 +105,25 @@ fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<
             ))) as Arc<dyn UsersQuery>,
         )
     })
+}
+
+fn build_profile_interests_pair(
+    config: &ServerConfig,
+) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
+    match &config.db_pool {
+        Some(pool) => (
+            Arc::new(DieselUserProfileQuery::new(DieselUserRepository::new(
+                pool.clone(),
+            ))) as Arc<dyn UserProfileQuery>,
+            Arc::new(DieselUserInterestsCommand::new(
+                DieselUserPreferencesRepository::new(pool.clone()),
+            )) as Arc<dyn UserInterestsCommand>,
+        ),
+        None => (
+            Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,
+            Arc::new(FixtureUserInterestsCommand) as Arc<dyn UserInterestsCommand>,
+        ),
+    }
 }
 
 macro_rules! build_idempotent_pair {
@@ -249,9 +268,8 @@ pub(super) fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    // TODO(#27): Wire remaining fixture ports (profile, interests)
-    // to real DB-backed implementations once their adapters are ready.
     let (login, users) = build_login_users_pair(config);
+    let (profile, interests) = build_profile_interests_pair(config);
     let (preferences, preferences_query) = build_user_preferences_pair(config);
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
@@ -262,8 +280,8 @@ pub(super) fn build_http_state(
         HttpStatePorts {
             login,
             users,
-            profile: Arc::new(FixtureUserProfileQuery),
-            interests: Arc::new(FixtureUserInterestsCommand),
+            profile,
+            interests,
             preferences,
             preferences_query,
             route_annotations,
