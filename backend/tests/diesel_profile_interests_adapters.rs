@@ -148,6 +148,22 @@ where
     }
 }
 
+async fn call_and_capture<S>(app: &S, req: actix_http::Request) -> Snapshot
+where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+        >,
+{
+    let res = actix_test::call_service(app, req).await;
+    Snapshot {
+        status: res.status().as_u16(),
+        session_cookie: None,
+        body: parse_body(actix_test::read_body(res).await.as_ref()),
+    }
+}
+
 async fn do_get_profile<S>(app: &S, cookie: Cookie<'static>) -> Snapshot
 where
     S: actix_web::dev::Service<
@@ -156,17 +172,11 @@ where
             Error = actix_web::Error,
         >,
 {
-    let profile_req = actix_test::TestRequest::get()
+    let req = actix_test::TestRequest::get()
         .uri("/api/v1/users/me")
         .cookie(cookie)
         .to_request();
-    let profile_res = actix_test::call_service(app, profile_req).await;
-
-    Snapshot {
-        status: profile_res.status().as_u16(),
-        session_cookie: None,
-        body: parse_body(actix_test::read_body(profile_res).await.as_ref()),
-    }
+    call_and_capture(app, req).await
 }
 
 async fn do_update_interests<S>(
@@ -181,18 +191,12 @@ where
             Error = actix_web::Error,
         >,
 {
-    let interests_req = actix_test::TestRequest::put()
+    let req = actix_test::TestRequest::put()
         .uri("/api/v1/users/me/interests")
         .cookie(cookie)
         .set_json(payload)
         .to_request();
-    let interests_res = actix_test::call_service(app, interests_req).await;
-
-    Snapshot {
-        status: interests_res.status().as_u16(),
-        session_cookie: None,
-        body: parse_body(actix_test::read_body(interests_res).await.as_ref()),
-    }
+    call_and_capture(app, req).await
 }
 
 async fn run_flow(
