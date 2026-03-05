@@ -134,6 +134,92 @@ fn seed_user(url: &str, user_id: &str, display_name: &str) -> Result<(), String>
         .map(|_| ())
 }
 
+type AppData<T> = web::Data<T>;
+type AppState = backend::inbound::http::state::HttpState;
+
+fn build_session_middleware() -> SessionMiddleware<CookieSessionStore> {
+    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
+        .cookie_name("session".to_owned())
+        .cookie_path("/".to_owned())
+        .cookie_secure(false)
+        .cookie_http_only(true)
+        .cookie_content_security(CookieContentSecurity::Private)
+        .cookie_same_site(SameSite::Lax)
+        .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
+        .build()
+}
+
+async fn capture_snapshot(res: actix_web::dev::ServiceResponse, with_cookie: bool) -> Snapshot {
+    Snapshot {
+        status: res.status().as_u16(),
+        trace_id: res
+            .headers()
+            .get(TRACE_ID_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned),
+        session_cookie: with_cookie
+            .then(|| {
+                res.response()
+                    .cookies()
+                    .find(|cookie| cookie.name() == "session")
+                    .map(|cookie| cookie.into_owned())
+            })
+            .flatten(),
+        body: parse_json_body(actix_test::read_body(res).await.as_ref()),
+    }
+}
+
+async fn execute_profile_interests_flow(
+    state: AppData<AppState>,
+    payload: InterestsRequest,
+) -> (Snapshot, Option<Snapshot>, Option<Snapshot>) {
+    let app = actix_test::init_service(
+        App::new().app_data(state).wrap(backend::Trace).service(
+            web::scope("/api/v1")
+                .wrap(build_session_middleware())
+                .service(login)
+                .service(current_user)
+                .service(update_interests),
+        ),
+    )
+    .await;
+
+    let login_req = actix_test::TestRequest::post()
+        .uri("/api/v1/login")
+        .set_json(&LoginRequest {
+            username: "admin".to_owned(),
+            password: "password".to_owned(),
+        })
+        .to_request();
+    let login_res = actix_test::call_service(&app, login_req).await;
+    let login_snapshot = capture_snapshot(login_res, true).await;
+
+    let Some(cookie) = login_snapshot.session_cookie.clone() else {
+        return (login_snapshot, None, None);
+    };
+
+    let profile_req = actix_test::TestRequest::get()
+        .uri("/api/v1/users/me")
+        .cookie(cookie.clone())
+        .to_request();
+    let profile_res = actix_test::call_service(&app, profile_req).await;
+    let profile_snapshot = capture_snapshot(profile_res, false).await;
+
+    let interests_req = actix_test::TestRequest::put()
+        .uri("/api/v1/users/me/interests")
+        .cookie(cookie)
+        .set_json(payload)
+        .to_request();
+    let interests_res = actix_test::call_service(&app, interests_req).await;
+    let interests_snapshot = capture_snapshot(interests_res, false).await;
+
+    (
+        login_snapshot,
+        Some(profile_snapshot),
+        Some(interests_snapshot),
+    )
+}
+
 fn run_profile_interests_flow(world: &mut World) {
     if is_skipped(world) {
         return;
@@ -152,94 +238,8 @@ fn run_profile_interests_flow(world: &mut World) {
         interest_theme_ids: world.interests_payload.interest_theme_ids.clone(),
     };
 
-    let (login_snapshot, profile_snapshot, interests_snapshot) = run_async(async move {
-        let session = SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-            .cookie_name("session".to_owned())
-            .cookie_path("/".to_owned())
-            .cookie_secure(false)
-            .cookie_http_only(true)
-            .cookie_content_security(CookieContentSecurity::Private)
-            .cookie_same_site(SameSite::Lax)
-            .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
-            .build();
-
-        let app = actix_test::init_service(
-            App::new().app_data(state).wrap(backend::Trace).service(
-                web::scope("/api/v1")
-                    .wrap(session)
-                    .service(login)
-                    .service(current_user)
-                    .service(update_interests),
-            ),
-        )
-        .await;
-
-        let login_req = actix_test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&LoginRequest {
-                username: "admin".to_owned(),
-                password: "password".to_owned(),
-            })
-            .to_request();
-        let login_res = actix_test::call_service(&app, login_req).await;
-        let login_snapshot = Snapshot {
-            status: login_res.status().as_u16(),
-            trace_id: login_res
-                .headers()
-                .get(TRACE_ID_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .map(ToOwned::to_owned),
-            session_cookie: login_res
-                .response()
-                .cookies()
-                .find(|cookie| cookie.name() == "session")
-                .map(|cookie| cookie.into_owned()),
-            body: parse_json_body(actix_test::read_body(login_res).await.as_ref()),
-        };
-
-        let Some(cookie) = login_snapshot.session_cookie.clone() else {
-            return (login_snapshot, None, None);
-        };
-
-        let profile_req = actix_test::TestRequest::get()
-            .uri("/api/v1/users/me")
-            .cookie(cookie.clone())
-            .to_request();
-        let profile_res = actix_test::call_service(&app, profile_req).await;
-        let profile_snapshot = Snapshot {
-            status: profile_res.status().as_u16(),
-            trace_id: profile_res
-                .headers()
-                .get(TRACE_ID_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .map(ToOwned::to_owned),
-            session_cookie: None,
-            body: parse_json_body(actix_test::read_body(profile_res).await.as_ref()),
-        };
-
-        let interests_req = actix_test::TestRequest::put()
-            .uri("/api/v1/users/me/interests")
-            .cookie(cookie)
-            .set_json(payload)
-            .to_request();
-        let interests_res = actix_test::call_service(&app, interests_req).await;
-        let interests_snapshot = Snapshot {
-            status: interests_res.status().as_u16(),
-            trace_id: interests_res
-                .headers()
-                .get(TRACE_ID_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .map(ToOwned::to_owned),
-            session_cookie: None,
-            body: parse_json_body(actix_test::read_body(interests_res).await.as_ref()),
-        };
-
-        (
-            login_snapshot,
-            Some(profile_snapshot),
-            Some(interests_snapshot),
-        )
-    });
+    let (login_snapshot, profile_snapshot, interests_snapshot) =
+        run_async(execute_profile_interests_flow(state, payload));
 
     world.login = Some(login_snapshot);
     world.profile = profile_snapshot;
