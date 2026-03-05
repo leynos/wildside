@@ -91,11 +91,13 @@ fn parse_body(bytes: &[u8]) -> Option<Value> {
     }
 }
 
-async fn run_flow(
+async fn build_test_app(
     state: web::Data<HttpState>,
-    credentials: Credentials<'_>,
-    interests_payload: &InterestsRequest,
-) -> (Snapshot, Option<Snapshot>, Option<Snapshot>) {
+) -> impl actix_web::dev::Service<
+    actix_http::Request,
+    Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+    Error = actix_web::Error,
+> {
     let session = SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
         .cookie_name("session".to_owned())
         .cookie_path("/".to_owned())
@@ -106,7 +108,7 @@ async fn run_flow(
         .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
         .build();
 
-    let app = actix_test::init_service(
+    actix_test::init_service(
         App::new().app_data(state).wrap(backend::Trace).service(
             web::scope("/api/v1")
                 .wrap(session)
@@ -115,18 +117,27 @@ async fn run_flow(
                 .service(update_interests),
         ),
     )
-    .await;
+    .await
+}
 
+async fn do_login<S>(app: &S, creds: &Credentials<'_>) -> Snapshot
+where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+        >,
+{
     let login_req = actix_test::TestRequest::post()
         .uri("/api/v1/login")
         .set_json(&LoginRequest {
-            username: credentials.username.to_owned(),
-            password: credentials.password.to_owned(),
+            username: creds.username.to_owned(),
+            password: creds.password.to_owned(),
         })
         .to_request();
-    let login_res = actix_test::call_service(&app, login_req).await;
+    let login_res = actix_test::call_service(app, login_req).await;
 
-    let login_snapshot = Snapshot {
+    Snapshot {
         status: login_res.status().as_u16(),
         session_cookie: login_res
             .response()
@@ -134,34 +145,70 @@ async fn run_flow(
             .find(|cookie| cookie.name() == "session")
             .map(|cookie| cookie.into_owned()),
         body: parse_body(actix_test::read_body(login_res).await.as_ref()),
-    };
+    }
+}
+
+async fn do_get_profile<S>(app: &S, cookie: Cookie<'static>) -> Snapshot
+where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+        >,
+{
+    let profile_req = actix_test::TestRequest::get()
+        .uri("/api/v1/users/me")
+        .cookie(cookie)
+        .to_request();
+    let profile_res = actix_test::call_service(app, profile_req).await;
+
+    Snapshot {
+        status: profile_res.status().as_u16(),
+        session_cookie: None,
+        body: parse_body(actix_test::read_body(profile_res).await.as_ref()),
+    }
+}
+
+async fn do_update_interests<S>(
+    app: &S,
+    cookie: Cookie<'static>,
+    payload: &InterestsRequest,
+) -> Snapshot
+where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+        >,
+{
+    let interests_req = actix_test::TestRequest::put()
+        .uri("/api/v1/users/me/interests")
+        .cookie(cookie)
+        .set_json(payload)
+        .to_request();
+    let interests_res = actix_test::call_service(app, interests_req).await;
+
+    Snapshot {
+        status: interests_res.status().as_u16(),
+        session_cookie: None,
+        body: parse_body(actix_test::read_body(interests_res).await.as_ref()),
+    }
+}
+
+async fn run_flow(
+    state: web::Data<HttpState>,
+    creds: Credentials<'_>,
+    interests_payload: &InterestsRequest,
+) -> (Snapshot, Option<Snapshot>, Option<Snapshot>) {
+    let app = build_test_app(state).await;
+    let login_snapshot = do_login(&app, &creds).await;
 
     let Some(cookie) = login_snapshot.session_cookie.clone() else {
         return (login_snapshot, None, None);
     };
 
-    let profile_req = actix_test::TestRequest::get()
-        .uri("/api/v1/users/me")
-        .cookie(cookie.clone())
-        .to_request();
-    let profile_res = actix_test::call_service(&app, profile_req).await;
-    let profile_snapshot = Snapshot {
-        status: profile_res.status().as_u16(),
-        session_cookie: None,
-        body: parse_body(actix_test::read_body(profile_res).await.as_ref()),
-    };
-
-    let interests_req = actix_test::TestRequest::put()
-        .uri("/api/v1/users/me/interests")
-        .cookie(cookie)
-        .set_json(interests_payload)
-        .to_request();
-    let interests_res = actix_test::call_service(&app, interests_req).await;
-    let interests_snapshot = Snapshot {
-        status: interests_res.status().as_u16(),
-        session_cookie: None,
-        body: parse_body(actix_test::read_body(interests_res).await.as_ref()),
-    };
+    let profile_snapshot = do_get_profile(&app, cookie.clone()).await;
+    let interests_snapshot = do_update_interests(&app, cookie, interests_payload).await;
 
     (
         login_snapshot,
