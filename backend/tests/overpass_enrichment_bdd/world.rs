@@ -256,7 +256,7 @@ impl OverpassEnrichmentWorld {
         let mut client =
             postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
         client
-            .batch_execute("DROP TABLE overpass_enrichment_provenance")
+            .batch_execute("DROP TABLE IF EXISTS overpass_enrichment_provenance")
             .expect("drop provenance table");
     }
 

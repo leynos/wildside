@@ -122,20 +122,25 @@ where
 
     fn persist_internal(&self, record: &T) -> Result<(), E> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.persisted
-            .lock()
-            .expect(T::MUTEX_MESSAGE)
-            .push(record.clone());
         let mut scripted = self.scripted.lock().expect(T::MUTEX_MESSAGE);
-        if let Some(result) = scripted.pop_front() {
-            result
-        } else {
-            debug_assert!(
-                false,
-                "ScriptedRepositoryStub: no scripted responses left for {}",
-                std::any::type_name::<T>(),
-            );
-            Ok(())
+        match scripted.pop_front() {
+            Some(Ok(())) => {
+                drop(scripted);
+                self.persisted
+                    .lock()
+                    .expect(T::MUTEX_MESSAGE)
+                    .push(record.clone());
+                Ok(())
+            }
+            Some(Err(error)) => Err(error),
+            None => {
+                debug_assert!(
+                    false,
+                    "ScriptedRepositoryStub: no scripted responses left for {}",
+                    std::any::type_name::<T>(),
+                );
+                Ok(())
+            }
         }
     }
 }
