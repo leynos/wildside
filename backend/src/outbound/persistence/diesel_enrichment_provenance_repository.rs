@@ -139,6 +139,60 @@ impl DieselEnrichmentProvenanceRepository {
 
         (page_rows, next_before)
     }
+
+    /// Handle split-boundary pagination when the page break falls within rows
+    /// that share the same `imported_at` timestamp.
+    async fn handle_split_boundary(
+        &self,
+        conn: &mut DbConn<'_>,
+        context: SplitBoundaryContext<'_>,
+    ) -> Result<ListEnrichmentProvenanceResponse, EnrichmentProvenanceRepositoryError> {
+        let SplitBoundaryContext {
+            rows,
+            request,
+            boundary_imported_at,
+        } = context;
+        let newer_rows_count = rows
+            .iter()
+            .take_while(|row| row.imported_at > boundary_imported_at)
+            .count();
+        let remaining = request.limit.saturating_sub(newer_rows_count);
+        let boundary_rows = self
+            .collect_boundary_rows(
+                conn,
+                BoundaryRowsRequest {
+                    boundary_imported_at,
+                    before: request.before,
+                    remaining,
+                },
+            )
+            .await?;
+        let boundary_has_overflow = boundary_rows.len() > remaining;
+        let (page_rows, cursor) = Self::split_boundary_page_rows(
+            rows,
+            boundary_rows,
+            request.limit,
+            boundary_imported_at,
+        );
+        let records = page_rows
+            .into_iter()
+            .map(EnrichmentProvenanceRecord::from)
+            .collect::<Vec<_>>();
+        let next_before = if let Some(cursor) = cursor {
+            if boundary_has_overflow {
+                Some(cursor)
+            } else {
+                self.derive_next_before(conn, cursor).await?
+            }
+        } else {
+            None
+        };
+
+        Ok(ListEnrichmentProvenanceResponse {
+            records,
+            next_before,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -146,6 +200,12 @@ struct BoundaryRowsRequest {
     boundary_imported_at: DateTime<Utc>,
     before: Option<EnrichmentProvenanceCursor>,
     remaining: usize,
+}
+
+struct SplitBoundaryContext<'a> {
+    rows: Vec<EnrichmentProvenanceRow>,
+    request: &'a ListEnrichmentProvenanceRequest,
+    boundary_imported_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable)]
@@ -182,6 +242,7 @@ type BoxedQuery<'a> = diesel::dsl::IntoBoxed<
 >;
 
 type PooledPgConnection<'a> = PooledConnection<'a, AsyncPgConnection>;
+type DbConn<'a> = PooledPgConnection<'a>;
 
 fn map_pool_error(error: PoolError) -> EnrichmentProvenanceRepositoryError {
     EnrichmentProvenanceRepositoryError::connection(map_pool_error_message(error))
@@ -298,46 +359,15 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
             });
         }
 
-        let newer_rows_count = rows
-            .iter()
-            .take_while(|row| row.imported_at > boundary_imported_at)
-            .count();
-        let remaining = request.limit.saturating_sub(newer_rows_count);
-        let boundary_rows = self
-            .collect_boundary_rows(
-                &mut conn,
-                BoundaryRowsRequest {
-                    boundary_imported_at,
-                    before: request.before,
-                    remaining,
-                },
-            )
-            .await?;
-        let boundary_has_overflow = boundary_rows.len() > remaining;
-        let (page_rows, cursor) = Self::split_boundary_page_rows(
-            rows,
-            boundary_rows,
-            request.limit,
-            boundary_imported_at,
-        );
-        let records = page_rows
-            .into_iter()
-            .map(EnrichmentProvenanceRecord::from)
-            .collect::<Vec<_>>();
-        let next_before = if let Some(cursor) = cursor {
-            if boundary_has_overflow {
-                Some(cursor)
-            } else {
-                self.derive_next_before(&mut conn, cursor).await?
-            }
-        } else {
-            None
-        };
-
-        Ok(ListEnrichmentProvenanceResponse {
-            records,
-            next_before,
-        })
+        self.handle_split_boundary(
+            &mut conn,
+            SplitBoundaryContext {
+                rows,
+                request,
+                boundary_imported_at,
+            },
+        )
+        .await
     }
 }
 
