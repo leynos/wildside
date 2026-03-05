@@ -164,12 +164,12 @@ fn persisted_enrichment_provenance_reporting_records_exist(world: &WorldFixture)
                 ),
                 fixture_record(
                     "https://overpass.example/api/interpreter?seed=0",
-                    "2026-02-28T11:58:00Z",
+                    "2026-02-28T12:00:00Z",
                     [-3.3, 55.8, -3.1, 55.95],
                 ),
             ],
             next_before: Some(fixture_cursor(
-                "2026-02-28T11:58:00Z",
+                "2026-02-28T12:00:00Z",
                 Uuid::from_u128(0x11),
             )),
         }),
@@ -237,7 +237,7 @@ fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_comp
         world,
         &format!(
             "limit=2&before=2026-02-28T12:00:00Z|{}",
-            Uuid::from_u128(0x22)
+            Uuid::from_u128(0x11)
         ),
     );
 }
@@ -280,24 +280,23 @@ fn the_response_is_ok_with_an_enrichment_provenance_payload(world: &WorldFixture
 
     let first = records.first().expect("first record");
     let second = records.get(1).expect("second record");
-    let expected_first_imported_at = fixture_timestamp("2026-02-28T12:00:00Z").to_rfc3339();
-    let expected_second_imported_at = fixture_timestamp("2026-02-28T11:58:00Z").to_rfc3339();
+    let expected_shared_imported_at = fixture_timestamp("2026-02-28T12:00:00Z").to_rfc3339();
     assert_record_payload(
         first,
         "https://overpass.example/api/interpreter?seed=1",
-        &expected_first_imported_at,
+        &expected_shared_imported_at,
         [-3.2, 55.9, -3.0, 56.0],
     );
     assert_record_payload(
         second,
         "https://overpass.example/api/interpreter?seed=0",
-        &expected_second_imported_at,
+        &expected_shared_imported_at,
         [-3.3, 55.8, -3.1, 55.95],
     );
 
     assert_records_sorted_newest_first(records);
 
-    let expected_next_before = format!("{}|{}", expected_second_imported_at, Uuid::from_u128(0x11));
+    let expected_next_before = format!("{}|{}", expected_shared_imported_at, Uuid::from_u128(0x11));
     assert_eq!(
         body.get("nextBefore").and_then(Value::as_str),
         Some(expected_next_before.as_str())
@@ -378,7 +377,7 @@ fn the_enrichment_provenance_query_receives_the_expected_composite_cursor(world:
             2,
             Some((
                 fixture_timestamp("2026-02-28T12:00:00Z"),
-                Uuid::from_u128(0x22),
+                Uuid::from_u128(0x11),
             )),
         ),
     );
