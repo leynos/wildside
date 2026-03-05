@@ -126,6 +126,22 @@ fn assert_records_sorted_newest_first(records: &[Value]) {
     );
 }
 
+fn perform_provenance_request(world: &WorldFixture, query: &str) {
+    bdd_common::perform_get_request(world, &format!("{}?{}", ENDPOINT, query));
+}
+
+fn assert_single_provenance_call(world: &WorldFixture, expected: ListEnrichmentProvenanceRequest) {
+    let ctx = world.world();
+    let ctx = ctx.borrow();
+    let calls = ctx.enrichment_provenance.calls();
+    assert_eq!(
+        calls.len(),
+        1,
+        "expected exactly one provenance repository call"
+    );
+    assert_eq!(calls[0], expected);
+}
+
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
     bdd_common::setup_server(world);
@@ -203,25 +219,24 @@ fn the_unauthenticated_client_requests_enrichment_provenance_reporting(world: &W
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invalid_limit(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(world, &format!("{}?limit=0", ENDPOINT));
+    perform_provenance_request(world, "limit=0");
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with invalid cursor")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_invalid_cursor(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(world, &format!("{}?before=not-a-timestamp", ENDPOINT));
+    perform_provenance_request(world, "before=not-a-timestamp");
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with a composite cursor")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_composite_cursor(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(
+    perform_provenance_request(
         world,
         &format!(
-            "{}?limit=2&before=2026-02-28T12:00:00Z|{}",
-            ENDPOINT,
+            "limit=2&before=2026-02-28T12:00:00Z|{}",
             Uuid::from_u128(0x22)
         ),
     );
@@ -233,30 +248,21 @@ fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_comp
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_a_malformed_composite_cursor(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(
-        world,
-        &format!(
-            "{}?limit=2&before=2026-02-28T12:00:00Z|not-a-uuid",
-            ENDPOINT
-        ),
-    );
+    perform_provenance_request(world, "limit=2&before=2026-02-28T12:00:00Z|not-a-uuid");
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with over-max limit")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_over_max_limit(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(world, &format!("{}?limit=201", ENDPOINT));
+    perform_provenance_request(world, "limit=201");
 }
 
 #[when("the authenticated client requests enrichment provenance reporting with limit and cursor")]
 fn the_authenticated_client_requests_enrichment_provenance_reporting_with_limit_and_cursor(
     world: &WorldFixture,
 ) {
-    bdd_common::perform_get_request(
-        world,
-        &format!("{}?limit=2&before=2026-02-28T12:00:00Z", ENDPOINT),
-    );
+    perform_provenance_request(world, "limit=2&before=2026-02-28T12:00:00Z");
 }
 
 #[then("the response is ok with an enrichment provenance payload")]
@@ -355,36 +361,26 @@ fn the_response_is_service_unavailable(world: &WorldFixture) {
 
 #[then("the enrichment provenance query receives the expected limit and cursor")]
 fn the_enrichment_provenance_query_receives_the_expected_limit_and_cursor(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-
-    let calls = ctx.enrichment_provenance.calls();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(
-        calls[0],
+    assert_single_provenance_call(
+        world,
         ListEnrichmentProvenanceRequest::new(
             2,
             Some((fixture_timestamp("2026-02-28T12:00:00Z"), Uuid::max())),
-        )
+        ),
     );
 }
 
 #[then("the enrichment provenance query receives the expected composite cursor")]
 fn the_enrichment_provenance_query_receives_the_expected_composite_cursor(world: &WorldFixture) {
-    let ctx = world.world();
-    let ctx = ctx.borrow();
-
-    let calls = ctx.enrichment_provenance.calls();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(
-        calls[0],
+    assert_single_provenance_call(
+        world,
         ListEnrichmentProvenanceRequest::new(
             2,
             Some((
                 fixture_timestamp("2026-02-28T12:00:00Z"),
-                Uuid::from_u128(0x22)
+                Uuid::from_u128(0x22),
             )),
-        )
+        ),
     );
 }
 
