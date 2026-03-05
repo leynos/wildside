@@ -56,6 +56,11 @@ struct DbContext {
     _database: TemporaryDatabase,
 }
 
+struct Credentials<'a> {
+    username: &'a str,
+    password: &'a str,
+}
+
 fn run_async<T>(future: impl Future<Output = T>) -> T {
     tokio::runtime::Runtime::new()
         .expect("runtime")
@@ -88,8 +93,7 @@ fn parse_body(bytes: &[u8]) -> Option<Value> {
 
 async fn run_flow(
     state: web::Data<HttpState>,
-    username: &str,
-    password: &str,
+    credentials: Credentials<'_>,
     interests_payload: &InterestsRequest,
 ) -> (Snapshot, Option<Snapshot>, Option<Snapshot>) {
     let session = SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
@@ -116,8 +120,8 @@ async fn run_flow(
     let login_req = actix_test::TestRequest::post()
         .uri("/api/v1/login")
         .set_json(&LoginRequest {
-            username: username.to_owned(),
-            password: password.to_owned(),
+            username: credentials.username.to_owned(),
+            password: credentials.password.to_owned(),
         })
         .to_request();
     let login_res = actix_test::call_service(&app, login_req).await;
@@ -200,22 +204,19 @@ fn setup_db_context() -> Option<DbContext> {
     })
 }
 
-fn seed_user(url: &str, id: &str, display_name: &str) -> Result<(), String> {
+fn seed_user(url: &str, id: Uuid, display_name: &str) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|error| format_postgres_error(&error))?;
-    let user_id = Uuid::parse_str(id).map_err(|error| error.to_string())?;
     client
         .execute(
             "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_id, &display_name],
+            &[&id, &display_name],
         )
         .map_err(|error| format_postgres_error(&error))
         .map(|_| ())
 }
 
-fn db_contains_interest_id(url: &str, user_id: &str, theme_id: &str) -> Result<bool, String> {
+fn db_contains_interest_id(url: &str, user_id: Uuid, theme_id: Uuid) -> Result<bool, String> {
     let mut client = Client::connect(url, NoTls).map_err(|error| format_postgres_error(&error))?;
-    let user_id = Uuid::parse_str(user_id).map_err(|error| error.to_string())?;
-    let theme_id = Uuid::parse_str(theme_id).map_err(|error| error.to_string())?;
 
     client
         .query_one(
@@ -242,8 +243,14 @@ fn fixture_fallback_mode_returns_fixture_profile_and_interests_shape() {
         Arc::new(FixtureRouteSubmissionService),
     );
 
-    let (login_snapshot, profile_snapshot, interests_snapshot) =
-        run_async(run_flow(state, "admin", "password", &interests_payload));
+    let (login_snapshot, profile_snapshot, interests_snapshot) = run_async(run_flow(
+        state,
+        Credentials {
+            username: "admin",
+            password: "password",
+        },
+        &interests_payload,
+    ));
 
     assert_eq!(login_snapshot.status, 200);
 
@@ -287,7 +294,12 @@ fn db_present_mode_returns_db_backed_profile_and_interests_behaviour() {
         return;
     };
 
-    seed_user(db.database_url.as_str(), FIXTURE_AUTH_ID, DB_PROFILE_NAME).expect("seed user");
+    seed_user(
+        db.database_url.as_str(),
+        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+        DB_PROFILE_NAME,
+    )
+    .expect("seed user");
 
     let interests_payload = InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned(), SECOND_THEME_ID.to_owned()],
@@ -297,8 +309,14 @@ fn db_present_mode_returns_db_backed_profile_and_interests_behaviour() {
         Arc::new(FixtureRouteSubmissionService),
     );
 
-    let (login_snapshot, profile_snapshot, interests_snapshot) =
-        run_async(run_flow(state, "admin", "password", &interests_payload));
+    let (login_snapshot, profile_snapshot, interests_snapshot) = run_async(run_flow(
+        state,
+        Credentials {
+            username: "admin",
+            password: "password",
+        },
+        &interests_payload,
+    ));
 
     assert_eq!(login_snapshot.status, 200);
     let profile_body = profile_snapshot
@@ -323,9 +341,12 @@ fn db_present_mode_returns_db_backed_profile_and_interests_behaviour() {
         Some(FIXTURE_AUTH_ID)
     );
 
-    let persisted =
-        db_contains_interest_id(db.database_url.as_str(), FIXTURE_AUTH_ID, FIRST_THEME_ID)
-            .expect("query interests persistence");
+    let persisted = db_contains_interest_id(
+        db.database_url.as_str(),
+        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+        Uuid::parse_str(FIRST_THEME_ID).expect("valid fixture UUID"),
+    )
+    .expect("query interests persistence");
     assert!(
         persisted,
         "expected interests to persist through DB-backed wiring"
