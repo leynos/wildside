@@ -1,4 +1,4 @@
-//! Regression coverage for steady-state interests command behavior.
+//! Regression coverage for steady-state interests command behaviour.
 
 use std::sync::Arc;
 

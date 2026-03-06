@@ -28,6 +28,38 @@ struct PreferencesUpdate {
 
 impl DieselUserInterestsCommand {
     /// Create a new interests command adapter backed by a user preferences repository.
+    ///
+    /// ```rust
+    /// use std::sync::Arc;
+    ///
+    /// use async_trait::async_trait;
+    /// use backend::domain::ports::{UserPreferencesRepository, UserPreferencesRepositoryError};
+    /// use backend::domain::{UserId, UserPreferences};
+    /// use backend::outbound::persistence::DieselUserInterestsCommand;
+    ///
+    /// struct StubRepository;
+    ///
+    /// #[async_trait]
+    /// impl UserPreferencesRepository for StubRepository {
+    ///     async fn find_by_user_id(
+    ///         &self,
+    ///         _user_id: &UserId,
+    ///     ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
+    ///         Ok(None)
+    ///     }
+    ///
+    ///     async fn save(
+    ///         &self,
+    ///         _preferences: &UserPreferences,
+    ///         _expected_revision: Option<u32>,
+    ///     ) -> Result<(), UserPreferencesRepositoryError> {
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let repository = Arc::new(StubRepository) as Arc<dyn UserPreferencesRepository>;
+    /// let _command: DieselUserInterestsCommand = DieselUserInterestsCommand::new(repository);
+    /// ```
     pub fn new(preferences_repository: Arc<dyn UserPreferencesRepository>) -> Self {
         Self {
             preferences_repository,
