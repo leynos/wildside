@@ -94,6 +94,19 @@ pub(super) fn build_login_users_pair_with_pool<Pool>(
     }
 }
 
+fn build_profile_interests_pair_with_pool<Pool>(
+    pool: &Option<Pool>,
+    make_pair: impl FnOnce(&Pool) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>),
+) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
+    match pool {
+        Some(pool) => make_pair(pool),
+        None => (
+            Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,
+            Arc::new(FixtureUserInterestsCommand) as Arc<dyn UserInterestsCommand>,
+        ),
+    }
+}
+
 fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
     build_login_users_pair_with_pool(&config.db_pool, |pool| {
         (
@@ -110,20 +123,16 @@ fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<
 fn build_profile_interests_pair(
     config: &ServerConfig,
 ) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
-    match &config.db_pool {
-        Some(pool) => (
+    build_profile_interests_pair_with_pool(&config.db_pool, |pool| {
+        (
             Arc::new(DieselUserProfileQuery::new(Arc::new(
                 DieselUserRepository::new(pool.clone()),
             ))) as Arc<dyn UserProfileQuery>,
             Arc::new(DieselUserInterestsCommand::new(Arc::new(
                 DieselUserPreferencesRepository::new(pool.clone()),
             ))) as Arc<dyn UserInterestsCommand>,
-        ),
-        None => (
-            Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,
-            Arc::new(FixtureUserInterestsCommand) as Arc<dyn UserInterestsCommand>,
-        ),
-    }
+        )
+    })
 }
 
 macro_rules! build_idempotent_pair {

@@ -138,6 +138,35 @@ async fn set_interests_maps_save_failures(
 }
 
 #[tokio::test]
+async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
+    let user_id = user_id();
+    let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
+        UserPreferences::builder(user_id.clone())
+            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .unit_system(UnitSystem::Metric)
+            .revision(u32::MAX)
+            .build(),
+    ));
+    let command = DieselUserInterestsCommand::new(repository.clone());
+
+    let err = command
+        .set_interests(
+            &user_id,
+            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+        )
+        .await
+        .expect_err("overflowing revisions should not wrap");
+
+    assert_eq!(err.code(), ErrorCode::InternalError);
+    assert!(
+        err.message()
+            .contains("preferences revision overflow prevents interest update")
+    );
+    assert!(repository.last_save_call().is_none());
+}
+
+#[tokio::test]
 async fn set_interests_maps_exhausted_revision_mismatches_to_internal_error() {
     let repository = Arc::new(StubUserPreferencesRepository::default());
     repository.set_save_failures([

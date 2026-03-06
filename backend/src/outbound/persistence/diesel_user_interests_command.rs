@@ -59,6 +59,10 @@ fn build_preferences_for_interest_update(
     match existing {
         Some(existing) => {
             let expected_revision = existing.revision;
+            let (next_revision, expected_revision) = match expected_revision.checked_add(1) {
+                Some(next_revision) => (next_revision, Some(expected_revision)),
+                None => (expected_revision, None),
+            };
             let preferences = UserPreferences::builder(user_id.clone())
                 .interest_theme_ids(
                     interest_theme_ids
@@ -68,11 +72,11 @@ fn build_preferences_for_interest_update(
                 )
                 .safety_toggle_ids(existing.safety_toggle_ids)
                 .unit_system(existing.unit_system)
-                .revision(expected_revision + 1)
+                .revision(next_revision)
                 .build();
             PreferencesUpdate {
                 preferences,
-                expected_revision: Some(expected_revision),
+                expected_revision,
             }
         }
         None => PreferencesUpdate {
@@ -105,12 +109,18 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
                 .find_by_user_id(user_id)
                 .await
                 .map_err(map_preferences_persistence_error)?;
+            let had_existing_preferences = existing_preferences.is_some();
 
             let update = build_preferences_for_interest_update(
                 user_id,
                 existing_preferences,
                 &interest_theme_ids,
             );
+            if had_existing_preferences && update.expected_revision.is_none() {
+                return Err(Error::internal(
+                    "preferences revision overflow prevents interest update",
+                ));
+            }
 
             match self
                 .preferences_repository
