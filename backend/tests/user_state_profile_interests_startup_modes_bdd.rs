@@ -1,12 +1,10 @@
 //! Behaviour coverage for 3.5.3 profile/interests startup-mode stability.
+
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use actix_session::SessionMiddleware;
-use actix_session::config::{CookieContentSecurity, PersistentSession};
-use actix_session::storage::CookieSessionStore;
-use actix_web::cookie::{Cookie, Key, SameSite, time::Duration as CookieDuration};
+use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::{App, test as actix_test, web};
 use backend::domain::TRACE_ID_HEADER;
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
@@ -24,6 +22,10 @@ use uuid::Uuid;
 mod support;
 
 use support::atexit_cleanup::shared_cluster_handle;
+use support::profile_interests::{
+    DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, INTEREST_THEME_IDS_MAX,
+    SECOND_THEME_ID, build_session_middleware,
+};
 use support::{
     drop_table, format_postgres_error, handle_cluster_setup_failure, provision_template_database,
 };
@@ -38,11 +40,6 @@ pub use server_config::ServerConfig;
 
 #[path = "../src/server/state_builders.rs"]
 mod state_builders;
-
-const FIXTURE_AUTH_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
-const DB_PROFILE_NAME: &str = "Database Ada";
-const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-const INTEREST_THEME_IDS_MAX: usize = 100;
 
 #[derive(Debug)]
 struct Snapshot {
@@ -96,6 +93,37 @@ fn assert_internal(snapshot: &Snapshot) {
     assert_eq!(trace_header, trace_body);
 }
 
+fn assert_profile_response(snapshot: &Snapshot, expected_display_name: &str) {
+    assert_eq!(snapshot.status, 200);
+    let body = snapshot.body.as_ref().expect("profile body");
+    assert_eq!(
+        body.get("id").and_then(Value::as_str),
+        Some(FIXTURE_AUTH_ID)
+    );
+    assert_eq!(
+        body.get("displayName").and_then(Value::as_str),
+        Some(expected_display_name)
+    );
+}
+
+fn assert_interests_response(snapshot: &Snapshot, expected_ids: &[&str]) {
+    assert_eq!(snapshot.status, 200);
+    let body = snapshot.body.as_ref().expect("interests body");
+    assert_eq!(
+        body.get("userId").and_then(Value::as_str),
+        Some(FIXTURE_AUTH_ID)
+    );
+    assert_eq!(
+        body.get("interestThemeIds")
+            .and_then(Value::as_array)
+            .expect("interestThemeIds array")
+            .iter()
+            .map(|value| value.as_str().expect("string interest id"))
+            .collect::<Vec<_>>(),
+        expected_ids
+    );
+}
+
 fn is_skipped(world: &World) -> bool {
     if let Some(reason) = world.skip_reason.as_deref() {
         eprintln!("SKIP-TEST-CLUSTER: scenario skipped ({reason})");
@@ -122,9 +150,8 @@ fn setup_db_context() -> Result<DbContext, String> {
     })
 }
 
-fn seed_user(url: &str, user_id: &str, display_name: &str) -> Result<(), String> {
+fn seed_user(url: &str, user_id: Uuid, display_name: &str) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|error| format_postgres_error(&error))?;
-    let user_id = Uuid::parse_str(user_id).map_err(|error| error.to_string())?;
     client
         .execute(
             "INSERT INTO users (id, display_name) VALUES ($1, $2)",
@@ -136,18 +163,6 @@ fn seed_user(url: &str, user_id: &str, display_name: &str) -> Result<(), String>
 
 type AppData<T> = web::Data<T>;
 type AppState = backend::inbound::http::state::HttpState;
-
-fn build_session_middleware() -> SessionMiddleware<CookieSessionStore> {
-    SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-        .cookie_name("session".to_owned())
-        .cookie_path("/".to_owned())
-        .cookie_secure(false)
-        .cookie_http_only(true)
-        .cookie_content_security(CookieContentSecurity::Private)
-        .cookie_same_site(SameSite::Lax)
-        .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
-        .build()
-}
 
 async fn capture_snapshot(res: actix_web::dev::ServiceResponse, with_cookie: bool) -> Snapshot {
     Snapshot {
@@ -225,11 +240,12 @@ fn run_profile_interests_flow(world: &mut World) {
         return;
     }
 
-    let db_pool = world.db.as_ref().expect("db context").pool.clone();
     let bind_addr = SocketAddr::from(([127, 0, 0, 1], 0));
-    let config =
-        ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr).with_db_pool(db_pool);
-
+    let base_config = ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr);
+    let config = match world.db.as_ref() {
+        Some(db) => base_config.with_db_pool(db.pool.clone()),
+        None => base_config,
+    };
     let state = state_builders::build_http_state(
         &config,
         Arc::new(FixtureRouteSubmissionService) as Arc<dyn RouteSubmissionService>,
@@ -264,8 +280,12 @@ fn world() -> World {
 fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
     match setup_db_context() {
         Ok(db) => {
-            seed_user(db.database_url.as_str(), FIXTURE_AUTH_ID, DB_PROFILE_NAME)
-                .expect("seed db user");
+            seed_user(
+                db.database_url.as_str(),
+                Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+                DB_PROFILE_NAME,
+            )
+            .expect("seed db user");
             world.db = Some(db);
             world.skip_reason = None;
         }
@@ -274,6 +294,12 @@ fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
             world.skip_reason = Some(error);
         }
     }
+}
+
+#[given("fixture-fallback startup mode without a database pool")]
+fn fixture_fallback_startup_mode_without_a_database_pool(world: &mut World) {
+    world.db = None;
+    world.skip_reason = None;
 }
 
 #[given("the interests schema is missing in db-present mode")]
@@ -292,6 +318,16 @@ fn the_interests_schema_is_missing_in_db_present_mode(world: &mut World) {
 fn executing_a_valid_login_profile_and_interests_request(world: &mut World) {
     world.interests_payload = InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
+    };
+    run_profile_interests_flow(world);
+}
+
+#[when("executing a valid login, profile, and interests request with multiple interestThemeIds")]
+fn executing_a_valid_login_profile_and_interests_request_with_multiple_interest_theme_ids(
+    world: &mut World,
+) {
+    world.interests_payload = InterestsRequest {
+        interest_theme_ids: vec![FIRST_THEME_ID.to_owned(), SECOND_THEME_ID.to_owned()],
     };
     run_profile_interests_flow(world);
 }
@@ -383,6 +419,44 @@ fn the_interests_validation_error_envelope_remains_stable(world: &mut World) {
     );
 }
 
+#[then("fixture-fallback startup preserves the fixture profile and interests response contract")]
+fn fixture_fallback_startup_preserves_the_fixture_profile_and_interests_response_contract(
+    world: &mut World,
+) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_eq!(world.login.as_ref().expect("login response").status, 200);
+    assert_profile_response(
+        world.profile.as_ref().expect("profile response"),
+        FIXTURE_PROFILE_NAME,
+    );
+    assert_interests_response(
+        world.interests.as_ref().expect("interests response"),
+        &[FIRST_THEME_ID],
+    );
+}
+
+#[then("db-present startup preserves the DB-backed profile and interests response contract")]
+fn db_present_startup_preserves_the_db_backed_profile_and_interests_response_contract(
+    world: &mut World,
+) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_eq!(world.login.as_ref().expect("login response").status, 200);
+    assert_profile_response(
+        world.profile.as_ref().expect("profile response"),
+        DB_PROFILE_NAME,
+    );
+    assert_interests_response(
+        world.interests.as_ref().expect("interests response"),
+        &[FIRST_THEME_ID, SECOND_THEME_ID],
+    );
+}
+
 #[scenario(
     path = "tests/features/user_state_profile_interests_startup_modes.feature",
     name = "DB-present startup remains stable when interests schema is missing"
@@ -396,5 +470,21 @@ fn db_present_startup_remains_stable_when_interests_schema_is_missing(world: Wor
     name = "DB-present startup keeps interestThemeIds validation envelope stable"
 )]
 fn db_present_startup_keeps_interest_theme_ids_validation_envelope_stable(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_state_profile_interests_startup_modes.feature",
+    name = "Fixture-fallback startup keeps profile and interests response contracts stable"
+)]
+fn fixture_fallback_startup_keeps_profile_and_interests_response_contracts_stable(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_state_profile_interests_startup_modes.feature",
+    name = "DB-present startup preserves DB-backed profile and interests responses"
+)]
+fn db_present_startup_preserves_db_backed_profile_and_interests_responses(world: World) {
     drop(world);
 }

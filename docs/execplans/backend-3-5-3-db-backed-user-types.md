@@ -14,7 +14,7 @@ extensions or dedicated adapters.`
 
 ## Purpose / big picture
 
-`backend/src/server/state_builders.rs` now uses DB-backed adapters for
+`backend/src/server/state_builders.rs` now uses database (DB)-backed adapters for
 `LoginService` and `UsersQuery` (roadmap 3.5.2), but it still hard-wires
 `FixtureUserProfileQuery` and `FixtureUserInterestsCommand` even when
 `ServerConfig.db_pool` is present.
@@ -66,8 +66,8 @@ Observable success criteria:
   that is 3.5.4 scope.
 - Interface tolerance: if public HTTP API signatures must change, stop and
   escalate.
-- Churn tolerance: if the change exceeds 14 files or 1,100 net LOC, stop and
-  split follow-up scope.
+- Churn tolerance: if the change exceeds 14 files or 1,100 net lines of code
+  (LOC), stop and split follow-up scope.
 - Dependency tolerance: if a new crate would be required, stop and escalate.
 - Test tolerance: if embedded PostgreSQL tests remain flaky after adding
   explicit skip handling and deterministic setup, stop and document options.

@@ -13,24 +13,20 @@ use crate::domain::ports::{
 };
 use crate::domain::{Error, InterestThemeId, UnitSystem, UserId, UserInterests, UserPreferences};
 
-use super::diesel_user_preferences_repository::DieselUserPreferencesRepository;
-
 /// Diesel-backed `UserInterestsCommand` implementation.
 #[derive(Clone)]
 pub struct DieselUserInterestsCommand {
     preferences_repository: Arc<dyn UserPreferencesRepository>,
 }
 
-impl DieselUserInterestsCommand {
-    /// Create a new interests command adapter backed by a Diesel preferences repository.
-    pub fn new(preferences_repository: DieselUserPreferencesRepository) -> Self {
-        Self {
-            preferences_repository: Arc::new(preferences_repository),
-        }
-    }
+struct PreferencesUpdate {
+    preferences: UserPreferences,
+    expected_revision: Option<u32>,
+}
 
-    #[cfg(test)]
-    fn from_repository(preferences_repository: Arc<dyn UserPreferencesRepository>) -> Self {
+impl DieselUserInterestsCommand {
+    /// Create a new interests command adapter backed by a user preferences repository.
+    pub fn new(preferences_repository: Arc<dyn UserPreferencesRepository>) -> Self {
         Self {
             preferences_repository,
         }
@@ -43,46 +39,54 @@ fn map_preferences_persistence_error(error: UserPreferencesRepositoryError) -> E
             Error::service_unavailable(message)
         }
         UserPreferencesRepositoryError::Query { message } => Error::internal(message),
-        UserPreferencesRepositoryError::RevisionMismatch { expected, actual } => Error::internal(
-            format!("preferences revision mismatch: expected {expected}, found {actual}"),
-        ),
+        UserPreferencesRepositoryError::RevisionMismatch { expected, actual } => {
+            // TODO(3.5.4): replace this temporary internal-error mapping with an
+            // explicit revision-conflict contract once stale-write semantics land.
+            Error::internal(format!(
+                "preferences revision mismatch: expected {expected}, found {actual}"
+            ))
+        }
     }
-}
-
-fn to_uuid_ids(interest_theme_ids: &[InterestThemeId]) -> Vec<uuid::Uuid> {
-    interest_theme_ids
-        .iter()
-        .map(|interest_theme_id| *interest_theme_id.as_uuid())
-        .collect()
 }
 
 fn build_preferences_for_interest_update(
     user_id: &UserId,
     existing: Option<UserPreferences>,
-    next_interest_theme_ids: Vec<uuid::Uuid>,
-) -> (UserPreferences, Option<u32>) {
+    interest_theme_ids: &[InterestThemeId],
+) -> PreferencesUpdate {
     match existing {
         Some(existing) => {
             let expected_revision = existing.revision;
-            (
-                UserPreferences::builder(user_id.clone())
-                    .interest_theme_ids(next_interest_theme_ids)
-                    .safety_toggle_ids(existing.safety_toggle_ids)
-                    .unit_system(existing.unit_system)
-                    .revision(expected_revision + 1)
-                    .build(),
-                Some(expected_revision),
-            )
+            let preferences = UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(
+                    interest_theme_ids
+                        .iter()
+                        .map(|interest_theme_id| *interest_theme_id.as_uuid())
+                        .collect(),
+                )
+                .safety_toggle_ids(existing.safety_toggle_ids)
+                .unit_system(existing.unit_system)
+                .revision(expected_revision + 1)
+                .build();
+            PreferencesUpdate {
+                preferences,
+                expected_revision: Some(expected_revision),
+            }
         }
-        None => (
-            UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(next_interest_theme_ids)
+        None => PreferencesUpdate {
+            preferences: UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(
+                    interest_theme_ids
+                        .iter()
+                        .map(|interest_theme_id| *interest_theme_id.as_uuid())
+                        .collect(),
+                )
                 .safety_toggle_ids(Vec::new())
                 .unit_system(UnitSystem::Metric)
                 .revision(1)
                 .build(),
-            None,
-        ),
+            expected_revision: None,
+        },
     }
 }
 
@@ -99,14 +103,14 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
             .await
             .map_err(map_preferences_persistence_error)?;
 
-        let (next_preferences, expected_revision) = build_preferences_for_interest_update(
+        let update = build_preferences_for_interest_update(
             user_id,
             existing_preferences,
-            to_uuid_ids(&interest_theme_ids),
+            &interest_theme_ids,
         );
 
         self.preferences_repository
-            .save(&next_preferences, expected_revision)
+            .save(&update.preferences, update.expected_revision)
             .await
             .map_err(map_preferences_persistence_error)?;
 
@@ -146,43 +150,31 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct StubState {
-        stored_preferences: Option<UserPreferences>,
-        find_failure: Option<StubFailure>,
-        save_failure: Option<StubFailure>,
-        save_calls: Vec<(UserPreferences, Option<u32>)>,
-    }
-
-    #[derive(Default)]
     struct StubUserPreferencesRepository {
-        state: Mutex<StubState>,
+        stored_preferences: Mutex<Option<UserPreferences>>,
+        find_failure: Mutex<Option<StubFailure>>,
+        save_failure: Mutex<Option<StubFailure>>,
+        last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
     }
 
     impl StubUserPreferencesRepository {
         fn with_preferences(stored_preferences: UserPreferences) -> Self {
             Self {
-                state: Mutex::new(StubState {
-                    stored_preferences: Some(stored_preferences),
-                    ..StubState::default()
-                }),
+                stored_preferences: Mutex::new(Some(stored_preferences)),
+                ..Self::default()
             }
         }
 
         fn set_find_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").find_failure = Some(failure);
+            *self.find_failure.lock().expect("find failure lock") = Some(failure);
         }
 
         fn set_save_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").save_failure = Some(failure);
+            *self.save_failure.lock().expect("save failure lock") = Some(failure);
         }
 
         fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-            self.state
-                .lock()
-                .expect("state lock")
-                .save_calls
-                .last()
-                .cloned()
+            self.last_save.lock().expect("last save lock").clone()
         }
     }
 
@@ -192,13 +184,14 @@ mod tests {
             &self,
             user_id: &UserId,
         ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-            let state = self.state.lock().expect("state lock");
-            if let Some(failure) = state.find_failure {
+            if let Some(failure) = *self.find_failure.lock().expect("find failure lock") {
                 return Err(failure.to_error());
             }
 
-            Ok(state
+            Ok(self
                 .stored_preferences
+                .lock()
+                .expect("stored preferences lock")
                 .as_ref()
                 .filter(|preferences| preferences.user_id == *user_id)
                 .cloned())
@@ -209,15 +202,16 @@ mod tests {
             preferences: &UserPreferences,
             expected_revision: Option<u32>,
         ) -> Result<(), UserPreferencesRepositoryError> {
-            let mut state = self.state.lock().expect("state lock");
-            if let Some(failure) = state.save_failure {
+            if let Some(failure) = *self.save_failure.lock().expect("save failure lock") {
                 return Err(failure.to_error());
             }
 
-            state.stored_preferences = Some(preferences.clone());
-            state
-                .save_calls
-                .push((preferences.clone(), expected_revision));
+            *self
+                .stored_preferences
+                .lock()
+                .expect("stored preferences lock") = Some(preferences.clone());
+            *self.last_save.lock().expect("last save lock") =
+                Some((preferences.clone(), expected_revision));
             Ok(())
         }
     }
@@ -237,7 +231,7 @@ mod tests {
     #[tokio::test]
     async fn set_interests_inserts_defaults_when_preferences_are_missing() {
         let repository = Arc::new(StubUserPreferencesRepository::default());
-        let command = DieselUserInterestsCommand::from_repository(repository.clone());
+        let command = DieselUserInterestsCommand::new(repository.clone());
         let user_id = user_id();
         let interest_theme_ids = vec![
             interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
@@ -262,7 +256,10 @@ mod tests {
         assert_eq!(saved_preferences.user_id, user_id);
         assert_eq!(
             saved_preferences.interest_theme_ids,
-            to_uuid_ids(&interest_theme_ids)
+            vec![
+                uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+                uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+            ]
         );
         assert!(saved_preferences.safety_toggle_ids.is_empty());
         assert_eq!(saved_preferences.unit_system, UnitSystem::Metric);
@@ -281,19 +278,19 @@ mod tests {
         let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
             existing_preferences,
         ));
-        let command = DieselUserInterestsCommand::from_repository(repository.clone());
-        let next_interests = vec![
+        let command = DieselUserInterestsCommand::new(repository.clone());
+        let next_interest_ids = vec![
             interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
             interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
         ];
 
         let interests = command
-            .set_interests(&user_id, next_interests.clone())
+            .set_interests(&user_id, next_interest_ids.clone())
             .await
             .expect("set interests should succeed");
 
         assert_eq!(interests.user_id(), &user_id);
-        assert_eq!(interests.interest_theme_ids(), next_interests.as_slice());
+        assert_eq!(interests.interest_theme_ids(), next_interest_ids.as_slice());
 
         let (saved_preferences, expected_revision) = repository
             .last_save_call()
@@ -301,7 +298,10 @@ mod tests {
         assert_eq!(expected_revision, Some(7));
         assert_eq!(
             saved_preferences.interest_theme_ids,
-            to_uuid_ids(&next_interests)
+            vec![
+                uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+                uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
+            ]
         );
         assert_eq!(
             saved_preferences.safety_toggle_ids,
@@ -321,7 +321,7 @@ mod tests {
     ) {
         let repository = Arc::new(StubUserPreferencesRepository::default());
         repository.set_find_failure(failure);
-        let command = DieselUserInterestsCommand::from_repository(repository);
+        let command = DieselUserInterestsCommand::new(repository);
 
         let err = command
             .set_interests(
@@ -339,8 +339,8 @@ mod tests {
     #[case(StubFailure::Query, ErrorCode::InternalError)]
     #[case(
         StubFailure::RevisionMismatch {
-            expected: 2,
-            actual: 3
+            expected: 3,
+            actual: 4,
         },
         ErrorCode::InternalError
     )]
@@ -351,7 +351,7 @@ mod tests {
     ) {
         let repository = Arc::new(StubUserPreferencesRepository::default());
         repository.set_save_failure(failure);
-        let command = DieselUserInterestsCommand::from_repository(repository);
+        let command = DieselUserInterestsCommand::new(repository);
 
         let err = command
             .set_interests(

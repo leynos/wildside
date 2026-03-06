@@ -112,12 +112,12 @@ fn build_profile_interests_pair(
 ) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
     match &config.db_pool {
         Some(pool) => (
-            Arc::new(DieselUserProfileQuery::new(DieselUserRepository::new(
-                pool.clone(),
+            Arc::new(DieselUserProfileQuery::new(Arc::new(
+                DieselUserRepository::new(pool.clone()),
             ))) as Arc<dyn UserProfileQuery>,
-            Arc::new(DieselUserInterestsCommand::new(
+            Arc::new(DieselUserInterestsCommand::new(Arc::new(
                 DieselUserPreferencesRepository::new(pool.clone()),
-            )) as Arc<dyn UserInterestsCommand>,
+            ))) as Arc<dyn UserInterestsCommand>,
         ),
         None => (
             Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,

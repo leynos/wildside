@@ -10,6 +10,11 @@ mod cluster_skip;
 pub mod embedded_postgres;
 #[cfg(feature = "example-data")]
 pub mod example_data_seeding_world;
+#[allow(
+    dead_code,
+    reason = "shared profile/interests helpers are only used by selected integration-test crates"
+)]
+pub mod profile_interests;
 pub mod seed_helpers;
 
 /// Render a `postgres` error with enough detail to be useful in CI logs.

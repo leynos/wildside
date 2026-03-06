@@ -4,10 +4,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use actix_session::SessionMiddleware;
-use actix_session::config::{CookieContentSecurity, PersistentSession};
-use actix_session::storage::CookieSessionStore;
-use actix_web::cookie::{Cookie, Key, SameSite, time::Duration as CookieDuration};
+use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::{App, test as actix_test, web};
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 use backend::inbound::http::state::HttpState;
@@ -24,6 +21,10 @@ use uuid::Uuid;
 mod support;
 
 use support::atexit_cleanup::shared_cluster_handle;
+use support::profile_interests::{
+    DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, SECOND_THEME_ID,
+    build_session_middleware,
+};
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 #[expect(
@@ -36,12 +37,6 @@ pub use server_config::ServerConfig;
 
 #[path = "../src/server/state_builders.rs"]
 mod state_builders;
-
-const FIXTURE_AUTH_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
-const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
-const DB_PROFILE_NAME: &str = "Database Ada";
-const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-const SECOND_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa7";
 
 #[derive(Debug)]
 struct Snapshot {
@@ -98,20 +93,10 @@ async fn build_test_app(
     Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
     Error = actix_web::Error,
 > {
-    let session = SessionMiddleware::builder(CookieSessionStore::default(), Key::generate())
-        .cookie_name("session".to_owned())
-        .cookie_path("/".to_owned())
-        .cookie_secure(false)
-        .cookie_http_only(true)
-        .cookie_content_security(CookieContentSecurity::Private)
-        .cookie_same_site(SameSite::Lax)
-        .session_lifecycle(PersistentSession::default().session_ttl(CookieDuration::hours(2)))
-        .build();
-
     actix_test::init_service(
         App::new().app_data(state).wrap(backend::Trace).service(
             web::scope("/api/v1")
-                .wrap(session)
+                .wrap(build_session_middleware())
                 .service(login)
                 .service(current_user)
                 .service(update_interests),
@@ -284,6 +269,33 @@ fn db_contains_interest_id(url: &str, user_id: Uuid, theme_id: Uuid) -> Result<b
         .map(|row| row.get::<_, bool>(0))
 }
 
+fn assert_profile_response(body: &Value, expected_display_name: &str) {
+    assert_eq!(
+        body.get("id").and_then(Value::as_str),
+        Some(FIXTURE_AUTH_ID)
+    );
+    assert_eq!(
+        body.get("displayName").and_then(Value::as_str),
+        Some(expected_display_name)
+    );
+}
+
+fn assert_interests_response(body: &Value, expected_ids: &[&str]) {
+    assert_eq!(
+        body.get("userId").and_then(Value::as_str),
+        Some(FIXTURE_AUTH_ID)
+    );
+    assert_eq!(
+        body.get("interestThemeIds")
+            .and_then(Value::as_array)
+            .expect("interestThemeIds array")
+            .iter()
+            .map(|value| value.as_str().expect("string interest id"))
+            .collect::<Vec<_>>(),
+        expected_ids
+    );
+}
+
 #[rstest]
 fn fixture_fallback_mode_returns_fixture_profile_and_interests_shape() {
     let interests_payload = InterestsRequest {
@@ -308,32 +320,12 @@ fn fixture_fallback_mode_returns_fixture_profile_and_interests_shape() {
     let profile = profile_snapshot.expect("profile response");
     assert_eq!(profile.status, 200);
     let profile_body = profile.body.as_ref().expect("profile body");
-    assert_eq!(
-        profile_body.get("id").and_then(Value::as_str),
-        Some(FIXTURE_AUTH_ID)
-    );
-    assert_eq!(
-        profile_body.get("displayName").and_then(Value::as_str),
-        Some(FIXTURE_PROFILE_NAME)
-    );
+    assert_profile_response(profile_body, FIXTURE_PROFILE_NAME);
 
     let interests = interests_snapshot.expect("interests response");
     assert_eq!(interests.status, 200);
     let interests_body = interests.body.as_ref().expect("interests body");
-    assert_eq!(
-        interests_body.get("userId").and_then(Value::as_str),
-        Some(FIXTURE_AUTH_ID)
-    );
-    assert_eq!(
-        interests_body
-            .get("interestThemeIds")
-            .and_then(Value::as_array)
-            .expect("interestThemeIds array")
-            .iter()
-            .map(|value| value.as_str().expect("string interest id"))
-            .collect::<Vec<_>>(),
-        vec![FIRST_THEME_ID]
-    );
+    assert_interests_response(interests_body, &[FIRST_THEME_ID]);
 }
 
 #[rstest]
@@ -374,23 +366,13 @@ fn db_present_mode_returns_db_backed_profile_and_interests_behaviour() {
         .expect("profile response")
         .body
         .expect("profile body");
-    assert_eq!(
-        profile_body.get("id").and_then(Value::as_str),
-        Some(FIXTURE_AUTH_ID)
-    );
-    assert_eq!(
-        profile_body.get("displayName").and_then(Value::as_str),
-        Some(DB_PROFILE_NAME)
-    );
+    assert_profile_response(&profile_body, DB_PROFILE_NAME);
 
     let interests_body = interests_snapshot
         .expect("interests response")
         .body
         .expect("interests body");
-    assert_eq!(
-        interests_body.get("userId").and_then(Value::as_str),
-        Some(FIXTURE_AUTH_ID)
-    );
+    assert_interests_response(&interests_body, &[FIRST_THEME_ID, SECOND_THEME_ID]);
 
     let persisted = db_contains_interest_id(
         db.database_url.as_str(),

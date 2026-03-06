@@ -1,4 +1,4 @@
-//! Diesel-backed `UserProfileQuery` adapter built on `DieselUserRepository`.
+//! Diesel-backed `UserProfileQuery` adapter built on a user repository.
 //!
 //! This adapter resolves an authenticated user's profile from PostgreSQL while
 //! keeping fixture-compatible error mapping semantics.
@@ -12,7 +12,6 @@ use crate::domain::ports::UserPersistenceError;
 use crate::domain::ports::{UserProfileQuery, UserRepository};
 use crate::domain::{Error, User, UserId};
 
-use super::diesel_user_repository::DieselUserRepository;
 use super::user_persistence_error_mapping::map_user_persistence_error;
 
 /// Diesel-backed `UserProfileQuery` implementation.
@@ -22,24 +21,10 @@ pub struct DieselUserProfileQuery {
 }
 
 impl DieselUserProfileQuery {
-    /// Create a new profile query adapter backed by a Diesel user repository.
-    pub fn new(user_repository: DieselUserRepository) -> Self {
-        Self {
-            user_repository: Arc::new(user_repository),
-        }
-    }
-
-    #[cfg(test)]
-    fn from_repository(user_repository: Arc<dyn UserRepository>) -> Self {
+    /// Create a new profile query adapter backed by a user repository.
+    pub fn new(user_repository: Arc<dyn UserRepository>) -> Self {
         Self { user_repository }
     }
-}
-
-fn missing_user_error(user_id: &UserId) -> Error {
-    Error::internal(format!(
-        "authenticated user record is missing for id {}",
-        user_id.as_ref()
-    ))
 }
 
 #[async_trait]
@@ -53,7 +38,10 @@ impl UserProfileQuery for DieselUserProfileQuery {
 
         match maybe_user {
             Some(user) => Ok(user),
-            None => Err(missing_user_error(user_id)),
+            None => Err(Error::internal(format!(
+                "authenticated user record is missing for id {}",
+                user_id.as_ref()
+            ))),
         }
     }
 }
@@ -61,70 +49,51 @@ impl UserProfileQuery for DieselUserProfileQuery {
 #[cfg(test)]
 mod tests {
     //! Regression coverage for profile lookup and error mapping.
-    use std::sync::Mutex;
-
     use super::*;
     use crate::domain::ErrorCode;
     use rstest::rstest;
 
-    #[derive(Clone, Copy)]
-    enum StubFailure {
-        Connection,
-        Query,
+    struct SuccessUserRepository {
+        user: User,
     }
 
-    impl StubFailure {
-        fn to_error(self) -> UserPersistenceError {
-            match self {
-                Self::Connection => UserPersistenceError::connection("database unavailable"),
-                Self::Query => UserPersistenceError::query("database query failed"),
-            }
-        }
-    }
+    struct MissingUserRepository;
 
-    #[derive(Default)]
-    struct StubState {
-        stored_user: Option<User>,
-        find_failure: Option<StubFailure>,
-    }
-
-    #[derive(Default)]
-    struct StubUserRepository {
-        state: Mutex<StubState>,
-    }
-
-    impl StubUserRepository {
-        fn with_user(stored_user: User) -> Self {
-            Self {
-                state: Mutex::new(StubState {
-                    stored_user: Some(stored_user),
-                    ..StubState::default()
-                }),
-            }
-        }
-
-        fn set_find_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").find_failure = Some(failure);
-        }
+    #[derive(Clone)]
+    struct FailingUserRepository {
+        error: UserPersistenceError,
     }
 
     #[async_trait]
-    impl UserRepository for StubUserRepository {
+    impl UserRepository for SuccessUserRepository {
         async fn upsert(&self, _user: &User) -> Result<(), UserPersistenceError> {
             Ok(())
         }
 
         async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError> {
-            let state = self.state.lock().expect("state lock");
-            if let Some(failure) = state.find_failure {
-                return Err(failure.to_error());
-            }
+            Ok((self.user.id() == id).then(|| self.user.clone()))
+        }
+    }
 
-            Ok(state
-                .stored_user
-                .as_ref()
-                .filter(|user| user.id() == id)
-                .cloned())
+    #[async_trait]
+    impl UserRepository for MissingUserRepository {
+        async fn upsert(&self, _user: &User) -> Result<(), UserPersistenceError> {
+            Ok(())
+        }
+
+        async fn find_by_id(&self, _id: &UserId) -> Result<Option<User>, UserPersistenceError> {
+            Ok(None)
+        }
+    }
+
+    #[async_trait]
+    impl UserRepository for FailingUserRepository {
+        async fn upsert(&self, _user: &User) -> Result<(), UserPersistenceError> {
+            Ok(())
+        }
+
+        async fn find_by_id(&self, _id: &UserId) -> Result<Option<User>, UserPersistenceError> {
+            Err(self.error.clone())
         }
     }
 
@@ -139,8 +108,9 @@ mod tests {
     #[tokio::test]
     async fn fetch_profile_returns_user_when_present() {
         let profile_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace");
-        let repository = Arc::new(StubUserRepository::with_user(profile_user.clone()));
-        let query = DieselUserProfileQuery::from_repository(repository);
+        let query = DieselUserProfileQuery::new(Arc::new(SuccessUserRepository {
+            user: profile_user.clone(),
+        }));
 
         let profile = query
             .fetch_profile(profile_user.id())
@@ -152,8 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_profile_returns_internal_error_when_user_missing() {
-        let query =
-            DieselUserProfileQuery::from_repository(Arc::new(StubUserRepository::default()));
+        let query = DieselUserProfileQuery::new(Arc::new(MissingUserRepository));
         let authenticated_user = user_id("11111111-1111-1111-1111-111111111111");
 
         let err = query
@@ -166,16 +135,20 @@ mod tests {
     }
 
     #[rstest]
-    #[case(StubFailure::Connection, ErrorCode::ServiceUnavailable)]
-    #[case(StubFailure::Query, ErrorCode::InternalError)]
+    #[case(
+        UserPersistenceError::connection("database unavailable"),
+        ErrorCode::ServiceUnavailable
+    )]
+    #[case(
+        UserPersistenceError::query("database query failed"),
+        ErrorCode::InternalError
+    )]
     #[tokio::test]
     async fn fetch_profile_maps_persistence_failures(
-        #[case] failure: StubFailure,
+        #[case] failure: UserPersistenceError,
         #[case] expected_code: ErrorCode,
     ) {
-        let repository = Arc::new(StubUserRepository::default());
-        repository.set_find_failure(failure);
-        let query = DieselUserProfileQuery::from_repository(repository);
+        let query = DieselUserProfileQuery::new(Arc::new(FailingUserRepository { error: failure }));
 
         let err = query
             .fetch_profile(&user_id("11111111-1111-1111-1111-111111111111"))
