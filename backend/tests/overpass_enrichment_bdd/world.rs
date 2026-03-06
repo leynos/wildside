@@ -26,6 +26,11 @@ use crate::{
     OverpassEnrichmentWorld, RecordingEnrichmentMetrics, RuntimeHandle, ScriptedOverpassSource,
 };
 
+enum CountTable {
+    Pois,
+    OverpassEnrichmentProvenance,
+}
+
 impl OverpassEnrichmentWorld {
     /// Build and wire a worker instance for one scenario.
     pub fn setup_worker(
@@ -182,7 +187,7 @@ impl OverpassEnrichmentWorld {
     }
 
     /// Generic helper for querying the row count of a single table.
-    fn query_table_count(&self, table_name: &str, description: &str) -> Option<i64> {
+    fn query_table_count(&self, table: CountTable, description: &str) -> Option<i64> {
         if self.is_skipped() {
             return None;
         }
@@ -190,9 +195,14 @@ impl OverpassEnrichmentWorld {
         let database_url = self.database_url.get().expect("database URL should be set");
         let mut client =
             postgres::Client::connect(database_url.as_str(), NoTls).expect("connect postgres");
-        let query = format!("SELECT COUNT(*) FROM {table_name}");
+        let query = match table {
+            CountTable::Pois => "SELECT COUNT(*) FROM pois",
+            CountTable::OverpassEnrichmentProvenance => {
+                "SELECT COUNT(*) FROM overpass_enrichment_provenance"
+            }
+        };
         let count = client
-            .query_one(query.as_str(), &[])
+            .query_one(query, &[])
             .expect(description)
             .get::<_, i64>(0);
         Some(count)
@@ -200,12 +210,15 @@ impl OverpassEnrichmentWorld {
 
     /// Query the persisted POI count from the scenario database.
     pub fn query_poi_count(&self) -> Option<i64> {
-        self.query_table_count("pois", "poi count query")
+        self.query_table_count(CountTable::Pois, "poi count query")
     }
 
     /// Query the persisted enrichment provenance row count.
     pub fn query_provenance_count(&self) -> Option<i64> {
-        self.query_table_count("overpass_enrichment_provenance", "provenance count query")
+        self.query_table_count(
+            CountTable::OverpassEnrichmentProvenance,
+            "provenance count query",
+        )
     }
 
     /// Query the latest persisted enrichment provenance row.
