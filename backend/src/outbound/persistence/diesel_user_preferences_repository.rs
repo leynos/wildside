@@ -130,6 +130,41 @@ where
     }
 }
 
+/// Handle an insert conflict by surfacing the current stored revision.
+///
+/// Concurrent first-write races are not a malformed request: another request
+/// legitimately created the row between the caller's read and write. Returning
+/// a revision mismatch lets the caller re-read and retry instead of collapsing
+/// the race into an internal error.
+async fn handle_preferences_insert_conflict<C>(
+    conn: &mut C,
+    user_id: uuid::Uuid,
+) -> UserPreferencesRepositoryError
+where
+    C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
+{
+    let current_result = user_preferences::table
+        .filter(user_preferences::user_id.eq(user_id))
+        .select(UserPreferencesRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+        .map_err(map_diesel_error);
+
+    match current_result {
+        Ok(Some(row)) => {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "revision is always non-negative in database"
+            )]
+            let actual = row.revision as u32;
+            UserPreferencesRepositoryError::revision_mismatch(0_u32, actual)
+        }
+        Ok(None) => UserPreferencesRepositoryError::query("preferences insert conflicted"),
+        Err(e) => e,
+    }
+}
+
 /// Cast domain revision (u32) to database revision (i32).
 #[expect(
     clippy::cast_possible_wrap,
@@ -183,12 +218,23 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
                     revision: revision_i32,
                 };
 
-                diesel::insert_into(user_preferences::table)
+                let inserted_rows = diesel::insert_into(user_preferences::table)
                     .values(&new_row)
+                    .on_conflict(user_preferences::user_id)
+                    .do_nothing()
                     .execute(&mut conn)
                     .await
-                    .map(|_| ())
-                    .map_err(map_diesel_error)
+                    .map_err(map_diesel_error)?;
+
+                if inserted_rows == 0 {
+                    return Err(handle_preferences_insert_conflict(
+                        &mut conn,
+                        *preferences.user_id.as_uuid(),
+                    )
+                    .await);
+                }
+
+                Ok(())
             }
             Some(expected) => {
                 // Update with revision check
