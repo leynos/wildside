@@ -209,11 +209,27 @@ impl OverpassEnrichmentWorld {
     }
 
     /// Query the persisted POI count from the scenario database.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// world.run_job();
+    ///
+    /// assert_eq!(world.query_poi_count(), Some(2));
+    /// ```
     pub fn query_poi_count(&self) -> Option<i64> {
         self.query_table_count(CountTable::Pois, "poi count query")
     }
 
     /// Query the persisted enrichment provenance row count.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// world.run_job();
+    ///
+    /// assert_eq!(world.query_provenance_count(), Some(1));
+    /// ```
     pub fn query_provenance_count(&self) -> Option<i64> {
         self.query_table_count(
             CountTable::OverpassEnrichmentProvenance,
@@ -222,6 +238,20 @@ impl OverpassEnrichmentWorld {
     }
 
     /// Query the latest persisted enrichment provenance row.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// world.run_job();
+    ///
+    /// let latest = world
+    ///     .query_latest_provenance()
+    ///     .expect("scenario setup succeeded")
+    ///     .expect("one provenance row");
+    ///
+    /// assert_eq!(latest.0, "https://overpass.example/api/interpreter");
+    /// assert_eq!(latest.1, "2026-02-26T12:00:00Z");
+    /// ```
     pub fn query_latest_provenance(&self) -> Option<Option<(String, String, [f64; 4])>> {
         if self.is_skipped() {
             return None;
@@ -260,6 +290,14 @@ impl OverpassEnrichmentWorld {
     }
 
     /// Drop the provenance table to force persistence failures.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// world.drop_provenance_table();
+    /// world.run_job();
+    /// // A subsequent job now fails during provenance persistence.
+    /// ```
     pub fn drop_provenance_table(&self) {
         if self.is_skipped() {
             return;
