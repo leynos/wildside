@@ -169,9 +169,7 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
             }
         }
 
-        Err(Error::internal(
-            "interest update retry loop exited unexpectedly",
-        ))
+        unreachable!("interest update retry loop exited unexpectedly")
     }
 }
 
