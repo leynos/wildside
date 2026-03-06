@@ -159,6 +159,7 @@ fn the_response_is_service_unavailable(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(503));
+    assert_eq!(ctx.enrichment_provenance.calls().len(), 1);
 }
 
 #[then("the enrichment provenance query receives the expected limit and cursor")]
