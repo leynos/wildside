@@ -2,6 +2,16 @@
 
 use super::*;
 
+fn assert_provenance_cursor_call(world: &WorldFixture, cursor_id: Uuid) {
+    assert_single_provenance_call(
+        world,
+        ListEnrichmentProvenanceRequest::new(
+            2,
+            Some((fixture_timestamp("2026-02-28T12:00:00Z"), cursor_id)),
+        ),
+    );
+}
+
 #[given("persisted enrichment provenance reporting records exist")]
 fn persisted_enrichment_provenance_reporting_records_exist(world: &WorldFixture) {
     world.world().borrow().enrichment_provenance.set_response(
@@ -153,25 +163,10 @@ fn the_response_is_service_unavailable(world: &WorldFixture) {
 
 #[then("the enrichment provenance query receives the expected limit and cursor")]
 fn the_enrichment_provenance_query_receives_the_expected_limit_and_cursor(world: &WorldFixture) {
-    assert_single_provenance_call(
-        world,
-        ListEnrichmentProvenanceRequest::new(
-            2,
-            Some((fixture_timestamp("2026-02-28T12:00:00Z"), Uuid::max())),
-        ),
-    );
+    assert_provenance_cursor_call(world, Uuid::max());
 }
 
 #[then("the enrichment provenance query receives the expected composite cursor")]
 fn the_enrichment_provenance_query_receives_the_expected_composite_cursor(world: &WorldFixture) {
-    assert_single_provenance_call(
-        world,
-        ListEnrichmentProvenanceRequest::new(
-            2,
-            Some((
-                fixture_timestamp("2026-02-28T12:00:00Z"),
-                Uuid::from_u128(0x11),
-            )),
-        ),
-    );
+    assert_provenance_cursor_call(world, Uuid::from_u128(0x11));
 }
