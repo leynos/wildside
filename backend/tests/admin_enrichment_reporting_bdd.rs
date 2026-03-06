@@ -64,24 +64,24 @@ fn fixture_timestamp(value: &str) -> DateTime<Utc> {
 
 fn fixture_record(
     source_url: &str,
-    imported_at: &str,
+    imported_at: DateTime<Utc>,
     bounding_box: [f64; 4],
 ) -> EnrichmentProvenanceRecord {
     EnrichmentProvenanceRecord {
         source_url: source_url.to_owned(),
-        imported_at: fixture_timestamp(imported_at),
+        imported_at,
         bounding_box,
     }
 }
 
-fn fixture_cursor(imported_at: &str, id: Uuid) -> EnrichmentProvenanceCursor {
-    EnrichmentProvenanceCursor::new(fixture_timestamp(imported_at), id)
+fn fixture_cursor(imported_at: DateTime<Utc>, id: Uuid) -> EnrichmentProvenanceCursor {
+    EnrichmentProvenanceCursor::new(imported_at, id)
 }
 
 fn assert_record_payload(
     record: &Value,
     expected_source_url: &str,
-    expected_imported_at: &str,
+    expected_imported_at: DateTime<Utc>,
     expected_bounding_box: [f64; 4],
 ) {
     assert_eq!(
@@ -90,7 +90,7 @@ fn assert_record_payload(
     );
     assert_eq!(
         record.get("importedAt").and_then(Value::as_str),
-        Some(expected_imported_at)
+        Some(expected_imported_at.to_rfc3339().as_str())
     );
 
     let bounding = record

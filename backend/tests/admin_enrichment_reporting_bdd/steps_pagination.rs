@@ -9,17 +9,17 @@ fn persisted_enrichment_provenance_reporting_records_exist(world: &WorldFixture)
             records: vec![
                 fixture_record(
                     "https://overpass.example/api/interpreter?seed=1",
-                    "2026-02-28T12:00:00Z",
+                    fixture_timestamp("2026-02-28T12:00:00Z"),
                     [-3.2, 55.9, -3.0, 56.0],
                 ),
                 fixture_record(
                     "https://overpass.example/api/interpreter?seed=0",
-                    "2026-02-28T12:00:00Z",
+                    fixture_timestamp("2026-02-28T12:00:00Z"),
                     [-3.3, 55.8, -3.1, 55.95],
                 ),
             ],
             next_before: Some(fixture_cursor(
-                "2026-02-28T12:00:00Z",
+                fixture_timestamp("2026-02-28T12:00:00Z"),
                 Uuid::from_u128(0x11),
             )),
         }),
@@ -85,23 +85,27 @@ fn the_response_is_ok_with_an_enrichment_provenance_payload(world: &WorldFixture
 
     let first = records.first().expect("first record");
     let second = records.get(1).expect("second record");
-    let expected_shared_imported_at = fixture_timestamp("2026-02-28T12:00:00Z").to_rfc3339();
+    let expected_shared_imported_at = fixture_timestamp("2026-02-28T12:00:00Z");
     assert_record_payload(
         first,
         "https://overpass.example/api/interpreter?seed=1",
-        &expected_shared_imported_at,
+        expected_shared_imported_at,
         [-3.2, 55.9, -3.0, 56.0],
     );
     assert_record_payload(
         second,
         "https://overpass.example/api/interpreter?seed=0",
-        &expected_shared_imported_at,
+        expected_shared_imported_at,
         [-3.3, 55.8, -3.1, 55.95],
     );
 
     assert_records_sorted_newest_first(records);
 
-    let expected_next_before = format!("{}|{}", expected_shared_imported_at, Uuid::from_u128(0x11));
+    let expected_next_before = format!(
+        "{}|{}",
+        fixture_timestamp("2026-02-28T12:00:00Z").to_rfc3339(),
+        Uuid::from_u128(0x11)
+    );
     assert_eq!(
         body.get("nextBefore").and_then(Value::as_str),
         Some(expected_next_before.as_str())
