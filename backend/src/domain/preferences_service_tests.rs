@@ -11,6 +11,7 @@ use crate::domain::{
     MutationType, UnitSystem, UserId, UserPreferences,
 };
 use chrono::Utc;
+use rstest::rstest;
 use uuid::Uuid;
 
 fn make_service(
@@ -45,11 +46,17 @@ async fn update_creates_preferences_when_missing() {
     assert!(!response.replayed);
 }
 
+#[rstest]
+#[case(3, None)] // record exists but no expected_revision supplied
+#[case(2, Some(1))] // expected_revision does not match actual revision
 #[tokio::test]
-async fn update_rejects_missing_revision_when_record_exists() {
+async fn update_rejects_mismatched_revision(
+    #[case] existing_revision: u32,
+    #[case] expected_revision: Option<u32>,
+) {
     let user_id = UserId::random();
     let existing = UserPreferences::builder(user_id.clone())
-        .revision(3)
+        .revision(existing_revision)
         .build();
     let mut repo = MockUserPreferencesRepository::new();
 
@@ -63,7 +70,7 @@ async fn update_rejects_missing_revision_when_record_exists() {
         interest_theme_ids: Vec::new(),
         safety_toggle_ids: Vec::new(),
         unit_system: UnitSystem::Metric,
-        expected_revision: None,
+        expected_revision,
         idempotency_key: None,
     };
 
@@ -71,17 +78,70 @@ async fn update_rejects_missing_revision_when_record_exists() {
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
 }
 
+fn missing_for_update_error() -> UserPreferencesRepositoryError {
+    UserPreferencesRepositoryError::missing_for_update(2_u32)
+}
+
+fn concurrent_write_conflict_error() -> UserPreferencesRepositoryError {
+    UserPreferencesRepositoryError::concurrent_write_conflict()
+}
+
+fn assert_actual_revision_zero(error: &crate::domain::Error) {
+    assert_eq!(
+        error
+            .details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+}
+
+fn assert_concurrent_write_conflict_code(error: &crate::domain::Error) {
+    assert_eq!(
+        error
+            .details()
+            .and_then(|details| details.get("code"))
+            .and_then(serde_json::Value::as_str),
+        Some("concurrent_write_conflict")
+    );
+}
+
+#[rstest]
+#[case(
+    Some(2_u32),
+    Some(2_u32),
+    missing_for_update_error,
+    assert_actual_revision_zero
+)]
+#[case(
+    None,
+    None,
+    concurrent_write_conflict_error,
+    assert_concurrent_write_conflict_code
+)]
 #[tokio::test]
-async fn update_rejects_revision_mismatch() {
+async fn update_maps_save_conflicts_to_conflict(
+    #[case] existing_revision: Option<u32>,
+    #[case] expected_revision: Option<u32>,
+    #[case] save_error: fn() -> UserPreferencesRepositoryError,
+    #[case] assert_details: fn(&crate::domain::Error),
+) {
     let user_id = UserId::random();
-    let existing = UserPreferences::builder(user_id.clone())
-        .revision(2)
-        .build();
     let mut repo = MockUserPreferencesRepository::new();
+    let existing_user_id = user_id.clone();
 
     repo.expect_find_by_user_id()
         .times(1)
-        .return_once(move |_| Ok(Some(existing)));
+        .return_once(move |_| {
+            Ok(existing_revision.map(|revision| {
+                UserPreferences::builder(existing_user_id)
+                    .revision(revision)
+                    .build()
+            }))
+        });
+    repo.expect_save()
+        .times(1)
+        .return_once(move |_, _| Err(save_error()));
 
     let service = make_service(repo);
     let request = UpdatePreferencesRequest {
@@ -89,12 +149,13 @@ async fn update_rejects_revision_mismatch() {
         interest_theme_ids: Vec::new(),
         safety_toggle_ids: Vec::new(),
         unit_system: UnitSystem::Metric,
-        expected_revision: Some(1),
+        expected_revision,
         idempotency_key: None,
     };
 
     let error = service.update(request).await.expect_err("conflict");
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+    assert_details(&error);
 }
 
 #[tokio::test]
