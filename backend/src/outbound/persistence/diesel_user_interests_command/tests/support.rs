@@ -61,6 +61,7 @@ impl StubUserPreferencesRepository {
 
 struct RetrySaveTracker {
     attempts: Mutex<usize>,
+    revision: Mutex<Option<u32>>,
     last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
 }
 
@@ -68,6 +69,7 @@ impl RetrySaveTracker {
     fn new() -> Self {
         Self {
             attempts: Mutex::new(0),
+            revision: Mutex::new(None),
             last_save: Mutex::new(None),
         }
     }
@@ -80,7 +82,16 @@ impl RetrySaveTracker {
         *self.attempts.lock().expect("attempts lock") += 1;
     }
 
+    fn revision(&self) -> Option<u32> {
+        *self.revision.lock().expect("revision lock")
+    }
+
+    fn set_revision(&self, revision: Option<u32>) {
+        *self.revision.lock().expect("revision lock") = revision;
+    }
+
     fn record(&self, preferences: &UserPreferences, expected_revision: Option<u32>) {
+        self.set_revision(Some(preferences.revision));
         *self.last_save.lock().expect("last save lock") =
             Some((preferences.clone(), expected_revision));
     }
@@ -98,6 +109,11 @@ pub(super) struct InsertRaceRetryRepository {
 
 impl InsertRaceRetryRepository {
     pub(super) fn new(user_id: UserId, competing_preferences: UserPreferences) -> Self {
+        assert_eq!(
+            competing_preferences.user_id, user_id,
+            "InsertRaceRetryRepository competing_preferences must belong to the provided user"
+        );
+
         Self {
             user_id,
             competing_preferences,
@@ -121,11 +137,20 @@ impl StaleUpdateRetryRepository {
         initial_preferences: UserPreferences,
         competing_preferences: UserPreferences,
     ) -> Self {
-        Self {
+        assert_eq!(
+            competing_preferences.user_id, initial_preferences.user_id,
+            "StaleUpdateRetryRepository preferences must belong to the same user"
+        );
+
+        let repository = Self {
             initial_preferences,
             competing_preferences,
             tracker: RetrySaveTracker::new(),
-        }
+        };
+        repository
+            .tracker
+            .set_revision(Some(repository.initial_preferences.revision));
+        repository
     }
 
     pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
@@ -205,8 +230,21 @@ impl UserPreferencesRepository for InsertRaceRetryRepository {
     ) -> Result<(), UserPreferencesRepositoryError> {
         if self.tracker.attempt() == 0 {
             self.tracker.increment_attempts();
+            self.tracker
+                .set_revision(Some(self.competing_preferences.revision));
             return Err(UserPreferencesRepositoryError::revision_mismatch(
                 0_u32, 1_u32,
+            ));
+        }
+
+        let stored_revision = self
+            .tracker
+            .revision()
+            .expect("insert-race tracker revision should be available after retry");
+        if expected_revision != Some(stored_revision) {
+            return Err(UserPreferencesRepositoryError::revision_mismatch(
+                expected_revision.unwrap_or_default(),
+                stored_revision,
             ));
         }
 
@@ -240,8 +278,21 @@ impl UserPreferencesRepository for StaleUpdateRetryRepository {
     ) -> Result<(), UserPreferencesRepositoryError> {
         if self.tracker.attempt() == 0 {
             self.tracker.increment_attempts();
+            self.tracker
+                .set_revision(Some(self.competing_preferences.revision));
             return Err(UserPreferencesRepositoryError::revision_mismatch(
                 2_u32, 3_u32,
+            ));
+        }
+
+        let stored_revision = self
+            .tracker
+            .revision()
+            .expect("stale-update tracker revision should be available after retry");
+        if expected_revision != Some(stored_revision) {
+            return Err(UserPreferencesRepositoryError::revision_mismatch(
+                expected_revision.unwrap_or_default(),
+                stored_revision,
             ));
         }
 
