@@ -143,10 +143,10 @@ fn assert_saved_result(
     expected_saved_revision: u32,
     expected_saved_interest_ids: &[uuid::Uuid],
 ) {
-    let (saved_preferences, actual_expected_revision) = repository
+    let (saved_preferences, recorded_expected_revision) = repository
         .last_save_call()
         .expect("save call should be recorded");
-    assert_eq!(actual_expected_revision, expected_revision);
+    assert_eq!(recorded_expected_revision, expected_revision);
     assert_eq!(saved_preferences.revision, expected_saved_revision);
     assert_eq!(
         saved_preferences.interest_theme_ids,
