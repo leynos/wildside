@@ -5,16 +5,6 @@ use std::sync::Arc;
 use actix_web::web;
 
 use backend::domain::ports::{
-    CatalogueRepository, DescriptorRepository, FixtureCatalogueRepository,
-    FixtureDescriptorRepository, FixtureLoginService, FixtureOfflineBundleCommand,
-    FixtureOfflineBundleQuery, FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
-    FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
-    FixtureUserProfileQuery, FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery,
-    LoginService, OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand,
-    RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
-    UserPreferencesQuery, UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
-};
-use backend::domain::ports::{
     CatalogueRepository, DescriptorRepository, EnrichmentProvenanceRepository,
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureEnrichmentProvenanceRepository,
     FixtureLoginService, FixtureOfflineBundleCommand, FixtureOfflineBundleQuery,
@@ -22,8 +12,8 @@ use backend::domain::ports::{
     FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
     FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, LoginService,
     OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
-    RouteSubmissionService, UserPreferencesCommand, UserPreferencesQuery, UsersQuery,
-    WalkSessionCommand, WalkSessionQuery,
+    RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery,
+    UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -32,16 +22,10 @@ use backend::domain::{
 use backend::inbound::http::state::{HttpState, HttpStateExtraPorts, HttpStatePorts};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 use backend::outbound::persistence::{
-    DbPool, DieselCatalogueRepository, DieselDescriptorRepository, DieselLoginService,
-    DieselOfflineBundleRepository, DieselRouteAnnotationRepository, DieselUserInterestsCommand,
-    DieselUserPreferencesRepository, DieselUserProfileQuery, DieselUserRepository,
-    DieselUsersQuery, DieselWalkSessionRepository,
-};
-use backend::outbound::persistence::{
     DbPool, DieselCatalogueRepository, DieselDescriptorRepository,
     DieselEnrichmentProvenanceRepository, DieselLoginService, DieselOfflineBundleRepository,
-    DieselRouteAnnotationRepository, DieselUserPreferencesRepository, DieselUserRepository,
-    DieselUsersQuery, DieselWalkSessionRepository,
+    DieselRouteAnnotationRepository, DieselUserInterestsCommand, DieselUserPreferencesRepository,
+    DieselUserProfileQuery, DieselUserRepository, DieselUsersQuery, DieselWalkSessionRepository,
 };
 
 use super::ServerConfig;
