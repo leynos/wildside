@@ -141,14 +141,14 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
                 .find_by_user_id(user_id)
                 .await
                 .map_err(map_preferences_persistence_error)?;
-            let had_existing_preferences = existing_preferences.is_some();
+            let has_existing_preferences = existing_preferences.is_some();
 
             let update = build_preferences_for_interest_update(
                 user_id,
                 existing_preferences,
                 &interest_theme_ids,
             );
-            if had_existing_preferences && update.expected_revision.is_none() {
+            if has_existing_preferences && update.expected_revision.is_none() {
                 return Err(Error::internal(
                     "preferences revision overflow prevents interest update",
                 ));
