@@ -165,12 +165,10 @@ where
 }
 
 /// Cast domain revision (u32) to database revision (i32).
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "revision values are always small positive integers"
-)]
-fn cast_revision_for_db(revision: u32) -> i32 {
-    revision as i32
+fn cast_revision_for_db(revision: u32) -> Result<i32, UserPreferencesRepositoryError> {
+    i32::try_from(revision).map_err(|_| {
+        UserPreferencesRepositoryError::query(format!("revision out of range: {revision}"))
+    })
 }
 
 #[async_trait]
@@ -204,7 +202,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
             UnitSystem::Imperial => "imperial",
         };
 
-        let revision_i32 = cast_revision_for_db(preferences.revision);
+        let revision_i32 = cast_revision_for_db(preferences.revision)?;
 
         match expected_revision {
             None => {
@@ -237,7 +235,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
             }
             Some(expected) => {
                 // Update with revision check
-                let expected_i32 = cast_revision_for_db(expected);
+                let expected_i32 = cast_revision_for_db(expected)?;
 
                 let update = UserPreferencesUpdate {
                     interest_theme_ids: &preferences.interest_theme_ids,
@@ -349,5 +347,17 @@ mod tests {
             UserPreferencesRepositoryError::Query { .. }
         ));
         assert!(error.to_string().contains("revision out of range: -1"));
+    }
+
+    #[rstest]
+    fn cast_revision_for_db_rejects_oversized_values() {
+        let error = cast_revision_for_db(u32::MAX)
+            .expect_err("oversized revisions should be rejected before persistence");
+
+        assert!(matches!(
+            error,
+            UserPreferencesRepositoryError::Query { .. }
+        ));
+        assert!(error.to_string().contains("revision out of range"));
     }
 }

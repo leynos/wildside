@@ -248,6 +248,31 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             return Err(failure.to_error());
         }
 
+        let stored_revision = self
+            .stored_preferences
+            .lock()
+            .expect("stored preferences lock")
+            .as_ref()
+            .map(|stored_preferences| stored_preferences.revision);
+
+        match (stored_revision, expected_revision) {
+            (None, None) => {}
+            (Some(actual), None) => {
+                return Err(UserPreferencesRepositoryError::revision_mismatch(
+                    0_u32, actual,
+                ));
+            }
+            (None, Some(expected)) => {
+                return Err(UserPreferencesRepositoryError::missing_for_update(expected));
+            }
+            (Some(actual), Some(expected)) if expected != actual => {
+                return Err(UserPreferencesRepositoryError::revision_mismatch(
+                    expected, actual,
+                ));
+            }
+            (Some(_), Some(_)) => {}
+        }
+
         *self
             .stored_preferences
             .lock()

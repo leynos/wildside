@@ -75,11 +75,11 @@ fn map_preferences_persistence_error(error: UserPreferencesRepositoryError) -> E
         }
         UserPreferencesRepositoryError::Query { message } => Error::internal(message),
         UserPreferencesRepositoryError::RevisionMismatch { expected, actual } => {
-            // TODO(3.5.4): replace this temporary internal-error mapping with an
-            // explicit revision-conflict contract once stale-write semantics land.
-            Error::internal(format!(
-                "preferences revision mismatch: expected {expected}, found {actual}"
-            ))
+            Error::conflict("preferences changed concurrently").with_details(json!({
+                "code": "revision_mismatch",
+                "expectedRevision": expected,
+                "actualRevision": actual,
+            }))
         }
         UserPreferencesRepositoryError::MissingForUpdate { expected } => {
             Error::conflict("preferences changed concurrently").with_details(json!({

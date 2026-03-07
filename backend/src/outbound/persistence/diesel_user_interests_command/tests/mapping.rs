@@ -167,7 +167,7 @@ async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
 }
 
 #[tokio::test]
-async fn set_interests_maps_exhausted_revision_mismatches_to_internal_error() {
+async fn set_interests_maps_exhausted_revision_mismatches_to_conflict() {
     let repository = Arc::new(StubUserPreferencesRepository::default());
     repository.set_save_failures([
         StubFailure::RevisionMismatch {
@@ -193,6 +193,24 @@ async fn set_interests_maps_exhausted_revision_mismatches_to_internal_error() {
         .await
         .expect_err("exhausted revision mismatches should map to domain errors");
 
-    assert_eq!(err.code(), ErrorCode::InternalError);
-    assert!(err.message().contains("revision mismatch"));
+    assert_eq!(err.code(), ErrorCode::Conflict);
+    assert_eq!(err.message(), "preferences changed concurrently");
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("code"))
+            .and_then(serde_json::Value::as_str),
+        Some("revision_mismatch")
+    );
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("expectedRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
 }
