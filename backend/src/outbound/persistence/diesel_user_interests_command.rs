@@ -169,6 +169,9 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
             }
         }
 
+        // The loop returns on every path: success -> Ok, final-attempt
+        // RevisionMismatch falls through to the Err arm, and all other
+        // errors return immediately. This guards against future refactoring.
         unreachable!("interest update retry loop exited unexpectedly")
     }
 }
