@@ -59,11 +59,41 @@ impl StubUserPreferencesRepository {
     }
 }
 
+struct RetrySaveTracker {
+    attempts: Mutex<usize>,
+    last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
+}
+
+impl RetrySaveTracker {
+    fn new() -> Self {
+        Self {
+            attempts: Mutex::new(0),
+            last_save: Mutex::new(None),
+        }
+    }
+
+    fn attempt(&self) -> usize {
+        *self.attempts.lock().expect("attempts lock")
+    }
+
+    fn increment_attempts(&self) {
+        *self.attempts.lock().expect("attempts lock") += 1;
+    }
+
+    fn record(&self, preferences: &UserPreferences, expected_revision: Option<u32>) {
+        *self.last_save.lock().expect("last save lock") =
+            Some((preferences.clone(), expected_revision));
+    }
+
+    fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
+        self.last_save.lock().expect("last save lock").clone()
+    }
+}
+
 pub(super) struct InsertRaceRetryRepository {
     user_id: UserId,
     competing_preferences: UserPreferences,
-    attempts: Mutex<usize>,
-    last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
+    tracker: RetrySaveTracker,
 }
 
 impl InsertRaceRetryRepository {
@@ -71,21 +101,19 @@ impl InsertRaceRetryRepository {
         Self {
             user_id,
             competing_preferences,
-            attempts: Mutex::new(0),
-            last_save: Mutex::new(None),
+            tracker: RetrySaveTracker::new(),
         }
     }
 
     pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.last_save.lock().expect("last save lock").clone()
+        self.tracker.last_save_call()
     }
 }
 
 pub(super) struct StaleUpdateRetryRepository {
     initial_preferences: UserPreferences,
     competing_preferences: UserPreferences,
-    attempts: Mutex<usize>,
-    last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
+    tracker: RetrySaveTracker,
 }
 
 impl StaleUpdateRetryRepository {
@@ -96,13 +124,12 @@ impl StaleUpdateRetryRepository {
         Self {
             initial_preferences,
             competing_preferences,
-            attempts: Mutex::new(0),
-            last_save: Mutex::new(None),
+            tracker: RetrySaveTracker::new(),
         }
     }
 
     pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.last_save.lock().expect("last save lock").clone()
+        self.tracker.last_save_call()
     }
 }
 
@@ -163,7 +190,7 @@ impl UserPreferencesRepository for InsertRaceRetryRepository {
             return Ok(None);
         }
 
-        let attempts = *self.attempts.lock().expect("attempts lock");
+        let attempts = self.tracker.attempt();
         if attempts == 0 {
             Ok(None)
         } else {
@@ -176,16 +203,14 @@ impl UserPreferencesRepository for InsertRaceRetryRepository {
         preferences: &UserPreferences,
         expected_revision: Option<u32>,
     ) -> Result<(), UserPreferencesRepositoryError> {
-        let mut attempts = self.attempts.lock().expect("attempts lock");
-        if *attempts == 0 {
-            *attempts += 1;
+        if self.tracker.attempt() == 0 {
+            self.tracker.increment_attempts();
             return Err(UserPreferencesRepositoryError::revision_mismatch(
                 0_u32, 1_u32,
             ));
         }
 
-        *self.last_save.lock().expect("last save lock") =
-            Some((preferences.clone(), expected_revision));
+        self.tracker.record(preferences, expected_revision);
         Ok(())
     }
 }
@@ -200,7 +225,7 @@ impl UserPreferencesRepository for StaleUpdateRetryRepository {
             return Ok(None);
         }
 
-        let attempts = *self.attempts.lock().expect("attempts lock");
+        let attempts = self.tracker.attempt();
         if attempts == 0 {
             Ok(Some(self.initial_preferences.clone()))
         } else {
@@ -213,16 +238,14 @@ impl UserPreferencesRepository for StaleUpdateRetryRepository {
         preferences: &UserPreferences,
         expected_revision: Option<u32>,
     ) -> Result<(), UserPreferencesRepositoryError> {
-        let mut attempts = self.attempts.lock().expect("attempts lock");
-        if *attempts == 0 {
-            *attempts += 1;
+        if self.tracker.attempt() == 0 {
+            self.tracker.increment_attempts();
             return Err(UserPreferencesRepositoryError::revision_mismatch(
                 2_u32, 3_u32,
             ));
         }
 
-        *self.last_save.lock().expect("last save lock") =
-            Some((preferences.clone(), expected_revision));
+        self.tracker.record(preferences, expected_revision);
         Ok(())
     }
 }
