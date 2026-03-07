@@ -112,6 +112,25 @@ fn executing_a_login_profile_and_interests_request_with_too_many_interest_theme_
     run_profile_interests_flow(world);
 }
 
+fn assert_interests_status(interests: &flow_support::Snapshot) {
+    match interests.status {
+        200 => {
+            let body = interests.body.as_ref().expect("interests body");
+            assert_eq!(
+                body.get("userId").and_then(Value::as_str),
+                Some(FIXTURE_AUTH_ID)
+            );
+            let ids = body
+                .get("interestThemeIds")
+                .and_then(Value::as_array)
+                .expect("interestThemeIds array");
+            assert!(!ids.is_empty(), "interestThemeIds should stay non-empty");
+        }
+        500 => assert_internal(interests),
+        other => panic!("unexpected /users/me/interests status after schema loss: {other}"),
+    }
+}
+
 #[then("the responses preserve a stable startup error or fallback contract")]
 fn the_responses_preserve_a_stable_startup_error_or_fallback_contract(world: &mut World) {
     if is_skipped(world) {
@@ -130,22 +149,7 @@ fn the_responses_preserve_a_stable_startup_error_or_fallback_contract(world: &mu
         200
     );
     let interests = world.interests.as_ref().expect("interests response");
-    match interests.status {
-        200 => {
-            let body = interests.body.as_ref().expect("interests body");
-            assert_eq!(
-                body.get("userId").and_then(Value::as_str),
-                Some(FIXTURE_AUTH_ID)
-            );
-            let ids = body
-                .get("interestThemeIds")
-                .and_then(Value::as_array)
-                .expect("interestThemeIds array");
-            assert!(!ids.is_empty(), "interestThemeIds should stay non-empty");
-        }
-        500 => assert_internal(interests),
-        other => panic!("unexpected /users/me/interests status after schema loss: {other}"),
-    }
+    assert_interests_status(interests);
 }
 
 #[then("the interests validation error envelope remains stable")]
