@@ -46,11 +46,17 @@ async fn update_creates_preferences_when_missing() {
     assert!(!response.replayed);
 }
 
+#[rstest]
+#[case(3, None)] // record exists but no expected_revision supplied
+#[case(2, Some(1))] // expected_revision does not match actual revision
 #[tokio::test]
-async fn update_rejects_missing_revision_when_record_exists() {
+async fn update_rejects_mismatched_revision(
+    #[case] existing_revision: u32,
+    #[case] expected_revision: Option<u32>,
+) {
     let user_id = UserId::random();
     let existing = UserPreferences::builder(user_id.clone())
-        .revision(3)
+        .revision(existing_revision)
         .build();
     let mut repo = MockUserPreferencesRepository::new();
 
@@ -64,33 +70,7 @@ async fn update_rejects_missing_revision_when_record_exists() {
         interest_theme_ids: Vec::new(),
         safety_toggle_ids: Vec::new(),
         unit_system: UnitSystem::Metric,
-        expected_revision: None,
-        idempotency_key: None,
-    };
-
-    let error = service.update(request).await.expect_err("conflict");
-    assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
-}
-
-#[tokio::test]
-async fn update_rejects_revision_mismatch() {
-    let user_id = UserId::random();
-    let existing = UserPreferences::builder(user_id.clone())
-        .revision(2)
-        .build();
-    let mut repo = MockUserPreferencesRepository::new();
-
-    repo.expect_find_by_user_id()
-        .times(1)
-        .return_once(move |_| Ok(Some(existing)));
-
-    let service = make_service(repo);
-    let request = UpdatePreferencesRequest {
-        user_id,
-        interest_theme_ids: Vec::new(),
-        safety_toggle_ids: Vec::new(),
-        unit_system: UnitSystem::Metric,
-        expected_revision: Some(1),
+        expected_revision,
         idempotency_key: None,
     };
 
