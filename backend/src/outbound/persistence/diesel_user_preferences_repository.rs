@@ -115,15 +115,15 @@ async fn fetch_current_revision<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let result = user_preferences::table
+    let result: Option<i32> = user_preferences::table
         .filter(user_preferences::user_id.eq(user_id))
-        .select(UserPreferencesRow::as_select())
+        .select(user_preferences::revision)
         .first(conn)
         .await
         .optional()
         .map_err(map_diesel_error)?;
 
-    Ok(result.map(|row| cast_revision_from_db(row.revision)))
+    Ok(result.map(cast_revision_from_db))
 }
 
 /// Handle failed preferences update by checking if it's a revision mismatch or missing record.

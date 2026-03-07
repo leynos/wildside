@@ -194,7 +194,7 @@ fn the_interests_validation_error_envelope_remains_stable(world: &mut World) {
 }
 
 fn assert_profile_and_interests_contract(
-    world: &mut World,
+    world: &World,
     expected_profile_name: &str,
     expected_interest_ids: &[&str],
 ) {
