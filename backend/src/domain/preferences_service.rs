@@ -68,6 +68,13 @@ where
             UserPreferencesRepositoryError::RevisionMismatch { expected, actual } => {
                 Self::revision_conflict(Some(expected), actual)
             }
+            UserPreferencesRepositoryError::MissingForUpdate { expected } => {
+                Self::revision_conflict(Some(expected), 0)
+            }
+            UserPreferencesRepositoryError::ConcurrentWriteConflict => {
+                Error::conflict("preferences changed concurrently")
+                    .with_details(json!({ "code": "concurrent_write_conflict" }))
+            }
         }
     }
 

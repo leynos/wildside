@@ -23,6 +23,12 @@ define_port_error! {
         /// Optimistic concurrency check failed.
         RevisionMismatch { expected: u32, actual: u32 } =>
             "revision mismatch: expected {expected}, found {actual}",
+        /// A previously read preferences row disappeared before the update landed.
+        MissingForUpdate { expected: u32 } =>
+            "preferences missing during update for expected revision {expected}",
+        /// A concurrent insert race was detected but the winning row could not be re-read.
+        ConcurrentWriteConflict =>
+            "preferences changed concurrently before the current revision could be re-read",
     }
 }
 
@@ -173,5 +179,19 @@ mod tests {
 
         assert!(message.contains("expected 2"));
         assert!(message.contains("found 5"));
+    }
+
+    #[test]
+    fn missing_for_update_error_formats_correctly() {
+        let error = UserPreferencesRepositoryError::missing_for_update(3_u32);
+
+        assert!(error.to_string().contains("expected revision 3"));
+    }
+
+    #[test]
+    fn concurrent_write_conflict_error_formats_correctly() {
+        let error = UserPreferencesRepositoryError::concurrent_write_conflict();
+
+        assert!(error.to_string().contains("changed concurrently"));
     }
 }

@@ -98,6 +98,75 @@ async fn update_rejects_revision_mismatch() {
 }
 
 #[tokio::test]
+async fn update_maps_missing_for_update_to_conflict() {
+    let user_id = UserId::random();
+    let existing = UserPreferences::builder(user_id.clone())
+        .revision(2)
+        .build();
+    let mut repo = MockUserPreferencesRepository::new();
+
+    repo.expect_find_by_user_id()
+        .times(1)
+        .return_once(move |_| Ok(Some(existing)));
+    repo.expect_save()
+        .times(1)
+        .return_once(|_, _| Err(UserPreferencesRepositoryError::missing_for_update(2_u32)));
+
+    let service = make_service(repo);
+    let request = UpdatePreferencesRequest {
+        user_id,
+        interest_theme_ids: Vec::new(),
+        safety_toggle_ids: Vec::new(),
+        unit_system: UnitSystem::Metric,
+        expected_revision: Some(2),
+        idempotency_key: None,
+    };
+
+    let error = service.update(request).await.expect_err("conflict");
+    assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+    assert_eq!(
+        error
+            .details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+}
+
+#[tokio::test]
+async fn update_maps_concurrent_write_conflict_to_conflict() {
+    let user_id = UserId::random();
+    let mut repo = MockUserPreferencesRepository::new();
+
+    repo.expect_find_by_user_id()
+        .times(1)
+        .return_once(|_| Ok(None));
+    repo.expect_save()
+        .times(1)
+        .return_once(|_, _| Err(UserPreferencesRepositoryError::concurrent_write_conflict()));
+
+    let service = make_service(repo);
+    let request = UpdatePreferencesRequest {
+        user_id,
+        interest_theme_ids: Vec::new(),
+        safety_toggle_ids: Vec::new(),
+        unit_system: UnitSystem::Metric,
+        expected_revision: None,
+        idempotency_key: None,
+    };
+
+    let error = service.update(request).await.expect_err("conflict");
+    assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+    assert_eq!(
+        error
+            .details()
+            .and_then(|details| details.get("code"))
+            .and_then(serde_json::Value::as_str),
+        Some("concurrent_write_conflict")
+    );
+}
+
+#[tokio::test]
 async fn update_returns_cached_response_for_duplicate_idempotency_key() {
     let user_id = UserId::random();
     let idempotency_key = IdempotencyKey::random();

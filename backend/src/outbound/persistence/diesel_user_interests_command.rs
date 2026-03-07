@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use serde_json::json;
 
 use crate::domain::ports::{
     UserInterestsCommand, UserPreferencesRepository, UserPreferencesRepositoryError,
@@ -79,6 +80,17 @@ fn map_preferences_persistence_error(error: UserPreferencesRepositoryError) -> E
             Error::internal(format!(
                 "preferences revision mismatch: expected {expected}, found {actual}"
             ))
+        }
+        UserPreferencesRepositoryError::MissingForUpdate { expected } => {
+            Error::conflict("preferences changed concurrently").with_details(json!({
+                "code": "preferences_missing_for_update",
+                "expectedRevision": expected,
+                "actualRevision": 0,
+            }))
+        }
+        UserPreferencesRepositoryError::ConcurrentWriteConflict => {
+            Error::conflict("preferences changed concurrently")
+                .with_details(json!({ "code": "concurrent_write_conflict" }))
         }
     }
 }
@@ -160,9 +172,11 @@ impl UserInterestsCommand for DieselUserInterestsCommand {
                 .await
             {
                 Ok(()) => return Ok(UserInterests::new(user_id.clone(), interest_theme_ids)),
-                Err(UserPreferencesRepositoryError::RevisionMismatch { .. })
-                    if attempt + 1 < MAX_CONCURRENT_WRITE_ATTEMPTS =>
-                {
+                Err(
+                    UserPreferencesRepositoryError::RevisionMismatch { .. }
+                    | UserPreferencesRepositoryError::MissingForUpdate { .. }
+                    | UserPreferencesRepositoryError::ConcurrentWriteConflict,
+                ) if attempt + 1 < MAX_CONCURRENT_WRITE_ATTEMPTS => {
                     continue;
                 }
                 Err(error) => return Err(map_preferences_persistence_error(error)),

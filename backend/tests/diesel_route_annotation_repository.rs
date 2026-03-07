@@ -11,6 +11,7 @@ use backend::domain::ports::{RouteAnnotationRepository, RouteAnnotationRepositor
 use backend::domain::{RouteNote, RouteNoteContent, RouteProgress, UserId};
 use backend::outbound::persistence::{DbPool, DieselRouteAnnotationRepository, PoolConfig};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
+use postgres::{Client, NoTls};
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -316,5 +317,36 @@ fn route_progress_rejects_revision_mismatch(repo_context: Option<TestContext>) {
             save: save_progress_future,
             _marker: PhantomData,
         },
+    );
+}
+
+#[rstest]
+fn route_notes_schema_rejects_negative_revisions(repo_context: Option<TestContext>) {
+    let Some(context) = repo_context else {
+        eprintln!("SKIP-TEST-CLUSTER: route_notes_schema_rejects_negative_revisions skipped");
+        return;
+    };
+
+    let database_url = context._database.url().to_owned();
+    let mut client =
+        Client::connect(database_url.as_str(), NoTls).expect("connect to temporary database");
+    let note_id = Uuid::new_v4();
+    let route_id = context.route_id;
+    let user_uuid = *context.user_id.as_uuid();
+
+    let error = client
+        .execute(
+            "INSERT INTO route_notes (id, route_id, user_id, body, revision)
+             VALUES ($1, $2, $3, 'invalid note', -1)",
+            &[&note_id, &route_id, &user_uuid],
+        )
+        .expect_err("negative revisions should violate the check constraint");
+
+    assert!(
+        error
+            .as_db_error()
+            .and_then(|db_error| db_error.constraint())
+            == Some("chk_route_notes_revision_non_negative"),
+        "expected revision constraint violation, got {error}"
     );
 }

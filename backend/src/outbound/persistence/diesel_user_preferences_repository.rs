@@ -70,7 +70,9 @@ fn map_diesel_error(error: diesel::result::Error) -> UserPreferencesRepositoryEr
 }
 
 /// Convert a database row to a domain UserPreferences.
-fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
+fn row_to_preferences(
+    row: UserPreferencesRow,
+) -> Result<UserPreferences, UserPreferencesRepositoryError> {
     let user_id = UserId::from_uuid(row.user_id);
     let unit_system = match row.unit_system.as_str() {
         "imperial" => UnitSystem::Imperial,
@@ -85,22 +87,20 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
         }
     };
 
-    UserPreferences {
+    Ok(UserPreferences {
         user_id,
         interest_theme_ids: row.interest_theme_ids,
         safety_toggle_ids: row.safety_toggle_ids,
         unit_system,
-        revision: cast_revision_from_db(row.revision),
+        revision: cast_revision_from_db(row.revision)?,
         updated_at: row.updated_at,
-    }
+    })
 }
 
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "revision is always non-negative in database"
-)]
-fn cast_revision_from_db(revision: i32) -> u32 {
-    revision as u32
+fn cast_revision_from_db(revision: i32) -> Result<u32, UserPreferencesRepositoryError> {
+    u32::try_from(revision).map_err(|_| {
+        UserPreferencesRepositoryError::query(format!("revision out of range: {revision}"))
+    })
 }
 
 /// Query the current stored revision for a given user preferences record.
@@ -123,7 +123,7 @@ where
         .optional()
         .map_err(map_diesel_error)?;
 
-    Ok(result.map(cast_revision_from_db))
+    result.map(cast_revision_from_db).transpose()
 }
 
 /// Handle failed preferences update by checking if it's a revision mismatch or missing record.
@@ -139,7 +139,7 @@ where
         Ok(Some(actual)) => {
             UserPreferencesRepositoryError::revision_mismatch(expected_revision, actual)
         }
-        Ok(None) => UserPreferencesRepositoryError::query("preferences not found for update"),
+        Ok(None) => UserPreferencesRepositoryError::missing_for_update(expected_revision),
         Err(e) => e,
     }
 }
@@ -159,7 +159,7 @@ where
 {
     match fetch_current_revision(conn, user_id).await {
         Ok(Some(actual)) => UserPreferencesRepositoryError::revision_mismatch(0_u32, actual),
-        Ok(None) => UserPreferencesRepositoryError::query("preferences insert conflicted"),
+        Ok(None) => UserPreferencesRepositoryError::concurrent_write_conflict(),
         Err(e) => e,
     }
 }
@@ -189,7 +189,7 @@ impl UserPreferencesRepository for DieselUserPreferencesRepository {
             .optional()
             .map_err(map_diesel_error)?;
 
-        Ok(result.map(row_to_preferences))
+        result.map(row_to_preferences).transpose()
     }
 
     async fn save(
@@ -314,7 +314,7 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        let prefs = row_to_preferences(row);
+        let prefs = row_to_preferences(row).expect("metric revision should be valid");
 
         assert_eq!(prefs.unit_system, UnitSystem::Metric);
         assert_eq!(prefs.revision, 3);
@@ -334,9 +334,20 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        let prefs = row_to_preferences(row);
+        let prefs = row_to_preferences(row).expect("imperial revision should be valid");
 
         assert_eq!(prefs.unit_system, UnitSystem::Imperial);
         assert_eq!(prefs.safety_toggle_ids.len(), 2);
+    }
+
+    #[rstest]
+    fn cast_revision_from_db_rejects_negative_values() {
+        let error = cast_revision_from_db(-1).expect_err("negative revisions should be rejected");
+
+        assert!(matches!(
+            error,
+            UserPreferencesRepositoryError::Query { .. }
+        ));
+        assert!(error.to_string().contains("revision out of range: -1"));
     }
 }

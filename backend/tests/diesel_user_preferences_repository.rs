@@ -182,3 +182,35 @@ fn preferences_repository_rejects_revision_mismatch(repo_context: Option<TestCon
         UserPreferencesRepositoryError::RevisionMismatch { expected: 1, .. }
     ));
 }
+
+#[rstest]
+fn preferences_repository_schema_rejects_negative_revisions(repo_context: Option<TestContext>) {
+    let Some(context) = repo_context else {
+        eprintln!(
+            "SKIP-TEST-CLUSTER: preferences_repository_schema_rejects_negative_revisions skipped"
+        );
+        return;
+    };
+
+    let database_url = context._database.url().to_owned();
+    let mut client =
+        Client::connect(database_url.as_str(), NoTls).expect("connect to temporary database");
+    let user_uuid = *context.user_id.as_uuid();
+
+    let error = client
+        .execute(
+            "INSERT INTO user_preferences (user_id, unit_system, revision)
+             VALUES ($1, 'metric', -1)",
+            &[&user_uuid],
+        )
+        .expect_err("negative revisions should violate the check constraint");
+
+    assert!(
+        error
+            .as_db_error()
+            .and_then(|db_error| db_error.constraint())
+            == Some("chk_user_preferences_revision_non_negative"),
+        "expected revision constraint violation, got {}",
+        format_postgres_error(&error)
+    );
+}

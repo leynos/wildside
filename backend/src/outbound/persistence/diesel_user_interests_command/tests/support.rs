@@ -12,6 +12,8 @@ pub(super) enum StubFailure {
     Connection,
     Query,
     RevisionMismatch { expected: u32, actual: u32 },
+    MissingForUpdate { expected: u32 },
+    ConcurrentWriteConflict,
 }
 
 impl StubFailure {
@@ -21,6 +23,12 @@ impl StubFailure {
             Self::Query => UserPreferencesRepositoryError::query("database query failed"),
             Self::RevisionMismatch { expected, actual } => {
                 UserPreferencesRepositoryError::revision_mismatch(expected, actual)
+            }
+            Self::MissingForUpdate { expected } => {
+                UserPreferencesRepositoryError::missing_for_update(expected)
+            }
+            Self::ConcurrentWriteConflict => {
+                UserPreferencesRepositoryError::concurrent_write_conflict()
             }
         }
     }
