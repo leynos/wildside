@@ -90,13 +90,17 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
         interest_theme_ids: row.interest_theme_ids,
         safety_toggle_ids: row.safety_toggle_ids,
         unit_system,
-        #[expect(
-            clippy::cast_sign_loss,
-            reason = "revision is always non-negative in database"
-        )]
-        revision: row.revision as u32,
+        revision: cast_revision_from_db(row.revision),
         updated_at: row.updated_at,
     }
+}
+
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "revision is always non-negative in database"
+)]
+fn cast_revision_from_db(revision: i32) -> u32 {
+    revision as u32
 }
 
 /// Handle failed preferences update by checking if it's a revision mismatch or missing record.
@@ -115,14 +119,7 @@ where
         .optional()
         .map_err(map_diesel_error)?;
 
-    Ok(result.map(|row| {
-        #[expect(
-            clippy::cast_sign_loss,
-            reason = "revision is always non-negative in database"
-        )]
-        let rev = row.revision as u32;
-        rev
-    }))
+    Ok(result.map(|row| cast_revision_from_db(row.revision)))
 }
 
 /// Handle failed preferences update by checking if it's a revision mismatch or missing record.
