@@ -189,9 +189,10 @@ fn the_interests_validation_error_envelope_remains_stable(world: &mut World) {
     );
 }
 
-#[then("fixture-fallback startup preserves the fixture profile and interests response contract")]
-fn fixture_fallback_startup_preserves_the_fixture_profile_and_interests_response_contract(
+fn assert_profile_and_interests_contract(
     world: &mut World,
+    expected_profile_name: &str,
+    expected_interest_ids: &[&str],
 ) {
     if is_skipped(world) {
         return;
@@ -200,29 +201,28 @@ fn fixture_fallback_startup_preserves_the_fixture_profile_and_interests_response
     assert_eq!(world.login.as_ref().expect("login response").status, 200);
     assert_profile_response(
         world.profile.as_ref().expect("profile response"),
-        FIXTURE_PROFILE_NAME,
+        expected_profile_name,
     );
     assert_interests_response(
         world.interests.as_ref().expect("interests response"),
-        &[FIRST_THEME_ID],
+        expected_interest_ids,
     );
+}
+
+#[then("fixture-fallback startup preserves the fixture profile and interests response contract")]
+fn fixture_fallback_startup_preserves_the_fixture_profile_and_interests_response_contract(
+    world: &mut World,
+) {
+    assert_profile_and_interests_contract(world, FIXTURE_PROFILE_NAME, &[FIRST_THEME_ID]);
 }
 
 #[then("db-present startup preserves the DB-backed profile and interests response contract")]
 fn db_present_startup_preserves_the_db_backed_profile_and_interests_response_contract(
     world: &mut World,
 ) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_eq!(world.login.as_ref().expect("login response").status, 200);
-    assert_profile_response(
-        world.profile.as_ref().expect("profile response"),
+    assert_profile_and_interests_contract(
+        world,
         DB_PROFILE_NAME,
-    );
-    assert_interests_response(
-        world.interests.as_ref().expect("interests response"),
         &[FIRST_THEME_ID, SECOND_THEME_ID],
     );
 }
