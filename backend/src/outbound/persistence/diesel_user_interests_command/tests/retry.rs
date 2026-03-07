@@ -47,85 +47,93 @@ struct RetryCase {
     expected_saved_interest_ids: Vec<uuid::Uuid>,
 }
 
+fn insert_race_case(user_id: UserId) -> RetryCase {
+    RetryCase {
+        repository: RetryRepositoryHarness::InsertRace(Arc::new(InsertRaceRetryRepository::new(
+            user_id.clone(),
+            UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa9")])
+                .safety_toggle_ids(Vec::new())
+                .unit_system(UnitSystem::Metric)
+                .revision(1)
+                .build(),
+        ))),
+        user_id,
+        interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+        expected_revision: Some(1),
+        expected_saved_revision: 2,
+        expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+    }
+}
+
+fn stale_update_case(user_id: UserId) -> RetryCase {
+    RetryCase {
+        repository: RetryRepositoryHarness::StaleUpdate(Arc::new(StaleUpdateRetryRepository::new(
+            UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+                .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+                .unit_system(UnitSystem::Metric)
+                .revision(2)
+                .build(),
+            UserPreferences::builder(user_id.clone())
+                .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afaa")])
+                .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+                .unit_system(UnitSystem::Metric)
+                .revision(3)
+                .build(),
+        ))),
+        user_id,
+        interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+        expected_revision: Some(3),
+        expected_saved_revision: 4,
+        expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+    }
+}
+
+fn missing_for_update_case(user_id: UserId) -> RetryCase {
+    let existing_preferences = UserPreferences::builder(user_id.clone())
+        .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+        .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+        .unit_system(UnitSystem::Metric)
+        .revision(4)
+        .build();
+    let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
+        existing_preferences,
+    ));
+    repository.set_save_failure(StubFailure::MissingForUpdate { expected: 4 });
+
+    RetryCase {
+        repository: RetryRepositoryHarness::Stub(repository),
+        user_id,
+        interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+        expected_revision: Some(4),
+        expected_saved_revision: 5,
+        expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+    }
+}
+
+fn concurrent_write_conflict_case(user_id: UserId) -> RetryCase {
+    let repository = Arc::new(StubUserPreferencesRepository::default());
+    repository.set_save_failure(StubFailure::ConcurrentWriteConflict);
+
+    RetryCase {
+        repository: RetryRepositoryHarness::Stub(repository),
+        user_id,
+        interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+        expected_revision: None,
+        expected_saved_revision: 1,
+        expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+    }
+}
+
 fn build_retry_case(scenario: RetryScenario) -> RetryCase {
     let user_id = user_id();
 
     match scenario {
-        RetryScenario::InsertRaceRevisionMismatch => RetryCase {
-            repository: RetryRepositoryHarness::InsertRace(Arc::new(
-                InsertRaceRetryRepository::new(
-                    user_id.clone(),
-                    UserPreferences::builder(user_id.clone())
-                        .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa9")])
-                        .safety_toggle_ids(Vec::new())
-                        .unit_system(UnitSystem::Metric)
-                        .revision(1)
-                        .build(),
-                ),
-            )),
-            user_id,
-            interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-            expected_revision: Some(1),
-            expected_saved_revision: 2,
-            expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-        },
-        RetryScenario::StaleUpdateRevisionMismatch => RetryCase {
-            repository: RetryRepositoryHarness::StaleUpdate(Arc::new(
-                StaleUpdateRetryRepository::new(
-                    UserPreferences::builder(user_id.clone())
-                        .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-                        .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
-                        .unit_system(UnitSystem::Metric)
-                        .revision(2)
-                        .build(),
-                    UserPreferences::builder(user_id.clone())
-                        .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afaa")])
-                        .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
-                        .unit_system(UnitSystem::Metric)
-                        .revision(3)
-                        .build(),
-                ),
-            )),
-            user_id,
-            interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
-            expected_revision: Some(3),
-            expected_saved_revision: 4,
-            expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
-        },
-        RetryScenario::MissingPreferencesForUpdate => {
-            let existing_preferences = UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-                .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
-                .unit_system(UnitSystem::Metric)
-                .revision(4)
-                .build();
-            let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
-                existing_preferences,
-            ));
-            repository.set_save_failure(StubFailure::MissingForUpdate { expected: 4 });
-
-            RetryCase {
-                repository: RetryRepositoryHarness::Stub(repository),
-                user_id,
-                interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
-                expected_revision: Some(4),
-                expected_saved_revision: 5,
-                expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
-            }
-        }
-        RetryScenario::ConcurrentWriteConflict => {
-            let repository = Arc::new(StubUserPreferencesRepository::default());
-            repository.set_save_failure(StubFailure::ConcurrentWriteConflict);
-
-            RetryCase {
-                repository: RetryRepositoryHarness::Stub(repository),
-                user_id,
-                interest_theme_ids: vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-                expected_revision: None,
-                expected_saved_revision: 1,
-                expected_saved_interest_ids: vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-            }
-        }
+        RetryScenario::InsertRaceRevisionMismatch => insert_race_case(user_id),
+        RetryScenario::StaleUpdateRevisionMismatch => stale_update_case(user_id),
+        RetryScenario::MissingPreferencesForUpdate => missing_for_update_case(user_id),
+        RetryScenario::ConcurrentWriteConflict => concurrent_write_conflict_case(user_id),
     }
 }
 
