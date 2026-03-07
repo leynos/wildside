@@ -100,6 +100,32 @@ fn row_to_preferences(row: UserPreferencesRow) -> UserPreferences {
 }
 
 /// Handle failed preferences update by checking if it's a revision mismatch or missing record.
+async fn fetch_current_revision<C>(
+    conn: &mut C,
+    user_id: uuid::Uuid,
+) -> Result<Option<u32>, UserPreferencesRepositoryError>
+where
+    C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
+{
+    let result = user_preferences::table
+        .filter(user_preferences::user_id.eq(user_id))
+        .select(UserPreferencesRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+        .map_err(map_diesel_error)?;
+
+    Ok(result.map(|row| {
+        #[expect(
+            clippy::cast_sign_loss,
+            reason = "revision is always non-negative in database"
+        )]
+        let rev = row.revision as u32;
+        rev
+    }))
+}
+
+/// Handle failed preferences update by checking if it's a revision mismatch or missing record.
 async fn handle_preferences_update_failure<C>(
     conn: &mut C,
     user_id: uuid::Uuid,
@@ -108,21 +134,8 @@ async fn handle_preferences_update_failure<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current_result = user_preferences::table
-        .filter(user_preferences::user_id.eq(user_id))
-        .select(UserPreferencesRow::as_select())
-        .first(conn)
-        .await
-        .optional()
-        .map_err(map_diesel_error);
-
-    match current_result {
-        Ok(Some(row)) => {
-            #[expect(
-                clippy::cast_sign_loss,
-                reason = "revision is always non-negative in database"
-            )]
-            let actual = row.revision as u32;
+    match fetch_current_revision(conn, user_id).await {
+        Ok(Some(actual)) => {
             UserPreferencesRepositoryError::revision_mismatch(expected_revision, actual)
         }
         Ok(None) => UserPreferencesRepositoryError::query("preferences not found for update"),
@@ -143,23 +156,8 @@ async fn handle_preferences_insert_conflict<C>(
 where
     C: diesel_async::AsyncConnection<Backend = diesel::pg::Pg> + Send,
 {
-    let current_result = user_preferences::table
-        .filter(user_preferences::user_id.eq(user_id))
-        .select(UserPreferencesRow::as_select())
-        .first(conn)
-        .await
-        .optional()
-        .map_err(map_diesel_error);
-
-    match current_result {
-        Ok(Some(row)) => {
-            #[expect(
-                clippy::cast_sign_loss,
-                reason = "revision is always non-negative in database"
-            )]
-            let actual = row.revision as u32;
-            UserPreferencesRepositoryError::revision_mismatch(0_u32, actual)
-        }
+    match fetch_current_revision(conn, user_id).await {
+        Ok(Some(actual)) => UserPreferencesRepositoryError::revision_mismatch(0_u32, actual),
         Ok(None) => UserPreferencesRepositoryError::query("preferences insert conflicted"),
         Err(e) => e,
     }
