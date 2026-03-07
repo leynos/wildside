@@ -103,7 +103,11 @@ fn cast_revision_from_db(revision: i32) -> u32 {
     revision as u32
 }
 
-/// Handle failed preferences update by checking if it's a revision mismatch or missing record.
+/// Query the current stored revision for a given user preferences record.
+///
+/// Returns `Ok(Some(revision))` when a preferences row exists for `user_id`,
+/// `Ok(None)` when no record exists, or `Err(UserPreferencesRepositoryError)`
+/// when the database query fails.
 async fn fetch_current_revision<C>(
     conn: &mut C,
     user_id: uuid::Uuid,

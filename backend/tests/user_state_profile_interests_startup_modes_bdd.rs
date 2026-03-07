@@ -19,7 +19,7 @@ use support::{drop_table, handle_cluster_setup_failure};
     reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
 )]
 mod server_config;
-pub use server_config::ServerConfig;
+pub(crate) use server_config::ServerConfig;
 
 #[path = "../src/server/state_builders.rs"]
 mod state_builders;
@@ -60,7 +60,7 @@ fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
             world.skip_reason = None;
         }
         Err(error) => {
-            let _: Option<()> = handle_cluster_setup_failure(error.as_str());
+            let _ = handle_cluster_setup_failure::<()>(error.as_str());
             world.skip_reason = Some(error);
         }
     }
