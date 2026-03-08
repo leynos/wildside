@@ -10,7 +10,7 @@ use futures_util::future::LocalBoxFuture;
 use crate::domain::{Error, UserId};
 
 pub(crate) const USER_ID_KEY: &str = "user_id";
-const FIXTURE_ADMIN_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
+const IS_ADMIN_KEY: &str = "is_admin";
 
 /// Newtype wrapper that exposes higher-level session operations.
 #[derive(Clone)]
@@ -24,8 +24,18 @@ impl SessionContext {
 
     /// Persist the authenticated user's id in the session cookie.
     pub fn persist_user(&self, user_id: &UserId) -> Result<(), Error> {
+        self.persist_authenticated_user(user_id, false)
+    }
+
+    /// Persist the authenticated user's id and admin claim in the session.
+    pub fn persist_authenticated_user(
+        &self,
+        user_id: &UserId,
+        is_admin: bool,
+    ) -> Result<(), Error> {
         self.0
             .insert(USER_ID_KEY, user_id.as_ref())
+            .and_then(|()| self.0.insert(IS_ADMIN_KEY, is_admin))
             .map_err(|error| Error::internal(format!("failed to persist session: {error}")))
     }
 
@@ -53,10 +63,18 @@ impl SessionContext {
             .ok_or_else(|| Error::unauthorized("login required"))
     }
 
-    /// Require the authenticated fixture admin user id or return `401`.
+    /// Return whether the current session carries the admin claim.
+    pub fn is_admin(&self) -> Result<bool, Error> {
+        self.0
+            .get::<bool>(IS_ADMIN_KEY)
+            .map(|claim| claim.unwrap_or(false))
+            .map_err(|error| Error::internal(format!("failed to read session: {error}")))
+    }
+
+    /// Require an authenticated admin session or return `401`.
     pub fn require_admin_user_id(&self) -> Result<UserId, Error> {
         let user_id = self.require_user_id()?;
-        if user_id.as_ref() == FIXTURE_ADMIN_USER_ID {
+        if self.is_admin()? {
             Ok(user_id)
         } else {
             Err(Error::unauthorized("admin login required"))
@@ -243,5 +261,50 @@ mod tests {
         )
         .await;
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn admin_user_is_authorised_for_admin_requirement() {
+        let app = test::init_service(
+            session_test_app()
+                .route(
+                    "/set-admin",
+                    web::get().to(|session: SessionContext| async move {
+                        let id = UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                            .expect("fixture id");
+                        session.persist_authenticated_user(&id, true)?;
+                        Ok::<_, Error>(HttpResponse::Ok())
+                    }),
+                )
+                .route(
+                    "/require-admin",
+                    web::get().to(|session: SessionContext| async move {
+                        let id = session.require_admin_user_id()?;
+                        Ok::<_, Error>(HttpResponse::Ok().body(id.to_string()))
+                    }),
+                ),
+        )
+        .await;
+
+        let set_res = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/set-admin").to_request(),
+        )
+        .await;
+        let cookie = set_res
+            .response()
+            .cookies()
+            .find(|cookie| cookie.name() == "session")
+            .expect("session cookie set");
+
+        let res = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/require-admin")
+                .cookie(cookie)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
     }
 }

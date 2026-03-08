@@ -195,6 +195,7 @@ fn creates_overpass_enrichment_provenance_contract(#[case] ddl_fragment: &str) {
 #[case("ADD COLUMN IF NOT EXISTS job_id UUID")]
 #[case("UPDATE overpass_enrichment_provenance")]
 #[case("ALTER COLUMN job_id SET NOT NULL")]
+#[case("CREATE UNIQUE INDEX IF NOT EXISTS idx_overpass_enrichment_provenance_job_id")]
 #[case("idx_overpass_enrichment_provenance_job_id")]
 fn creates_overpass_enrichment_provenance_job_id_contract(#[case] ddl_fragment: &str) {
     assert!(

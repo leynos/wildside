@@ -60,6 +60,10 @@ pub struct EnrichmentProvenanceRecordBody {
 #[serde(rename_all = "camelCase")]
 pub struct ListEnrichmentProvenanceResponseBody {
     pub records: Vec<EnrichmentProvenanceRecordBody>,
+    /// Exclusive `RFC3339|UUID` cursor for the next page.
+    ///
+    /// Clients should round-trip this value into the `before` query
+    /// parameter to continue pagination.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_before: Option<String>,
 }

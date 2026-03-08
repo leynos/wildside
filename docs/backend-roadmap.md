@@ -240,8 +240,8 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 - [ ] 4.2.4. Preserve the shipped admin provenance reporting baseline for
   `GET /api/v1/admin/enrichment/provenance`: keep admin-only access,
   deterministic `(imported_at, id)` ordering, and legacy `before`
-  compatibility (`RFC3339` or `RFC3339|UUID`) while layering the shared
-  pagination crate on top.
+  compatibility (Request for Comments 3339 (RFC 3339) `RFC3339` or
+  `RFC3339|UUID`) while layering the shared pagination crate on top.
 - [ ] 4.2.5. Implement dual query compatibility for admin enrichment reporting:
   add the new opaque `cursor` parameter alongside the shipped `before`
   contract, reject requests that provide both, and map invalid cursor or

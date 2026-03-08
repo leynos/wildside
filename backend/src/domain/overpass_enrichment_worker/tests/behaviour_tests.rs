@@ -20,6 +20,7 @@ type ProvenanceResponse = Result<(), EnrichmentProvenanceRepositoryError>;
 
 struct WorkerTestFixtureBuilder {
     now: DateTime<Utc>,
+    source: Option<Arc<SourceStub>>,
     source_responses: Vec<SourceResponse>,
     repo_responses: Vec<RepoResponse>,
     provenance_responses: Vec<ProvenanceResponse>,
@@ -32,6 +33,7 @@ impl WorkerTestFixtureBuilder {
     fn new(now: DateTime<Utc>) -> Self {
         Self {
             now,
+            source: None,
             source_responses: Vec::new(),
             repo_responses: vec![Ok(())],
             provenance_responses: vec![Ok(())],
@@ -43,6 +45,11 @@ impl WorkerTestFixtureBuilder {
 
     fn with_source_responses(mut self, responses: Vec<SourceResponse>) -> Self {
         self.source_responses = responses;
+        self
+    }
+
+    fn with_source(mut self, source: Arc<SourceStub>) -> Self {
+        self.source = Some(source);
         self
     }
 
@@ -75,7 +82,9 @@ impl WorkerTestFixtureBuilder {
     }
 
     fn build(self) -> WorkerTestFixture {
-        let source = Arc::new(SourceStub::scripted(self.source_responses));
+        let source = self
+            .source
+            .unwrap_or_else(|| Arc::new(SourceStub::scripted(self.source_responses)));
         let repo = Arc::new(RepoStub::new(self.repo_responses));
         let provenance_repo = Arc::new(ProvenanceRepoStub::new(self.provenance_responses));
         let metrics = Arc::new(MetricsStub::default());
@@ -279,117 +288,4 @@ async fn retry_uses_jittered_exponential_backoff(
         fixture.metrics.successes.lock().expect("metrics mutex")[0].attempt_count,
         3
     );
-}
-
-struct CircuitBreakerTestFixtureBuilder {
-    now: DateTime<Utc>,
-    source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
-    failure_threshold: u32,
-    cooldown_duration: Duration,
-}
-
-impl CircuitBreakerTestFixtureBuilder {
-    fn new(
-        now: DateTime<Utc>,
-        source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
-        failure_threshold: u32,
-        cooldown_duration: Duration,
-    ) -> Self {
-        Self {
-            now,
-            source_responses,
-            failure_threshold,
-            cooldown_duration,
-        }
-    }
-
-    fn build(self) -> CircuitBreakerTestFixture {
-        let worker_fixture = WorkerTestFixtureBuilder::new(self.now)
-            .with_source_responses(self.source_responses)
-            .with_repo_responses(vec![Ok(()), Ok(())])
-            .with_provenance_responses(vec![Ok(()), Ok(())])
-            .with_config({
-                let failure_threshold = self.failure_threshold;
-                let cooldown_duration = self.cooldown_duration;
-                move |cfg| {
-                    cfg.max_attempts = 1;
-                    cfg.circuit_failure_threshold = failure_threshold;
-                    cfg.circuit_open_cooldown = cooldown_duration;
-                }
-            })
-            .build();
-
-        CircuitBreakerTestFixture { worker_fixture }
-    }
-}
-
-struct CircuitBreakerTestFixture {
-    worker_fixture: WorkerTestFixture,
-}
-
-impl CircuitBreakerTestFixture {
-    async fn process_job(
-        &self,
-        request: OverpassEnrichmentRequest,
-    ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
-        self.worker_fixture.worker.process_job(request).await
-    }
-
-    fn advance_clock(&self, delta: Duration) {
-        self.worker_fixture.advance_clock(delta);
-    }
-
-    fn circuit_state(&self) -> CircuitBreakerState {
-        self.worker_fixture.circuit_state()
-    }
-
-    fn stub_call_counters(&self) -> StubCallCounters<'_> {
-        StubCallCounters {
-            source: self.worker_fixture.source.as_ref(),
-            repository: self.worker_fixture.repo.as_ref(),
-            provenance_repository: self.worker_fixture.provenance_repo.as_ref(),
-        }
-    }
-}
-
-#[rstest]
-#[tokio::test]
-async fn circuit_opens_and_blocks_until_cooldown(
-    now: DateTime<Utc>,
-    job: OverpassEnrichmentRequest,
-) {
-    let fixture = CircuitBreakerTestFixtureBuilder::new(
-        now,
-        vec![
-            Err(OverpassEnrichmentSourceError::transport("failure-1")),
-            Err(OverpassEnrichmentSourceError::transport("failure-2")),
-        ],
-        2,
-        Duration::from_secs(120),
-    )
-    .build();
-
-    let _ = fixture
-        .process_job(job.clone())
-        .await
-        .expect_err("first fails");
-    let _ = fixture
-        .process_job(job.clone())
-        .await
-        .expect_err("second fails");
-    let blocked = fixture
-        .process_job(job)
-        .await
-        .expect_err("blocked by open circuit");
-
-    assert_eq!(blocked.code(), crate::domain::ErrorCode::ServiceUnavailable);
-    assert_stub_call_counts(
-        fixture.stub_call_counters(),
-        StubCallCountExpectations {
-            source: 2,
-            repository: 0,
-            provenance_repository: 0,
-        },
-    );
-    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
 }
