@@ -222,12 +222,25 @@ pub(super) fn create_catalogue_doubles()
 /// # Examples
 ///
 /// ```rust,ignore
-/// let _provenance = create_enrichment_provenance_double();
+/// use backend::domain::ports::ListEnrichmentProvenanceRequest;
+///
+/// let provenance = create_enrichment_provenance_double();
+/// let response = tokio_test::block_on(
+///     provenance.list_recent(&ListEnrichmentProvenanceRequest::new(50, None)),
+/// )
+/// .expect("default response");
+///
+/// assert_eq!(response.records.len(), 1);
+/// assert_eq!(
+///     response.records[0].source_url,
+///     "https://overpass.example/api/interpreter"
+/// );
 /// ```
 pub(super) fn create_enrichment_provenance_double() -> RecordingEnrichmentProvenanceRepository {
     RecordingEnrichmentProvenanceRepository::new(EnrichmentProvenanceListResponse::Ok(
         ListEnrichmentProvenanceResponse {
             records: vec![EnrichmentProvenanceRecord {
+                job_id: fixture_uuid("00000000-0000-0000-0000-000000000303"),
                 source_url: "https://overpass.example/api/interpreter".to_owned(),
                 imported_at: fixture_timestamp("2026-02-28T12:00:00Z"),
                 bounding_box: [-3.2, 55.9, -3.0, 56.0],

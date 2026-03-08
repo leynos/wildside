@@ -1,6 +1,8 @@
 //! Authentication-related admin enrichment reporting BDD steps.
 
 use super::*;
+use backend::domain::UserId;
+use doubles::LoginResponse;
 
 #[given("a running server with session middleware")]
 fn a_running_server_with_session_middleware(world: &WorldFixture) {
@@ -9,6 +11,9 @@ fn a_running_server_with_session_middleware(world: &WorldFixture) {
 
 #[given("the client has an authenticated session")]
 fn the_client_has_an_authenticated_session(world: &WorldFixture) {
+    world.world().borrow().login.set_response(LoginResponse::Ok(
+        UserId::new("123e4567-e89b-12d3-a456-426614174000").expect("fixture admin user id"),
+    ));
     bdd_common::setup_authenticated_session(world);
 }
 

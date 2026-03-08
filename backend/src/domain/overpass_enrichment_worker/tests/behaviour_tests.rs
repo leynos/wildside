@@ -79,6 +79,7 @@ impl WorkerTestFixtureBuilder {
         let repo = Arc::new(RepoStub::new(self.repo_responses));
         let provenance_repo = Arc::new(ProvenanceRepoStub::new(self.provenance_responses));
         let metrics = Arc::new(MetricsStub::default());
+        let clock = Arc::new(MutableClock::new(self.now));
 
         let mut cfg = config();
         if let Some(mutator) = self.config_mutator {
@@ -92,7 +93,7 @@ impl WorkerTestFixtureBuilder {
                 provenance_repo.clone(),
                 metrics.clone(),
             ),
-            Arc::new(MutableClock::new(self.now)),
+            clock.clone(),
             OverpassEnrichmentWorkerRuntime {
                 sleeper: self.sleeper,
                 jitter: self.jitter,
@@ -106,6 +107,7 @@ impl WorkerTestFixtureBuilder {
             repo,
             provenance_repo,
             metrics,
+            clock,
         }
     }
 }
@@ -116,6 +118,7 @@ struct WorkerTestFixture {
     repo: Arc<RepoStub>,
     provenance_repo: Arc<ProvenanceRepoStub>,
     metrics: Arc<MetricsStub>,
+    clock: Arc<MutableClock>,
 }
 
 impl WorkerTestFixture {
@@ -124,6 +127,18 @@ impl WorkerTestFixture {
         request: OverpassEnrichmentRequest,
     ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
         self.worker.process_job(request).await
+    }
+
+    fn advance_clock(&self, delta: Duration) {
+        self.clock.advance(delta);
+    }
+
+    fn circuit_state(&self) -> CircuitBreakerState {
+        self.worker
+            .policy_state
+            .lock()
+            .expect("policy mutex")
+            .circuit_state()
     }
 }
 
@@ -289,47 +304,27 @@ impl CircuitBreakerTestFixtureBuilder {
     }
 
     fn build(self) -> CircuitBreakerTestFixture {
-        let clock = Arc::new(MutableClock::new(self.now));
-        let source = Arc::new(SourceStub::scripted(self.source_responses));
-        let repo = Arc::new(RepoStub::new(vec![Ok(()), Ok(())]));
-        let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(()), Ok(())]));
+        let worker_fixture = WorkerTestFixtureBuilder::new(self.now)
+            .with_source_responses(self.source_responses)
+            .with_repo_responses(vec![Ok(()), Ok(())])
+            .with_provenance_responses(vec![Ok(()), Ok(())])
+            .with_config({
+                let failure_threshold = self.failure_threshold;
+                let cooldown_duration = self.cooldown_duration;
+                move |cfg| {
+                    cfg.max_attempts = 1;
+                    cfg.circuit_failure_threshold = failure_threshold;
+                    cfg.circuit_open_cooldown = cooldown_duration;
+                }
+            })
+            .build();
 
-        let mut cfg = config();
-        cfg.max_attempts = 1;
-        cfg.circuit_failure_threshold = self.failure_threshold;
-        cfg.circuit_open_cooldown = self.cooldown_duration;
-
-        let worker = OverpassEnrichmentWorker::with_runtime(
-            OverpassEnrichmentWorkerPorts::new(
-                source.clone(),
-                repo.clone(),
-                provenance_repo.clone(),
-                Arc::new(MetricsStub::default()),
-            ),
-            clock.clone(),
-            OverpassEnrichmentWorkerRuntime {
-                sleeper: Arc::new(RecordingSleeper::default()),
-                jitter: Arc::new(NoJitter),
-            },
-            cfg,
-        );
-
-        CircuitBreakerTestFixture {
-            worker,
-            source,
-            repo,
-            provenance_repo,
-            clock,
-        }
+        CircuitBreakerTestFixture { worker_fixture }
     }
 }
 
 struct CircuitBreakerTestFixture {
-    worker: OverpassEnrichmentWorker,
-    source: Arc<SourceStub>,
-    repo: Arc<RepoStub>,
-    provenance_repo: Arc<ProvenanceRepoStub>,
-    clock: Arc<MutableClock>,
+    worker_fixture: WorkerTestFixture,
 }
 
 impl CircuitBreakerTestFixture {
@@ -337,19 +332,23 @@ impl CircuitBreakerTestFixture {
         &self,
         request: OverpassEnrichmentRequest,
     ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
-        self.worker.process_job(request).await
+        self.worker_fixture.worker.process_job(request).await
     }
 
     fn advance_clock(&self, delta: Duration) {
-        self.clock.advance(delta);
+        self.worker_fixture.advance_clock(delta);
     }
 
     fn circuit_state(&self) -> CircuitBreakerState {
-        self.worker
-            .policy_state
-            .lock()
-            .expect("policy mutex")
-            .circuit_state()
+        self.worker_fixture.circuit_state()
+    }
+
+    fn stub_call_counters(&self) -> StubCallCounters<'_> {
+        StubCallCounters {
+            source: self.worker_fixture.source.as_ref(),
+            repository: self.worker_fixture.repo.as_ref(),
+            provenance_repository: self.worker_fixture.provenance_repo.as_ref(),
+        }
     }
 }
 
@@ -385,11 +384,7 @@ async fn circuit_opens_and_blocks_until_cooldown(
 
     assert_eq!(blocked.code(), crate::domain::ErrorCode::ServiceUnavailable);
     assert_stub_call_counts(
-        StubCallCounters {
-            source: fixture.source.as_ref(),
-            repository: fixture.repo.as_ref(),
-            provenance_repository: fixture.provenance_repo.as_ref(),
-        },
+        fixture.stub_call_counters(),
         StubCallCountExpectations {
             source: 2,
             repository: 0,

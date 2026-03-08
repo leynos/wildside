@@ -9,6 +9,7 @@ use super::*;
 fn row(id: Uuid, imported_at: DateTime<Utc>) -> EnrichmentProvenanceRow {
     EnrichmentProvenanceRow {
         id,
+        job_id: Uuid::new_v4(),
         source_url: "https://overpass.example/api/interpreter".to_owned(),
         imported_at,
         bounds_min_lng: -3.2,

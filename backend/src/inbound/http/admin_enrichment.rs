@@ -29,7 +29,10 @@ const BEFORE_CURSOR_SEPARATOR: char = '|';
 pub struct ListEnrichmentProvenanceQuery {
     /// Maximum number of rows to return. Defaults to 50, maximum 200.
     pub limit: Option<usize>,
-    /// Optional exclusive cursor `RFC3339|UUID` for `(importedAt,id)`.
+    /// Optional exclusive cursor.
+    ///
+    /// Accepts either bare `RFC3339` or `RFC3339|UUID` for `(importedAt,id)`.
+    /// Bare timestamps are interpreted as `(timestamp, Uuid::max())`.
     pub before: Option<String>,
 }
 
@@ -103,6 +106,11 @@ fn map_reporting_error(error: EnrichmentProvenanceRepositoryError) -> Error {
     )
 }
 
+/// Parse the optional `before` cursor.
+///
+/// Accepted forms are bare `RFC3339` and `RFC3339|UUID`. Bare timestamps are
+/// normalized to `(timestamp, Uuid::max())` so legacy callers still align with
+/// `(importedAt,id)` ordering.
 fn parse_before_cursor(value: Option<String>) -> Result<Option<(DateTime<Utc>, Uuid)>, Error> {
     let Some(raw) = value else {
         return Ok(None);
@@ -134,7 +142,7 @@ fn encode_before_cursor(cursor: EnrichmentProvenanceCursor) -> String {
     path = "/api/v1/admin/enrichment/provenance",
     params(
         ("limit" = Option<usize>, Query, description = "Number of records to return, default 50, max 200"),
-        ("before" = Option<String>, Query, description = "Exclusive cursor RFC3339|UUID for importedAt/id ordering")
+        ("before" = Option<String>, Query, description = "Exclusive cursor RFC3339 or RFC3339|UUID for importedAt/id ordering; bare timestamps map to RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff")
     ),
     responses(
         (status = 200, description = "Enrichment provenance records", body = ListEnrichmentProvenanceResponseBody),
@@ -153,7 +161,7 @@ pub async fn list_enrichment_provenance(
     session: SessionContext,
     query: web::Query<ListEnrichmentProvenanceQuery>,
 ) -> ApiResult<HttpResponse> {
-    let _user_id = session.require_user_id()?;
+    let _user_id = session.require_admin_user_id()?;
     let query = query.into_inner();
     let limit = parse_limit(query.limit)?;
     let before = parse_before_cursor(query.before)?;

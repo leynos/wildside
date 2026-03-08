@@ -447,6 +447,7 @@ stability.
 | `GET`    | `/api/v1/interest-themes`               | List all available interest themes.                 | Optional       |
 | `GET`    | `/api/v1/catalogue/explore`             | Fetch the Explore catalogue snapshot.               | Session cookie |
 | `GET`    | `/api/v1/catalogue/descriptors`         | Fetch descriptor registries (tags, badges, safety). | Session cookie |
+| `GET`    | `/api/v1/admin/enrichment/provenance`   | List persisted enrichment provenance rows with `limit` and `before` query params. Returns `400` for validation failures and `503` when the reporting repository is unavailable. | Session cookie |
 | `POST`   | `/api/v1/routes`                        | Request generation of a personalised walking route. | Session cookie |
 | `GET`    | `/api/v1/routes/{request_id}`           | Poll for completion or fetch a generated route.     | Session cookie |
 | `GET`    | `/api/v1/routes/{route_id}`             | Fetch a generated route plan by ID.                 | Session cookie |
@@ -1922,9 +1923,10 @@ boundary discipline as 3.4.2:
   `GET /api/v1/admin/enrichment/provenance`, with query parameters
   `limit` (default 50, max 200) and optional `before`
   (`RFC3339|UUID` composite cursor; legacy RFC3339 is accepted as
-  `RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff`), and a response payload
-  shaped as `{ records, nextBefore? }` where `nextBefore` is emitted in
-  `RFC3339|UUID` form.
+  `RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff`). The endpoint requires the
+  authenticated fixture admin session and returns a response payload shaped as
+  `{ records, nextBefore? }` where `nextBefore` is emitted in `RFC3339|UUID`
+  form.
 
 Failure policy for this endpoint is explicit: unauthenticated requests return
 `401`, query validation failures return `400`, and provenance repository

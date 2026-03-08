@@ -170,6 +170,7 @@ diesel::table! {
 diesel::table! {
     overpass_enrichment_provenance (id) {
         id -> Uuid,
+        job_id -> Uuid,
         source_url -> Text,
         imported_at -> Timestamptz,
         bounds_min_lng -> Float8,

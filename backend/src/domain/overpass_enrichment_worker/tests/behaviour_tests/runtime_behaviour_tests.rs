@@ -34,7 +34,14 @@ async fn half_open_probe_success_closes_circuit(
         .await
         .expect("closed circuit allows call");
 
-    assert_eq!(fixture.source.calls.load(Ordering::SeqCst), 3);
+    assert_eq!(
+        fixture
+            .stub_call_counters()
+            .source
+            .calls
+            .load(Ordering::SeqCst),
+        3
+    );
     assert_eq!(fixture.circuit_state(), CircuitBreakerState::Closed);
 }
 

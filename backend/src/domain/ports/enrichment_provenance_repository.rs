@@ -9,6 +9,8 @@ use super::define_port_error;
 /// Persisted provenance record for one successful enrichment source fetch.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnrichmentProvenanceRecord {
+    /// Stable enrichment job identifier used for idempotent persistence.
+    pub job_id: Uuid,
     /// Source URL used for the successful enrichment call.
     pub source_url: String,
     /// Timestamp when provenance was imported into backend persistence.

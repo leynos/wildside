@@ -212,6 +212,7 @@ struct SplitBoundaryContext<'a> {
 #[diesel(table_name = overpass_enrichment_provenance)]
 struct EnrichmentProvenanceRow {
     id: Uuid,
+    job_id: Uuid,
     source_url: String,
     imported_at: DateTime<Utc>,
     bounds_min_lng: f64,
@@ -224,6 +225,7 @@ struct EnrichmentProvenanceRow {
 #[derive(Debug, Insertable)]
 #[diesel(table_name = overpass_enrichment_provenance)]
 struct NewEnrichmentProvenanceRow<'a> {
+    job_id: Uuid,
     source_url: &'a str,
     imported_at: DateTime<Utc>,
     bounds_min_lng: f64,
@@ -259,9 +261,11 @@ impl From<EnrichmentProvenanceRow> for EnrichmentProvenanceRecord {
     fn from(row: EnrichmentProvenanceRow) -> Self {
         // `id` and `created_at` stay persistence-local metadata.
         let _ = row.id;
+        let _ = row.job_id;
         let _ = row.created_at;
 
         Self {
+            job_id: row.job_id,
             source_url: row.source_url,
             imported_at: row.imported_at,
             bounding_box: [
@@ -282,6 +286,7 @@ fn to_insert_row(record: &EnrichmentProvenanceRecord) -> NewEnrichmentProvenance
         bounds_max_lat,
     ] = record.bounding_box;
     NewEnrichmentProvenanceRow {
+        job_id: record.job_id,
         source_url: record.source_url.as_str(),
         imported_at: record.imported_at,
         bounds_min_lng,
@@ -302,6 +307,8 @@ impl EnrichmentProvenanceRepository for DieselEnrichmentProvenanceRepository {
 
         diesel::insert_into(overpass_enrichment_provenance::table)
             .values(&row)
+            .on_conflict(overpass_enrichment_provenance::job_id)
+            .do_nothing()
             .execute(&mut conn)
             .await
             .map(|_| ())

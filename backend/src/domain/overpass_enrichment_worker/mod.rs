@@ -341,6 +341,7 @@ impl OverpassEnrichmentWorker {
         }
 
         let provenance_record = EnrichmentProvenanceRecord {
+            job_id: request.job_id,
             source_url,
             imported_at: self.clock.utc(),
             bounding_box: request.bounding_box,

@@ -10,6 +10,7 @@ use futures_util::future::LocalBoxFuture;
 use crate::domain::{Error, UserId};
 
 pub(crate) const USER_ID_KEY: &str = "user_id";
+const FIXTURE_ADMIN_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
 
 /// Newtype wrapper that exposes higher-level session operations.
 #[derive(Clone)]
@@ -50,6 +51,16 @@ impl SessionContext {
     pub fn require_user_id(&self) -> Result<UserId, Error> {
         self.user_id()?
             .ok_or_else(|| Error::unauthorized("login required"))
+    }
+
+    /// Require the authenticated fixture admin user id or return `401`.
+    pub fn require_admin_user_id(&self) -> Result<UserId, Error> {
+        let user_id = self.require_user_id()?;
+        if user_id.as_ref() == FIXTURE_ADMIN_USER_ID {
+            Ok(user_id)
+        } else {
+            Err(Error::unauthorized("admin login required"))
+        }
     }
 }
 
@@ -182,6 +193,51 @@ mod tests {
             &app,
             test::TestRequest::get()
                 .uri("/require")
+                .cookie(cookie)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn non_admin_user_is_unauthorised_for_admin_requirement() {
+        let app = test::init_service(
+            session_test_app()
+                .route(
+                    "/set-non-admin",
+                    web::get().to(|session: SessionContext| async move {
+                        let id = UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+                            .expect("fixture id");
+                        session.persist_user(&id)?;
+                        Ok::<_, Error>(HttpResponse::Ok())
+                    }),
+                )
+                .route(
+                    "/require-admin",
+                    web::get().to(|session: SessionContext| async move {
+                        let _ = session.require_admin_user_id()?;
+                        Ok::<_, Error>(HttpResponse::Ok())
+                    }),
+                ),
+        )
+        .await;
+
+        let set_res = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/set-non-admin").to_request(),
+        )
+        .await;
+        let cookie = set_res
+            .response()
+            .cookies()
+            .find(|cookie| cookie.name() == "session")
+            .expect("session cookie set");
+
+        let res = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/require-admin")
                 .cookie(cookie)
                 .to_request(),
         )

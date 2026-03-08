@@ -27,6 +27,30 @@ pub struct OverpassEnrichmentWorkerPorts {
 
 impl OverpassEnrichmentWorkerPorts {
     /// Build a strongly-typed worker port bundle.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::sync::Arc;
+    ///
+    /// use backend::domain::overpass_enrichment_worker::OverpassEnrichmentWorkerPorts;
+    /// use backend::domain::ports::{
+    ///     FixtureEnrichmentProvenanceRepository, FixtureOverpassEnrichmentSource,
+    ///     FixtureOsmPoiRepository, NoOpEnrichmentJobMetrics,
+    /// };
+    ///
+    /// let ports = OverpassEnrichmentWorkerPorts::new(
+    ///     Arc::new(FixtureOverpassEnrichmentSource),
+    ///     Arc::new(FixtureOsmPoiRepository),
+    ///     Arc::new(FixtureEnrichmentProvenanceRepository),
+    ///     Arc::new(NoOpEnrichmentJobMetrics),
+    /// );
+    ///
+    /// let _source = ports.source.clone();
+    /// let _poi_repository = ports.poi_repository.clone();
+    /// let _provenance_repository = ports.provenance_repository.clone();
+    /// let _metrics = ports.metrics.clone();
+    /// ```
     pub fn new(
         source: Arc<dyn OverpassEnrichmentSource>,
         poi_repository: Arc<dyn OsmPoiRepository>,

@@ -68,6 +68,9 @@ fn fixture_record(
     bounding_box: [f64; 4],
 ) -> EnrichmentProvenanceRecord {
     EnrichmentProvenanceRecord {
+        job_id: Uuid::from_u128(source_url.bytes().fold(0u128, |acc, byte| {
+            acc.wrapping_mul(16_777_619).wrapping_add(u128::from(byte))
+        })),
         source_url: source_url.to_owned(),
         imported_at,
         bounding_box,

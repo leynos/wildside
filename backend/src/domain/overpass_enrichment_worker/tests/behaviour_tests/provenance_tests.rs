@@ -138,6 +138,7 @@ async fn source_url_is_persisted_verbatim(
         .lock()
         .expect("provenance mutex");
     assert_eq!(persisted.len(), 1);
+    assert_eq!(persisted[0].job_id, job.job_id);
     assert_eq!(persisted[0].source_url, edge_source_url);
     assert_eq!(persisted[0].imported_at, now);
     assert_eq!(persisted[0].bounding_box, job.bounding_box);
