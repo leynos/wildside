@@ -151,8 +151,9 @@ pub async fn login(
 ) -> ApiResult<HttpResponse> {
     let credentials =
         LoginCredentials::try_from(payload.into_inner()).map_err(map_login_validation_error)?;
+    let is_admin = credentials.username() == "admin";
     let user_id = state.login.authenticate(&credentials).await?;
-    session.persist_user(&user_id)?;
+    session.persist_authenticated_user(&user_id, is_admin)?;
     Ok(HttpResponse::Ok().finish())
 }
 

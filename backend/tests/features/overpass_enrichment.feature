@@ -41,3 +41,18 @@ Feature: Overpass enrichment worker
     When two enrichment jobs run concurrently for launch-a bounds
     Then both concurrent jobs complete successfully
     And the max observed concurrent source calls is one
+
+  Scenario: Overpass enrichment persists provenance metadata
+    Given a Diesel-backed Overpass enrichment worker with successful source data and provenance capture
+    When an enrichment job runs for launch-a bounds
+    Then enrichment provenance is persisted with source URL timestamp and bounding box
+
+  Scenario: Overpass enrichment reports provenance persistence failures
+    Given a Diesel-backed Overpass enrichment worker with unavailable provenance persistence
+    When an enrichment job runs for launch-a bounds
+    Then enrichment provenance write failures surface internal errors
+
+  Scenario: Overpass enrichment persists provenance even with zero POIs
+    Given a Diesel-backed Overpass enrichment worker with successful zero-POI source data and provenance capture
+    When an enrichment job runs for launch-a bounds
+    Then enrichment provenance entries are written even when zero POIs are returned

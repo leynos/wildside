@@ -19,8 +19,10 @@ use super::{
 };
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
-    EnrichmentJobMetricsError, EnrichmentJobSuccess, OsmPoiIngestionRecord, OsmPoiRepository,
-    OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
+    EnrichmentJobMetricsError, EnrichmentJobSuccess, EnrichmentProvenanceRecord,
+    EnrichmentProvenanceRepository, EnrichmentProvenanceRepositoryError,
+    ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse, OsmPoiIngestionRecord,
+    OsmPoiRepository, OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
     OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
 };
 use crate::test_support::overpass_enrichment::{
@@ -88,36 +90,93 @@ impl OverpassEnrichmentSource for SourceStub {
     }
 }
 
-struct RepoStub {
-    scripted: Mutex<VecDeque<Result<(), OsmPoiRepositoryError>>>,
-    calls: AtomicUsize,
-    persisted: Mutex<Vec<Vec<OsmPoiIngestionRecord>>>,
+trait ScriptedRepositoryRecord {
+    const MUTEX_MESSAGE: &'static str;
 }
-impl RepoStub {
-    fn new(scripted: Vec<Result<(), OsmPoiRepositoryError>>) -> Self {
+
+impl ScriptedRepositoryRecord for Vec<OsmPoiIngestionRecord> {
+    const MUTEX_MESSAGE: &'static str = "repo mutex";
+}
+
+impl ScriptedRepositoryRecord for EnrichmentProvenanceRecord {
+    const MUTEX_MESSAGE: &'static str = "provenance mutex";
+}
+
+struct ScriptedRepositoryStub<T, E> {
+    scripted: Mutex<VecDeque<Result<(), E>>>,
+    calls: AtomicUsize,
+    persisted: Mutex<Vec<T>>,
+}
+
+impl<T, E> ScriptedRepositoryStub<T, E>
+where
+    T: Clone + ScriptedRepositoryRecord,
+{
+    fn new(scripted: Vec<Result<(), E>>) -> Self {
         Self {
             scripted: Mutex::new(scripted.into()),
             calls: AtomicUsize::new(0),
             persisted: Mutex::new(Vec::new()),
         }
     }
+
+    fn persist_internal(&self, record: &T) -> Result<(), E> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut scripted = self.scripted.lock().expect(T::MUTEX_MESSAGE);
+        match scripted.pop_front() {
+            Some(Ok(())) => {
+                drop(scripted);
+                self.persisted
+                    .lock()
+                    .expect(T::MUTEX_MESSAGE)
+                    .push(record.clone());
+                Ok(())
+            }
+            Some(Err(error)) => Err(error),
+            None => {
+                debug_assert!(
+                    false,
+                    "ScriptedRepositoryStub: no scripted responses left for {}",
+                    std::any::type_name::<T>(),
+                );
+                Ok(())
+            }
+        }
+    }
 }
+
+type RepoStub = ScriptedRepositoryStub<Vec<OsmPoiIngestionRecord>, OsmPoiRepositoryError>;
+
 #[async_trait]
 impl OsmPoiRepository for RepoStub {
     async fn upsert_pois(
         &self,
         records: &[OsmPoiIngestionRecord],
     ) -> Result<(), OsmPoiRepositoryError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        self.persisted
-            .lock()
-            .expect("repo mutex")
-            .push(records.to_vec());
-        self.scripted
-            .lock()
-            .expect("repo mutex")
-            .pop_front()
-            .unwrap_or(Ok(()))
+        self.persist_internal(&records.to_vec())
+    }
+}
+
+type ProvenanceRepoStub =
+    ScriptedRepositoryStub<EnrichmentProvenanceRecord, EnrichmentProvenanceRepositoryError>;
+
+#[async_trait]
+impl EnrichmentProvenanceRepository for ProvenanceRepoStub {
+    async fn persist(
+        &self,
+        record: &EnrichmentProvenanceRecord,
+    ) -> Result<(), EnrichmentProvenanceRepositoryError> {
+        self.persist_internal(record)
+    }
+
+    async fn list_recent(
+        &self,
+        _request: &ListEnrichmentProvenanceRequest,
+    ) -> Result<ListEnrichmentProvenanceResponse, EnrichmentProvenanceRepositoryError> {
+        Ok(ListEnrichmentProvenanceResponse {
+            records: Vec::new(),
+            next_before: None,
+        })
     }
 }
 
@@ -183,8 +242,21 @@ fn config() -> OverpassEnrichmentWorkerConfig {
 }
 
 fn response(poi_count: usize, transfer_bytes: u64) -> OverpassEnrichmentResponse {
+    response_with_source_url(
+        poi_count,
+        transfer_bytes,
+        "https://overpass.example/api/interpreter",
+    )
+}
+
+fn response_with_source_url(
+    poi_count: usize,
+    transfer_bytes: u64,
+    source_url: &str,
+) -> OverpassEnrichmentResponse {
     OverpassEnrichmentResponse {
         transfer_bytes,
+        source_url: source_url.to_owned(),
         pois: (0..poi_count)
             .map(|idx| OverpassPoi {
                 element_type: "node".to_owned(),

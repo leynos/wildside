@@ -2,10 +2,10 @@
 
 use backend::domain::ports::{
     CreateWalkSessionResponse, DeleteNoteResponse, DeleteOfflineBundleResponse,
-    GetOfflineBundleResponse, ListOfflineBundlesResponse, OfflineBundlePayload,
-    UpdatePreferencesResponse, UpdateProgressResponse, UpsertNoteResponse,
-    UpsertOfflineBundleResponse, WalkCompletionSummaryPayload,
-    empty_catalogue_and_descriptor_snapshots,
+    EnrichmentProvenanceRecord, GetOfflineBundleResponse, ListEnrichmentProvenanceResponse,
+    ListOfflineBundlesResponse, OfflineBundlePayload, UpdatePreferencesResponse,
+    UpdateProgressResponse, UpsertNoteResponse, UpsertOfflineBundleResponse,
+    WalkCompletionSummaryPayload, empty_catalogue_and_descriptor_snapshots,
 };
 use backend::domain::{
     BoundingBox, DisplayName, InterestThemeId, OfflineBundleKind, OfflineBundleStatus,
@@ -18,15 +18,16 @@ use uuid::Uuid;
 
 use crate::doubles::{
     CatalogueQueryResponse, DeleteNoteCommandResponse, DeleteOfflineBundleCommandResponse,
-    DescriptorQueryResponse, LoginResponse, OfflineBundleGetQueryResponse,
-    OfflineBundleListQueryResponse, RecordingCatalogueRepository, RecordingDescriptorRepository,
-    RecordingLoginService, RecordingOfflineBundleCommand, RecordingOfflineBundleQuery,
-    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
-    RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
-    RecordingUserProfileQuery, RecordingUsersQuery, RecordingWalkSessionCommand,
-    RouteAnnotationsQueryResponse, UpdateProgressCommandResponse, UpsertNoteCommandResponse,
-    UpsertOfflineBundleCommandResponse, UserInterestsResponse, UserPreferencesCommandResponse,
-    UserPreferencesQueryResponse, UserProfileResponse, UsersResponse, WalkSessionCommandResponse,
+    DescriptorQueryResponse, EnrichmentProvenanceListResponse, LoginResponse,
+    OfflineBundleGetQueryResponse, OfflineBundleListQueryResponse, RecordingCatalogueRepository,
+    RecordingDescriptorRepository, RecordingEnrichmentProvenanceRepository, RecordingLoginService,
+    RecordingOfflineBundleCommand, RecordingOfflineBundleQuery, RecordingRouteAnnotationsCommand,
+    RecordingRouteAnnotationsQuery, RecordingUserInterestsCommand, RecordingUserPreferencesCommand,
+    RecordingUserPreferencesQuery, RecordingUserProfileQuery, RecordingUsersQuery,
+    RecordingWalkSessionCommand, RouteAnnotationsQueryResponse, UpdateProgressCommandResponse,
+    UpsertNoteCommandResponse, UpsertOfflineBundleCommandResponse, UserInterestsResponse,
+    UserPreferencesCommandResponse, UserPreferencesQueryResponse, UserProfileResponse,
+    UsersResponse, WalkSessionCommandResponse,
 };
 
 /// Returns the canonical authenticated user identifier for harness defaults.
@@ -214,6 +215,39 @@ pub(super) fn create_catalogue_doubles()
         RecordingDescriptorRepository::new(DescriptorQueryResponse::Ok(descriptor_snapshot));
 
     (catalogue, descriptors)
+}
+
+/// Creates a default enrichment provenance reporting double.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use backend::domain::ports::ListEnrichmentProvenanceRequest;
+///
+/// let provenance = create_enrichment_provenance_double();
+/// let response = tokio_test::block_on(
+///     provenance.list_recent(&ListEnrichmentProvenanceRequest::new(50, None)),
+/// )
+/// .expect("default response");
+///
+/// assert_eq!(response.records.len(), 1);
+/// assert_eq!(
+///     response.records[0].source_url,
+///     "https://overpass.example/api/interpreter"
+/// );
+/// ```
+pub(super) fn create_enrichment_provenance_double() -> RecordingEnrichmentProvenanceRepository {
+    RecordingEnrichmentProvenanceRepository::new(EnrichmentProvenanceListResponse::Ok(
+        ListEnrichmentProvenanceResponse {
+            records: vec![EnrichmentProvenanceRecord {
+                job_id: fixture_uuid("00000000-0000-0000-0000-000000000303"),
+                source_url: "https://overpass.example/api/interpreter".to_owned(),
+                imported_at: fixture_timestamp("2026-02-28T12:00:00Z"),
+                bounding_box: [-3.2, 55.9, -3.0, 56.0],
+            }],
+            next_before: None,
+        },
+    ))
 }
 
 /// Creates default offline bundle and walk-session doubles.

@@ -24,19 +24,20 @@ use tokio::task::LocalSet;
 mod harness_defaults;
 
 use self::harness_defaults::{
-    create_catalogue_doubles, create_fixture_user_id, create_interests_double,
-    create_offline_and_walk_doubles, create_preferences_doubles, create_route_annotations_doubles,
-    create_user_doubles,
+    create_catalogue_doubles, create_enrichment_provenance_double, create_fixture_user_id,
+    create_interests_double, create_offline_and_walk_doubles, create_preferences_doubles,
+    create_route_annotations_doubles, create_user_doubles,
 };
 use crate::doubles::{
     QueueUserOnboarding, RecordingCatalogueRepository, RecordingDescriptorRepository,
-    RecordingLoginService, RecordingOfflineBundleCommand, RecordingOfflineBundleQuery,
-    RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
+    RecordingEnrichmentProvenanceRepository, RecordingLoginService, RecordingOfflineBundleCommand,
+    RecordingOfflineBundleQuery, RecordingRouteAnnotationsCommand, RecordingRouteAnnotationsQuery,
     RecordingUserInterestsCommand, RecordingUserPreferencesCommand, RecordingUserPreferencesQuery,
     RecordingUserProfileQuery, RecordingUsersQuery, RecordingWalkSessionCommand,
 };
 use backend::Trace;
 use backend::domain::ports::{FixtureRouteSubmissionService, FixtureWalkSessionQuery};
+use backend::inbound::http::admin_enrichment::list_enrichment_provenance as list_enrichment_provenance_handler;
 use backend::inbound::http::annotations::{
     get_annotations as get_annotations_handler, update_progress as update_progress_handler,
     upsert_note as upsert_note_handler,
@@ -77,6 +78,7 @@ pub(crate) struct AdapterWorld {
     pub(crate) route_annotations_query: RecordingRouteAnnotationsQuery,
     pub(crate) catalogue: RecordingCatalogueRepository,
     pub(crate) descriptors: RecordingDescriptorRepository,
+    pub(crate) enrichment_provenance: RecordingEnrichmentProvenanceRepository,
     pub(crate) offline_bundles: RecordingOfflineBundleCommand,
     pub(crate) offline_bundles_query: RecordingOfflineBundleQuery,
     pub(crate) walk_sessions: RecordingWalkSessionCommand,
@@ -165,6 +167,7 @@ async fn spawn_adapter_server(
             .service(update_progress_handler)
             .service(get_explore_catalogue_handler)
             .service(get_descriptors_handler)
+            .service(list_enrichment_provenance_handler)
             .service(list_offline_bundles_handler)
             .service(upsert_offline_bundle_handler)
             .service(delete_offline_bundle_handler)
@@ -199,6 +202,65 @@ fn create_runtime_and_local() -> (Runtime, LocalSet) {
     (runtime, local)
 }
 
+struct HttpStateTestDoubles {
+    login: RecordingLoginService,
+    users: RecordingUsersQuery,
+    profile: RecordingUserProfileQuery,
+    interests: RecordingUserInterestsCommand,
+    preferences: RecordingUserPreferencesCommand,
+    preferences_query: RecordingUserPreferencesQuery,
+    route_annotations: RecordingRouteAnnotationsCommand,
+    route_annotations_query: RecordingRouteAnnotationsQuery,
+    catalogue: RecordingCatalogueRepository,
+    descriptors: RecordingDescriptorRepository,
+    enrichment_provenance: RecordingEnrichmentProvenanceRepository,
+    offline_bundles: RecordingOfflineBundleCommand,
+    offline_bundles_query: RecordingOfflineBundleQuery,
+    walk_sessions: RecordingWalkSessionCommand,
+}
+
+fn build_http_state_for_tests(doubles: HttpStateTestDoubles) -> HttpState {
+    let HttpStateTestDoubles {
+        login,
+        users,
+        profile,
+        interests,
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
+        catalogue,
+        descriptors,
+        enrichment_provenance,
+        offline_bundles,
+        offline_bundles_query,
+        walk_sessions,
+    } = doubles;
+
+    HttpState::new_with_extra(
+        HttpStatePorts {
+            login: Arc::new(login),
+            users: Arc::new(users),
+            profile: Arc::new(profile),
+            interests: Arc::new(interests),
+            preferences: Arc::new(preferences),
+            preferences_query: Arc::new(preferences_query),
+            route_annotations: Arc::new(route_annotations),
+            route_annotations_query: Arc::new(route_annotations_query),
+            route_submission: Arc::new(FixtureRouteSubmissionService),
+            catalogue: Arc::new(catalogue),
+            descriptors: Arc::new(descriptors),
+        },
+        HttpStateExtraPorts {
+            offline_bundles: Arc::new(offline_bundles),
+            offline_bundles_query: Arc::new(offline_bundles_query),
+            enrichment_provenance: Arc::new(enrichment_provenance),
+            walk_sessions: Arc::new(walk_sessions),
+            walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
+        },
+    )
+}
+
 #[fixture]
 pub(crate) fn world() -> WorldFixture {
     let (runtime, local) = create_runtime_and_local();
@@ -208,30 +270,26 @@ pub(crate) fn world() -> WorldFixture {
     let (preferences, preferences_query) = create_preferences_doubles(&user_id);
     let (route_annotations, route_annotations_query) = create_route_annotations_doubles(&user_id);
     let (catalogue, descriptors) = create_catalogue_doubles();
+    let enrichment_provenance = create_enrichment_provenance_double();
     let (offline_bundles, offline_bundles_query, walk_sessions) =
         create_offline_and_walk_doubles(&user_id);
     let onboarding = QueueUserOnboarding::new(Vec::new());
-    let http_state = HttpState::new_with_extra(
-        HttpStatePorts {
-            login: Arc::new(login.clone()),
-            users: Arc::new(users.clone()),
-            profile: Arc::new(profile.clone()),
-            interests: Arc::new(interests.clone()),
-            preferences: Arc::new(preferences.clone()),
-            preferences_query: Arc::new(preferences_query.clone()),
-            route_annotations: Arc::new(route_annotations.clone()),
-            route_annotations_query: Arc::new(route_annotations_query.clone()),
-            route_submission: Arc::new(FixtureRouteSubmissionService),
-            catalogue: Arc::new(catalogue.clone()),
-            descriptors: Arc::new(descriptors.clone()),
-        },
-        HttpStateExtraPorts {
-            offline_bundles: Arc::new(offline_bundles.clone()),
-            offline_bundles_query: Arc::new(offline_bundles_query.clone()),
-            walk_sessions: Arc::new(walk_sessions.clone()),
-            walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
-        },
-    );
+    let http_state = build_http_state_for_tests(HttpStateTestDoubles {
+        login: login.clone(),
+        users: users.clone(),
+        profile: profile.clone(),
+        interests: interests.clone(),
+        preferences: preferences.clone(),
+        preferences_query: preferences_query.clone(),
+        route_annotations: route_annotations.clone(),
+        route_annotations_query: route_annotations_query.clone(),
+        catalogue: catalogue.clone(),
+        descriptors: descriptors.clone(),
+        enrichment_provenance: enrichment_provenance.clone(),
+        offline_bundles: offline_bundles.clone(),
+        offline_bundles_query: offline_bundles_query.clone(),
+        walk_sessions: walk_sessions.clone(),
+    });
     let ws_state = crate::ws_support::ws_state(onboarding.clone());
 
     let (base_url, server) = local
@@ -255,6 +313,7 @@ pub(crate) fn world() -> WorldFixture {
         route_annotations_query,
         catalogue,
         descriptors,
+        enrichment_provenance,
         offline_bundles,
         offline_bundles_query,
         walk_sessions,

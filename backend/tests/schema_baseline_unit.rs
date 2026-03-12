@@ -1,4 +1,4 @@
-//! Static contract checks for roadmap 3.1.1, 3.3.2, and 3.4.1 migration SQL.
+//! Static contract checks for roadmap 3.1.1, 3.3.2, 3.4.1, and 3.4.3 migration SQL.
 
 use rstest::rstest;
 
@@ -17,6 +17,16 @@ const OSM_PROVENANCE_UP: &str =
     include_str!("../migrations/2026-02-24-000000_create_osm_ingestion_provenance/up.sql");
 const OSM_PROVENANCE_DOWN: &str =
     include_str!("../migrations/2026-02-24-000000_create_osm_ingestion_provenance/down.sql");
+const ENRICHMENT_PROVENANCE_UP: &str =
+    include_str!("../migrations/2026-02-28-000000_create_overpass_enrichment_provenance/up.sql");
+const ENRICHMENT_PROVENANCE_DOWN: &str =
+    include_str!("../migrations/2026-02-28-000000_create_overpass_enrichment_provenance/down.sql");
+const ENRICHMENT_PROVENANCE_JOB_ID_UP: &str = include_str!(
+    "../migrations/2026-03-08-000000_add_job_id_to_overpass_enrichment_provenance/up.sql"
+);
+const ENRICHMENT_PROVENANCE_JOB_ID_DOWN: &str = include_str!(
+    "../migrations/2026-03-08-000000_add_job_id_to_overpass_enrichment_provenance/down.sql"
+);
 
 #[rstest]
 fn enables_required_extensions() {
@@ -151,5 +161,69 @@ fn osm_ingestion_provenance_down_migration_drops_schema_objects(#[case] drop_sta
     assert!(
         OSM_PROVENANCE_DOWN.contains(drop_statement),
         "expected OSM provenance down migration to contain: {drop_statement}"
+    );
+}
+
+#[rstest]
+#[case("CREATE TABLE IF NOT EXISTS overpass_enrichment_provenance")]
+#[case("id UUID PRIMARY KEY DEFAULT gen_random_uuid()")]
+#[case("imported_at TIMESTAMPTZ NOT NULL")]
+#[case("source_url TEXT NOT NULL CHECK (char_length(source_url) > 0)")]
+#[case(
+    "bounds_min_lng DOUBLE PRECISION NOT NULL CHECK (bounds_min_lng >= -180.0 AND bounds_min_lng <= 180.0)"
+)]
+#[case(
+    "bounds_min_lat DOUBLE PRECISION NOT NULL CHECK (bounds_min_lat >= -90.0 AND bounds_min_lat <= 90.0)"
+)]
+#[case(
+    "bounds_max_lng DOUBLE PRECISION NOT NULL CHECK (bounds_max_lng >= -180.0 AND bounds_max_lng <= 180.0)"
+)]
+#[case(
+    "bounds_max_lat DOUBLE PRECISION NOT NULL CHECK (bounds_max_lat >= -90.0 AND bounds_max_lat <= 90.0)"
+)]
+#[case("CONSTRAINT overpass_enrichment_provenance_bounds_order CHECK")]
+#[case("idx_overpass_enrichment_provenance_imported_at")]
+#[case("ON overpass_enrichment_provenance (imported_at DESC, id DESC)")]
+fn creates_overpass_enrichment_provenance_contract(#[case] ddl_fragment: &str) {
+    assert!(
+        ENRICHMENT_PROVENANCE_UP.contains(ddl_fragment),
+        "expected enrichment provenance migration to contain: {ddl_fragment}"
+    );
+}
+
+#[rstest]
+#[case("ADD COLUMN IF NOT EXISTS job_id UUID")]
+#[case("UPDATE overpass_enrichment_provenance")]
+#[case("ALTER COLUMN job_id SET NOT NULL")]
+#[case("CREATE UNIQUE INDEX IF NOT EXISTS idx_overpass_enrichment_provenance_job_id")]
+#[case("idx_overpass_enrichment_provenance_job_id")]
+fn creates_overpass_enrichment_provenance_job_id_contract(#[case] ddl_fragment: &str) {
+    assert!(
+        ENRICHMENT_PROVENANCE_JOB_ID_UP.contains(ddl_fragment),
+        "expected enrichment provenance job id migration to contain: {ddl_fragment}"
+    );
+}
+
+#[rstest]
+#[case("DROP INDEX IF EXISTS idx_overpass_enrichment_provenance_imported_at")]
+#[case("DROP TABLE IF EXISTS overpass_enrichment_provenance")]
+fn overpass_enrichment_provenance_down_migration_drops_schema_objects(
+    #[case] drop_statement: &str,
+) {
+    assert!(
+        ENRICHMENT_PROVENANCE_DOWN.contains(drop_statement),
+        "expected enrichment provenance down migration to contain: {drop_statement}"
+    );
+}
+
+#[rstest]
+#[case("DROP INDEX IF EXISTS idx_overpass_enrichment_provenance_job_id")]
+#[case("DROP COLUMN IF EXISTS job_id")]
+fn overpass_enrichment_provenance_job_id_down_migration_drops_schema_objects(
+    #[case] drop_statement: &str,
+) {
+    assert!(
+        ENRICHMENT_PROVENANCE_JOB_ID_DOWN.contains(drop_statement),
+        "expected enrichment provenance job id down migration to contain: {drop_statement}"
     );
 }
