@@ -1,0 +1,233 @@
+//! Behavioural coverage for revision-safe interests updates against real DB wiring.
+
+use rstest::fixture;
+use rstest_bdd_macros::{given, scenario, then, when};
+use uuid::Uuid;
+
+mod support;
+
+use support::handle_cluster_setup_failure;
+
+#[path = "../src/server/config.rs"]
+#[expect(
+    dead_code,
+    reason = "tests import ServerConfig from server_config for DB-backed HTTP flows"
+)]
+mod server_config;
+pub(crate) use server_config::ServerConfig;
+
+#[path = "../src/server/state_builders.rs"]
+mod state_builders;
+
+#[path = "user_interests_revision_conflicts_bdd/flow_support.rs"]
+mod flow_support;
+
+use flow_support::{
+    FIRST_THEME_ID, PreferencesData, SAFETY_TOGGLE_ID, SECOND_THEME_ID, THIRD_THEME_ID, World,
+    assert_conflict_snapshot, assert_interests_snapshot, assert_preferences_snapshot, is_skipped,
+    run_first_write, run_matching_revision_write, run_missing_revision_conflict,
+    run_preserve_non_interest_flow, run_stale_revision_conflict, seed_preferences, seed_user,
+    setup_db_context,
+};
+use support::profile_interests::FIXTURE_AUTH_ID;
+
+#[fixture]
+fn world() -> World {
+    World::default()
+}
+
+#[given("db-present startup mode backed by embedded postgres")]
+fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
+    match setup_db_context() {
+        Ok(db) => {
+            seed_user(
+                db.database_url.as_str(),
+                Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+                "Revision Ada",
+            )
+            .expect("seed db user");
+            world.db = Some(db);
+            world.skip_reason = None;
+        }
+        Err(error) => {
+            let _ = handle_cluster_setup_failure::<()>(error.as_str());
+            world.skip_reason = Some(error);
+        }
+    }
+}
+
+#[given("existing preferences revision 1 with preserved safety and unit settings")]
+fn existing_preferences_revision_1_with_preserved_safety_and_unit_settings(world: &mut World) {
+    if is_skipped(world) {
+        return;
+    }
+
+    let db = world.db.as_ref().expect("db context");
+    seed_preferences(
+        db.database_url.as_str(),
+        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+        PreferencesData::new(&[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "imperial", 1),
+    )
+    .expect("seed user preferences");
+}
+
+#[given("existing preferences revision 2")]
+fn existing_preferences_revision_2(world: &mut World) {
+    if is_skipped(world) {
+        return;
+    }
+
+    let db = world.db.as_ref().expect("db context");
+    seed_preferences(
+        db.database_url.as_str(),
+        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+        PreferencesData::new(&[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "metric", 2),
+    )
+    .expect("seed user preferences");
+}
+
+#[when("the client writes interests for the first time")]
+fn the_client_writes_interests_for_the_first_time(world: &mut World) {
+    run_first_write(world);
+}
+
+#[when("the client writes interests twice using the returned revision")]
+fn the_client_writes_interests_twice_using_the_returned_revision(world: &mut World) {
+    run_matching_revision_write(world);
+}
+
+#[when("the client writes interests with stale expected revision 1")]
+fn the_client_writes_interests_with_stale_expected_revision_1(world: &mut World) {
+    run_stale_revision_conflict(world);
+}
+
+#[when("the client writes interests without expected revision after preferences exist")]
+fn the_client_writes_interests_without_expected_revision_after_preferences_exist(
+    world: &mut World,
+) {
+    run_missing_revision_conflict(world);
+}
+
+#[when("the client updates interests and then fetches preferences")]
+fn the_client_updates_interests_and_then_fetches_preferences(world: &mut World) {
+    run_preserve_non_interest_flow(world);
+}
+
+#[then("the first interests response includes revision 1")]
+fn the_first_interests_response_includes_revision_1(world: &mut World) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_interests_snapshot(
+        world.first_update.as_ref().expect("first update response"),
+        &[FIRST_THEME_ID],
+        1,
+    );
+}
+
+#[then("the second interests response includes revision 2")]
+fn the_second_interests_response_includes_revision_2(world: &mut World) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_interests_snapshot(
+        world
+            .second_update
+            .as_ref()
+            .expect("second update response"),
+        &[SECOND_THEME_ID],
+        2,
+    );
+}
+
+#[then("the response is a conflict with expected revision 1 and actual revision 2")]
+fn the_response_is_a_conflict_with_expected_revision_1_and_actual_revision_2(world: &mut World) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_conflict_snapshot(
+        world.first_update.as_ref().expect("conflict response"),
+        Some(1),
+        2,
+    );
+}
+
+#[then("the response is a conflict with missing expected revision and actual revision 1")]
+fn the_response_is_a_conflict_with_missing_expected_revision_and_actual_revision_1(
+    world: &mut World,
+) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_conflict_snapshot(
+        world.first_update.as_ref().expect("conflict response"),
+        None,
+        1,
+    );
+}
+
+#[then("the fetched preferences preserve safety and unit settings while advancing revision 2")]
+fn the_fetched_preferences_preserve_safety_and_unit_settings_while_advancing_revision_2(
+    world: &mut World,
+) {
+    if is_skipped(world) {
+        return;
+    }
+
+    assert_interests_snapshot(
+        world.first_update.as_ref().expect("update response"),
+        &[THIRD_THEME_ID],
+        2,
+    );
+    assert_preferences_snapshot(
+        world.preferences.as_ref().expect("preferences response"),
+        &[THIRD_THEME_ID],
+        &[SAFETY_TOGGLE_ID],
+        "imperial",
+        2,
+    );
+}
+
+#[scenario(
+    path = "tests/features/user_interests_revision_conflicts.feature",
+    name = "First interests write creates revision 1"
+)]
+fn first_interests_write_creates_revision_1(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_interests_revision_conflicts.feature",
+    name = "Matching expected revision advances interests revision"
+)]
+fn matching_expected_revision_advances_interests_revision(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_interests_revision_conflicts.feature",
+    name = "Stale expected revision returns a conflict"
+)]
+fn stale_expected_revision_returns_a_conflict(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_interests_revision_conflicts.feature",
+    name = "Missing expected revision after preferences exist returns a conflict"
+)]
+fn missing_expected_revision_after_preferences_exist_returns_a_conflict(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/user_interests_revision_conflicts.feature",
+    name = "Interests updates preserve non-interest preferences fields"
+)]
+fn interests_updates_preserve_non_interest_preferences_fields(world: World) {
+    drop(world);
+}
