@@ -31,9 +31,41 @@ use flow_support::{
 };
 use support::profile_interests::FIXTURE_AUTH_ID;
 
+fn with_world<F: FnOnce(&mut World)>(world: &mut World, f: F) {
+    if !is_skipped(world) {
+        f(world);
+    }
+}
+
 #[fixture]
 fn world() -> World {
     World::default()
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "step helper signature is prescribed by the refactor task"
+)]
+fn seed_prefs(
+    world: &mut World,
+    interests: &[&str],
+    safety: &[&str],
+    unit_system: &str,
+    revision: i32,
+) {
+    let db = world.db.as_ref().expect("db context");
+    let user_id = Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID");
+    seed_preferences(
+        db.database_url.as_str(),
+        user_id,
+        SeedPreferences {
+            interest_ids: interests,
+            safety_ids: safety,
+            unit_system,
+            revision,
+        },
+    )
+    .expect("seed user preferences");
 }
 
 #[given("db-present startup mode backed by embedded postgres")]
@@ -58,42 +90,16 @@ fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
 
 #[given("existing preferences revision 1 with preserved safety and unit settings")]
 fn existing_preferences_revision_1_with_preserved_safety_and_unit_settings(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    let db = world.db.as_ref().expect("db context");
-    seed_preferences(
-        db.database_url.as_str(),
-        SeedPreferences {
-            user_id: Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
-            interest_ids: &[FIRST_THEME_ID],
-            safety_ids: &[SAFETY_TOGGLE_ID],
-            unit_system: "imperial",
-            revision: 1,
-        },
-    )
-    .expect("seed user preferences");
+    with_world(world, |world| {
+        seed_prefs(world, &[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "imperial", 1);
+    });
 }
 
 #[given("existing preferences revision 2")]
 fn existing_preferences_revision_2(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    let db = world.db.as_ref().expect("db context");
-    seed_preferences(
-        db.database_url.as_str(),
-        SeedPreferences {
-            user_id: Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
-            interest_ids: &[FIRST_THEME_ID],
-            safety_ids: &[SAFETY_TOGGLE_ID],
-            unit_system: "metric",
-            revision: 2,
-        },
-    )
-    .expect("seed user preferences");
+    with_world(world, |world| {
+        seed_prefs(world, &[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "metric", 2);
+    });
 }
 
 #[when("the client writes interests for the first time")]
@@ -125,83 +131,73 @@ fn the_client_updates_interests_and_then_fetches_preferences(world: &mut World) 
 
 #[then("the first interests response includes revision 1")]
 fn the_first_interests_response_includes_revision_1(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_interests_snapshot(
-        world.first_update.as_ref().expect("first update response"),
-        &[FIRST_THEME_ID],
-        1,
-    );
+    with_world(world, |world| {
+        assert_interests_snapshot(
+            world.first_update.as_ref().expect("first update response"),
+            &[FIRST_THEME_ID],
+            1,
+        );
+    });
 }
 
 #[then("the second interests response includes revision 2")]
 fn the_second_interests_response_includes_revision_2(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_interests_snapshot(
-        world
-            .second_update
-            .as_ref()
-            .expect("second update response"),
-        &[SECOND_THEME_ID],
-        2,
-    );
+    with_world(world, |world| {
+        assert_interests_snapshot(
+            world
+                .second_update
+                .as_ref()
+                .expect("second update response"),
+            &[SECOND_THEME_ID],
+            2,
+        );
+    });
 }
 
 #[then("the response is a conflict with expected revision 1 and actual revision 2")]
 fn the_response_is_a_conflict_with_expected_revision_1_and_actual_revision_2(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_conflict_snapshot(
-        world.first_update.as_ref().expect("conflict response"),
-        Some(1),
-        2,
-    );
+    with_world(world, |world| {
+        assert_conflict_snapshot(
+            world.first_update.as_ref().expect("conflict response"),
+            Some(1),
+            2,
+        );
+    });
 }
 
 #[then("the response is a conflict with missing expected revision and actual revision 1")]
 fn the_response_is_a_conflict_with_missing_expected_revision_and_actual_revision_1(
     world: &mut World,
 ) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_conflict_snapshot(
-        world.first_update.as_ref().expect("conflict response"),
-        None,
-        1,
-    );
+    with_world(world, |world| {
+        assert_conflict_snapshot(
+            world.first_update.as_ref().expect("conflict response"),
+            None,
+            1,
+        );
+    });
 }
 
 #[then("the fetched preferences preserve safety and unit settings while advancing revision 2")]
 fn the_fetched_preferences_preserve_safety_and_unit_settings_while_advancing_revision_2(
     world: &mut World,
 ) {
-    if is_skipped(world) {
-        return;
-    }
-
-    assert_interests_snapshot(
-        world.first_update.as_ref().expect("update response"),
-        &[THIRD_THEME_ID],
-        2,
-    );
-    assert_preferences_snapshot(
-        world.preferences.as_ref().expect("preferences response"),
-        ExpectedPreferences {
-            interest_ids: &[THIRD_THEME_ID],
-            safety_ids: &[SAFETY_TOGGLE_ID],
-            unit_system: "imperial",
-            revision: 2,
-        },
-    );
+    with_world(world, |world| {
+        assert_interests_snapshot(
+            world.first_update.as_ref().expect("update response"),
+            &[THIRD_THEME_ID],
+            2,
+        );
+        assert_preferences_snapshot(
+            world.preferences.as_ref().expect("preferences response"),
+            ExpectedPreferences {
+                interest_ids: &[THIRD_THEME_ID],
+                safety_ids: &[SAFETY_TOGGLE_ID],
+                unit_system: "imperial",
+                revision: 2,
+            },
+        );
+    });
 }
 
 #[scenario(

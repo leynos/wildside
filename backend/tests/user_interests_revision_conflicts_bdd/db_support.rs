@@ -16,7 +16,6 @@ pub(crate) struct DbContext {
 }
 
 pub(crate) struct SeedPreferences<'a> {
-    pub(crate) user_id: Uuid,
     pub(crate) interest_ids: &'a [&'a str],
     pub(crate) safety_ids: &'a [&'a str],
     pub(crate) unit_system: &'a str,
@@ -69,14 +68,18 @@ pub(crate) fn seed_user(url: &str, user_id: Uuid, display_name: &str) -> Result<
         .map(|_| ())
 }
 
-pub(crate) fn seed_preferences(url: &str, seeded: SeedPreferences<'_>) -> Result<(), String> {
+pub(crate) fn seed_preferences(
+    url: &str,
+    user_id: Uuid,
+    prefs: SeedPreferences<'_>,
+) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|error| format_postgres_error(&error))?;
-    let interest_ids = seeded
+    let interest_ids = prefs
         .interest_ids
         .iter()
         .map(|value| Uuid::parse_str(value).expect("valid interest UUID"))
         .collect::<Vec<_>>();
-    let safety_ids = seeded
+    let safety_ids = prefs
         .safety_ids
         .iter()
         .map(|value| Uuid::parse_str(value).expect("valid safety UUID"))
@@ -91,11 +94,11 @@ pub(crate) fn seed_preferences(url: &str, seeded: SeedPreferences<'_>) -> Result
                 revision
             ) VALUES ($1, $2, $3, $4, $5)",
             &[
-                &seeded.user_id,
+                &user_id,
                 &interest_ids,
                 &safety_ids,
-                &seeded.unit_system,
-                &seeded.revision,
+                &prefs.unit_system,
+                &prefs.revision,
             ],
         )
         .map_err(|error| format_postgres_error(&error))

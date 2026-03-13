@@ -153,7 +153,7 @@ where
     capture_snapshot(actix_test::call_service(app, req).await, false).await
 }
 
-pub(crate) fn run_first_write(world: &mut World) {
+fn run_single_update(world: &mut World, payload: InterestsRequest) {
     if is_skipped(world) {
         return;
     }
@@ -163,26 +163,40 @@ pub(crate) fn run_first_write(world: &mut World) {
     world.first_update = Some(run_async(async {
         let app = build_app(state).await;
         let cookie = login_cookie(&app).await;
-        update_interests_snapshot(
-            &app,
-            cookie,
-            InterestsRequest {
-                interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
-                expected_revision: None,
-            },
-        )
-        .await
+        update_interests_snapshot(&app, cookie, payload).await
     }));
 }
 
-pub(crate) fn run_matching_revision_write(world: &mut World) {
+fn run_single_interests_update(world: &mut World, payload: InterestsRequest) {
+    run_single_update(world, payload);
+}
+
+fn with_app_session<F, Fut, T>(world: &mut World, f: F) -> Option<T>
+where
+    F: FnOnce(DbPool) -> Fut,
+    Fut: Future<Output = T>,
+{
     if is_skipped(world) {
-        return;
+        return None;
     }
 
     let db = world.db.as_ref().expect("db context");
-    let state = build_http_state(db.pool.clone());
-    let (first_update, second_update) = run_async(async {
+    Some(run_async(f(db.pool.clone())))
+}
+
+pub(crate) fn run_first_write(world: &mut World) {
+    run_single_interests_update(
+        world,
+        InterestsRequest {
+            interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
+            expected_revision: None,
+        },
+    );
+}
+
+pub(crate) fn run_matching_revision_write(world: &mut World) {
+    if let Some((first_update, second_update)) = with_app_session(world, |pool| async move {
+        let state = build_http_state(pool);
         let app = build_app(state).await;
         let cookie = login_cookie(&app).await;
         let first = update_interests_snapshot(
@@ -204,63 +218,35 @@ pub(crate) fn run_matching_revision_write(world: &mut World) {
         )
         .await;
         (first, second)
-    });
-    world.first_update = Some(first_update);
-    world.second_update = Some(second_update);
+    }) {
+        world.first_update = Some(first_update);
+        world.second_update = Some(second_update);
+    }
 }
 
 pub(crate) fn run_stale_revision_conflict(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    let db = world.db.as_ref().expect("db context");
-    let state = build_http_state(db.pool.clone());
-    world.first_update = Some(run_async(async {
-        let app = build_app(state).await;
-        let cookie = login_cookie(&app).await;
-        update_interests_snapshot(
-            &app,
-            cookie,
-            InterestsRequest {
-                interest_theme_ids: vec![SECOND_THEME_ID.to_owned()],
-                expected_revision: Some(1),
-            },
-        )
-        .await
-    }));
+    run_single_interests_update(
+        world,
+        InterestsRequest {
+            interest_theme_ids: vec![SECOND_THEME_ID.to_owned()],
+            expected_revision: Some(1),
+        },
+    );
 }
 
 pub(crate) fn run_missing_revision_conflict(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    let db = world.db.as_ref().expect("db context");
-    let state = build_http_state(db.pool.clone());
-    world.first_update = Some(run_async(async {
-        let app = build_app(state).await;
-        let cookie = login_cookie(&app).await;
-        update_interests_snapshot(
-            &app,
-            cookie,
-            InterestsRequest {
-                interest_theme_ids: vec![SECOND_THEME_ID.to_owned()],
-                expected_revision: None,
-            },
-        )
-        .await
-    }));
+    run_single_interests_update(
+        world,
+        InterestsRequest {
+            interest_theme_ids: vec![SECOND_THEME_ID.to_owned()],
+            expected_revision: None,
+        },
+    );
 }
 
 pub(crate) fn run_preserve_non_interest_flow(world: &mut World) {
-    if is_skipped(world) {
-        return;
-    }
-
-    let db = world.db.as_ref().expect("db context");
-    let state = build_http_state(db.pool.clone());
-    let (update, preferences) = run_async(async {
+    if let Some((update, preferences)) = with_app_session(world, |pool| async move {
+        let state = build_http_state(pool);
         let app = build_app(state).await;
         let cookie = login_cookie(&app).await;
         let update = update_interests_snapshot(
@@ -274,9 +260,10 @@ pub(crate) fn run_preserve_non_interest_flow(world: &mut World) {
         .await;
         let preferences = preferences_snapshot(&app, cookie).await;
         (update, preferences)
-    });
-    world.first_update = Some(update);
-    world.preferences = Some(preferences);
+    }) {
+        world.first_update = Some(update);
+        world.preferences = Some(preferences);
+    }
 }
 
 pub(crate) fn assert_interests_snapshot(
