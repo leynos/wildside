@@ -27,6 +27,7 @@ mod ws_support;
 use actix_web::http::{Method, header};
 use awc::Client;
 use backend::domain::TRACE_ID_HEADER;
+use backend::domain::ports::UpdateUserInterestsRequest;
 use harness::{WorldFixture, with_world_async};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
@@ -253,6 +254,7 @@ fn the_interests_response_includes_the_selected_theme(world: &WorldFixture) {
         .and_then(Value::as_array)
         .expect("interestThemeIds array");
     assert_eq!(ids.first().and_then(Value::as_str), Some(TEST_THEME_ID));
+    assert_eq!(body.get("revision").and_then(Value::as_u64), Some(1));
 }
 
 #[then("the interests port was called with the authenticated user id and theme")]
@@ -261,7 +263,13 @@ fn the_interests_port_was_called_with_the_authenticated_user_id_and_theme(world:
     let ctx = ctx.borrow();
     assert_eq!(
         ctx.interests.calls(),
-        vec![(TEST_USER_ID.to_owned(), vec![TEST_THEME_ID.to_owned()],)]
+        vec![UpdateUserInterestsRequest {
+            user_id: backend::domain::UserId::new(TEST_USER_ID).expect("user id"),
+            interest_theme_ids: vec![
+                backend::domain::InterestThemeId::new(TEST_THEME_ID).expect("theme id"),
+            ],
+            expected_revision: None,
+        }]
     );
 }
 

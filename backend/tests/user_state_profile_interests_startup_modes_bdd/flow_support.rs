@@ -87,7 +87,11 @@ pub(crate) fn assert_profile_response(snapshot: &Snapshot, expected_display_name
     );
 }
 
-pub(crate) fn assert_interests_response(snapshot: &Snapshot, expected_ids: &[&str]) {
+pub(crate) fn assert_interests_response(
+    snapshot: &Snapshot,
+    expected_ids: &[&str],
+    expected_revision: u32,
+) {
     assert_eq!(snapshot.status, 200);
     let body = snapshot.body.as_ref().expect("interests body");
     assert_eq!(
@@ -102,6 +106,10 @@ pub(crate) fn assert_interests_response(snapshot: &Snapshot, expected_ids: &[&st
             .map(|value| value.as_str().expect("string interest id"))
             .collect::<Vec<_>>(),
         expected_ids
+    );
+    assert_eq!(
+        body.get("revision").and_then(Value::as_u64),
+        Some(u64::from(expected_revision))
     );
 }
 
@@ -233,6 +241,7 @@ pub(crate) fn run_profile_interests_flow(world: &mut World) {
     );
     let payload = InterestsRequest {
         interest_theme_ids: world.interests_payload.interest_theme_ids.clone(),
+        expected_revision: world.interests_payload.expected_revision,
     };
 
     let (login_snapshot, profile_snapshot, interests_snapshot) =

@@ -13,14 +13,16 @@ use crate::domain::{InterestThemeId, UserId};
 pub struct UserInterests {
     user_id: UserId,
     interest_theme_ids: Vec<InterestThemeId>,
+    revision: u32,
 }
 
 impl UserInterests {
     /// Build a new [`UserInterests`] value.
-    pub fn new(user_id: UserId, interest_theme_ids: Vec<InterestThemeId>) -> Self {
+    pub fn new(user_id: UserId, interest_theme_ids: Vec<InterestThemeId>, revision: u32) -> Self {
         Self {
             user_id,
             interest_theme_ids,
+            revision,
         }
     }
 
@@ -32,6 +34,11 @@ impl UserInterests {
     /// Selected interest theme identifiers.
     pub fn interest_theme_ids(&self) -> &[InterestThemeId] {
         &self.interest_theme_ids
+    }
+
+    /// Shared aggregate revision after the interests update.
+    pub fn revision(&self) -> u32 {
+        self.revision
     }
 }
 
@@ -45,9 +52,10 @@ mod tests {
         let user_id = UserId::new("11111111-1111-1111-1111-111111111111").expect("user id");
         let interest_id =
             InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6").expect("interest id");
-        let interests = UserInterests::new(user_id.clone(), vec![interest_id.clone()]);
+        let interests = UserInterests::new(user_id.clone(), vec![interest_id.clone()], 2);
 
         assert_eq!(interests.user_id(), &user_id);
         assert_eq!(interests.interest_theme_ids(), &[interest_id]);
+        assert_eq!(interests.revision(), 2);
     }
 }

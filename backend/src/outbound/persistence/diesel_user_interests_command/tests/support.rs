@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use super::super::*;
+use crate::domain::UserId;
+use crate::domain::ports::UpdateUserInterestsRequest;
 
 #[derive(Clone, Copy)]
 pub(super) enum StubFailure {
@@ -39,6 +41,7 @@ pub(super) struct StubUserPreferencesRepository {
     stored_preferences: Mutex<Option<UserPreferences>>,
     find_failure: Mutex<Option<StubFailure>>,
     save_failures: Mutex<Vec<StubFailure>>,
+    save_call_count: Mutex<usize>,
     last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
 }
 
@@ -58,156 +61,12 @@ impl StubUserPreferencesRepository {
         *self.save_failures.lock().expect("save failure lock") = vec![failure];
     }
 
-    pub(super) fn set_save_failures(&self, failures: impl IntoIterator<Item = StubFailure>) {
-        *self.save_failures.lock().expect("save failure lock") = failures.into_iter().collect();
-    }
-
     pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
         self.last_save.lock().expect("last save lock").clone()
     }
-}
 
-struct RetrySaveTracker {
-    attempts: Mutex<usize>,
-    revision: Mutex<Option<u32>>,
-    last_save: Mutex<Option<(UserPreferences, Option<u32>)>>,
-}
-
-impl RetrySaveTracker {
-    fn new() -> Self {
-        Self {
-            attempts: Mutex::new(0),
-            revision: Mutex::new(None),
-            last_save: Mutex::new(None),
-        }
-    }
-
-    fn attempt(&self) -> usize {
-        *self.attempts.lock().expect("attempts lock")
-    }
-
-    fn increment_attempts(&self) {
-        *self.attempts.lock().expect("attempts lock") += 1;
-    }
-
-    fn revision(&self) -> Option<u32> {
-        *self.revision.lock().expect("revision lock")
-    }
-
-    fn set_revision(&self, revision: Option<u32>) {
-        *self.revision.lock().expect("revision lock") = revision;
-    }
-
-    fn select_preferences<'a>(
-        &self,
-        first_attempt_value: Option<&'a UserPreferences>,
-        competing: &'a UserPreferences,
-    ) -> Option<&'a UserPreferences> {
-        if self.attempt() == 0 {
-            first_attempt_value
-        } else {
-            Some(competing)
-        }
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "CodeScene-directed retry-helper extraction keeps the scenario inputs explicit"
-    )]
-    fn perform_save(
-        &self,
-        preferences: &UserPreferences,
-        expected_revision: Option<u32>,
-        competing_revision: u32,
-        initial_mismatch: (u32, u32),
-        context_msg: &'static str,
-    ) -> Result<(), UserPreferencesRepositoryError> {
-        if self.attempt() == 0 {
-            self.increment_attempts();
-            self.set_revision(Some(competing_revision));
-            return Err(UserPreferencesRepositoryError::revision_mismatch(
-                initial_mismatch.0,
-                initial_mismatch.1,
-            ));
-        }
-
-        let stored_revision = self.revision().expect(context_msg);
-        if expected_revision != Some(stored_revision) {
-            return Err(UserPreferencesRepositoryError::revision_mismatch(
-                expected_revision.unwrap_or_default(),
-                stored_revision,
-            ));
-        }
-
-        self.record(preferences, expected_revision);
-        Ok(())
-    }
-
-    fn record(&self, preferences: &UserPreferences, expected_revision: Option<u32>) {
-        self.set_revision(Some(preferences.revision));
-        *self.last_save.lock().expect("last save lock") =
-            Some((preferences.clone(), expected_revision));
-    }
-
-    fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.last_save.lock().expect("last save lock").clone()
-    }
-}
-
-pub(super) struct InsertRaceRetryRepository {
-    user_id: UserId,
-    competing_preferences: UserPreferences,
-    tracker: RetrySaveTracker,
-}
-
-impl InsertRaceRetryRepository {
-    pub(super) fn new(user_id: UserId, competing_preferences: UserPreferences) -> Self {
-        assert_eq!(
-            competing_preferences.user_id, user_id,
-            "InsertRaceRetryRepository competing_preferences must belong to the provided user"
-        );
-
-        Self {
-            user_id,
-            competing_preferences,
-            tracker: RetrySaveTracker::new(),
-        }
-    }
-
-    pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.tracker.last_save_call()
-    }
-}
-
-pub(super) struct StaleUpdateRetryRepository {
-    initial_preferences: UserPreferences,
-    competing_preferences: UserPreferences,
-    tracker: RetrySaveTracker,
-}
-
-impl StaleUpdateRetryRepository {
-    pub(super) fn new(
-        initial_preferences: UserPreferences,
-        competing_preferences: UserPreferences,
-    ) -> Self {
-        assert_eq!(
-            competing_preferences.user_id, initial_preferences.user_id,
-            "StaleUpdateRetryRepository preferences must belong to the same user"
-        );
-
-        let repository = Self {
-            initial_preferences,
-            competing_preferences,
-            tracker: RetrySaveTracker::new(),
-        };
-        repository
-            .tracker
-            .set_revision(Some(repository.initial_preferences.revision));
-        repository
-    }
-
-    pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.tracker.last_save_call()
+    pub(super) fn save_call_count(&self) -> usize {
+        *self.save_call_count.lock().expect("save call count lock")
     }
 }
 
@@ -235,6 +94,8 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         preferences: &UserPreferences,
         expected_revision: Option<u32>,
     ) -> Result<(), UserPreferencesRepositoryError> {
+        *self.save_call_count.lock().expect("save call count lock") += 1;
+
         let failure = {
             let mut failures = self.save_failures.lock().expect("save failure lock");
             if failures.is_empty() {
@@ -256,7 +117,7 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             .map(|stored_preferences| stored_preferences.revision);
 
         match (stored_revision, expected_revision) {
-            (None, None) => {}
+            (None, None) | (Some(_), Some(_)) => {}
             (Some(actual), None) => {
                 return Err(UserPreferencesRepositoryError::revision_mismatch(
                     0_u32, actual,
@@ -265,12 +126,6 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             (None, Some(expected)) => {
                 return Err(UserPreferencesRepositoryError::missing_for_update(expected));
             }
-            (Some(actual), Some(expected)) if expected != actual => {
-                return Err(UserPreferencesRepositoryError::revision_mismatch(
-                    expected, actual,
-                ));
-            }
-            (Some(_), Some(_)) => {}
         }
 
         *self
@@ -280,68 +135,6 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         *self.last_save.lock().expect("last save lock") =
             Some((preferences.clone(), expected_revision));
         Ok(())
-    }
-}
-
-#[async_trait]
-impl UserPreferencesRepository for InsertRaceRetryRepository {
-    async fn find_by_user_id(
-        &self,
-        user_id: &UserId,
-    ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-        if *user_id != self.user_id {
-            return Ok(None);
-        }
-
-        Ok(self
-            .tracker
-            .select_preferences(None, &self.competing_preferences)
-            .cloned())
-    }
-
-    async fn save(
-        &self,
-        preferences: &UserPreferences,
-        expected_revision: Option<u32>,
-    ) -> Result<(), UserPreferencesRepositoryError> {
-        self.tracker.perform_save(
-            preferences,
-            expected_revision,
-            self.competing_preferences.revision,
-            (0_u32, 1_u32),
-            "insert-race tracker revision should be available after retry",
-        )
-    }
-}
-
-#[async_trait]
-impl UserPreferencesRepository for StaleUpdateRetryRepository {
-    async fn find_by_user_id(
-        &self,
-        user_id: &UserId,
-    ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-        if user_id != &self.initial_preferences.user_id {
-            return Ok(None);
-        }
-
-        Ok(self
-            .tracker
-            .select_preferences(Some(&self.initial_preferences), &self.competing_preferences)
-            .cloned())
-    }
-
-    async fn save(
-        &self,
-        preferences: &UserPreferences,
-        expected_revision: Option<u32>,
-    ) -> Result<(), UserPreferencesRepositoryError> {
-        self.tracker.perform_save(
-            preferences,
-            expected_revision,
-            self.competing_preferences.revision,
-            (2_u32, 3_u32),
-            "stale-update tracker revision should be available after retry",
-        )
     }
 }
 
@@ -355,4 +148,16 @@ pub(super) fn interest_theme_id(value: &str) -> InterestThemeId {
 
 pub(super) fn uuid_id(value: &str) -> Uuid {
     Uuid::parse_str(value).expect("valid uuid")
+}
+
+pub(super) fn request(
+    user_id: UserId,
+    interest_theme_ids: Vec<InterestThemeId>,
+    expected_revision: Option<u32>,
+) -> UpdateUserInterestsRequest {
+    UpdateUserInterestsRequest {
+        user_id,
+        interest_theme_ids,
+        expected_revision,
+    }
 }

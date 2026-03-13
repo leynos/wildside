@@ -134,6 +134,8 @@ pub struct UserInterestsSchema {
         max_items = 100
     )]
     interest_theme_ids: Vec<String>,
+    /// Shared aggregate revision after the interests update.
+    revision: u32,
 }
 
 #[cfg(test)]

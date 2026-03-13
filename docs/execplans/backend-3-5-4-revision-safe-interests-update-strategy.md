@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: DRAFT
+Status: IMPLEMENTED; FULL GATES BLOCKED BY ENVIRONMENT
 
 This plan covers roadmap item 3.5.4 only:
 `Define and implement the revision-safe interests update strategy (for
@@ -136,17 +136,21 @@ Observable success criteria:
   and architecture guidance.
 - [x] (2026-03-13 02:17Z) Drafted this ExecPlan at
   `docs/execplans/backend-3-5-4-revision-safe-interests-update-strategy.md`.
-- [ ] Approval gate: user approves this plan before implementation begins.
-- [ ] Convert the interests driving port and HTTP payload/schema to a
+- [x] Approval gate: user approved implementation by requesting the ExecPlan
+  to be carried out.
+- [x] Convert the interests driving port and HTTP payload/schema to a
   revision-aware contract.
-- [ ] Implement the DB-backed stale-write strategy and remove hidden
+- [x] Implement the DB-backed stale-write strategy and remove hidden
   last-write-wins retry behaviour.
-- [ ] Add or update `rstest` coverage for unit, adapter, and DB-backed
+- [x] Add or update `rstest` coverage for unit, adapter, and DB-backed
   conflict semantics.
-- [ ] Add or update `rstest-bdd` coverage for HTTP-level happy, unhappy, and
-  edge flows with embedded PostgreSQL.
-- [ ] Record final design decisions in
-  `docs/wildside-backend-architecture.md` and mark roadmap item 3.5.4 done.
+- [x] Add or update `rstest-bdd` coverage for HTTP-level happy, unhappy, and
+  edge flows with embedded PostgreSQL. The suite compiles; execution is
+  presently blocked by embedded PostgreSQL bootstrap failure in this
+  container.
+- [x] Record final design decisions in
+  `docs/wildside-backend-architecture.md`. `docs/backend-roadmap.md` remains
+  unchanged until every required gate is green.
 - [ ] Run doc checks and full repository gates, retaining logs.
 
 ## Surprises & discoveries
@@ -171,6 +175,16 @@ Observable success criteria:
   that no revision-tracking migration is required.
   Evidence: `docs/user-state-schema-audit-3-5-1.md`.
   Impact: the implementation should stay inside domain/adapter code and tests.
+
+- Observation: the execution environment still recreates `/dev/null` as a
+  regular file (`-rw-r--r--`) instead of the expected character device, so
+  `pg-embedded-setup-unpriv` fails during PostgreSQL bootstrap before any
+  scenario logic runs.
+  Evidence: `ls -l /dev/null` reported a regular file on 2026-03-13, and
+  `cargo test -p backend --test user_interests_revision_conflicts_bdd` failed
+  with repeated `cannot create /dev/null: Permission denied`.
+  Impact: DB-backed BDD scenarios compile but cannot be executed to completion
+  in this container until the runtime is repaired.
 
 ## Decision Log
 
@@ -204,18 +218,20 @@ Observable success criteria:
 
 ## Outcomes & retrospective
 
-Draft state only. No implementation has started yet.
+Implementation state:
 
-Expected completion outcome:
-
-- interests writes become revision-safe and no longer silently overwrite
-  concurrent preferences changes;
-- the interests endpoint exposes the revision needed for safe follow-up writes;
-- stale-write conflicts are observable and stable at the HTTP boundary;
-- the architecture docs clearly state that interests and preferences share the
-  same persisted aggregate and revision.
-
-Retrospective notes will be filled in after implementation and gate replay.
+- `PUT /api/v1/users/me/interests` now accepts `expectedRevision` and returns
+  the updated interests payload with `revision`.
+- `DieselUserInterestsCommand` now follows explicit optimistic concurrency
+  semantics over `user_preferences.revision` and no longer retries stale
+  writes into silent success.
+- stale or omitted revisions on an existing preferences row now surface as
+  `409 Conflict` with `code: revision_mismatch`,
+  `expectedRevision`, and `actualRevision`.
+- unit coverage and non-DB behavioural coverage passed locally.
+- DB-backed behavioural execution is blocked by the known `/dev/null` bootstrap
+  failure in embedded PostgreSQL, so full-gate replay and roadmap closure are
+  still pending environment repair.
 
 ## Context and orientation
 
