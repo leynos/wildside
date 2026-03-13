@@ -5,10 +5,6 @@
 //! identifiers on unauthorised responses.
 // Shared test doubles include helpers unused in this specific crate.
 #[expect(
-    clippy::type_complexity,
-    reason = "Shared test doubles include helpers unused in this specific crate."
-)]
-#[expect(
     dead_code,
     reason = "Shared test doubles include helpers unused in this specific crate."
 )]

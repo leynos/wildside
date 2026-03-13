@@ -23,11 +23,11 @@ mod state_builders;
 mod flow_support;
 
 use flow_support::{
-    FIRST_THEME_ID, SAFETY_TOGGLE_ID, SECOND_THEME_ID, THIRD_THEME_ID, World,
-    assert_conflict_snapshot, assert_interests_snapshot, assert_preferences_snapshot, is_skipped,
-    run_first_write, run_matching_revision_write, run_missing_revision_conflict,
-    run_preserve_non_interest_flow, run_stale_revision_conflict, seed_preferences, seed_user,
-    setup_db_context,
+    ExpectedPreferences, FIRST_THEME_ID, SAFETY_TOGGLE_ID, SECOND_THEME_ID, SeedPreferences,
+    THIRD_THEME_ID, World, assert_conflict_snapshot, assert_interests_snapshot,
+    assert_preferences_snapshot, is_skipped, run_first_write, run_matching_revision_write,
+    run_missing_revision_conflict, run_preserve_non_interest_flow, run_stale_revision_conflict,
+    seed_preferences, seed_user, setup_db_context,
 };
 use support::profile_interests::FIXTURE_AUTH_ID;
 
@@ -65,11 +65,13 @@ fn existing_preferences_revision_1_with_preserved_safety_and_unit_settings(world
     let db = world.db.as_ref().expect("db context");
     seed_preferences(
         db.database_url.as_str(),
-        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
-        &[FIRST_THEME_ID],
-        &[SAFETY_TOGGLE_ID],
-        "imperial",
-        1,
+        SeedPreferences {
+            user_id: Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+            interest_ids: &[FIRST_THEME_ID],
+            safety_ids: &[SAFETY_TOGGLE_ID],
+            unit_system: "imperial",
+            revision: 1,
+        },
     )
     .expect("seed user preferences");
 }
@@ -83,11 +85,13 @@ fn existing_preferences_revision_2(world: &mut World) {
     let db = world.db.as_ref().expect("db context");
     seed_preferences(
         db.database_url.as_str(),
-        Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
-        &[FIRST_THEME_ID],
-        &[SAFETY_TOGGLE_ID],
-        "metric",
-        2,
+        SeedPreferences {
+            user_id: Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
+            interest_ids: &[FIRST_THEME_ID],
+            safety_ids: &[SAFETY_TOGGLE_ID],
+            unit_system: "metric",
+            revision: 2,
+        },
     )
     .expect("seed user preferences");
 }
@@ -191,10 +195,12 @@ fn the_fetched_preferences_preserve_safety_and_unit_settings_while_advancing_rev
     );
     assert_preferences_snapshot(
         world.preferences.as_ref().expect("preferences response"),
-        &[THIRD_THEME_ID],
-        &[SAFETY_TOGGLE_ID],
-        "imperial",
-        2,
+        ExpectedPreferences {
+            interest_ids: &[THIRD_THEME_ID],
+            safety_ids: &[SAFETY_TOGGLE_ID],
+            unit_system: "imperial",
+            revision: 2,
+        },
     );
 }
 

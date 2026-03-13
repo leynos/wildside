@@ -19,7 +19,7 @@ use super::{ServerConfig, state_builders};
 mod db_support;
 
 pub(crate) use self::db_support::{
-    World, is_skipped, seed_preferences, seed_user, setup_db_context,
+    SeedPreferences, World, is_skipped, seed_preferences, seed_user, setup_db_context,
 };
 
 pub(crate) const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
@@ -32,6 +32,13 @@ pub(crate) struct Snapshot {
     pub(crate) status: u16,
     pub(crate) body: Option<Value>,
     pub(crate) session_cookie: Option<Cookie<'static>>,
+}
+
+pub(crate) struct ExpectedPreferences<'a> {
+    pub(crate) interest_ids: &'a [&'a str],
+    pub(crate) safety_ids: &'a [&'a str],
+    pub(crate) unit_system: &'a str,
+    pub(crate) revision: u32,
 }
 
 pub(crate) fn run_async<T>(future: impl Future<Output = T>) -> T {
@@ -335,13 +342,7 @@ pub(crate) fn assert_conflict_snapshot(
     );
 }
 
-pub(crate) fn assert_preferences_snapshot(
-    snapshot: &Snapshot,
-    expected_interest_ids: &[&str],
-    expected_safety_ids: &[&str],
-    expected_unit_system: &str,
-    expected_revision: u32,
-) {
+pub(crate) fn assert_preferences_snapshot(snapshot: &Snapshot, expected: ExpectedPreferences<'_>) {
     assert_eq!(snapshot.status, 200);
     let body = snapshot.body.as_ref().expect("preferences body");
     assert_eq!(
@@ -351,7 +352,7 @@ pub(crate) fn assert_preferences_snapshot(
             .iter()
             .map(|value| value.as_str().expect("string interest id"))
             .collect::<Vec<_>>(),
-        expected_interest_ids
+        expected.interest_ids
     );
     assert_eq!(
         body.get("safetyToggleIds")
@@ -360,14 +361,14 @@ pub(crate) fn assert_preferences_snapshot(
             .iter()
             .map(|value| value.as_str().expect("string safety id"))
             .collect::<Vec<_>>(),
-        expected_safety_ids
+        expected.safety_ids
     );
     assert_eq!(
         body.get("unitSystem").and_then(Value::as_str),
-        Some(expected_unit_system)
+        Some(expected.unit_system)
     );
     assert_eq!(
         body.get("revision").and_then(Value::as_u64),
-        Some(u64::from(expected_revision))
+        Some(u64::from(expected.revision))
     );
 }

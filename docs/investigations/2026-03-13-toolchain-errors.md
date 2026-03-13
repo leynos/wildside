@@ -12,6 +12,11 @@ implementation for roadmap item `3.5.4`:
 The goal here is to capture the exact evidence, the relevant code paths, what
 was ruled out, and the most likely diagnoses supported by the investigation.
 
+Historical note: later on 2026-03-13 the repository switched from a
+repo-local `backend` `pg_worker` binary to the `pg_worker` binary published by
+`pg-embed-setup-unpriv`. Code-path references below describe the wiring that
+was in place when these failures were captured.
+
 ## Environment Snapshot
 
 The current shell and toolchain state at the time of this investigation was:
