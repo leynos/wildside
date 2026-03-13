@@ -37,35 +37,45 @@ fn with_world<F: FnOnce(&mut World)>(world: &mut World, f: F) {
     }
 }
 
+fn then_first_update_is_interests(world: &mut World, ids: &[&str], revision: u32) {
+    with_world(world, |w| {
+        assert_interests_snapshot(
+            w.first_update.as_ref().expect("first update response"),
+            ids,
+            revision,
+        );
+    });
+}
+
+fn then_second_update_is_interests(world: &mut World, ids: &[&str], revision: u32) {
+    with_world(world, |w| {
+        assert_interests_snapshot(
+            w.second_update.as_ref().expect("second update response"),
+            ids,
+            revision,
+        );
+    });
+}
+
+fn then_first_update_is_conflict(world: &mut World, expected: Option<u32>, actual: u32) {
+    with_world(world, |w| {
+        assert_conflict_snapshot(
+            w.first_update.as_ref().expect("conflict response"),
+            expected,
+            actual,
+        );
+    });
+}
+
 #[fixture]
 fn world() -> World {
     World::default()
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "step helper signature is prescribed by the refactor task"
-)]
-fn seed_prefs(
-    world: &mut World,
-    interests: &[&str],
-    safety: &[&str],
-    unit_system: &str,
-    revision: i32,
-) {
+fn seed_prefs(world: &mut World, prefs: SeedPreferences<'_>) {
     let db = world.db.as_ref().expect("db context");
     let user_id = Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID");
-    seed_preferences(
-        db.database_url.as_str(),
-        user_id,
-        SeedPreferences {
-            interest_ids: interests,
-            safety_ids: safety,
-            unit_system,
-            revision,
-        },
-    )
-    .expect("seed user preferences");
+    seed_preferences(db.database_url.as_str(), user_id, prefs).expect("seed user preferences");
 }
 
 #[given("db-present startup mode backed by embedded postgres")]
@@ -91,14 +101,30 @@ fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
 #[given("existing preferences revision 1 with preserved safety and unit settings")]
 fn existing_preferences_revision_1_with_preserved_safety_and_unit_settings(world: &mut World) {
     with_world(world, |world| {
-        seed_prefs(world, &[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "imperial", 1);
+        seed_prefs(
+            world,
+            SeedPreferences {
+                interest_ids: &[FIRST_THEME_ID],
+                safety_ids: &[SAFETY_TOGGLE_ID],
+                unit_system: "imperial",
+                revision: 1,
+            },
+        );
     });
 }
 
 #[given("existing preferences revision 2")]
 fn existing_preferences_revision_2(world: &mut World) {
     with_world(world, |world| {
-        seed_prefs(world, &[FIRST_THEME_ID], &[SAFETY_TOGGLE_ID], "metric", 2);
+        seed_prefs(
+            world,
+            SeedPreferences {
+                interest_ids: &[FIRST_THEME_ID],
+                safety_ids: &[SAFETY_TOGGLE_ID],
+                unit_system: "metric",
+                revision: 2,
+            },
+        );
     });
 }
 
@@ -131,51 +157,24 @@ fn the_client_updates_interests_and_then_fetches_preferences(world: &mut World) 
 
 #[then("the first interests response includes revision 1")]
 fn the_first_interests_response_includes_revision_1(world: &mut World) {
-    with_world(world, |world| {
-        assert_interests_snapshot(
-            world.first_update.as_ref().expect("first update response"),
-            &[FIRST_THEME_ID],
-            1,
-        );
-    });
+    then_first_update_is_interests(world, &[FIRST_THEME_ID], 1);
 }
 
 #[then("the second interests response includes revision 2")]
 fn the_second_interests_response_includes_revision_2(world: &mut World) {
-    with_world(world, |world| {
-        assert_interests_snapshot(
-            world
-                .second_update
-                .as_ref()
-                .expect("second update response"),
-            &[SECOND_THEME_ID],
-            2,
-        );
-    });
+    then_second_update_is_interests(world, &[SECOND_THEME_ID], 2);
 }
 
 #[then("the response is a conflict with expected revision 1 and actual revision 2")]
 fn the_response_is_a_conflict_with_expected_revision_1_and_actual_revision_2(world: &mut World) {
-    with_world(world, |world| {
-        assert_conflict_snapshot(
-            world.first_update.as_ref().expect("conflict response"),
-            Some(1),
-            2,
-        );
-    });
+    then_first_update_is_conflict(world, Some(1), 2);
 }
 
 #[then("the response is a conflict with missing expected revision and actual revision 1")]
 fn the_response_is_a_conflict_with_missing_expected_revision_and_actual_revision_1(
     world: &mut World,
 ) {
-    with_world(world, |world| {
-        assert_conflict_snapshot(
-            world.first_update.as_ref().expect("conflict response"),
-            None,
-            1,
-        );
-    });
+    then_first_update_is_conflict(world, None, 1);
 }
 
 #[then("the fetched preferences preserve safety and unit settings while advancing revision 2")]

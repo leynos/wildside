@@ -69,6 +69,17 @@ async fn capture_snapshot(
     }
 }
 
+async fn call_endpoint<S>(app: &S, req: actix_http::Request) -> Snapshot
+where
+    S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+        >,
+{
+    capture_snapshot(actix_test::call_service(app, req).await, false).await
+}
+
 async fn build_app(
     state: web::Data<HttpState>,
 ) -> impl actix_web::dev::Service<
@@ -130,12 +141,15 @@ where
             Error = actix_web::Error,
         >,
 {
-    let req = actix_test::TestRequest::put()
-        .uri("/api/v1/users/me/interests")
-        .cookie(cookie)
-        .set_json(payload)
-        .to_request();
-    capture_snapshot(actix_test::call_service(app, req).await, false).await
+    call_endpoint(
+        app,
+        actix_test::TestRequest::put()
+            .uri("/api/v1/users/me/interests")
+            .cookie(cookie)
+            .set_json(payload)
+            .to_request(),
+    )
+    .await
 }
 
 async fn preferences_snapshot<S>(app: &S, cookie: Cookie<'static>) -> Snapshot
@@ -146,11 +160,14 @@ where
             Error = actix_web::Error,
         >,
 {
-    let req = actix_test::TestRequest::get()
-        .uri("/api/v1/users/me/preferences")
-        .cookie(cookie)
-        .to_request();
-    capture_snapshot(actix_test::call_service(app, req).await, false).await
+    call_endpoint(
+        app,
+        actix_test::TestRequest::get()
+            .uri("/api/v1/users/me/preferences")
+            .cookie(cookie)
+            .to_request(),
+    )
+    .await
 }
 
 fn run_single_update(world: &mut World, payload: InterestsRequest) {
