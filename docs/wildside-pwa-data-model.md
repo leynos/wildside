@@ -381,6 +381,25 @@ type UserPreferences = {
 };
 ```
 
+The backward-compatibility endpoint `PUT /api/v1/users/me/interests` should be
+modelled as a partial write over the same aggregate rather than as a separate
+resource. Its request payload accepts the selected `interestThemeIds` plus an
+optional `expectedRevision`, and its success payload returns the updated
+interest selection with the shared aggregate revision:
+
+```ts
+type UserInterests = {
+  readonly userId: string;
+  readonly interestThemeIds: readonly string[];
+  readonly revision: number;
+};
+```
+
+Clients may omit `expectedRevision` only for the first interests write when no
+preferences row exists yet. After that, both `PUT /api/v1/users/me/interests`
+and `PUT /api/v1/users/me/preferences` must send `expectedRevision` and handle
+HTTP `409 Conflict` on stale or missing revisions.
+
 ### Notes and progress
 
 ```ts
@@ -606,6 +625,7 @@ The following endpoint set is sufficient to back the PWA’s initial screens:
 
 - `GET /api/v1/catalogue/explore` → `ExploreCatalogueSnapshot`
 - `GET /api/v1/interest-themes` → `InterestTheme[]`
+- `PUT /api/v1/users/me/interests` → `UserInterests`
 - `PUT /api/v1/users/me/preferences` → `UserPreferences`
 - `POST /api/v1/routes` → `{ requestId }`
 - `GET /api/v1/routes/{requestId}` → `{ status, routeId?, routePlan? }`

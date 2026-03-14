@@ -10,21 +10,15 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use crate::domain::ports::{
-    UserInterestsCommand, UserPreferencesRepository, UserPreferencesRepositoryError,
+    UpdateUserInterestsRequest, UserInterestsCommand, UserPreferencesRepository,
+    UserPreferencesRepositoryError,
 };
-use crate::domain::{Error, InterestThemeId, UnitSystem, UserId, UserInterests, UserPreferences};
+use crate::domain::{Error, InterestThemeId, UnitSystem, UserInterests, UserPreferences};
 
 /// Diesel-backed `UserInterestsCommand` implementation.
 #[derive(Clone)]
 pub struct DieselUserInterestsCommand {
     preferences_repository: Arc<dyn UserPreferencesRepository>,
-}
-
-const MAX_CONCURRENT_WRITE_ATTEMPTS: usize = 3;
-
-struct PreferencesUpdate {
-    preferences: UserPreferences,
-    expected_revision: Option<u32>,
 }
 
 impl DieselUserInterestsCommand {
@@ -75,18 +69,10 @@ fn map_preferences_persistence_error(error: UserPreferencesRepositoryError) -> E
         }
         UserPreferencesRepositoryError::Query { message } => Error::internal(message),
         UserPreferencesRepositoryError::RevisionMismatch { expected, actual } => {
-            Error::conflict("preferences changed concurrently").with_details(json!({
-                "code": "revision_mismatch",
-                "expectedRevision": expected,
-                "actualRevision": actual,
-            }))
+            revision_conflict(Some(expected), actual)
         }
         UserPreferencesRepositoryError::MissingForUpdate { expected } => {
-            Error::conflict("preferences changed concurrently").with_details(json!({
-                "code": "preferences_missing_for_update",
-                "expectedRevision": expected,
-                "actualRevision": 0,
-            }))
+            revision_conflict(Some(expected), 0)
         }
         UserPreferencesRepositoryError::ConcurrentWriteConflict => {
             Error::conflict("preferences changed concurrently")
@@ -95,48 +81,50 @@ fn map_preferences_persistence_error(error: UserPreferencesRepositoryError) -> E
     }
 }
 
+fn revision_conflict(expected: Option<u32>, actual: u32) -> Error {
+    Error::conflict("revision mismatch").with_details(json!({
+        "code": "revision_mismatch",
+        "expectedRevision": expected,
+        "actualRevision": actual,
+    }))
+}
+
 fn build_preferences_for_interest_update(
-    user_id: &UserId,
+    request: &UpdateUserInterestsRequest,
     existing: Option<UserPreferences>,
-    interest_theme_ids: &[InterestThemeId],
-) -> PreferencesUpdate {
-    match existing {
-        Some(existing) => {
-            let expected_revision = existing.revision;
-            let (next_revision, expected_revision) = match expected_revision.checked_add(1) {
-                Some(next_revision) => (next_revision, Some(expected_revision)),
-                None => (expected_revision, None),
-            };
-            let preferences = UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(
-                    interest_theme_ids
-                        .iter()
-                        .map(|interest_theme_id| *interest_theme_id.as_uuid())
-                        .collect(),
-                )
+) -> Result<UserPreferences, Error> {
+    let interest_theme_ids = request
+        .interest_theme_ids
+        .iter()
+        .map(InterestThemeId::as_uuid)
+        .copied()
+        .collect();
+
+    match (existing, request.expected_revision) {
+        (None, None) => Ok(UserPreferences::builder(request.user_id.clone())
+            .interest_theme_ids(interest_theme_ids)
+            .safety_toggle_ids(Vec::new())
+            .unit_system(UnitSystem::Metric)
+            .revision(1)
+            .build()),
+        (None, Some(expected)) => Err(revision_conflict(Some(expected), 0)),
+        (Some(existing), None) => Err(revision_conflict(None, existing.revision)),
+        (Some(existing), Some(expected)) => {
+            if existing.revision != expected {
+                return Err(revision_conflict(Some(expected), existing.revision));
+            }
+
+            let next_revision = expected.checked_add(1).ok_or_else(|| {
+                Error::internal("preferences revision overflow prevents interest update")
+            })?;
+
+            Ok(UserPreferences::builder(request.user_id.clone())
+                .interest_theme_ids(interest_theme_ids)
                 .safety_toggle_ids(existing.safety_toggle_ids)
                 .unit_system(existing.unit_system)
                 .revision(next_revision)
-                .build();
-            PreferencesUpdate {
-                preferences,
-                expected_revision,
-            }
+                .build())
         }
-        None => PreferencesUpdate {
-            preferences: UserPreferences::builder(user_id.clone())
-                .interest_theme_ids(
-                    interest_theme_ids
-                        .iter()
-                        .map(|interest_theme_id| *interest_theme_id.as_uuid())
-                        .collect(),
-                )
-                .safety_toggle_ids(Vec::new())
-                .unit_system(UnitSystem::Metric)
-                .revision(1)
-                .build(),
-            expected_revision: None,
-        },
     }
 }
 
@@ -144,49 +132,25 @@ fn build_preferences_for_interest_update(
 impl UserInterestsCommand for DieselUserInterestsCommand {
     async fn set_interests(
         &self,
-        user_id: &UserId,
-        interest_theme_ids: Vec<InterestThemeId>,
+        request: UpdateUserInterestsRequest,
     ) -> Result<UserInterests, Error> {
-        for attempt in 0..MAX_CONCURRENT_WRITE_ATTEMPTS {
-            let existing_preferences = self
-                .preferences_repository
-                .find_by_user_id(user_id)
-                .await
-                .map_err(map_preferences_persistence_error)?;
-            let has_existing_preferences = existing_preferences.is_some();
+        let existing_preferences = self
+            .preferences_repository
+            .find_by_user_id(&request.user_id)
+            .await
+            .map_err(map_preferences_persistence_error)?;
+        let preferences = build_preferences_for_interest_update(&request, existing_preferences)?;
 
-            let update = build_preferences_for_interest_update(
-                user_id,
-                existing_preferences,
-                &interest_theme_ids,
-            );
-            if has_existing_preferences && update.expected_revision.is_none() {
-                return Err(Error::internal(
-                    "preferences revision overflow prevents interest update",
-                ));
-            }
+        self.preferences_repository
+            .save(&preferences, request.expected_revision)
+            .await
+            .map_err(map_preferences_persistence_error)?;
 
-            match self
-                .preferences_repository
-                .save(&update.preferences, update.expected_revision)
-                .await
-            {
-                Ok(()) => return Ok(UserInterests::new(user_id.clone(), interest_theme_ids)),
-                Err(
-                    UserPreferencesRepositoryError::RevisionMismatch { .. }
-                    | UserPreferencesRepositoryError::MissingForUpdate { .. }
-                    | UserPreferencesRepositoryError::ConcurrentWriteConflict,
-                ) if attempt + 1 < MAX_CONCURRENT_WRITE_ATTEMPTS => {
-                    continue;
-                }
-                Err(error) => return Err(map_preferences_persistence_error(error)),
-            }
-        }
-
-        // The loop returns on every path: success -> Ok, final-attempt
-        // RevisionMismatch falls through to the Err arm, and all other
-        // errors return immediately. This guards against future refactoring.
-        unreachable!("interest update retry loop exited unexpectedly")
+        Ok(UserInterests::new(
+            request.user_id,
+            request.interest_theme_ids,
+            preferences.revision,
+        ))
     }
 }
 

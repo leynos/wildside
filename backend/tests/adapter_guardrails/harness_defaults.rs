@@ -111,6 +111,7 @@ pub(super) fn create_interests_double(user_id: &UserId) -> RecordingUserInterest
             InterestThemeId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
                 .expect("fixture interest theme id"),
         ],
+        1,
     )))
 }
 

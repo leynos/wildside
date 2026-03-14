@@ -19,7 +19,7 @@ async fn set_interests_inserts_defaults_when_preferences_are_missing() {
     ];
 
     let interests = command
-        .set_interests(&user_id, interest_theme_ids.clone())
+        .set_interests(request(user_id.clone(), interest_theme_ids.clone(), None))
         .await
         .expect("set interests should succeed");
 
@@ -28,6 +28,7 @@ async fn set_interests_inserts_defaults_when_preferences_are_missing() {
         interests.interest_theme_ids(),
         interest_theme_ids.as_slice()
     );
+    assert_eq!(interests.revision(), 1);
 
     let (saved_preferences, expected_revision) = repository
         .last_save_call()
@@ -65,12 +66,13 @@ async fn set_interests_updates_existing_preferences_with_revision_bump() {
     ];
 
     let interests = command
-        .set_interests(&user_id, next_interest_ids.clone())
+        .set_interests(request(user_id.clone(), next_interest_ids.clone(), Some(7)))
         .await
         .expect("set interests should succeed");
 
     assert_eq!(interests.user_id(), &user_id);
     assert_eq!(interests.interest_theme_ids(), next_interest_ids.as_slice());
+    assert_eq!(interests.revision(), 8);
 
     let (saved_preferences, expected_revision) = repository
         .last_save_call()
@@ -104,10 +106,11 @@ async fn set_interests_maps_find_failures(
     let command = DieselUserInterestsCommand::new(repository);
 
     let err = command
-        .set_interests(
-            &user_id(),
+        .set_interests(request(
+            user_id(),
             vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-        )
+            None,
+        ))
         .await
         .expect_err("find failures should map to domain errors");
 
@@ -117,6 +120,15 @@ async fn set_interests_maps_find_failures(
 #[rstest]
 #[case(StubFailure::Connection, ErrorCode::ServiceUnavailable)]
 #[case(StubFailure::Query, ErrorCode::InternalError)]
+#[case(
+    StubFailure::RevisionMismatch {
+        expected: 7,
+        actual: 8,
+    },
+    ErrorCode::Conflict
+)]
+#[case(StubFailure::MissingForUpdate { expected: 7 }, ErrorCode::Conflict)]
+#[case(StubFailure::ConcurrentWriteConflict, ErrorCode::Conflict)]
 #[tokio::test]
 async fn set_interests_maps_save_failures(
     #[case] failure: StubFailure,
@@ -127,14 +139,117 @@ async fn set_interests_maps_save_failures(
     let command = DieselUserInterestsCommand::new(repository);
 
     let err = command
-        .set_interests(
-            &user_id(),
+        .set_interests(request(
+            user_id(),
             vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-        )
+            None,
+        ))
         .await
         .expect_err("save failures should map to domain errors");
 
     assert_eq!(err.code(), expected_code);
+}
+
+#[tokio::test]
+async fn set_interests_rejects_missing_expected_revision_when_preferences_exist() {
+    let user_id = user_id();
+    let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
+        UserPreferences::builder(user_id.clone())
+            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .unit_system(UnitSystem::Metric)
+            .revision(3)
+            .build(),
+    ));
+    let command = DieselUserInterestsCommand::new(repository.clone());
+
+    let err = command
+        .set_interests(request(
+            user_id,
+            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+            None,
+        ))
+        .await
+        .expect_err("missing revision should be rejected");
+
+    assert_eq!(err.code(), ErrorCode::Conflict);
+    assert_eq!(err.message(), "revision mismatch");
+    assert_eq!(repository.save_call_count(), 0);
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("expectedRevision"))
+            .map(serde_json::Value::is_null),
+        Some(true)
+    );
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(3)
+    );
+}
+
+#[tokio::test]
+async fn set_interests_rejects_stale_expected_revision_before_save() {
+    let user_id = user_id();
+    let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
+        UserPreferences::builder(user_id.clone())
+            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .unit_system(UnitSystem::Metric)
+            .revision(4)
+            .build(),
+    ));
+    let command = DieselUserInterestsCommand::new(repository.clone());
+
+    let err = command
+        .set_interests(request(
+            user_id,
+            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+            Some(2),
+        ))
+        .await
+        .expect_err("stale revision should be rejected");
+
+    assert_eq!(err.code(), ErrorCode::Conflict);
+    assert_eq!(err.message(), "revision mismatch");
+    assert_eq!(repository.save_call_count(), 0);
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("expectedRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(4)
+    );
+}
+
+#[tokio::test]
+async fn set_interests_rejects_missing_preferences_for_expected_revision() {
+    let repository = Arc::new(StubUserPreferencesRepository::default());
+    let command = DieselUserInterestsCommand::new(repository.clone());
+
+    let err = command
+        .set_interests(request(
+            user_id(),
+            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+            Some(9),
+        ))
+        .await
+        .expect_err("missing preferences should conflict");
+
+    assert_eq!(err.code(), ErrorCode::Conflict);
+    assert_eq!(repository.save_call_count(), 0);
+    assert_eq!(
+        err.details()
+            .and_then(|details| details.get("actualRevision"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
 }
 
 #[tokio::test]
@@ -151,10 +266,11 @@ async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
     let command = DieselUserInterestsCommand::new(repository.clone());
 
     let err = command
-        .set_interests(
-            &user_id,
+        .set_interests(request(
+            user_id,
             vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
-        )
+            Some(u32::MAX),
+        ))
         .await
         .expect_err("overflowing revisions should not wrap");
 
@@ -163,54 +279,5 @@ async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
         err.message()
             .contains("preferences revision overflow prevents interest update")
     );
-    assert!(repository.last_save_call().is_none());
-}
-
-#[tokio::test]
-async fn set_interests_maps_exhausted_revision_mismatches_to_conflict() {
-    let repository = Arc::new(StubUserPreferencesRepository::default());
-    repository.set_save_failures([
-        StubFailure::RevisionMismatch {
-            expected: 0,
-            actual: 1,
-        },
-        StubFailure::RevisionMismatch {
-            expected: 0,
-            actual: 1,
-        },
-        StubFailure::RevisionMismatch {
-            expected: 0,
-            actual: 1,
-        },
-    ]);
-    let command = DieselUserInterestsCommand::new(repository);
-
-    let err = command
-        .set_interests(
-            &user_id(),
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
-        )
-        .await
-        .expect_err("exhausted revision mismatches should map to domain errors");
-
-    assert_eq!(err.code(), ErrorCode::Conflict);
-    assert_eq!(err.message(), "preferences changed concurrently");
-    assert_eq!(
-        err.details()
-            .and_then(|details| details.get("code"))
-            .and_then(serde_json::Value::as_str),
-        Some("revision_mismatch")
-    );
-    assert_eq!(
-        err.details()
-            .and_then(|details| details.get("expectedRevision"))
-            .and_then(serde_json::Value::as_u64),
-        Some(0)
-    );
-    assert_eq!(
-        err.details()
-            .and_then(|details| details.get("actualRevision"))
-            .and_then(serde_json::Value::as_u64),
-        Some(1)
-    );
+    assert_eq!(repository.save_call_count(), 0);
 }

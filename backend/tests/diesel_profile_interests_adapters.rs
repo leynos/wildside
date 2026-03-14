@@ -294,12 +294,14 @@ fn assert_interests_response(body: &Value, expected_ids: &[&str]) {
             .collect::<Vec<_>>(),
         expected_ids
     );
+    assert_eq!(body.get("revision").and_then(Value::as_u64), Some(1));
 }
 
 #[rstest]
 fn fixture_fallback_mode_returns_fixture_profile_and_interests_shape() {
     let interests_payload = InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
+        expected_revision: None,
     };
     let state = build_http_state_for_tests(
         &server_config(None),
@@ -346,6 +348,7 @@ fn db_present_mode_returns_db_backed_profile_and_interests_behaviour() {
 
     let interests_payload = InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned(), SECOND_THEME_ID.to_owned()],
+        expected_revision: None,
     };
     let state = build_http_state_for_tests(
         &server_config(Some(db.pool.clone())),

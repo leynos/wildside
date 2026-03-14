@@ -4,8 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use super::recording_double_macro::recording_double;
 use async_trait::async_trait;
-use backend::domain::ports::{LoginService, UserInterestsCommand, UserProfileQuery, UsersQuery};
-use backend::domain::{Error, InterestThemeId, LoginCredentials, User, UserId, UserInterests};
+use backend::domain::ports::{
+    LoginService, UpdateUserInterestsRequest, UserInterestsCommand, UserProfileQuery, UsersQuery,
+};
+use backend::domain::{Error, LoginCredentials, User, UserId, UserInterests};
 
 /// Configurable success or failure outcome for RecordingLoginService.
 #[derive(Clone)]
@@ -94,7 +96,7 @@ recording_double! {
 
 #[derive(Clone)]
 pub(crate) struct RecordingUserInterestsCommand {
-    calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    calls: Arc<Mutex<Vec<UpdateUserInterestsRequest>>>,
     response: Arc<Mutex<UserInterestsResponse>>,
 }
 
@@ -106,7 +108,7 @@ impl RecordingUserInterestsCommand {
         }
     }
 
-    pub(crate) fn calls(&self) -> Vec<(String, Vec<String>)> {
+    pub(crate) fn calls(&self) -> Vec<UpdateUserInterestsRequest> {
         self.calls.lock().expect("interests calls lock").clone()
     }
 
@@ -119,13 +121,12 @@ impl RecordingUserInterestsCommand {
 impl UserInterestsCommand for RecordingUserInterestsCommand {
     async fn set_interests(
         &self,
-        user_id: &UserId,
-        interest_theme_ids: Vec<InterestThemeId>,
+        request: UpdateUserInterestsRequest,
     ) -> Result<UserInterests, Error> {
-        self.calls.lock().expect("interests calls lock").push((
-            user_id.to_string(),
-            interest_theme_ids.iter().map(|id| id.to_string()).collect(),
-        ));
+        self.calls
+            .lock()
+            .expect("interests calls lock")
+            .push(request);
         match self
             .response
             .lock()

@@ -175,7 +175,9 @@ pub use schema_snapshot_repository::MockSchemaSnapshotRepository;
 pub use schema_snapshot_repository::{
     FixtureSchemaSnapshotRepository, SchemaSnapshotRepository, SchemaSnapshotRepositoryError,
 };
-pub use user_interests_command::{FixtureUserInterestsCommand, UserInterestsCommand};
+pub use user_interests_command::{
+    FixtureUserInterestsCommand, UpdateUserInterestsRequest, UserInterestsCommand,
+};
 pub use user_onboarding::UserOnboarding;
 #[cfg(test)]
 pub use user_preferences_command::MockUserPreferencesCommand;

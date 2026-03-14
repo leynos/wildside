@@ -152,6 +152,8 @@ lint-actions:
 	$(LINT_ACTIONS_CMD)
 
 PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
+PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
+PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.0
 NEXTEST_TEST_THREADS ?= 1
 
 test: test-rust test-frontend
@@ -164,8 +166,17 @@ test-frontend: deps typecheck
 
 .PHONY: prepare-pg-worker
 prepare-pg-worker:
-	$(RUST_FLAGS_ENV) cargo build -p backend --bin pg_worker
-	install -m 0755 target/debug/pg_worker $(PG_WORKER_PATH)
+	if command -v pg_worker >/dev/null 2>&1; then \
+	  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"; \
+	else \
+	  cargo install \
+	    --locked \
+	    --root "$(PG_WORKER_INSTALL_ROOT)" \
+	    --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" \
+	    --bin pg_worker \
+	    pg-embed-setup-unpriv; \
+	  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"; \
+	fi
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml

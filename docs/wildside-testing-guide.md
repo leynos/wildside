@@ -23,21 +23,23 @@ with local step definitions at build time.
 
 ## Embedded Postgres worker path
 
-`make test` builds and installs the `pg_worker` helper used by
-`pg-embed-setup-unpriv` (imported as `pg_embedded_setup_unpriv` in Rust). By
-default, it writes to `/var/tmp/pg_worker`, which may fail on systems without
-write access.
+`make test` now uses the `pg_worker` helper shipped by
+`pg-embed-setup-unpriv` (imported as `pg_embedded_setup_unpriv` in Rust).
 
-- Set `PG_WORKER_PATH` to a user-writable location when running locally, for
-  example:
+- If `pg_worker` is already installed and on `PATH`, the Makefile copies that
+  binary to `PG_WORKER_PATH`.
+- Otherwise, the Makefile installs `pg-embed-setup-unpriv`'s `pg_worker` into
+  a cache under `target/pg-worker-root/` and then copies it to
+  `PG_WORKER_PATH`.
+- By default, `PG_WORKER_PATH` is `target/pg_worker`. Override it when you need
+  a different writable destination, for example:
 
   ```bash
   PG_WORKER_PATH=/tmp/pg_worker make test
   ```
 
-- The Makefile forwards this value to `PG_EMBEDDED_WORKER`, keeping behaviour
-  consistent between the helper and the test runner while preserving the
-  default CI path.
+- The Makefile forwards `PG_WORKER_PATH` to `PG_EMBEDDED_WORKER`, keeping the
+  test runner and the helper aligned while still allowing local overrides.
 
 ## Embedded Postgres test strategy
 
@@ -61,6 +63,6 @@ To force the template to rebuild locally, delete the workspace cache under
 ## Troubleshooting
 
 - Permission denied during `prepare-pg-worker`: re-run with `PG_WORKER_PATH` as
-  shown above.
+  shown above, or ensure the destination directory is writable.
 - Doctor-style errors from doctests: ensure `TraceId` imports use the public
   re-export (`use backend::TraceId;`).
