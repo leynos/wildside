@@ -158,8 +158,7 @@ jobs:
 
       - name: Build pg_worker binary
         run: |
-          RUSTFLAGS="-D warnings" cargo build --locked -p backend --bin pg_worker
-          install -m 0755 target/debug/pg_worker target/pg_worker
+          make prepare-pg-worker
 
       - name: Rust tests
         env:
