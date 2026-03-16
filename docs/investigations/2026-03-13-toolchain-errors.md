@@ -309,9 +309,9 @@ completed successfully and emitted only the expected target metadata:
 ```
 
 The command `cargo clippy --workspace --all-targets --all-features -- -D
-warnings` was also re-run. This time it did not hit the target-probe failure at all. Instead,
-it progressed into ordinary workspace linting and failed on unrelated,
-deterministic lint expectations:
+warnings` was also re-run. This time it did not hit the target-probe
+failure at all. Instead, it progressed into ordinary workspace linting and
+failed on unrelated, deterministic lint expectations:
 
 ```text
 11  Checking backend v0.1.0 (/home/user/project/backend)
