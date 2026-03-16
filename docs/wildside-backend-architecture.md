@@ -478,8 +478,9 @@ preferences writes, preserve `safety_toggle_ids` and `unit_system`, and follow
 the same optimistic-concurrency policy. A first interests write may omit
 `expectedRevision` and creates revision `1`; once a preferences row exists,
 `PUT /api/v1/users/me/interests` must receive `expectedRevision` and returns
-HTTP `409 Conflict` with `code: "revision_mismatch"` plus
-`expectedRevision`/`actualRevision` details when the token is stale or omitted.
+HTTP `409 Conflict` with top-level `code: "conflict"` and nested `details`
+containing `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`
+when the token is stale or omitted.
 
 `GET /api/v1/users/me/preferences` always returns a fully populated
 preferences payload. When the user has never saved preferences, the service

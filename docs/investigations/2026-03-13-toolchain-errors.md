@@ -1,4 +1,4 @@
-# Toolchain Error Investigation: 2026-03-13
+# Toolchain error investigation: 2026-03-13
 
 ## Scope
 
@@ -17,7 +17,7 @@ repo-local `backend` `pg_worker` binary to the `pg_worker` binary published by
 `pg-embed-setup-unpriv`. Code-path references below describe the wiring that
 was in place when these failures were captured.
 
-## Environment Snapshot
+## Environment snapshot
 
 The current shell and toolchain state at the time of this investigation was:
 
@@ -61,7 +61,7 @@ This does not prove the binaries were always executable at failure time, but it
 does rule out the simplest explanation that the files were merely absent when
 inspected.
 
-## Relevant Code Paths
+## Relevant code paths
 
 The failure sites line up with the following repository code:
 
@@ -119,15 +119,15 @@ Relevant excerpts:
 57 }
 ```
 
-## Failure 1: BDD Test Fails Before Scenario Logic
+## Failure 1: BDD test fails before scenario logic
 
-### Failure 1 Command
+### Failure 1 command
 
 ```text
 cargo test -p backend --test user_interests_revision_conflicts_bdd
 ```
 
-### Failure 1 Primary Evidence
+### Failure 1 primary evidence
 
 The recorded log shows the failure occurs during embedded PostgreSQL bootstrap,
 before any scenario assertions execute:
@@ -181,7 +181,7 @@ The current source has the equivalent step function at
 reference in the failure log came from the earlier file shape that produced the
 captured output.
 
-### Failure 1 Corroborating Evidence
+### Failure 1 corroborating evidence
 
 The test target still compiles when not asked to run:
 
@@ -193,7 +193,7 @@ The test target still compiles when not asked to run:
 That narrows this specific failure to runtime setup rather than compilation of
 the test target or the new interests code.
 
-### Failure 1 Suspected Diagnosis
+### Failure 1 suspected diagnosis
 
 Most likely diagnosis: the original failure was caused by a broken `/dev/null`
 inside the container at the time the test ran, and embedded Postgres bootstrap
@@ -219,15 +219,15 @@ Important qualification:
   the failing run. The log is therefore the strongest evidence of the original
   failure condition.
 
-## Failure 2: `make lint` Fails During `cargo clippy` Probe
+## Failure 2: `make lint` fails during `cargo clippy` probe
 
-### Failure 2 Command
+### Failure 2 command
 
 ```text
 make lint
 ```
 
-### Failure 2 Primary Evidence
+### Failure 2 primary evidence
 
 The original failure happened in `lint-rust`, after `cargo doc` completed and
 when `cargo clippy` tried to probe target information:
@@ -281,9 +281,9 @@ The same stderr stream continues with the same pattern:
 282     |                               ^
 ```
 
-### Failure 2 Follow-up Investigation
+### Failure 2 follow-up investigation
 
-I re-ran the exact probe command directly, feeding it `/dev/null` on stdin. It
+The exact probe command was re-run directly, feeding it `/dev/null` on stdin. It
 completed successfully and emitted only the expected target metadata:
 
 ```text
@@ -308,8 +308,8 @@ completed successfully and emitted only the expected target metadata:
 53 unix
 ```
 
-I also re-ran `cargo clippy --workspace --all-targets --all-features -- -D
-warnings`. This time it did not hit the target-probe failure at all. Instead,
+The command `cargo clippy --workspace --all-targets --all-features -- -D
+warnings` was also re-run. This time it did not hit the target-probe failure at all. Instead,
 it progressed into ordinary workspace linting and failed on unrelated,
 deterministic lint expectations:
 
@@ -328,7 +328,7 @@ deterministic lint expectations:
 28   |     ^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
-### Failure 2 Suspected Diagnosis
+### Failure 2 suspected diagnosis
 
 Most likely diagnosis: the original `make lint` failure was a transient
 toolchain-process or stdin/stderr corruption issue during `cargo clippy`'s
@@ -354,15 +354,15 @@ What I cannot prove from current evidence:
 The strongest safe statement is that the original failure was transient,
 toolchain-adjacent, and not reproducible on demand during follow-up.
 
-## Failure 3: `make test` Fails in `prepare-pg-worker` With `os error 2`
+## Failure 3: `make test` fails in `prepare-pg-worker` with `os error 2`
 
-### Failure 3 Command
+### Failure 3 command
 
 ```text
 make test
 ```
 
-### Failure 3 Primary Evidence
+### Failure 3 primary evidence
 
 The recorded failure occurred in `prepare-pg-worker`, which comes from
 `Makefile:167` and executes `cargo build -p backend --bin pg_worker`:
@@ -403,9 +403,9 @@ Two points are important here:
 - The failing crate is `unicode-bidi`, not backend application code.
 - Cargo says the `rustc` process was never executed.
 
-### Failure 3 Follow-up Investigation
+### Failure 3 follow-up investigation
 
-I re-ran the narrower build command directly:
+The narrower build command was re-run directly:
 
 ```text
 RUSTFLAGS="-D warnings" cargo build -p backend --bin pg_worker
@@ -426,7 +426,7 @@ This later completed successfully:
 329  Finished `dev` profile [optimized + debuginfo] target(s) in 1m 58s
 ```
 
-### Failure 3 Suspected Diagnosis
+### Failure 3 suspected diagnosis
 
 Most likely diagnosis: the original `os error 2` was another transient
 toolchain execution failure in the container, not a persistent absence of the
@@ -448,7 +448,7 @@ Important limitation:
   dependencies were available during follow-up, but it does not prove they were
   available at the exact instant of the original failure.
 
-## Cross-Cutting Assessment
+## Cross-cutting assessment
 
 Across all three failures, the evidence points more strongly to an unstable or
 mutating local execution environment than to defects in the `3.5.4`
@@ -463,7 +463,7 @@ Evidence for that assessment:
 - `/dev/null` was correct by the time of follow-up, implying the environment
   changed between failure capture and investigation.
 
-I therefore assign the following confidence levels:
+The following confidence levels are therefore assigned:
 
 - `/dev/null` as the proximate cause of the original BDD failure: high.
 - Transient toolchain-process instability as the cause of the original
@@ -471,7 +471,7 @@ I therefore assign the following confidence levels:
 - Transient toolchain execution instability as the cause of the original
   `make test` `os error 2`: medium.
 
-## What Was Ruled Out
+## What was ruled out
 
 - A compile error in `backend/tests/user_interests_revision_conflicts_bdd.rs`
   causing the BDD failure.
@@ -485,7 +485,7 @@ I therefore assign the following confidence levels:
   `os error 2`.
   - Ruled out by the later successful direct `cargo build`.
 
-## Recommended Next Steps
+## Recommended next steps
 
 - Preserve the original failing logs in build artefacts whenever these issues
   recur. The transient failures leave little evidence once the environment

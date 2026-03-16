@@ -226,8 +226,8 @@ Implementation state:
   semantics over `user_preferences.revision` and no longer retries stale
   writes into silent success.
 - stale or omitted revisions on an existing preferences row now surface as
-  `409 Conflict` with `code: revision_mismatch`,
-  `expectedRevision`, and `actualRevision`.
+  `409 Conflict` with top-level `code: "conflict"` and nested details containing
+  `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`.
 - unit coverage and non-DB behavioural coverage passed locally.
 - DB-backed behavioural execution is blocked by the known `/dev/null` bootstrap
   failure in embedded PostgreSQL, so full-gate replay and roadmap closure are

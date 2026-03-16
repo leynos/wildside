@@ -39,6 +39,7 @@ pub struct InterestsRequest {
     // The #[schema(max_items = 100)] must equal INTEREST_THEME_IDS_MAX.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_revision: Option<u32>,
 }
 

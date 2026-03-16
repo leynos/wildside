@@ -18,6 +18,18 @@ pub struct UserInterests {
 
 impl UserInterests {
     /// Build a new [`UserInterests`] value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{UserId, InterestThemeId, UserInterests};
+    ///
+    /// let user_id = UserId::random();
+    /// let theme_ids = vec![InterestThemeId::random(), InterestThemeId::random()];
+    /// let interests = UserInterests::new(user_id, theme_ids, 1);
+    ///
+    /// assert_eq!(interests.revision(), 1);
+    /// ```
     pub fn new(user_id: UserId, interest_theme_ids: Vec<InterestThemeId>, revision: u32) -> Self {
         Self {
             user_id,
@@ -37,6 +49,17 @@ impl UserInterests {
     }
 
     /// Shared aggregate revision after the interests update.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{UserId, InterestThemeId, UserInterests};
+    ///
+    /// let user_id = UserId::random();
+    /// let interests = UserInterests::new(user_id, vec![], 42);
+    ///
+    /// assert_eq!(interests.revision(), 42);
+    /// ```
     pub fn revision(&self) -> u32 {
         self.revision
     }

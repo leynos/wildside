@@ -207,6 +207,10 @@ mod tests {
             schema_json.contains("interestThemeIds"),
             "schema should contain interestThemeIds field"
         );
+        assert!(
+            schema_json.contains("revision"),
+            "schema should contain revision field"
+        );
     }
 
     #[test]

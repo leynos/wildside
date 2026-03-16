@@ -1,6 +1,6 @@
 # Wildside Progressive Web App (PWA) data model (mockup-derived, backend-compatible)
 
-Last updated: 14 December 2025
+Last updated: 16 March 2026
 
 ## Purpose
 

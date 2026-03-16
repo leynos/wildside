@@ -166,8 +166,8 @@ test-frontend: deps typecheck
 
 .PHONY: prepare-pg-worker
 prepare-pg-worker:
+	mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
 	if command -v pg_worker >/dev/null 2>&1; then \
-	  mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"; \
 	  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"; \
 	else \
 	  cargo install \
@@ -176,7 +176,6 @@ prepare-pg-worker:
 	    --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" \
 	    --bin pg_worker \
 	    pg-embed-setup-unpriv; \
-	  mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"; \
 	  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"; \
 	fi
 
