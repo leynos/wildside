@@ -419,77 +419,77 @@ is retained.
 
 1. Capture the current baseline and confirm the old interests contract.
 
-```bash
-set -o pipefail
-cargo test -p backend update_interests --lib 2>&1 | tee /tmp/3-5-4-baseline-users-tests.out
-```
+   ```bash
+   set -o pipefail
+   cargo test -p backend update_interests --lib 2>&1 | tee /tmp/3-5-4-baseline-users-tests.out
+   ```
 
-Expected pre-change signal:
+   Expected pre-change signal:
 
-```plaintext
-test ...update_interests_rejects_too_many_ids ... ok
-test ... no stale-write conflict coverage yet ...
-```
+   ```plaintext
+   test ...update_interests_rejects_too_many_ids ... ok
+   test ... no stale-write conflict coverage yet ...
+   ```
 
-1. Add failing unit and behaviour tests for the revision-safe contract.
+2. Add failing unit and behaviour tests for the revision-safe contract.
 
-```bash
-set -o pipefail
-cargo test -p backend user_interests --lib 2>&1 | tee /tmp/3-5-4-red-unit.out
-set -o pipefail
-cargo test -p backend --test user_interests_revision_conflicts_bdd \
-  2>&1 | tee /tmp/3-5-4-red-bdd.out
-```
+   ```bash
+   set -o pipefail
+   cargo test -p backend user_interests --lib 2>&1 | tee /tmp/3-5-4-red-unit.out
+   set -o pipefail
+   cargo test -p backend --test user_interests_revision_conflicts_bdd \
+     2>&1 | tee /tmp/3-5-4-red-bdd.out
+   ```
 
-Expected red-state examples:
+   Expected red-state examples:
 
-```plaintext
-thread '...stale interests update...' panicked at 'expected status 409, got 200'
-thread '...returns revision...' panicked at 'expected field revision'
-```
+   ```plaintext
+   thread '...stale interests update...' panicked at 'expected status 409, got 200'
+   thread '...returns revision...' panicked at 'expected field revision'
+   ```
 
-1. Implement the domain port, adapter, and HTTP contract changes, then rerun
+3. Implement the domain port, adapter, and HTTP contract changes, then rerun
    the focused suites until they pass.
 
-```bash
-set -o pipefail
-cargo test -p backend user_interests --lib 2>&1 | tee /tmp/3-5-4-green-unit.out
-set -o pipefail
-cargo test -p backend --test user_interests_revision_conflicts_bdd \
-  2>&1 | tee /tmp/3-5-4-green-bdd.out
-```
+   ```bash
+   set -o pipefail
+   cargo test -p backend user_interests --lib 2>&1 | tee /tmp/3-5-4-green-unit.out
+   set -o pipefail
+   cargo test -p backend --test user_interests_revision_conflicts_bdd \
+     2>&1 | tee /tmp/3-5-4-green-bdd.out
+   ```
 
-Expected green-state examples:
+   Expected green-state examples:
 
-```plaintext
-test ...stale_interests_update_returns_conflict... ok
-test ...first_interests_write_returns_revision_1... ok
-test result: ok.
-```
+   ```plaintext
+   test ...stale_interests_update_returns_conflict... ok
+   test ...first_interests_write_returns_revision_1... ok
+   test result: ok.
+   ```
 
-1. Run documentation-specific checks required for Markdown edits.
+4. Run documentation-specific checks required for Markdown edits.
 
-```bash
-set -o pipefail
-make fmt 2>&1 | tee /tmp/3-5-4-fmt.out
-set -o pipefail
-make markdownlint 2>&1 | tee /tmp/3-5-4-markdownlint.out
-set -o pipefail
-make nixie 2>&1 | tee /tmp/3-5-4-nixie.out
-```
+   ```bash
+   set -o pipefail
+   make fmt 2>&1 | tee /tmp/3-5-4-fmt.out
+   set -o pipefail
+   make markdownlint 2>&1 | tee /tmp/3-5-4-markdownlint.out
+   set -o pipefail
+   make nixie 2>&1 | tee /tmp/3-5-4-nixie.out
+   ```
 
-1. Run repository-wide gates required before closure.
+5. Run repository-wide gates required before closure.
 
-```bash
-set -o pipefail
-make check-fmt 2>&1 | tee /tmp/3-5-4-check-fmt.out
-set -o pipefail
-make lint 2>&1 | tee /tmp/3-5-4-lint.out
-set -o pipefail
-make test 2>&1 | tee /tmp/3-5-4-test.out
-```
+   ```bash
+   set -o pipefail
+   make check-fmt 2>&1 | tee /tmp/3-5-4-check-fmt.out
+   set -o pipefail
+   make lint 2>&1 | tee /tmp/3-5-4-lint.out
+   set -o pipefail
+   make test 2>&1 | tee /tmp/3-5-4-test.out
+   ```
 
-1. Update docs and roadmap only after all gates pass, then append final
+6. Update docs and roadmap only after all gates pass, then append final
    evidence to this ExecPlan.
 
 ## Validation and acceptance
