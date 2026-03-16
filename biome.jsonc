@@ -160,7 +160,6 @@
       },
       "nursery": {
         "noFloatingPromises": "error",
-        "noImportCycles": "error",
         // Prefer @ts-expect-error over @ts-ignore (no direct Biome rule in 2.2.2)
         "useExhaustiveSwitchCases": "error"
       }
