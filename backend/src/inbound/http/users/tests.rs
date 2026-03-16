@@ -6,7 +6,7 @@ use crate::domain::ports::{
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,
     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureRouteSubmissionService,
     FixtureUserInterestsCommand, FixtureUserPreferencesCommand, FixtureUserPreferencesQuery,
-    FixtureUserProfileQuery, FixtureUsersQuery, UpdateUserInterestsRequest,
+    FixtureUserProfileQuery, FixtureUsersQuery,
 };
 use crate::inbound::http::state::HttpStatePorts;
 use actix_web::{App, test as actix_test, web};

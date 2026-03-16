@@ -148,68 +148,47 @@ mod tests {
         serde_json::to_string(&T::schema()).expect("schema serializes to JSON")
     }
 
+    fn assert_schema_contains<T: PartialSchema + ToSchema>(
+        expected_name: &str,
+        expected_fields: &[&str],
+    ) {
+        let schema_json = schema_to_json::<T>();
+        let name = T::name();
+        // utoipa replaces :: with . in schema names
+        assert_eq!(name, expected_name);
+        for field in expected_fields {
+            assert!(
+                schema_json.contains(field),
+                "schema should contain {field} field"
+            );
+        }
+    }
+
     #[test]
     fn error_code_schema_has_expected_name() {
-        let schema_json = schema_to_json::<ErrorCodeSchema>();
-        let name = ErrorCodeSchema::name();
-        // utoipa replaces :: with . in schema names
-        assert_eq!(name, "crate.domain.ErrorCode");
-        assert!(
-            schema_json.contains("invalid_request"),
-            "schema should contain error code variants"
-        );
+        assert_schema_contains::<ErrorCodeSchema>("crate.domain.ErrorCode", &["invalid_request"]);
     }
 
     #[test]
     fn error_schema_has_expected_name() {
-        let schema_json = schema_to_json::<ErrorSchema>();
-        let name = ErrorSchema::name();
-        // utoipa replaces :: with . in schema names
-        assert_eq!(name, "crate.domain.Error");
-        assert!(
-            schema_json.contains("message"),
-            "schema should contain message field"
-        );
-        assert!(
-            schema_json.contains("traceId"),
-            "schema should contain traceId field"
-        );
+        assert_schema_contains::<ErrorSchema>("crate.domain.Error", &["message", "traceId"]);
     }
 
     #[test]
     fn user_schema_has_expected_name() {
-        let schema_json = schema_to_json::<UserSchema>();
-        let name = UserSchema::name();
-        // utoipa replaces :: with . in schema names
-        assert_eq!(name, "crate.domain.User");
-        assert!(
-            schema_json.contains("displayName"),
-            "schema should contain displayName field"
-        );
+        assert_schema_contains::<UserSchema>("crate.domain.User", &["displayName"]);
     }
 
     #[test]
     fn interest_theme_id_schema_has_expected_name() {
-        let schema_json = schema_to_json::<InterestThemeIdSchema>();
-        let name = InterestThemeIdSchema::name();
-        // utoipa replaces :: with . in schema names
-        assert_eq!(name, "crate.domain.InterestThemeId");
-        assert!(schema_json.contains("uuid"), "schema should mention uuid");
+        assert_schema_contains::<InterestThemeIdSchema>("crate.domain.InterestThemeId", &["uuid"]);
     }
 
     #[test]
     fn user_interests_schema_has_expected_name() {
-        let schema_json = schema_to_json::<UserInterestsSchema>();
-        let name = UserInterestsSchema::name();
-        // utoipa replaces :: with . in schema names
-        assert_eq!(name, "crate.domain.UserInterests");
-        assert!(
-            schema_json.contains("interestThemeIds"),
-            "schema should contain interestThemeIds field"
-        );
-        assert!(
-            schema_json.contains("revision"),
-            "schema should contain revision field"
+        assert_schema_contains::<UserInterestsSchema>(
+            "crate.domain.UserInterests",
+            &["interestThemeIds", "revision"],
         );
     }
 
