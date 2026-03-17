@@ -367,4 +367,8 @@ fn interests_request_serializes_expected_revision_in_camel_case() {
         value.get("expectedRevision").and_then(Value::as_u64),
         Some(3)
     );
+    assert!(
+        value.get("expected_revision").is_none(),
+        "snake_case key should not be present"
+    );
 }

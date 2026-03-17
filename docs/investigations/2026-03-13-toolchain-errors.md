@@ -345,7 +345,7 @@ Evidence supporting that diagnosis:
 - A later `cargo clippy` run reaches normal linting and reports unrelated,
   comprehensible source issues instead.
 
-What the available evidence does not establish:
+What cannot be proved from current evidence:
 
 - Whether the root cause was a nightly Rust/Clippy regression, a transient
   cargo-to-clippy plumbing bug, or environment-specific stdin/stderr handling

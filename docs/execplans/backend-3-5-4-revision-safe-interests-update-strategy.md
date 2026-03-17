@@ -226,7 +226,7 @@ Implementation state:
 - `DieselUserInterestsCommand` now follows explicit optimistic concurrency
   semantics over `user_preferences.revision` and no longer retries stale
   writes into silent success.
-- stale or omitted revisions on an existing preferences row now surface as
+- stale or omitted revisions on an existing preference row now surface as
   `409 Conflict` with top-level `code: "conflict"` and nested details containing
   `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`.
 - unit coverage and non-DB behavioural coverage passed locally.
