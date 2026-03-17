@@ -356,7 +356,7 @@ fn interests_request_validation_accepts_valid_ids() {
 }
 
 #[test]
-fn update_user_interests_request_serializes_expected_revision_in_camel_case() {
+fn interests_request_serializes_expected_revision_in_camel_case() {
     let request = InterestsRequest {
         interest_theme_ids: vec![],
         expected_revision: Some(3),

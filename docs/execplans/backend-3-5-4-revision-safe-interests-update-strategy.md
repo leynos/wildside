@@ -203,8 +203,9 @@ Observable success criteria:
   Date/Author: 2026-03-13 / planning team.
 
 - Decision: align stale-write error mapping with the existing preferences and
-  annotations conflict envelope using `code: revision_mismatch`,
-  `expectedRevision`, and `actualRevision`.
+  annotations conflict envelope: top-level `code: "conflict"` with nested
+  details carrying `code: "revision_mismatch"`, `expectedRevision`, and
+  `actualRevision`.
   Rationale: clients already consume this shape elsewhere, so reuse lowers
   cognitive load and avoids contract fragmentation.
   Date/Author: 2026-03-13 / planning team.
