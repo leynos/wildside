@@ -7,6 +7,7 @@
 //! PUT /api/v1/users/me/interests
 //! ```
 
+use crate::domain::ports::UpdateUserInterestsRequest;
 use crate::domain::{
     Error, InterestThemeId, InterestThemeIdValidationError, LoginCredentials, LoginValidationError,
     User, UserInterests,
@@ -38,6 +39,8 @@ pub struct InterestsRequest {
     // The #[schema(max_items = 100)] must equal INTEREST_THEME_IDS_MAX.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<u32>,
 }
 
 // This constant must match the #[schema(max_items = 100)] on
@@ -93,7 +96,7 @@ enum InterestsRequestError {
 
 fn parse_interest_theme_ids(
     payload: InterestsRequest,
-) -> Result<Vec<InterestThemeId>, InterestsRequestError> {
+) -> Result<ParsedInterests, InterestsRequestError> {
     if payload.interest_theme_ids.len() > INTEREST_THEME_IDS_MAX {
         return Err(InterestsRequestError::TooManyInterestThemeIds {
             length: payload.interest_theme_ids.len(),
@@ -101,7 +104,7 @@ fn parse_interest_theme_ids(
         });
     }
 
-    payload
+    let interest_theme_ids = payload
         .interest_theme_ids
         .into_iter()
         .enumerate()
@@ -114,7 +117,18 @@ fn parse_interest_theme_ids(
                 }
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(ParsedInterests {
+        interest_theme_ids,
+        expected_revision: payload.expected_revision,
+    })
+}
+
+#[derive(Debug)]
+struct ParsedInterests {
+    interest_theme_ids: Vec<InterestThemeId>,
+    expected_revision: Option<u32>,
 }
 
 impl TryFrom<LoginRequest> for LoginCredentials {
@@ -268,6 +282,7 @@ pub async fn current_user(
         (status = 200, description = "Updated interests", body = UserInterestsSchema),
         (status = 400, description = "Invalid request", body = ErrorSchema),
         (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
@@ -281,11 +296,15 @@ pub async fn update_interests(
     payload: web::Json<InterestsRequest>,
 ) -> ApiResult<web::Json<UserInterests>> {
     let user_id = session.require_user_id()?;
-    let interest_theme_ids =
+    let parsed =
         parse_interest_theme_ids(payload.into_inner()).map_err(map_interests_request_error)?;
     let interests = state
         .interests
-        .set_interests(&user_id, interest_theme_ids)
+        .set_interests(UpdateUserInterestsRequest {
+            user_id,
+            interest_theme_ids: parsed.interest_theme_ids,
+            expected_revision: parsed.expected_revision,
+        })
         .await?;
     Ok(web::Json(interests))
 }

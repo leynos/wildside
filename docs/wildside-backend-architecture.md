@@ -472,6 +472,16 @@ available for backward compatibility, while
 (interests, safety toggles, and unit system) and should be preferred for new
 clients.
 
+Interests writes are not a separate aggregate. They update the
+`user_preferences` row in place, share the same `revision` counter as full
+preferences writes, preserve `safety_toggle_ids` and `unit_system`, and follow
+the same optimistic-concurrency policy. A first interests write may omit
+`expectedRevision` and creates revision `1`; once a preferences row exists,
+`PUT /api/v1/users/me/interests` must receive `expectedRevision` and returns
+HTTP `409 Conflict` with top-level `code: "conflict"` and nested `details`
+containing `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`
+when the token is stale or omitted.
+
 `GET /api/v1/users/me/preferences` always returns a fully populated
 preferences payload. When the user has never saved preferences, the service
 creates and persists default preferences (revision 1) before responding so

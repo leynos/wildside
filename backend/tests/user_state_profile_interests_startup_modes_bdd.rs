@@ -41,6 +41,7 @@ fn world() -> World {
         interests: None,
         interests_payload: backend::inbound::http::users::InterestsRequest {
             interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
+            expected_revision: None,
         },
         skip_reason: None,
     }
@@ -88,6 +89,7 @@ fn the_interests_schema_is_missing_in_db_present_mode(world: &mut World) {
 fn executing_a_valid_login_profile_and_interests_request(world: &mut World) {
     world.interests_payload = backend::inbound::http::users::InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned()],
+        expected_revision: None,
     };
     run_profile_interests_flow(world);
 }
@@ -98,6 +100,7 @@ fn executing_a_valid_login_profile_and_interests_request_with_multiple_interest_
 ) {
     world.interests_payload = backend::inbound::http::users::InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned(), SECOND_THEME_ID.to_owned()],
+        expected_revision: None,
     };
     run_profile_interests_flow(world);
 }
@@ -108,6 +111,7 @@ fn executing_a_login_profile_and_interests_request_with_too_many_interest_theme_
 ) {
     world.interests_payload = backend::inbound::http::users::InterestsRequest {
         interest_theme_ids: vec![FIRST_THEME_ID.to_owned(); INTEREST_THEME_IDS_MAX + 1],
+        expected_revision: None,
     };
     run_profile_interests_flow(world);
 }
@@ -210,6 +214,7 @@ fn assert_profile_and_interests_contract(
     assert_interests_response(
         world.interests.as_ref().expect("interests response"),
         expected_interest_ids,
+        1,
     );
 }
 

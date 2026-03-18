@@ -219,6 +219,7 @@ async fn update_interests_rejects_too_many_ids() {
             "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
             INTEREST_THEME_IDS_MAX + 1
         ],
+        expected_revision: None,
     };
 
     let request = actix_test::TestRequest::put()
@@ -275,6 +276,7 @@ fn interests_request_validation_rejects_invalid_ids(
 ) {
     let payload = InterestsRequest {
         interest_theme_ids: vec![value.to_owned()],
+        expected_revision: None,
     };
 
     let err = parse_interest_theme_ids(payload).expect_err("invalid interest theme id");
@@ -304,6 +306,7 @@ fn interests_request_validation_rejects_too_many_ids() {
             "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
             INTEREST_THEME_IDS_MAX + 1
         ],
+        expected_revision: None,
     };
 
     let err = parse_interest_theme_ids(payload).expect_err("too many ids");
@@ -340,9 +343,32 @@ fn interests_request_validation_rejects_too_many_ids() {
 fn interests_request_validation_accepts_valid_ids() {
     let payload = InterestsRequest {
         interest_theme_ids: vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],
+        expected_revision: Some(7),
     };
 
     let parsed = parse_interest_theme_ids(payload).expect("valid interest theme ids");
-    assert_eq!(parsed.len(), 1);
-    assert_eq!(parsed[0].as_ref(), "3fa85f64-5717-4562-b3fc-2c963f66afa6");
+    assert_eq!(parsed.expected_revision, Some(7));
+    assert_eq!(parsed.interest_theme_ids.len(), 1);
+    assert_eq!(
+        parsed.interest_theme_ids[0].as_ref(),
+        "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    );
+}
+
+#[test]
+fn interests_request_serializes_expected_revision_in_camel_case() {
+    let request = InterestsRequest {
+        interest_theme_ids: vec![],
+        expected_revision: Some(3),
+    };
+
+    let value = serde_json::to_value(request).expect("request serializes");
+    assert_eq!(
+        value.get("expectedRevision").and_then(Value::as_u64),
+        Some(3)
+    );
+    assert!(
+        value.get("expected_revision").is_none(),
+        "snake_case key should not be present"
+    );
 }
