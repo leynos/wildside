@@ -1,0 +1,76 @@
+# .github/workflows/bun-global-cache.yml
+name: Build Bun Global Cache
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build-cache:
+    runs-on: ubuntu-latest
+
+    env:
+      # Keep the build self-contained & relocatable
+      BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun/cache
+      BUN_INSTALL_GLOBAL_DIR: ${{ runner.temp }}/bun/global
+      BUN_INSTALL_BIN:        ${{ runner.temp }}/bun/bin
+
+      # Pin what you want installed (note: corrected Biome package)
+      PKG_SPEC: "@biomejs/biome @asyncapi/cli@3.4.2 pnpm @redocly/cli@2.1.0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Clean working dirs
+        run: |
+          rm -rf "$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL_GLOBAL_DIR" "$BUN_INSTALL_BIN"
+          mkdir -p "$BUN_INSTALL_CACHE_DIR" "$BUN_INSTALL_GLOBAL_DIR" "$BUN_INSTALL_BIN"
+
+      - name: Global install tools (populate cache)
+        run: bun install --global --verbose $PKG_SPEC
+        # bun's global installs & cache: docs
+        # https://bun.com/docs/cli/install
+        # https://bun.com/docs/install/cache
+
+      - name: Freeze resolved versions (spec file for hermetic re-install)
+        id: freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pull actual versions from the installed CLIs so we never need the network to resolve "latest"
+          BIOME_VER="$(biome --version | sed -E 's/[^0-9]*([0-9]+(\.[0-9]+){1,2}).*/\1/')"
+          PNPM_VER="$(pnpm --version | sed -E 's/^v?([0-9]+(\.[0-9]+){1,2}).*/\1/')"
+          ASYNCAPI_VER="3.4.2"    # already pinned
+          REDOCLY_VER="2.1.0"     # already pinned
+
+          {
+            echo "@biomejs/biome@${BIOME_VER}"
+            echo "@asyncapi/cli@${ASYNCAPI_VER}"
+            echo "pnpm@${PNPM_VER}"
+            echo "@redocly/cli@${REDOCLY_VER}"
+          } > bun-global-spec.txt
+
+          echo "Resolved spec:"
+          cat bun-global-spec.txt
+
+          # Short hash of the spec for stable artefact naming
+          SPEC_SHA="$(sha256sum bun-global-spec.txt | cut -c1-12)"
+          echo "spec_sha=$SPEC_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Pack Bun cache
+        run: |
+          mkdir -p out
+          TAR="out/bun-cache-${{ runner.os }}-${{ runner.arch }}-bun$(bun --version)-${{ steps.freeze.outputs.spec_sha }}.tar.gz"
+          tar -C "$BUN_INSTALL_CACHE_DIR" -czf "$TAR" .
+          cp bun-global-spec.txt out/
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-cache-${{ runner.os }}-${{ runner.arch }}-bun$(bun --version)-${{ steps.freeze.outputs.spec_sha }}
+          path: out/*
+          if-no-files-found: error
