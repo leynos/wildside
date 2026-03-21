@@ -200,7 +200,7 @@ so persistence details stay confined to outbound adapters.
     for profile/interests wiring and architecture decision-log updates;
     coordinator-owned gate evidence references are tracked in the 3.5.3
     ExecPlan closure notes.
-- [ ] 3.5.4. Define and implement the revision-safe interests update strategy
+- [x] 3.5.4. Define and implement the revision-safe interests update strategy
   (for example optimistic concurrency via expected revision checks), including
   the persistence contract and error mapping for stale-write conflicts.
 - [ ] 3.5.5. Harden `backend/src/server/state_builders.rs` startup-mode

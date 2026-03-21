@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -374,14 +374,16 @@ user explicitly approves the plan or requests revisions to it.
 - [x] (2026-03-20 00:00Z) Reviewed the roadmap item, the current backend
   architecture text, the testing guidance, and the live repository state.
 - [x] (2026-03-20 00:00Z) Replaced the stale 3.5.4 ExecPlan with this draft.
-- [ ] Approval gate obtained from the user.
-- [ ] Baseline and environment preflight captured.
-- [ ] Domain and persistence contract confirmed or corrected.
-- [ ] HTTP contract and schema verified.
-- [ ] `rstest` and `rstest-bdd` evidence captured.
-- [ ] `docs/wildside-backend-architecture.md` confirmed accurate or updated.
-- [ ] `make check-fmt`, `make lint`, and `make test` pass.
-- [ ] `docs/backend-roadmap.md` marks `3.5.4` as done.
+- [x] (2026-03-20 23:55Z) Approval gate obtained from the user.
+- [x] (2026-03-20 23:55Z) Baseline and environment preflight captured.
+- [x] (2026-03-21 00:02Z) Domain and persistence contract confirmed.
+- [x] (2026-03-21 00:02Z) HTTP contract and schema verified.
+- [x] (2026-03-21 00:08Z) `rstest` and `rstest-bdd` evidence captured.
+- [x] (2026-03-21 00:09Z) `docs/wildside-backend-architecture.md`
+  confirmed accurate and updated to remove stale 3.5.4 deferral text.
+- [x] (2026-03-21 00:32Z) `make check-fmt`, `make lint`, and `make test`
+  passed.
+- [x] (2026-03-21 00:33Z) `docs/backend-roadmap.md` marks `3.5.4` as done.
 
 ## Surprises & Discoveries
 
@@ -395,6 +397,10 @@ user explicitly approves the plan or requests revisions to it.
   environment issues around `/dev/null` and embedded PostgreSQL worker setup,
   so the plan must treat environment preflight as first-class work rather than
   an afterthought.
+- Direct `cargo test` invocation for the DB-backed interests BDD does not pick
+  up `PG_EMBEDDED_WORKER` automatically; using the Makefile wiring or exporting
+  the variable explicitly is required for the suite to exercise product logic
+  instead of failing during bootstrap.
 
 ## Decision Log
 
@@ -423,6 +429,46 @@ user explicitly approves the plan or requests revisions to it.
 
 ## Outcomes & Retrospective
 
-Not started. This section must be completed during execution with the final
-behaviour, gate status, roadmap state, and any follow-on work that should move
-to `3.5.5` or `3.5.6` instead of being folded back into `3.5.4`.
+Roadmap item `3.5.4` is complete. The repository already contained the core
+implementation for revision-safe interests updates, and execution work in this
+turn verified that implementation against the acceptance criteria and closed
+the remaining documentation gap.
+
+Final behaviour confirmed:
+
+- `PUT /api/v1/users/me/interests` accepts optional `expectedRevision`.
+- Successful interests writes return the updated shared aggregate `revision`.
+- Existing `user_preferences` rows require `expectedRevision`; stale or missing
+  revisions surface conflict details with `expectedRevision` and
+  `actualRevision`.
+- Interests-only updates preserve non-interest preferences fields while using
+  the shared `user_preferences.revision` optimistic-concurrency contract.
+
+Evidence captured:
+
+- Targeted unit tests:
+  `/tmp/backend-3-5-4-targeted-unit.log`
+- Targeted BDD tests:
+  `/tmp/backend-3-5-4-targeted-bdd.log`
+- Environment preflight:
+  `/tmp/backend-3-5-4-dev-null.log`,
+  `/tmp/backend-3-5-4-prepare-pg-worker.log`
+- Documentation and gate logs:
+  `/tmp/backend-3-5-4-markdownlint.log`,
+  `/tmp/backend-3-5-4-nixie.log`,
+  `/tmp/backend-3-5-4-check-fmt.log`,
+  `/tmp/backend-3-5-4-lint.log`,
+  `/tmp/backend-3-5-4-test.log`
+
+Environment notes:
+
+- `/dev/null` had drifted back to a regular file and had to be restored to a
+  character device before DB-backed verification.
+- `yamllint` and `actionlint` were absent and were reinstalled so `make lint`
+  could complete.
+
+Follow-on work remains unchanged:
+
+- `3.5.5` should continue to harden startup-mode composition and helper seams.
+- `3.5.6` should continue to expand the startup-matrix regression coverage, but
+  no additional work is required to close `3.5.4`.

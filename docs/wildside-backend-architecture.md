@@ -780,8 +780,9 @@ services.
 > `DieselUserInterestsCommand`), while DB-absent startup keeps fixture fallback
 > behaviour. This strategy preserves repository cohesion, localizes dual-model
 > interests persistence mapping to the interests adapter, and avoids growing
-> `DieselUserRepository` into a mixed-responsibility type. Revision-safe
-> stale-write conflict semantics remain deferred to roadmap item 3.5.4.
+> `DieselUserRepository` into a mixed-responsibility type. Roadmap item 3.5.4
+> then completed the shared-revision write contract so interests writes now use
+> the same optimistic-concurrency semantics as full preferences updates.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.
