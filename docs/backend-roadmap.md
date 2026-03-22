@@ -218,7 +218,7 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 
 ### 4.1. Pagination crate foundation
 
-- [ ] 4.1.1. Implement `backend/crates/pagination` providing opaque cursor
+- [x] 4.1.1. Implement `backend/crates/pagination` providing opaque cursor
   encoding, `PageParams`, and `Paginated<T>` envelopes with navigation links,
   backed by unit tests for cursor round-tripping.
 - [ ] 4.1.2. Add support for direction-aware cursors (`Next` and `Prev`) with

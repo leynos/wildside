@@ -3548,6 +3548,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c6901729fa79e91a0913333229e9ca5dc725089d1c363b2f4b4760709dc4a52"
 
 [[package]]
+name = "pagination"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "rstest",
+ "rstest-bdd 0.5.0",
+ "rstest-bdd-macros 0.5.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "url",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 This plan covers roadmap item 4.1.1 only:
 `Implement backend/crates/pagination providing opaque cursor encoding,
@@ -143,14 +143,14 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   and that the root workspace must be updated explicitly for this crate path.
 - [x] (2026-03-22 00:00Z) Drafted this ExecPlan at
   [docs/execplans/backend-4-1-1-pagination-crate.md](/home/user/project/docs/execplans/backend-4-1-1-pagination-crate.md).
-- [ ] Approval gate: wait for explicit approval before implementation begins.
-- [ ] Create and wire the new workspace crate.
-- [ ] Implement cursor, params, envelope, and error modules with Rustdoc.
-- [ ] Add `rstest` unit coverage and `rstest-bdd` behavioural coverage.
-- [ ] Update backend architecture documentation with the shared-crate design
+- [x] Approval gate: explicit approval received before implementation.
+- [x] Create and wire the new workspace crate.
+- [x] Implement cursor, params, envelope, and error modules with Rustdoc.
+- [x] Add `rstest` unit coverage and `rstest-bdd` behavioural coverage.
+- [x] Update backend architecture documentation with the shared-crate design
   decisions.
-- [ ] Run formatting, lint, Markdown, and test gates with retained logs.
-- [ ] Mark roadmap item 4.1.1 done only after the implementation and gates are
+- [x] Run formatting, lint, Markdown, and test gates with retained logs.
+- [x] Mark roadmap item 4.1.1 done only after the implementation and gates are
   complete.
 
 ## Surprises & discoveries
@@ -161,13 +161,17 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   Impact: the implementation must create the directory tree and cannot assume
   an existing crate template.
 
-- Observation: the root workspace currently lists members manually and
-  auto-discovery only targets `crates/*`, not `backend/crates/*`.
+- Observation: the root workspace currently lists members manually, but
+  `make fmt` rewrites that list from `workspace.metadata.autodiscover.globs`,
+  which originally targeted `crates/*` and not `backend/crates/*`.
   Evidence: [Cargo.toml](/home/user/project/Cargo.toml) contains
   `members = ["backend", "crates/example-data", "tools/architecture-lint"]`
-  and `workspace.metadata.autodiscover.globs = ["apps/*", "crates/*", ...]`.
-  Impact: the new pagination crate must be added explicitly or it will be
-  invisible to workspace commands and quality gates.
+  and `workspace.metadata.autodiscover.globs = ["apps/*", "crates/*", ...]`;
+  `make fmt` runs `scripts/sync_workspace_members.py`, which rewrites members
+  from those globs.
+  Impact: the new pagination crate must be added to the autodiscovery globs or
+  it will be removed from the workspace during formatting and become invisible
+  to later quality gates.
 
 - Observation: the backend architecture document already reserves special
   pagination compatibility rules for admin provenance reporting.
@@ -186,13 +190,33 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   Impact: local verification for 4.1.1 must include the standard gate flow,
   but the new crate should remain free of direct database setup code.
 
+- Observation: the narrowest 4.1.1-compatible public API does not need
+  direction-aware cursors yet, because the crate can generate `self`, `next`,
+  and `prev` links from caller-supplied cursor strings without encoding
+  traversal semantics into the foundation token.
+  Evidence: the implemented crate exposes `Cursor<K>`, `PageParams`,
+  `Paginated<T>`, and `PaginationLinks`, and the behavioural tests cover link
+  generation without any `Next`/`Prev` enum.
+  Impact: roadmap 4.1.2 can still add direction-aware cursor semantics as a
+  focused follow-on change instead of leaking that scope into 4.1.1.
+
+- Observation: full gate replay was blocked twice by environment drift rather
+  than source regressions: `/dev/null` reverted to a regular file again and
+  the container was missing `yamllint` and `actionlint`.
+  Evidence: `ls -l /dev/null` showed `-rw-r--r--` before repair; `make lint`
+  failed in `lint-actions` until `yamllint` and `actionlint` were installed.
+  Impact: future gate replays in this container should verify `/dev/null` and
+  the lint helper CLIs before treating failures as product regressions.
+
 ## Decision Log
 
 - Decision: implement the crate at `backend/crates/pagination` exactly as the
-  roadmap and design document state, and wire it into the workspace explicitly
-  from the root manifest.
+  roadmap and design document state, and wire it into the workspace by
+  extending `workspace.metadata.autodiscover.globs` with `backend/crates/*`.
   Rationale: changing the path at plan time would silently rewrite approved
-  product scope; the cleaner fix is explicit workspace membership.
+  product scope; the repo's sync script rewrites workspace members from the
+  autodiscovery configuration, so fixing that source of truth is the durable
+  way to keep the crate visible.
   Date/Author: 2026-03-22 / planning team.
 
 - Decision: keep the pagination crate generic and infrastructure-neutral.
@@ -215,6 +239,21 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   remains part of the repo-wide gate flow.
   Date/Author: 2026-03-22 / planning team.
 
+- Decision: keep roadmap 4.1.1 scoped to opaque cursor tokens without
+  direction metadata, and let the envelope builder accept caller-supplied
+  `next`/`prev` cursor strings for link generation.
+  Rationale: this satisfies the approved 4.1.1 deliverables while preserving a
+  clean seam for roadmap 4.1.2 to add direction-aware traversal semantics
+  separately.
+  Date/Author: 2026-03-22 / implementation.
+
+- Decision: make the workspace discovery rule include `backend/crates/*`
+  rather than relying on a hand-edited `members` list.
+  Rationale: `make fmt` runs `scripts/sync_workspace_members.py`, which
+  rewrites the manifest from `workspace.metadata.autodiscover.globs`; adding
+  the crate only to `members` was not durable.
+  Date/Author: 2026-03-22 / implementation.
+
 - Decision: do not mark roadmap 4.1.1 done during planning.
   Rationale: the roadmap may only change once implementation is complete and
   the full gate suite is green.
@@ -222,17 +261,45 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 
 ## Outcomes & retrospective
 
-Planning complete. Implementation has not started yet.
+Completed state:
 
-The expected completed state is:
+- Added `backend/crates/pagination` as a workspace crate with documented
+  modules for opaque `Cursor<K>` encoding/decoding, normalized `PageParams`,
+  and `Paginated<T>`/`PaginationLinks` envelopes.
+- Added unit and behavioural coverage, including crate doctests and a
+  `tests/features/pagination.feature` scenario file.
+- Updated
+  [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
+  with the shared pagination crate boundary and workspace-wiring decisions.
+- Marked roadmap item 4.1.1 complete in
+  [docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md).
 
-- a reusable workspace crate at `backend/crates/pagination`;
-- documented public API for opaque cursors, page parameters, and paginated
-  envelopes;
-- `rstest` unit tests and `rstest-bdd` behavioural tests covering happy,
-  unhappy, and edge behaviour;
-- an updated backend architecture decision record;
-- roadmap item 4.1.1 marked done only after green gates.
+Gate evidence:
+
+- `make prepare-pg-worker`:
+  `/tmp/backend-4-1-1-prepare-pg-worker.log`
+- `make fmt`:
+  `/tmp/backend-4-1-1-fmt.log`
+- `make markdownlint`:
+  `/tmp/backend-4-1-1-markdownlint.log`
+- `make nixie`:
+  `/tmp/backend-4-1-1-nixie.log`
+- `make check-fmt`:
+  `/tmp/backend-4-1-1-check-fmt.log`
+- `make lint`:
+  `/tmp/backend-4-1-1-lint.log`
+- `make test`:
+  `/tmp/backend-4-1-1-test.log`
+
+Retrospective:
+
+- The crate stayed within the planned tolerance: it remained transport- and
+  persistence-neutral and did not pull in endpoint adoption work.
+- The repo-specific workspace sync script was the main packaging surprise; the
+  durable fix was extending autodiscovery rather than fighting the generated
+  members list.
+- Environment drift remains a recurring operational risk in this container,
+  but it was repaired and documented without masking any source-level issue.
 
 ## Agent team and ownership
 
