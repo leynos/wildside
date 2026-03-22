@@ -328,9 +328,9 @@ final decision rather than the intended one.
 Only after the full gates are green may the coordinator:
 
 1. update `docs/backend-roadmap.md` to mark `3.5.4` as done;
-2. update this ExecPlan status from `DRAFT` to `COMPLETE`;
-3. fill in `Outcomes & Retrospective` with the actual result and any follow-on
-   concerns.
+2. record the closure state in this ExecPlan, noting that its status is
+   already `COMPLETE` and that `Outcomes & Retrospective` captures the actual
+   result and any follow-on concerns.
 
 ## Validation and gate execution
 
