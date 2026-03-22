@@ -276,7 +276,7 @@ queue, cache, and repository ports defined in section 1.
 
 ### 5.1. Cache adapter (Redis)
 
-- [ ] 5.1.1. Implement `RouteCache` using Redis with `bb8-redis` for connection
+- [x] 5.1.1. Implement `RouteCache` using Redis with `bb8-redis` for connection
   pooling, replacing the current stub adapter.
 - [ ] 5.1.2. Add serialization with `serde_json` for cached plan payloads.
 - [ ] 5.1.3. Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%)
