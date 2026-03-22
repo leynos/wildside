@@ -6,6 +6,10 @@
 //! common test-only utilities.
 
 pub mod atexit_cleanup;
+#[allow(
+    dead_code,
+    reason = "cluster skip helpers are only used by selected integration-test crates"
+)]
 mod cluster_skip;
 pub mod embedded_postgres;
 #[cfg(feature = "example-data")]
@@ -15,6 +19,11 @@ pub mod example_data_seeding_world;
     reason = "shared profile/interests helpers are only used by selected integration-test crates"
 )]
 pub mod profile_interests;
+#[allow(
+    dead_code,
+    reason = "shared Redis helpers are only used by selected integration-test crates"
+)]
+pub mod redis;
 pub mod seed_helpers;
 
 /// Render a `postgres` error with enough detail to be useful in CI logs.
@@ -76,7 +85,15 @@ pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
 // Anchor shared helper reachability across independent integration-test crates.
 const _: fn(&str, &str) -> Result<(), String> = drop_table;
 
+#[allow(
+    unused_imports,
+    reason = "some integration test crates import support helpers through this facade"
+)]
 pub use cluster_skip::handle_cluster_setup_failure;
+#[allow(
+    unused_imports,
+    reason = "some integration test crates import support helpers through this facade"
+)]
 pub use embedded_postgres::provision_template_database;
 // Re-exported for crates that import from `support` directly.
 #[expect(

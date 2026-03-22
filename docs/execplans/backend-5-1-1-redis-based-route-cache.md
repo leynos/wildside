@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: DRAFT
+Status: IMPLEMENTED
 
 This plan covers roadmap item 5.1.1 only:
 `Implement RouteCache using Redis with bb8-redis for connection pooling,
@@ -182,15 +182,18 @@ Hand-off order:
   scope is explicitly widened.
 - [x] (2026-03-22 00:00Z) Drafted this ExecPlan at
   `docs/execplans/backend-5-1-1-redis-based-route-cache.md`.
-- [ ] Approval gate: await explicit user approval before implementation begins.
-- [ ] Add Redis dependencies, replace the outbound stub with a real adapter,
-  and preserve test-only doubles separately.
-- [ ] Add focused `rstest` coverage for round trips, misses, corrupted payloads,
-  and backend failures.
-- [ ] Add `rstest-bdd` scenarios running against a real Redis protocol server.
-- [ ] Record the architecture decision in
+- [x] (2026-03-22 14:40Z) Approval gate cleared; implementation work started.
+- [x] (2026-03-22 14:40Z) Added `bb8-redis`, replaced the outbound stub with
+  `RedisRouteCache`, and kept lightweight test doubles outside the production
+  adapter.
+- [x] (2026-03-22 14:40Z) Added focused `rstest` coverage for round trips,
+  misses, corrupted payloads, and backend failures.
+- [x] (2026-03-22 14:40Z) Added `rstest-bdd` scenarios running against a real
+  local `redis-server` process.
+- [x] (2026-03-22 14:40Z) Recorded the architecture decision in
   `docs/wildside-backend-architecture.md`.
-- [ ] Mark roadmap item 5.1.1 done in `docs/backend-roadmap.md`.
+- [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 done in
+  `docs/backend-roadmap.md`.
 - [ ] Run final gates and retain logs:
   `make check-fmt`, `make lint`, `make test`.
 
@@ -229,6 +232,15 @@ Hand-off order:
   “Caching Layer (Redis)”.
   Impact: 5.1.1 must distinguish the adapter foundation from later caching
   policy work so the roadmap remains trustworthy.
+
+- Observation: `mini-redis` was not compatible enough with the pooled
+  `redis-rs` client used by `bb8-redis`; pool checkout timed out even after
+  forcing RESP2 and disabling library info setup.
+  Evidence:
+  focused BDD failures during the first implementation pass on 2026-03-22.
+  Impact: the behavioural harness switched to a local `redis-server` process,
+  which still satisfies the plan's requirement to exercise the adapter against
+  a real Redis protocol server.
 
 ## Decision Log
 
