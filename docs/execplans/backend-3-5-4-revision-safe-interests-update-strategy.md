@@ -20,9 +20,9 @@ The repository already contains a candidate 3.5.4 implementation footprint in
 the domain port, Diesel adapter, HTTP handler, behavioural tests, and
 architecture document. This plan treats that footprint as provisional. The
 team must verify the contract, correct any gaps, prove the behaviour through
-`rstest` and `rstest-bdd`, update the architecture record if the final
-decision differs from the current text, run the full gates, and only then mark
-roadmap item 3.5.4 as done.
+`rstest` and `rstest-bdd` (behaviour-driven development, BDD), update the
+architecture record if the final decision differs from the current text, run
+the full gates, and only then mark roadmap item 3.5.4 as done.
 
 Observable success means all of the following are true:
 
@@ -366,8 +366,9 @@ Gate acceptance is simple:
 
 ## Approval gate
 
-This document is a draft only. No feature closure work should begin until the
-user explicitly approves the plan or requests revisions to it.
+The approval gate was satisfied on 20 March 2026 before implementation closure
+work began. This section is retained as part of the execution record; the
+document is no longer a draft.
 
 ## Progress
 
