@@ -205,16 +205,20 @@ mod tests {
             let manager = RedisConnectionManager::new(self.redis_url.as_str())
                 .expect("build redis manager for readiness check");
 
-            for _ in 0..50 {
-                if Pool::builder()
+            let mut attempts = 0;
+            while attempts < 50
+                && Pool::builder()
                     .max_size(1)
                     .build(manager.clone())
                     .await
-                    .is_ok()
-                {
-                    return;
-                }
+                    .is_err()
+            {
                 sleep(Duration::from_millis(100)).await;
+                attempts += 1;
+            }
+
+            if attempts < 50 {
+                return;
             }
 
             panic!("redis-server did not become ready at {}", self.redis_url);
