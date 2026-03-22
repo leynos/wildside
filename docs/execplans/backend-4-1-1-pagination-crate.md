@@ -55,7 +55,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   roadmap and design document.
 - Because the root workspace currently auto-discovers `crates/*` rather than
   `backend/crates/*`, add the new crate as an explicit workspace member in the
-  root [Cargo.toml](/home/user/project/Cargo.toml).
+  root [Cargo.toml](../../Cargo.toml).
 - Keep the public API small and human-readable. Split code into small modules
   so no file exceeds the 400-line project limit.
 - Add module-level and public-item Rustdoc comments. Use examples where they
@@ -67,7 +67,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   dependencies inside the pagination crate itself merely to satisfy a tooling
   requirement.
 - Record new design decisions in
-  [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md).
+  [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md).
 - Update documentation in en-GB-oxendict style.
 
 ## Tolerances
@@ -142,7 +142,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 - [x] (2026-03-22 00:00Z) Confirmed that `backend/crates/` does not yet exist
   and that the root workspace must be updated explicitly for this crate path.
 - [x] (2026-03-22 00:00Z) Drafted this ExecPlan at
-  [docs/execplans/backend-4-1-1-pagination-crate.md](/home/user/project/docs/execplans/backend-4-1-1-pagination-crate.md).
+  [docs/execplans/backend-4-1-1-pagination-crate.md](backend-4-1-1-pagination-crate.md).
 - [x] Approval gate: explicit approval received before implementation.
 - [x] Create and wire the new workspace crate.
 - [x] Implement cursor, params, envelope, and error modules with Rustdoc.
@@ -164,7 +164,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 - Observation: the root workspace currently lists members manually, but
   `make fmt` rewrites that list from `workspace.metadata.autodiscover.globs`,
   which originally targeted `crates/*` and not `backend/crates/*`.
-  Evidence: [Cargo.toml](/home/user/project/Cargo.toml) contains
+  Evidence: [Cargo.toml](../../Cargo.toml) contains
   `members = ["backend", "crates/example-data", "tools/architecture-lint"]`
   and `workspace.metadata.autodiscover.globs = ["apps/*", "crates/*", ...]`;
   `make fmt` runs `scripts/sync_workspace_members.py`, which rewrites members
@@ -176,7 +176,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 - Observation: the backend architecture document already reserves special
   pagination compatibility rules for admin provenance reporting.
   Evidence:
-  [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
+  [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
   around the "3.4.3 Pagination Compatibility Requirements" section.
   Impact: the foundation crate must stay generic and must not encode admin
   provenance-specific `before` semantics.
@@ -184,7 +184,7 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 - Observation: repository-wide test execution depends on
   `pg-embed-setup-unpriv` via `make prepare-pg-worker` and
   `make test`, not on per-crate direct cluster setup.
-  Evidence: [Makefile](/home/user/project/Makefile) targets
+  Evidence: [Makefile](../../Makefile) targets
   `prepare-pg-worker` and `test-rust`, plus the
   `docs/pg-embed-setup-unpriv-users-guide.md` guidance.
   Impact: local verification for 4.1.1 must include the standard gate flow,
@@ -269,10 +269,10 @@ Completed state:
 - Added unit and behavioural coverage, including crate doctests and a
   `tests/features/pagination.feature` scenario file.
 - Updated
-  [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
+  [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
   with the shared pagination crate boundary and workspace-wiring decisions.
 - Marked roadmap item 4.1.1 complete in
-  [docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md).
+  [docs/backend-roadmap.md](../backend-roadmap.md).
 
 Gate evidence:
 
@@ -317,9 +317,9 @@ may cover multiple roles, but the ownership boundaries should remain visible.
   verification transcript for happy, unhappy, and edge cases.
 - Documentation agent:
   updates
-  [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
+  [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
   and later
-  [docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md) after
+  [docs/backend-roadmap.md](../backend-roadmap.md) after
   implementation is complete.
 - Gate agent:
   runs `make prepare-pg-worker`, `make fmt`, `make markdownlint`,
@@ -341,34 +341,34 @@ Coordination sequence:
 
 Primary references to load before making edits:
 
-- [docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md)
-- [docs/keyset-pagination-design.md](/home/user/project/docs/keyset-pagination-design.md)
-- [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
-- [docs/rust-testing-with-rstest-fixtures.md](/home/user/project/docs/rust-testing-with-rstest-fixtures.md)
-- [docs/rstest-bdd-users-guide.md](/home/user/project/docs/rstest-bdd-users-guide.md)
-- [docs/rust-doctest-dry-guide.md](/home/user/project/docs/rust-doctest-dry-guide.md)
-- [docs/complexity-antipatterns-and-refactoring-strategies.md](/home/user/project/docs/complexity-antipatterns-and-refactoring-strategies.md)
-- [docs/pg-embed-setup-unpriv-users-guide.md](/home/user/project/docs/pg-embed-setup-unpriv-users-guide.md)
+- [docs/backend-roadmap.md](../backend-roadmap.md)
+- [docs/keyset-pagination-design.md](../keyset-pagination-design.md)
+- [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
+- [docs/rust-testing-with-rstest-fixtures.md](../rust-testing-with-rstest-fixtures.md)
+- [docs/rstest-bdd-users-guide.md](../rstest-bdd-users-guide.md)
+- [docs/rust-doctest-dry-guide.md](../rust-doctest-dry-guide.md)
+- [docs/complexity-antipatterns-and-refactoring-strategies.md](../complexity-antipatterns-and-refactoring-strategies.md)
+- [docs/pg-embed-setup-unpriv-users-guide.md](../pg-embed-setup-unpriv-users-guide.md)
 
 Current code anchors and likely edit targets:
 
-- [Cargo.toml](/home/user/project/Cargo.toml) for workspace membership.
-- [backend/Cargo.toml](/home/user/project/backend/Cargo.toml) only if a local
+- [Cargo.toml](../../Cargo.toml) for workspace membership.
+- [backend/Cargo.toml](../../backend/Cargo.toml) only if a local
   path dependency becomes necessary during implementation; avoid touching it
   for 4.1.1 unless required.
 - `backend/crates/pagination/Cargo.toml` as the new crate manifest.
 - `backend/crates/pagination/src/lib.rs` plus small supporting modules such as
   `cursor.rs`, `params.rs`, `envelope.rs`, and `error.rs`.
 - `backend/crates/pagination/tests/` for `rstest` and `rstest-bdd` coverage.
-- [docs/wildside-backend-architecture.md](/home/user/project/docs/wildside-backend-architecture.md)
+- [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
   for the shared-crate decision record.
-- [docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md) for
+- [docs/backend-roadmap.md](../backend-roadmap.md) for
   final checkbox closure only.
 
 Deliberate non-goals for this item:
 
 - no endpoint wiring in
-  [backend/src/inbound/http/admin_enrichment.rs](/home/user/project/backend/src/inbound/http/admin_enrichment.rs)
+  [backend/src/inbound/http/admin_enrichment.rs](../../backend/src/inbound/http/admin_enrichment.rs)
   or `/api/users` yet;
 - no repository filter logic;
 - no OpenAPI adoption;
@@ -469,7 +469,7 @@ set -o pipefail && make test 2>&1 | tee /tmp/backend-4-1-1/test.log
 ```
 
 If every required gate passes, mark 4.1.1 done in
-[docs/backend-roadmap.md](/home/user/project/docs/backend-roadmap.md) and
+[docs/backend-roadmap.md](../backend-roadmap.md) and
 update this ExecPlan's status and progress sections.
 
 ## Acceptance checks

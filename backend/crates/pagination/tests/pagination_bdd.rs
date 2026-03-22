@@ -1,15 +1,11 @@
 //! Behavioural tests for the pagination crate foundation.
 
-#![expect(
-    clippy::expect_used,
-    reason = "test code uses expect for clear failure messages"
-)]
-
 use pagination::{Cursor, CursorError, PageParams, Paginated, PaginationLinks};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,22 +39,34 @@ fn a_composite_ordering_key(world: &World) {
 
 #[given("a malformed opaque cursor token")]
 fn a_malformed_opaque_cursor_token(world: &World) {
-    world.cursor_token.set("not-valid-base64".to_owned());
+    world.cursor_token.set("not!valid".to_owned());
 }
 
 #[given("pagination parameters without a limit")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn pagination_parameters_without_a_limit(world: &World) {
     let params = PageParams::new(None, None).expect("default params should be valid");
     world.page_params.set(params);
 }
 
 #[given("normalized pagination parameters with cursor {cursor}")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn normalized_pagination_parameters_with_cursor(world: &World, cursor: String) {
     let params = PageParams::new(Some(cursor), Some(25)).expect("params should be valid");
     world.page_params.set(params);
 }
 
 #[given("a request URL with filter query parameters")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn a_request_url_with_filter_query_parameters(world: &World) {
     let url = Url::parse(
         "https://example.test/api/v1/users?role=admin&status=active&limit=1&cursor=stale",
@@ -68,6 +76,10 @@ fn a_request_url_with_filter_query_parameters(world: &World) {
 }
 
 #[when("the key is encoded into an opaque cursor and decoded again")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_key_is_encoded_into_an_opaque_cursor_and_decoded_again(world: &World) {
     let key = world.key.get().expect("key should be set");
     let token = Cursor::new(key.clone())
@@ -80,6 +92,10 @@ fn the_key_is_encoded_into_an_opaque_cursor_and_decoded_again(world: &World) {
 }
 
 #[when("the cursor is decoded")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_cursor_is_decoded(world: &World) {
     let token = world
         .cursor_token
@@ -95,6 +111,10 @@ fn the_cursor_is_decoded(world: &World) {
 fn the_parameters_are_normalized(_world: &World) {}
 
 #[when("pagination parameters request limit {limit:u64}")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn pagination_parameters_request_limit(world: &World, limit: u64) {
     let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
     let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
@@ -103,22 +123,51 @@ fn pagination_parameters_request_limit(world: &World, limit: u64) {
 
 #[when("a paginated envelope is built with next and prev cursors")]
 fn a_paginated_envelope_is_built_with_next_and_prev_cursors(world: &World) {
-    let params = world.page_params.get().expect("page params should be set");
-    let request_url = world.request_url.get().expect("request url should be set");
-    let page = Paginated::new(
-        vec!["Ada".to_owned(), "Linus".to_owned()],
-        params.limit(),
-        PaginationLinks::from_request(
-            &request_url,
-            &params,
-            Some("next-token"),
-            Some("prev-token"),
-        ),
-    );
+    let page = build_paginated_envelope(world, Some("next-token"), Some("prev-token"));
     world.page.set(page);
 }
 
+#[when("a paginated envelope is built with only a next cursor")]
+fn a_paginated_envelope_is_built_with_only_a_next_cursor(world: &World) {
+    let page = build_paginated_envelope(world, Some("next-token"), None);
+    world.page.set(page);
+}
+
+#[when("a paginated envelope is built with only a prev cursor")]
+fn a_paginated_envelope_is_built_with_only_a_prev_cursor(world: &World) {
+    let page = build_paginated_envelope(world, None, Some("prev-token"));
+    world.page.set(page);
+}
+
+#[when("a paginated envelope is built without pagination cursors")]
+fn a_paginated_envelope_is_built_without_pagination_cursors(world: &World) {
+    let page = build_paginated_envelope(world, None, None);
+    world.page.set(page);
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+fn build_paginated_envelope(
+    world: &World,
+    next_cursor: Option<&str>,
+    prev_cursor: Option<&str>,
+) -> Paginated<String> {
+    let params = world.page_params.get().expect("page params should be set");
+    let request_url = world.request_url.get().expect("request url should be set");
+    Paginated::new(
+        vec!["Ada".to_owned(), "Linus".to_owned()],
+        params.limit(),
+        PaginationLinks::from_request(&request_url, &params, next_cursor, prev_cursor),
+    )
+}
+
 #[then("the decoded cursor key matches the original key")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_decoded_cursor_key_matches_the_original_key(world: &World) {
     let key = world.key.get().expect("key should be set");
     let decode_result = world
@@ -133,6 +182,10 @@ fn the_decoded_cursor_key_matches_the_original_key(world: &World) {
 }
 
 #[then("cursor decoding fails")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn cursor_decoding_fails(world: &World) {
     let result = world
         .decode_result
@@ -143,6 +196,10 @@ fn cursor_decoding_fails(world: &World) {
 }
 
 #[then("the normalized limit is {limit:u64}")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_normalized_limit_is(world: &World, limit: u64) {
     let params = world.page_params.get().expect("page params should be set");
 
@@ -153,6 +210,10 @@ fn the_normalized_limit_is(world: &World, limit: u64) {
 }
 
 #[then("the self link preserves the current cursor and filter")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_self_link_preserves_the_current_cursor_and_filter(world: &World) {
     let page = world.page.get().expect("page should be set");
 
@@ -163,6 +224,10 @@ fn the_self_link_preserves_the_current_cursor_and_filter(world: &World) {
 }
 
 #[then("the next link uses the next cursor")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_next_link_uses_the_next_cursor(world: &World) {
     let page = world.page.get().expect("page should be set");
 
@@ -175,6 +240,10 @@ fn the_next_link_uses_the_next_cursor(world: &World) {
 }
 
 #[then("the prev link uses the prev cursor")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
 fn the_prev_link_uses_the_prev_cursor(world: &World) {
     let page = world.page.get().expect("page should be set");
 
@@ -184,6 +253,37 @@ fn the_prev_link_uses_the_prev_cursor(world: &World) {
             "https://example.test/api/v1/users?role=admin&status=active&limit=25&cursor=prev-token"
         )
     );
+}
+
+#[then("the next link is omitted from the envelope")]
+fn the_next_link_is_omitted_from_the_envelope(world: &World) {
+    let links = serialized_links(world);
+
+    assert!(links.get("next").is_none());
+}
+
+#[then("the prev link is omitted from the envelope")]
+fn the_prev_link_is_omitted_from_the_envelope(world: &World) {
+    let links = serialized_links(world);
+
+    assert!(links.get("prev").is_none());
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+fn serialized_links(world: &World) -> serde_json::Map<String, Value> {
+    let page = world.page.get().expect("page should be set");
+    let payload = serde_json::to_value(page).expect("paginated envelope should serialize");
+    let links = payload
+        .get("links")
+        .and_then(Value::as_object)
+        .expect("serialized payload should include links object");
+
+    assert!(links.get("self").is_some());
+
+    links.clone()
 }
 
 #[scenario(path = "tests/features/pagination.feature")]

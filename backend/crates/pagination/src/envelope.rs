@@ -21,6 +21,24 @@ pub struct PaginationLinks {
 
 impl PaginationLinks {
     /// Construct a set of links directly from concrete values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use pagination::PaginationLinks;
+    ///
+    /// let links = PaginationLinks::new(
+    ///     "https://example.test/api/v1/users?limit=25&cursor=current-token".to_owned(),
+    ///     Some("https://example.test/api/v1/users?limit=25&cursor=next-token".to_owned()),
+    ///     None,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     links.next.as_deref(),
+    ///     Some("https://example.test/api/v1/users?limit=25&cursor=next-token")
+    /// );
+    /// assert_eq!(links.prev, None);
+    /// ```
     #[must_use]
     pub const fn new(self_: String, next: Option<String>, prev: Option<String>) -> Self {
         Self { self_, next, prev }
@@ -29,6 +47,40 @@ impl PaginationLinks {
     /// Build links for the current request URL and page parameters.
     ///
     /// Existing non-pagination query parameters are preserved.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use pagination::{PageParams, PaginationLinks};
+    /// use url::Url;
+    ///
+    /// let request_url = Url::parse(
+    ///     "https://example.test/api/v1/users?role=admin&limit=1&cursor=stale",
+    /// )
+    /// .expect("request url should parse");
+    /// let params = PageParams::new(Some("current-token".to_owned()), Some(25))
+    ///     .expect("page params should be valid");
+    ///
+    /// let links = PaginationLinks::from_request(
+    ///     &request_url,
+    ///     &params,
+    ///     Some("next-token"),
+    ///     Some("prev-token"),
+    /// );
+    ///
+    /// assert_eq!(
+    ///     links.self_,
+    ///     "https://example.test/api/v1/users?role=admin&limit=25&cursor=current-token"
+    /// );
+    /// assert_eq!(
+    ///     links.next.as_deref(),
+    ///     Some("https://example.test/api/v1/users?role=admin&limit=25&cursor=next-token")
+    /// );
+    /// assert_eq!(
+    ///     links.prev.as_deref(),
+    ///     Some("https://example.test/api/v1/users?role=admin&limit=25&cursor=prev-token")
+    /// );
+    /// ```
     #[must_use]
     pub fn from_request(
         request_url: &Url,
@@ -59,6 +111,29 @@ pub struct Paginated<T> {
 
 impl<T> Paginated<T> {
     /// Construct an envelope from explicit link values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use pagination::{Paginated, PaginationLinks};
+    ///
+    /// let page = Paginated::new(
+    ///     vec![1, 2, 3],
+    ///     3,
+    ///     PaginationLinks::new(
+    ///         "https://example.test/api/v1/numbers?limit=3".to_owned(),
+    ///         Some("https://example.test/api/v1/numbers?limit=3&cursor=next".to_owned()),
+    ///         None,
+    ///     ),
+    /// );
+    ///
+    /// assert_eq!(page.data, vec![1, 2, 3]);
+    /// assert_eq!(page.limit, 3);
+    /// assert_eq!(
+    ///     page.links.next.as_deref(),
+    ///     Some("https://example.test/api/v1/numbers?limit=3&cursor=next")
+    /// );
+    /// ```
     #[must_use]
     pub const fn new(data: Vec<T>, limit: usize, links: PaginationLinks) -> Self {
         Self { data, limit, links }

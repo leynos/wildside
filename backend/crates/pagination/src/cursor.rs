@@ -1,6 +1,9 @@
 //! Opaque cursor encoding and decoding helpers.
 
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
@@ -108,12 +111,12 @@ where
     /// base64url and [`CursorError::Deserialize`] when the decoded JSON does
     /// not match the expected cursor shape.
     pub fn decode(value: &str) -> Result<Self, CursorError> {
-        let payload =
-            URL_SAFE_NO_PAD
-                .decode(value)
-                .map_err(|error| CursorError::InvalidBase64 {
-                    message: error.to_string(),
-                })?;
+        let payload = URL_SAFE_NO_PAD
+            .decode(value)
+            .or_else(|_| URL_SAFE.decode(value))
+            .map_err(|error| CursorError::InvalidBase64 {
+                message: error.to_string(),
+            })?;
         serde_json::from_slice(&payload).map_err(|error| CursorError::Deserialize {
             message: error.to_string(),
         })
@@ -154,6 +157,21 @@ mod tests {
         let result = Cursor::<FixtureKey>::decode("!!!");
 
         assert!(matches!(result, Err(CursorError::InvalidBase64 { .. })));
+    }
+
+    #[test]
+    fn padded_base64_cursor_decodes_successfully() {
+        let cursor = Cursor::new(FixtureKey {
+            created_at: "2026-03-22T10:30:00Z".to_owned(),
+            id: "8b116c56-0a58-4c55-b7d7-06ee6bbddb8c".to_owned(),
+        });
+        let payload = serde_json::to_vec(&cursor).expect("cursor should serialize");
+        let encoded = base64::engine::general_purpose::URL_SAFE.encode(payload);
+
+        let decoded =
+            Cursor::<FixtureKey>::decode(&encoded).expect("padded cursor decoding should succeed");
+
+        assert_eq!(decoded, cursor);
     }
 
     #[test]

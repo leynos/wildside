@@ -27,3 +27,27 @@ Feature: Pagination crate foundation
     Then the self link preserves the current cursor and filter
     And the next link uses the next cursor
     And the prev link uses the prev cursor
+
+  Scenario: Paginated envelopes omit the prev link when only next is available
+    Given normalized pagination parameters with cursor "current-token"
+    And a request URL with filter query parameters
+    When a paginated envelope is built with only a next cursor
+    Then the self link preserves the current cursor and filter
+    And the next link uses the next cursor
+    And the prev link is omitted from the envelope
+
+  Scenario: Paginated envelopes omit the next link when only prev is available
+    Given normalized pagination parameters with cursor "current-token"
+    And a request URL with filter query parameters
+    When a paginated envelope is built with only a prev cursor
+    Then the self link preserves the current cursor and filter
+    And the prev link uses the prev cursor
+    And the next link is omitted from the envelope
+
+  Scenario: Paginated envelopes omit optional links when no cursors are available
+    Given normalized pagination parameters with cursor "current-token"
+    And a request URL with filter query parameters
+    When a paginated envelope is built without pagination cursors
+    Then the self link preserves the current cursor and filter
+    And the next link is omitted from the envelope
+    And the prev link is omitted from the envelope

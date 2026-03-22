@@ -1951,9 +1951,10 @@ This section records the design contract implemented for roadmap item 3.4.3.
 ##### Shared pagination foundation crate (Roadmap 4.1.1)
 
 Roadmap 4.1.1 introduces a standalone workspace crate at
-`backend/crates/pagination` for shared pagination primitives. The crate is
-added explicitly to the root Cargo workspace because the current workspace
-autodiscovery globs do not include `backend/crates/*`.
+`backend/crates/pagination` for shared pagination primitives. The root Cargo
+workspace now includes `backend/crates/*` in its autodiscovery globs, so the
+crate remains present when workspace-member sync rewrites the generated
+members list.
 
 The crate boundary is intentionally narrow:
 
