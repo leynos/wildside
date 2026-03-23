@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "backend",
+    "backend/crates/pagination",
     "crates/example-data",
     "tools/architecture-lint",
 ]
@@ -92,6 +93,7 @@ opt-level = 3
 [workspace.metadata.autodiscover]
 globs = [
     "apps/*",
+    "backend/crates/*",
     "crates/*",
     "examples/*",
     "tools/*",

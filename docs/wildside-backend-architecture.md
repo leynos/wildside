@@ -1948,6 +1948,37 @@ distinguish transport availability from client input errors.
 
 This section records the design contract implemented for roadmap item 3.4.3.
 
+##### Shared pagination foundation crate (Roadmap 4.1.1)
+
+Roadmap 4.1.1 introduces a standalone workspace crate at
+`backend/crates/pagination` for shared pagination primitives. The root Cargo
+workspace now includes `backend/crates/*` in its autodiscovery globs, so the
+crate remains present when workspace-member sync rewrites the generated
+members list.
+
+The crate boundary is intentionally narrow:
+
+- `Cursor<K>` provides opaque base64url JSON cursor encoding and decoding for
+  stable ordered keys.
+- `PageParams` normalizes the shared pagination query contract with defaults of
+  `limit=20` and `max=100`, while leaving endpoint-specific narrower guardrails
+  to inbound adapters.
+- `Paginated<T>` and `PaginationLinks` provide transport-neutral response
+  envelopes containing `self`, `next`, and `prev` links derived from a request
+  URL.
+
+Hexagonal boundary rules for this crate are explicit:
+
+- It must not depend on Actix, Diesel, or backend domain modules.
+- Inbound adapters remain responsible for HTTP error mapping and any endpoint-
+  specific query aliases.
+- Outbound adapters remain responsible for turning decoded cursor keys into
+  repository-specific keyset filters and ordering clauses.
+
+This foundation crate is intentionally generic and additive. Endpoint adoption,
+direction-aware cursors, and admin provenance compatibility work remain
+separate roadmap items in section 4.2.
+
 ##### 3.4.3 Pagination Compatibility Requirements (Phase 4, Future Work)
 
 Opaque pagination remains deferred future work. The current public contract for
