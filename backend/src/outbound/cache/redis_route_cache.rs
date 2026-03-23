@@ -126,6 +126,12 @@ fn map_serialization_error(error: serde_json::Error) -> RouteCacheError {
 #[cfg(test)]
 mod tests {
     //! Focused adapter tests covering port-level semantics.
+    //!
+    //! Tests requiring a real `redis-server` binary are marked with `#[ignore]`
+    //! and can be run explicitly via:
+    //! ```sh
+    //! cargo test -- --ignored
+    //! ```
 
     use bb8_redis::redis::cmd;
     use rstest::rstest;
@@ -233,6 +239,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn get_returns_none_for_missing_key() {
         let server = TestRedisServer::start().await;
         let cache = RedisRouteCache::<TestPlan>::new(server.pool().await);
@@ -244,6 +251,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn put_followed_by_get_round_trips_the_typed_plan() {
         let server = TestRedisServer::start().await;
         let cache = RedisRouteCache::<TestPlan>::new(server.pool().await);
@@ -258,6 +266,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn corrupted_cached_bytes_map_to_serialization_errors() {
         let server = TestRedisServer::start().await;
         let pool = server.pool().await;
