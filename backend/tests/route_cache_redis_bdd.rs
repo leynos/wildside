@@ -1,4 +1,10 @@
 //! Behavioural tests for the Redis-backed `RouteCache` adapter.
+//!
+//! These tests require a `redis-server` binary and are ignored by default.
+//! Run explicitly with:
+//! ```sh
+//! cargo test -- --ignored
+//! ```
 
 use std::sync::Arc;
 
@@ -277,6 +283,7 @@ fn each_cache_key_keeps_its_own_plan(world: &RouteCacheWorld) {
     path = "tests/features/route_cache_redis.feature",
     name = "Stored plans round-trip through Redis"
 )]
+#[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
 fn stored_plans_round_trip_through_redis(world: RouteCacheWorld) {
     drop(world);
 }
@@ -285,6 +292,7 @@ fn stored_plans_round_trip_through_redis(world: RouteCacheWorld) {
     path = "tests/features/route_cache_redis.feature",
     name = "Missing keys return a cache miss"
 )]
+#[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
 fn missing_keys_return_a_cache_miss(world: RouteCacheWorld) {
     drop(world);
 }
@@ -293,6 +301,7 @@ fn missing_keys_return_a_cache_miss(world: RouteCacheWorld) {
     path = "tests/features/route_cache_redis.feature",
     name = "Malformed cached bytes surface as serialization failures"
 )]
+#[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
 fn malformed_cached_bytes_surface_as_serialization_failures(world: RouteCacheWorld) {
     drop(world);
 }
@@ -301,6 +310,7 @@ fn malformed_cached_bytes_surface_as_serialization_failures(world: RouteCacheWor
     path = "tests/features/route_cache_redis.feature",
     name = "Unreachable Redis surfaces as a backend failure"
 )]
+#[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
 fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
     drop(world);
 }
@@ -309,6 +319,7 @@ fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
     path = "tests/features/route_cache_redis.feature",
     name = "Distinct cache keys do not overwrite each other"
 )]
+#[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
 fn distinct_cache_keys_do_not_overwrite_each_other(world: RouteCacheWorld) {
     drop(world);
 }
