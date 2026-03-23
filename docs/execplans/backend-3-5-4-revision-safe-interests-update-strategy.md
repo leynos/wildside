@@ -374,7 +374,8 @@ document is no longer a draft.
 
 - [x] (2026-03-20 00:00Z) Reviewed the roadmap item, the current backend
   architecture text, the testing guidance, and the live repository state.
-- [x] (2026-03-20 00:00Z) Replaced the stale 3.5.4 ExecPlan with this draft.
+- [x] (2026-03-20 00:00Z) Replaced the stale 3.5.4 ExecPlan with this
+  completed revision record.
 - [x] (2026-03-20 23:55Z) Approval gate obtained from the user.
 - [x] (2026-03-20 23:55Z) Baseline and environment preflight captured.
 - [x] (2026-03-21 00:02Z) Domain and persistence contract confirmed.
@@ -391,9 +392,10 @@ document is no longer a draft.
 - The repository already contains a candidate 3.5.4 implementation footprint,
   including port, domain, adapter, BDD, and architecture-document changes,
   while the roadmap entry remains open.
-- The previous `docs/execplans/backend-3-5-4-revision-safe-interests-update-
-  strategy.md` was no longer a draft and no longer matched the repository
-  state, so this plan had to be rewritten as a fresh audit-and-close document.
+- The previous
+  `docs/execplans/backend-3-5-4-revision-safe-interests-update-strategy.md`
+  was no longer a draft and no longer matched the repository state, so this
+  plan had to be rewritten as a fresh audit-and-close document.
 - Historical notes show that DB-backed verification can fail because of
   environment issues around `/dev/null` and embedded PostgreSQL worker setup,
   so the plan must treat environment preflight as first-class work rather than
