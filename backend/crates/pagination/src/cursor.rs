@@ -218,6 +218,9 @@ mod tests {
         id: String,
     }
 
+    // Verify Cursor::new works in const contexts
+    const _CONST_CURSOR: Cursor<&str> = Cursor::new("compile-time-test");
+
     #[test]
     fn cursor_round_trips_through_opaque_token() {
         let cursor = Cursor::new(FixtureKey {
