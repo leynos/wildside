@@ -102,10 +102,10 @@ impl<Key> Cursor<Key> {
     /// assert_eq!(cursor.direction(), Direction::Next);
     /// ```
     #[must_use]
-    pub fn new(key: Key) -> Self {
+    pub const fn new(key: Key) -> Self {
         Self {
             key,
-            dir: Direction::default(),
+            dir: Direction::Next,
         }
     }
 
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn cursor_new_defaults_to_next_direction() {
+    fn cursor_new_uses_next_direction() {
         let cursor = Cursor::new(FixtureKey {
             created_at: "2026-03-22T10:30:00Z".to_owned(),
             id: "test-id".to_owned(),

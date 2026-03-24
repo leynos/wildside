@@ -82,8 +82,8 @@ that require significant refactoring.
   - Severity: low
   - Likelihood: medium
   - Mitigation: Property tests for cursor encoding are pure unit tests and do
-    not need Postgres. BDD tests can use the existing sync patterns from
-    `pagination/tests/pagination_bdd.rs`.
+    not need Postgres. Behaviour-driven development (BDD) tests can use the
+    existing sync patterns from `pagination/tests/pagination_bdd.rs`.
 
 ## Progress
 
@@ -150,7 +150,8 @@ compatibility with existing cursors.
 ### Test coverage
 
 - 11 unit tests (7 new direction-aware tests)
-- 2 BDD test suites (1 new direction-aware feature with 3 scenarios)
+- 2 behaviour-driven development (BDD) test suites (1 new direction-aware
+  feature with 3 scenarios)
 - 10 doc tests (4 new direction-related examples)
 
 All tests pass: `cargo test -p pagination` returns 0 failures.
@@ -500,7 +501,7 @@ Edit `docs/backend-roadmap.md`:
   - Crate-level docs in `lib.rs` include Direction usage example.
   - Architecture decision logged in `docs/wildside-backend-architecture.md`.
 
-### Quality method (how we check)
+### Quality method (how to check)
 
 ```bash
 # Run all pagination crate tests
@@ -540,7 +541,7 @@ tests::padded_base64_cursor_decodes_successfully ... ok
 tests::structurally_invalid_json_cursor_fails_decode ... ok
 tests::direction_round_trips_through_encoding_next ... ok
 tests::direction_round_trips_through_encoding_prev ... ok
-tests::cursor_with_direction_defaults_to_next ... ok
+tests::cursor_without_direction_defaults_to_next ... ok
 ...
 test result: ok. 15 passed; 0 failed; 0 ignored
 ```
