@@ -136,14 +136,9 @@ mod tests {
     use bb8_redis::redis::cmd;
     use rstest::rstest;
     use serde::{Deserialize, Serialize};
-    use std::{
-        process::{Child, Command, Stdio},
-        time::Duration,
-    };
-    use tempfile::TempDir;
-    use tokio::{net::TcpListener, time::sleep};
 
     use super::*;
+    use crate::test_support::redis::{RedisTestServer as TestRedisServer, unused_redis_url};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestPlan {
@@ -160,96 +155,11 @@ mod tests {
         }
     }
 
-    /// Test harness for spawning a real `redis-server` process.
-    ///
-    /// Note: This is intentionally duplicated from `tests/support/redis.rs`.
-    /// Rust's module system makes sharing test utilities between unit tests
-    /// and integration tests complex (unit tests are compiled as part of the
-    /// library, integration tests as separate crates). The duplication is
-    /// minimal and keeping them separate is simpler than the alternatives.
-    struct TestRedisServer {
-        redis_url: String,
-        process: Child,
-        _temp_dir: TempDir,
-    }
-
-    impl TestRedisServer {
-        async fn start() -> Self {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("reserve redis port");
-            let address = listener.local_addr().expect("redis test address");
-            drop(listener);
-            let temp_dir = TempDir::new().expect("create redis temp dir");
-            let process = Command::new("redis-server")
-                .arg("--bind")
-                .arg("127.0.0.1")
-                .arg("--port")
-                .arg(address.port().to_string())
-                .arg("--save")
-                .arg("")
-                .arg("--appendonly")
-                .arg("no")
-                .arg("--dir")
-                .arg(temp_dir.path())
-                .arg("--loglevel")
-                .arg("warning")
-                .arg("--protected-mode")
-                .arg("no")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .expect("spawn redis-server");
-
-            let server = Self {
-                redis_url: format!("redis://{address}/"),
-                process,
-                _temp_dir: temp_dir,
-            };
-            server.wait_until_ready().await;
-            server
-        }
-
-        async fn pool(&self) -> RedisPool {
-            let manager =
-                RedisConnectionManager::new(self.redis_url.as_str()).expect("redis manager");
-            Pool::builder().build(manager).await.expect("redis pool")
-        }
-
-        async fn wait_until_ready(&self) {
-            let manager = RedisConnectionManager::new(self.redis_url.as_str())
-                .expect("build redis manager for readiness check");
-
-            let mut attempts = 0;
-            while attempts < 50
-                && Pool::builder()
-                    .max_size(1)
-                    .build(manager.clone())
-                    .await
-                    .is_err()
-            {
-                sleep(Duration::from_millis(100)).await;
-                attempts += 1;
-            }
-
-            if attempts < 50 {
-                return;
-            }
-
-            panic!("redis-server did not become ready at {}", self.redis_url);
-        }
-    }
-
-    impl Drop for TestRedisServer {
-        fn drop(&mut self) {
-            let _ = self.process.kill();
-            let _ = self.process.wait();
-        }
-    }
-
     #[tokio::test]
     #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn get_returns_none_for_missing_key() {
         let server = TestRedisServer::start().await;
-        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await);
+        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
         let key = RouteCacheKey::new("route:missing").expect("valid key");
 
         let result = cache.get(&key).await.expect("missing-key lookup succeeds");
@@ -261,7 +171,7 @@ mod tests {
     #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn put_followed_by_get_round_trips_the_typed_plan() {
         let server = TestRedisServer::start().await;
-        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await);
+        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
         let key = RouteCacheKey::new("route:round-trip").expect("valid key");
         let plan = TestPlan::new("req-1", 42);
 
@@ -276,7 +186,7 @@ mod tests {
     #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
     async fn corrupted_cached_bytes_map_to_serialization_errors() {
         let server = TestRedisServer::start().await;
-        let pool = server.pool().await;
+        let pool = server.pool().await.expect("redis pool");
         let cache = RedisRouteCache::<TestPlan>::new(pool.clone());
         let key = RouteCacheKey::new("route:corrupt").expect("valid key");
         let mut connection = pool.get().await.expect("redis connection");
@@ -322,14 +232,5 @@ mod tests {
             .expect_err("invalid redis url should fail");
 
         assert!(matches!(result, RouteCacheError::Backend { .. }));
-    }
-
-    async fn unused_redis_url() -> String {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind ephemeral port");
-        let address = listener.local_addr().expect("ephemeral port address");
-        drop(listener);
-        format!("redis://{address}/")
     }
 }

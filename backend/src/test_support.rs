@@ -3,6 +3,8 @@
 //! This module provides shared helpers for both unit tests (in `src/`) and
 //! integration tests (in `tests/`). It is only compiled when running tests.
 
+pub mod redis;
+
 pub mod cap_fs {
     //! Capability-safe filesystem helpers for tests.
     //!
