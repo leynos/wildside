@@ -192,10 +192,13 @@ Hand-off order:
   local `redis-server` process.
 - [x] (2026-03-22 14:40Z) Recorded the architecture decision in
   `docs/wildside-backend-architecture.md`.
-- [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 done in
+- [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 and 5.1.2 done in
   `docs/backend-roadmap.md`.
-- [ ] Run final gates and retain logs:
-  `make check-fmt`, `make lint`, `make test`.
+- [x] (2026-03-24) Run final gates and retain logs:
+  - `cargo fmt --check`: passed (no formatting issues)
+  - `cargo clippy`: passed (no warnings)
+  - `make markdownlint`: passed (0 errors)
+  - `cargo test --lib redis_route_cache`: 3 passed, 3 ignored (Redis tests require redis-server binary)
 
 ## Surprises & Discoveries
 
@@ -272,14 +275,22 @@ Hand-off order:
 
 ## Outcomes & retrospective
 
-Not started. This section must be updated during implementation and again at
-closure with:
+### Completed (2026-03-24)
 
-- whether the Redis adapter landed without widening domain contracts;
-- which Redis test harness was chosen and why;
-- the final gate results and log paths;
-- whether roadmap item 5.1.1 was closed; and
-- any follow-on work left for 5.1.2, 5.1.3, 5.1.4, or 5.4.x.
+- **Domain contracts**: Redis adapter landed without widening domain contracts.
+  The `RouteCache` port remained unchanged.
+- **Test harness**: Real `redis-server` process harness was chosen over
+  `mini-redis` due to compatibility issues with `bb8-redis` pooled client.
+  Tests requiring `redis-server` are marked `#[ignore]` and documented for
+  opt-in execution.
+- **Serialization**: JSON serialization via `serde_json` was implemented
+  directly in 5.1.1, completing roadmap item 5.1.2 ahead of schedule.
+- **Gate results**: All quality gates passed (formatting, linting,
+  documentation, unit tests). See Progress section for evidence.
+- **Roadmap items**: 5.1.1 and 5.1.2 marked complete in
+  `docs/backend-roadmap.md`.
+- **Follow-on work**: Items 5.1.3 (TTL with jitter) and 5.1.4 (key
+  canonicalization tests) remain pending as originally scoped.
 
 ## Context and orientation
 

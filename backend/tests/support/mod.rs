@@ -85,15 +85,10 @@ pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
 // Anchor shared helper reachability across independent integration-test crates.
 const _: fn(&str, &str) -> Result<(), String> = drop_table;
 
-#[allow(
-    unused_imports,
-    reason = "some integration test crates import support helpers through this facade"
-)]
+// Re-export cluster skip helpers for integration test crates.
+// Not marked with #[expect(unused_imports)] because these are actually used
+// by integration tests and would fail the unfulfilled expectation check.
 pub use cluster_skip::handle_cluster_setup_failure;
-#[allow(
-    unused_imports,
-    reason = "some integration test crates import support helpers through this facade"
-)]
 pub use embedded_postgres::provision_template_database;
 // Re-exported for crates that import from `support` directly.
 #[expect(
