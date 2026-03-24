@@ -336,6 +336,15 @@ Module boundaries are enforced by a repo-local lint that runs during
   `generatedAt` RFC 3339 timestamp so clients can detect staleness. Response
   DTOs wrap domain snapshot types as opaque `serde_json::Value` fields to keep
   `ToSchema` derives in the inbound layer.
+- **2026-03-24:** Add direction-aware cursors to the `pagination` crate. Cursors
+  now embed a `Direction` enum (`Next` or `Prev`) to indicate traversal
+  direction. The `Direction` enum derives `Default` with `Next` as the default
+  value, ensuring backward-compatible decoding of cursors created before this
+  change. Cursors without the `dir` field deserialize as `Direction::Next`,
+  preserving existing forward-pagination behaviour. The opaque base64url JSON
+  encoding remains unchanged; clients continue to treat cursors as opaque
+  tokens. This enables bidirectional pagination without breaking existing
+  cursor consumers.
 
 ### Web API and WebSocket Layer (Actix Web)
 

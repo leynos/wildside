@@ -1,6 +1,6 @@
 //! Behavioural tests for the pagination crate foundation.
 
-use pagination::{Cursor, CursorError, PageParams, Paginated, PaginationLinks};
+use pagination::{Cursor, CursorError, Direction, PageParams, Paginated, PaginationLinks};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -22,6 +22,7 @@ struct World {
     page_params: Slot<PageParams>,
     request_url: Slot<Url>,
     page: Slot<Paginated<String>>,
+    direction: Slot<Direction>,
 }
 
 #[fixture]
@@ -286,7 +287,75 @@ fn serialized_links(world: &World) -> serde_json::Map<String, Value> {
     links.clone()
 }
 
+// Direction-aware cursor step definitions
+
+#[given("pagination direction Next")]
+fn pagination_direction_next(world: &World) {
+    world.direction.set(Direction::Next);
+}
+
+#[given("pagination direction Prev")]
+fn pagination_direction_prev(world: &World) {
+    world.direction.set(Direction::Prev);
+}
+
+#[when("the key and direction are encoded into a cursor and decoded")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn the_key_and_direction_are_encoded_into_a_cursor_and_decoded(world: &World) {
+    let key = world.key.get().expect("key should be set");
+    let dir = world.direction.get().expect("direction should be set");
+    let token = Cursor::with_direction(key.clone(), dir)
+        .encode()
+        .expect("cursor encoding should succeed");
+    world.cursor_token.set(token.clone());
+    world
+        .decode_result
+        .set(Cursor::<FixtureKey>::decode(&token));
+}
+
+#[then("the decoded cursor has direction Next")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn the_decoded_cursor_has_direction_next(world: &World) {
+    let decode_result = world
+        .decode_result
+        .get()
+        .expect("decode result should be set");
+    let cursor = decode_result
+        .as_ref()
+        .expect("cursor decoding should succeed");
+
+    assert_eq!(cursor.direction(), Direction::Next);
+}
+
+#[then("the decoded cursor has direction Prev")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn the_decoded_cursor_has_direction_prev(world: &World) {
+    let decode_result = world
+        .decode_result
+        .get()
+        .expect("decode result should be set");
+    let cursor = decode_result
+        .as_ref()
+        .expect("cursor decoding should succeed");
+
+    assert_eq!(cursor.direction(), Direction::Prev);
+}
+
 #[scenario(path = "tests/features/pagination.feature")]
 fn pagination_crate_foundation(world: World) {
+    drop(world);
+}
+
+#[scenario(path = "tests/features/direction_aware_cursors.feature")]
+fn direction_aware_cursor_pagination(world: World) {
     drop(world);
 }

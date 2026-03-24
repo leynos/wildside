@@ -7,15 +7,41 @@ use base64::{
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
-/// Cursor wrapper for an ordered boundary key.
+/// Direction of pagination relative to the cursor.
+///
+/// Indicates whether the cursor represents a position for fetching
+/// the next page (forward in sort order) or the previous page
+/// (backward in sort order).
+///
+/// # Examples
+///
+/// ```
+/// use pagination::Direction;
+///
+/// let forward = Direction::Next;
+/// let backward = Direction::Prev;
+///
+/// assert_ne!(forward, backward);
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Direction {
+    /// Forward in the sort order (e.g., newer items if sorting ascending).
+    #[default]
+    Next,
+    /// Backward in the sort order (e.g., older items).
+    Prev,
+}
+
+/// Cursor wrapper for an ordered boundary key with direction.
 ///
 /// The encoded representation is base64url JSON and must be treated as opaque
-/// by clients.
+/// by clients. The direction indicates whether this cursor is meant for
+/// fetching the next page (forward) or previous page (backward).
 ///
 /// # Example
 ///
 /// ```
-/// use pagination::Cursor;
+/// use pagination::{Cursor, Direction};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,10 +58,13 @@ use thiserror::Error;
 /// let decoded = Cursor::<UserKey>::decode(&encoded).expect("cursor decoding succeeds");
 ///
 /// assert_eq!(decoded.key(), cursor.key());
+/// assert_eq!(decoded.direction(), Direction::Next);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cursor<Key> {
     key: Key,
+    #[serde(default)]
+    dir: Direction,
 }
 
 /// Errors raised while encoding or decoding opaque cursors.
@@ -62,10 +91,37 @@ pub enum CursorError {
 }
 
 impl<Key> Cursor<Key> {
-    /// Construct a cursor from one ordering key.
+    /// Construct a cursor from one ordering key with the default direction (`Next`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::new("my-key");
+    /// assert_eq!(cursor.direction(), Direction::Next);
+    /// ```
     #[must_use]
-    pub const fn new(key: Key) -> Self {
-        Self { key }
+    pub fn new(key: Key) -> Self {
+        Self {
+            key,
+            dir: Direction::default(),
+        }
+    }
+
+    /// Construct a cursor from one ordering key with an explicit direction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    /// assert_eq!(cursor.direction(), Direction::Prev);
+    /// ```
+    #[must_use]
+    pub const fn with_direction(key: Key, dir: Direction) -> Self {
+        Self { key, dir }
     }
 
     /// Borrow the cursor key.
@@ -74,10 +130,33 @@ impl<Key> Cursor<Key> {
         &self.key
     }
 
+    /// Access the pagination direction.
+    #[must_use]
+    pub const fn direction(&self) -> Direction {
+        self.dir
+    }
+
     /// Consume the cursor and return the inner key.
     #[must_use]
     pub fn into_inner(self) -> Key {
         self.key
+    }
+
+    /// Decompose the cursor into its constituent parts (key and direction).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    /// let (key, dir) = cursor.into_parts();
+    /// assert_eq!(key, "my-key");
+    /// assert_eq!(dir, Direction::Prev);
+    /// ```
+    #[must_use]
+    pub fn into_parts(self) -> (Key, Direction) {
+        (self.key, self.dir)
     }
 }
 
@@ -128,9 +207,10 @@ mod tests {
     //! Unit tests for opaque cursor encoding and decoding.
 
     use base64::Engine as _;
+    use rstest::rstest;
     use serde::{Deserialize, Serialize};
 
-    use super::{Cursor, CursorError};
+    use super::{Cursor, CursorError, Direction};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct FixtureKey {
@@ -182,5 +262,80 @@ mod tests {
         let result = Cursor::<FixtureKey>::decode(&invalid_payload);
 
         assert!(matches!(result, Err(CursorError::Deserialize { .. })));
+    }
+
+    #[rstest]
+    #[case(Direction::Next)]
+    #[case(Direction::Prev)]
+    fn direction_round_trips_through_encoding(#[case] direction: Direction) {
+        let cursor = Cursor::with_direction(
+            FixtureKey {
+                created_at: "2026-03-22T10:30:00Z".to_owned(),
+                id: "test-id".to_owned(),
+            },
+            direction,
+        );
+        let encoded = cursor.encode().expect("encoding succeeds");
+        let decoded = Cursor::<FixtureKey>::decode(&encoded).expect("decoding succeeds");
+
+        assert_eq!(decoded.direction(), direction);
+        assert_eq!(decoded.key(), cursor.key());
+    }
+
+    #[test]
+    fn cursor_without_direction_defaults_to_next() {
+        // Simulate an old cursor (pre-4.1.2) without the `dir` field
+        let old_cursor_json = r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"}}"#;
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(old_cursor_json);
+
+        let decoded = Cursor::<FixtureKey>::decode(&encoded).expect("decoding succeeds");
+
+        assert_eq!(decoded.direction(), Direction::Next);
+    }
+
+    #[test]
+    fn new_cursor_includes_direction_in_json() {
+        let cursor = Cursor::with_direction(
+            FixtureKey {
+                created_at: "2026-03-22T10:30:00Z".to_owned(),
+                id: "test-id".to_owned(),
+            },
+            Direction::Prev,
+        );
+        let encoded = cursor.encode().expect("encoding succeeds");
+        let decoded_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(&encoded)
+            .expect("base64 decoding succeeds");
+        let json_str = String::from_utf8(decoded_bytes).expect("valid utf8");
+
+        // Verify the direction is present in the JSON
+        assert!(json_str.contains("\"dir\""));
+        assert!(json_str.contains("Prev"));
+    }
+
+    #[rstest]
+    #[case(Direction::Next)]
+    #[case(Direction::Prev)]
+    fn into_parts_returns_key_and_direction(#[case] direction: Direction) {
+        let key = FixtureKey {
+            created_at: "2026-03-22T10:30:00Z".to_owned(),
+            id: "test-id".to_owned(),
+        };
+        let cursor = Cursor::with_direction(key.clone(), direction);
+
+        let (returned_key, returned_dir) = cursor.into_parts();
+
+        assert_eq!(returned_key, key);
+        assert_eq!(returned_dir, direction);
+    }
+
+    #[test]
+    fn cursor_new_defaults_to_next_direction() {
+        let cursor = Cursor::new(FixtureKey {
+            created_at: "2026-03-22T10:30:00Z".to_owned(),
+            id: "test-id".to_owned(),
+        });
+
+        assert_eq!(cursor.direction(), Direction::Next);
     }
 }

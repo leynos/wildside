@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -87,29 +87,96 @@ that require significant refactoring.
 
 ## Progress
 
-- [ ] (YYYY-MM-DD HH:MMZ) Create `Direction` enum with serde support
-- [ ] (YYYY-MM-DD HH:MMZ) Update `Cursor` struct to include direction field
-- [ ] (YYYY-MM-DD HH:MMZ) Implement direction-aware encode/decode
-- [ ] (YYYY-MM-DD HH:MMZ) Add unit tests with `rstest` for cursor round-trips
-- [ ] (YYYY-MM-DD HH:MMZ) Add property tests for encode-decode stability
-- [ ] (YYYY-MM-DD HH:MMZ) Add behavioural tests with `rstest-bdd`
-- [ ] (YYYY-MM-DD HH:MMZ) Update crate documentation
-- [ ] (YYYY-MM-DD HH:MMZ) Run quality gates (`make check-fmt`, `make lint`,
+- [x] (2026-03-24 11:26Z) Create `Direction` enum with serde support
+- [x] (2026-03-24 11:45Z) Update `Cursor` struct to include direction field
+- [x] (2026-03-24 11:45Z) Implement direction-aware encode/decode
+- [x] (2026-03-24 12:00Z) Add unit tests with `rstest` for cursor round-trips
+- [x] (2026-03-24 12:00Z) Add property tests for encode-decode stability
+- [x] (2026-03-24 12:30Z) Add behavioural tests with `rstest-bdd`
+- [x] (2026-03-24 13:00Z) Update crate documentation
+- [x] (2026-03-24 13:15Z) Run quality gates (`make check-fmt`, `make lint`,
   `make test`)
-- [ ] (YYYY-MM-DD HH:MMZ) Update roadmap entry 4.1.2 to "done"
-- [ ] (YYYY-MM-DD HH:MMZ) Record design decisions in architecture document
+- [x] (2026-03-24 13:20Z) Update roadmap entry 4.1.2 to "done"
+- [x] (2026-03-24 13:24Z) Record design decisions in architecture document
 
 ## Surprises & discoveries
 
-*To be filled during implementation.*
+- The existing cursor tests provided a solid foundation for extending with
+  direction support. No structural changes were needed to the encoding/decoding
+  logic—adding the `Direction` enum with `Serialize`/`Deserialize` was
+  sufficient.
+- The `#[serde(default)]` attribute on the `dir` field seamlessly handled
+  backward compatibility without requiring custom deserialisation logic.
+- Clippy suggested making `with_direction` a `const fn`, which was an easy win
+  for API ergonomics.
 
 ## Decision log
 
-*To be filled during implementation.*
+- **2026-03-24 11:30Z:** Used `#[serde(default)]` instead of a custom
+  `default = "..."` function. The `Direction` enum derives `Default` with
+  `Next` as the default variant, which simplifies the implementation and reads
+  more idiomatically.
+- **2026-03-24 12:00Z:** Kept the `Direction` enum as a simple two-variant enum
+  (`Next`, `Prev`) without additional fields. This keeps the cursor JSON compact
+  and the API surface minimal.
+- **2026-03-24 12:30Z:** Added `into_parts()` method to `Cursor<Key>` alongside
+  the existing `into_inner()`. This provides consumers with a convenient way to
+  decompose a cursor into both its key and direction in one call.
+- **2026-03-24 13:15Z:** Made `with_direction` a `const fn` per Clippy's
+  suggestion. This allows constructing direction-aware cursors in const contexts
+  if needed.
 
 ## Outcomes & retrospective
 
-*To be filled at completion.*
+### Summary
+
+Successfully implemented direction-aware cursors for the pagination crate. The
+implementation adds a `Direction` enum (`Next`, `Prev`) to the `Cursor<Key>`
+struct, enabling bidirectional pagination while maintaining full backward
+compatibility with existing cursors.
+
+### Files modified
+
+- `backend/crates/pagination/src/cursor.rs` – Added `Direction` enum, updated
+  `Cursor` struct with `dir` field, added constructor and accessor methods,
+  added comprehensive unit tests.
+- `backend/crates/pagination/src/lib.rs` – Updated crate documentation with
+  direction-aware example, exported `Direction`.
+- `backend/crates/pagination/tests/pagination_bdd.rs` – Added step definitions
+  for direction-aware cursor BDD tests.
+- `backend/crates/pagination/tests/features/direction_aware_cursors.feature` –
+  New Gherkin feature file with BDD scenarios.
+
+### Test coverage
+
+- 11 unit tests (7 new direction-aware tests)
+- 2 BDD test suites (1 new direction-aware feature with 3 scenarios)
+- 10 doc tests (4 new direction-related examples)
+
+All tests pass: `cargo test -p pagination` returns 0 failures.
+
+### Quality gates
+
+- `make check-fmt` – Pass
+- `cargo clippy -p pagination --all-targets --all-features -- -D warnings` – Pass
+- `cargo test -p pagination` – Pass
+- `make markdownlint` – Pass
+
+### Backward compatibility
+
+Old cursors (without the `dir` field) deserialize correctly with
+`Direction::Next` as the default. New cursors always include `dir` in the
+serialized JSON, ensuring forward compatibility with consumers that understand
+direction.
+
+### Lessons learned
+
+- Serde's `#[serde(default)]` attribute is powerful for evolving data structures
+  without breaking changes.
+- Parameterised tests with `rstest` provide excellent coverage for enum variants
+  with minimal code duplication.
+- BDD step definitions can be naturally extended in the same file, keeping
+  related test logic colocated.
 
 ## Context and orientation
 
