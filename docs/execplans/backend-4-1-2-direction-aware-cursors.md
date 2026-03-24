@@ -18,7 +18,7 @@ After this change, the pagination crate will provide:
 
 - A `Direction` enum (`Next`, `Prev`) embedded in cursors to indicate traversal
 direction.
-- Updated `Cursor<Key, Direction>` encoding/decoding that preserves direction
+- Updated `Cursor<Key>` encoding/decoding that preserves direction
 through base64url JSON serialization.
 - Property tests ensuring encode-decode round-trip stability.
 - Unit and behavioural tests covering happy paths, unhappy paths, and edge
@@ -41,8 +41,8 @@ functionality.
 `docs/rstest-bdd-users-guide.md`.
 - **Embedded Postgres:** Integration-style tests must use
 `pg-embedded-setup-unpriv` for local testing (where persistence is needed).
-- **Quality gates:** `make check-fmt`, `make lint`, and `make test` must all
-pass before completion.
+- **Quality gates:** `make check-fmt`, `make lint`, `make test`, `make
+markdownlint`, `make fmt`, and `make nixie` must all pass before completion.
 - **File size:** No single code file may exceed 400 lines (per
 `AGENTS.md` guidelines).
 
@@ -73,9 +73,9 @@ that require significant refactoring.
 - **Risk:** Backward compatibility concerns with existing cursor format.
   - Severity: medium
   - Likelihood: low
-  - Mitigation: This is a new feature (4.1.2), not a breaking change. Existing
-    cursor functionality (without direction) remains valid; direction-aware
-    cursors are additive.
+  - Mitigation: Use serde `default` attribute so cursors lacking the `dir` field
+    deserialize as `Direction::Next`. Old tokens continue to work; new tokens
+    with `dir` are forward-compatible with updated consumers.
 
 - **Risk:** Integration with pg-embedded-setup-unpriv may require async test
   patterns that complicate the test structure.
@@ -174,57 +174,61 @@ When decoded, the direction indicates:
      `Deserialize`.
    - Include doc comments explaining `Next` and `Prev` semantics.
 
-2. Update `Cursor<Key>` to `Cursor<Key, Direction = ()>` or add direction as a
-   field:
-   - Option A (preferred): Add `direction: Direction` field with default
-     backward-compatible behavior.
-   - Option B: Use generic `Cursor<Key, Dir = ()>` to maintain backward compat.
-
-   Decision: Use Option A with a const default for backward compatibility.
+2. Update `Cursor<Key>` to include a `direction` field:
+   - Add `direction: Direction` field with serde defaults for backward-compatible
+     encoding/decoding.
+   - The direction defaults to `Direction::Next` when deserialising cursors that
+     lack the field (preserving existing behaviour for forward pagination).
 
 ### Stage B: Implementation
 
-3. Modify `Cursor` struct in `cursor.rs`:
+1. Modify `Cursor` struct in `cursor.rs` to add the direction field with
+   backward-compatible serde attributes:
 
    ```rust
    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-   pub struct Cursor<Key, Direction = ()> {
+   pub struct Cursor<Key> {
        key: Key,
-       #[serde(skip_serializing_if = "is_unit", default)]
+       #[serde(default = "default_direction")]
        dir: Direction,
    }
+
+   fn default_direction() -> Direction { Direction::Next }
    ```
 
-   Or simpler: always include direction field, default to `Direction::Next` for
-   backward compatibility during transition.
+   This ensures:
+   - Old cursors without the `dir` field deserialize with `Direction::Next`
+   - New cursors always include `dir` in serialized output
 
-4. Add constructor methods:
+2. Add constructor methods:
    - `Cursor::new(key)` – creates cursor with default direction (Next).
    - `Cursor::with_direction(key, direction)` – creates cursor with explicit
      direction.
 
-5. Add accessor methods:
+3. Add accessor methods:
    - `Cursor::direction(&self) -> &Direction`
    - `Cursor::key(&self) -> &Key` (already exists, may need update)
    - `Cursor::into_parts(self) -> (Key, Direction)`
 
-6. Update encoding/decoding:
+4. Update encoding/decoding:
    - The existing `encode()` and `decode()` should work via serde if Direction
      implements Serialize/Deserialize.
    - Ensure base64url encoding remains unchanged.
 
 ### Stage C: Unit tests with `rstest`
 
-7. Add unit tests in `cursor.rs` (within `#[cfg(test)]` module):
+1. Add unit tests in `cursor.rs` (within `#[cfg(test)]` module):
 
    - `direction_round_trips_through_opaque_token`: Encode cursor with Next,
      decode, assert direction preserved.
    - `prev_direction_round_trips`: Same for Prev.
-   - `cursor_without_direction_defaults_to_next`: Backward compatibility test.
+   - `cursor_without_direction_defaults_to_next`: Backward compatibility test—
+     verify that cursors serialized before 4.1.2 (without `dir` field) decode
+     successfully with `Direction::Next`.
    - `invalid_direction_json_fails_gracefully`: Error handling for malformed
      direction values.
 
-8. Add property tests using `rstest` with `#[case]` or value combinations:
+2. Add property tests using `rstest` with `#[case]` or value combinations:
 
    - Test all combinations of:
      - Direction: Next, Prev
@@ -233,7 +237,7 @@ When decoded, the direction indicates:
 
 ### Stage D: Behavioural tests with `rstest-bdd`
 
-9. Extend or add Gherkin feature file (e.g.,
+1. Extend or add Gherkin feature file (e.g.,
    `tests/features/direction_aware_cursors.feature`):
 
    ```gherkin
@@ -259,7 +263,7 @@ When decoded, the direction indicates:
        Then the decoded cursor has direction Next
    ```
 
-10. Add step definitions in a new test file or extend
+2. Add step definitions in a new test file or extend
     `tests/pagination_bdd.rs`:
     - `#[given("direction {direction}")]` – sets direction in world.
     - `#[when("the key and direction are encoded into a cursor and decoded")]`
@@ -269,25 +273,28 @@ When decoded, the direction indicates:
 
 ### Stage E: Documentation and quality gates
 
-11. Update crate-level documentation in `lib.rs`:
+1. Update crate-level documentation in `lib.rs`:
     - Add example showing direction-aware cursor usage.
     - Document the Direction enum semantics.
 
-12. Run quality gates:
+2. Run quality gates:
     - `make check-fmt` – ensure formatting passes.
     - `make lint` – ensure clippy and other lints pass.
     - `make test` – ensure all tests pass.
+    - `make markdownlint` – ensure Markdown passes linting.
+    - `make fmt` – ensure all code is formatted.
+    - `make nixie` – ensure Mermaid diagrams are valid.
 
-13. Update roadmap:
+3. Update roadmap:
     - Mark `docs/backend-roadmap.md` item 4.1.2 as done.
 
-14. Record design decisions:
+4. Record design decisions:
     - Add entry to `docs/wildside-backend-architecture.md` decision log
       documenting the direction-aware cursor design.
 
 ## Concrete steps
 
-Execute these commands from the repository root (`/data/leynos/Projects/wildside.worktrees/backend-4-1-2-direction-aware-cursors`).
+Execute these commands from the repository root.
 
 ### 1. Verify current state
 
@@ -319,15 +326,15 @@ fn direction_round_trips_through_encoding(#[case] direction: Direction) {
         direction,
     );
     let encoded = cursor.encode().expect("encoding succeeds");
-    let decoded = Cursor::<FixtureKey, Direction>::decode(&encoded).expect("decoding succeeds");
-    assert_eq!(decoded.direction(), &direction);
+    let decoded = Cursor::<FixtureKey>::decode(&encoded).expect("decoding succeeds");
+    assert_eq!(decoded.direction(), direction);
 }
 ```
 
 ### 4. Run unit tests
 
 ```bash
-cargo test -p pagination cursor
+cargo test -p pagination direction
 ```
 
 Expected: New direction tests pass.
@@ -373,6 +380,9 @@ Expected: All BDD scenarios pass.
 make check-fmt
 make lint
 make test
+make markdownlint
+make fmt
+make nixie
 ```
 
 Expected: All pass.
@@ -468,6 +478,28 @@ tests::cursor_with_direction_defaults_to_next ... ok
 test result: ok. 15 passed; 0 failed; 0 ignored
 ```
 
+### Backward compatibility
+
+The serde configuration ensures seamless migration between old and new cursor
+formats:
+
+| Origin          | JSON shape                            | Direction             |
+|-----------------|---------------------------------------|-----------------------|
+| Old (pre-4.1.2) | `{"key":{"id":"abc"}}`                | `Next` (default)      |
+| New with `Next` | `{"key":{"id":"abc"},"dir":"Next"}`   | `Next`                |
+| New with `Prev` | `{"key":{"id":"abc"},"dir":"Prev"}`   | `Prev`                |
+
+Key serde behaviours:
+
+- **`#[serde(default)]` on `dir` field**: When deserialising JSON without the
+  `dir` field, the `Direction::default()` (which is `Next`) is used. This
+  preserves the behaviour of existing cursors that were created before this
+  change.
+- **No `skip_serializing_if`**: New cursors always include `dir` in serialized
+  output. This ensures forward compatibility—consumers that understand direction
+  will see it; older consumers ignore unknown fields per typical JSON
+  conventions.
+
 ### Interface definitions
 
 At completion, the following types and functions must exist:
@@ -476,31 +508,38 @@ In `backend/crates/pagination/src/cursor.rs`:
 
 ```rust
 /// Direction of pagination relative to the cursor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Direction {
     /// Forward in the sort order (e.g., newer items if sorting ascending).
+    #[default]
     Next,
     /// Backward in the sort order (e.g., older items).
     Prev,
 }
 
-/// Cursor wrapper for an ordered boundary key with optional direction.
+/// Cursor wrapper for an ordered boundary key with direction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Cursor<Key, Dir = ()> {
+pub struct Cursor<Key> {
     key: Key,
-    #[serde(skip_serializing_if = "is_unit", default)]
-    dir: Dir,
+    #[serde(default)]
+    dir: Direction,
 }
 
-impl<Key> Cursor<Key, ()> {
-    pub const fn new(key: Key) -> Self;
-}
+impl<Key> Cursor<Key> {
+    /// Create a cursor with the default direction (`Next`).
+    pub fn new(key: Key) -> Self;
 
-impl<Key, Dir> Cursor<Key, Dir> {
-    pub fn with_direction(key: Key, dir: Dir) -> Self;
+    /// Create a cursor with an explicit direction.
+    pub fn with_direction(key: Key, dir: Direction) -> Self;
+
+    /// Access the ordering key.
     pub const fn key(&self) -> &Key;
-    pub const fn direction(&self) -> &Dir;
-    pub fn into_parts(self) -> (Key, Dir);
+
+    /// Access the pagination direction.
+    pub const fn direction(&self) -> Direction;
+
+    /// Decompose into constituent parts.
+    pub fn into_parts(self) -> (Key, Direction);
 }
 ```
 
