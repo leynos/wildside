@@ -5,7 +5,15 @@ This ExecPlan (execution plan) is a living document. The sections
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
 to date as work proceeds.
 
-Status: IMPLEMENTED; FULL GATES BLOCKED BY ENVIRONMENT
+Status: COMPLETE
+
+This document is the original implementation ExecPlan for roadmap item 3.5.4.
+The work it describes is now complete, and the final audit, closure evidence,
+and retrospective conclusions are recorded in
+`docs/execplans/backend-3-5-4a-close-revision-safe-interests-update-strategy.md`.
+Use this file to understand the intended execution path; use the `3.5.4a`
+close-out record to understand what actually landed and how the roadmap item
+was closed.
 
 This plan covers roadmap item 3.5.4 only:
 `Define and implement the revision-safe interests update strategy (for
@@ -145,13 +153,13 @@ Observable success criteria:
 - [x] Add or update `rstest` coverage for unit, adapter, and DB-backed
   conflict semantics.
 - [x] Add or update `rstest-bdd` coverage for HTTP-level happy, unhappy, and
-  edge flows with embedded PostgreSQL. The suite compiles; execution is
-  presently blocked by embedded PostgreSQL bootstrap failure in this
-  container.
+  edge flows with embedded PostgreSQL.
 - [x] Record final design decisions in
   `docs/wildside-backend-architecture.md`. `docs/backend-roadmap.md` remains
   unchanged until every required gate is green.
-- [ ] Run doc checks and full repository gates, retaining logs.
+- [x] Run doc checks and full repository gates, retaining logs. Final gate
+  evidence and closure notes live in
+  `docs/execplans/backend-3-5-4a-close-revision-safe-interests-update-strategy.md`.
 
 ## Surprises & discoveries
 
@@ -186,6 +194,13 @@ Observable success criteria:
   Impact: DB-backed BDD scenarios compile but cannot be executed to completion
   in this container until the runtime is repaired.
 
+- Observation: the environment blocker above was later resolved, allowing the
+  DB-backed BDD suite and the full repository gates to pass.
+  Evidence:
+  `docs/execplans/backend-3-5-4a-close-revision-safe-interests-update-strategy.md`.
+  Impact: roadmap item `3.5.4` is now closed; keep the earlier `/dev/null`
+  notes as historical debugging context rather than the current state.
+
 ## Decision Log
 
 - Decision: use `user_preferences` as the single aggregate and concurrency
@@ -219,20 +234,19 @@ Observable success criteria:
 
 ## Outcomes & retrospective
 
-Implementation state:
+Current state:
 
-- `PUT /api/v1/users/me/interests` now accepts `expectedRevision` and returns
-  the updated interests payload with `revision`.
-- `DieselUserInterestsCommand` now follows explicit optimistic concurrency
-  semantics over `user_preferences.revision` and no longer retries stale
-  writes into silent success.
-- stale or omitted revisions on an existing preference row now surface as
-  `409 Conflict` with top-level `code: "conflict"` and nested details containing
-  `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`.
-- unit coverage and non-DB behavioural coverage passed locally.
-- DB-backed behavioural execution is blocked by the known `/dev/null` bootstrap
-  failure in embedded PostgreSQL, so full-gate replay and roadmap closure are
-  still pending environment repair.
+- The roadmap work described in this original ExecPlan is complete.
+- `PUT /api/v1/users/me/interests` now accepts `expectedRevision`, returns
+  `revision`, and surfaces stale writes as HTTP `409 Conflict` with stable
+  revision-mismatch details.
+- `DieselUserInterestsCommand` now follows the shared
+  `user_preferences.revision` optimistic-concurrency contract without hiding
+  stale writes behind retry-to-success behaviour.
+- The DB-backed BDD suite and the full repository gates were later rerun
+  successfully after repairing the local environment.
+- The final closure record, gate evidence, and follow-on notes are captured in
+  `docs/execplans/backend-3-5-4a-close-revision-safe-interests-update-strategy.md`.
 
 ## Context and orientation
 
