@@ -160,6 +160,13 @@ mod tests {
         }
     }
 
+    /// Test harness for spawning a real `redis-server` process.
+    ///
+    /// Note: This is intentionally duplicated from `tests/support/redis.rs`.
+    /// Rust's module system makes sharing test utilities between unit tests
+    /// and integration tests complex (unit tests are compiled as part of the
+    /// library, integration tests as separate crates). The duplication is
+    /// minimal and keeping them separate is simpler than the alternatives.
     struct TestRedisServer {
         redis_url: String,
         process: Child,

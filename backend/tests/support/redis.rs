@@ -16,6 +16,10 @@ use tempfile::TempDir;
 use tokio::time::sleep;
 
 /// Real `redis-server` process for adapter contract tests.
+///
+/// Note: This is intentionally duplicated from the unit test version in
+/// `src/outbound/cache/redis_route_cache.rs`. See the comment there for
+/// rationale.
 #[derive(Debug)]
 pub struct RedisTestServer {
     address: SocketAddr,

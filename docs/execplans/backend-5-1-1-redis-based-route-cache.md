@@ -38,8 +38,8 @@ Observable success criteria:
   command failures to `RouteCacheError::Backend`.
 - Cached payload decoding failures map to `RouteCacheError::Serialization`.
 - `rstest` coverage proves happy, unhappy, and edge cases for the adapter.
-- `rstest-bdd` coverage proves adapter behaviour against a real Redis protocol
-  server, not a handwritten mock.
+- behaviour-driven development (BDD) coverage via `rstest-bdd` proves adapter
+  behaviour against a real Redis protocol server, not a handwritten mock.
 - `docs/wildside-backend-architecture.md` records the scope decision that
   5.1.1 delivers the driven adapter but does not yet enable request-path
   caching.
@@ -154,7 +154,7 @@ than one role, but the ownership boundaries should remain visible.
 - Test harness agent:
   owns `backend/tests/support/*` additions needed to start a Redis protocol
   server and any shared fixtures for cache integration tests.
-- QA agent:
+- Quality Assurance (QA) agent:
   owns adapter `rstest` coverage plus `rstest-bdd` scenarios and feature files
   proving happy, unhappy, and edge behaviour.
 - Documentation agent:

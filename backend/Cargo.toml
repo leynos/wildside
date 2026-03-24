@@ -89,7 +89,6 @@ insta = { version = "1", features = ["json", "redactions"] }
 # Provides libc::atexit for graceful embedded PostgreSQL cluster shutdown under nextest.
 libc = "0.2"
 tempfile = "3"
-mini-redis = "0.4"
 
 [[bin]]
 name = "openapi-dump"
