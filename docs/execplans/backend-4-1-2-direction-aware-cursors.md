@@ -545,7 +545,7 @@ tests::cursor_with_direction_defaults_to_next ... ok
 test result: ok. 15 passed; 0 failed; 0 ignored
 ```
 
-### Backward compatibility
+### Backward compatibility table
 
 The serde configuration ensures seamless migration between old and new cursor
 formats:
