@@ -106,7 +106,7 @@ that require significant refactoring.
   logic—adding the `Direction` enum with `Serialize`/`Deserialize` was
   sufficient.
 - The `#[serde(default)]` attribute on the `dir` field seamlessly handled
-  backward compatibility without requiring custom deserialisation logic.
+  backward compatibility without requiring custom deserialization logic.
 - Clippy suggested making `with_direction` a `const fn`, which was an easy win
   for API ergonomics.
 
@@ -174,7 +174,7 @@ direction.
 
 - Serde's `#[serde(default)]` attribute is powerful for evolving data structures
   without breaking changes.
-- Parameterised tests with `rstest` provide excellent coverage for enum variants
+- Parameterized tests with `rstest` provide excellent coverage for enum variants
   with minimal code duplication.
 - BDD step definitions can be naturally extended in the same file, keeping
   related test logic colocated.
@@ -245,7 +245,7 @@ When decoded, the direction indicates:
 2. Update `Cursor<Key>` to include a `dir` field:
    - Add `dir: Direction` field with `#[serde(default)]` for backward-compatible
      encoding/decoding.
-   - The direction defaults to `Direction::Next` when deserialising cursors that
+   - The direction defaults to `Direction::Next` when deserializing cursors that
      lack the field (preserving existing behaviour for forward pagination).
 
 ### Stage B: Implementation
@@ -559,7 +559,7 @@ formats:
 
 Key serde behaviours:
 
-- **`#[serde(default)]` on `dir` field**: When deserialising JSON without the
+- **`#[serde(default)]` on `dir` field**: When deserializing JSON without the
   `dir` field, the `Direction::default()` (which is `Next`) is used. This
   preserves the behaviour of existing cursors that were created before this
   change.
