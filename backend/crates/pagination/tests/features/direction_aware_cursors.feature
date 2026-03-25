@@ -16,7 +16,7 @@ Feature: Direction-aware cursor pagination
     Then the decoded cursor has direction Prev
     And the decoded cursor key matches the original key
 
-  Scenario: Cursor without explicit direction defaults to Next
+  Scenario: Cursor created with Cursor::new has direction Next
     Given a composite ordering key
     When the key is encoded into an opaque cursor and decoded again
     Then the decoded cursor has direction Next

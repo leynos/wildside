@@ -1985,9 +1985,10 @@ Hexagonal boundary rules for this crate are explicit:
 - Outbound adapters remain responsible for turning decoded cursor keys into
   repository-specific keyset filters and ordering clauses.
 
-This foundation crate is intentionally generic and additive. Endpoint adoption,
-direction-aware cursors, and admin provenance compatibility work remain
-separate roadmap items in section 4.2.
+This foundation crate is intentionally generic and additive. Direction-aware
+cursors (roadmap 4.1.2) are now implemented with a `Direction` enum supporting
+`Next` and `Prev` variants. Endpoint adoption and admin provenance compatibility
+work remain separate roadmap items in section 4.2.
 
 ##### 3.4.3 Pagination Compatibility Requirements (Phase 4, Future Work)
 

@@ -242,8 +242,8 @@ When decoded, the direction indicates:
      `Deserialize`.
    - Include doc comments explaining `Next` and `Prev` semantics.
 
-2. Update `Cursor<Key>` to include a `direction` field:
-   - Add `direction: Direction` field with serde defaults for backward-compatible
+2. Update `Cursor<Key>` to include a `dir` field:
+   - Add `dir: Direction` field with `#[serde(default)]` for backward-compatible
      encoding/decoding.
    - The direction defaults to `Direction::Next` when deserialising cursors that
      lack the field (preserving existing behaviour for forward pagination).
@@ -257,24 +257,24 @@ When decoded, the direction indicates:
    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
    pub struct Cursor<Key> {
        key: Key,
-       #[serde(default = "default_direction")]
+       #[serde(default)]
        dir: Direction,
    }
-
-   fn default_direction() -> Direction { Direction::Next }
    ```
+
+   The `Direction` enum derives `Default` with `Next` as the default variant.
 
    This ensures:
    - Old cursors without the `dir` field deserialize with `Direction::Next`
    - New cursors always include `dir` in serialized output
 
-2. Add constructor methods:
+2. Add const constructor methods:
    - `Cursor::new(key)` – creates cursor with default direction (Next).
-   - `Cursor::with_direction(key, direction)` – creates cursor with explicit
+   - `Cursor::with_direction(key, dir)` – creates cursor with explicit
      direction.
 
 3. Add accessor methods:
-   - `Cursor::direction(&self) -> &Direction`
+   - `Cursor::direction(&self) -> Direction` (returns by value)
    - `Cursor::key(&self) -> &Key` (already exists, may need update)
    - `Cursor::into_parts(self) -> (Key, Direction)`
 
@@ -619,4 +619,4 @@ pub use cursor::{Cursor, CursorError, Direction};
 
 ## Revision note
 
-*Initial version created. Awaiting approval before implementation.*
+*Implemented and approved. All acceptance criteria met.*

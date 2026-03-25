@@ -296,14 +296,16 @@ mod tests {
         assert_eq!(decoded.direction(), Direction::Next);
     }
 
-    #[test]
-    fn new_cursor_includes_direction_in_json() {
+    #[rstest]
+    #[case(Direction::Next, "Next")]
+    #[case(Direction::Prev, "Prev")]
+    fn new_cursor_includes_direction_in_json(#[case] direction: Direction, #[case] expected: &str) {
         let cursor = Cursor::with_direction(
             FixtureKey {
                 created_at: "2026-03-22T10:30:00Z".to_owned(),
                 id: "test-id".to_owned(),
             },
-            Direction::Prev,
+            direction,
         );
         let encoded = cursor.encode().expect("encoding succeeds");
         let decoded_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -313,7 +315,7 @@ mod tests {
 
         // Verify the direction is present in the JSON
         assert!(json_str.contains("\"dir\""));
-        assert!(json_str.contains("Prev"));
+        assert!(json_str.contains(expected));
     }
 
     #[rstest]
