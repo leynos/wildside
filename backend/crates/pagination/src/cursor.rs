@@ -311,11 +311,15 @@ mod tests {
         let decoded_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(&encoded)
             .expect("base64 decoding succeeds");
-        let json_str = String::from_utf8(decoded_bytes).expect("valid utf8");
+        let json_value: serde_json::Value =
+            serde_json::from_slice(&decoded_bytes).expect("valid JSON");
 
-        // Verify the direction is present in the JSON
-        assert!(json_str.contains("\"dir\""));
-        assert!(json_str.contains(expected));
+        // Verify the direction field exists and has the expected value
+        let dir_value = json_value
+            .get("dir")
+            .and_then(|v| v.as_str())
+            .expect("dir field should exist and be a string");
+        assert_eq!(dir_value, expected);
     }
 
     #[rstest]

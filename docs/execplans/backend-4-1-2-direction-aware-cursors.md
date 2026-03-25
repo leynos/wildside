@@ -95,7 +95,7 @@ that require significant refactoring.
 - [x] (2026-03-24 12:30Z) Add behavioural tests with `rstest-bdd`
 - [x] (2026-03-24 13:00Z) Update crate documentation
 - [x] (2026-03-24 13:15Z) Run quality gates (`make check-fmt`, `make lint`,
-  `make test`)
+  `make test`, `make markdownlint`, `make fmt`, `make nixie`)
 - [x] (2026-03-24 13:20Z) Update roadmap entry 4.1.2 to "done"
 - [x] (2026-03-24 13:24Z) Record design decisions in architecture document
 
