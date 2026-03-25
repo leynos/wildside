@@ -595,10 +595,10 @@ pub struct Cursor<Key> {
 
 impl<Key> Cursor<Key> {
     /// Create a cursor with the default direction (`Next`).
-    pub fn new(key: Key) -> Self;
+    pub const fn new(key: Key) -> Self;
 
     /// Create a cursor with an explicit direction.
-    pub fn with_direction(key: Key, dir: Direction) -> Self;
+    pub const fn with_direction(key: Key, dir: Direction) -> Self;
 
     /// Access the ordering key.
     pub const fn key(&self) -> &Key;
