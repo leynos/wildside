@@ -167,17 +167,13 @@ test-frontend: deps typecheck
 .PHONY: prepare-pg-worker
 .ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD
+set -euo pipefail
 mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
-if command -v pg_worker >/dev/null 2>&1; then \
-  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"; \
-else \
-  cargo install \
-    --locked \
-    --root "$(PG_WORKER_INSTALL_ROOT)" \
-    --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" \
-    --bin pg_worker \
-    pg-embed-setup-unpriv; \
-  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"; \
+if command -v pg_worker >/dev/null 2>&1; then
+  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"
+else
+  cargo install --locked --root "$(PG_WORKER_INSTALL_ROOT)" --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" --bin pg_worker pg-embed-setup-unpriv
+  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"
 fi
 endef
 
