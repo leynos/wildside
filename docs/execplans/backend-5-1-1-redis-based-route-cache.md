@@ -198,7 +198,8 @@ Hand-off order:
   - `cargo fmt --check`: passed (no formatting issues)
   - `cargo clippy`: passed (no warnings)
   - `make markdownlint`: passed (0 errors)
-  - `cargo test --lib redis_route_cache`: 3 passed, 3 ignored (Redis tests require redis-server binary)
+  - `cargo test --lib redis_route_cache`: 3 passed, 3 ignored (Redis tests
+    require redis-server binary)
 
 ## Surprises & Discoveries
 
