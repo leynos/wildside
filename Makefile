@@ -165,6 +165,7 @@ test-frontend: deps typecheck
 	pnpm -r --if-present --silent run test
 
 .PHONY: prepare-pg-worker
+.ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD
 mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
 if command -v pg_worker >/dev/null 2>&1; then \
