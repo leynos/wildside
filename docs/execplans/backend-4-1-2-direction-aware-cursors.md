@@ -517,6 +517,9 @@ cargo clippy -p pagination -- -D warnings
 make check-fmt
 make lint
 make test
+make markdownlint
+make fmt
+make nixie
 ```
 
 ## Idempotence and recovery
