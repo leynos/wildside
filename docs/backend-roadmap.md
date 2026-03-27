@@ -221,7 +221,7 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 - [x] 4.1.1. Implement `backend/crates/pagination` providing opaque cursor
   encoding, `PageParams`, and `Paginated<T>` envelopes with navigation links,
   backed by unit tests for cursor round-tripping.
-- [ ] 4.1.2. Add support for direction-aware cursors (`Next` and `Prev`) with
+- [x] 4.1.2. Add support for direction-aware cursors (`Next` and `Prev`) with
   serde-based encoding and property tests ensuring decode-encode stability.
 - [ ] 4.1.3. Publish crate-level documentation outlining ordering
   requirements, default and maximum limits (20 and 100), and error mapping
