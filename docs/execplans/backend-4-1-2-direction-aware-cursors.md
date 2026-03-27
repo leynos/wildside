@@ -1,4 +1,4 @@
-# ExecPlan: Add Direction-Aware Cursors to Pagination Crate
+# ExecPlan: Add direction-aware cursors to pagination crate
 
 This ExecPlan (execution plan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -146,10 +146,13 @@ compatibility with existing cursors.
   for direction-aware cursor BDD tests.
 - `backend/crates/pagination/tests/features/direction_aware_cursors.feature` –
   New Gherkin feature file with BDD scenarios.
+- `docs/backend-roadmap.md` – Marked roadmap item 4.1.2 as complete.
+- `docs/wildside-backend-architecture.md` – Added design decision entry for
+  direction-aware cursors.
 
 ### Test coverage
 
-- 11 unit tests (7 new direction-aware tests)
+- 18 unit tests (13 cursor tests including 9 direction-aware tests)
 - 2 behaviour-driven development (BDD) test suites (1 new direction-aware
   feature with 3 scenarios)
 - 10 doc tests (4 new direction-related examples)
@@ -289,14 +292,13 @@ When decoded, the direction indicates:
 
 1. Add unit tests in `cursor.rs` (within `#[cfg(test)]` module):
 
-   - `direction_round_trips_through_opaque_token`: Encode cursor with Next,
-     decode, assert direction preserved.
-   - `prev_direction_round_trips`: Same for Prev.
+   - `direction_round_trips_through_encoding`: Parameterized test encoding
+     cursors with Next and Prev, decoding, and asserting direction preserved.
    - `cursor_without_direction_defaults_to_next`: Backward compatibility test—
      verify that cursors serialized before 4.1.2 (without `dir` field) decode
      successfully with `Direction::Next`.
-   - `invalid_direction_json_fails_gracefully`: Error handling for malformed
-     direction values.
+   - `invalid_direction_value_returns_deserialize_error`: Error handling for
+     malformed direction values.
 
 2. Add property tests using `rstest` with `#[case]` or value combinations:
 

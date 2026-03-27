@@ -218,8 +218,10 @@ mod tests {
         id: String,
     }
 
-    // Verify Cursor::new works in const contexts
+    // Verify Cursor constructors work in const contexts
     const _CONST_CURSOR: Cursor<&str> = Cursor::new("compile-time-test");
+    const _CONST_DIRECTIONAL_CURSOR: Cursor<&str> =
+        Cursor::with_direction("compile-time-test", Direction::Prev);
 
     #[test]
     fn cursor_round_trips_through_opaque_token() {
