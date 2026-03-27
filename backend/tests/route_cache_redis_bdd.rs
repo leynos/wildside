@@ -56,6 +56,7 @@ struct RouteCacheWorld {
     second_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     latest_put_result: Slot<Result<(), RouteCacheError>>,
     latest_error: Slot<RouteCacheError>,
+    skip_reason: Slot<String>,
 }
 
 impl RouteCacheWorld {
@@ -65,6 +66,22 @@ impl RouteCacheWorld {
 
     fn cache(&self) -> RedisRouteCache<TestPlan> {
         self.cache.get().expect("cache should be initialised")
+    }
+
+    fn is_skipped(&self) -> bool {
+        if let Some(reason) = self.skip_reason.get() {
+            eprintln!("SKIP-REDIS-TESTS: scenario skipped ({reason})");
+            true
+        } else {
+            false
+        }
+    }
+
+    fn check_skip(&self) {
+        if should_skip_redis_tests() {
+            self.skip_reason
+                .set("redis-server unavailable or SKIP_REDIS_TESTS set".to_owned());
+        }
     }
 
     fn setup_running_cache(&self) {
@@ -147,49 +164,79 @@ fn world() -> RouteCacheWorld {
 
 #[given("a running Redis-backed route cache")]
 fn a_running_redis_backed_route_cache(world: &RouteCacheWorld) {
+    world.check_skip();
+    if world.is_skipped() {
+        return;
+    }
     world.setup_running_cache();
 }
 
 #[given("a Redis-backed route cache with malformed cached bytes")]
 fn a_redis_backed_route_cache_with_malformed_cached_bytes(world: &RouteCacheWorld) {
+    world.check_skip();
+    if world.is_skipped() {
+        return;
+    }
     world.setup_running_cache();
     world.seed_corrupt_bytes("route:corrupt", vec![0_u8, 159, 146, 150]);
 }
 
 #[given("an unavailable Redis-backed route cache")]
 fn an_unavailable_redis_backed_route_cache(world: &RouteCacheWorld) {
+    world.check_skip();
+    if world.is_skipped() {
+        return;
+    }
     world.setup_unreachable_cache();
 }
 
 #[when("a plan is stored under cache key \"route:happy\"")]
 fn a_plan_is_stored_under_cache_key_route_happy(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.store_plan("route:happy", TestPlan::new("req-happy", 42));
 }
 
 #[when("the cache is read for key \"route:happy\"")]
 fn the_cache_is_read_for_key_route_happy(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.load_plan_into("route:happy", &world.first_loaded_plan);
 }
 
 #[when("the cache is read for key \"route:missing\"")]
 fn the_cache_is_read_for_key_route_missing(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.load_plan_into("route:missing", &world.first_loaded_plan);
 }
 
 #[when("the cache is read for key \"route:corrupt\"")]
 fn the_cache_is_read_for_key_route_corrupt(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.load_plan_into("route:corrupt", &world.first_loaded_plan);
     world.remember_error_from_first_get();
 }
 
 #[when("the unavailable cache is read for key \"route:down\"")]
 fn the_unavailable_cache_is_read_for_key_route_down(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.load_plan_into("route:down", &world.first_loaded_plan);
     world.remember_error_from_first_get();
 }
 
 #[when("distinct plans are stored under cache keys \"route:first\" and \"route:second\"")]
 fn distinct_plans_are_stored_under_cache_keys(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.store_plan("route:first", TestPlan::new("req-first", 1));
     let first_put = world
         .latest_put_result
@@ -203,12 +250,18 @@ fn distinct_plans_are_stored_under_cache_keys(world: &RouteCacheWorld) {
 
 #[when("both cache keys are read back")]
 fn both_cache_keys_are_read_back(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world.load_plan_into("route:first", &world.first_loaded_plan);
     world.load_plan_into("route:second", &world.second_loaded_plan);
 }
 
 #[then("the same plan is returned from the cache")]
 fn the_same_plan_is_returned_from_the_cache(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world
         .latest_put_result
         .get()
@@ -228,6 +281,9 @@ fn the_same_plan_is_returned_from_the_cache(world: &RouteCacheWorld) {
 
 #[then("the cache reports a miss")]
 fn the_cache_reports_a_miss(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     let loaded = world
         .first_loaded_plan
         .get()
@@ -240,18 +296,27 @@ fn the_cache_reports_a_miss(world: &RouteCacheWorld) {
 
 #[then("the error maps to a serialization failure")]
 fn the_error_maps_to_a_serialization_failure(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     let error = world.latest_error.get().expect("error should be recorded");
     assert!(matches!(error, RouteCacheError::Serialization { .. }));
 }
 
 #[then("the error maps to a backend failure")]
 fn the_error_maps_to_a_backend_failure(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     let error = world.latest_error.get().expect("error should be recorded");
     assert!(matches!(error, RouteCacheError::Backend { .. }));
 }
 
 #[then("each cache key keeps its own plan")]
 fn each_cache_key_keeps_its_own_plan(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
     world
         .latest_put_result
         .get()
@@ -281,10 +346,6 @@ fn each_cache_key_keeps_its_own_plan(world: &RouteCacheWorld) {
     name = "Stored plans round-trip through Redis"
 )]
 fn stored_plans_round_trip_through_redis(world: RouteCacheWorld) {
-    if should_skip_redis_tests() {
-        eprintln!("SKIP-REDIS-TESTS: redis-server unavailable or SKIP_REDIS_TESTS set");
-        return;
-    }
     drop(world);
 }
 
@@ -293,10 +354,6 @@ fn stored_plans_round_trip_through_redis(world: RouteCacheWorld) {
     name = "Missing keys return a cache miss"
 )]
 fn missing_keys_return_a_cache_miss(world: RouteCacheWorld) {
-    if should_skip_redis_tests() {
-        eprintln!("SKIP-REDIS-TESTS: redis-server unavailable or SKIP_REDIS_TESTS set");
-        return;
-    }
     drop(world);
 }
 
@@ -305,10 +362,6 @@ fn missing_keys_return_a_cache_miss(world: RouteCacheWorld) {
     name = "Malformed cached bytes surface as serialization failures"
 )]
 fn malformed_cached_bytes_surface_as_serialization_failures(world: RouteCacheWorld) {
-    if should_skip_redis_tests() {
-        eprintln!("SKIP-REDIS-TESTS: redis-server unavailable or SKIP_REDIS_TESTS set");
-        return;
-    }
     drop(world);
 }
 
@@ -317,10 +370,6 @@ fn malformed_cached_bytes_surface_as_serialization_failures(world: RouteCacheWor
     name = "Unreachable Redis surfaces as a backend failure"
 )]
 fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
-    if should_skip_redis_tests() {
-        eprintln!("SKIP-REDIS-TESTS: redis-server unavailable or SKIP_REDIS_TESTS set");
-        return;
-    }
     drop(world);
 }
 
@@ -329,9 +378,5 @@ fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
     name = "Distinct cache keys do not overwrite each other"
 )]
 fn distinct_cache_keys_do_not_overwrite_each_other(world: RouteCacheWorld) {
-    if should_skip_redis_tests() {
-        eprintln!("SKIP-REDIS-TESTS: redis-server unavailable or SKIP_REDIS_TESTS set");
-        return;
-    }
     drop(world);
 }
