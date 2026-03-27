@@ -97,6 +97,10 @@ const _: fn(&str, &str) -> Result<(), String> = drop_table;
 // Re-export skip helpers for integration test crates.
 // Not marked with #[expect(unused_imports)] because usage varies across
 // integration-test crates and unfulfilled expectations would break builds.
+#[allow(
+    unused_imports,
+    reason = "Cluster skip helpers are only used by selected integration-test crates"
+)]
 pub use cluster_skip::handle_cluster_setup_failure;
 pub use embedded_postgres::provision_template_database;
 #[allow(
