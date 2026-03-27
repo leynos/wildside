@@ -152,7 +152,7 @@ compatibility with existing cursors.
 
 ### Test coverage
 
-- 18 unit tests (13 cursor tests including 9 direction-aware tests)
+- 10 unit tests (6 direction-aware or direction-related tests)
 - 2 behaviour-driven development (BDD) test suites (1 new direction-aware
   feature with 3 scenarios)
 - 10 doc tests (4 new direction-related examples)
@@ -541,16 +541,22 @@ make nixie
 ```plaintext
 $ cargo test -p pagination
 
-running 15 tests
+running 18 tests
 tests::cursor_round_trips_through_opaque_token ... ok
 tests::invalid_base64_cursor_fails_decode ... ok
 tests::padded_base64_cursor_decodes_successfully ... ok
 tests::structurally_invalid_json_cursor_fails_decode ... ok
-tests::direction_round_trips_through_encoding_next ... ok
-tests::direction_round_trips_through_encoding_prev ... ok
+tests::direction_round_trips_through_encoding::case_1 ... ok
+tests::direction_round_trips_through_encoding::case_2 ... ok
 tests::cursor_without_direction_defaults_to_next ... ok
+tests::cursor_new_uses_next_direction ... ok
+tests::into_parts_returns_key_and_direction::case_1 ... ok
+tests::into_parts_returns_key_and_direction::case_2 ... ok
+tests::invalid_direction_value_returns_deserialize_error ... ok
+tests::new_cursor_includes_direction_in_json::case_1 ... ok
+tests::new_cursor_includes_direction_in_json::case_2 ... ok
 ...
-test result: ok. 15 passed; 0 failed; 0 ignored
+test result: ok. 18 passed; 0 failed; 0 ignored
 ```
 
 ### Backward compatibility table
