@@ -17,10 +17,10 @@ use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-#[path = "support/redis.rs"]
-mod redis_support;
 #[path = "support/redis_skip.rs"]
 mod redis_skip;
+#[path = "support/redis.rs"]
+mod redis_support;
 
 use backend::test_support::redis::unused_redis_url;
 use redis_skip::should_skip_redis_tests;
@@ -69,7 +69,9 @@ impl RouteCacheWorld {
 
     fn setup_running_cache(&self) {
         let runtime = Runtime::new().expect("create runtime");
-        let server = runtime.block_on(async { RedisTestServer::start().await });
+        let server = runtime
+            .block_on(async { RedisTestServer::start().await })
+            .expect("start redis-server");
         let pool = runtime
             .block_on(async { server.pool().await })
             .expect("create redis pool");
@@ -82,7 +84,9 @@ impl RouteCacheWorld {
 
     fn setup_unreachable_cache(&self) {
         let runtime = Runtime::new().expect("create runtime");
-        let redis_url = runtime.block_on(async { unused_redis_url().await });
+        let redis_url = runtime
+            .block_on(async { unused_redis_url().await })
+            .expect("unused redis url");
         let manager =
             RedisConnectionManager::new(redis_url.as_str()).expect("create redis manager");
         let pool = {
