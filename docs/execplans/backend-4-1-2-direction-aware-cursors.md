@@ -152,7 +152,7 @@ compatibility with existing cursors.
 
 ### Test coverage
 
-- 10 unit tests (6 direction-aware or direction-related tests)
+- 18 unit tests (13 cursor tests including 9 direction-aware tests)
 - 2 behaviour-driven development (BDD) test suites (1 new direction-aware
   feature with 3 scenarios)
 - 10 doc tests (4 new direction-related examples)
@@ -578,8 +578,7 @@ Key serde behaviours:
   change.
 - **No `skip_serializing_if`**: New cursors always include `dir` in serialized
   output. This ensures forward compatibility—consumers that understand direction
-  will see it; older consumers ignore unknown fields per typical JSON
-  conventions.
+  will see it; consumers that tolerate unknown JSON fields will ignore `dir`.
 
 ### Interface definitions
 
