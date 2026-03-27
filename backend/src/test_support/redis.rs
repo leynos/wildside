@@ -3,8 +3,6 @@
 //! Provides a `RedisTestServer` utility that spawns a real `redis-server`
 //! process on an ephemeral port for adapter contract tests.
 
-#![cfg_attr(any(test, feature = "test-support"), allow(clippy::expect_used))]
-
 use std::{
     net::SocketAddr,
     process::{Child, Command, Stdio},
@@ -22,6 +20,9 @@ use tokio::time::sleep;
 #[cfg(feature = "test-support")]
 use crate::outbound::cache::RedisPool;
 
+/// Opaque error type for test harness setup failures.
+type SetupError = Box<dyn std::error::Error>;
+
 /// Real `redis-server` process for adapter contract tests.
 #[derive(Debug)]
 pub struct RedisTestServer {
@@ -32,12 +33,18 @@ pub struct RedisTestServer {
 
 impl RedisTestServer {
     /// Start a fresh Redis server on an ephemeral local port.
-    pub async fn start() -> Self {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("reserve redis port");
-        let address = listener.local_addr().expect("redis server address");
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ephemeral port cannot be reserved, the
+    /// temporary directory cannot be created, or the `redis-server`
+    /// process fails to spawn.
+    pub async fn start() -> Result<Self, SetupError> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
         drop(listener);
 
-        let temp_dir = TempDir::new().expect("create redis temp dir");
+        let temp_dir = TempDir::new()?;
         let process = Command::new("redis-server")
             .arg("--bind")
             .arg("127.0.0.1")
@@ -55,16 +62,15 @@ impl RedisTestServer {
             .arg("no")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn redis-server");
+            .spawn()?;
 
         let mut server = Self {
             address,
             process,
             _temp_dir: temp_dir,
         };
-        server.wait_until_ready().await;
-        server
+        server.wait_until_ready().await?;
+        Ok(server)
     }
 
     /// Return the Redis URL for the running test server.
@@ -91,9 +97,8 @@ impl RedisTestServer {
             .await
     }
 
-    async fn wait_until_ready(&mut self) {
-        let manager = RedisConnectionManager::new(self.redis_url().as_str())
-            .expect("build redis manager for readiness check");
+    async fn wait_until_ready(&mut self) -> Result<(), SetupError> {
+        let manager = RedisConnectionManager::new(self.redis_url().as_str())?;
 
         let mut attempts = 0;
         while attempts < 50
@@ -120,7 +125,7 @@ impl RedisTestServer {
         }
 
         if attempts < 50 {
-            return;
+            return Ok(());
         }
 
         panic!("redis-server did not become ready at {}", self.redis_url());
@@ -153,13 +158,15 @@ fn read_process_stderr(process: &mut Child) -> String {
 /// Binds an ephemeral port, drops the listener, and returns a Redis URL
 /// for that address. Since the listener is dropped, connection attempts
 /// will fail.
-pub async fn unused_redis_url() -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind ephemeral port");
-    let address = listener.local_addr().expect("ephemeral port address");
+///
+/// # Errors
+///
+/// Returns an error if the ephemeral port cannot be bound.
+pub async fn unused_redis_url() -> Result<String, SetupError> {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
     drop(listener);
-    format!("redis://{address}/")
+    Ok(format!("redis://{address}/"))
 }
 
 #[cfg(feature = "test-support")]
