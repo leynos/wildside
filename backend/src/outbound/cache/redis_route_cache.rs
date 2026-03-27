@@ -252,9 +252,7 @@ mod tests {
 
     // -- Shared test helpers ------------------------------------------------------
 
-    async fn assert_put_get_round_trips(
-        cache: &impl RouteCache<Plan = TestPlan>,
-    ) {
+    async fn assert_put_get_round_trips(cache: &impl RouteCache<Plan = TestPlan>) {
         let key = RouteCacheKey::new("route:round-trip").expect("valid key");
         let plan = TestPlan::new("req-1", 42);
         cache.put(&key, &plan).await.expect("put succeeds");
