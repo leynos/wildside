@@ -165,19 +165,20 @@ test-frontend: deps typecheck
 	pnpm -r --if-present --silent run test
 
 .PHONY: prepare-pg-worker
+.ONESHELL: prepare-pg-worker
+define PREPARE_PG_WORKER_CMD
+set -euo pipefail
+mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
+if command -v pg_worker >/dev/null 2>&1; then
+  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"
+else
+  cargo install --locked --root "$(PG_WORKER_INSTALL_ROOT)" --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" --bin pg_worker pg-embed-setup-unpriv
+  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"
+fi
+endef
+
 prepare-pg-worker:
-	mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
-	if command -v pg_worker >/dev/null 2>&1; then \
-	  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"; \
-	else \
-	  cargo install \
-	    --locked \
-	    --root "$(PG_WORKER_INSTALL_ROOT)" \
-	    --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" \
-	    --bin pg_worker \
-	    pg-embed-setup-unpriv; \
-	  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"; \
-	fi
+	$(PREPARE_PG_WORKER_CMD)
 
 TS_WORKSPACES := frontend-pwa packages/tokens packages/types
 PNPM_LOCK_FILE := pnpm-lock.yaml
