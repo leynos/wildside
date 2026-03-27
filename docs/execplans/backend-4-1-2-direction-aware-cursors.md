@@ -159,9 +159,11 @@ All tests pass: `cargo test -p pagination` returns 0 failures.
 ### Quality gates
 
 - `make check-fmt` – Pass
-- `cargo clippy -p pagination --all-targets --all-features -- -D warnings` – Pass
-- `cargo test -p pagination` – Pass
+- `make lint` – Pass
+- `make test` – Pass
 - `make markdownlint` – Pass
+- `make fmt` – Pass
+- `make nixie` – Pass
 
 ### Backward compatibility
 
