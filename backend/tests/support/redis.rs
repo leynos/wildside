@@ -2,7 +2,7 @@
 //!
 //! Re-exports the shared `RedisTestServer` from the backend crate's test-support module.
 
-#[allow(
+#[expect(
     unused_imports,
     reason = "re-exported for integration tests that need Redis"
 )]
