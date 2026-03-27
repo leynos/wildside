@@ -28,7 +28,7 @@ fn is_env_truthy(var: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn redis_server_is_available() -> bool {
+pub fn redis_server_is_available() -> bool {
     std::process::Command::new("redis-server")
         .arg("--version")
         .stdout(std::process::Stdio::null())
