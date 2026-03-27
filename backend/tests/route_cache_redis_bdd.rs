@@ -183,10 +183,6 @@ fn a_redis_backed_route_cache_with_malformed_cached_bytes(world: &RouteCacheWorl
 
 #[given("an unavailable Redis-backed route cache")]
 fn an_unavailable_redis_backed_route_cache(world: &RouteCacheWorld) {
-    world.check_skip();
-    if world.is_skipped() {
-        return;
-    }
     world.setup_unreachable_cache();
 }
 
