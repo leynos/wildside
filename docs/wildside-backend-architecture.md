@@ -336,6 +336,15 @@ Module boundaries are enforced by a repo-local lint that runs during
   `generatedAt` RFC 3339 timestamp so clients can detect staleness. Response
   DTOs wrap domain snapshot types as opaque `serde_json::Value` fields to keep
   `ToSchema` derives in the inbound layer.
+- **2026-03-22:** Roadmap item 5.1.1 replaces the `RouteCache` stub with
+  `RedisRouteCache`, a driven adapter backed by `bb8-redis` pooling and
+  JSON-encoded byte payloads. This change is intentionally adapter-first: it
+  adds Redis contract coverage and error mapping, but does not yet wire cache
+  reuse into route submission or HTTP request flows. Behaviour tests start a
+  local `redis-server` process from `backend/tests/support/redis.rs` so the
+  adapter runs against a real Redis protocol server without booting the Actix
+  application.
+
 - **2026-03-24:** Add direction-aware cursors to the `pagination` crate. Cursors
   now embed a `Direction` enum (`Next` or `Prev`) to indicate traversal
   direction. The `Direction` enum derives `Default` with `Next` as the default
@@ -345,7 +354,6 @@ Module boundaries are enforced by a repo-local lint that runs during
   encoding remains unchanged; clients continue to treat cursors as opaque
   tokens. This enables bidirectional pagination without breaking existing
   cursor consumers.
-
 ### Web API and WebSocket Layer (Actix Web)
 
 The **Actix Web** framework powers Wildside’s HTTP API layer, exposing RESTful
@@ -1559,15 +1567,16 @@ before invoking a port. Canonical examples include:
 >
 > **Design decision (2025-12-10):** Introduce `backend::outbound` as the home
 > for driven adapter implementations. The module contains three sub-modules:
-> `persistence` (Diesel/PostgreSQL), `cache` (Redis stub), and `queue` (Apalis
+> `persistence` (Diesel/PostgreSQL), `cache` (Redis), and `queue` (Apalis
 > stub). The persistence adapter provides `DieselUserRepository` implementing
 > `UserRepository` with async support via `diesel-async` and `bb8` connection
-> pooling. Internal Diesel models (`UserRow`, `NewUserRow`) remain private to
-> the adapter; only domain types cross the boundary. Stub adapters for cache
-> and queue implement their respective port traits with no-op behaviour,
-> allowing the application to compile and run without Redis or job queue
-> infrastructure. Migrations reside in `backend/migrations/` and define the
-> PostgreSQL schema including audit timestamps and auto-update triggers.
+> pooling. The cache adapter now provides `RedisRouteCache`, which implements
+> `RouteCache` with `bb8-redis` connection pooling and JSON payloads stored as
+> raw Redis bytes. Internal Diesel and Redis details remain private to the
+> adapters; only domain types cross the boundary. The queue adapter remains a
+> stub until the job-queue roadmap items land. Migrations reside in
+> `backend/migrations/` and define the PostgreSQL schema including audit
+> timestamps and auto-update triggers.
 >
 > **Design decision (2025-12-19):** Introduce driving ports
 > `UserProfileQuery` and `UserInterestsCommand` plus domain types
@@ -2571,9 +2580,10 @@ tests:
   test can inject deterministic behaviour.
 - **Adapter contract tests:** Each driven adapter (Diesel repository, Redis
   cache, Apalis dispatcher, Martin client) ships a contract suite ensuring it
-  obeys the port semantics, including error mapping. These tests run against
-  ephemeral containers spun up via `docker compose` or
-  `cargo nextest run --features integration`.
+  obeys the port semantics, including error mapping. Postgres-backed suites use
+  embedded PostgreSQL; the Redis cache suite starts a local `redis-server`
+  process from `backend/tests/support/redis.rs` so the adapter runs against a
+  real Redis protocol server in local and CI environments.
 - **End-to-end smoke tests:** Using the same bootstrapping code as production,
   we spin up the Actix server plus workers, inject the test adapters, and hit
   the HTTP/WebSocket APIs to verify routing, session handling, and telemetry
@@ -2909,9 +2919,10 @@ classDiagram
         +String display_name
     }
 
-    %% Outbound cache stub
-    class StubRouteCache {
-        +new() StubRouteCache
+    %% Outbound cache adapter
+    class RedisRouteCache {
+        +new(pool RedisPool) RedisRouteCache
+        +async connect(redis_url str) Result~RedisRouteCache, RouteCacheError~
         +async get(key RouteCacheKey) Result~Option~StubPlan~~, RouteCacheError~
         +async put(key RouteCacheKey, plan StubPlan) Result~(), RouteCacheError~
     }
@@ -2927,7 +2938,7 @@ classDiagram
 
     %% Relationships
     UserRepository <|.. DieselUserRepository
-    RouteCache <|.. StubRouteCache
+    RouteCache <|.. RedisRouteCache
     RouteQueue <|.. StubRouteQueue
 
     DieselUserRepository o-- DbPool
@@ -2940,8 +2951,8 @@ classDiagram
     DieselUserRepository --> UserId
     DieselUserRepository --> DisplayName
 
-    StubRouteCache --> RouteCacheKey
-    StubRouteCache --> StubPlan
+    RedisRouteCache --> RouteCacheKey
+    RedisRouteCache --> StubPlan
     StubRouteQueue --> StubPlan
 ```
 

@@ -27,6 +27,7 @@ postgresql_embedded = { version = "0.20.0", features = ["tokio"] }
 postgres = { version = "0.19.12", features = ["with-uuid-1"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
+bb8-redis = "0.26"
 
 # Diesel ORM with PostgreSQL and async support
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
@@ -39,7 +40,7 @@ wildside-data = { git = "https://github.com/leynos/wildside-engine.git", package
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 futures-util = "0.3"
-tokio = { version = "1", features = ["macros"] }
+tokio = { version = "1", features = ["macros", "net", "time", "rt-multi-thread"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # OpenAPI
@@ -57,6 +58,9 @@ zeroize = "1.7"
 sha2 = "0.10"
 hex = "0.4"
 
+# Test support dependencies (only when test-support feature is enabled)
+tempfile = { version = "3", optional = true }
+
 [features]
 default = []
 # Enable example data seeding at startup via OrthoConfig.
@@ -64,7 +68,7 @@ example-data = ["dep:example-data"]
 # Enable Prometheus metrics middleware and endpoint
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
 # Expose test utilities for integration tests
-test-support = []
+test-support = ["dep:tempfile"]
 
 [dev-dependencies]
 # Enable test-support feature for integration tests
