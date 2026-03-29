@@ -344,6 +344,7 @@ Module boundaries are enforced by a repo-local lint that runs during
   local `redis-server` process from `backend/tests/support/redis.rs` so the
   adapter runs against a real Redis protocol server without booting the Actix
   application.
+
 - **2026-03-24:** Add direction-aware cursors to the `pagination` crate. Cursors
   now embed a `Direction` enum (`Next` or `Prev`) to indicate traversal
   direction. The `Direction` enum derives `Default` with `Next` as the default

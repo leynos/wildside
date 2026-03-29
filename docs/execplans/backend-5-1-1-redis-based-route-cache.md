@@ -192,8 +192,9 @@ Hand-off order:
   local `redis-server` process.
 - [x] (2026-03-22 14:40Z) Recorded the architecture decision in
   `docs/wildside-backend-architecture.md`.
-- [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 and 5.1.2 done in
-  `docs/backend-roadmap.md`.
+- [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 done in
+  `docs/backend-roadmap.md`. Roadmap items 5.1.2, 5.1.3, and 5.1.4 remain
+  open for future work (TTL, jitter, key canonicalization).
 - [x] (2026-03-24) Run final gates and retain logs:
   - `cargo fmt --check`: passed (no formatting issues)
   - `cargo clippy`: passed (no warnings)

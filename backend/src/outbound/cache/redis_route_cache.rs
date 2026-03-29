@@ -92,7 +92,20 @@ impl<P> RedisRouteCache<P> {
     /// # Ok(())
     /// # }
     /// ```
+    /// Creates a new cache instance from an existing pool.
+    ///
+    /// Available as public API when the `test-support` feature is enabled,
+    /// otherwise crate-private to keep bb8-redis internals from leaking.
+    #[cfg(feature = "test-support")]
     pub fn new(pool: RedisPool) -> Self {
+        Self {
+            provider: RedisPoolProvider { pool },
+            _plan: PhantomData,
+        }
+    }
+
+    #[cfg(not(feature = "test-support"))]
+    pub(crate) fn new(pool: RedisPool) -> Self {
         Self {
             provider: RedisPoolProvider { pool },
             _plan: PhantomData,
