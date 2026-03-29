@@ -19,14 +19,10 @@ use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-#[path = "support/redis_skip.rs"]
-mod redis_skip;
-#[path = "support/redis.rs"]
-mod redis_support;
+mod support;
 
 use backend::test_support::redis::unused_redis_url;
-use redis_skip::should_skip_redis_tests;
-use redis_support::RedisTestServer;
+use support::{redis::RedisTestServer, should_skip_redis_tests};
 
 #[derive(Clone)]
 struct RuntimeHandle(Arc<Runtime>);
