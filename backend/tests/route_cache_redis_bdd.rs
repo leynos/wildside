@@ -1,8 +1,10 @@
 //! Behavioural tests for the Redis-backed `RouteCache` adapter.
 //!
-//! These tests require a `redis-server` binary on `PATH`. When the binary is
-//! absent or `SKIP_REDIS_TESTS=1` is set, scenarios are skipped at runtime
-//! rather than failing.
+//! Live-Redis scenarios require a `redis-server` binary on `PATH`. When the
+//! binary is absent or `SKIP_REDIS_TESTS=1` is set, live-Redis scenarios are
+//! skipped at runtime rather than failing. The unreachable-backend scenario
+//! (using `setup_unreachable_cache`) still runs to ensure backend error mapping
+//! remains covered without requiring a running Redis server.
 
 use std::sync::Arc;
 
