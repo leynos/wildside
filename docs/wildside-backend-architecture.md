@@ -354,6 +354,7 @@ Module boundaries are enforced by a repo-local lint that runs during
   encoding remains unchanged; clients continue to treat cursors as opaque
   tokens. This enables bidirectional pagination without breaking existing
   cursor consumers.
+
 ### Web API and WebSocket Layer (Actix Web)
 
 The **Actix Web** framework powers Wildside’s HTTP API layer, exposing RESTful
@@ -2920,11 +2921,11 @@ classDiagram
     }
 
     %% Outbound cache adapter
-    class RedisRouteCache {
-        +new(pool RedisPool) RedisRouteCache
-        +async connect(redis_url str) Result~RedisRouteCache, RouteCacheError~
-        +async get(key RouteCacheKey) Result~Option~StubPlan~~, RouteCacheError~
-        +async put(key RouteCacheKey, plan StubPlan) Result~(), RouteCacheError~
+    class RedisRouteCache~P~ {
+        +new(pool RedisPool) RedisRouteCache~P~ <<test-support only>>
+        +async connect(redis_url str) Result~RedisRouteCache~P~~, RouteCacheError~
+        +async get(key RouteCacheKey) Result~Option~P~~, RouteCacheError~
+        +async put(key RouteCacheKey, plan P) Result~(), RouteCacheError~
     }
 
     class StubPlan {
@@ -2952,7 +2953,7 @@ classDiagram
     DieselUserRepository --> DisplayName
 
     RedisRouteCache --> RouteCacheKey
-    RedisRouteCache --> StubPlan
+    RedisRouteCache --> P : generic plan type
     StubRouteQueue --> StubPlan
 ```
 

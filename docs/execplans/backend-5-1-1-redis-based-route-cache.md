@@ -196,11 +196,10 @@ Hand-off order:
   `docs/backend-roadmap.md`. Roadmap items 5.1.2, 5.1.3, and 5.1.4 remain
   open for future work (TTL, jitter, key canonicalization).
 - [x] (2026-03-24) Run final gates and retain logs:
-  - `cargo fmt --check`: passed (no formatting issues)
-  - `cargo clippy`: passed (no warnings)
-  - `make markdownlint`: passed (0 errors)
-  - `cargo test --lib redis_route_cache`: 3 passed, 3 ignored (Redis tests
-    require redis-server binary)
+  - `make check-fmt`: passed (no formatting issues)
+  - `make lint`: passed (no warnings)
+  - `make test`: 10 passed, 0 failed (5 BDD scenarios + 5 support tests;
+    3 live-Redis tests require redis-server binary)
 
 ## Surprises & Discoveries
 

@@ -32,7 +32,9 @@ pub trait ConnectionProvider: Send + Sync {
 /// [`ConnectionProvider`] backed by a real `bb8-redis` pool.
 ///
 /// Fields are private — external code constructs a cache via
-/// [`RedisRouteCache::new`] or [`RedisRouteCache::connect`] instead.
+/// [`RedisRouteCache::connect`]. The [`RedisRouteCache::new`] constructor is
+/// provided only for test/support builds (enabled via the `test-support`
+/// feature) to allow injection of pre-configured pools.
 #[derive(Debug, Clone)]
 pub struct RedisPoolProvider {
     pool: RedisPool,
