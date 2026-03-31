@@ -312,7 +312,7 @@ mod tests {
     // -- Live Redis tests (require redis-server binary) -------------------------
 
     #[tokio::test]
-    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
+    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn get_returns_none_for_missing_key() {
         let server = TestRedisServer::start().await.expect("start redis-server");
         let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
+    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn put_followed_by_get_round_trips_the_typed_plan() {
         let server = TestRedisServer::start().await.expect("start redis-server");
         let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
@@ -332,7 +332,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires redis-server binary; opt-in via RUN_REDIS_TESTS=1"]
+    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn corrupted_cached_bytes_map_to_serialization_errors() {
         let server = TestRedisServer::start().await.expect("start redis-server");
         let pool = server.pool().await.expect("redis pool");

@@ -285,13 +285,15 @@ Hand-off order:
   Tests requiring `redis-server` are marked `#[ignore]` and documented for
   opt-in execution.
 - **Serialization**: JSON serialization via `serde_json` was implemented
-  directly in 5.1.1, completing roadmap item 5.1.2 ahead of schedule.
+  as a minimal encoding detail in 5.1.1. Full serialization policy work
+  (roadmap item 5.1.2) remains open for future scope.
 - **Gate results**: All quality gates passed (formatting, linting,
   documentation, unit tests). See Progress section for evidence.
-- **Roadmap items**: 5.1.1 and 5.1.2 marked complete in
-  `docs/backend-roadmap.md`.
-- **Follow-on work**: Items 5.1.3 (TTL with jitter) and 5.1.4 (key
-  canonicalization tests) remain pending as originally scoped.
+- **Roadmap items**: 5.1.1 marked complete in `docs/backend-roadmap.md`.
+  Items 5.1.2, 5.1.3, and 5.1.4 remain open for future work.
+- **Follow-on work**: Items 5.1.2 (serialization policy), 5.1.3 (TTL with
+  jitter), and 5.1.4 (key canonicalization tests) remain pending as
+  originally scoped.
 
 ## Context and orientation
 
