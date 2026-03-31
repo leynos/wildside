@@ -55,7 +55,7 @@ struct RouteCacheWorld {
     latest_put_result: Slot<Result<(), RouteCacheError>>,
     latest_error: Slot<RouteCacheError>,
     skip_reason: Slot<String>,
-    skip_message_printed: Slot<bool>,
+    has_printed_skip_message: Slot<bool>,
 }
 
 impl RouteCacheWorld {
@@ -70,9 +70,9 @@ impl RouteCacheWorld {
     fn is_skipped(&self) -> bool {
         if let Some(reason) = self.skip_reason.get() {
             // Only print skip message once per scenario
-            if self.skip_message_printed.get() != Some(true) {
+            if self.has_printed_skip_message.get() != Some(true) {
                 eprintln!("SKIP-REDIS-TESTS: scenario skipped ({reason})");
-                self.skip_message_printed.set(true);
+                self.has_printed_skip_message.set(true);
             }
             true
         } else {
