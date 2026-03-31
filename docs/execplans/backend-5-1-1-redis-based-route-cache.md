@@ -121,9 +121,11 @@ Observable success criteria:
   and the repo-local compose stack does not currently define a Redis service.
   Severity: high.
   Likelihood: high.
-  Mitigation: prefer an in-process Redis protocol harness for tests so the
-  suite stays self-contained; escalate if the harness does not exercise the
-  commands the adapter needs.
+  Mitigation: use the repo-local `redis-server` binary as the supported
+  test harness. Tests requiring a live Redis server are marked with
+  `#[ignore]` and must be run explicitly via `cargo test -- --ignored`.
+  The `deploy/docker-compose.yml` provides a Redis service for local
+  development and CI environments.
 
 - Risk: replacing the stub outright may break tests or code paths that assumed
   a no-op adapter existed in production code.
@@ -199,8 +201,10 @@ Hand-off order:
 - [x] (2026-03-24) Run final gates and retain logs:
   - `make check-fmt`: passed (no formatting issues)
   - `make lint`: passed (no warnings)
-  - `make test`: All repo tests pass (including Redis BDD tests and
-    existing Postgres-backed suites); see CI logs for full results
+  - `make test`: All default repo tests pass (mocked Redis unit tests and
+    existing Postgres-backed suites). Live redis-server BDD tests
+    (annotated with `#[ignore]`) are opt-in and run separately via
+    `cargo test -- --ignored`; see CI logs for full results
 
 ## Surprises & Discoveries
 
@@ -263,10 +267,11 @@ Hand-off order:
   Date/Author: 2026-03-22 / planning team.
 
 - Decision: use a real Redis-protocol test harness for behavioural coverage,
-  with an in-process server preferred over external infrastructure.
+  using the `redis-server` binary as the supported implementation.
   Rationale: the user explicitly asked for behavioural tests, and a port
   contract for Redis should be verified against actual protocol interactions
-  rather than handwritten mocks.
+  rather than handwritten mocks. An in-process `mini-redis` harness was
+  evaluated and found incompatible with `bb8-redis` pooled clients.
   Date/Author: 2026-03-22 / planning team.
 
 - Decision: keep future TTL, jitter, and key-canonicalization work out of scope
@@ -392,10 +397,10 @@ Stage D: document the architectural scope explicitly.
 
 Update `docs/wildside-backend-architecture.md` to record that roadmap item
 5.1.1 introduces the Redis-backed `RouteCache` adapter and connection pooling,
-but does not yet enable route result reuse in runtime request flows. If the
-implementation chooses an in-process behavioural harness for tests, mention
-that in the testing strategy section so future contributors know how Redis
-adapter tests run locally.
+but does not yet enable route result reuse in runtime request flows. Document
+that the test harness uses a real `redis-server` binary (provided via the
+repo-local compose stack) and that tests requiring a live Redis server are
+marked with `#[ignore]` for opt-in execution.
 
 Only after the implementation, tests, and full gates pass should
 `docs/backend-roadmap.md` mark 5.1.1 done.
