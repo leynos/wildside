@@ -80,13 +80,16 @@ impl ConnectionProvider for RedisPoolProvider {
     }
 }
 
-/// Internal generic adapter parameterised over the connection provider.
+/// Generic adapter parameterised over the connection provider.
 ///
 /// Production code uses the [`RedisRouteCache`] type alias which fixes the
 /// provider to `RedisPoolProvider`. Unit tests substitute a fake provider to
 /// exercise JSON round-trip logic without a live Redis server.
+///
+/// This type is public to support integration tests; prefer using the
+/// [`RedisRouteCache`] type alias for production code.
 #[derive(Debug, Clone)]
-pub(crate) struct GenericRedisRouteCache<P, C> {
+pub struct GenericRedisRouteCache<P, C> {
     provider: C,
     _plan: PhantomData<fn() -> P>,
 }
@@ -164,10 +167,9 @@ impl<P> RedisRouteCache<P> {
 impl<P, C> GenericRedisRouteCache<P, C> {
     /// Create a cache with a custom connection provider.
     ///
-    /// This constructor is crate-private and intended for test use only.
-    /// Production code should use [`RedisRouteCache::connect`] or
-    /// [`RedisRouteCache::new`].
-    pub(crate) fn with_provider(provider: C) -> Self {
+    /// This constructor is intended for test use only. Production code should
+    /// use [`RedisRouteCache::connect`] or [`RedisRouteCache::new`].
+    pub fn with_provider(provider: C) -> Self {
         Self {
             provider,
             _plan: PhantomData,
