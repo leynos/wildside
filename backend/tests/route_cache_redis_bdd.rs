@@ -60,11 +60,11 @@ struct RouteCacheWorld {
 
 impl RouteCacheWorld {
     fn runtime(&self) -> RuntimeHandle {
-        self.runtime.get().expect("runtime should be initialised")
+        self.runtime.get().expect("runtime should be initialized")
     }
 
     fn cache(&self) -> RedisRouteCache<TestPlan> {
-        self.cache.get().expect("cache should be initialised")
+        self.cache.get().expect("cache should be initialized")
     }
 
     fn is_skipped(&self) -> bool {
@@ -80,14 +80,18 @@ impl RouteCacheWorld {
         }
     }
 
-    fn check_skip(&self) {
+    /// Bootstrap a live Redis connection for scenarios that need it.
+    ///
+    /// Checks skip conditions, starts a RedisTestServer, creates the pool and
+    /// cache, and stores all handles into the world state. Returns `true` if
+    /// the scenario should be skipped (Redis unavailable or SKIP_REDIS_TESTS set).
+    fn bootstrap_redis(&self) -> bool {
         if should_skip_redis_tests() {
             self.skip_reason
                 .set("redis-server unavailable or SKIP_REDIS_TESTS set".to_owned());
+            return true;
         }
-    }
 
-    fn setup_running_cache(&self) {
         let runtime = Runtime::new().expect("create runtime");
         let server = runtime
             .block_on(async { RedisTestServer::start().await })
@@ -100,6 +104,8 @@ impl RouteCacheWorld {
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.server.set(RedisServerHandle(Arc::new(server)));
         self.cache.set(cache);
+
+        false
     }
 
     fn setup_unreachable_cache(&self) {
@@ -140,7 +146,7 @@ impl RouteCacheWorld {
         let server = self
             .server
             .get()
-            .expect("redis server should be initialised");
+            .expect("redis server should be initialized");
         let runtime = self.runtime();
         runtime
             .0
@@ -167,20 +173,16 @@ fn world() -> RouteCacheWorld {
 
 #[given("a running Redis-backed route cache")]
 fn a_running_redis_backed_route_cache(world: &RouteCacheWorld) {
-    world.check_skip();
-    if world.is_skipped() {
+    if world.bootstrap_redis() {
         return;
     }
-    world.setup_running_cache();
 }
 
 #[given("a Redis-backed route cache with malformed cached bytes")]
 fn a_redis_backed_route_cache_with_malformed_cached_bytes(world: &RouteCacheWorld) {
-    world.check_skip();
-    if world.is_skipped() {
+    if world.bootstrap_redis() {
         return;
     }
-    world.setup_running_cache();
     world.seed_corrupt_bytes("route:corrupt", vec![0_u8, 159, 146, 150]);
 }
 
