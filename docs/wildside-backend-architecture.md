@@ -2921,8 +2921,9 @@ classDiagram
     }
 
     %% Outbound cache adapter
+    %% Note: new() is test-support only; production code uses connect()
     class RedisRouteCache~P~ {
-        +new(pool RedisPool) RedisRouteCache~P~ <<test-support only>>
+        +new(pool RedisPool) RedisRouteCache~P~
         +async connect(redis_url str) Result~RedisRouteCache~P~~, RouteCacheError~
         +async get(key RouteCacheKey) Result~Option~P~~, RouteCacheError~
         +async put(key RouteCacheKey, plan P) Result~(), RouteCacheError~
