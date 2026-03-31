@@ -10,3 +10,10 @@ pub use redis_route_cache::RedisRouteCache;
 // Export RedisPool only for test-support feature to avoid exposing bb8-redis in public API
 #[cfg(feature = "test-support")]
 pub use redis_route_cache::RedisPool;
+
+// Test helpers and internal tests are only available in test builds
+#[cfg(test)]
+pub mod test_helpers;
+
+#[cfg(test)]
+mod tests;
