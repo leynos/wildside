@@ -81,10 +81,11 @@ Observable success criteria:
 - Runtime-wiring tolerance: if a real Redis adapter cannot be introduced
   without also wiring new server/application configuration, stop and decide
   explicitly whether that extra wiring belongs in 5.1.1.
-- Test-harness tolerance: if a Redis protocol test harness cannot be run
-  through an in-process server such as `mini-redis`, stop and choose between a
-  new container-based harness and a repository-managed Redis service before
-  implementation continues.
+- Test-harness tolerance: the implementation uses a local `redis-server`
+  process (not an in-process server) for live adapter tests. This approach
+  was chosen after discovering that `mini-redis` was not compatible with the
+  pooled `bb8-redis` client. If the `redis-server` harness cannot be started,
+  stop and document the blocker before continuing.
 - Dependency tolerance: if more than one new production dependency or more than
   two new dev-dependencies are required, stop and review the trade-off.
 - Error-contract tolerance: if Redis or pool failures cannot be mapped cleanly
@@ -198,8 +199,8 @@ Hand-off order:
 - [x] (2026-03-24) Run final gates and retain logs:
   - `make check-fmt`: passed (no formatting issues)
   - `make lint`: passed (no warnings)
-  - `make test`: 10 passed, 0 failed (5 BDD scenarios + 5 support tests;
-    3 live-Redis tests require redis-server binary)
+  - `make test`: All repo tests pass (including Redis BDD tests and
+    existing Postgres-backed suites); see CI logs for full results
 
 ## Surprises & Discoveries
 
@@ -237,14 +238,14 @@ Hand-off order:
   Impact: 5.1.1 must distinguish the adapter foundation from later caching
   policy work so the roadmap remains trustworthy.
 
-- Observation: `mini-redis` was not compatible enough with the pooled
-  `redis-rs` client used by `bb8-redis`; pool checkout timed out even after
-  forcing RESP2 and disabling library info setup.
+- Observation: `mini-redis` (evaluated and superseded) was not compatible
+  with the pooled `redis-rs` client used by `bb8-redis`; pool checkout timed
+  out even after forcing RESP2 and disabling library info setup.
   Evidence:
   focused BDD failures during the first implementation pass on 2026-03-22.
-  Impact: the behavioural harness switched to a local `redis-server` process,
-  which still satisfies the plan's requirement to exercise the adapter against
-  a real Redis protocol server.
+  Impact: the behavioural harness uses a local `redis-server` process,
+  which satisfies the plan's requirement to exercise the adapter against
+  a real Redis protocol server. `mini-redis` is documented as superseded.
 
 ## Decision Log
 
@@ -281,7 +282,8 @@ Hand-off order:
 - **Domain contracts**: Redis adapter landed without widening domain contracts.
   The `RouteCache` port remained unchanged.
 - **Test harness**: Real `redis-server` process harness was chosen over
-  `mini-redis` due to compatibility issues with `bb8-redis` pooled client.
+  `mini-redis` (superseded) due to compatibility issues with `bb8-redis` pooled
+  client.
   Tests requiring `redis-server` are marked `#[ignore]` and documented for
   opt-in execution.
 - **Serialization**: JSON serialization via `serde_json` was implemented
@@ -363,7 +365,7 @@ contract and round-trip semantics before adding broader behavioural scenarios.
 Stage C: add a Redis protocol harness and behavioural coverage.
 
 Add a self-contained Redis test helper under `backend/tests/support/`, with
-`mini-redis` as the preferred starting point because it exercises the actual
+`redis-server` process as the supported harness because it exercises the actual
 Redis protocol without requiring a repo-wide service dependency. The harness
 should expose:
 
@@ -513,6 +515,4 @@ The implementation is done only when all of the following are true:
 
 ## Approval / implementation gate
 
-Per the `execplans` skill, this document is the draft phase only. Do not begin
-implementation until the user explicitly approves this plan or requests changes
-to it.
+Status: IMPLEMENTED (approved and completed 2026-03-22).

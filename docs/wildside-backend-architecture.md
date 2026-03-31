@@ -341,7 +341,7 @@ Module boundaries are enforced by a repo-local lint that runs during
   JSON-encoded byte payloads. This change is intentionally adapter-first: it
   adds Redis contract coverage and error mapping, but does not yet wire cache
   reuse into route submission or HTTP request flows. Behaviour tests start a
-  local `redis-server` process from `backend/tests/support/redis.rs` so the
+  local `redis-server` process from `backend/src/test_support/redis.rs` so the
   adapter runs against a real Redis protocol server without booting the Actix
   application.
 
@@ -2583,8 +2583,8 @@ tests:
   cache, Apalis dispatcher, Martin client) ships a contract suite ensuring it
   obeys the port semantics, including error mapping. Postgres-backed suites use
   embedded PostgreSQL; the Redis cache suite starts a local `redis-server`
-  process from `backend/tests/support/redis.rs` so the adapter runs against a
-  real Redis protocol server in local and CI environments.
+  process from `backend/src/test_support/redis.rs` so the adapter runs against
+  a real Redis protocol server in local and CI environments.
 - **End-to-end smoke tests:** Using the same bootstrapping code as production,
   we spin up the Actix server plus workers, inject the test adapters, and hit
   the HTTP/WebSocket APIs to verify routing, session handling, and telemetry
