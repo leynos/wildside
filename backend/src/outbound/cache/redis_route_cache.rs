@@ -23,9 +23,30 @@ pub type RedisPool = Pool<RedisConnectionManager>;
 #[async_trait]
 pub trait ConnectionProvider: Send + Sync {
     /// Read raw bytes for `key`, returning `None` on a cache miss.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # async fn example(provider: &dyn ConnectionProvider) -> Result<(), RouteCacheError> {
+    /// let result = provider.get_bytes("missing_key").await?;
+    /// assert_eq!(result, None);
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError>;
 
     /// Write raw bytes for `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # async fn example(provider: &dyn ConnectionProvider) -> Result<(), RouteCacheError> {
+    /// provider.set_bytes("k", vec![1, 2, 3]).await?;
+    /// let got = provider.get_bytes("k").await?;
+    /// assert_eq!(got, Some(vec![1, 2, 3]));
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError>;
 }
 
@@ -210,7 +231,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::test_support::redis::{RedisTestServer as TestRedisServer, unused_redis_url};
+    use crate::test_support::redis::{RedisTestServer, unused_redis_url};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestPlan {
@@ -311,11 +332,18 @@ mod tests {
 
     // -- Live Redis tests (require redis-server binary) -------------------------
 
+    /// Starts a test Redis server and returns a connection pool.
+    async fn start_test_redis() -> (RedisTestServer, RedisPool) {
+        let server = RedisTestServer::start().await.expect("start redis-server");
+        let pool = server.pool().await.expect("create redis pool");
+        (server, pool)
+    }
+
     #[tokio::test]
     #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn get_returns_none_for_missing_key() {
-        let server = TestRedisServer::start().await.expect("start redis-server");
-        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
+        let (_server, pool) = start_test_redis().await;
+        let cache = RedisRouteCache::<TestPlan>::new(pool);
         let key = RouteCacheKey::new("route:missing").expect("valid key");
 
         let result = cache.get(&key).await.expect("missing-key lookup succeeds");
@@ -326,16 +354,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn put_followed_by_get_round_trips_the_typed_plan() {
-        let server = TestRedisServer::start().await.expect("start redis-server");
-        let cache = RedisRouteCache::<TestPlan>::new(server.pool().await.expect("redis pool"));
+        let (_server, pool) = start_test_redis().await;
+        let cache = RedisRouteCache::<TestPlan>::new(pool);
         assert_put_get_round_trips(&cache).await;
     }
 
     #[tokio::test]
     #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
     async fn corrupted_cached_bytes_map_to_serialization_errors() {
-        let server = TestRedisServer::start().await.expect("start redis-server");
-        let pool = server.pool().await.expect("redis pool");
+        let (_server, pool) = start_test_redis().await;
         let cache = RedisRouteCache::<TestPlan>::new(pool.clone());
         let key = RouteCacheKey::new("route:corrupt").expect("valid key");
         let mut connection = pool.get().await.expect("redis connection");
