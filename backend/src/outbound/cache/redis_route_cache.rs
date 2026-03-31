@@ -86,7 +86,7 @@ impl ConnectionProvider for RedisPoolProvider {
 /// provider to `RedisPoolProvider`. Unit tests substitute a fake provider to
 /// exercise JSON round-trip logic without a live Redis server.
 #[derive(Debug, Clone)]
-pub struct GenericRedisRouteCache<P, C> {
+pub(crate) struct GenericRedisRouteCache<P, C> {
     provider: C,
     _plan: PhantomData<fn() -> P>,
 }
@@ -161,9 +161,13 @@ impl<P> RedisRouteCache<P> {
     }
 }
 
-#[cfg(test)]
 impl<P, C> GenericRedisRouteCache<P, C> {
-    fn with_provider(provider: C) -> Self {
+    /// Create a cache with a custom connection provider.
+    ///
+    /// This constructor is crate-private and intended for test use only.
+    /// Production code should use [`RedisRouteCache::connect`] or
+    /// [`RedisRouteCache::new`].
+    pub(crate) fn with_provider(provider: C) -> Self {
         Self {
             provider,
             _plan: PhantomData,
@@ -208,205 +212,5 @@ fn map_redis_error(error: RedisError) -> RouteCacheError {
 fn map_serialization_error(error: serde_json::Error) -> RouteCacheError {
     RouteCacheError::Serialization {
         message: error.to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Focused adapter tests covering port-level semantics.
-    //!
-    //! Mock-based tests run unconditionally and cover JSON round-trip,
-    //! cache-miss, and corrupt-payload semantics. Tests requiring a real
-    //! `redis-server` binary are marked with `#[ignore]` and can be run
-    //! via:
-    //! ```sh
-    //! cargo test -- --ignored
-    //! ```
-
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    use bb8_redis::redis::cmd;
-    use rstest::rstest;
-    use serde::{Deserialize, Serialize};
-
-    use super::*;
-    use crate::test_support::redis::{RedisTestServer, unused_redis_url};
-
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestPlan {
-        request_id: String,
-        checksum: u64,
-    }
-
-    impl TestPlan {
-        fn new(request_id: &str, checksum: u64) -> Self {
-            Self {
-                request_id: request_id.to_owned(),
-                checksum,
-            }
-        }
-    }
-
-    // -- In-memory fake for ConnectionProvider ----------------------------------
-
-    /// Simple in-memory store used as a [`ConnectionProvider`] double.
-    #[derive(Debug)]
-    struct FakeProvider {
-        store: Mutex<HashMap<String, Vec<u8>>>,
-    }
-
-    impl FakeProvider {
-        fn empty() -> Self {
-            Self {
-                store: Mutex::new(HashMap::new()),
-            }
-        }
-
-        fn seeded(key: &str, bytes: Vec<u8>) -> Self {
-            let mut map = HashMap::new();
-            map.insert(key.to_owned(), bytes);
-            Self {
-                store: Mutex::new(map),
-            }
-        }
-    }
-
-    #[async_trait]
-    impl ConnectionProvider for FakeProvider {
-        async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError> {
-            let store = self.store.lock().expect("fake store lock");
-            Ok(store.get(key).cloned())
-        }
-
-        async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-            let mut store = self.store.lock().expect("fake store lock");
-            store.insert(key.to_owned(), value);
-            Ok(())
-        }
-    }
-
-    // -- Shared test helpers ------------------------------------------------------
-
-    async fn assert_put_get_round_trips(cache: &impl RouteCache<Plan = TestPlan>) {
-        let key = RouteCacheKey::new("route:round-trip").expect("valid key");
-        let plan = TestPlan::new("req-1", 42);
-        cache.put(&key, &plan).await.expect("put succeeds");
-        let loaded = cache.get(&key).await.expect("get succeeds");
-        assert_eq!(loaded, Some(plan));
-    }
-
-    // -- Mock-based tests (run unconditionally) ---------------------------------
-
-    #[tokio::test]
-    async fn mock_get_returns_none_for_missing_key() {
-        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider(FakeProvider::empty());
-        let key = RouteCacheKey::new("route:missing").expect("valid key");
-
-        let result = cache.get(&key).await.expect("get should succeed");
-
-        assert_eq!(result, None);
-    }
-
-    #[tokio::test]
-    async fn mock_put_then_get_round_trips_the_typed_plan() {
-        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider(FakeProvider::empty());
-        assert_put_get_round_trips(&cache).await;
-    }
-
-    #[tokio::test]
-    async fn mock_corrupted_bytes_map_to_serialization_errors() {
-        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider(FakeProvider::seeded(
-            "route:corrupt",
-            vec![0_u8, 159, 146, 150],
-        ));
-        let key = RouteCacheKey::new("route:corrupt").expect("valid key");
-
-        let result = cache
-            .get(&key)
-            .await
-            .expect_err("corrupt payload should fail");
-
-        assert!(matches!(result, RouteCacheError::Serialization { .. }));
-    }
-
-    // -- Live Redis tests (require redis-server binary) -------------------------
-
-    /// Starts a test Redis server and returns a connection pool.
-    async fn start_test_redis() -> (RedisTestServer, RedisPool) {
-        let server = RedisTestServer::start().await.expect("start redis-server");
-        let pool = server.pool().await.expect("create redis pool");
-        (server, pool)
-    }
-
-    #[tokio::test]
-    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
-    async fn get_returns_none_for_missing_key() {
-        let (_server, pool) = start_test_redis().await;
-        let cache = RedisRouteCache::<TestPlan>::new(pool);
-        let key = RouteCacheKey::new("route:missing").expect("valid key");
-
-        let result = cache.get(&key).await.expect("missing-key lookup succeeds");
-
-        assert_eq!(result, None);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
-    async fn put_followed_by_get_round_trips_the_typed_plan() {
-        let (_server, pool) = start_test_redis().await;
-        let cache = RedisRouteCache::<TestPlan>::new(pool);
-        assert_put_get_round_trips(&cache).await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
-    async fn corrupted_cached_bytes_map_to_serialization_errors() {
-        let (_server, pool) = start_test_redis().await;
-        let cache = RedisRouteCache::<TestPlan>::new(pool.clone());
-        let key = RouteCacheKey::new("route:corrupt").expect("valid key");
-        let mut connection = pool.get().await.expect("redis connection");
-
-        cmd("SET")
-            .arg(key.as_str())
-            .arg(vec![0_u8, 159, 146, 150])
-            .query_async::<()>(&mut *connection)
-            .await
-            .expect("seed corrupt bytes");
-
-        let result = cache
-            .get(&key)
-            .await
-            .expect_err("corrupt payload should fail");
-
-        assert!(matches!(result, RouteCacheError::Serialization { .. }));
-    }
-
-    #[tokio::test]
-    async fn command_failures_map_to_backend_errors() {
-        let unreachable_url = unused_redis_url().await.expect("unused redis url");
-        let manager = RedisConnectionManager::new(unreachable_url.as_str()).expect("redis manager");
-        let pool = Pool::builder().max_size(1).build_unchecked(manager);
-        let cache = RedisRouteCache::<TestPlan>::new(pool);
-        let key = RouteCacheKey::new("route:backend").expect("valid key");
-
-        let result = cache
-            .get(&key)
-            .await
-            .expect_err("unreachable backend should fail");
-
-        assert!(matches!(result, RouteCacheError::Backend { .. }));
-    }
-
-    #[rstest]
-    #[case("not a redis url")]
-    #[case("http://127.0.0.1:6379")]
-    #[tokio::test]
-    async fn connect_maps_invalid_connection_strings_to_backend_errors(#[case] redis_url: &str) {
-        let result = RedisRouteCache::<TestPlan>::connect(redis_url)
-            .await
-            .expect_err("invalid redis url should fail");
-
-        assert!(matches!(result, RouteCacheError::Backend { .. }));
     }
 }
