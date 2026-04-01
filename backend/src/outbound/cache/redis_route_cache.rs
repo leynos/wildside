@@ -86,8 +86,8 @@ impl ConnectionProvider for RedisPoolProvider {
 /// provider to `RedisPoolProvider`. Unit tests substitute a fake provider to
 /// exercise JSON round-trip logic without a live Redis server.
 ///
-/// This type is public to support integration tests; prefer using the
-/// [`RedisRouteCache`] type alias for production code.
+/// Public because the [`RedisRouteCache`] type alias references this type;
+/// prefer using the type alias for production code.
 #[derive(Debug, Clone)]
 pub struct GenericRedisRouteCache<P, C> {
     provider: C,
