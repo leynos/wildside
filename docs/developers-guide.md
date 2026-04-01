@@ -157,7 +157,7 @@ The internal generic `GenericRedisRouteCache<P, C>` and its connection provider
 trait are crate-private (`pub(crate)`) to prevent leaking implementation
 details into the public API:
 
-- `GenericRedisRouteCache<P, C>` – Internal generic struct parameterised over
+- `GenericRedisRouteCache<P, C>` – Internal generic struct parameterized over
 the connection provider type `C`. This enables test doubles while keeping the
 public surface minimal.
 - `ConnectionProvider` – Internal trait abstracting over Redis connections.

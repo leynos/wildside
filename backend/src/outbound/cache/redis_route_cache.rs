@@ -167,9 +167,11 @@ impl<P> RedisRouteCache<P> {
 impl<P, C> GenericRedisRouteCache<P, C> {
     /// Create a cache with a custom connection provider.
     ///
-    /// This constructor is intended for test use only. Production code should
-    /// use [`RedisRouteCache::connect`] or [`RedisRouteCache::new`].
-    pub fn with_provider(provider: C) -> Self {
+    /// This constructor is crate-private and intended for test use only.
+    /// Production code should use [`RedisRouteCache::connect`] or
+    /// [`RedisRouteCache::new`].
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn with_provider(provider: C) -> Self {
         Self {
             provider,
             _plan: PhantomData,
@@ -199,16 +201,18 @@ where
     }
 }
 
-fn map_pool_error(error: RunError<RedisError>) -> RouteCacheError {
+fn map_backend_error<E: std::fmt::Display>(err: E) -> RouteCacheError {
     RouteCacheError::Backend {
-        message: error.to_string(),
+        message: err.to_string(),
     }
 }
 
+fn map_pool_error(error: RunError<RedisError>) -> RouteCacheError {
+    map_backend_error(error)
+}
+
 fn map_redis_error(error: RedisError) -> RouteCacheError {
-    RouteCacheError::Backend {
-        message: error.to_string(),
-    }
+    map_backend_error(error)
 }
 
 fn map_serialization_error(error: serde_json::Error) -> RouteCacheError {

@@ -13,22 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::RedisRouteCache;
+use crate::outbound::cache::test_helpers::TestPlan;
 use crate::test_support::redis::{RedisTestServer, unused_redis_url};
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct TestPlan {
-    request_id: String,
-    checksum: u64,
-}
-
-impl TestPlan {
-    fn new(request_id: &str, checksum: u64) -> Self {
-        Self {
-            request_id: request_id.to_owned(),
-            checksum,
-        }
-    }
-}
 
 /// Starts a test Redis server and returns a connection pool.
 async fn start_test_redis() -> (RedisTestServer, Pool<RedisConnectionManager>) {

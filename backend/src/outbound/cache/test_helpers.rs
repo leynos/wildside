@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::redis_route_cache::ConnectionProvider;
@@ -49,12 +50,30 @@ impl ConnectionProvider for FakeProvider {
     }
 }
 
+/// Test plan type used for cache adapter tests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TestPlan {
+    /// Request identifier for the test plan.
+    pub request_id: String,
+    /// Checksum value for the test plan.
+    pub checksum: u64,
+}
+
+impl TestPlan {
+    /// Create a new test plan with the given request ID and checksum.
+    pub fn new(request_id: &str, checksum: u64) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            checksum,
+        }
+    }
+}
+
 /// Assert that a cache correctly round-trips a test plan.
 ///
 /// # Type Parameters
 ///
-/// - `P`: The plan type, must be serialisable and comparable.
-/// - `C`: The cache type implementing [`RouteCache<Plan = P>`].
+/// - `P`: The plan type, must be serializable and comparable.
 ///
 /// # Examples
 ///
@@ -65,21 +84,18 @@ impl ConnectionProvider for FakeProvider {
 /// ```
 pub async fn assert_put_get_round_trips<P>(cache: &impl RouteCache<Plan = P>)
 where
-    P: Clone + PartialEq + std::fmt::Debug,
+    P: Clone + PartialEq + std::fmt::Debug + Default,
 {
     let key = RouteCacheKey::new("route:round-trip").expect("valid key");
-    let plan = cache.get(&key).await.expect("get succeeds");
-    assert_eq!(plan, None, "key should not exist before put");
-
-    let test_plan = cache.get(&key).await.expect("get succeeds");
-    if let Some(ref p) = test_plan {
-        cache.put(&key, p).await.expect("put succeeds");
-    }
+    let plan = P::default();
+    cache.put(&key, &plan).await.expect("put succeeds");
+    let loaded = cache.get(&key).await.expect("get succeeds");
+    assert_eq!(loaded, Some(plan));
 }
 
 /// Assert that a cache correctly round-trips a specific plan instance.
 ///
-/// This variant accepts a concrete plan value for use in parametrised tests.
+/// This variant accepts a concrete plan value for use in parameterized tests.
 ///
 /// # Examples
 ///

@@ -4,26 +4,10 @@
 //! and corrupt-payload semantics without requiring a live Redis server.
 
 use rstest::rstest;
-use serde::{Deserialize, Serialize};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::redis_route_cache::GenericRedisRouteCache;
-use crate::outbound::cache::test_helpers::FakeProvider;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct TestPlan {
-    request_id: String,
-    checksum: u64,
-}
-
-impl TestPlan {
-    fn new(request_id: &str, checksum: u64) -> Self {
-        Self {
-            request_id: request_id.to_owned(),
-            checksum,
-        }
-    }
-}
+use crate::outbound::cache::test_helpers::{FakeProvider, TestPlan};
 
 #[tokio::test]
 async fn mock_get_returns_none_for_missing_key() {

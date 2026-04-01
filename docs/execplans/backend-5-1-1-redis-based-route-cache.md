@@ -204,7 +204,7 @@ Hand-off order:
   - `make test`: All default repo tests pass (mocked Redis unit tests and
     existing Postgres-backed suites). Live redis-server BDD tests
     (annotated with `#[ignore]`) are opt-in and run separately via
-    `cargo test -- --ignored`; see CI logs for full results
+    `cargo test -- --ignored`; see CI logs for full results.
 
 ## Surprises & Discoveries
 
