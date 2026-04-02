@@ -1,4 +1,11 @@
-//! Redis-backed `RouteCache` adapter.
+//! Redis-backed [`RouteCache`] adapter for typed route plans.
+//!
+//! This module stores plan payloads as JSON-encoded bytes behind Redis,
+//! validates keys through [`RouteCacheKey`], and maps Redis/pool failures plus
+//! serialization failures into [`RouteCacheError`]. The adapter is built around
+//! the [`ConnectionProvider`] abstraction so tests can substitute fakes or
+//! mocks while production uses the [`RedisPool`] and [`RedisPoolProvider`]
+//! backed implementation.
 
 use std::marker::PhantomData;
 

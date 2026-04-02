@@ -242,7 +242,7 @@ The hexagonal boundary is enforced via visibility:
 | Component                       | Visibility           | Purpose                              |
 |---------------------------------|----------------------|--------------------------------------|
 | `RedisRouteCache<P>`            | `pub`                | Public adapter for domain use        |
-| `GenericRedisRouteCache<P, C>`  | `pub(crate)`         | Internal generic implementation      |
+| `GenericRedisRouteCache<P, C>`  | `pub`                | Generic adapter implementation       |
 | `ConnectionProvider`            | `pub` (trait)        | Test seam for connection abstraction |
 | `RedisPoolProvider`             | `pub`                | Production `ConnectionProvider` impl |
 | `test_helpers::FakeProvider`    | `pub` (test-only)    | In-memory test double                |

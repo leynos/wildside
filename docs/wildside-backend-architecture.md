@@ -2940,7 +2940,7 @@ classDiagram
 
     %% Relationships
     UserRepository <|.. DieselUserRepository
-    RouteCache <|.. RedisRouteCache
+    RouteCache <|.. RedisRouteCache~P~
     RouteQueue <|.. StubRouteQueue
 
     DieselUserRepository o-- DbPool
@@ -2953,8 +2953,8 @@ classDiagram
     DieselUserRepository --> UserId
     DieselUserRepository --> DisplayName
 
-    RedisRouteCache --> RouteCacheKey
-    RedisRouteCache --> P : generic plan type
+    RedisRouteCache~P~ --> RouteCacheKey
+    RedisRouteCache~P~ --> P : generic plan type
     StubRouteQueue --> StubPlan
 ```
 

@@ -203,9 +203,11 @@ Hand-off order:
   - `make check-fmt`: passed (no formatting issues)
   - `make lint`: passed (no warnings)
   - `make test`: All default repo tests pass (mocked Redis unit tests and
-    existing Postgres-backed suites). Live redis-server BDD tests
-    (annotated with `#[ignore]`) are opt-in and run separately via
-    `cargo test -- --ignored`; see CI logs for full results.
+    existing Postgres-backed suites); live redis-server BDD tests annotated
+    with `#[ignore]` run only via `cargo test -- --ignored`, while the
+    runtime-gated scenarios skip themselves when `SKIP_REDIS_TESTS=1` is set
+    or `redis-server` is unavailable, so both live paths remain opt-in
+    outside `make test`.
 
 ## Surprises & Discoveries
 

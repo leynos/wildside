@@ -7,7 +7,9 @@ use rstest::rstest;
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::redis_route_cache::GenericRedisRouteCache;
-use crate::outbound::cache::test_helpers::{FakeProvider, TestPlan};
+use crate::outbound::cache::test_helpers::{
+    FakeProvider, TestPlan, assert_put_get_round_trips_with_plan,
+};
 
 #[tokio::test]
 async fn mock_get_returns_none_for_missing_key() {
@@ -22,13 +24,11 @@ async fn mock_get_returns_none_for_missing_key() {
 #[tokio::test]
 async fn mock_put_then_get_round_trips_the_typed_plan() {
     let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider(FakeProvider::empty());
-    let key = RouteCacheKey::new("route:round-trip").expect("valid key");
     let plan = TestPlan::new("req-1", 42);
 
-    cache.put(&key, &plan).await.expect("put succeeds");
-    let loaded = cache.get(&key).await.expect("get succeeds");
-
-    assert_eq!(loaded, Some(plan));
+    assert_put_get_round_trips_with_plan(&cache, &plan)
+        .await
+        .expect("put/get round-trip succeeds");
 }
 
 #[tokio::test]
