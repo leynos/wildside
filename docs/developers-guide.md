@@ -148,23 +148,29 @@ implements the hexagonal `RouteCache` port defined in the domain layer.
 
 ### Architecture and public API
 
-The cache module exports a single public type:
+Public production API:
 
 - `RedisRouteCache<P>` – A type alias for the concrete Redis-backed cache
-  implementation. This is the only public entry point for production code.
+  implementation. This is the supported public entry point for production code.
 
-The generic `GenericRedisRouteCache<P, C>` struct and the
-`ConnectionProvider` trait are exported as `pub`, but they are considered
-implementation details rather than part of the public API contract. The same
-applies to `RedisPoolProvider`, which exists to back `RedisRouteCache<P>` with
-`bb8-redis` pooling:
+Exported implementation details:
+
+- `GenericRedisRouteCache<P, C>` – Exported as `pub`, but intended for
+  implementation-facing use rather than as part of the stable public API
+  contract.
+- `ConnectionProvider` – Exported as `pub` to support advanced extension and
+  testing, while remaining an implementation detail rather than the supported
+  production entry point.
+- `RedisPoolProvider` – Exported as `pub` and used to back
+  `RedisRouteCache<P>` with `bb8-redis` pooling, but still treated as an
+  implementation detail.
 
 - `GenericRedisRouteCache<P, C>` – Generic struct parameterized over the
-connection provider type `C`. This enables test doubles while the production
-entry point stays focused on `RedisRouteCache<P>`.
+  connection provider type `C`. This enables test doubles while the production
+  entry point stays focused on `RedisRouteCache<P>`.
 - `ConnectionProvider` – Trait abstracting over Redis connections. Production
-uses `RedisPoolProvider` (wrapping `bb8_redis::bb8::Pool`), while tests
-substitute `FakeProvider` for fast, deterministic unit tests.
+  uses `RedisPoolProvider` (wrapping `bb8_redis::bb8::Pool`), while tests
+  substitute `FakeProvider` for fast, deterministic unit tests.
 
 ### Test infrastructure
 
