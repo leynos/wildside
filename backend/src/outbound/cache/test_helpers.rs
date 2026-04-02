@@ -73,49 +73,17 @@ impl TestPlan {
     }
 }
 
-/// Assert that a cache correctly round-trips a test plan.
+/// Assert that a cache correctly round-trips a default test plan.
 ///
-/// # Type Parameters
-///
-/// - `P`: The plan type, must be serializable and comparable.
-///
-/// # Examples
-///
-/// ```ignore
-/// # async fn example(cache: &impl RouteCache<Plan = TestPlan>) {
-/// assert_put_get_round_trips(cache).await;
-/// # }
-/// ```
+/// Delegates to `assert_put_get_round_trips_with_plan` with `P::default()`.
 pub async fn assert_put_get_round_trips<P>(cache: &impl RouteCache<Plan = P>)
 where
     P: Clone + PartialEq + std::fmt::Debug + Default,
 {
-    let key = RouteCacheKey::new("route:round-trip").unwrap_or_else(|e| {
-        panic!("valid key: {e}");
-    });
-    let plan = P::default();
-    cache
-        .put(&key, &plan)
-        .await
-        .unwrap_or_else(|e| panic!("put succeeds: {e}"));
-    let loaded = cache
-        .get(&key)
-        .await
-        .unwrap_or_else(|e| panic!("get succeeds: {e}"));
-    assert_eq!(loaded, Some(plan));
+    assert_put_get_round_trips_with_plan(cache, &P::default()).await;
 }
 
 /// Assert that a cache correctly round-trips a specific plan instance.
-///
-/// This variant accepts a concrete plan value for use in parameterized tests.
-///
-/// # Examples
-///
-/// ```ignore
-/// # async fn example(cache: &impl RouteCache<Plan = TestPlan>, plan: TestPlan) {
-/// assert_put_get_round_trips_with_plan(cache, &plan).await;
-/// # }
-/// ```
 pub async fn assert_put_get_round_trips_with_plan<P>(cache: &impl RouteCache<Plan = P>, plan: &P)
 where
     P: Clone + PartialEq + std::fmt::Debug,
