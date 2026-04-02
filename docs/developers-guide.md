@@ -153,24 +153,21 @@ Public production API:
 - `RedisRouteCache<P>` – A type alias for the concrete Redis-backed cache
   implementation. This is the supported public entry point for production code.
 
-Exported implementation details:
+Implementation details within `outbound::cache`:
 
-- `GenericRedisRouteCache<P, C>` – Exported as `pub`, but intended for
-  implementation-facing use rather than as part of the stable public API
-  contract.
-- `ConnectionProvider` – Exported as `pub` to support advanced extension and
-  testing, while remaining an implementation detail rather than the supported
-  production entry point.
-- `RedisPoolProvider` – Exported as `pub` and used to back
-  `RedisRouteCache<P>` with `bb8-redis` pooling, but still treated as an
+- `GenericRedisRouteCache<P, C>` – Declared `pub` inside the private
+  `redis_route_cache` module, but not re-exported from `outbound::cache`, so it
+  is not part of the crate's supported public API. It parameterizes the adapter
+  over the connection provider type `C` so tests can substitute doubles.
+- `ConnectionProvider` – Declared `pub` inside the private
+  `redis_route_cache` module, but not re-exported from `outbound::cache`, so it
+  remains an implementation detail rather than a supported public extension
+  point. Production uses `RedisPoolProvider`, while tests substitute
+  `FakeProvider`.
+- `RedisPoolProvider` – Declared `pub` inside the private `redis_route_cache`
+  module, but not re-exported from `outbound::cache`. It backs
+  `RedisRouteCache<P>` with `bb8-redis` pooling and remains an internal
   implementation detail.
-
-- `GenericRedisRouteCache<P, C>` – Generic struct parameterized over the
-  connection provider type `C`. This enables test doubles while the production
-  entry point stays focused on `RedisRouteCache<P>`.
-- `ConnectionProvider` – Trait abstracting over Redis connections. Production
-  uses `RedisPoolProvider` (wrapping `bb8_redis::bb8::Pool`), while tests
-  substitute `FakeProvider` for fast, deterministic unit tests.
 
 ### Test infrastructure
 
@@ -247,14 +244,14 @@ cargo test -p backend --lib outbound::cache -- --ignored
 
 The hexagonal boundary is enforced via visibility:
 
-| Component                       | Visibility           | Purpose                              |
-|---------------------------------|----------------------|--------------------------------------|
-| `RedisRouteCache<P>`            | `pub`                | Public adapter for domain use        |
-| `GenericRedisRouteCache<P, C>`  | `pub`                | Generic adapter implementation       |
-| `ConnectionProvider`            | `pub` (trait)        | Test seam for connection abstraction |
-| `RedisPoolProvider`             | `pub`                | Production `ConnectionProvider` impl |
-| `test_helpers::FakeProvider`    | `pub` (test-only)    | In-memory test double                |
-| `RedisTestServer`               | `pub` (test-support) | Live server harness                  |
+| Component                      | Visibility                  | Purpose                              |
+|--------------------------------|-----------------------------|--------------------------------------|
+| `RedisRouteCache<P>`           | `pub`                       | Public adapter for domain use        |
+| `GenericRedisRouteCache<P, C>` | Internal; not re-exported   | Generic adapter implementation       |
+| `ConnectionProvider`           | Internal; not re-exported   | Test seam for connection abstraction |
+| `RedisPoolProvider`            | Internal; not re-exported   | Production `ConnectionProvider` impl |
+| `test_helpers::FakeProvider`   | `pub` (test-only)           | In-memory test double                |
+| `RedisTestServer`              | `pub` (test-support)        | Live server harness                  |
 
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
