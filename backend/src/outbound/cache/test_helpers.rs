@@ -39,12 +39,16 @@ impl FakeProvider {
 #[async_trait]
 impl ConnectionProvider for FakeProvider {
     async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError> {
-        let store = self.store.lock().expect("fake store lock");
+        let store = self.store.lock().map_err(|_| RouteCacheError::Backend {
+            message: "fake store lock poisoned".to_owned(),
+        })?;
         Ok(store.get(key).cloned())
     }
 
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        let mut store = self.store.lock().expect("fake store lock");
+        let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
+            message: "fake store lock poisoned".to_owned(),
+        })?;
         store.insert(key.to_owned(), value);
         Ok(())
     }
@@ -86,10 +90,18 @@ pub async fn assert_put_get_round_trips<P>(cache: &impl RouteCache<Plan = P>)
 where
     P: Clone + PartialEq + std::fmt::Debug + Default,
 {
-    let key = RouteCacheKey::new("route:round-trip").expect("valid key");
+    let key = RouteCacheKey::new("route:round-trip").unwrap_or_else(|e| {
+        panic!("valid key: {e}");
+    });
     let plan = P::default();
-    cache.put(&key, &plan).await.expect("put succeeds");
-    let loaded = cache.get(&key).await.expect("get succeeds");
+    cache
+        .put(&key, &plan)
+        .await
+        .unwrap_or_else(|e| panic!("put succeeds: {e}"));
+    let loaded = cache
+        .get(&key)
+        .await
+        .unwrap_or_else(|e| panic!("get succeeds: {e}"));
     assert_eq!(loaded, Some(plan));
 }
 
@@ -108,8 +120,16 @@ pub async fn assert_put_get_round_trips_with_plan<P>(cache: &impl RouteCache<Pla
 where
     P: Clone + PartialEq + std::fmt::Debug,
 {
-    let key = RouteCacheKey::new("route:round-trip").expect("valid key");
-    cache.put(&key, plan).await.expect("put succeeds");
-    let loaded = cache.get(&key).await.expect("get succeeds");
+    let key = RouteCacheKey::new("route:round-trip").unwrap_or_else(|e| {
+        panic!("valid key: {e}");
+    });
+    cache
+        .put(&key, plan)
+        .await
+        .unwrap_or_else(|e| panic!("put succeeds: {e}"));
+    let loaded = cache
+        .get(&key)
+        .await
+        .unwrap_or_else(|e| panic!("get succeeds: {e}"));
     assert_eq!(loaded, Some(plan.clone()));
 }
