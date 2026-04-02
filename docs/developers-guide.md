@@ -153,16 +153,18 @@ The cache module exports a single public type:
 - `RedisRouteCache<P>` – A type alias for the concrete Redis-backed cache
   implementation. This is the only public entry point for production code.
 
-The internal generic `GenericRedisRouteCache<P, C>` and its connection provider
-trait are crate-private (`pub(crate)`) to prevent leaking implementation
-details into the public API:
+The generic `GenericRedisRouteCache<P, C>` struct and the
+`ConnectionProvider` trait are exported as `pub`, but they are considered
+implementation details rather than part of the public API contract. The same
+applies to `RedisPoolProvider`, which exists to back `RedisRouteCache<P>` with
+`bb8-redis` pooling:
 
-- `GenericRedisRouteCache<P, C>` – Internal generic struct parameterized over
-the connection provider type `C`. This enables test doubles while keeping the
-public surface minimal.
-- `ConnectionProvider` – Internal trait abstracting over Redis connections.
-Production uses `RedisPoolProvider` (wrapping `bb8_redis::bb8::Pool`), while
-tests substitute `FakeProvider` for fast, deterministic unit tests.
+- `GenericRedisRouteCache<P, C>` – Generic struct parameterized over the
+connection provider type `C`. This enables test doubles while the production
+entry point stays focused on `RedisRouteCache<P>`.
+- `ConnectionProvider` – Trait abstracting over Redis connections. Production
+uses `RedisPoolProvider` (wrapping `bb8_redis::bb8::Pool`), while tests
+substitute `FakeProvider` for fast, deterministic unit tests.
 
 ### Test infrastructure
 
