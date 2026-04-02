@@ -128,13 +128,12 @@ lint-makefile:
 	mbake validate Makefile
 
 define LINT_ACTIONS_CMD
-$(call ensure_tool,yamllint)
 $(call ensure_tool,action-validator)
 $(call ensure_tool,actionlint)
 @if [ ! -d .github/actions ]; then \
   echo "No composite actions found; skipping lint-actions"; \
 else \
-  find .github/actions -name 'action.yml' -print0 | xargs -0 -r yamllint; \
+  find .github/actions -name 'action.yml' -print0 | xargs -0 -r uvx yamllint; \
   while IFS= read -r -d '' action; do \
     echo "$$action:"; \
     action-validator "$$action"; \
@@ -143,7 +142,7 @@ fi
 @if [ ! -d .github/workflows ]; then \
   echo "No workflows found; skipping workflow lint"; \
 else \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r yamllint; \
+  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r uvx yamllint; \
   find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint; \
 fi
 endef
@@ -236,5 +235,5 @@ nixie:
 	nixie --no-sandbox
 
 yamllint:
-	command -v helm >/dev/null && command -v yamllint >/dev/null && command -v yq >/dev/null
-	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | yamllint -f parsable -
+	command -v helm >/dev/null && command -v uv >/dev/null && command -v yq >/dev/null
+	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | uvx yamllint -f parsable -
