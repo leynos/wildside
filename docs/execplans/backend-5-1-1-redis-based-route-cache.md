@@ -124,8 +124,9 @@ Observable success criteria:
   Mitigation: use the repo-local `redis-server` binary as the supported
   test harness. Tests requiring a live Redis server are marked with
   `#[ignore]` and must be run explicitly via `cargo test -- --ignored`.
-  The `deploy/docker-compose.yml` provides a Redis service for local
-  development and CI environments.
+  If the project later adds Redis to `deploy/docker-compose.yml`, treat that as
+  an optional convenience for local development rather than the required test
+  harness for this plan.
 
 - Risk: replacing the stub outright may break tests or code paths that assumed
   a no-op adapter existed in production code.
@@ -398,9 +399,9 @@ Stage D: document the architectural scope explicitly.
 Update `docs/wildside-backend-architecture.md` to record that roadmap item
 5.1.1 introduces the Redis-backed `RouteCache` adapter and connection pooling,
 but does not yet enable route result reuse in runtime request flows. Document
-that the test harness uses a real `redis-server` binary (provided via the
-repo-local compose stack) and that tests requiring a live Redis server are
-marked with `#[ignore]` for opt-in execution.
+that the test harness uses a real `redis-server` binary started directly by the
+tests, and that tests requiring a live Redis server are marked with `#[ignore]`
+for opt-in execution.
 
 Only after the implementation, tests, and full gates pass should
 `docs/backend-roadmap.md` mark 5.1.1 done.
