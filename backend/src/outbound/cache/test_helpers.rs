@@ -76,28 +76,28 @@ impl TestPlan {
 /// Assert that a cache correctly round-trips a default test plan.
 ///
 /// Delegates to `assert_put_get_round_trips_with_plan` with `P::default()`.
-pub async fn assert_put_get_round_trips<P>(cache: &impl RouteCache<Plan = P>)
+pub async fn assert_put_get_round_trips<P>(
+    cache: &impl RouteCache<Plan = P>,
+) -> Result<(), RouteCacheError>
 where
     P: Clone + PartialEq + std::fmt::Debug + Default,
 {
-    assert_put_get_round_trips_with_plan(cache, &P::default()).await;
+    assert_put_get_round_trips_with_plan(cache, &P::default()).await
 }
 
 /// Assert that a cache correctly round-trips a specific plan instance.
-pub async fn assert_put_get_round_trips_with_plan<P>(cache: &impl RouteCache<Plan = P>, plan: &P)
+pub async fn assert_put_get_round_trips_with_plan<P>(
+    cache: &impl RouteCache<Plan = P>,
+    plan: &P,
+) -> Result<(), RouteCacheError>
 where
     P: Clone + PartialEq + std::fmt::Debug,
 {
-    let key = RouteCacheKey::new("route:round-trip").unwrap_or_else(|e| {
-        panic!("valid key: {e}");
-    });
-    cache
-        .put(&key, plan)
-        .await
-        .unwrap_or_else(|e| panic!("put succeeds: {e}"));
-    let loaded = cache
-        .get(&key)
-        .await
-        .unwrap_or_else(|e| panic!("get succeeds: {e}"));
+    let key = RouteCacheKey::new("route:round-trip").map_err(|error| RouteCacheError::Backend {
+        message: error.to_string(),
+    })?;
+    cache.put(&key, plan).await?;
+    let loaded = cache.get(&key).await?;
     assert_eq!(loaded, Some(plan.clone()));
+    Ok(())
 }
