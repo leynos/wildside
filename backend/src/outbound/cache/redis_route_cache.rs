@@ -80,7 +80,7 @@ impl ConnectionProvider for RedisPoolProvider {
     }
 }
 
-/// Generic adapter parameterised over the connection provider.
+/// Generic adapter parameterized over the connection provider.
 ///
 /// Production code uses the [`RedisRouteCache`] type alias which fixes the
 /// provider to `RedisPoolProvider`. Unit tests substitute a fake provider to
@@ -170,7 +170,7 @@ impl<P, C> GenericRedisRouteCache<P, C> {
     /// This constructor is crate-private and intended for test use only.
     /// Production code should use [`RedisRouteCache::connect`] or
     /// [`RedisRouteCache::new`].
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(crate) fn with_provider(provider: C) -> Self {
         Self {
             provider,

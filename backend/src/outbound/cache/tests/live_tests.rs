@@ -9,7 +9,6 @@
 //! ```
 
 use bb8_redis::{RedisConnectionManager, bb8::Pool, redis::cmd};
-use serde::{Deserialize, Serialize};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::RedisRouteCache;
