@@ -140,6 +140,122 @@ When adding a new behaviour:
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
 
+## Redis cache adapter testing
+
+The backend includes a Redis-backed `RouteCache` adapter for caching route
+computation results. The adapter uses `bb8-redis` for connection pooling and
+implements the hexagonal `RouteCache` port defined in the domain layer.
+
+### Architecture and public API
+
+Public production API:
+
+- `RedisRouteCache<P>` – A type alias for the concrete Redis-backed cache
+  implementation. This is the supported public entry point for production code.
+
+Implementation details within `outbound::cache`:
+
+- `GenericRedisRouteCache<P, C>` – Declared `pub` inside the private
+  `redis_route_cache` module, but not re-exported from `outbound::cache`, so it
+  is not part of the crate's supported public API. It parameterizes the adapter
+  over the connection provider type `C` so tests can substitute doubles.
+- `ConnectionProvider` – Declared `pub` inside the private
+  `redis_route_cache` module, but not re-exported from `outbound::cache`, so it
+  remains an implementation detail rather than a supported public extension
+  point. Production uses `RedisPoolProvider`, while tests substitute
+  `FakeProvider`.
+- `RedisPoolProvider` – Declared `pub` inside the private `redis_route_cache`
+  module, but not re-exported from `outbound::cache`. It backs
+  `RedisRouteCache<P>` with `bb8-redis` pooling and remains an internal
+  implementation detail.
+
+### Test infrastructure
+
+The Redis adapter test suite uses a dual-mode approach:
+
+**Mock-based unit tests** (run by default):
+
+- Located in `backend/src/outbound/cache/tests/mock_tests.rs`
+- Use `FakeProvider` – an in-memory `ConnectionProvider` double
+- Fast, deterministic, no external dependencies
+- Run as part of the standard `cargo test` / `make test` gate
+
+**Live Redis integration tests** (opt-in):
+
+- Located in `backend/src/outbound/cache/tests/live_tests.rs`
+- Require a `redis-server` binary on `PATH`
+- Marked with `#[ignore = "requires redis-server binary..."]`
+- Run explicitly with: `cargo test -- --ignored`
+
+### RedisTestServer harness
+
+Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
+
+```rust
+use backend::test_support::redis::RedisTestServer;
+
+// Start a temporary redis-server process on an ephemeral port
+let server = RedisTestServer::start().await?;
+
+// Get a connection URL
+let url = server.redis_url(); // e.g., "redis://127.0.0.1:12345/"
+
+// Build a bb8-redis pool (requires test-support feature)
+let pool = server.pool().await?;
+
+// Or seed raw bytes for error-path testing
+server.seed_raw_bytes("key", vec![0xff, 0xfe]).await?;
+```
+
+The harness spawns a real `redis-server` process with:
+
+- Ephemeral port binding (`127.0.0.1:0`)
+- Disabled persistence (`--save "" --appendonly no`)
+- Temporary working directory (automatically cleaned up on drop)
+- Process termination on drop (via `Drop` impl)
+
+### Build requirements
+
+The cache adapter requires:
+
+**Production dependencies:**
+
+- `bb8-redis` – Connection pooling for `redis-rs`
+- `serde` / `serde_json` – Payload serialization
+
+**Test infrastructure:**
+
+- `test-support` feature flag – Enables `RedisRouteCache::new()` constructor
+  and `RedisTestServer::pool()` for test injection
+- `redis-server` binary – Required for live integration tests (not for unit
+tests using `FakeProvider`)
+
+To run live Redis tests locally:
+
+```bash
+# Ensure redis-server is available
+which redis-server
+
+# Run ignored tests explicitly
+cargo test -p backend --lib outbound::cache -- --ignored
+```
+
+### Adapter boundaries
+
+The hexagonal boundary is enforced via visibility:
+
+| Component                      | Visibility                  | Purpose                              |
+|--------------------------------|-----------------------------|--------------------------------------|
+| `RedisRouteCache<P>`           | `pub`                       | Public adapter for domain use        |
+| `GenericRedisRouteCache<P, C>` | Internal; not re-exported   | Generic adapter implementation       |
+| `ConnectionProvider`           | Internal; not re-exported   | Test seam for connection abstraction |
+| `RedisPoolProvider`            | Internal; not re-exported   | Production `ConnectionProvider` impl |
+| `test_helpers::FakeProvider`   | `pub` (test-only)           | In-memory test double                |
+| `RedisTestServer`              | `pub` (test-support)        | Live server harness                  |
+
+Domain code depends only on the `RouteCache` port trait. The Redis adapter
+implements this port without exposing `bb8-redis` types in the public API.
+
 ## Operational references
 
 - For local command quick reference and embedded PostgreSQL worker setup:
