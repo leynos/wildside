@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: BLOCKED (Dependency Conflict)
 
 This plan covers roadmap item 5.2.1 only:
 `Implement RouteQueue using Apalis with PostgreSQL backend, replacing the
@@ -224,14 +224,18 @@ Hand-off order:
 
 ## Progress
 
-- [ ] Review roadmap item 5.2.1, the current `RouteQueue` port, the stub
+- [x] Review roadmap item 5.2.1, the current `RouteQueue` port, the stub
   adapter, the architecture guidance, and the testing guides.
-- [ ] Confirm that no current runtime service or server builder dispatches to
+- [x] Confirm that no current runtime service or server builder dispatches to
   `RouteQueue`; verify the change is adapter-first.
-- [ ] Draft this ExecPlan at
+- [x] Draft this ExecPlan at
   `docs/execplans/backend-5-2-1-apalis-route-queue.md`.
-- [ ] Await approval gate.
-- [ ] Add `apalis-postgres` and related dependencies to `backend/Cargo.toml`.
+- [x] Await approval gate.
+- [x] Run baseline queue tests (`/tmp/5-2-1-queue-baseline.out` - 1 passing test confirmed)
+- [BLOCKED] Add `apalis-postgres` and related dependencies to `backend/Cargo.toml`.
+  - Attempted with apalis-postgres 1.0.0-rc.6, apalis-sql 0.7.x, multiple resolution strategies
+  - Blocked by libsqlite3-sys native library conflict (see Surprises & discoveries #1)
+  - Log: `/tmp/5-2-1-check-deps.out`, `/tmp/5-2-1-check-deps-0.7.out`, `/tmp/5-2-1-check-deps-workspace-patch.out`
 - [ ] Create `backend/src/outbound/queue/apalis_route_queue.rs` with the
   adapter struct, connection provider trait, and error mapping.
 - [ ] Create `backend/src/outbound/queue/test_helpers.rs` with a fake provider
@@ -255,7 +259,43 @@ Hand-off order:
 
 ## Surprises & discoveries
 
-(To be populated during implementation.)
+### Discovery 1: Dependency conflict blocks apalis-postgres integration (2026-04-03)
+
+**Issue**: Cannot add `apalis-postgres` (either 1.0.0-rc.6 or apalis-sql 0.7.x) due to a `libsqlite3-sys` native library version conflict:
+
+- `wildside-data` (git dependency at rev 894aa38) depends on `rusqlite` 0.31 → `libsqlite3-sys` 0.28
+- `pg-embed-setup-unpriv` 0.5.0 (used for test infrastructure) depends on `postgresql_embedded` 0.20.1 → `sqlx` 0.8.6 → `libsqlite3-sys` 0.30+
+- Cargo enforces that only one version of a native library (`sqlite3`) can be linked per binary
+
+**Attempted resolutions (all failed)**:
+- Adjusting version constraints for `url`, `hex`, `postgresql_embedded`
+- Disabling sqlx default features
+- Explicitly adding `rusqlite` 0.32 or `libsqlite3-sys` 0.30 to backend/Cargo.toml
+- Using `[patch.crates-io]` at workspace level (patches require different source, can't patch crates.io with crates.io)
+- Using `[workspace.dependencies]` (doesn't override git dependency locks)
+- Switching to apalis 0.7.x stable (still blocked by pg-embed-setup-unpriv → sqlx 0.8)
+
+**Root cause**: The git dependency `wildside-data` is locked to a specific revision that uses rusqlite 0.31, and Cargo cannot override transitive dependencies of git sources.
+
+**Options forward**:
+
+1. **Update wildside-engine upstream**: Modify the wildside-engine repository to use rusqlite 0.32+, then update the git revision in this project
+   - Pros: Clean resolution, no workarounds
+   - Cons: Requires upstream coordination, blocks this task
+
+2. **Use apalis-core directly without apalis-postgres**: Implement a custom PostgreSQL storage adapter using Diesel instead of sqlx
+   - Pros: Avoids sqlx entirely, keeps Diesel as single DB access layer
+   - Cons: Significantly more implementation work, diverges from roadmap plan
+
+3. **Use an alternate job queue library**: Evaluate alternatives like `fang`, `tokio-cron-scheduler`, or custom implementation
+   - Pros: May avoid dependency conflicts
+   - Cons: Deviates from approved roadmap, requires re-evaluation of architecture
+
+4. **Defer 5.2.1 until wildside-data conflict is resolved**: Mark this task as blocked and continue with other roadmap items
+   - Pros: Clean path forward once unblocked
+   - Cons: Delays queue functionality
+
+**Recommendation**: Escalate to project stakeholders for decision. This is a structural dependency conflict that cannot be resolved through standard Cargo mechanisms without either upstream changes or significant architectural divergence from the approved plan.
 
 ## Decision log
 
