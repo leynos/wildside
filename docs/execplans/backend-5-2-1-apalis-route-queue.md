@@ -301,6 +301,24 @@ Hand-off order:
   migrations complete.
   Date/Author: 2026-04-03 / planning team.
 
+- Decision: use PostgreSQL rather than AMQP (RabbitMQ / LavinMQ) as the
+  queue backend for 5.2.1, on the explicit condition that the `QueueProvider`
+  abstraction provides sufficient isolation to migrate to an AMQP backend at
+  a later date should volume warrant it.
+  Rationale: PostgreSQL is already provisioned in production and in the test
+  harness (`pg-embedded-setup-unpriv`), so the adapter can be tested and
+  deployed with zero new infrastructure. AMQP would require a new broker
+  service in production, a new test harness (no embedded RabbitMQ equivalent
+  exists for Rust), and depends on the less mature `apalis-amqp` crate. The
+  hexagonal boundary — specifically the `QueueProvider` trait and the
+  domain-owned `RouteQueue` port — ensures that swapping to an
+  `ApalisAmqpProvider` is a contained adapter change: the domain port, all
+  `FakeQueueProvider` unit tests, and consuming services remain untouched.
+  If queue throughput or routing/fanout requirements outgrow PostgreSQL
+  `NOTIFY`/`SKIP LOCKED`, the migration path is to implement a new provider
+  behind the same trait and update the composition root.
+  Date/Author: 2026-04-03 / planning team.
+
 - Decision: the architecture document will be updated to reflect that the
   queue backend is PostgreSQL (via `apalis-postgres`), not Redis, for job
   storage. The older architecture prose references Redis as the job broker;
