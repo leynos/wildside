@@ -223,7 +223,7 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
   backed by unit tests for cursor round-tripping.
 - [x] 4.1.2. Add support for direction-aware cursors (`Next` and `Prev`) with
   serde-based encoding and property tests ensuring decode-encode stability.
-- [ ] 4.1.3. Publish crate-level documentation outlining ordering
+- [x] 4.1.3. Publish crate-level documentation outlining ordering
   requirements, default and maximum limits (20 and 100), and error mapping
   guidelines.
 

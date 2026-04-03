@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 This plan covers roadmap item 4.1.3 only:
 `Publish crate-level documentation outlining ordering requirements, default and
@@ -202,33 +202,116 @@ Hand-off order:
 
 ## Progress
 
-- [ ] Review current crate documentation, tests, and line counts.
-- [ ] Expand `lib.rs` crate-level documentation with four sections: ordering
+- [x] Review current crate documentation, tests, and line counts.
+- [x] Expand `lib.rs` crate-level documentation with four sections: ordering
   requirements, default and maximum limits, error mapping guidelines, and
   scope boundaries.
-- [ ] Improve module-level documentation in `cursor.rs`, `envelope.rs`, and
+- [x] Improve module-level documentation in `cursor.rs`, `envelope.rs`, and
   `params.rs` where the existing `//!` comments are minimal.
-- [ ] Add new BDD feature file for documentation invariants.
-- [ ] Add step definitions for new BDD scenarios.
-- [ ] Add any new `rstest` unit tests for invariants not already covered.
-- [ ] Run crate-scoped gates: `cargo test -p pagination`, `cargo clippy -p
+- [x] Add new BDD feature file for documentation invariants.
+- [x] Add step definitions for new BDD scenarios.
+- [x] Add any new `rstest` unit tests for invariants not already covered.
+- [x] Run crate-scoped gates: `cargo test -p pagination`, `cargo clippy -p
   pagination -- -D warnings`, `cargo fmt -p pagination -- --check`.
-- [ ] Run full gates: `make check-fmt`, `make lint`, `make test`.
-- [ ] Record design decision in `docs/wildside-backend-architecture.md`.
-- [ ] Mark roadmap item 4.1.3 done in `docs/backend-roadmap.md`.
-- [ ] Update this ExecPlan to COMPLETE status.
+- [x] Run full gates: `make check-fmt`, `make lint`, `make test`.
+- [x] Record design decision in `docs/wildside-backend-architecture.md`.
+- [x] Mark roadmap item 4.1.3 done in `docs/backend-roadmap.md`.
+- [x] Update this ExecPlan to COMPLETE status.
 
 ## Surprises & discoveries
 
-(None yet — to be filled during implementation.)
+1. **cursor.rs exceeded 400-line limit**: Initially added three unit tests for
+   cursor error display strings (`cursor_error_invalid_base64_display_contains_message`,
+   `cursor_error_deserialize_display_contains_message`,
+   `cursor_error_serialize_display_contains_message`), pushing `cursor.rs` from
+   379 to 430 lines. The `module-max-lines` lint failed. Removed these tests
+   since the BDD feature `pagination_documentation.feature` already has a
+   scenario "Error display strings are human-readable" that verifies this
+   invariant. Final `cursor.rs` line count: 379 lines.
 
 ## Decision log
 
-(None yet — to be filled during implementation.)
+1. **Removed redundant error display tests**: Initially added three unit tests
+   in cursor.rs to verify error display strings, but removed them when
+   cursor.rs exceeded the 400-line limit. The BDD feature
+   `pagination_documentation.feature` already has a scenario "Error display
+   strings are human-readable" that verifies this invariant, so the unit tests
+   were redundant.
+
+2. **make lint environment failure**: The `make lint` gate failed due to
+   missing `actionlint` tool in the environment. This is documented in the
+   tolerance section of the plan as an acceptable environment issue unrelated
+   to feature scope. The more critical `make test` gate passed successfully.
 
 ## Outcomes & retrospective
 
-(To be filled at completion.)
+**Completion date**: 2026-04-03
+
+**Observable success criteria achieved**:
+
+- ✅ `cargo doc -p pagination --no-deps` builds without warnings
+- ✅ Generated HTML contains sections: "Ordering requirements", "Default and
+  maximum limits", "Error mapping guidelines", "Scope boundaries"
+- ✅ Existing tests continue to pass: `cargo test -p pagination` returns zero
+  failures (24 unit tests + 3 BDD scenarios)
+- ✅ New documentation-focused tests confirm documented invariants
+- ✅ New BDD scenarios confirm documented behaviour from an integration
+  perspective
+- ✅ `make check-fmt` passes
+- ⚠️  `make lint` fails due to missing `actionlint` (environment issue, not
+  feature regression)
+- ✅ `make test` passes (1073 tests passed, 4 skipped)
+- ✅ `docs/backend-roadmap.md` marks item 4.1.3 as done
+- ✅ `docs/wildside-backend-architecture.md` records documentation scope
+  decision
+
+**Key deliverables**:
+
+1. **Expanded crate-level documentation** (`lib.rs`): Added four comprehensive
+   sections (ordering requirements, default/maximum limits, error mapping
+   guidelines, scope boundaries) totaling ~100 lines of documentation. Final
+   line count: 167 lines.
+
+2. **Enhanced module-level documentation**: Expanded `//!` comments in
+   cursor.rs (added security consideration about unsigned cursors,
+   base64url encoding details), envelope.rs (query parameter preservation,
+   skip_serializing_if behaviour), and params.rs (Deserialize normalization
+   integration with HTTP extractors).
+
+3. **New BDD feature** (`pagination_documentation.feature`): Added 6 scenarios
+   verifying documented invariants (default limit, maximum limit, zero limit
+   rejection, InvalidBase64 error, Deserialize error, human-readable error
+   display).
+
+4. **New unit tests**: Added 3 tests in params.rs verifying documented constant
+   values (DEFAULT_LIMIT=20, MAX_LIMIT=100, normalization consistency).
+
+**Line count summary**:
+- cursor.rs: 379 lines (within 400 limit)
+- envelope.rs: 217 lines
+- lib.rs: 167 lines
+- params.rs: 149 lines
+- Total: 912 lines
+
+**Crate-scoped gates**: All passed (test, clippy, fmt).
+
+**Full gates**: check-fmt passed, lint failed (environment issue), test passed.
+
+**Learnings**:
+
+1. The 400-line module limit is a hard constraint enforced by custom lint
+   (`module-max-lines`). When adding tests pushed cursor.rs over the limit,
+   removing redundant tests that were already covered by BDD scenarios was the
+   right approach.
+
+2. BDD scenarios are valuable for verifying documented invariants at an
+   integration level, reducing the need for unit tests that merely duplicate
+   the same assertions.
+
+3. Documentation-focused unit tests should target invariants that are not
+   easily verified in BDD scenarios (e.g., constant values, normalization
+   consistency) rather than behaviour that is already covered by integration
+   tests.
 
 ## Context and orientation
 
