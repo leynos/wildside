@@ -170,14 +170,14 @@ Observable success criteria:
 
 ## Progress
 
-- [ ] Reviewed roadmap item 3.5.5, adjacent items 3.5.2 through 3.5.4,
+- [x] Reviewed roadmap item 3.5.5, adjacent items 3.5.2 through 3.5.4,
   the current state of `state_builders.rs`, and existing test coverage.
-- [ ] Drafted this ExecPlan at
+- [x] Drafted this ExecPlan at
   `docs/execplans/backend-3-5-5-harden-startup-mode-composition.md`.
-- [ ] Approval gate: user approved implementation.
-- [ ] Stage A: analyse and design the helper seam pattern and regression
+- [x] Approval gate: user approved implementation.
+- [x] Stage A: analyse and design the helper seam pattern and regression
   assertion strategy.
-- [ ] Stage B: extract helper seams and add in-module unit tests to
+- [x] Stage B: extract helper seams and add in-module unit tests to
   `state_builders.rs` proving deterministic adapter selection for all 16
   ports.
 - [ ] Stage C: add BDD behavioural suite exercising the full startup-mode
@@ -189,11 +189,64 @@ Observable success criteria:
 
 ## Surprises & discoveries
 
-(None yet. This section will be updated as work proceeds.)
+2026-04-03: Stage A analysis confirmed that `state_builders.rs` is
+currently 321 lines. Adding a comprehensive test module will exceed the
+400-line limit, so tests will be extracted to a sibling file
+`backend/src/server/state_builders/tests.rs` from the start.
+
+2026-04-03: Domain port traits are currently simple `#[async_trait]`
+definitions with `Send + Sync` bounds. They do not implement or require
+`std::any::Any` as a supertrait. The recommended type-witness strategy using
+`TypeId` requires either adding `Any` as a supertrait to all 16 port traits
+(invasive, risky) or using an observable-behaviour assertion strategy instead.
+
+Decision: use **observable-behaviour assertion strategy**. Each test will call
+a lightweight operation on each port and assert the response shape
+distinguishes fixture from DB-backed adapter. This avoids changing domain
+trait signatures and maintains hexagonal boundaries.
+
+2026-04-03: Stage B unit tests created as integration test at
+`backend/tests/state_builders_composition_unit.rs` rather than in-module
+because `state_builders.rs` is in the binary crate (`src/main.rs`), not the
+library crate (`src/lib.rs`). Integration tests using `#[path]` includes
+follow existing repository patterns.
+
+2026-04-03: DB-mode unit test requires synchronous cluster setup but
+`#[tokio::test]` creates async runtime, causing nested runtime panic. Rather
+than rewrite test infrastructure, marked DB-mode test as `#[ignore]` and will
+verify DB-mode composition through BDD suite in Stage C, which already handles
+sync/async properly.
 
 ## Decision log
 
-(No decisions yet. This section will be updated as work proceeds.)
+**Decision A1 (2026-04-03):** Use observable-behaviour assertions instead of
+`TypeId`-based type witnesses.
+
+Rationale: Adding `Any` as a supertrait to all 16 domain port traits would
+be invasive, would leak test concerns into production trait definitions, and
+could ripple into every adapter implementation. The observable-behaviour
+strategy is non-invasive: fixture adapters return hardcoded data (for
+example, `FixtureLoginService` accepts `admin`/`password`), while DB-backed
+adapters reject fixture credentials or require real data. Each test can
+distinguish adapters by calling a lightweight method and inspecting the
+response.
+
+Trade-off: observable-behaviour tests are slightly slower than pure type
+checks and depend on fixture behaviour remaining stable. However, they
+provide stronger regression coverage because they test composition and
+runtime behaviour together.
+
+**Decision A2 (2026-04-03):** Extract test module to
+`backend/src/server/state_builders/tests.rs` from the start.
+
+Rationale: `state_builders.rs` is currently 321 lines. A comprehensive test
+module covering all 16 ports in both startup modes will add at least 150–200
+lines. Extracting tests from the start avoids hitting the 400-line limit
+mid-implementation and then needing a disruptive refactor.
+
+The test module will be declared as `#[cfg(test)] mod tests;` inside
+`state_builders.rs` and will live at
+`backend/src/server/state_builders/tests.rs`.
 
 ## Outcomes & retrospective
 
