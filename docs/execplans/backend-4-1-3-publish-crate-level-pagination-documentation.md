@@ -287,6 +287,7 @@ Hand-off order:
    values (DEFAULT_LIMIT=20, MAX_LIMIT=100, normalization consistency).
 
 **Line count summary**:
+
 - cursor.rs: 379 lines (within 400 limit)
 - envelope.rs: 217 lines
 - lib.rs: 167 lines
