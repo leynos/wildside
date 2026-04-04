@@ -237,5 +237,6 @@ nixie:
 	nixie --no-sandbox
 
 yamllint:
-	command -v helm >/dev/null && command -v uv >/dev/null && command -v yq >/dev/null
+	$(call ensure_tool,helm)
+	$(call ensure_tool,uv)
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint -f parsable -
