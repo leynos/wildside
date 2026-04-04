@@ -5,7 +5,6 @@
 //! across both fixture-fallback and DB-present startup modes, proving that
 //! adapter selection remains deterministic as wiring evolves.
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -22,14 +21,15 @@ use backend::inbound::http::offline::list_offline_bundles;
 use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::outbound::persistence::{DbPool, PoolConfig};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
-use postgres::{Client, NoTls};
 use serde_json::Value;
 use uuid::Uuid;
 
 use super::support::atexit_cleanup::shared_cluster_handle;
 use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
-use super::support::{format_postgres_error, provision_template_database};
+use super::support::provision_template_database;
 use super::{ServerConfig, state_builders};
 
 /// Snapshot of an HTTP response for assertion purposes.
@@ -63,9 +63,9 @@ pub(crate) struct World {
     pub(crate) skip_reason: Option<String>,
 }
 
-fn run_async<T>(future: impl Future<Output = T>) -> T {
+fn run_async<T>(future: impl std::future::Future<Output = T>) -> T {
     tokio::runtime::Runtime::new()
-        .expect("runtime")
+        .expect("create runtime")
         .block_on(future)
 }
 
@@ -137,20 +137,26 @@ pub(crate) fn setup_db_context() -> Result<DbContext, String> {
 }
 
 /// Seed a user into the DB for testing.
-pub(crate) fn seed_user(url: &str, user_id: Uuid, display_name: &str) -> Result<(), String> {
-    let mut client = Client::connect(url, NoTls).map_err(|error| format_postgres_error(&error))?;
-    client
-        .execute(
-            "INSERT INTO users (id, display_name) VALUES ($1, $2)",
-            &[&user_id, &display_name],
-        )
-        .map_err(|error| format_postgres_error(&error))
-        .map(|_| ())
+pub(crate) fn seed_user(pool: &DbPool, user_id: Uuid, display_name: &str) -> Result<(), String> {
+    run_async(async {
+        let mut conn = pool.get().await.map_err(|error| error.to_string())?;
+        diesel::sql_query("INSERT INTO users (id, display_name) VALUES ($1, $2)")
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<diesel::sql_types::Text, _>(display_name)
+            .execute(&mut conn)
+            .await
+            .map_err(|error| error.to_string())
+            .map(|_| ())
+    })
 }
 
 /// Execute the comprehensive startup-mode flow exercising all major port
 /// groups.
 pub(crate) fn run_comprehensive_flow(world: &mut World) {
+    run_async(run_comprehensive_flow_async(world));
+}
+
+async fn run_comprehensive_flow_async(world: &mut World) {
     if is_skipped(world) {
         return;
     }
@@ -186,7 +192,8 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
                     .service(create_walk_session)
                     .service(list_enrichment_provenance),
             ),
-    );
+    )
+    .await;
 
     // Login to establish session
     let login_payload = LoginRequest {
@@ -198,21 +205,20 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
         .set_json(&login_payload)
         .to_request();
 
-    let app = run_async(app);
-    let login_resp = run_async(actix_test::call_service(&app, login_req));
+    let login_resp = actix_test::call_service(&app, login_req).await;
     let login_status = login_resp.status().as_u16();
-    let login_headers = login_resp.headers().clone();
-    let login_body_bytes = run_async(actix_test::read_body(login_resp));
-    let login_body = parse_json_body(&login_body_bytes);
-    let session_cookie = login_headers
-        .get("set-cookie")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|cookie_str| Cookie::parse(cookie_str).ok())
-        .map(|c| c.into_owned());
-    let login_trace_id = login_headers
+    let login_trace_id = login_resp
+        .headers()
         .get(TRACE_ID_HEADER)
         .and_then(|value| value.to_str().ok())
         .map(|s| s.to_owned());
+    let session_cookie = login_resp
+        .response()
+        .cookies()
+        .find(|cookie| cookie.name() == "session")
+        .map(|cookie| cookie.into_owned());
+    let login_body_bytes = actix_test::read_body(login_resp).await;
+    let login_body = parse_json_body(&login_body_bytes);
 
     world.login = Some(Snapshot {
         status: login_status,
@@ -221,20 +227,20 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
         session_cookie: session_cookie.clone(),
     });
 
-    let cookie_value = match session_cookie.as_ref() {
-        Some(c) => c.to_string(),
+    let cookie = match session_cookie.as_ref() {
+        Some(c) => c,
         None => return, // Login failed, can't continue
     };
 
     // Profile GET
     let profile_req = actix_test::TestRequest::get()
         .uri("/api/v1/users/me")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .cookie(cookie.clone())
         .to_request();
-    let profile_resp = run_async(actix_test::call_service(&app, profile_req));
+    let profile_resp = actix_test::call_service(&app, profile_req).await;
     let profile_status = profile_resp.status().as_u16();
     let profile_headers = profile_resp.headers().clone();
-    let profile_body_bytes = run_async(actix_test::read_body(profile_resp));
+    let profile_body_bytes = actix_test::read_body(profile_resp).await;
     let profile_body = parse_json_body(&profile_body_bytes);
     let profile_trace_id = profile_headers
         .get(TRACE_ID_HEADER)
@@ -250,12 +256,12 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
     // Preferences GET
     let prefs_get_req = actix_test::TestRequest::get()
         .uri("/api/v1/users/me/preferences")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .cookie(cookie.clone())
         .to_request();
-    let prefs_resp = run_async(actix_test::call_service(&app, prefs_get_req));
+    let prefs_resp = actix_test::call_service(&app, prefs_get_req).await;
     let prefs_status = prefs_resp.status().as_u16();
     let prefs_headers = prefs_resp.headers().clone();
-    let prefs_body_bytes = run_async(actix_test::read_body(prefs_resp));
+    let prefs_body_bytes = actix_test::read_body(prefs_resp).await;
     let prefs_body = parse_json_body(&prefs_body_bytes);
     let prefs_trace_id = prefs_headers
         .get(TRACE_ID_HEADER)
@@ -271,12 +277,12 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
     // Catalogue explore GET
     let catalogue_explore_req = actix_test::TestRequest::get()
         .uri("/api/v1/catalogue/explore")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .cookie(cookie.clone())
         .to_request();
-    let catalogue_explore_resp = run_async(actix_test::call_service(&app, catalogue_explore_req));
+    let catalogue_explore_resp = actix_test::call_service(&app, catalogue_explore_req).await;
     let catalogue_explore_status = catalogue_explore_resp.status().as_u16();
     let catalogue_explore_headers = catalogue_explore_resp.headers().clone();
-    let catalogue_explore_body_bytes = run_async(actix_test::read_body(catalogue_explore_resp));
+    let catalogue_explore_body_bytes = actix_test::read_body(catalogue_explore_resp).await;
     let catalogue_explore_body = parse_json_body(&catalogue_explore_body_bytes);
     let catalogue_explore_trace_id = catalogue_explore_headers
         .get(TRACE_ID_HEADER)
@@ -292,14 +298,14 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
     // Catalogue descriptors GET
     let catalogue_descriptors_req = actix_test::TestRequest::get()
         .uri("/api/v1/catalogue/descriptors")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .cookie(cookie.clone())
         .to_request();
     let catalogue_descriptors_resp =
-        run_async(actix_test::call_service(&app, catalogue_descriptors_req));
+        actix_test::call_service(&app, catalogue_descriptors_req).await;
     let catalogue_descriptors_status = catalogue_descriptors_resp.status().as_u16();
     let catalogue_descriptors_headers = catalogue_descriptors_resp.headers().clone();
     let catalogue_descriptors_body_bytes =
-        run_async(actix_test::read_body(catalogue_descriptors_resp));
+        actix_test::read_body(catalogue_descriptors_resp).await;
     let catalogue_descriptors_body = parse_json_body(&catalogue_descriptors_body_bytes);
     let catalogue_descriptors_trace_id = catalogue_descriptors_headers
         .get(TRACE_ID_HEADER)
@@ -314,13 +320,13 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
 
     // Offline bundles GET
     let offline_bundles_req = actix_test::TestRequest::get()
-        .uri("/api/v1/offline/bundles")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .uri("/api/v1/offline/bundles?deviceId=test-device")
+        .cookie(cookie.clone())
         .to_request();
-    let offline_bundles_resp = run_async(actix_test::call_service(&app, offline_bundles_req));
+    let offline_bundles_resp = actix_test::call_service(&app, offline_bundles_req).await;
     let offline_bundles_status = offline_bundles_resp.status().as_u16();
     let offline_bundles_headers = offline_bundles_resp.headers().clone();
-    let offline_bundles_body_bytes = run_async(actix_test::read_body(offline_bundles_resp));
+    let offline_bundles_body_bytes = actix_test::read_body(offline_bundles_resp).await;
     let offline_bundles_body = parse_json_body(&offline_bundles_body_bytes);
     let offline_bundles_trace_id = offline_bundles_headers
         .get(TRACE_ID_HEADER)
@@ -336,12 +342,12 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
     // Enrichment provenance GET (admin endpoint)
     let enrichment_req = actix_test::TestRequest::get()
         .uri("/api/v1/admin/enrichment/provenance")
-        .cookie(session_cookie.clone().expect("session cookie"))
+        .cookie(cookie.clone())
         .to_request();
-    let enrichment_resp = run_async(actix_test::call_service(&app, enrichment_req));
+    let enrichment_resp = actix_test::call_service(&app, enrichment_req).await;
     let enrichment_status = enrichment_resp.status().as_u16();
     let enrichment_headers = enrichment_resp.headers().clone();
-    let enrichment_body_bytes = run_async(actix_test::read_body(enrichment_resp));
+    let enrichment_body_bytes = actix_test::read_body(enrichment_resp).await;
     let enrichment_body = parse_json_body(&enrichment_body_bytes);
     let enrichment_trace_id = enrichment_headers
         .get(TRACE_ID_HEADER)
@@ -357,6 +363,10 @@ pub(crate) fn run_comprehensive_flow(world: &mut World) {
 
 /// Execute flow with invalid input to test validation error stability.
 pub(crate) fn run_validation_error_flow(world: &mut World) {
+    run_async(run_validation_error_flow_async(world));
+}
+
+async fn run_validation_error_flow_async(world: &mut World) {
     if is_skipped(world) {
         return;
     }
@@ -385,7 +395,8 @@ pub(crate) fn run_validation_error_flow(world: &mut World) {
                     .service(login)
                     .service(update_preferences),
             ),
-    );
+    )
+    .await;
 
     // Login to establish session
     let login_payload = LoginRequest {
@@ -397,13 +408,11 @@ pub(crate) fn run_validation_error_flow(world: &mut World) {
         .set_json(&login_payload)
         .to_request();
 
-    let app = run_async(app);
-    let login_resp = run_async(actix_test::call_service(&app, login_req));
+    let login_resp = actix_test::call_service(&app, login_req).await;
     let session_cookie = login_resp
-        .headers()
-        .get("set-cookie")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|cookie_str| Cookie::parse(cookie_str).ok())
+        .response()
+        .cookies()
+        .find(|c| c.name() == "session")
         .map(|c| c.into_owned());
 
     if session_cookie.is_none() {
@@ -423,10 +432,10 @@ pub(crate) fn run_validation_error_flow(world: &mut World) {
         .insert_header(("idempotency-key", "550e8400-e29b-41d4-a716-446655440000"))
         .set_json(&invalid_prefs)
         .to_request();
-    let prefs_resp = run_async(actix_test::call_service(&app, prefs_req));
+    let prefs_resp = actix_test::call_service(&app, prefs_req).await;
     let prefs_status = prefs_resp.status().as_u16();
     let prefs_headers = prefs_resp.headers().clone();
-    let prefs_body_bytes = run_async(actix_test::read_body(prefs_resp));
+    let prefs_body_bytes = actix_test::read_body(prefs_resp).await;
     let prefs_body = parse_json_body(&prefs_body_bytes);
     let prefs_trace_id = prefs_headers
         .get(TRACE_ID_HEADER)
