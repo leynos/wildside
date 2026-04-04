@@ -1,100 +1,38 @@
-//! Placeholder for future Apalis job queue adapter.
+//! Queue adapters for the `RouteQueue` port.
 //!
-//! This module provides a stub implementation of the `RouteQueue` port that
-//! discards all enqueued jobs. It serves as a structural placeholder until
-//! the Apalis-backed implementation is completed.
+//! This module provides implementations of the `RouteQueue` port:
+//!
+//! - [`StubRouteQueue`]: A no-op stub that discards all jobs (for development)
+//! - [`ApalisRouteQueue`]: Production adapter using Apalis with PostgreSQL storage
+//!
+//! # Architecture
+//!
+//! The queue adapters follow the hexagonal architecture pattern, implementing
+//! the domain-owned [`RouteQueue`](crate::domain::ports::RouteQueue) port with
+//! infrastructure-specific details isolated in this module.
+//!
+//! The Apalis adapter uses a provider abstraction ([`QueueProvider`](apalis_route_queue::QueueProvider))
+//! to enable unit testing without PostgreSQL, following the same pattern as
+//! [`RedisRouteCache`](crate::outbound::cache::RedisRouteCache).
 //!
 //! # Future Implementation
 //!
-//! The full Apalis implementation will:
-//! - Use `apalis` with PostgreSQL or Redis as the message broker
-//! - Define job structs (`GenerateRouteJob`, `EnrichmentJob`)
-//! - Implement retry policies with exponential backoff
-//! - Support dead-letter handling for failed jobs
-//! - Propagate trace IDs through job metadata for observability
+//! The full queue system will include:
+//! - Worker consumption of enqueued jobs
+//! - Job struct definitions (`GenerateRouteJob`, `EnrichmentJob`)
+//! - Retry policies with exponential backoff
+//! - Dead-letter handling for failed jobs
+//! - Trace ID propagation through job metadata
 //!
-//! # Roadmap
-//!
-//! See `docs/backend-roadmap.md` for the Apalis queue implementation tasks.
+//! See `docs/backend-roadmap.md` section 5.2 for the implementation roadmap.
 
-use std::marker::PhantomData;
-use std::sync::Once;
+mod stub_route_queue;
+pub use stub_route_queue::StubRouteQueue;
 
-use async_trait::async_trait;
-
-use crate::domain::ports::{JobDispatchError, RouteQueue};
-
-/// Guard to ensure the stub warning is only logged once per process.
-static STUB_WARNING_LOGGED: Once = Once::new();
-
-/// Stub queue implementation that discards all jobs.
-///
-/// This placeholder implements the `RouteQueue` port with no-op behaviour,
-/// allowing the application to compile and run without a job queue backend.
-/// All `enqueue` operations succeed but the job is not persisted or processed.
-///
-/// The generic parameter `P` allows this stub to be used with any plan type,
-/// enabling transparent substitution when the real Apalis adapter is introduced.
-///
-/// A warning is logged on first use to alert developers that jobs are being
-/// discarded. The warning is gated by a `Once` guard to avoid log flooding.
-///
-/// # Why Default is manually implemented
-///
-/// Deriving `Default` on a generic struct adds a `P: Default` bound, but
-/// `PhantomData<P>` implements `Default` unconditionally. The manual impl
-/// avoids requiring plan types to implement `Default`.
-#[derive(Debug, Clone)]
-pub struct StubRouteQueue<P> {
-    _marker: PhantomData<P>,
-}
-
-impl<P> Default for StubRouteQueue<P> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<P> StubRouteQueue<P> {
-    /// Create a new stub queue instance.
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[async_trait]
-impl<P: Send + Sync> RouteQueue for StubRouteQueue<P> {
-    type Plan = P;
-
-    async fn enqueue(&self, _plan: &Self::Plan) -> Result<(), JobDispatchError> {
-        // Stub discards jobs; real implementation will submit to Apalis.
-        // Log a warning once so developers notice if this stub is used unintentionally.
-        STUB_WARNING_LOGGED.call_once(|| {
-            tracing::warn!("StubRouteQueue: job discarded (queue adapter not implemented)");
-        });
-        Ok(())
-    }
-}
+mod apalis_route_queue;
+pub use apalis_route_queue::{
+    ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue,
+};
 
 #[cfg(test)]
-mod tests {
-    //! Regression coverage for this module.
-    use super::*;
-    use rstest::rstest;
-
-    /// Test plan type for unit tests.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct TestPlan;
-
-    #[rstest]
-    #[tokio::test]
-    async fn stub_queue_enqueue_succeeds() {
-        let queue: StubRouteQueue<TestPlan> = StubRouteQueue::new();
-        let plan = TestPlan;
-
-        let result = queue.enqueue(&plan).await;
-        assert!(result.is_ok(), "stub queue enqueue should succeed");
-    }
-}
+mod test_helpers;
