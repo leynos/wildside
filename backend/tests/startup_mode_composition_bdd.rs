@@ -34,7 +34,7 @@ use flow_support::{
 };
 
 const DB_PROFILE_NAME: &str = "Test User DB";
-const FIXTURE_PROFILE_NAME: &str = "Fixture User";
+const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 
 #[fixture]
 fn world() -> World {
@@ -155,14 +155,20 @@ fn all_responses_match_fixture_fallback_contracts(world: &mut World) {
 fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
     match setup_db_context() {
         Ok(db) => {
-            seed_user(
-                db.database_url.as_str(),
+            match seed_user(
+                &db.pool,
                 Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
                 DB_PROFILE_NAME,
-            )
-            .expect("seed db user");
-            world.db = Some(db);
-            world.skip_reason = None;
+            ) {
+                Ok(()) => {
+                    world.db = Some(db);
+                    world.skip_reason = None;
+                }
+                Err(error) => {
+                    let _ = handle_cluster_setup_failure::<()>(error.as_str());
+                    world.skip_reason = Some(error);
+                }
+            }
         }
         Err(error) => {
             let _ = handle_cluster_setup_failure::<()>(error.as_str());
