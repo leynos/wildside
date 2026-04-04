@@ -1,4 +1,16 @@
 //! Query parameter parsing and normalization for paginated endpoints.
+//!
+//! This module provides the [`PageParams`] type for parsing and normalising
+//! `cursor` and `limit` query parameters, the [`PageParamsError`] type for
+//! validation failures, and the shared constants [`DEFAULT_LIMIT`] and
+//! [`MAX_LIMIT`].
+//!
+//! The [`PageParams`] type implements `Deserialize` with automatic
+//! normalization: missing limits default to [`DEFAULT_LIMIT`], oversized limits
+//! are capped at [`MAX_LIMIT`], and zero limits are rejected. This behaviour
+//! integrates with HTTP framework query extractors (such as Actix Web's
+//! `Query<PageParams>`) to ensure consistent limit handling across all
+//! endpoints.
 
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -133,5 +145,25 @@ mod tests {
 
         assert_eq!(params.limit(), MAX_LIMIT);
         assert_eq!(params.cursor(), Some("opaque"));
+    }
+
+    #[test]
+    fn documented_default_limit_constant_is_twenty() {
+        assert_eq!(DEFAULT_LIMIT, 20);
+    }
+
+    #[test]
+    fn documented_maximum_limit_constant_is_one_hundred() {
+        assert_eq!(MAX_LIMIT, 100);
+    }
+
+    #[test]
+    fn normalization_logic_uses_documented_constants() {
+        let default_params = PageParams::new(None, None).expect("default params should be valid");
+        assert_eq!(default_params.limit(), DEFAULT_LIMIT);
+
+        let capped_params =
+            PageParams::new(None, Some(MAX_LIMIT + 1)).expect("oversized limit should clamp");
+        assert_eq!(capped_params.limit(), MAX_LIMIT);
     }
 }

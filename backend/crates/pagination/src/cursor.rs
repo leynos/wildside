@@ -1,4 +1,19 @@
 //! Opaque cursor encoding and decoding helpers.
+//!
+//! This module provides the [`Cursor<Key>`] type for encoding pagination
+//! positions as opaque base64url-encoded JSON tokens, and the [`Direction`]
+//! enum for bidirectional navigation. Cursors are transport-neutral and can be
+//! used with any HTTP framework or serialization format.
+//!
+//! The base64url JSON encoding format ensures cursors are URL-safe and do not
+//! require additional escaping in query parameters. The `dir` field is optional
+//! in the JSON representation for backward compatibility with clients that omit
+//! it (the default direction is `Next`).
+//!
+//! **Security consideration**: cursors are opaque but not signed or encrypted.
+//! They encode the ordering key only, not any access control information.
+//! Consumers must validate that the requesting user has permission to access
+//! the underlying data.
 
 use base64::{
     Engine as _,

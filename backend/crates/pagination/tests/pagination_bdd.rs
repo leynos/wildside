@@ -1,6 +1,10 @@
 //! Behavioural tests for the pagination crate foundation.
 
-use pagination::{Cursor, CursorError, Direction, PageParams, Paginated, PaginationLinks};
+use base64::Engine as _;
+use pagination::{
+    Cursor, CursorError, DEFAULT_LIMIT, Direction, MAX_LIMIT, PageParams, PageParamsError,
+    Paginated, PaginationLinks,
+};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -20,9 +24,11 @@ struct World {
     cursor_token: Slot<String>,
     decode_result: Slot<Result<Cursor<FixtureKey>, CursorError>>,
     page_params: Slot<PageParams>,
+    page_params_result: Slot<Result<PageParams, PageParamsError>>,
     request_url: Slot<Url>,
     page: Slot<Paginated<String>>,
     direction: Slot<Direction>,
+    cursor_errors: Slot<Vec<CursorError>>,
 }
 
 #[fixture]
@@ -109,7 +115,9 @@ fn the_cursor_is_decoded(world: &World) {
 }
 
 #[when("the parameters are normalized")]
-fn the_parameters_are_normalized(_world: &World) {}
+fn the_parameters_are_normalized(world: &World) {
+    let _ = world;
+}
 
 #[when("pagination parameters request limit {limit:u64}")]
 #[expect(
@@ -350,6 +358,141 @@ fn the_decoded_cursor_has_direction_prev(world: &World) {
     assert_eq!(cursor.direction(), Direction::Prev);
 }
 
+// Documentation invariant step definitions
+
+#[given("pagination parameters with limit {limit:u64}")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn pagination_parameters_with_limit(world: &World, limit: u64) {
+    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
+    let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
+    world.page_params.set(params);
+}
+
+#[given("an invalid base64 cursor token {token}")]
+fn an_invalid_base64_cursor_token(world: &World, token: String) {
+    world.cursor_token.set(token);
+}
+
+#[given("a base64url token containing invalid JSON")]
+fn a_base64url_token_containing_invalid_json(world: &World) {
+    let invalid_json = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"{not-json");
+    world.cursor_token.set(invalid_json);
+}
+
+#[given("cursor decoding errors of different variants")]
+fn cursor_decoding_errors_of_different_variants(world: &World) {
+    let mut errors = Vec::new();
+
+    let invalid_base64_result = Cursor::<FixtureKey>::decode("not!valid");
+    if let Err(e) = invalid_base64_result {
+        errors.push(e);
+    }
+
+    let invalid_json = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"{not-json");
+    let deserialize_result = Cursor::<FixtureKey>::decode(&invalid_json);
+    if let Err(e) = deserialize_result {
+        errors.push(e);
+    }
+
+    world.cursor_errors.set(errors);
+}
+
+#[when("pagination parameters are created with limit {limit:u64}")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn pagination_parameters_are_created_with_limit(world: &World, limit: u64) {
+    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
+    let result = PageParams::new(None, Some(requested_limit));
+    world.page_params_result.set(result);
+}
+
+#[then("the normalized limit equals DEFAULT_LIMIT")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn the_normalized_limit_equals_default_limit(world: &World) {
+    let params = world.page_params.get().expect("page params should be set");
+    assert_eq!(params.limit(), DEFAULT_LIMIT);
+}
+
+#[then("the normalized limit equals MAX_LIMIT")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn the_normalized_limit_equals_max_limit(world: &World) {
+    let params = world.page_params.get().expect("page params should be set");
+    assert_eq!(params.limit(), MAX_LIMIT);
+}
+
+#[then("page parameter creation fails with InvalidLimit error")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn page_parameter_creation_fails_with_invalid_limit_error(world: &World) {
+    let result = world
+        .page_params_result
+        .get()
+        .expect("page params result should be set");
+
+    assert!(matches!(result, Err(PageParamsError::InvalidLimit)));
+}
+
+#[then("decoding fails with InvalidBase64 error")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn decoding_fails_with_invalid_base64_error(world: &World) {
+    let result = world
+        .decode_result
+        .get()
+        .expect("decode result should be set");
+
+    assert!(matches!(result, Err(CursorError::InvalidBase64 { .. })));
+}
+
+#[then("decoding fails with Deserialize error")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn decoding_fails_with_deserialize_error(world: &World) {
+    let result = world
+        .decode_result
+        .get()
+        .expect("decode result should be set");
+
+    assert!(matches!(result, Err(CursorError::Deserialize { .. })));
+}
+
+#[then("each error display string contains a descriptive message")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn each_error_display_string_contains_a_descriptive_message(world: &World) {
+    let errors = world
+        .cursor_errors
+        .get()
+        .expect("cursor errors should be set");
+
+    for error in &errors {
+        let display = format!("{error}");
+        assert!(
+            !display.is_empty(),
+            "error display string should not be empty"
+        );
+    }
+}
+
 #[scenario(path = "tests/features/pagination.feature")]
 fn pagination_crate_foundation(world: World) {
     drop(world);
@@ -357,5 +500,10 @@ fn pagination_crate_foundation(world: World) {
 
 #[scenario(path = "tests/features/direction_aware_cursors.feature")]
 fn direction_aware_cursor_pagination(world: World) {
+    drop(world);
+}
+
+#[scenario(path = "tests/features/pagination_documentation.feature")]
+fn pagination_documentation_invariants(world: World) {
     drop(world);
 }

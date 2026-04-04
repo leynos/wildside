@@ -1,4 +1,17 @@
 //! Paginated response envelopes and hypermedia links.
+//!
+//! This module provides the [`Paginated<T>`] envelope for wrapping a page of
+//! results with metadata and hypermedia links, and the [`PaginationLinks`] type
+//! for building `self`, `next`, and `prev` links.
+//!
+//! The [`PaginationLinks::from_request`] constructor preserves non-pagination
+//! query parameters (such as filter or sort parameters) when building the
+//! `self`, `next`, and `prev` links, ensuring that link navigation maintains
+//! the original request context.
+//!
+//! Optional links (`next` and `prev`) use `#[serde(skip_serializing_if)]` to
+//! omit `null` values from the serialized JSON, producing cleaner response
+//! envelopes.
 
 use serde::Serialize;
 use url::{Url, form_urlencoded};
