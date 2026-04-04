@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: BLOCKED (Dependency Conflict)
+Status: IN PROGRESS
 
 This plan covers roadmap item 5.2.1 only:
 `Implement RouteQueue using Apalis with PostgreSQL backend, replacing the
@@ -232,10 +232,11 @@ Hand-off order:
   `docs/execplans/backend-5-2-1-apalis-route-queue.md`.
 - [x] Await approval gate.
 - [x] Run baseline queue tests (`/tmp/5-2-1-queue-baseline.out` - 1 passing test confirmed)
-- [BLOCKED] Add `apalis-postgres` and related dependencies to `backend/Cargo.toml`.
-  - Attempted with apalis-postgres 1.0.0-rc.6, apalis-sql 0.7.x, multiple resolution strategies
-  - Blocked by libsqlite3-sys native library conflict (see Surprises & discoveries #1)
-  - Log: `/tmp/5-2-1-check-deps.out`, `/tmp/5-2-1-check-deps-0.7.out`, `/tmp/5-2-1-check-deps-workspace-patch.out`
+- [x] Add `apalis-postgres` and related dependencies to `backend/Cargo.toml`.
+  - Updated wildside-data git rev from 894aa38 to 2db6cbf (rusqlite 0.32.1)
+  - Added apalis-postgres 1.0.0-rc.6 and sqlx 0.8 (postgres, runtime-tokio-rustls)
+  - `cargo check -p backend` succeeded
+  - Log: `/tmp/5-2-1-check-deps-updated-wildside.out`
 - [ ] Create `backend/src/outbound/queue/apalis_route_queue.rs` with the
   adapter struct, connection provider trait, and error mapping.
 - [ ] Create `backend/src/outbound/queue/test_helpers.rs` with a fake provider
@@ -295,7 +296,7 @@ Hand-off order:
    - Pros: Clean path forward once unblocked
    - Cons: Delays queue functionality
 
-**Recommendation**: Escalate to project stakeholders for decision. This is a structural dependency conflict that cannot be resolved through standard Cargo mechanisms without either upstream changes or significant architectural divergence from the approved plan.
+**Resolution (2026-04-03)**: Wildside-engine upstream was updated to rusqlite 0.32.1 via commit 2db6cbf. Updated backend/Cargo.toml to use this revision, which resolved the libsqlite3-sys conflict. `cargo check -p backend` now succeeds with apalis-postgres 1.0.0-rc.6 and sqlx 0.8 dependencies added successfully.
 
 ## Decision log
 
