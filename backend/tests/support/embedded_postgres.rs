@@ -19,6 +19,7 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use pg_embedded_setup_unpriv::test_support::hash_directory;
 use pg_embedded_setup_unpriv::{ClusterHandle, TemporaryDatabase};
 use postgres::{Client, NoTls};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::format_postgres_error;
@@ -158,6 +159,36 @@ pub fn drop_users_table(url: &str) -> Result<(), UserPersistenceError> {
     Ok(())
 }
 
+/// Sets up Apalis PostgreSQL storage tables for queue testing.
+///
+/// Creates the necessary job queue tables that Apalis requires using
+/// `apalis_postgres::PostgresStorage::setup()`. This should be called after
+/// Diesel migrations have run to ensure the database schema is ready for queue
+/// operations.
+///
+/// # Examples
+///
+/// ```text
+/// let temp_db = provision_template_database(&cluster)?;
+/// let url = temp_db.url();
+/// let runtime = Runtime::new()?;
+/// runtime.block_on(setup_apalis_storage(url))?;
+/// ```
+pub async fn setup_apalis_storage(url: &str) -> Result<PgPool, UserPersistenceError> {
+    use apalis_postgres::PostgresStorage;
+
+    let pool = PgPool::connect(url)
+        .await
+        .map_err(|err| UserPersistenceError::connection(format!("connect: {err:?}")))?;
+
+    // The setup method is on PostgresStorage<(), (), ()> (specific type parameters)
+    PostgresStorage::<(), (), ()>::setup(&pool)
+        .await
+        .map_err(|err| UserPersistenceError::query(format!("setup apalis storage: {err:?}")))?;
+
+    Ok(pool)
+}
+
 #[cfg(test)]
 mod tests {
     //! Linkage checks for embedded postgres helpers.
@@ -167,5 +198,10 @@ mod tests {
     #[test]
     fn drop_users_table_is_linked() {
         let _ = drop_users_table as fn(&str) -> Result<(), UserPersistenceError>;
+    }
+
+    #[test]
+    fn setup_apalis_storage_is_linked() {
+        let _ = setup_apalis_storage;
     }
 }

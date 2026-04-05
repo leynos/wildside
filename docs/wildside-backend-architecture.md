@@ -2113,26 +2113,47 @@ replicas) for the
 workers([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L671-L673)).
 
 **Job queue and Apalis config:** Apalis supports multiple backends for queues;
-we plan to use **Redis** as the job broker (leveraging our existing Redis
-instance)(
-[3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L655-L662)).
- Each job type can have its own queue; for example, we define a high-priority
-queue for route generation jobs and a lower-priority queue for enrichment
-jobs([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L655-L662)).
- The Apalis configuration in our code will register our job types and their
+the current implementation uses **PostgreSQL** as the job broker (roadmap item
+5.2.1). The choice of PostgreSQL over Redis for queue storage was made to
+leverage existing PostgreSQL infrastructure and test harnesses
+(`pg-embedded-setup-unpriv`), eliminating the need for an additional AMQP
+broker service in production and testing. The hexagonal boundary – specifically
+the `QueueProvider` trait and the domain-owned `RouteQueue` port – ensures that
+migrating to an AMQP backend (e.g., RabbitMQ) is a contained adapter change if
+queue throughput or routing requirements outgrow PostgreSQL
+`NOTIFY`/`SKIP LOCKED` capabilities.
+
+Each job type can have its own queue; for example, we define a high-priority
+queue for route generation jobs and a lower-priority queue for enrichment jobs.
+The Apalis configuration in our code will register our job types and their
 handlers, and set up consumers for each queue. We also configure retry
 policies: if a job fails, Apalis will retry it a limited number of times with
-exponential backoff
-delays([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L657-L660)).
- If a job continues to fail (e.g., bad data or a persistent issue), it will be
-moved to a **dead-letter queue** after max retries, so that we can inspect or
-manually requeue it once the issue is
-resolved([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L657-L661)).
- Each job will also have a **timeout** – for instance, we might enforce that
-`GenerateRouteJob` must complete within 30 seconds, otherwise it is considered
-failed (to avoid stuck
-threads)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L254-L262)).
- Apalis allows setting such time limits per job or globally.
+exponential backoff delays. If a job continues to fail (e.g., bad data or a
+persistent issue), it will be moved to a **dead-letter queue** after max
+retries, so that we can inspect or manually requeue it once the issue is
+resolved. Each job will also have a **timeout** – for instance, we might enforce
+that `GenerateRouteJob` must complete within 30 seconds, otherwise it is
+considered failed (to avoid stuck threads). Apalis allows setting such time
+limits per job or globally.
+
+**Roadmap item 5.2.1 scope:** As of roadmap item 5.2.1, the backend includes an
+Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
+(`backend/src/outbound/queue/apalis_route_queue.rs`). This adapter implements
+the `RouteQueue` port trait using `apalis-postgres` (`PostgresStorage`) for job
+persistence and maps infrastructure failures to domain-owned `JobDispatchError`
+variants. The adapter uses a separate `sqlx::PgPool` connection pool, which
+coexists with the Diesel `bb8` pool used by repository adapters. Both pools
+connect to the same PostgreSQL instance with independent lifecycle management,
+mirroring how the Redis cache adapter uses its own `bb8-redis` pool
+independently of Diesel. The Apalis job tables are managed by
+`PostgresStorage::setup()`, not by Diesel migrations.
+
+Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
+request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
+`backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
+unchanged, awaiting later roadmap items covering job struct definitions (5.2.2),
+retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
+(`StubRouteQueue`) is retained for tests that do not require PostgreSQL.
 
 **Job definitions:** We have two primary job types in the system (with the
 possibility of more as the project grows):
