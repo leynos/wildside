@@ -1,7 +1,7 @@
 //! Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::marker::PhantomData;
 
 use apalis_core::backend::TaskSink;
@@ -152,7 +152,9 @@ impl ApalisPostgresProvider {
         // Create Apalis tables if they don't exist
         apalis_postgres::PostgresStorage::<(), (), ()>::setup(&pool)
             .await
-            .map_err(|e| JobDispatchError::unavailable(format!("Failed to setup Apalis tables: {e}")))?;
+            .map_err(|e| {
+                JobDispatchError::unavailable(format!("Failed to setup Apalis tables: {e}"))
+            })?;
 
         // Create the storage instance
         let storage = apalis_postgres::PostgresStorage::new(&pool);
@@ -168,14 +170,11 @@ impl QueueProvider for ApalisPostgresProvider {
         let mut storage = self.storage.clone();
 
         // Push the job payload to Apalis
-        storage
-            .push(payload)
-            .await
-            .map_err(|e| {
-                // Map all Apalis/SQLx errors to Unavailable
-                // The error type is TaskSinkError<sqlx::Error>
-                JobDispatchError::unavailable(format!("Failed to enqueue job: {e}"))
-            })
+        storage.push(payload).await.map_err(|e| {
+            // Map all Apalis/SQLx errors to Unavailable
+            // The error type is TaskSinkError<sqlx::Error>
+            JobDispatchError::unavailable(format!("Failed to enqueue job: {e}"))
+        })
     }
 }
 
@@ -211,8 +210,8 @@ mod tests {
         assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
 
         // Verify the payload can be deserialized back to the original plan
-        let deserialized: TestPlan = serde_json::from_slice(&pushed_jobs[0])
-            .expect("pushed payload should be valid JSON");
+        let deserialized: TestPlan =
+            serde_json::from_slice(&pushed_jobs[0]).expect("pushed payload should be valid JSON");
         assert_eq!(
             deserialized, plan,
             "deserialized plan should match original"
@@ -263,19 +262,24 @@ mod tests {
             name: "plan-2".to_string(),
         };
 
-        queue.enqueue(&plan1).await.expect("first enqueue should succeed");
-        queue.enqueue(&plan2).await.expect("second enqueue should succeed");
+        queue
+            .enqueue(&plan1)
+            .await
+            .expect("first enqueue should succeed");
+        queue
+            .enqueue(&plan2)
+            .await
+            .expect("second enqueue should succeed");
 
         let pushed_jobs = fake_provider.pushed_jobs();
         assert_eq!(pushed_jobs.len(), 2, "both jobs should be pushed");
 
-        let deserialized1: TestPlan = serde_json::from_slice(&pushed_jobs[0])
-            .expect("first payload should be valid JSON");
-        let deserialized2: TestPlan = serde_json::from_slice(&pushed_jobs[1])
-            .expect("second payload should be valid JSON");
+        let deserialized1: TestPlan =
+            serde_json::from_slice(&pushed_jobs[0]).expect("first payload should be valid JSON");
+        let deserialized2: TestPlan =
+            serde_json::from_slice(&pushed_jobs[1]).expect("second payload should be valid JSON");
 
         assert_eq!(deserialized1, plan1, "first plan should match");
         assert_eq!(deserialized2, plan2, "second plan should match");
     }
 }
-

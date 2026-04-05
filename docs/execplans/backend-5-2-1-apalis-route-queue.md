@@ -237,25 +237,29 @@ Hand-off order:
   - Added apalis-postgres 1.0.0-rc.6 and sqlx 0.8 (postgres, runtime-tokio-rustls)
   - `cargo check -p backend` succeeded
   - Log: `/tmp/5-2-1-check-deps-updated-wildside.out`
-- [ ] Create `backend/src/outbound/queue/apalis_route_queue.rs` with the
+- [x] Create `backend/src/outbound/queue/apalis_route_queue.rs` with the
   adapter struct, connection provider trait, and error mapping.
-- [ ] Create `backend/src/outbound/queue/test_helpers.rs` with a fake provider
+- [x] Create `backend/src/outbound/queue/test_helpers.rs` with a fake provider
   for unit tests.
-- [ ] Add focused `rstest` unit tests in
+- [x] Add focused `rstest` unit tests in
   `backend/src/outbound/queue/apalis_route_queue.rs` (or a sibling `tests`
   module) covering enqueue round-trip, unavailable backend, and rejected job
   paths.
-- [ ] Extend `backend/tests/support/` with Apalis PostgreSQL setup helpers
+- [x] Extend `backend/tests/support/` with Apalis PostgreSQL setup helpers
   that reuse the `pg-embedded-setup-unpriv` cluster.
-- [ ] Create `backend/tests/features/route_queue_apalis.feature` with BDD
+  - Added `setup_apalis_storage` helper to `backend/tests/support/embedded_postgres.rs`
+- [x] Create `backend/tests/features/route_queue_apalis.feature` with BDD
   scenarios.
-- [ ] Create `backend/tests/route_queue_apalis_bdd.rs` with step definitions
+- [x] Create `backend/tests/route_queue_apalis_bdd.rs` with step definitions
   exercising the adapter against a real PostgreSQL instance.
-- [ ] Update `docs/wildside-backend-architecture.md` with the 5.2.1 scope
+- [x] Update `docs/wildside-backend-architecture.md` with the 5.2.1 scope
   decision and dual-pool documentation.
-- [ ] Run `make check-fmt` and capture the log.
+- [x] Run `make check-fmt` and capture the log.
+  - Log: `/tmp/5-2-1-check-fmt-after.out` (passed after `make fmt`)
 - [ ] Run `make lint` and capture the log.
+  - In progress: `/tmp/5-2-1-lint-attempt2.out`
 - [ ] Run `make test` and capture the log.
+  - In progress: `/tmp/5-2-1-make-test-full.out`
 - [ ] Mark `docs/backend-roadmap.md` item 5.2.1 done after all gates pass.
 
 ## Surprises & discoveries

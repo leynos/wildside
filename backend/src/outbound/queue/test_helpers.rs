@@ -40,20 +40,6 @@ impl FakeQueueProvider {
             })
             .clone()
     }
-
-    /// Returns the number of jobs that were pushed to this provider.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the mutex is poisoned.
-    pub(crate) fn job_count(&self) -> usize {
-        self.pushed_jobs
-            .lock()
-            .unwrap_or_else(|e| {
-                panic!("Mutex poisoned: {e}");
-            })
-            .len()
-    }
 }
 
 #[async_trait]
