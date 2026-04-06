@@ -102,6 +102,10 @@ const _: fn(&str, &str) -> Result<(), String> = drop_table;
     reason = "Cluster skip helpers are only used by selected integration-test crates"
 )]
 pub use cluster_skip::handle_cluster_setup_failure;
+#[allow(
+    unused_imports,
+    reason = "Template provisioning is only used by selected integration-test crates"
+)]
 pub use embedded_postgres::provision_template_database;
 #[allow(
     unused_imports,
