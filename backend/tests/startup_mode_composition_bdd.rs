@@ -15,7 +15,7 @@ use support::profile_interests::FIXTURE_AUTH_ID;
 use support::handle_cluster_setup_failure;
 
 #[path = "../src/server/config.rs"]
-#[expect(
+#[allow(
     dead_code,
     reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
 )]

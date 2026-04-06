@@ -17,8 +17,7 @@ use actix_web::cookie::Key;
 use rstest::rstest;
 
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
-use backend::domain::{ErrorCode, LoginCredentials, UserId};
-use backend::outbound::persistence::{DbPool, PoolConfig};
+use backend::domain::LoginCredentials;
 
 #[path = "../src/server/config.rs"]
 mod server_config;
@@ -27,10 +26,6 @@ use server_config::ServerConfig;
 #[path = "../src/server/state_builders.rs"]
 mod state_builders;
 use state_builders::build_http_state;
-
-mod support;
-use support::atexit_cleanup::shared_cluster_handle;
-use support::{handle_cluster_setup_failure, provision_template_database};
 
 /// Helper to construct a fixture-mode `ServerConfig` with no database pool.
 fn fixture_config() -> ServerConfig {

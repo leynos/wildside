@@ -21,7 +21,6 @@ use backend::inbound::http::offline::list_offline_bundles;
 use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::outbound::persistence::{DbPool, PoolConfig};
-use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::Value;
@@ -53,11 +52,13 @@ pub(crate) struct World {
     pub(crate) db: Option<DbContext>,
     pub(crate) login: Option<Snapshot>,
     pub(crate) profile: Option<Snapshot>,
+    #[allow(dead_code)]
     pub(crate) interests: Option<Snapshot>,
     pub(crate) preferences: Option<Snapshot>,
     pub(crate) catalogue_explore: Option<Snapshot>,
     pub(crate) catalogue_descriptors: Option<Snapshot>,
     pub(crate) offline_bundles: Option<Snapshot>,
+    #[allow(dead_code)]
     pub(crate) walk_sessions: Option<Snapshot>,
     pub(crate) enrichment_provenance: Option<Snapshot>,
     pub(crate) skip_reason: Option<String>,
@@ -172,7 +173,7 @@ async fn run_comprehensive_flow_async(world: &mut World) {
     }
 
     let route_submission: Arc<dyn RouteSubmissionService> =
-        Arc::new(FixtureRouteSubmissionService::default());
+        Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 
     let app = actix_test::init_service(
@@ -382,7 +383,7 @@ async fn run_validation_error_flow_async(world: &mut World) {
     }
 
     let route_submission: Arc<dyn RouteSubmissionService> =
-        Arc::new(FixtureRouteSubmissionService::default());
+        Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 
     let app = actix_test::init_service(

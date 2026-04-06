@@ -14,7 +14,7 @@ use support::profile_interests::{
 use support::{drop_table, handle_cluster_setup_failure};
 
 #[path = "../src/server/config.rs"]
-#[expect(
+#[allow(
     dead_code,
     reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
 )]

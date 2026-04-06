@@ -24,18 +24,25 @@ use uuid::Uuid;
 use super::format_postgres_error;
 
 /// Embedded migrations from the backend/migrations directory.
+#[allow(dead_code)]
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
+#[allow(dead_code)]
 static TEMPLATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+#[allow(dead_code)]
 const TEMPLATE_NAME_PREFIX: &str = "backend_template";
+#[allow(dead_code)]
 const TEMPLATE_PROVISION_RETRIES: usize = 5;
+#[allow(dead_code)]
 const TEMPLATE_PROVISION_RETRY_DELAY: Duration = Duration::from_millis(500);
 
+#[allow(dead_code)]
 fn migrations_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
 }
 
+#[allow(dead_code)]
 fn template_database_name() -> Result<String, UserPersistenceError> {
     let hash = hash_directory(migrations_dir())
         .map_err(|err| UserPersistenceError::query(format!("hash migrations: {err}")))?;
@@ -43,6 +50,7 @@ fn template_database_name() -> Result<String, UserPersistenceError> {
     Ok(format!("{TEMPLATE_NAME_PREFIX}_{short_hash}"))
 }
 
+#[allow(dead_code)]
 fn new_test_database_name() -> String {
     format!("test_{}", Uuid::new_v4())
 }
@@ -68,6 +76,7 @@ fn new_test_database_name() -> String {
 ///        "template check: attempt 1/5: ..."
 ///      ))
 /// ```
+#[allow(dead_code)]
 fn provision_template_database_attempt(
     cluster: &ClusterHandle,
     attempt: usize,
@@ -88,6 +97,7 @@ fn provision_template_database_attempt(
 }
 
 /// Creates or reuses a template database with the latest migrations applied.
+#[allow(dead_code)]
 fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersistenceError> {
     let template_name = template_database_name()?;
     let _lock = TEMPLATE_LOCK
@@ -116,6 +126,7 @@ fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersi
 /// Retries up to [`TEMPLATE_PROVISION_RETRIES`] times with
 /// [`TEMPLATE_PROVISION_RETRY_DELAY`] between attempts to tolerate transient
 /// cluster errors during parallel test runs.
+#[allow(dead_code)]
 pub fn provision_template_database(
     cluster: &ClusterHandle,
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
@@ -136,6 +147,7 @@ pub fn provision_template_database(
 }
 
 /// Runs all pending Diesel migrations against the test database.
+#[allow(dead_code)]
 pub fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
     let mut conn = PgConnection::establish(url)
         .map_err(|err| UserPersistenceError::connection(format!("{err:?}")))?;
