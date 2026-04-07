@@ -248,8 +248,9 @@ async fn count_jobs_for_plan_name(pool: &PgPool, plan_name: &str) -> i64 {
         .expect("query job count")
 }
 
-#[then("the plan is persisted in the queue storage")]
-fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
+/// Fetches the job count for the most recently enqueued plan.
+fn fetch_last_plan_job_count(world: &SharedContext) -> i64 {
+    let mut job_count: i64 = 0;
     with_context_async(
         world,
         |ctx| {
@@ -259,12 +260,16 @@ fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
         },
         |(pool, plan)| async move { count_jobs_for_plan_name(&pool, &plan.name).await },
         |_ctx, count| {
-            assert!(
-                count >= 1,
-                "expected at least one job in storage, found {count}"
-            );
+            job_count = count;
         },
     );
+    job_count
+}
+
+#[then("the plan is persisted in the queue storage")]
+fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
+    let count = fetch_last_plan_job_count(world);
+    assert!(count >= 1, "expected at least one job in storage, found {count}");
 }
 
 #[then("both plans are persisted as separate jobs")]
@@ -279,13 +284,7 @@ fn both_plans_are_persisted_as_separate_jobs(world: &SharedContext) {
         |(pool, plans)| async move {
             let mut counts = Vec::new();
             for plan in &plans {
-                let count: i64 =
-                    sqlx::query_scalar("SELECT COUNT(*) FROM apalis.jobs WHERE job->>'name' = $1")
-                        .bind(&plan.name)
-                        .fetch_one(&pool)
-                        .await
-                        .expect("query job count");
-                counts.push(count);
+                counts.push(count_jobs_for_plan_name(&pool, &plan.name).await);
             }
             counts
         },
@@ -302,21 +301,8 @@ fn both_plans_are_persisted_as_separate_jobs(world: &SharedContext) {
 
 #[then("two independent jobs exist in storage")]
 fn two_independent_jobs_exist_in_storage(world: &SharedContext) {
-    with_context_async(
-        world,
-        |ctx| {
-            let pool = ctx.pool.clone().expect("pool should be available");
-            let plan = ctx.enqueued_plans.last().expect("at least one plan");
-            (pool, plan.clone())
-        },
-        |(pool, plan)| async move { count_jobs_for_plan_name(&pool, &plan.name).await },
-        |_ctx, count| {
-            assert_eq!(
-                count, 2,
-                "expected exactly two jobs for duplicate plan, found {count}"
-            );
-        },
-    );
+    let count = fetch_last_plan_job_count(world);
+    assert_eq!(count, 2, "expected exactly two jobs for duplicate plan, found {count}");
 }
 
 // -- Scenario bindings --
