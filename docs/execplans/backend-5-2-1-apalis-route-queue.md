@@ -231,7 +231,8 @@ Hand-off order:
 - [x] Draft this ExecPlan at
   `docs/execplans/backend-5-2-1-apalis-route-queue.md`.
 - [x] Await approval gate.
-- [x] Run baseline queue tests (`/tmp/5-2-1-queue-baseline.out` - 1 passing test confirmed)
+- [x] Run baseline queue tests (`/tmp/5-2-1-queue-baseline.out` -
+  1 passing test confirmed)
 - [x] Add `apalis-postgres` and related dependencies to `backend/Cargo.toml`.
   - Updated wildside-data git rev from 894aa38 to 2db6cbf (rusqlite 0.32.1)
   - Added apalis-postgres 1.0.0-rc.6 and sqlx 0.8 (postgres, runtime-tokio-rustls)
@@ -266,41 +267,64 @@ Hand-off order:
 
 ### Discovery 1: Dependency conflict blocks apalis-postgres integration (2026-04-03)
 
-**Issue**: Cannot add `apalis-postgres` (either 1.0.0-rc.6 or apalis-sql 0.7.x) due to a `libsqlite3-sys` native library version conflict:
+**Issue**: Cannot add `apalis-postgres` (either 1.0.0-rc.6 or
+apalis-sql 0.7.x) due to a `libsqlite3-sys` native library version
+conflict:
 
-- `wildside-data` (git dependency at rev 894aa38) depends on `rusqlite` 0.31 → `libsqlite3-sys` 0.28
-- `pg-embed-setup-unpriv` 0.5.0 (used for test infrastructure) depends on `postgresql_embedded` 0.20.1 → `sqlx` 0.8.6 → `libsqlite3-sys` 0.30+
-- Cargo enforces that only one version of a native library (`sqlite3`) can be linked per binary
+- `wildside-data` (git dependency at rev 894aa38) depends on
+  `rusqlite` 0.31 → `libsqlite3-sys` 0.28
+- `pg-embed-setup-unpriv` 0.5.0 (used for test infrastructure) depends
+  on `postgresql_embedded` 0.20.1 → `sqlx` 0.8.6 →
+  `libsqlite3-sys` 0.30+
+- Cargo enforces that only one version of a native library (`sqlite3`)
+  can be linked per binary
 
 **Attempted resolutions (all failed)**:
-- Adjusting version constraints for `url`, `hex`, `postgresql_embedded`
-- Disabling sqlx default features
-- Explicitly adding `rusqlite` 0.32 or `libsqlite3-sys` 0.30 to backend/Cargo.toml
-- Using `[patch.crates-io]` at workspace level (patches require different source, can't patch crates.io with crates.io)
-- Using `[workspace.dependencies]` (doesn't override git dependency locks)
-- Switching to apalis 0.7.x stable (still blocked by pg-embed-setup-unpriv → sqlx 0.8)
 
-**Root cause**: The git dependency `wildside-data` is locked to a specific revision that uses rusqlite 0.31, and Cargo cannot override transitive dependencies of git sources.
+- Adjusting version constraints for `url`, `hex`,
+  `postgresql_embedded`
+- Disabling sqlx default features
+- Explicitly adding `rusqlite` 0.32 or `libsqlite3-sys` 0.30 to
+  backend/Cargo.toml
+- Using `[patch.crates-io]` at workspace level (patches require
+  different source, can't patch crates.io with crates.io)
+- Using `[workspace.dependencies]` (doesn't override git dependency
+  locks)
+- Switching to apalis 0.7.x stable (still blocked by
+  pg-embed-setup-unpriv → sqlx 0.8)
+
+**Root cause**: The git dependency `wildside-data` is locked to a
+specific revision that uses rusqlite 0.31, and Cargo cannot override
+transitive dependencies of git sources.
 
 **Options forward**:
 
-1. **Update wildside-engine upstream**: Modify the wildside-engine repository to use rusqlite 0.32+, then update the git revision in this project
+1. **Update wildside-engine upstream**: Modify the wildside-engine
+   repository to use rusqlite 0.32+, then update the git revision in
+   this project
    - Pros: Clean resolution, no workarounds
    - Cons: Requires upstream coordination, blocks this task
 
-2. **Use apalis-core directly without apalis-postgres**: Implement a custom PostgreSQL storage adapter using Diesel instead of sqlx
+2. **Use apalis-core directly without apalis-postgres**: Implement a
+   custom PostgreSQL storage adapter using Diesel instead of sqlx
    - Pros: Avoids sqlx entirely, keeps Diesel as single DB access layer
    - Cons: Significantly more implementation work, diverges from roadmap plan
 
-3. **Use an alternate job queue library**: Evaluate alternatives like `fang`, `tokio-cron-scheduler`, or custom implementation
+3. **Use an alternate job queue library**: Evaluate alternatives like
+   `fang`, `tokio-cron-scheduler`, or custom implementation
    - Pros: May avoid dependency conflicts
    - Cons: Deviates from approved roadmap, requires re-evaluation of architecture
 
-4. **Defer 5.2.1 until wildside-data conflict is resolved**: Mark this task as blocked and continue with other roadmap items
+4. **Defer 5.2.1 until wildside-data conflict is resolved**: Mark this
+   task as blocked and continue with other roadmap items
    - Pros: Clean path forward once unblocked
    - Cons: Delays queue functionality
 
-**Resolution (2026-04-03)**: Wildside-engine upstream was updated to rusqlite 0.32.1 via commit 2db6cbf. Updated backend/Cargo.toml to use this revision, which resolved the libsqlite3-sys conflict. `cargo check -p backend` now succeeds with apalis-postgres 1.0.0-rc.6 and sqlx 0.8 dependencies added successfully.
+**Resolution (2026-04-03)**: Wildside-engine upstream was updated to
+rusqlite 0.32.1 via commit 2db6cbf. Updated backend/Cargo.toml to use
+this revision, which resolved the libsqlite3-sys conflict.
+`cargo check -p backend` now succeeds with apalis-postgres 1.0.0-rc.6
+and sqlx 0.8 dependencies added successfully.
 
 ## Decision log
 
