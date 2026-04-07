@@ -239,6 +239,15 @@ fn the_enqueue_operation_fails_with_an_unavailable_error(world: &SharedContext) 
     }
 }
 
+/// Returns the number of Apalis jobs whose `name` field matches `plan_name`.
+async fn count_jobs_for_plan_name(pool: &PgPool, plan_name: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM apalis.jobs WHERE job->>'name' = $1")
+        .bind(plan_name)
+        .fetch_one(pool)
+        .await
+        .expect("query job count")
+}
+
 #[then("the plan is persisted in the queue storage")]
 fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
     with_context_async(
@@ -248,15 +257,7 @@ fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
             let plan = ctx.enqueued_plans.last().expect("at least one plan");
             (pool, plan.clone())
         },
-        |(pool, plan)| async move {
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apalis.jobs WHERE job->>'name' = $1")
-                    .bind(&plan.name)
-                    .fetch_one(&pool)
-                    .await
-                    .expect("query job count");
-            count
-        },
+        |(pool, plan)| async move { count_jobs_for_plan_name(&pool, &plan.name).await },
         |_ctx, count| {
             assert!(
                 count >= 1,
@@ -308,15 +309,7 @@ fn two_independent_jobs_exist_in_storage(world: &SharedContext) {
             let plan = ctx.enqueued_plans.last().expect("at least one plan");
             (pool, plan.clone())
         },
-        |(pool, plan)| async move {
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apalis.jobs WHERE job->>'name' = $1")
-                    .bind(&plan.name)
-                    .fetch_one(&pool)
-                    .await
-                    .expect("query job count");
-            count
-        },
+        |(pool, plan)| async move { count_jobs_for_plan_name(&pool, &plan.name).await },
         |_ctx, count| {
             assert_eq!(
                 count, 2,
