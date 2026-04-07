@@ -12,7 +12,7 @@ use backend::{
     domain::ports::{RouteCache, RouteCacheError, RouteCacheKey},
     outbound::cache::RedisRouteCache,
 };
-use bb8_redis::{RedisConnectionManager, bb8::Pool};
+use bb8_redis::{RedisConnectionManager, bb8::Pool, redis::AsyncCommands};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -29,6 +29,9 @@ struct RuntimeHandle(Arc<Runtime>);
 
 #[derive(Clone)]
 struct RedisServerHandle(Arc<RedisTestServer>);
+
+#[derive(Clone)]
+struct CacheHandle(Arc<RedisRouteCache<TestPlan>>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
@@ -49,13 +52,14 @@ impl TestPlan {
 struct RouteCacheWorld {
     runtime: Slot<RuntimeHandle>,
     server: Slot<RedisServerHandle>,
-    cache: Slot<RedisRouteCache<TestPlan>>,
+    cache: Slot<CacheHandle>,
     first_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     second_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     latest_put_result: Slot<Result<(), RouteCacheError>>,
     latest_error: Slot<RouteCacheError>,
     skip_reason: Slot<String>,
     has_printed_skip_message: Slot<bool>,
+    ttl_records: Slot<Vec<Option<usize>>>,
 }
 
 impl RouteCacheWorld {
@@ -63,7 +67,7 @@ impl RouteCacheWorld {
         self.runtime.get().expect("runtime should be initialized")
     }
 
-    fn cache(&self) -> RedisRouteCache<TestPlan> {
+    fn cache(&self) -> CacheHandle {
         self.cache.get().expect("cache should be initialized")
     }
 
@@ -103,7 +107,7 @@ impl RouteCacheWorld {
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.server.set(RedisServerHandle(Arc::new(server)));
-        self.cache.set(cache);
+        self.cache.set(CacheHandle(Arc::new(cache)));
 
         false
     }
@@ -121,7 +125,8 @@ impl RouteCacheWorld {
         };
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
-        self.cache.set(RedisRouteCache::new(pool));
+        self.cache
+            .set(CacheHandle(Arc::new(RedisRouteCache::new(pool))));
     }
 
     fn store_plan(&self, key: &str, plan: TestPlan) {
@@ -130,7 +135,7 @@ impl RouteCacheWorld {
         let cache = self.cache();
         let result = runtime
             .0
-            .block_on(async move { cache.put(&key, &plan).await });
+            .block_on(async move { cache.0.put(&key, &plan).await });
         self.latest_put_result.set(result);
     }
 
@@ -138,7 +143,7 @@ impl RouteCacheWorld {
         let key = RouteCacheKey::new(key).expect("valid key");
         let runtime = self.runtime();
         let cache = self.cache();
-        let result = runtime.0.block_on(async move { cache.get(&key).await });
+        let result = runtime.0.block_on(async move { cache.0.get(&key).await });
         slot.set(result);
     }
 
@@ -163,6 +168,27 @@ impl RouteCacheWorld {
             .expect_err("expected get to fail")
             .clone();
         self.latest_error.set(error);
+    }
+
+    fn query_ttl(&self, key: &str) -> Option<usize> {
+        let server = self
+            .server
+            .get()
+            .expect("redis server should be initialized");
+        let runtime = self.runtime();
+        runtime.0.block_on(async {
+            let pool = server.0.pool().await.expect("get pool");
+            let mut conn = pool.get().await.expect("get connection");
+            conn.ttl::<_, isize>(key)
+                .await
+                .ok()
+                .and_then(|ttl| if ttl > 0 { Some(ttl as usize) } else { None })
+        })
+    }
+
+    fn record_ttls_for_keys(&self, keys: &[&str]) {
+        let ttls: Vec<Option<usize>> = keys.iter().map(|key| self.query_ttl(key)).collect();
+        self.ttl_records.set(ttls);
     }
 }
 
@@ -342,6 +368,50 @@ fn each_cache_key_keeps_its_own_plan(world: &RouteCacheWorld) {
     assert_eq!(second_loaded, Some(TestPlan::new("req-second", 2)));
 }
 
+#[when("five plans are stored under distinct cache keys")]
+fn five_plans_are_stored_under_distinct_cache_keys(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
+    for i in 1..=5 {
+        let key = format!("route:jitter-{i}");
+        world.store_plan(&key, TestPlan::new(&format!("req-{i}"), i));
+    }
+    // Record TTLs for all five keys
+    world.record_ttls_for_keys(&[
+        "route:jitter-1",
+        "route:jitter-2",
+        "route:jitter-3",
+        "route:jitter-4",
+        "route:jitter-5",
+    ]);
+}
+
+#[then("not all recorded TTLs are identical")]
+fn not_all_recorded_ttls_are_identical(world: &RouteCacheWorld) {
+    if world.is_skipped() {
+        return;
+    }
+    let ttls = world
+        .ttl_records
+        .get()
+        .expect("TTL records should be present");
+
+    // All TTLs should be Some (keys should exist)
+    assert!(
+        ttls.iter().all(|t| t.is_some()),
+        "All keys should have TTLs"
+    );
+
+    // Check that not all TTLs are identical
+    let first_ttl = ttls[0].expect("First TTL should exist");
+    let all_same = ttls.iter().all(|t| *t == Some(first_ttl));
+    assert!(
+        !all_same,
+        "Not all TTLs should be identical (jitter should vary them)"
+    );
+}
+
 #[scenario(
     path = "tests/features/route_cache_redis.feature",
     name = "Stored plans round-trip through Redis"
@@ -379,5 +449,13 @@ fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
     name = "Distinct cache keys do not overwrite each other"
 )]
 fn distinct_cache_keys_do_not_overwrite_each_other(world: RouteCacheWorld) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/route_cache_redis.feature",
+    name = "Jittered writes produce varying TTLs"
+)]
+fn jittered_writes_produce_varying_ttls(world: RouteCacheWorld) {
     drop(world);
 }
