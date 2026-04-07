@@ -15,7 +15,7 @@
     "color": "^5.0.0",
     "markdownlint-cli": "^0.45.0",
     "style-dictionary": "^5.0.4",
-    "vite": "^7.1.12"
+    "vite": "^7.3.2"
   },
   "contrastThreshold": 4.5,
   "engines": {
