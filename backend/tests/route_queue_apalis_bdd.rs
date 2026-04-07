@@ -269,7 +269,10 @@ fn fetch_last_plan_job_count(world: &SharedContext) -> i64 {
 #[then("the plan is persisted in the queue storage")]
 fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
     let count = fetch_last_plan_job_count(world);
-    assert!(count >= 1, "expected at least one job in storage, found {count}");
+    assert!(
+        count >= 1,
+        "expected at least one job in storage, found {count}"
+    );
 }
 
 #[then("both plans are persisted as separate jobs")]
@@ -302,7 +305,10 @@ fn both_plans_are_persisted_as_separate_jobs(world: &SharedContext) {
 #[then("two independent jobs exist in storage")]
 fn two_independent_jobs_exist_in_storage(world: &SharedContext) {
     let count = fetch_last_plan_job_count(world);
-    assert_eq!(count, 2, "expected exactly two jobs for duplicate plan, found {count}");
+    assert_eq!(
+        count, 2,
+        "expected exactly two jobs for duplicate plan, found {count}"
+    );
 }
 
 // -- Scenario bindings --
