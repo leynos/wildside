@@ -57,6 +57,8 @@ zeroize = "1.7"
 # Cryptographic hashing for key fingerprinting
 sha2 = "0.10"
 hex = "0.4"
+# Random number generation for TTL jitter
+rand = { version = "0.8", features = ["small_rng"] }
 
 # Test support dependencies (only when test-support feature is enabled)
 tempfile = { version = "3", optional = true }

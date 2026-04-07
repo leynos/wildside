@@ -4,7 +4,7 @@
 //! testing the Redis route cache adapter without requiring a live Redis server.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -12,27 +12,40 @@ use serde::{Deserialize, Serialize};
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 use crate::outbound::cache::redis_route_cache::ConnectionProvider;
 
+/// Cached value with optional TTL in seconds.
+type CachedValue = (Vec<u8>, Option<u64>);
+
 /// Simple in-memory store used as a [`ConnectionProvider`] double.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FakeProvider {
-    store: Mutex<HashMap<String, Vec<u8>>>,
+    store: Arc<Mutex<HashMap<String, CachedValue>>>,
 }
 
 impl FakeProvider {
     /// Create an empty fake provider with no pre-seeded data.
     pub fn empty() -> Self {
         Self {
-            store: Mutex::new(HashMap::new()),
+            store: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// Create a fake provider pre-seeded with a key-value pair.
     pub fn seeded(key: &str, bytes: Vec<u8>) -> Self {
         let mut map = HashMap::new();
-        map.insert(key.to_owned(), bytes);
+        map.insert(key.to_owned(), (bytes, None));
         Self {
-            store: Mutex::new(map),
+            store: Arc::new(Mutex::new(map)),
         }
+    }
+
+    /// Retrieve the recorded TTL for a given key, if any.
+    ///
+    /// Returns `None` if the key does not exist or was stored without TTL.
+    pub fn ttl_for(&self, key: &str) -> Option<u64> {
+        self.store
+            .lock()
+            .ok()
+            .and_then(|store| store.get(key).and_then(|(_, ttl)| *ttl))
     }
 }
 
@@ -42,14 +55,27 @@ impl ConnectionProvider for FakeProvider {
         let store = self.store.lock().map_err(|_| RouteCacheError::Backend {
             message: "fake store lock poisoned".to_owned(),
         })?;
-        Ok(store.get(key).cloned())
+        Ok(store.get(key).map(|(bytes, _)| bytes.clone()))
     }
 
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
         let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
             message: "fake store lock poisoned".to_owned(),
         })?;
-        store.insert(key.to_owned(), value);
+        store.insert(key.to_owned(), (value, None));
+        Ok(())
+    }
+
+    async fn set_bytes_ex(
+        &self,
+        key: &str,
+        value: Vec<u8>,
+        ttl_seconds: u64,
+    ) -> Result<(), RouteCacheError> {
+        let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
+            message: "fake store lock poisoned".to_owned(),
+        })?;
+        store.insert(key.to_owned(), (value, Some(ttl_seconds)));
         Ok(())
     }
 }
