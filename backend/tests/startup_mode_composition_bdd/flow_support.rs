@@ -12,14 +12,14 @@ use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::{App, test as actix_test, web};
 use backend::domain::TRACE_ID_HEADER;
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
-use backend::inbound::http::users::{LoginRequest, current_user, login};
+use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
+use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
+use backend::inbound::http::offline::list_offline_bundles;
 use backend::inbound::http::preferences::{
     PreferencesRequest, get_preferences, update_preferences,
 };
-use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
-use backend::inbound::http::offline::list_offline_bundles;
+use backend::inbound::http::users::{LoginRequest, current_user, login};
 use backend::inbound::http::walk_sessions::create_walk_session;
-use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::outbound::persistence::{DbPool, PoolConfig};
 use diesel_async::RunQueryDsl;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
@@ -172,8 +172,7 @@ async fn run_comprehensive_flow_async(world: &mut World) {
         config = config.with_db_pool(db.pool.clone());
     }
 
-    let route_submission: Arc<dyn RouteSubmissionService> =
-        Arc::new(FixtureRouteSubmissionService);
+    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 
     let app = actix_test::init_service(
@@ -305,8 +304,7 @@ async fn run_comprehensive_flow_async(world: &mut World) {
         actix_test::call_service(&app, catalogue_descriptors_req).await;
     let catalogue_descriptors_status = catalogue_descriptors_resp.status().as_u16();
     let catalogue_descriptors_headers = catalogue_descriptors_resp.headers().clone();
-    let catalogue_descriptors_body_bytes =
-        actix_test::read_body(catalogue_descriptors_resp).await;
+    let catalogue_descriptors_body_bytes = actix_test::read_body(catalogue_descriptors_resp).await;
     let catalogue_descriptors_body = parse_json_body(&catalogue_descriptors_body_bytes);
     let catalogue_descriptors_trace_id = catalogue_descriptors_headers
         .get(TRACE_ID_HEADER)
@@ -382,8 +380,7 @@ async fn run_validation_error_flow_async(world: &mut World) {
         config = config.with_db_pool(db.pool.clone());
     }
 
-    let route_submission: Arc<dyn RouteSubmissionService> =
-        Arc::new(FixtureRouteSubmissionService);
+    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 
     let app = actix_test::init_service(

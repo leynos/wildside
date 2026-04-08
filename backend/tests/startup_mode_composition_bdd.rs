@@ -11,8 +11,8 @@ use uuid::Uuid;
 mod support;
 
 use support::embedded_postgres::drop_users_table;
-use support::profile_interests::FIXTURE_AUTH_ID;
 use support::handle_cluster_setup_failure;
+use support::profile_interests::FIXTURE_AUTH_ID;
 
 #[path = "../src/server/config.rs"]
 #[allow(
@@ -128,10 +128,7 @@ fn all_responses_match_fixture_fallback_contracts(world: &mut World) {
         .as_ref()
         .expect("offline_bundles snapshot");
     assert_eq!(offline_bundles.status, 200);
-    let bundles_body = offline_bundles
-        .body
-        .as_ref()
-        .expect("offline_bundles body");
+    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
     assert!(bundles_body.get("bundles").is_some());
 
     // Enrichment provenance should return 200 with empty fixture list
@@ -240,10 +237,7 @@ fn all_responses_match_db_backed_contracts(world: &mut World) {
         .as_ref()
         .expect("offline_bundles snapshot");
     assert_eq!(offline_bundles.status, 200);
-    let bundles_body = offline_bundles
-        .body
-        .as_ref()
-        .expect("offline_bundles body");
+    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
     assert!(bundles_body.get("bundles").is_some());
 
     // Enrichment provenance should return 200 with DB-backed data
@@ -317,7 +311,10 @@ fn validation_error_envelopes_are_identical_to_db_present_validation_errors(worl
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
     assert_eq!(preferences.status, 400);
     let body = preferences.body.as_ref().expect("error body");
-    assert_eq!(body.get("code").and_then(|v| v.as_str()), Some("invalid_request"));
+    assert_eq!(
+        body.get("code").and_then(|v| v.as_str()),
+        Some("invalid_request")
+    );
     // Should include details about missing fields
     assert!(body.get("details").is_some());
 }
@@ -332,7 +329,10 @@ fn validation_error_envelopes_remain_stable(world: &mut World) {
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
     assert_eq!(preferences.status, 400);
     let body = preferences.body.as_ref().expect("error body");
-    assert_eq!(body.get("code").and_then(|v| v.as_str()), Some("invalid_request"));
+    assert_eq!(
+        body.get("code").and_then(|v| v.as_str()),
+        Some("invalid_request")
+    );
     assert!(body.get("details").is_some());
 }
 
