@@ -16,8 +16,8 @@ use std::sync::Arc;
 use actix_web::cookie::Key;
 use rstest::rstest;
 
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 use backend::domain::LoginCredentials;
+use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 
 #[path = "../src/server/config.rs"]
 mod server_config;
@@ -46,8 +46,7 @@ fn fixture_config() -> ServerConfig {
 #[tokio::test]
 async fn fixture_mode_wires_fixture_adapters() {
     let config = fixture_config();
-    let route_submission: Arc<dyn RouteSubmissionService> =
-        Arc::new(FixtureRouteSubmissionService);
+    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
 
     let state = build_http_state(&config, route_submission);
 
