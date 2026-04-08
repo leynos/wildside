@@ -16,8 +16,7 @@ use std::sync::Arc;
 use actix_web::cookie::Key;
 use rstest::rstest;
 
-use backend::domain::LoginCredentials;
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+mod support;
 
 #[path = "../src/server/config.rs"]
 mod server_config;
@@ -45,6 +44,9 @@ fn fixture_config() -> ServerConfig {
 #[rstest]
 #[tokio::test]
 async fn fixture_mode_wires_fixture_adapters() {
+    use backend::domain::LoginCredentials;
+    use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+
     let config = fixture_config();
     let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
 
@@ -73,19 +75,27 @@ async fn fixture_mode_wires_fixture_adapters() {
     );
 }
 
-/// Test that DB mode builds a functional state and exhibits DB-backed behaviour.
+/// DB-mode composition tests (Stage C).
 ///
-/// This test exercises the login port as a representative smoke test. The key
-/// assertion is that `admin`/`password` fails with `Unauthorized`, which is the
-/// hallmark of `DieselLoginService`. Fixture login would accept these credentials.
-///
-/// NOTE: This test requires a synchronous setup flow and cannot use `#[tokio::test]`.
-/// The DB-mode composition is exercised through the BDD suite in Stage C instead.
-#[rstest]
-#[test]
-#[ignore = "DB mode composition covered by BDD suite; requires sync setup"]
-fn db_mode_wires_db_adapters() {
-    // NOTE: This test is skipped. DB-mode composition determinism will be
-    // verified through the BDD suite in Stage C, which can properly handle
-    // sync cluster setup with async port calls.
+/// Imports in this module are scaffolding for the full implementation;
+/// they will become active once the stub body is filled in.
+mod db_mode {
+    #[allow(unused_imports)]
+    use super::{build_http_state, fixture_config};
+
+    #[allow(unused_imports)]
+    use crate::support::atexit_cleanup::shared_cluster_handle;
+    #[allow(unused_imports)]
+    use crate::support::{handle_cluster_setup_failure, provision_template_database};
+    #[allow(unused_imports)]
+    use backend::domain::{ErrorCode, UserId};
+    #[allow(unused_imports)]
+    use backend::outbound::persistence::{DbPool, PoolConfig};
+
+    #[rstest::rstest]
+    #[test]
+    #[ignore = "DB mode composition covered by BDD suite; requires sync setup"]
+    fn db_mode_wires_db_adapters() {
+        // body to be filled in Stage C
+    }
 }
