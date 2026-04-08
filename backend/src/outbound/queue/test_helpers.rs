@@ -33,24 +33,14 @@ impl FakeQueueProvider {
     ///
     /// Panics if the mutex is poisoned.
     pub(crate) fn pushed_jobs(&self) -> Vec<Vec<u8>> {
-        self.pushed_jobs
-            .lock()
-            .unwrap_or_else(|e| {
-                panic!("Mutex poisoned: {e}");
-            })
-            .clone()
+        self.pushed_jobs.lock().unwrap().clone()
     }
 }
 
 #[async_trait]
 impl QueueProvider for FakeQueueProvider {
     async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError> {
-        self.pushed_jobs
-            .lock()
-            .unwrap_or_else(|e| {
-                panic!("Mutex poisoned: {e}");
-            })
-            .push(payload);
+        self.pushed_jobs.lock().unwrap().push(payload);
         Ok(())
     }
 }
