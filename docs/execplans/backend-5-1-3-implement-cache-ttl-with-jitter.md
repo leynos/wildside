@@ -624,6 +624,7 @@ The implementation is done only when all of the following are true:
 Status: APPROVED and IMPLEMENTED.
 
 All validation criteria met:
+
 - TTL behaviour verified via unit and BDD tests
 - Adapter API extended with `set_bytes_ex`
 - Jitter helper implemented with comprehensive edge-case coverage
