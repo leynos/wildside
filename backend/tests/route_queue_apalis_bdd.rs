@@ -103,7 +103,7 @@ fn setup_test_context() -> Result<TestContext, String> {
 }
 
 #[fixture]
-fn queue_world() -> Option<SharedContext> {
+fn world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
         Err(reason) => handle_cluster_setup_failure(reason),
@@ -315,8 +315,8 @@ fn two_independent_jobs_exist_in_storage(world: &SharedContext) {
 
 #[scenario(path = "tests/features/route_queue_apalis.feature")]
 #[rstest]
-fn route_queue_apalis(queue_world: Option<SharedContext>) {
-    if queue_world.is_none() {
+fn route_queue_apalis(world: Option<SharedContext>) {
+    if world.is_none() {
         eprintln!("Skipping route_queue_apalis: cluster setup failed");
     }
 }
