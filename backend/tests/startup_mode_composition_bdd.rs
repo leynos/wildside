@@ -54,6 +54,91 @@ fn world() -> World {
 }
 
 // ------------------------------------------------------------------------
+// Helper functions for assertion reuse
+// ------------------------------------------------------------------------
+
+/// Assert shared happy-path contracts across both startup modes.
+fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
+    // Login should succeed
+    let login = world.login.as_ref().expect("login snapshot");
+    assert_eq!(login.status, 200);
+    assert!(login.session_cookie.is_some());
+
+    // Profile should return expected display name
+    let profile = world.profile.as_ref().expect("profile snapshot");
+    assert_profile_response(profile, profile_name);
+
+    // Preferences should return 200 with all required fields
+    let preferences = world.preferences.as_ref().expect("preferences snapshot");
+    assert_eq!(preferences.status, 200);
+    let prefs_body = preferences.body.as_ref().expect("preferences body");
+    assert!(prefs_body.get("userId").is_some());
+    assert!(prefs_body.get("interestThemeIds").is_some());
+    assert!(prefs_body.get("safetyToggleIds").is_some());
+    assert!(prefs_body.get("unitSystem").is_some());
+    assert!(prefs_body.get("revision").is_some());
+
+    // Catalogue explore should return 200 with standard fields
+    let catalogue_explore = world
+        .catalogue_explore
+        .as_ref()
+        .expect("catalogue_explore snapshot");
+    assert_eq!(catalogue_explore.status, 200);
+    let explore_body = catalogue_explore
+        .body
+        .as_ref()
+        .expect("catalogue_explore body");
+    assert!(explore_body.get("generatedAt").is_some());
+    assert!(explore_body.get("categories").is_some());
+
+    // Catalogue descriptors should return 200 with standard fields
+    let catalogue_descriptors = world
+        .catalogue_descriptors
+        .as_ref()
+        .expect("catalogue_descriptors snapshot");
+    assert_eq!(catalogue_descriptors.status, 200);
+    let descriptors_body = catalogue_descriptors
+        .body
+        .as_ref()
+        .expect("catalogue_descriptors body");
+    assert!(descriptors_body.get("generatedAt").is_some());
+    assert!(descriptors_body.get("tags").is_some());
+
+    // Offline bundles should return 200 with bundles field
+    let offline_bundles = world
+        .offline_bundles
+        .as_ref()
+        .expect("offline_bundles snapshot");
+    assert_eq!(offline_bundles.status, 200);
+    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
+    assert!(bundles_body.get("bundles").is_some());
+
+    // Enrichment provenance should return 200 with records field
+    let enrichment = world
+        .enrichment_provenance
+        .as_ref()
+        .expect("enrichment_provenance snapshot");
+    assert_eq!(enrichment.status, 200);
+    let enrichment_body = enrichment
+        .body
+        .as_ref()
+        .expect("enrichment_provenance body");
+    assert!(enrichment_body.get("records").is_some());
+}
+
+/// Assert validation error envelope structure.
+fn assert_validation_error_envelope(world: &mut World) {
+    let preferences = world.preferences.as_ref().expect("preferences snapshot");
+    assert_eq!(preferences.status, 400);
+    let body = preferences.body.as_ref().expect("error body");
+    assert_eq!(
+        body.get("code").and_then(|v| v.as_str()),
+        Some("invalid_request")
+    );
+    assert!(body.get("details").is_some());
+}
+
+// ------------------------------------------------------------------------
 // Scenario 1: Fixture-fallback happy path
 // ------------------------------------------------------------------------
 
@@ -74,74 +159,30 @@ fn all_responses_match_fixture_fallback_contracts(world: &mut World) {
         return;
     }
 
-    // Login should succeed with fixture credentials
-    let login = world.login.as_ref().expect("login snapshot");
-    assert_eq!(login.status, 200);
-    assert!(login.session_cookie.is_some());
+    assert_shared_happy_path_contracts(world, FIXTURE_PROFILE_NAME);
 
-    // Profile should return fixture display name
-    let profile = world.profile.as_ref().expect("profile snapshot");
-    assert_profile_response(profile, FIXTURE_PROFILE_NAME);
-
-    // Preferences should return 200 with fixture data
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_eq!(preferences.status, 200);
-    let prefs_body = preferences.body.as_ref().expect("preferences body");
-    assert!(prefs_body.get("userId").is_some());
-    assert!(prefs_body.get("interestThemeIds").is_some());
-    assert!(prefs_body.get("safetyToggleIds").is_some());
-    assert!(prefs_body.get("unitSystem").is_some());
-    assert!(prefs_body.get("revision").is_some());
-
-    // Catalogue explore should return 200 with fixture data
+    // Fixture-specific assertions: explore includes routes
     let catalogue_explore = world
         .catalogue_explore
         .as_ref()
         .expect("catalogue_explore snapshot");
-    assert_eq!(catalogue_explore.status, 200);
     let explore_body = catalogue_explore
         .body
         .as_ref()
         .expect("catalogue_explore body");
-    assert!(explore_body.get("generatedAt").is_some());
-    assert!(explore_body.get("categories").is_some());
     assert!(explore_body.get("routes").is_some());
 
-    // Catalogue descriptors should return 200 with fixture data
+    // Fixture-specific assertions: descriptors include badges and interestThemes
     let catalogue_descriptors = world
         .catalogue_descriptors
         .as_ref()
         .expect("catalogue_descriptors snapshot");
-    assert_eq!(catalogue_descriptors.status, 200);
     let descriptors_body = catalogue_descriptors
         .body
         .as_ref()
         .expect("catalogue_descriptors body");
-    assert!(descriptors_body.get("generatedAt").is_some());
-    assert!(descriptors_body.get("tags").is_some());
     assert!(descriptors_body.get("badges").is_some());
     assert!(descriptors_body.get("interestThemes").is_some());
-
-    // Offline bundles should return 200 with empty fixture list
-    let offline_bundles = world
-        .offline_bundles
-        .as_ref()
-        .expect("offline_bundles snapshot");
-    assert_eq!(offline_bundles.status, 200);
-    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
-    assert!(bundles_body.get("bundles").is_some());
-
-    // Enrichment provenance should return 200 with empty fixture list
-    let enrichment = world
-        .enrichment_provenance
-        .as_ref()
-        .expect("enrichment_provenance snapshot");
-    assert_eq!(enrichment.status, 200);
-    let enrichment_body = enrichment
-        .body
-        .as_ref()
-        .expect("enrichment_provenance body");
-    assert!(enrichment_body.get("records").is_some());
 }
 
 // ------------------------------------------------------------------------
@@ -180,77 +221,15 @@ fn all_responses_match_db_backed_contracts(world: &mut World) {
         return;
     }
 
-    // Login should succeed with fixture credentials (fixture login service
-    // still used even in DB mode per current architecture)
-    let login = world.login.as_ref().expect("login snapshot");
-    assert_eq!(login.status, 200);
-    assert!(login.session_cookie.is_some());
+    assert_shared_happy_path_contracts(world, DB_PROFILE_NAME);
 
-    // Profile should return DB display name
-    let profile = world.profile.as_ref().expect("profile snapshot");
-    assert_profile_response(profile, DB_PROFILE_NAME);
-
-    // Preferences should return 200 with DB-backed data
+    // DB-specific assertion: verify userId matches seeded user
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_eq!(preferences.status, 200);
     let prefs_body = preferences.body.as_ref().expect("preferences body");
     assert_eq!(
         prefs_body.get("userId").and_then(|v| v.as_str()),
         Some(FIXTURE_AUTH_ID)
     );
-    // DB-backed preferences include all required fields
-    assert!(prefs_body.get("interestThemeIds").is_some());
-    assert!(prefs_body.get("safetyToggleIds").is_some());
-    assert!(prefs_body.get("unitSystem").is_some());
-    assert!(prefs_body.get("revision").is_some());
-
-    // Catalogue explore should return 200 with DB-backed data
-    let catalogue_explore = world
-        .catalogue_explore
-        .as_ref()
-        .expect("catalogue_explore snapshot");
-    assert_eq!(catalogue_explore.status, 200);
-    let explore_body = catalogue_explore
-        .body
-        .as_ref()
-        .expect("catalogue_explore body");
-    assert!(explore_body.get("generatedAt").is_some());
-    assert!(explore_body.get("categories").is_some());
-
-    // Catalogue descriptors should return 200 with DB-backed data
-    let catalogue_descriptors = world
-        .catalogue_descriptors
-        .as_ref()
-        .expect("catalogue_descriptors snapshot");
-    assert_eq!(catalogue_descriptors.status, 200);
-    let descriptors_body = catalogue_descriptors
-        .body
-        .as_ref()
-        .expect("catalogue_descriptors body");
-    assert!(descriptors_body.get("generatedAt").is_some());
-    assert!(descriptors_body.get("tags").is_some());
-
-    // Offline bundles should return 200 with DB-backed data (empty unless
-    // seeded)
-    let offline_bundles = world
-        .offline_bundles
-        .as_ref()
-        .expect("offline_bundles snapshot");
-    assert_eq!(offline_bundles.status, 200);
-    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
-    assert!(bundles_body.get("bundles").is_some());
-
-    // Enrichment provenance should return 200 with DB-backed data
-    let enrichment = world
-        .enrichment_provenance
-        .as_ref()
-        .expect("enrichment_provenance snapshot");
-    assert_eq!(enrichment.status, 200);
-    let enrichment_body = enrichment
-        .body
-        .as_ref()
-        .expect("enrichment_provenance body");
-    assert!(enrichment_body.get("records").is_some());
 }
 
 // ------------------------------------------------------------------------
@@ -307,16 +286,7 @@ fn validation_error_envelopes_are_identical_to_db_present_validation_errors(worl
         return;
     }
 
-    // Validation errors should be 400 Bad Request regardless of startup mode
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_eq!(preferences.status, 400);
-    let body = preferences.body.as_ref().expect("error body");
-    assert_eq!(
-        body.get("code").and_then(|v| v.as_str()),
-        Some("invalid_request")
-    );
-    // Should include details about missing fields
-    assert!(body.get("details").is_some());
+    assert_validation_error_envelope(world);
 }
 
 #[then("validation error envelopes remain stable")]
@@ -325,15 +295,7 @@ fn validation_error_envelopes_remain_stable(world: &mut World) {
         return;
     }
 
-    // Same assertion as above - validation errors are mode-independent
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_eq!(preferences.status, 400);
-    let body = preferences.body.as_ref().expect("error body");
-    assert_eq!(
-        body.get("code").and_then(|v| v.as_str()),
-        Some("invalid_request")
-    );
-    assert!(body.get("details").is_some());
+    assert_validation_error_envelope(world);
 }
 
 #[scenario(
