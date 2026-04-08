@@ -125,10 +125,18 @@ pub struct RedisPoolProvider {
     pool: RedisPool,
 }
 
+impl RedisPoolProvider {
+    async fn acquire_connection(
+        &self,
+    ) -> Result<bb8_redis::bb8::PooledConnection<'_, RedisConnectionManager>, RouteCacheError> {
+        self.pool.get().await.map_err(map_pool_error)
+    }
+}
+
 #[async_trait]
 impl ConnectionProvider for RedisPoolProvider {
     async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError> {
-        let mut connection = self.pool.get().await.map_err(map_pool_error)?;
+        let mut connection = self.acquire_connection().await?;
         connection
             .get::<_, Option<Vec<u8>>>(key)
             .await
@@ -136,7 +144,7 @@ impl ConnectionProvider for RedisPoolProvider {
     }
 
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        let mut connection = self.pool.get().await.map_err(map_pool_error)?;
+        let mut connection = self.acquire_connection().await?;
         connection
             .set::<_, _, ()>(key, value)
             .await
@@ -149,7 +157,7 @@ impl ConnectionProvider for RedisPoolProvider {
         value: Vec<u8>,
         ttl_seconds: u64,
     ) -> Result<(), RouteCacheError> {
-        let mut connection = self.pool.get().await.map_err(map_pool_error)?;
+        let mut connection = self.acquire_connection().await?;
         connection
             .set_ex::<_, _, ()>(key, value, ttl_seconds)
             .await

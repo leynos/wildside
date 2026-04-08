@@ -47,6 +47,19 @@ impl FakeProvider {
             .ok()
             .and_then(|store| store.get(key).and_then(|(_, ttl)| *ttl))
     }
+
+    fn insert_entry(
+        &self,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Option<u64>,
+    ) -> Result<(), RouteCacheError> {
+        let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
+            message: "fake store lock poisoned".to_owned(),
+        })?;
+        store.insert(key.to_owned(), (value, ttl));
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -59,11 +72,7 @@ impl ConnectionProvider for FakeProvider {
     }
 
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
-            message: "fake store lock poisoned".to_owned(),
-        })?;
-        store.insert(key.to_owned(), (value, None));
-        Ok(())
+        self.insert_entry(key, value, None)
     }
 
     async fn set_bytes_ex(
@@ -72,11 +81,7 @@ impl ConnectionProvider for FakeProvider {
         value: Vec<u8>,
         ttl_seconds: u64,
     ) -> Result<(), RouteCacheError> {
-        let mut store = self.store.lock().map_err(|_| RouteCacheError::Backend {
-            message: "fake store lock poisoned".to_owned(),
-        })?;
-        store.insert(key.to_owned(), (value, Some(ttl_seconds)));
-        Ok(())
+        self.insert_entry(key, value, Some(ttl_seconds))
     }
 }
 
