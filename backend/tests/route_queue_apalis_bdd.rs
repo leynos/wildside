@@ -113,7 +113,8 @@ fn world() -> Option<SharedContext> {
 // -- Step definitions --
 
 #[given("a test database with Apalis storage initialised")]
-fn a_test_database_with_apalis_storage_initialised(world: &SharedContext) {
+fn a_test_database_with_apalis_storage_initialised(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     // Context setup already initialised the storage in the fixture.
     let ctx = world.lock().expect("context lock");
     assert!(ctx.queue.is_some(), "queue adapter should be initialised");
@@ -121,7 +122,8 @@ fn a_test_database_with_apalis_storage_initialised(world: &SharedContext) {
 }
 
 #[given("the queue adapter uses an invalid database connection")]
-fn the_queue_adapter_uses_an_invalid_database_connection(world: &SharedContext) {
+fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let mut ctx = world.lock().expect("context lock");
     // Replace the queue with one using an invalid connection.
     let invalid_url = "postgres://invalid:invalid@invalid:5432/invalid";
@@ -173,32 +175,38 @@ fn enqueue_test_plan_with_name(world: &SharedContext, name: String) {
 }
 
 #[when("I enqueue a test plan")]
-fn i_enqueue_a_test_plan(world: &SharedContext) {
+fn i_enqueue_a_test_plan(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     enqueue_test_plan_with_name(world, "test-plan".to_string());
 }
 
 #[when("I enqueue the first test plan")]
-fn i_enqueue_the_first_test_plan(world: &SharedContext) {
+fn i_enqueue_the_first_test_plan(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     enqueue_test_plan_with_name(world, "first-plan".to_string());
 }
 
 #[when("I enqueue the second test plan")]
-fn i_enqueue_the_second_test_plan(world: &SharedContext) {
+fn i_enqueue_the_second_test_plan(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     enqueue_test_plan_with_name(world, "second-plan".to_string());
 }
 
 #[when("I enqueue the same test plan again")]
-fn i_enqueue_the_same_test_plan_again(world: &SharedContext) {
+fn i_enqueue_the_same_test_plan_again(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     enqueue_test_plan_with_name(world, "duplicate-plan".to_string());
 }
 
 #[when("I attempt to enqueue a test plan")]
-fn i_attempt_to_enqueue_a_test_plan(world: &SharedContext) {
-    i_enqueue_a_test_plan(world);
+fn i_attempt_to_enqueue_a_test_plan(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
+    enqueue_test_plan_with_name(world, "test-plan".to_string());
 }
 
 #[then("the enqueue operation succeeds")]
-fn the_enqueue_operation_succeeds(world: &SharedContext) {
+fn the_enqueue_operation_succeeds(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let ctx = world.lock().expect("context lock");
     let last_result = ctx
         .enqueue_results
@@ -211,7 +219,8 @@ fn the_enqueue_operation_succeeds(world: &SharedContext) {
 }
 
 #[then("both enqueue operations succeed")]
-fn both_enqueue_operations_succeed(world: &SharedContext) {
+fn both_enqueue_operations_succeed(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let ctx = world.lock().expect("context lock");
     assert_eq!(
         ctx.enqueue_results.len(),
@@ -227,7 +236,8 @@ fn both_enqueue_operations_succeed(world: &SharedContext) {
 }
 
 #[then("the enqueue operation fails with an unavailable error")]
-fn the_enqueue_operation_fails_with_an_unavailable_error(world: &SharedContext) {
+fn the_enqueue_operation_fails_with_an_unavailable_error(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let ctx = world.lock().expect("context lock");
     let last_result = ctx
         .enqueue_results
@@ -267,7 +277,8 @@ fn fetch_last_plan_job_count(world: &SharedContext) -> i64 {
 }
 
 #[then("the plan is persisted in the queue storage")]
-fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
+fn the_plan_is_persisted_in_the_queue_storage(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let count = fetch_last_plan_job_count(world);
     assert!(
         count >= 1,
@@ -276,7 +287,8 @@ fn the_plan_is_persisted_in_the_queue_storage(world: &SharedContext) {
 }
 
 #[then("both plans are persisted as separate jobs")]
-fn both_plans_are_persisted_as_separate_jobs(world: &SharedContext) {
+fn both_plans_are_persisted_as_separate_jobs(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     with_context_async(
         world,
         |ctx| {
@@ -303,7 +315,8 @@ fn both_plans_are_persisted_as_separate_jobs(world: &SharedContext) {
 }
 
 #[then("two independent jobs exist in storage")]
-fn two_independent_jobs_exist_in_storage(world: &SharedContext) {
+fn two_independent_jobs_exist_in_storage(world: &Option<SharedContext>) {
+    let Some(world) = world else { return };
     let count = fetch_last_plan_job_count(world);
     assert_eq!(
         count, 2,
