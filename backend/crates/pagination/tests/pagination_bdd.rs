@@ -27,6 +27,16 @@ fn a_malformed_opaque_cursor_token(world: &World) {
     world.cursor_token.set("not!valid".to_owned());
 }
 
+#[given("pagination parameters without a limit")]
+#[expect(
+    clippy::expect_used,
+    reason = "BDD steps use expect for clear failures"
+)]
+fn pagination_parameters_without_a_limit(world: &World) {
+    let params = PageParams::new(None, None).expect("default params should be valid");
+    world.page_params.set(params);
+}
+
 #[given("normalized pagination parameters with cursor {cursor}")]
 #[expect(
     clippy::expect_used,

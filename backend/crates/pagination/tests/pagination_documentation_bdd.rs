@@ -173,9 +173,14 @@ fn each_error_display_string_contains_a_descriptive_message(world: &World) {
 
     for error in &errors {
         let display = format!("{error}");
+        let has_descriptive_content = display.contains("base64")
+            || display.contains("deserialize")
+            || display.contains("decode")
+            || display.contains("invalid")
+            || display.contains("JSON");
         assert!(
-            !display.is_empty(),
-            "error display string should not be empty"
+            has_descriptive_content,
+            "error display string should contain descriptive keywords like 'base64', 'deserialize', 'decode', 'invalid', or 'JSON'; got: {display}"
         );
     }
 }
