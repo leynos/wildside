@@ -1,6 +1,6 @@
 //! Query parameter parsing and normalization for paginated endpoints.
 //!
-//! This module provides the [`PageParams`] type for parsing and normalising
+//! This module provides the [`PageParams`] type for parsing and normalizing
 //! `cursor` and `limit` query parameters, the [`PageParamsError`] type for
 //! validation failures, and the shared constants [`DEFAULT_LIMIT`] and
 //! [`MAX_LIMIT`].
