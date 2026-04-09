@@ -51,7 +51,6 @@ impl ServerConfig {
 
     /// Return the socket address the server will bind to.
     #[must_use]
-    #[cfg_attr(test, allow(dead_code))]
     pub fn bind_addr(&self) -> SocketAddr {
         self.bind_addr
     }
@@ -68,7 +67,6 @@ impl ServerConfig {
     #[cfg(feature = "metrics")]
     /// Return the configured Prometheus middleware, if any.
     #[must_use]
-    #[cfg_attr(test, allow(dead_code))]
     pub fn metrics(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()
     }
