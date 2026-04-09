@@ -83,13 +83,13 @@
 //! - [`DEFAULT_LIMIT`]: 20 records per page (applied when no limit is provided)
 //! - [`MAX_LIMIT`]: 100 records per page (upper bound for all requests)
 //!
-//! The [`PageParams`] type automatically normalises limit values during
+//! The [`PageParams`] type automatically normalizes limit values during
 //! construction and deserialization:
 //!
 //! - If no limit is provided (`None`), the default limit (20) is applied.
 //! - If the limit is provided but exceeds the maximum (100), it is capped at
 //!   the maximum.
-//! - If the limit is zero or negative, [`PageParams::new`] returns
+//! - If the limit is zero, [`PageParams::new`] returns
 //!   `Err(PageParamsError::InvalidLimit)`.
 //!
 //! ```no_run
@@ -125,7 +125,7 @@
 //! | [`PageParamsError`] | `InvalidLimit`   | 400 Bad Request | `invalid_page_params`   |
 //!
 //! Note that `CursorError::Serialize` maps to HTTP 500 (not 400) because it
-//! indicates a bug in the server (the key type could not be serialised), not a
+//! indicates a bug in the server (the key type could not be serialized), not a
 //! client error. Consumers should log serialization failures and investigate the
 //! root cause.
 //!

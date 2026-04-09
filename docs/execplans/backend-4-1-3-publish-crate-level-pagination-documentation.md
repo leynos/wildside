@@ -367,7 +367,7 @@ The crate exports the following items:
 - `PaginationLinks` — `self_: String`, `next: Option<String>`,
   `prev: Option<String>`. Constructors: `new(...)`,
   `from_request(url, params, next_cursor, prev_cursor)`.
-- `PageParams` — normalised pagination parameters. Constructor:
+- `PageParams` — normalized pagination parameters. Constructor:
   `new(cursor, limit)`. Methods: `cursor()`, `limit()`. Implements
   `Deserialize` with automatic normalization.
 - `PageParamsError` — single variant: `InvalidLimit`.

@@ -5,12 +5,10 @@ Feature: Pagination documentation invariants
 
   Scenario: Default limit is applied when no limit is provided
     Given pagination parameters without a limit
-    When the parameters are normalized
     Then the normalized limit equals DEFAULT_LIMIT
 
   Scenario: Maximum limit caps oversized requests
     Given pagination parameters with limit 500
-    When the parameters are normalized
     Then the normalized limit equals MAX_LIMIT
 
   Scenario: Zero limit is rejected with an error
