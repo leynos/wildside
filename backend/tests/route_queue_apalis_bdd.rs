@@ -251,11 +251,13 @@ fn the_enqueue_operation_fails_with_an_unavailable_error(world: &Option<SharedCo
 
 /// Returns the number of Apalis jobs whose `name` field matches `plan_name`.
 async fn count_jobs_for_plan_name(pool: &PgPool, plan_name: &str) -> i64 {
-    sqlx::query_scalar("SELECT COUNT(*) FROM apalis.jobs WHERE job->>'name' = $1")
-        .bind(plan_name)
-        .fetch_one(pool)
-        .await
-        .expect("query job count")
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM apalis.jobs WHERE convert_from(job, 'UTF8')::jsonb->>'name' = $1",
+    )
+    .bind(plan_name)
+    .fetch_one(pool)
+    .await
+    .expect("query job count")
 }
 
 /// Fetches the job count for the most recently enqueued plan.
