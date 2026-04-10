@@ -28,12 +28,26 @@ use state_builders::build_http_state;
 
 /// Helper to construct a fixture-mode `ServerConfig` with no database pool.
 fn fixture_config() -> ServerConfig {
-    ServerConfig::new(
+    let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid addr");
+    let config = ServerConfig::new(
         Key::generate(),
         false,
         actix_web::cookie::SameSite::Lax,
-        "127.0.0.1:8080".parse::<SocketAddr>().expect("valid addr"),
-    )
+        addr,
+    );
+    // Assert accessor round-trips — this also satisfies the dead-code lint in
+    // this compilation unit, where mod.rs (containing create_server) is absent.
+    assert_eq!(
+        config.bind_addr(),
+        addr,
+        "bind_addr should round-trip the value supplied to new()"
+    );
+    #[cfg(feature = "metrics")]
+    assert!(
+        config.metrics().is_none(),
+        "metrics should be None for a default-constructed ServerConfig"
+    );
+    config
 }
 
 /// Test that fixture mode builds a functional state and exhibits fixture behaviour.
