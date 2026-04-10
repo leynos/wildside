@@ -62,6 +62,8 @@ async fn connect_maps_invalid_connection_strings_to_backend_errors(#[case] redis
 }
 
 mod ttl_integration_tests {
+    //! Integration tests for TTL (time-to-live) behaviour with jittered expiry.
+
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 
@@ -128,6 +130,8 @@ mod ttl_integration_tests {
 }
 
 mod jitter_tests {
+    //! Unit tests for the jittered TTL calculation helper function.
+
     use rand::SeedableRng;
     use rand::rngs::StdRng;
     use rstest::rstest;
