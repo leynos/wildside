@@ -131,6 +131,25 @@ impl RedisPoolProvider {
     ) -> Result<bb8_redis::bb8::PooledConnection<'_, RedisConnectionManager>, RouteCacheError> {
         self.pool.get().await.map_err(map_pool_error)
     }
+
+    async fn set_bytes_internal(
+        &self,
+        key: &str,
+        value: Vec<u8>,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(), RouteCacheError> {
+        let mut connection = self.acquire_connection().await?;
+        match ttl_seconds {
+            Some(ttl) => connection
+                .set_ex::<_, _, ()>(key, value, ttl)
+                .await
+                .map_err(map_redis_error),
+            None => connection
+                .set::<_, _, ()>(key, value)
+                .await
+                .map_err(map_redis_error),
+        }
+    }
 }
 
 #[async_trait]
@@ -144,11 +163,7 @@ impl ConnectionProvider for RedisPoolProvider {
     }
 
     async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        let mut connection = self.acquire_connection().await?;
-        connection
-            .set::<_, _, ()>(key, value)
-            .await
-            .map_err(map_redis_error)
+        self.set_bytes_internal(key, value, None).await
     }
 
     async fn set_bytes_ex(
@@ -157,11 +172,7 @@ impl ConnectionProvider for RedisPoolProvider {
         value: Vec<u8>,
         ttl_seconds: u64,
     ) -> Result<(), RouteCacheError> {
-        let mut connection = self.acquire_connection().await?;
-        connection
-            .set_ex::<_, _, ()>(key, value, ttl_seconds)
-            .await
-            .map_err(map_redis_error)
+        self.set_bytes_internal(key, value, Some(ttl_seconds)).await
     }
 }
 
