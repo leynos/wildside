@@ -123,6 +123,10 @@ Scenario state is isolated by default:
 - Example-data scenarios and steps:
   - Feature files: `crates/example-data/tests/features/`
   - Scenario bindings: `crates/example-data/tests/*_bdd.rs`
+- Shared workspace crate scenarios and steps:
+  - Feature files: `backend/crates/<crate>/tests/features/`
+  - Scenario bindings: `backend/crates/<crate>/tests/*_bdd.rs`
+  - Shared fixtures: `backend/crates/<crate>/tests/common.rs`
 
 ## Adding or changing behavioural tests
 
@@ -139,6 +143,96 @@ When adding a new behaviour:
 
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
+
+## Shared workspace crate testing
+
+Shared workspace crates (such as `backend/crates/pagination`) provide
+domain-neutral primitives consumed by multiple layers of the hexagonal
+architecture. Their test suites follow a specific structure to keep
+individual files under the 400-line limit and to validate both functional
+behaviour and documented invariants.
+
+### File layout
+
+Shared crate BDD suites split into three files under `tests/`:
+
+| File                           | Purpose                                                        |
+|--------------------------------|----------------------------------------------------------------|
+| `common.rs`                    | Shared fixtures, world state, re-exports, and helpers          |
+| `<crate>_bdd.rs`               | Core functional scenarios (one `#[scenario]` per feature file) |
+| `<crate>_documentation_bdd.rs` | Scenarios verifying documented invariants                      |
+
+For the pagination crate, this yields:
+
+- `tests/common.rs` — `World` state struct, `FixtureKey`, and re-exports
+- `tests/pagination_bdd.rs` — pagination foundation and direction-aware
+  cursor scenarios
+- `tests/pagination_documentation_bdd.rs` — documentation invariant
+  scenarios (default limits, error variants, display strings)
+
+### Fixture module pattern
+
+The `common.rs` module contains:
+
+- **Re-exports** of the crate's public API types so step definitions import
+  from `common::` rather than directly from the crate.
+- **A `World` struct** deriving `ScenarioState` with `Slot<T>` fields for
+  each piece of scenario state.
+- **Domain-specific fixture types** (for example, a composite ordering key
+  struct that mirrors the crate documentation examples).
+
+Each BDD test binary declares `mod common;` and imports from it:
+
+```rust
+mod common;
+
+use common::{Cursor, CursorError, FixtureKey, World};
+```
+
+When a step definition is needed by more than one test binary, define it
+in both binaries rather than extracting it into the common module.
+`rstest-bdd` step macros must appear in the same compilation unit as the
+`#[scenario]` binding that references them.
+
+### Hexagonal consumption rules
+
+Shared workspace crates sit below the adapter layer and must remain
+transport-agnostic:
+
+- **Inbound adapters** consume shared crate types for deserialization and
+  response wrapping (for example, deserializing `PageParams` from query
+  strings and wrapping results in `Paginated<T>`).
+- **Outbound adapters** consume shared crate types for query construction
+  (for example, using `Cursor` keys for keyset filtering in Diesel
+  queries).
+- **Domain code** does not depend on shared crate types directly. Ports
+  define their own parameter and return types; adapters convert at the
+  boundary.
+- **Error mapping** is performed by inbound adapters, not by the shared
+  crate. The crate documents recommended HTTP status codes and envelope
+  `code` values, but the adapter layer owns the final mapping.
+
+### Documentation invariant testing
+
+When a shared crate includes crate-level documentation that makes specific
+claims (default values, error behaviour, normalization rules), create a
+dedicated `*_documentation_bdd.rs` test file with scenarios that verify
+those claims at runtime. This ensures documentation and implementation
+remain in sync as a gating requirement.
+
+### Integration guidance for new crates
+
+When adding a new shared workspace crate:
+
+1. Add the crate path to `[workspace].members` in the root `Cargo.toml`.
+2. Run `make fmt` to synchronize the auto-discovered members list.
+3. Verify the crate compiles and tests pass: `cargo test -p <crate-name>`.
+4. Create `tests/common.rs` with a `World` struct and crate re-exports.
+5. Create one `*_bdd.rs` file per feature file under `tests/features/`.
+6. If the crate includes substantial documentation with testable claims,
+   add a `*_documentation_bdd.rs` file with invariant scenarios.
+7. Ensure all test files stay under 400 lines; split by feature when
+   needed.
 
 ## Redis cache adapter testing
 
