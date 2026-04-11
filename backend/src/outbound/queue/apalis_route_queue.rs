@@ -123,7 +123,7 @@ where
 /// to `JobDispatchError` variants.
 #[derive(Clone)]
 pub struct ApalisPostgresProvider {
-    storage: apalis_postgres::PostgresStorage<Vec<u8>>,
+    storage: apalis_postgres::PostgresStorage<serde_json::Value>,
 }
 
 impl ApalisPostgresProvider {
@@ -166,15 +166,15 @@ impl ApalisPostgresProvider {
 #[async_trait]
 impl QueueProvider for ApalisPostgresProvider {
     async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError> {
-        // Clone storage to get a mutable reference (required by TaskSink::push)
-        let mut storage = self.storage.clone();
+        let job: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| {
+            JobDispatchError::rejected(format!("Failed to parse payload as JSON: {e}"))
+        })?;
 
-        // Push the job payload to Apalis
-        storage.push(payload).await.map_err(|e| {
-            // Map all Apalis/SQLx errors to Unavailable
-            // The error type is TaskSinkError<sqlx::Error>
-            JobDispatchError::unavailable(format!("Failed to enqueue job: {e}"))
-        })
+        let mut storage = self.storage.clone();
+        storage
+            .push(job)
+            .await
+            .map_err(|e| JobDispatchError::unavailable(format!("Failed to enqueue job: {e}")))
     }
 }
 
