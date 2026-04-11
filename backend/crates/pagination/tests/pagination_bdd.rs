@@ -1,29 +1,13 @@
 //! Behavioural tests for the pagination crate foundation.
 
-use pagination::{Cursor, CursorError, Direction, PageParams, Paginated, PaginationLinks};
+mod common;
+
+use common::{Cursor, CursorError, Direction, FixtureKey, World};
+use pagination::{PageParams, Paginated, PaginationLinks};
 use rstest::fixture;
-use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
-use serde::{Deserialize, Serialize};
+use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 use url::Url;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct FixtureKey {
-    created_at: String,
-    id: String,
-}
-
-#[derive(Debug, Default, ScenarioState)]
-struct World {
-    key: Slot<FixtureKey>,
-    cursor_token: Slot<String>,
-    decode_result: Slot<Result<Cursor<FixtureKey>, CursorError>>,
-    page_params: Slot<PageParams>,
-    request_url: Slot<Url>,
-    page: Slot<Paginated<String>>,
-    direction: Slot<Direction>,
-}
 
 #[fixture]
 fn world() -> World {
@@ -108,9 +92,6 @@ fn the_cursor_is_decoded(world: &World) {
         .set(Cursor::<FixtureKey>::decode(&token));
 }
 
-#[when("the parameters are normalized")]
-fn the_parameters_are_normalized(_world: &World) {}
-
 #[when("pagination parameters request limit {limit:u64}")]
 #[expect(
     clippy::expect_used,
@@ -120,6 +101,25 @@ fn pagination_parameters_request_limit(world: &World, limit: u64) {
     let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
     let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
     world.page_params.set(params);
+}
+
+/// Helper to build a paginated envelope with the given cursors.
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+fn build_paginated_envelope(
+    world: &World,
+    next_cursor: Option<&str>,
+    prev_cursor: Option<&str>,
+) -> Paginated<String> {
+    let params = world.page_params.get().expect("page params should be set");
+    let request_url = world.request_url.get().expect("request url should be set");
+    Paginated::new(
+        vec!["Ada".to_owned(), "Linus".to_owned()],
+        params.limit(),
+        PaginationLinks::from_request(&request_url, &params, next_cursor, prev_cursor),
+    )
 }
 
 #[when("a paginated envelope is built with next and prev cursors")]
@@ -144,24 +144,6 @@ fn a_paginated_envelope_is_built_with_only_a_prev_cursor(world: &World) {
 fn a_paginated_envelope_is_built_without_pagination_cursors(world: &World) {
     let page = build_paginated_envelope(world, None, None);
     world.page.set(page);
-}
-
-#[expect(
-    clippy::expect_used,
-    reason = "BDD helpers use expect for clear failures"
-)]
-fn build_paginated_envelope(
-    world: &World,
-    next_cursor: Option<&str>,
-    prev_cursor: Option<&str>,
-) -> Paginated<String> {
-    let params = world.page_params.get().expect("page params should be set");
-    let request_url = world.request_url.get().expect("request url should be set");
-    Paginated::new(
-        vec!["Ada".to_owned(), "Linus".to_owned()],
-        params.limit(),
-        PaginationLinks::from_request(&request_url, &params, next_cursor, prev_cursor),
-    )
 }
 
 #[then("the decoded cursor key matches the original key")]
