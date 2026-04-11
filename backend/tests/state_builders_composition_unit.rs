@@ -89,11 +89,12 @@ async fn fixture_mode_wires_fixture_adapters() {
     );
 }
 
-/// DB-mode composition tests (Stage C).
-///
-/// Imports in this module are scaffolding for the full implementation;
-/// they will become active once the stub body is filled in.
 mod db_mode {
+    //! DB-mode composition tests (Stage C).
+    //!
+    //! Imports in this module are scaffolding for the full implementation;
+    //! they will become active once the stub body is filled in.
+
     #[allow(unused_imports)]
     use super::{build_http_state, fixture_config};
 
