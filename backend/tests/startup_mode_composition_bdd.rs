@@ -6,6 +6,7 @@
 
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
+use std::sync::Arc;
 use uuid::Uuid;
 
 mod support;
@@ -39,6 +40,7 @@ const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 #[fixture]
 fn world() -> World {
     World {
+        runtime: Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario")),
         db: None,
         login: None,
         profile: None,
@@ -191,12 +193,13 @@ fn all_responses_match_fixture_fallback_contracts(world: &mut World) {
 
 #[given("db-present startup mode backed by embedded postgres")]
 fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
-    match setup_db_context() {
+    match setup_db_context(&world.runtime) {
         Ok(db) => {
             match seed_user(
                 &db.pool,
                 Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
                 DB_PROFILE_NAME,
+                &world.runtime,
             ) {
                 Ok(()) => {
                     world.db = Some(db);
