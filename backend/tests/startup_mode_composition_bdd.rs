@@ -26,12 +26,16 @@ pub(crate) use server_config::ServerConfig;
 #[path = "../src/server/state_builders.rs"]
 mod state_builders;
 
+#[path = "startup_mode_composition_bdd/db_support.rs"]
+mod db_support;
+
 #[path = "startup_mode_composition_bdd/flow_support.rs"]
 mod flow_support;
 
+use db_support::{seed_route, seed_user, setup_db_context};
 use flow_support::{
     World, assert_internal, assert_profile_response, is_skipped, run_comprehensive_flow,
-    run_validation_error_flow, seed_user, setup_db_context,
+    run_validation_error_flow,
 };
 
 const DB_PROFILE_NAME: &str = "Test User DB";
@@ -42,6 +46,7 @@ fn world() -> World {
     World {
         runtime: Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario")),
         db: None,
+        seeded_route_id: None,
         login: None,
         profile: None,
         interests: None,
@@ -126,6 +131,21 @@ fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
         .as_ref()
         .expect("enrichment_provenance body");
     assert!(enrichment_body.get("records").is_some());
+
+    // Interests should return 200 with interestThemeIds
+    let interests = world.interests.as_ref().expect("interests snapshot");
+    assert_eq!(interests.status, 200);
+    let interests_body = interests.body.as_ref().expect("interests body");
+    assert!(interests_body.get("interestThemeIds").is_some());
+
+    // Walk sessions should return 200 with sessionId
+    let walk = world
+        .walk_sessions
+        .as_ref()
+        .expect("walk_sessions snapshot");
+    assert_eq!(walk.status, 200);
+    let walk_body = walk.body.as_ref().expect("walk_sessions body");
+    assert!(walk_body.get("sessionId").is_some());
 }
 
 /// Assert validation error envelope structure.
@@ -195,14 +215,14 @@ fn all_responses_match_fixture_fallback_contracts(world: &mut World) {
 fn db_present_startup_mode_backed_by_embedded_postgres(world: &mut World) {
     match setup_db_context(&world.runtime) {
         Ok(db) => {
-            match seed_user(
-                &db.pool,
-                Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID"),
-                DB_PROFILE_NAME,
-                &world.runtime,
-            ) {
+            let user_id = Uuid::parse_str(FIXTURE_AUTH_ID).expect("valid fixture UUID");
+            let route_id = Uuid::new_v4();
+            match seed_user(&db.pool, user_id, DB_PROFILE_NAME, &world.runtime)
+                .and_then(|()| seed_route(&db.pool, route_id, user_id, &world.runtime))
+            {
                 Ok(()) => {
                     world.db = Some(db);
+                    world.seeded_route_id = Some(route_id);
                     world.skip_reason = None;
                 }
                 Err(error) => {
