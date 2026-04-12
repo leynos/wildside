@@ -34,7 +34,8 @@ are no in-module unit tests that prove the branching invariant: "when a pool
 is `Some`, every port is DB-backed; when a pool is `None`, every port is
 fixture-backed".
 
-Existing integration and BDD tests exercise state composition indirectly
+Existing integration and behaviour-driven development (BDD) tests exercise
+state composition indirectly
 through HTTP-level flows. They confirm that the wired ports produce correct
 responses, but they do not assert the composition decision itself. If a
 future wiring change accidentally swaps a DB port for a fixture or vice
@@ -175,7 +176,7 @@ Observable success criteria:
 - [x] Drafted this ExecPlan at
   `docs/execplans/backend-3-5-5-harden-startup-mode-composition.md`.
 - [x] Approval gate: user approved implementation.
-- [x] Stage A: analyse and design the helper seam pattern and regression
+- [x] Stage A: analyze and design the helper seam pattern and regression
   assertion strategy.
 - [x] Stage B: extract helper seams and add in-module unit tests to
   `state_builders.rs` proving deterministic adapter selection for all 16
@@ -466,7 +467,7 @@ stay separate.
   deterministic adapter selection for all 16 ports across both startup
   modes, and ensures the module stays within the 400-line limit.
 
-- QA agent:
+- Quality assurance (QA) agent:
   adds the BDD behavioural suite exercising the full startup-mode
   composition matrix at the HTTP boundary with embedded PostgreSQL,
   covering happy, unhappy, and edge paths.
@@ -487,7 +488,7 @@ Hand-off order:
 
 ## Plan of work
 
-### Stage A: analyse and design the helper seam and assertion strategy
+### Stage A: analyze and design the helper seam and assertion strategy
 
 Before writing code, identify the exact assertion mechanism that will prove
 adapter selection determinism without violating hexagonal boundaries.
@@ -567,7 +568,7 @@ Stage A analysis, but the likely steps are:
    ```
 
    For this to compile, the port traits must either be `: Any` or the
-   concrete type behind the `Arc<dyn Trait>` must be downable. Since all
+   concrete type behind the `Arc<dyn Trait>` must be downcastable. Since all
    port trait objects are `'static` and `Send + Sync`, `Any`-based
    downcasting should be available through `Arc::as_any()` if a small
    helper trait is added to the test module.

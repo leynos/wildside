@@ -18,17 +18,13 @@ use backend::inbound::http::offline::list_offline_bundles;
 use backend::inbound::http::preferences::{
     PreferencesRequest, get_preferences, update_preferences,
 };
-use backend::inbound::http::users::{LoginRequest, current_user, login};
+use backend::inbound::http::users::{LoginRequest, current_user, login, update_interests};
 use backend::inbound::http::walk_sessions::create_walk_session;
-use backend::outbound::persistence::{DbPool, PoolConfig};
-use diesel_async::RunQueryDsl;
-use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::support::atexit_cleanup::shared_cluster_handle;
+use super::db_support::DbContext;
 use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
-use super::support::provision_template_database;
 use super::{ServerConfig, state_builders};
 
 /// Snapshot of an HTTP response for assertion purposes.
@@ -40,26 +36,18 @@ pub(crate) struct Snapshot {
     pub(crate) session_cookie: Option<Cookie<'static>>,
 }
 
-/// Database context for DB-present startup mode tests.
-pub(crate) struct DbContext {
-    pub(crate) database_url: String,
-    pub(crate) pool: DbPool,
-    _database: TemporaryDatabase,
-}
-
 /// BDD world state tracking all endpoint responses and startup mode.
 pub(crate) struct World {
     pub(crate) runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) db: Option<DbContext>,
+    pub(crate) seeded_route_id: Option<Uuid>,
     pub(crate) login: Option<Snapshot>,
     pub(crate) profile: Option<Snapshot>,
-    #[allow(dead_code)]
     pub(crate) interests: Option<Snapshot>,
     pub(crate) preferences: Option<Snapshot>,
     pub(crate) catalogue_explore: Option<Snapshot>,
     pub(crate) catalogue_descriptors: Option<Snapshot>,
     pub(crate) offline_bundles: Option<Snapshot>,
-    #[allow(dead_code)]
     pub(crate) walk_sessions: Option<Snapshot>,
     pub(crate) enrichment_provenance: Option<Snapshot>,
     pub(crate) skip_reason: Option<String>,
@@ -112,44 +100,6 @@ pub(crate) fn assert_profile_response(snapshot: &Snapshot, expected_display_name
         body.get("displayName").and_then(Value::as_str),
         Some(expected_display_name)
     );
-}
-
-/// Set up a DB context with embedded PostgreSQL.
-pub(crate) fn setup_db_context(runtime: &tokio::runtime::Runtime) -> Result<DbContext, String> {
-    let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
-    let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
-    let database_url = database.url().to_owned();
-    let pool = runtime
-        .block_on(DbPool::new(
-            PoolConfig::new(database_url.as_str())
-                .with_max_size(2)
-                .with_min_idle(Some(1)),
-        ))
-        .map_err(|error| error.to_string())?;
-    Ok(DbContext {
-        database_url,
-        pool,
-        _database: database,
-    })
-}
-
-/// Seed a user into the DB for testing.
-pub(crate) fn seed_user(
-    pool: &DbPool,
-    user_id: Uuid,
-    display_name: &str,
-    runtime: &tokio::runtime::Runtime,
-) -> Result<(), String> {
-    runtime.block_on(async {
-        let mut conn = pool.get().await.map_err(|error| error.to_string())?;
-        diesel::sql_query("INSERT INTO users (id, display_name) VALUES ($1, $2)")
-            .bind::<diesel::sql_types::Uuid, _>(user_id)
-            .bind::<diesel::sql_types::Text, _>(display_name)
-            .execute(&mut conn)
-            .await
-            .map_err(|error| error.to_string())
-            .map(|_| ())
-    })
 }
 
 /// Build a server configuration from the world state.
@@ -219,7 +169,7 @@ async fn perform_login(
 }
 
 /// Call an authenticated GET endpoint and return a snapshot.
-async fn call_get_endpoint(
+async fn call_get(
     app: &impl actix_web::dev::Service<
         actix_http::Request,
         Response = actix_web::dev::ServiceResponse,
@@ -233,6 +183,20 @@ async fn call_get_endpoint(
         .cookie(cookie)
         .to_request();
     let resp = actix_test::call_service(app, req).await;
+    capture_snapshot(resp, false).await
+}
+
+/// Call an authenticated JSON-body endpoint and return a snapshot.
+async fn call_json(
+    app: &impl actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+    req: actix_test::TestRequest,
+    cookie: Cookie<'static>,
+) -> Snapshot {
+    let resp = actix_test::call_service(app, req.cookie(cookie).to_request()).await;
     capture_snapshot(resp, false).await
 }
 
@@ -261,6 +225,7 @@ async fn run_comprehensive_flow_async(world: &mut World) {
                     .wrap(build_session_middleware())
                     .service(login)
                     .service(current_user)
+                    .service(update_interests)
                     .service(get_preferences)
                     .service(update_preferences)
                     .service(get_explore_catalogue)
@@ -283,16 +248,15 @@ async fn run_comprehensive_flow_async(world: &mut World) {
     };
     world.login = Some(login_snapshot);
 
-    // Exercise all major port groups
-    world.profile = Some(call_get_endpoint(&app, "/api/v1/users/me", cookie.clone()).await);
-    world.preferences =
-        Some(call_get_endpoint(&app, "/api/v1/users/me/preferences", cookie.clone()).await);
+    // Exercise all major port groups (GET endpoints)
+    world.profile = Some(call_get(&app, "/api/v1/users/me", cookie.clone()).await);
+    world.preferences = Some(call_get(&app, "/api/v1/users/me/preferences", cookie.clone()).await);
     world.catalogue_explore =
-        Some(call_get_endpoint(&app, "/api/v1/catalogue/explore", cookie.clone()).await);
+        Some(call_get(&app, "/api/v1/catalogue/explore", cookie.clone()).await);
     world.catalogue_descriptors =
-        Some(call_get_endpoint(&app, "/api/v1/catalogue/descriptors", cookie.clone()).await);
+        Some(call_get(&app, "/api/v1/catalogue/descriptors", cookie.clone()).await);
     world.offline_bundles = Some(
-        call_get_endpoint(
+        call_get(
             &app,
             "/api/v1/offline/bundles?deviceId=test-device",
             cookie.clone(),
@@ -300,7 +264,42 @@ async fn run_comprehensive_flow_async(world: &mut World) {
         .await,
     );
     world.enrichment_provenance =
-        Some(call_get_endpoint(&app, "/api/v1/admin/enrichment/provenance", cookie).await);
+        Some(call_get(&app, "/api/v1/admin/enrichment/provenance", cookie.clone()).await);
+
+    // Exercise interests port (PUT with a minimal valid payload).
+    // The preceding GET preferences call may have created default preferences
+    // (revision 1), so we forward that revision to satisfy optimistic-lock
+    // validation in DB-present mode.
+    let expected_revision = world
+        .preferences
+        .as_ref()
+        .and_then(|s| s.body.as_ref())
+        .and_then(|b| b.get("revision"))
+        .and_then(|v| v.as_u64())
+        .map(|r| r as u32);
+    let interests_req = actix_test::TestRequest::put()
+        .uri("/api/v1/users/me/interests")
+        .set_json(serde_json::json!({
+            "interestThemeIds": ["00000000-0000-0000-0000-000000000001"],
+            "expectedRevision": expected_revision,
+        }));
+    world.interests = Some(call_json(&app, interests_req, cookie.clone()).await);
+
+    // Exercise walk sessions port (POST with a minimal valid payload).
+    // In DB-present mode the routes table enforces a foreign key, so use
+    // the seeded route_id; in fixture mode any UUID is accepted.
+    let route_id = world.seeded_route_id.unwrap_or_else(Uuid::new_v4);
+    let walk_req = actix_test::TestRequest::post()
+        .uri("/api/v1/walk-sessions")
+        .set_json(serde_json::json!({
+            "id": Uuid::new_v4().to_string(),
+            "routeId": route_id.to_string(),
+            "startedAt": "2026-01-01T00:00:00Z",
+            "primaryStats": [],
+            "secondaryStats": [],
+            "highlightedPoiIds": [],
+        }));
+    world.walk_sessions = Some(call_json(&app, walk_req, cookie).await);
 }
 
 /// Execute flow with invalid input to test validation error stability.
