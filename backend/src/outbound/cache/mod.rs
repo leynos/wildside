@@ -5,7 +5,7 @@
 
 mod redis_route_cache;
 
-pub use redis_route_cache::{RedisRouteCache, jittered_ttl};
+pub use redis_route_cache::RedisRouteCache;
 
 // Export RedisPool only for test-support feature to avoid exposing bb8-redis in public API
 #[cfg(feature = "test-support")]

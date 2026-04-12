@@ -40,12 +40,13 @@ impl FakeProvider {
 
     /// Retrieve the recorded TTL for a given key, if any.
     ///
-    /// Returns `None` if the key does not exist or was stored without TTL.
-    pub fn ttl_for(&self, key: &str) -> Option<u64> {
-        self.store
-            .lock()
-            .ok()
-            .and_then(|store| store.get(key).and_then(|(_, ttl)| *ttl))
+    /// Returns `Ok(None)` if the key does not exist or was stored without TTL.
+    /// Returns `Err` if the internal mutex is poisoned.
+    pub fn ttl_for(&self, key: &str) -> Result<Option<u64>, RouteCacheError> {
+        let store = self.store.lock().map_err(|_| RouteCacheError::Backend {
+            message: "fake store lock poisoned".to_owned(),
+        })?;
+        Ok(store.get(key).and_then(|(_, ttl)| *ttl))
     }
 
     fn insert_entry(

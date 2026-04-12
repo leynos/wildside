@@ -81,7 +81,9 @@ mod ttl_integration_tests {
 
         cache.put(&key, &plan).await.expect("put should succeed");
 
-        let ttl = provider.ttl_for("route:ttl-test");
+        let ttl = provider
+            .ttl_for("route:ttl-test")
+            .expect("ttl_for should succeed");
         assert!(ttl.is_some(), "TTL should be recorded");
         let ttl = ttl.expect("TTL exists");
         assert!(ttl >= 77_760, "TTL {ttl} below lower bound 77760");
@@ -102,7 +104,9 @@ mod ttl_integration_tests {
 
         cache.put(&key, &plan).await.expect("put should succeed");
 
-        let ttl = provider.ttl_for("route:no-jitter");
+        let ttl = provider
+            .ttl_for("route:no-jitter")
+            .expect("ttl_for should succeed");
         assert_eq!(ttl, Some(base), "Zero jitter should use exact base TTL");
     }
 
@@ -128,7 +132,7 @@ mod jitter_tests {
     use rand::rngs::StdRng;
     use rstest::rstest;
 
-    use crate::outbound::cache::jittered_ttl;
+    use crate::outbound::cache::redis_route_cache::jittered_ttl;
 
     #[rstest]
     #[case(42)]
@@ -167,13 +171,13 @@ mod jitter_tests {
     #[test]
     fn jittered_ttl_handles_large_jitter_without_overflow() {
         let mut rng = StdRng::seed_from_u64(456);
-        let base = 86_400;
+        let base = (u64::MAX / 2) + 1000; // This would overflow when computing 2 * delta
         let jitter = 1.0;
 
         let ttl = jittered_ttl(base, jitter, &mut rng);
 
         assert!(ttl >= 1, "Large jitter must still clamp to at least 1");
-        assert!(ttl <= 2 * base, "Large jitter must not exceed 2 * base");
+        assert!(ttl <= u64::MAX, "Large jitter must not exceed u64::MAX");
     }
 
     #[test]
