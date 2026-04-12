@@ -49,6 +49,7 @@ pub(crate) struct DbContext {
 
 /// BDD world state tracking all endpoint responses and startup mode.
 pub(crate) struct World {
+    pub(crate) runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) db: Option<DbContext>,
     pub(crate) login: Option<Snapshot>,
     pub(crate) profile: Option<Snapshot>,
@@ -62,12 +63,6 @@ pub(crate) struct World {
     pub(crate) walk_sessions: Option<Snapshot>,
     pub(crate) enrichment_provenance: Option<Snapshot>,
     pub(crate) skip_reason: Option<String>,
-}
-
-fn run_async<T>(future: impl std::future::Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("create runtime")
-        .block_on(future)
 }
 
 fn parse_json_body(bytes: &[u8]) -> Option<Value> {
@@ -120,16 +115,17 @@ pub(crate) fn assert_profile_response(snapshot: &Snapshot, expected_display_name
 }
 
 /// Set up a DB context with embedded PostgreSQL.
-pub(crate) fn setup_db_context() -> Result<DbContext, String> {
+pub(crate) fn setup_db_context(runtime: &tokio::runtime::Runtime) -> Result<DbContext, String> {
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
-    let pool = run_async(DbPool::new(
-        PoolConfig::new(database_url.as_str())
-            .with_max_size(2)
-            .with_min_idle(Some(1)),
-    ))
-    .map_err(|error| error.to_string())?;
+    let pool = runtime
+        .block_on(DbPool::new(
+            PoolConfig::new(database_url.as_str())
+                .with_max_size(2)
+                .with_min_idle(Some(1)),
+        ))
+        .map_err(|error| error.to_string())?;
     Ok(DbContext {
         database_url,
         pool,
@@ -138,8 +134,13 @@ pub(crate) fn setup_db_context() -> Result<DbContext, String> {
 }
 
 /// Seed a user into the DB for testing.
-pub(crate) fn seed_user(pool: &DbPool, user_id: Uuid, display_name: &str) -> Result<(), String> {
-    run_async(async {
+pub(crate) fn seed_user(
+    pool: &DbPool,
+    user_id: Uuid,
+    display_name: &str,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<(), String> {
+    runtime.block_on(async {
         let mut conn = pool.get().await.map_err(|error| error.to_string())?;
         diesel::sql_query("INSERT INTO users (id, display_name) VALUES ($1, $2)")
             .bind::<diesel::sql_types::Uuid, _>(user_id)
@@ -238,7 +239,8 @@ async fn call_get_endpoint(
 /// Execute the comprehensive startup-mode flow exercising all major port
 /// groups.
 pub(crate) fn run_comprehensive_flow(world: &mut World) {
-    run_async(run_comprehensive_flow_async(world));
+    let rt = Arc::clone(&world.runtime);
+    rt.block_on(run_comprehensive_flow_async(world));
 }
 
 async fn run_comprehensive_flow_async(world: &mut World) {
@@ -303,7 +305,8 @@ async fn run_comprehensive_flow_async(world: &mut World) {
 
 /// Execute flow with invalid input to test validation error stability.
 pub(crate) fn run_validation_error_flow(world: &mut World) {
-    run_async(run_validation_error_flow_async(world));
+    let rt = Arc::clone(&world.runtime);
+    rt.block_on(run_validation_error_flow_async(world));
 }
 
 async fn run_validation_error_flow_async(world: &mut World) {
