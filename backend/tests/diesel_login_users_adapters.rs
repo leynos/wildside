@@ -25,7 +25,7 @@ use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
-#[expect(
+#[allow(
     dead_code,
     reason = "server config include exposes members unused in this integration test"
 )]

@@ -9,7 +9,7 @@ mod support;
 use support::handle_cluster_setup_failure;
 
 #[path = "../src/server/config.rs"]
-#[expect(
+#[allow(
     dead_code,
     reason = "tests import ServerConfig from server_config for DB-backed HTTP flows"
 )]

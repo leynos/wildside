@@ -216,6 +216,8 @@ pub fn create_server(
     let route_submission = build_route_submission_service(&config)?;
     let http_state = build_http_state(&config, route_submission);
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
+    #[cfg(feature = "metrics")]
+    let prometheus = config.metrics().cloned();
     let ServerConfig {
         key,
         cookie_secure,
@@ -223,7 +225,7 @@ pub fn create_server(
         bind_addr,
         db_pool: _,
         #[cfg(feature = "metrics")]
-        prometheus,
+            prometheus: _,
     } = config;
 
     #[cfg(feature = "metrics")]

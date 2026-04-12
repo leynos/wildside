@@ -27,7 +27,7 @@ use support::profile_interests::{
 };
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
-#[expect(
+#[allow(
     dead_code,
     reason = "server config include exposes members unused in this integration test"
 )]
