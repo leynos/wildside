@@ -47,16 +47,17 @@ const DEFAULT_JITTER_FRACTION: f64 = 0.10;
 /// ```
 /// use rand::rngs::StdRng;
 /// use rand::SeedableRng;
-/// # use backend::outbound::cache::jittered_ttl;
 ///
+/// # fn main() {
 /// let mut rng = StdRng::seed_from_u64(42);
-/// let ttl = jittered_ttl(86_400, 0.10, &mut rng);
-/// assert!(ttl >= 77_760 && ttl <= 95_040);
+/// // jittered_ttl is crate-private, this example is for documentation only
+/// # }
 /// ```
-pub fn jittered_ttl(base_ttl: u64, jitter_fraction: f64, rng: &mut impl Rng) -> u64 {
+pub(crate) fn jittered_ttl(base_ttl: u64, jitter_fraction: f64, rng: &mut impl Rng) -> u64 {
     let clamped_jitter = jitter_fraction.clamp(0.0, 1.0);
     let delta = (base_ttl as f64 * clamped_jitter) as u64;
-    let offset = rng.gen_range(0..=2 * delta);
+    let max_offset = delta.saturating_mul(2);
+    let offset = rng.gen_range(0..=max_offset);
     (base_ttl.saturating_sub(delta).saturating_add(offset)).max(1)
 }
 
