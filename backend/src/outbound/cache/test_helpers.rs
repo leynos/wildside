@@ -71,17 +71,13 @@ impl ConnectionProvider for FakeProvider {
         Ok(store.get(key).map(|(bytes, _)| bytes.clone()))
     }
 
-    async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        self.insert_entry(key, value, None)
-    }
-
-    async fn set_bytes_ex(
+    async fn set_bytes_with_ttl(
         &self,
         key: &str,
         value: Vec<u8>,
-        ttl_seconds: u64,
+        ttl_seconds: Option<u64>,
     ) -> Result<(), RouteCacheError> {
-        self.insert_entry(key, value, Some(ttl_seconds))
+        self.insert_entry(key, value, ttl_seconds)
     }
 }
 

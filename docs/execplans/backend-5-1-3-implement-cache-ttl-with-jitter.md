@@ -1,4 +1,4 @@
-# Implement cache TTL with jitter (roadmap 5.1.3)
+# Implement cache time-to-live (TTL) with jitter (roadmap 5.1.3)
 
 This ExecPlan (execution plan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
@@ -75,8 +75,8 @@ Observable success criteria:
   `docs/reliable-testing-in-rust-via-dependency-injection.md` for guidance.
 - The default TTL base must be 24 hours (86 400 seconds) and the jitter
   range +/- 10%, yielding a window of 77 760 s to 95 040 s.
-- Use `rstest` for focused unit coverage and `rstest-bdd` for behavioural
-  coverage.
+- Use `rstest` for focused unit coverage and `rstest-bdd` (behaviour-driven
+  development, BDD) for behavioural coverage.
 - Use `pg-embedded-setup-unpriv` to enable local testing with Postgres
   where existing suites require it (via `make test`).
 - Keep files under 400 lines by splitting into coherent modules if needed.
