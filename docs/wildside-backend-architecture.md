@@ -2106,8 +2106,8 @@ same binary in a different **mode**: if an environment variable or CLI flag
 the application in **worker mode** instead of starting the HTTP
 server([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L659-L663)).
  In worker mode, the application initializes the Apalis runtime, connects to
-the job queue (Redis or Postgres), and begins polling for jobs to execute. This
-design allows us to ship one container image but deploy it in two roles: one
+the job queue (PostgreSQL), and begins polling for jobs to execute. This
+design allows the deployment of one container image in two roles: one
 Deployment for the API server, and another Deployment (with perhaps multiple
 replicas) for the
 workers([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L671-L673)).
@@ -2116,25 +2116,25 @@ workers([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f
 the current implementation uses **PostgreSQL** as the job broker (roadmap item
 5.2.1). The choice of PostgreSQL over Redis for queue storage was made to
 leverage existing PostgreSQL infrastructure and test harnesses
-(`pg-embedded-setup-unpriv`), eliminating the need for an additional AMQP
-broker service in production and testing. The hexagonal boundary – specifically
-the `QueueProvider` trait and the domain-owned `RouteQueue` port – ensures that
-migrating to an AMQP backend (e.g., RabbitMQ) is a contained adapter change if
-queue throughput or routing requirements outgrow PostgreSQL
-`NOTIFY`/`SKIP LOCKED` capabilities.
+(`pg-embedded-setup-unpriv`), eliminating the need for an additional Advanced
+Message Queuing Protocol (AMQP) broker service in production and testing. The
+hexagonal boundary – specifically the `QueueProvider` trait and the
+domain-owned `RouteQueue` port – ensures that migrating to an AMQP backend
+(e.g., RabbitMQ) is a contained adapter change if queue throughput or routing
+requirements outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
-Each job type can have its own queue; for example, we define a high-priority
-queue for route generation jobs and a lower-priority queue for enrichment jobs.
-The Apalis configuration in our code will register our job types and their
-handlers, and set up consumers for each queue. We also configure retry
-policies: if a job fails, Apalis will retry it a limited number of times with
+Each job type can have its own queue; for example, the configuration defines a
+high-priority queue for route generation jobs and a lower-priority queue for
+enrichment jobs. The Apalis configuration in the code registers job types and
+their handlers, and sets up consumers for each queue. Retry policies are also
+configured: if a job fails, Apalis will retry it a limited number of times with
 exponential backoff delays. If a job continues to fail (e.g., bad data or a
 persistent issue), it will be moved to a **dead-letter queue** after max
-retries, so that we can inspect or manually requeue it once the issue is
-resolved. Each job will also have a **timeout** – for instance, we might enforce
-that `GenerateRouteJob` must complete within 30 seconds, otherwise it is
-considered failed (to avoid stuck threads). Apalis allows setting such time
-limits per job or globally.
+retries, so that failed jobs can be inspected or manually requeued once the
+issue is resolved. Each job will also have a **timeout** – for instance, the
+system might enforce that `GenerateRouteJob` must complete within 30 seconds,
+otherwise it is considered failed (to avoid stuck threads). Apalis allows
+setting such time limits per job or globally.
 
 **Roadmap item 5.2.1 scope:** As of roadmap item 5.2.1, the backend includes an
 Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
@@ -2271,12 +2271,12 @@ context([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f
 around the job execution. This way, if a user request triggered multiple jobs,
 all of them carry the same trace_id in logs.
 
-We also monitor the queue depth and worker health. Redis can be queried for the
-length of each queue; we can export that as a metric (e.g.,
-`job_queue_length{queue="route_generation"}`) via a custom Prometheus metric or
-use Apalis’ metrics if available. If queue length grows, it indicates workers
-are falling behind. We may set alerts if jobs start to time out or if the
-dead-letter queue has new entries (meaning repeated failures).
+Queue depth and worker health monitoring can be achieved by querying the Apalis
+PostgreSQL tables (e.g., `SELECT COUNT(*) FROM apalis.jobs WHERE state = 'pending'`)
+and exporting metrics (e.g., `job_queue_length{queue="route_generation"}`) via
+custom Prometheus exporters or Apalis' built-in metrics if available. Growing
+queue length indicates workers are falling behind. Alerts can be configured for
+job timeouts or dead-letter queue entries (indicating repeated failures).
 
 Finally, any exceptions in job processing (like if the engine panics or an API
 call fails) are caught by Apalis and can be logged. We ensure that those errors
@@ -2327,11 +2327,12 @@ service that the backend connects to, separate from the Postgres database.
   Redis could have been used for that, but here it’s not needed aside from
   maybe storing a token blacklist or similar, which hasn’t been specified.
 
-- **Job queue backend:** As noted, the same Redis instance is also used as the
-  Apalis job broker (list queues). While logically separate, it’s using the
-  same technology. We configure separate Redis databases or key prefixes for
-  cache vs jobs to avoid collisions. For example, cache keys might be prefixed
-  with `cache:` and Apalis might use its own namespace for queue data.
+- **Job queue backend:** The Apalis job queue uses PostgreSQL as the broker
+  (roadmap item 5.2.1), managed via `apalis-postgres` with a separate
+  `sqlx::PgPool` connection pool. This is independent of the Redis cache and
+  the Diesel repository pool, providing isolation between cache, queue, and
+  persistence concerns. The Apalis tables are managed by
+  `PostgresStorage::setup()` and coexist with Diesel-managed schema.
 
 **Implementation:** The backend uses a Redis client library (`bb8-redis` for
 connection pooling). We initialize a Redis connection pool during
@@ -2403,11 +2404,11 @@ errors connecting to Redis occur. The application should handle Redis failures
 gracefully (if Redis is down, the app can still function by just not caching –
 returning misses and computing fresh results).
 
-Finally, because Redis is also our job queue, if Redis goes down, that affects
-background processing. We might want alerts on that too (e.g., if we cannot
-ping Redis or `redis_up` is 0). In such a scenario, the API would still accept
-requests but jobs wouldn’t be processed, so we’d see a growing queue. Thus,
-ensuring Redis availability is part of our reliability strategy.
+The job queue uses PostgreSQL (roadmap item 5.2.1), so queue availability is
+tied to the PostgreSQL database health rather than Redis. If PostgreSQL is
+unavailable, job enqueuing will fail with `JobDispatchError::Unavailable`, and
+background processing will be blocked. Monitoring PostgreSQL connectivity and
+the Apalis job table metrics is essential for ensuring queue reliability.
 
 ### Observability and Telemetry
 
@@ -2454,9 +2455,10 @@ code([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11f
   connections,
   etc.)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L303-L311)).
 
-- *Redis exporter* for cache and queue metrics (memory, ops,
-  hits/misses)(
+- *Redis exporter* for cache metrics (memory, ops, hits/misses)(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L771-L779)).
+  Queue metrics are obtained from PostgreSQL via the Postgres exporter or
+  custom queries against the Apalis job tables.
 
 - (Additionally, if using Kubernetes, we leverage the Prometheus Operator’s
   ServiceMonitor to scrape these on a 15s interval with proper

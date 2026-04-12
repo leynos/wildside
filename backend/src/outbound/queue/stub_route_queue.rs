@@ -17,7 +17,7 @@ static STUB_WARNING_LOGGED: Once = Once::new();
 /// All `enqueue` operations succeed but the job is not persisted or processed.
 ///
 /// The generic parameter `P` allows this stub to be used with any plan type,
-/// enabling transparent substitution when the real Apalis adapter is introduced.
+/// enabling transparent substitution when using the real Apalis adapter.
 ///
 /// A warning is logged on first use to alert developers that jobs are being
 /// discarded. The warning is gated by a `Once` guard to avoid log flooding.

@@ -96,34 +96,36 @@ Observable success criteria:
 ## Tolerances (exception triggers)
 
 - Scope tolerance: if the work requires changing the `RouteQueue` port trait
-  signature or `JobDispatchError` enum beyond what is already defined, stop
-  and escalate.
+  signature or `JobDispatchError` enum beyond what is already defined, the work
+  should be stopped and escalated.
 - Runtime-wiring tolerance: if a real Apalis adapter cannot be introduced
   without also wiring new server/application configuration or modifying
-  `state_builders.rs`, stop and decide explicitly whether that extra wiring
-  belongs in 5.2.1.
+  `state_builders.rs`, the work should be stopped and an explicit decision
+  made about whether that extra wiring belongs in 5.2.1.
 - Dependency tolerance: adding `apalis`, `apalis-core`, `apalis-sql`, and
   `apalis-postgres` (plus `sqlx` if not already present) is expected. If more
-  than two additional production dependencies beyond these are required, stop
-  and review the trade-off.
+  than two additional production dependencies beyond these are required, the
+  work should be stopped and the trade-off reviewed.
 - Error-contract tolerance: if Apalis or SQLx failures cannot be mapped
   cleanly into the existing `JobDispatchError::{Unavailable, Rejected}` shape,
-  stop and revisit the domain error contract before proceeding.
+  the work should be stopped and the domain error contract revisited before
+  proceeding.
 - Test-harness tolerance: the implementation uses the existing
   `pg-embedded-setup-unpriv` infrastructure for live adapter tests (the same
   harness used by Diesel repository tests). If the embedded PostgreSQL cluster
-  cannot be started, stop and document the blocker before continuing.
+  cannot be started, the work should be stopped and the blocker documented
+  before continuing.
 - Migration tolerance: if Apalis requires database migrations that conflict
-  with or duplicate existing Diesel migrations, stop and escalate.
-  `PostgresStorage::setup()` creates its own tables; this must be verified to
-  coexist safely with the existing Diesel-managed schema.
+  with or duplicate existing Diesel migrations, the work should be stopped and
+  escalated. `PostgresStorage::setup()` creates its own tables; this must be
+  verified to coexist safely with the existing Diesel-managed schema.
 - Gate tolerance: if `make check-fmt`, `make lint`, or `make test` fail after
-  three repair loops, stop and capture the failing logs instead of pushing past
-  the quality gates.
-- Environment tolerance: if embedded PostgreSQL cannot start locally, stop and
-  document the exact blocker plus the command output.
-- File-size tolerance: if any single source file exceeds 400 lines, split it
-  into coherent sub-modules before proceeding.
+  three repair loops, the work should be stopped and the failing logs captured
+  instead of pushing past the quality gates.
+- Environment tolerance: if embedded PostgreSQL cannot start locally, the work
+  should be stopped and the exact blocker plus the command output documented.
+- File-size tolerance: if any single source file exceeds 400 lines, it should
+  be split into coherent sub-modules before proceeding.
 
 ## Risks
 
@@ -265,10 +267,10 @@ Hand-off order:
 
 ## Surprises & discoveries
 
-### Discovery 1: Dependency conflict blocks apalis-postgres integration (2026-04-03)
+### Discovery 1: Dependency conflict blocked apalis-postgres integration (2026-04-03)
 
-**Issue**: Cannot add `apalis-postgres` (either 1.0.0-rc.6 or
-apalis-sql 0.7.x) due to a `libsqlite3-sys` native library version
+**Issue**: `apalis-postgres` (either 1.0.0-rc.6 or apalis-sql 0.7.x)
+could not be added due to a `libsqlite3-sys` native library version
 conflict:
 
 - `wildside-data` (git dependency at rev 894aa38) depends on
@@ -328,7 +330,7 @@ and sqlx 0.8 dependencies added successfully.
 
 ## Decision log
 
-- Decision: 5.2.1 will deliver the Apalis-driven adapter itself, not
+- Decision: 5.2.1 delivers the Apalis-driven adapter itself, not
   request-path queue dispatch or worker consumption.
   Rationale: no domain service currently dispatches to `RouteQueue` (gated
   behind `TODO(#276)` in `route_submission`), and adding that behaviour would
@@ -365,15 +367,16 @@ and sqlx 0.8 dependencies added successfully.
   `PostgresStorage::setup()` at connection time, not by Diesel migrations.
   Rationale: Apalis owns its table schema and the `setup()` call is
   idempotent. Mixing Apalis schema into Diesel migrations would create a
-  coupling between the two ORMs. The adapter calls `setup()` during
-  construction, and tests call it during harness provisioning after Diesel
-  migrations complete.
+  coupling between the two object–relational mappers (ORMs). The adapter calls
+  `setup()` during construction, and tests call it during harness provisioning
+  after Diesel migrations complete.
   Date/Author: 2026-04-03 / planning team.
 
-- Decision: use PostgreSQL rather than AMQP (RabbitMQ / LavinMQ) as the
-  queue backend for 5.2.1, on the explicit condition that the `QueueProvider`
-  abstraction provides sufficient isolation to migrate to an AMQP backend at
-  a later date should volume warrant it.
+- Decision: use PostgreSQL rather than Advanced Message Queuing Protocol
+  (AMQP) brokers (RabbitMQ / LavinMQ) as the queue backend for 5.2.1, on the
+  explicit condition that the `QueueProvider` abstraction provides sufficient
+  isolation to migrate to an AMQP backend at a later date should volume
+  warrant it.
   Rationale: PostgreSQL is already provisioned in production and in the test
   harness (`pg-embedded-setup-unpriv`), so the adapter can be tested and
   deployed with zero new infrastructure. AMQP would require a new broker
@@ -665,9 +668,9 @@ global gate run.
 
 ## Concrete steps
 
-Run all commands from `/home/user/project`. Use `set -o pipefail` and `tee`
-for every meaningful command so the exit code survives truncation and the log
-is retained.
+All commands should be run from `/home/user/project`. `set -o pipefail` and
+`tee` should be used for every meaningful command so the exit code survives
+truncation and the log is retained.
 
 1. Capture the current stub-only baseline and confirm there is no Apalis
    adapter yet.
@@ -800,9 +803,9 @@ All steps in this plan are designed to be re-runnable:
   destructive or irreversible operations are performed.
 
 If the embedded PostgreSQL cluster fails to start (a known environment issue in
-this container), check `/dev/null` is a character device
-(`ls -l /dev/null` should show `crw-rw-rw-`). If it is a regular file,
-recreate it with `mknod -m 666 /dev/null c 1 3`.
+this container), `/dev/null` should be checked to confirm it is a character
+device (`ls -l /dev/null` should show `crw-rw-rw-`). If it is a regular file,
+it should be recreated with `mknod -m 666 /dev/null c 1 3`.
 
 ## Interfaces and dependencies
 
@@ -813,7 +816,7 @@ recreate it with `mknod -m 666 /dev/null c 1 3`.
 apalis-postgres = "1.0.0-rc.6"
 
 # SQLx for Apalis PostgreSQL pool (if not already present)
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }
 ```
 
 The exact version of `apalis-postgres` should be verified against the latest
@@ -873,5 +876,3 @@ backend/tests/route_queue_apalis_bdd.rs              (step definitions)
 ```
 
 ## Approval / implementation gate
-
-Status: AWAITING APPROVAL

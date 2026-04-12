@@ -1,7 +1,8 @@
 //! Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
 
 use async_trait::async_trait;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::Serialize;
+use serde_json::Value;
 use std::marker::PhantomData;
 
 use apalis_core::backend::TaskSink;
@@ -13,16 +14,27 @@ use crate::domain::ports::{JobDispatchError, RouteQueue};
 /// This trait allows the adapter to be tested with fake providers that don't
 /// require a PostgreSQL connection, following the pattern established by
 /// `RedisRouteCache`.
+///
+/// The API accepts a `serde_json::Value` so that higher-level components
+/// (such as `GenericApalisRouteQueue`) perform a single serialization step,
+/// while concrete providers remain decoupled from the specific payload type.
+///
+/// # Visibility
+///
+/// This trait is public to allow integration tests to provide custom test
+/// implementations, but it is not intended for use outside of testing scenarios.
 #[async_trait]
-pub(crate) trait QueueProvider: Send + Sync {
-    /// Pushes a serialized job payload into the queue.
+pub trait QueueProvider: Send + Sync {
+    /// Pushes a JSON job payload into the queue.
+    ///
+    /// Implementations are responsible for any storage-specific encoding
+    /// (e.g. converting to bytes, SQL parameters, etc.).
     ///
     /// # Errors
     ///
     /// Returns `JobDispatchError::Unavailable` if the queue infrastructure is
-    /// unreachable or returns an error. Returns `JobDispatchError::Rejected`
-    /// if the job cannot be persisted (e.g., serialization failure).
-    async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError>;
+    /// not reachable or otherwise cannot accept the job.
+    async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError>;
 }
 
 /// Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
@@ -37,8 +49,8 @@ pub(crate) trait QueueProvider: Send + Sync {
 ///
 /// # Type Parameters
 ///
-/// - `P`: The plan type that will be enqueued. Must implement `Serialize` and
-///   `DeserializeOwned` for persistence.
+/// - `P`: The plan type that will be enqueued. Must implement `Serialize` for
+///   persistence.
 /// - `Q`: The queue provider that abstracts the Apalis storage backend.
 ///
 /// # Example
@@ -102,14 +114,14 @@ pub type ApalisRouteQueue<P> = GenericApalisRouteQueue<P, ApalisPostgresProvider
 #[async_trait]
 impl<P, Q> RouteQueue for GenericApalisRouteQueue<P, Q>
 where
-    P: Serialize + DeserializeOwned + Send + Sync,
+    P: Serialize + Send + Sync,
     Q: QueueProvider,
 {
     type Plan = P;
 
     async fn enqueue(&self, plan: &Self::Plan) -> Result<(), JobDispatchError> {
-        // Serialize the plan to JSON bytes
-        let payload = serde_json::to_vec(plan)
+        // Serialize the plan to JSON value
+        let payload = serde_json::to_value(plan)
             .map_err(|e| JobDispatchError::rejected(format!("Failed to serialize plan: {e}")))?;
 
         // Push to the queue provider
@@ -149,7 +161,9 @@ impl ApalisPostgresProvider {
     /// # }
     /// ```
     pub async fn new(pool: sqlx::PgPool) -> Result<Self, JobDispatchError> {
-        // Create Apalis tables if they don't exist
+        // Create Apalis tables if they don't exist.
+        // Note: setup() is only available for PostgresStorage<(), (), ()> but creates
+        // tables that work for any job type.
         apalis_postgres::PostgresStorage::<(), (), ()>::setup(&pool)
             .await
             .map_err(|e| {
@@ -165,7 +179,7 @@ impl ApalisPostgresProvider {
 
 #[async_trait]
 impl QueueProvider for ApalisPostgresProvider {
-    async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError> {
+    async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
         let job: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| {
             JobDispatchError::rejected(format!("Failed to parse payload as JSON: {e}"))
         })?;
@@ -210,8 +224,8 @@ mod tests {
         assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
 
         // Verify the payload can be deserialized back to the original plan
-        let deserialized: TestPlan =
-            serde_json::from_slice(&pushed_jobs[0]).expect("pushed payload should be valid JSON");
+        let deserialized: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
+            .expect("pushed payload should be valid JSON");
         assert_eq!(
             deserialized, plan,
             "deserialized plan should match original"
@@ -274,10 +288,10 @@ mod tests {
         let pushed_jobs = fake_provider.pushed_jobs();
         assert_eq!(pushed_jobs.len(), 2, "both jobs should be pushed");
 
-        let deserialized1: TestPlan =
-            serde_json::from_slice(&pushed_jobs[0]).expect("first payload should be valid JSON");
-        let deserialized2: TestPlan =
-            serde_json::from_slice(&pushed_jobs[1]).expect("second payload should be valid JSON");
+        let deserialized1: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
+            .expect("first payload should be valid JSON");
+        let deserialized2: TestPlan = serde_json::from_value(pushed_jobs[1].clone())
+            .expect("second payload should be valid JSON");
 
         assert_eq!(deserialized1, plan1, "first plan should match");
         assert_eq!(deserialized2, plan2, "second plan should match");

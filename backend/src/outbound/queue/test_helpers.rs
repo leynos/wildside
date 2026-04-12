@@ -3,6 +3,7 @@
 #![cfg(test)]
 
 use async_trait::async_trait;
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
 use crate::domain::ports::JobDispatchError;
@@ -16,7 +17,7 @@ use crate::outbound::queue::apalis_route_queue::QueueProvider;
 #[derive(Debug, Clone)]
 pub(crate) struct FakeQueueProvider {
     /// Shared storage for pushed job payloads.
-    pushed_jobs: Arc<Mutex<Vec<Vec<u8>>>>,
+    pushed_jobs: Arc<Mutex<Vec<Value>>>,
 }
 
 impl FakeQueueProvider {
@@ -32,15 +33,21 @@ impl FakeQueueProvider {
     /// # Panics
     ///
     /// Panics if the mutex is poisoned.
-    pub(crate) fn pushed_jobs(&self) -> Vec<Vec<u8>> {
-        self.pushed_jobs.lock().unwrap().clone()
+    pub(crate) fn pushed_jobs(&self) -> Vec<Value> {
+        self.pushed_jobs
+            .lock()
+            .expect("failed to lock pushed_jobs mutex")
+            .clone()
     }
 }
 
 #[async_trait]
 impl QueueProvider for FakeQueueProvider {
-    async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError> {
-        self.pushed_jobs.lock().unwrap().push(payload);
+    async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
+        self.pushed_jobs
+            .lock()
+            .expect("failed to lock pushed_jobs mutex")
+            .push(payload);
         Ok(())
     }
 }
@@ -63,7 +70,7 @@ impl FailingQueueProvider {
 
 #[async_trait]
 impl QueueProvider for FailingQueueProvider {
-    async fn push_job(&self, _payload: Vec<u8>) -> Result<(), JobDispatchError> {
+    async fn push_job(&self, _payload: Value) -> Result<(), JobDispatchError> {
         Err(JobDispatchError::unavailable(self.error_message.clone()))
     }
 }

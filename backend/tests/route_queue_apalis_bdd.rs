@@ -12,12 +12,14 @@
 
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use backend::domain::ports::{JobDispatchError, RouteQueue};
-use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue};
+use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue, QueueProvider};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
 
@@ -32,11 +34,31 @@ struct TestPlan {
     name: String,
 }
 
+/// Test helper: Failing queue provider for simulating database unavailability.
+#[derive(Clone)]
+struct FailingProvider {
+    error_message: String,
+}
+
+impl FailingProvider {
+    fn new(error_message: String) -> Self {
+        Self { error_message }
+    }
+}
+
+#[async_trait]
+impl QueueProvider for FailingProvider {
+    async fn push_job(&self, _payload: Value) -> Result<(), JobDispatchError> {
+        Err(JobDispatchError::unavailable(self.error_message.clone()))
+    }
+}
+
 struct TestContext {
     /// Tokio runtime reused for all async operations in this test.
     runtime: Runtime,
     /// The queue adapter under test (or None if using invalid connection).
-    queue: Option<GenericApalisRouteQueue<TestPlan, ApalisPostgresProvider>>,
+    /// Uses Arc<dyn RouteQueue<Plan = TestPlan>> to allow different provider implementations.
+    queue: Option<Arc<dyn RouteQueue<Plan = TestPlan>>>,
     /// SQLx pool for verifying job persistence.
     pool: Option<PgPool>,
     /// Results of enqueue operations.
@@ -94,7 +116,7 @@ fn setup_test_context() -> Result<TestContext, String> {
 
     Ok(TestContext {
         runtime,
-        queue: Some(queue),
+        queue: Some(Arc::new(queue)),
         pool: Some(pool),
         enqueue_results: Vec::new(),
         enqueued_plans: Vec::new(),
@@ -125,33 +147,10 @@ fn a_test_database_with_apalis_storage_initialised(world: &Option<SharedContext>
 fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
     let mut ctx = world.lock().expect("context lock");
-    // Replace the queue with one using an invalid connection.
-    let invalid_url = "postgres://invalid:invalid@invalid:5432/invalid";
-    let pool_result = ctx
-        .runtime
-        .block_on(async { PgPool::connect(invalid_url).await });
-
-    match pool_result {
-        Ok(pool) => {
-            // If connection somehow succeeded, create provider but setup will fail.
-            let provider_result = ctx
-                .runtime
-                .block_on(async { ApalisPostgresProvider::new(pool).await });
-            match provider_result {
-                Ok(provider) => {
-                    ctx.queue = Some(GenericApalisRouteQueue::new(provider));
-                }
-                Err(_) => {
-                    // Provider creation failed as expected.
-                    ctx.queue = None;
-                }
-            }
-        }
-        Err(_) => {
-            // Connection failed as expected - queue operations will fail.
-            ctx.queue = None;
-        }
-    }
+    // Replace the queue with a failing provider that simulates database unavailability.
+    // This exercises the adapter's error mapping without requiring actual database failures.
+    let failing_provider = FailingProvider::new("Database connection unavailable".to_string());
+    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(failing_provider)));
 }
 
 fn enqueue_test_plan_with_name(world: &SharedContext, name: String) {
@@ -159,12 +158,14 @@ fn enqueue_test_plan_with_name(world: &SharedContext, name: String) {
 
     with_context_async(
         world,
-        |ctx| (ctx.queue.clone(), plan.clone()),
-        |(queue_opt, plan_to_enqueue)| async move {
-            let result = match queue_opt {
-                Some(queue) => queue.enqueue(&plan_to_enqueue).await,
-                None => Err(JobDispatchError::unavailable("no queue available")),
-            };
+        |ctx| {
+            (
+                ctx.queue.clone().expect("queue should be initialised"),
+                plan.clone(),
+            )
+        },
+        |(queue, plan_to_enqueue)| async move {
+            let result = queue.enqueue(&plan_to_enqueue).await;
             (result, plan_to_enqueue)
         },
         |ctx, (result, plan_to_store)| {
@@ -195,7 +196,7 @@ fn i_enqueue_the_second_test_plan(world: &Option<SharedContext>) {
 #[when("I enqueue the same test plan again")]
 fn i_enqueue_the_same_test_plan_again(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
-    enqueue_test_plan_with_name(world, "duplicate-plan".to_string());
+    enqueue_test_plan_with_name(world, "test-plan".to_string());
 }
 
 #[when("I attempt to enqueue a test plan")]
