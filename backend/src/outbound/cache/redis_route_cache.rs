@@ -8,7 +8,6 @@
 //! backed implementation.
 
 use std::marker::PhantomData;
-use std::sync::Mutex;
 
 use async_trait::async_trait;
 use bb8_redis::{
@@ -16,7 +15,7 @@ use bb8_redis::{
     bb8::{Pool, RunError},
     redis::{AsyncCommands, RedisError},
 };
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::Rng;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
@@ -40,6 +39,9 @@ const DEFAULT_JITTER_FRACTION: f64 = 0.10;
 /// - Random offset in `[0, 2 * delta]`
 /// - Returns `(base_ttl - delta + offset).max(1)`
 ///
+/// The `jitter_fraction` parameter is clamped to the range [0.0, 1.0] to ensure
+/// sane results. Values outside this range will be automatically clamped.
+///
 /// # Examples
 ///
 /// ```
@@ -52,7 +54,8 @@ const DEFAULT_JITTER_FRACTION: f64 = 0.10;
 /// assert!(ttl >= 77_760 && ttl <= 95_040);
 /// ```
 pub fn jittered_ttl(base_ttl: u64, jitter_fraction: f64, rng: &mut impl Rng) -> u64 {
-    let delta = (base_ttl as f64 * jitter_fraction) as u64;
+    let clamped_jitter = jitter_fraction.clamp(0.0, 1.0);
+    let delta = (base_ttl as f64 * clamped_jitter) as u64;
     let offset = rng.gen_range(0..=2 * delta);
     (base_ttl.saturating_sub(delta).saturating_add(offset)).max(1)
 }
@@ -77,7 +80,33 @@ pub trait ConnectionProvider: Send + Sync {
     /// ```
     async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError>;
 
-    /// Write raw bytes for `key`.
+    /// Write raw bytes for `key` with optional TTL.
+    ///
+    /// If `ttl_seconds` is `Some(n)`, the entry expires after `n` seconds.
+    /// If `ttl_seconds` is `None`, the entry persists without expiry.
+    /// Implementations that do not support expiry may ignore the parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # async fn example(provider: &dyn ConnectionProvider) -> Result<(), RouteCacheError> {
+    /// // Store with 1-hour TTL
+    /// provider.set_bytes_with_ttl("k", vec![1, 2, 3], Some(3600)).await?;
+    /// let got = provider.get_bytes("k").await?;
+    /// assert_eq!(got, Some(vec![1, 2, 3]));
+    /// # Ok(())
+    /// # }
+    /// ```
+    async fn set_bytes_with_ttl(
+        &self,
+        key: &str,
+        value: Vec<u8>,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(), RouteCacheError>;
+
+    /// Write raw bytes for `key` without expiry.
+    ///
+    /// This is a convenience wrapper around `set_bytes_with_ttl(key, value, None)`.
     ///
     /// # Examples
     ///
@@ -89,29 +118,9 @@ pub trait ConnectionProvider: Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError>;
-
-    /// Write raw bytes for `key` with expiry.
-    ///
-    /// The entry expires after `ttl_seconds`. Implementations that do not
-    /// support expiry may ignore the parameter.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # async fn example(provider: &dyn ConnectionProvider) -> Result<(), RouteCacheError> {
-    /// provider.set_bytes_ex("k", vec![1, 2, 3], 3600).await?;
-    /// let got = provider.get_bytes("k").await?;
-    /// assert_eq!(got, Some(vec![1, 2, 3]));
-    /// # Ok(())
-    /// # }
-    /// ```
-    async fn set_bytes_ex(
-        &self,
-        key: &str,
-        value: Vec<u8>,
-        ttl_seconds: u64,
-    ) -> Result<(), RouteCacheError>;
+    async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
+        self.set_bytes_with_ttl(key, value, None).await
+    }
 }
 
 /// [`ConnectionProvider`] backed by a real `bb8-redis` pool.
@@ -125,20 +134,23 @@ pub struct RedisPoolProvider {
     pool: RedisPool,
 }
 
-impl RedisPoolProvider {
-    async fn acquire_connection(
-        &self,
-    ) -> Result<bb8_redis::bb8::PooledConnection<'_, RedisConnectionManager>, RouteCacheError> {
-        self.pool.get().await.map_err(map_pool_error)
+#[async_trait]
+impl ConnectionProvider for RedisPoolProvider {
+    async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError> {
+        let mut connection = self.pool.get().await.map_err(map_pool_error)?;
+        connection
+            .get::<_, Option<Vec<u8>>>(key)
+            .await
+            .map_err(map_redis_error)
     }
 
-    async fn set_bytes_internal(
+    async fn set_bytes_with_ttl(
         &self,
         key: &str,
         value: Vec<u8>,
         ttl_seconds: Option<u64>,
     ) -> Result<(), RouteCacheError> {
-        let mut connection = self.acquire_connection().await?;
+        let mut connection = self.pool.get().await.map_err(map_pool_error)?;
         match ttl_seconds {
             Some(ttl) => connection
                 .set_ex::<_, _, ()>(key, value, ttl)
@@ -149,30 +161,6 @@ impl RedisPoolProvider {
                 .await
                 .map_err(map_redis_error),
         }
-    }
-}
-
-#[async_trait]
-impl ConnectionProvider for RedisPoolProvider {
-    async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, RouteCacheError> {
-        let mut connection = self.acquire_connection().await?;
-        connection
-            .get::<_, Option<Vec<u8>>>(key)
-            .await
-            .map_err(map_redis_error)
-    }
-
-    async fn set_bytes(&self, key: &str, value: Vec<u8>) -> Result<(), RouteCacheError> {
-        self.set_bytes_internal(key, value, None).await
-    }
-
-    async fn set_bytes_ex(
-        &self,
-        key: &str,
-        value: Vec<u8>,
-        ttl_seconds: u64,
-    ) -> Result<(), RouteCacheError> {
-        self.set_bytes_internal(key, value, Some(ttl_seconds)).await
     }
 }
 
@@ -189,7 +177,6 @@ pub struct GenericRedisRouteCache<P, C> {
     provider: C,
     base_ttl: u64,
     jitter_fraction: f64,
-    rng: Mutex<SmallRng>,
     _plan: PhantomData<fn() -> P>,
 }
 
@@ -217,30 +204,27 @@ impl<P> RedisRouteCache<P> {
     /// # Ok(())
     /// # }
     /// ```
+    fn from_pool(pool: RedisPool) -> Self {
+        Self {
+            provider: RedisPoolProvider { pool },
+            base_ttl: DEFAULT_BASE_TTL_SECS,
+            jitter_fraction: DEFAULT_JITTER_FRACTION,
+            _plan: PhantomData,
+        }
+    }
+
     /// Creates a new cache instance from an existing pool.
     ///
     /// Available as public API when the `test-support` feature is enabled,
     /// otherwise crate-private to keep bb8-redis internals from leaking.
     #[cfg(feature = "test-support")]
     pub fn new(pool: RedisPool) -> Self {
-        Self {
-            provider: RedisPoolProvider { pool },
-            base_ttl: DEFAULT_BASE_TTL_SECS,
-            jitter_fraction: DEFAULT_JITTER_FRACTION,
-            rng: Mutex::new(SmallRng::from_entropy()),
-            _plan: PhantomData,
-        }
+        Self::from_pool(pool)
     }
 
     #[cfg(not(feature = "test-support"))]
     pub(crate) fn new(pool: RedisPool) -> Self {
-        Self {
-            provider: RedisPoolProvider { pool },
-            base_ttl: DEFAULT_BASE_TTL_SECS,
-            jitter_fraction: DEFAULT_JITTER_FRACTION,
-            rng: Mutex::new(SmallRng::from_entropy()),
-            _plan: PhantomData,
-        }
+        Self::from_pool(pool)
     }
 
     /// Build a Redis-backed cache from a Redis connection string.
@@ -281,7 +265,6 @@ impl<P, C> GenericRedisRouteCache<P, C> {
             provider,
             base_ttl: DEFAULT_BASE_TTL_SECS,
             jitter_fraction: DEFAULT_JITTER_FRACTION,
-            rng: Mutex::new(SmallRng::from_entropy()),
             _plan: PhantomData,
         }
     }
@@ -289,20 +272,13 @@ impl<P, C> GenericRedisRouteCache<P, C> {
     /// Create a cache with a custom provider and TTL parameters.
     ///
     /// This constructor allows tests to control TTL behaviour by specifying
-    /// custom base TTL, jitter fraction, and a seeded RNG for deterministic
-    /// tests.
+    /// custom base TTL and jitter fraction.
     #[cfg(test)]
-    pub(crate) fn with_provider_and_ttl(
-        provider: C,
-        base_ttl: u64,
-        jitter_fraction: f64,
-        rng: SmallRng,
-    ) -> Self {
+    pub(crate) fn with_provider_and_ttl(provider: C, base_ttl: u64, jitter_fraction: f64) -> Self {
         Self {
             provider,
             base_ttl,
             jitter_fraction,
-            rng: Mutex::new(rng),
             _plan: PhantomData,
         }
     }
@@ -328,13 +304,13 @@ where
         let payload = serde_json::to_vec(plan).map_err(map_serialization_error)?;
 
         let ttl = {
-            let mut rng = self.rng.lock().map_err(|_| RouteCacheError::Backend {
-                message: "RNG lock poisoned".to_owned(),
-            })?;
-            jittered_ttl(self.base_ttl, self.jitter_fraction, &mut *rng)
+            let mut rng = rand::thread_rng();
+            jittered_ttl(self.base_ttl, self.jitter_fraction, &mut rng)
         };
 
-        self.provider.set_bytes_ex(key.as_str(), payload, ttl).await
+        self.provider
+            .set_bytes_with_ttl(key.as_str(), payload, Some(ttl))
+            .await
     }
 }
 
