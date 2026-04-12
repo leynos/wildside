@@ -260,18 +260,21 @@ fn responses_produce_stable_error_envelopes_rather_than_fixture_data(world: &mut
         return;
     }
 
-    // Login should still work (fixture login service)
+    // In DB-present mode the DB login service is active. With the users table
+    // missing it cannot authenticate, so login itself returns a stable 500
+    // error envelope — not fixture-fallback data.
     let login = world.login.as_ref().expect("login snapshot");
-    assert_eq!(login.status, 200);
+    assert_internal(login);
 
-    // Profile should return 500 internal error (not fixture data) because
-    // users table is missing
-    let profile = world.profile.as_ref().expect("profile snapshot");
-    assert_internal(profile);
-
-    // Preferences should return 500 internal error (not fixture data)
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_internal(preferences);
+    // Because login failed the flow aborted early; no further snapshots exist.
+    assert!(
+        world.profile.is_none(),
+        "profile should not be set when login fails: no fixture fallback should occur"
+    );
+    assert!(
+        world.preferences.is_none(),
+        "preferences should not be set when login fails: no fixture fallback should occur"
+    );
 }
 
 // ------------------------------------------------------------------------
