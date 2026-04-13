@@ -157,11 +157,7 @@ fn the_decoded_cursor_key_matches_the_original_key(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.key(), &key);
+    assert_eq!(decoded_cursor(&decode_result).key(), &key);
 }
 
 #[then("cursor decoding fails")]
@@ -269,6 +265,18 @@ fn serialized_links(world: &World) -> serde_json::Map<String, Value> {
     links.clone()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+fn decoded_cursor(
+    decode_result: &Result<Cursor<FixtureKey>, CursorError>,
+) -> &Cursor<FixtureKey> {
+    decode_result
+        .as_ref()
+        .expect("cursor decoding should succeed")
+}
+
 // Direction-aware cursor step definitions
 
 #[given("pagination direction Next")]
@@ -308,11 +316,7 @@ fn the_decoded_cursor_has_direction_next(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.direction(), Direction::Next);
+    assert_eq!(decoded_cursor(&decode_result).direction(), Direction::Next);
 }
 
 #[then("the decoded cursor has direction Prev")]
@@ -325,11 +329,7 @@ fn the_decoded_cursor_has_direction_prev(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.direction(), Direction::Prev);
+    assert_eq!(decoded_cursor(&decode_result).direction(), Direction::Prev);
 }
 
 #[scenario(path = "tests/features/pagination.feature")]
