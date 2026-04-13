@@ -180,13 +180,9 @@ impl ApalisPostgresProvider {
 #[async_trait]
 impl QueueProvider for ApalisPostgresProvider {
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
-        let job: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| {
-            JobDispatchError::rejected(format!("Failed to parse payload as JSON: {e}"))
-        })?;
-
         let mut storage = self.storage.clone();
         storage
-            .push(job)
+            .push(payload)
             .await
             .map_err(|e| JobDispatchError::unavailable(format!("Failed to enqueue job: {e}")))
     }

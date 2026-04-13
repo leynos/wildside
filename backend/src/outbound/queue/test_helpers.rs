@@ -34,20 +34,14 @@ impl FakeQueueProvider {
     ///
     /// Panics if the mutex is poisoned.
     pub(crate) fn pushed_jobs(&self) -> Vec<Value> {
-        self.pushed_jobs
-            .lock()
-            .expect("failed to lock pushed_jobs mutex")
-            .clone()
+        self.pushed_jobs.lock().unwrap().clone()
     }
 }
 
 #[async_trait]
 impl QueueProvider for FakeQueueProvider {
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
-        self.pushed_jobs
-            .lock()
-            .expect("failed to lock pushed_jobs mutex")
-            .push(payload);
+        self.pushed_jobs.lock().unwrap().push(payload);
         Ok(())
     }
 }
