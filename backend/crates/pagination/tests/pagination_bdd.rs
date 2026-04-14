@@ -93,14 +93,8 @@ fn the_cursor_is_decoded(world: &World) {
 }
 
 #[when("pagination parameters request limit {limit:u64}")]
-#[expect(
-    clippy::expect_used,
-    reason = "BDD steps use expect for clear failures"
-)]
 fn pagination_parameters_request_limit(world: &World, limit: u64) {
-    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
-    let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
-    world.page_params.set(params);
+    common::set_page_params_with_limit(world, limit);
 }
 
 /// Helper to build a paginated envelope with the given cursors.

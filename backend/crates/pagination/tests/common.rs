@@ -40,3 +40,21 @@ pub struct World {
     /// Collection of cursor errors for testing.
     pub cursor_errors: Slot<Vec<CursorError>>,
 }
+
+/// Helper to create and store page parameters with the given limit.
+///
+/// This helper is shared by BDD step definitions that need to set up
+/// page parameters with a specific limit value.
+///
+/// # Panics
+///
+/// Panics if the limit exceeds `usize::MAX` or if the limit is zero.
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+pub fn set_page_params_with_limit(world: &World, limit: u64) {
+    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
+    let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
+    world.page_params.set(params);
+}

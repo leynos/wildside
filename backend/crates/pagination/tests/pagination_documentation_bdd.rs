@@ -26,14 +26,8 @@ fn pagination_parameters_without_a_limit(world: &World) {
 }
 
 #[given("pagination parameters with limit {limit:u64}")]
-#[expect(
-    clippy::expect_used,
-    reason = "BDD steps use expect for clear failures"
-)]
 fn pagination_parameters_with_limit(world: &World, limit: u64) {
-    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
-    let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
-    world.page_params.set(params);
+    common::set_page_params_with_limit(world, limit);
 }
 
 #[given("an invalid base64 cursor token {token}")]
