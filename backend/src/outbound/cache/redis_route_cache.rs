@@ -173,7 +173,7 @@ impl ConnectionProvider for RedisPoolProvider {
 ///
 /// Public because the [`RedisRouteCache`] type alias references this type;
 /// prefer using the type alias for production code.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GenericRedisRouteCache<P, C> {
     provider: C,
     base_ttl: u64,
@@ -274,8 +274,8 @@ impl<P, C> GenericRedisRouteCache<P, C> {
     ///
     /// This constructor allows tests to control TTL behaviour by specifying
     /// custom base TTL and jitter fraction.
-    #[cfg(test)]
-    pub(crate) fn with_provider_and_ttl(provider: C, base_ttl: u64, jitter_fraction: f64) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_provider_and_ttl(provider: C, base_ttl: u64, jitter_fraction: f64) -> Self {
         Self {
             provider,
             base_ttl,
