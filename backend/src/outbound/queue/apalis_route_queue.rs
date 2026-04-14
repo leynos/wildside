@@ -34,6 +34,32 @@ pub trait QueueProvider: Send + Sync {
     ///
     /// Returns `JobDispatchError::Unavailable` if the queue infrastructure is
     /// not reachable or otherwise cannot accept the job.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use async_trait::async_trait;
+    /// # use serde_json::json;
+    /// # use backend::domain::ports::JobDispatchError;
+    /// # use backend::outbound::queue::QueueProvider;
+    /// # use serde_json::Value;
+    /// #
+    /// # struct MyProvider;
+    /// #
+    /// # #[async_trait]
+    /// # impl QueueProvider for MyProvider {
+    /// #     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
+    /// #         Ok(())
+    /// #     }
+    /// # }
+    /// #
+    /// # async fn example() -> Result<(), JobDispatchError> {
+    /// let provider = MyProvider;
+    /// let payload = json!({ "name": "route-123" });
+    /// provider.push_job(payload).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError>;
 }
 
@@ -216,7 +242,9 @@ mod tests {
         let result = queue.enqueue(&plan).await;
         assert!(result.is_ok(), "enqueue should succeed with fake provider");
 
-        let pushed_jobs = fake_provider.pushed_jobs();
+        let pushed_jobs = fake_provider
+            .pushed_jobs()
+            .expect("should be able to access pushed jobs");
         assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
 
         // Verify the payload can be deserialized back to the original plan
@@ -281,7 +309,9 @@ mod tests {
             .await
             .expect("second enqueue should succeed");
 
-        let pushed_jobs = fake_provider.pushed_jobs();
+        let pushed_jobs = fake_provider
+            .pushed_jobs()
+            .expect("should be able to access pushed jobs");
         assert_eq!(pushed_jobs.len(), 2, "both jobs should be pushed");
 
         let deserialized1: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
@@ -324,7 +354,11 @@ mod tests {
             JobDispatchError::Rejected { message } => {
                 assert!(
                     message.contains("Failed to serialize plan"),
-                    "error message should indicate serialization failure: {message}"
+                    "error message should contain adapter context: {message}"
+                );
+                assert!(
+                    message.contains("simulated serialization failure"),
+                    "error message should contain underlying serializer error: {message}"
                 );
             }
             JobDispatchError::Unavailable { .. } => {
@@ -333,7 +367,9 @@ mod tests {
         }
 
         // Verify nothing was pushed to the provider
-        let pushed_jobs = fake_provider.pushed_jobs();
+        let pushed_jobs = fake_provider
+            .pushed_jobs()
+            .expect("should be able to access pushed jobs");
         assert_eq!(
             pushed_jobs.len(),
             0,
