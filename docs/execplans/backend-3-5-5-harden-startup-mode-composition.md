@@ -387,11 +387,11 @@ should be wired.
 
 ### HTTP state types: `backend/src/inbound/http/state.rs`
 
-`HttpStatePorts` contains 11 port `Arc`s: `login`, `users`, `profile`,
+`HttpStatePorts` contains 11 ports (as `Arc`s): `login`, `users`, `profile`,
 `interests`, `preferences`, `preferences_query`, `route_annotations`,
 `route_annotations_query`, `route_submission`, `catalogue`, `descriptors`.
 
-`HttpStateExtraPorts` contains 5 port `Arc`s: `offline_bundles`,
+`HttpStateExtraPorts` contains 5 ports (as `Arc`s): `offline_bundles`,
 `offline_bundles_query`, `enrichment_provenance`, `walk_sessions`,
 `walk_sessions_query`.
 
@@ -494,23 +494,14 @@ Hand-off order:
 Before writing code, identify the exact assertion mechanism that will prove
 adapter selection determinism without violating hexagonal boundaries.
 
-The recommended approach is a **type-witness strategy**: each builder helper
-returns `(Arc<dyn PortTrait>, ...)` as it does today, but in the
-`#[cfg(test)]` unit-test module we call the same builders and use
-`std::any::TypeId` on the inner concrete type (via `Arc::as_ref()` and
-`.type_id()`) to assert that the returned trait object wraps the expected
-concrete adapter or fixture. This works because `TypeId` is available for
-any `'static` type and does not require changes to domain traits. The key
-prerequisite is that domain port traits include `: Any` as a supertrait
-bound or, more conservatively, that the test module uses
-`std::any::Any`-based downcasting only on the concrete `HttpState` fields
-which are already `'static`.
-
-If `TypeId`-based assertion proves impractical (for example, if trait
-objects do not expose `Any`), the fallback strategy is to test through
-observable behaviour: call a lightweight method on each port and assert the
-response shape distinguishes fixture from DB-backed (for example, fixture
-login accepts `admin`/`password` while DB login rejects it).
+Decision A1 superseded the earlier **type-witness strategy** draft that
+would have used `std::any::TypeId` and `Any`-based downcasting on the
+returned trait objects. The chosen approach is to test through observable
+behaviour instead: call a lightweight method on each port and assert the
+response shape distinguishes fixture from DB-backed implementations
+(for example, fixture login accepts `admin`/`password` while DB login
+rejects it), which keeps the assertions aligned with the hexagonal
+boundary and avoids adding type-introspection seams just for tests.
 
 Audit the existing builder visibility to determine which helpers need
 `pub(crate)` or `pub(super)` exposure for testability, and assess whether

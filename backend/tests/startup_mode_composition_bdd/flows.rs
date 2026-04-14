@@ -146,13 +146,13 @@ async fn call_write_endpoints(
     // The preceding GET preferences call may have created default preferences
     // (revision 1), so we forward that revision to satisfy optimistic-lock
     // validation in DB-present mode.
-    let expected_revision = world
+    let expected_revision: Option<u32> = world
         .preferences
         .as_ref()
         .and_then(|s| s.body.as_ref())
         .and_then(|b| b.get("revision"))
         .and_then(|v| v.as_u64())
-        .map(|r| r as u32);
+        .and_then(|r| r.try_into().ok());
     let interests_req = actix_test::TestRequest::put()
         .uri("/api/v1/users/me/interests")
         .set_json(serde_json::json!({
@@ -210,6 +210,9 @@ async fn run_comprehensive_flow_async(world: &mut World) {
     }
 
     let config = build_server_config(world);
+    // `FixtureRouteSubmissionService` is injected for both startup modes here
+    // because `state_builders::build_http_state` does not select this port via
+    // `db_pool`; the test harness wires route submission externally instead.
     let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 
@@ -283,6 +286,9 @@ async fn run_validation_error_flow_async(world: &mut World) {
     }
 
     let config = build_server_config(world);
+    // `FixtureRouteSubmissionService` is injected for both startup modes here
+    // because `state_builders::build_http_state` does not select this port via
+    // `db_pool`; the test harness wires route submission externally instead.
     let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
     let state = state_builders::build_http_state(&config, route_submission);
 

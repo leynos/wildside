@@ -67,92 +67,83 @@ fn world() -> World {
 // Helper functions for assertion reuse
 // ------------------------------------------------------------------------
 
-/// Assert shared happy-path contracts across both startup modes.
-fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
-    // Login should succeed
-    let login = world.login.as_ref().expect("login snapshot");
-    assert_eq!(login.status, 200);
-    assert!(login.session_cookie.is_some());
+fn assert_snapshot_ok(
+    snapshot: &Option<flow_support::Snapshot>,
+    name: &str,
+    expected_status: u16,
+    required_fields: &[&str],
+) {
+    let snapshot = match snapshot.as_ref() {
+        Some(snapshot) => snapshot,
+        None => panic!("{name} snapshot missing"),
+    };
+    assert_eq!(snapshot.status, expected_status, "{name} status");
+    let body = match snapshot.body.as_ref() {
+        Some(body) => body,
+        None => panic!("{name} body missing"),
+    };
+    for field in required_fields {
+        assert!(body.get(*field).is_some(), "{name} missing {field}");
+    }
+}
 
-    // Profile should return expected display name
-    let profile = world.profile.as_ref().expect("profile snapshot");
-    assert_profile_response(profile, profile_name);
-
+fn assert_user_state_snapshots(world: &World) {
     // Users list should return 200
     let users_list = world.users_list.as_ref().expect("users_list snapshot");
     assert_eq!(users_list.status, 200);
 
     // Preferences should return 200 with all required fields
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    assert_eq!(preferences.status, 200);
-    let prefs_body = preferences.body.as_ref().expect("preferences body");
-    assert!(prefs_body.get("userId").is_some());
-    assert!(prefs_body.get("interestThemeIds").is_some());
-    assert!(prefs_body.get("safetyToggleIds").is_some());
-    assert!(prefs_body.get("unitSystem").is_some());
-    assert!(prefs_body.get("revision").is_some());
+    assert_snapshot_ok(
+        &world.preferences,
+        "preferences",
+        200,
+        &[
+            "userId",
+            "interestThemeIds",
+            "safetyToggleIds",
+            "unitSystem",
+            "revision",
+        ],
+    );
+}
 
+fn assert_catalogue_snapshots(world: &World) {
     // Catalogue explore should return 200 with standard fields
-    let catalogue_explore = world
-        .catalogue_explore
-        .as_ref()
-        .expect("catalogue_explore snapshot");
-    assert_eq!(catalogue_explore.status, 200);
-    let explore_body = catalogue_explore
-        .body
-        .as_ref()
-        .expect("catalogue_explore body");
-    assert!(explore_body.get("generatedAt").is_some());
-    assert!(explore_body.get("categories").is_some());
+    assert_snapshot_ok(
+        &world.catalogue_explore,
+        "catalogue_explore",
+        200,
+        &["generatedAt", "categories"],
+    );
 
     // Catalogue descriptors should return 200 with standard fields
-    let catalogue_descriptors = world
-        .catalogue_descriptors
-        .as_ref()
-        .expect("catalogue_descriptors snapshot");
-    assert_eq!(catalogue_descriptors.status, 200);
-    let descriptors_body = catalogue_descriptors
-        .body
-        .as_ref()
-        .expect("catalogue_descriptors body");
-    assert!(descriptors_body.get("generatedAt").is_some());
-    assert!(descriptors_body.get("tags").is_some());
+    assert_snapshot_ok(
+        &world.catalogue_descriptors,
+        "catalogue_descriptors",
+        200,
+        &["generatedAt", "tags"],
+    );
+}
 
+fn assert_resource_snapshots(world: &World) {
     // Offline bundles should return 200 with bundles field
-    let offline_bundles = world
-        .offline_bundles
-        .as_ref()
-        .expect("offline_bundles snapshot");
-    assert_eq!(offline_bundles.status, 200);
-    let bundles_body = offline_bundles.body.as_ref().expect("offline_bundles body");
-    assert!(bundles_body.get("bundles").is_some());
+    assert_snapshot_ok(&world.offline_bundles, "offline_bundles", 200, &["bundles"]);
 
     // Enrichment provenance should return 200 with records field
-    let enrichment = world
-        .enrichment_provenance
-        .as_ref()
-        .expect("enrichment_provenance snapshot");
-    assert_eq!(enrichment.status, 200);
-    let enrichment_body = enrichment
-        .body
-        .as_ref()
-        .expect("enrichment_provenance body");
-    assert!(enrichment_body.get("records").is_some());
+    assert_snapshot_ok(
+        &world.enrichment_provenance,
+        "enrichment_provenance",
+        200,
+        &["records"],
+    );
+}
 
+fn assert_write_port_snapshots(world: &World) {
     // Interests should return 200 with interestThemeIds
-    let interests = world.interests.as_ref().expect("interests snapshot");
-    assert_eq!(interests.status, 200);
-    let interests_body = interests.body.as_ref().expect("interests body");
-    assert!(interests_body.get("interestThemeIds").is_some());
+    assert_snapshot_ok(&world.interests, "interests", 200, &["interestThemeIds"]);
 
     // Walk sessions should return 200 with sessionId
-    let walk = world
-        .walk_sessions
-        .as_ref()
-        .expect("walk_sessions snapshot");
-    assert_eq!(walk.status, 200);
-    let walk_body = walk.body.as_ref().expect("walk_sessions body");
-    assert!(walk_body.get("sessionId").is_some());
+    assert_snapshot_ok(&world.walk_sessions, "walk_sessions", 200, &["sessionId"]);
 
     // Route annotations should return 200 (empty annotations for the route)
     let annotations = world
@@ -162,13 +153,27 @@ fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
     assert_eq!(annotations.status, 200);
 
     // Route submission should return 202 Accepted with a requestId
-    let submission = world
-        .route_submission
-        .as_ref()
-        .expect("route_submission snapshot");
-    assert_eq!(submission.status, 202);
-    let submission_body = submission.body.as_ref().expect("route_submission body");
-    assert!(submission_body.get("requestId").is_some());
+    assert_snapshot_ok(
+        &world.route_submission,
+        "route_submission",
+        202,
+        &["requestId"],
+    );
+}
+
+/// Assert shared happy-path contracts across both startup modes.
+fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
+    let login = world.login.as_ref().expect("login snapshot");
+    assert_eq!(login.status, 200);
+    assert!(login.session_cookie.is_some());
+
+    let profile = world.profile.as_ref().expect("profile snapshot");
+    assert_profile_response(profile, profile_name);
+
+    assert_user_state_snapshots(world);
+    assert_catalogue_snapshots(world);
+    assert_resource_snapshots(world);
+    assert_write_port_snapshots(world);
 }
 
 /// Assert validation error envelope structure.

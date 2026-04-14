@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use actix_web::cookie::Key;
-use rstest::rstest;
+use rstest::{fixture, rstest};
 
 mod support;
 
@@ -27,6 +27,7 @@ mod state_builders;
 use state_builders::build_http_state;
 
 /// Helper to construct a fixture-mode `ServerConfig` with no database pool.
+#[fixture]
 fn fixture_config() -> ServerConfig {
     let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid addr");
     let config = ServerConfig::new(
@@ -57,14 +58,13 @@ fn fixture_config() -> ServerConfig {
 /// `FixtureLoginService`. DB-backed login would reject these credentials.
 #[rstest]
 #[tokio::test]
-async fn fixture_mode_wires_fixture_adapters() {
+async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
     use backend::domain::LoginCredentials;
     use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 
-    let config = fixture_config();
     let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
 
-    let state = build_http_state(&config, route_submission);
+    let state = build_http_state(&fixture_config, route_submission);
 
     // Fixture login accepts "admin"/"password" and returns a fixed user ID
     let fixture_creds =
