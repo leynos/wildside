@@ -292,4 +292,52 @@ mod tests {
         assert_eq!(deserialized1, plan1, "first plan should match");
         assert_eq!(deserialized2, plan2, "second plan should match");
     }
+
+    /// Test plan type that always fails serialization.
+    struct TestPlanFailingSerialize;
+
+    impl Serialize for TestPlanFailingSerialize {
+        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            Err(serde::ser::Error::custom("simulated serialization failure"))
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn apalis_queue_serialize_failure_rejected() {
+        let fake_provider = FakeQueueProvider::new();
+        let queue: GenericApalisRouteQueue<TestPlanFailingSerialize, _> =
+            GenericApalisRouteQueue::new(fake_provider.clone());
+
+        let plan = TestPlanFailingSerialize;
+
+        let result = queue.enqueue(&plan).await;
+        assert!(
+            result.is_err(),
+            "enqueue should fail when serialization fails"
+        );
+
+        match result.unwrap_err() {
+            JobDispatchError::Rejected { message } => {
+                assert!(
+                    message.contains("Failed to serialize plan"),
+                    "error message should indicate serialization failure: {message}"
+                );
+            }
+            JobDispatchError::Unavailable { .. } => {
+                panic!("expected Rejected error for serialization failure, got Unavailable");
+            }
+        }
+
+        // Verify nothing was pushed to the provider
+        let pushed_jobs = fake_provider.pushed_jobs();
+        assert_eq!(
+            pushed_jobs.len(),
+            0,
+            "no jobs should be pushed when serialization fails"
+        );
+    }
 }
