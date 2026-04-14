@@ -32,10 +32,6 @@ use support::embedded_postgres::drop_users_table;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
 #[path = "../src/server/config.rs"]
-#[allow(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
-)]
 mod server_config;
 pub use server_config::ServerConfig;
 

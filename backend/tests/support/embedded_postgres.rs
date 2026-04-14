@@ -126,7 +126,6 @@ fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersi
 /// Retries up to [`TEMPLATE_PROVISION_RETRIES`] times with
 /// [`TEMPLATE_PROVISION_RETRY_DELAY`] between attempts to tolerate transient
 /// cluster errors during parallel test runs.
-#[allow(dead_code)]
 pub fn provision_template_database(
     cluster: &ClusterHandle,
 ) -> Result<TemporaryDatabase, UserPersistenceError> {
@@ -147,7 +146,6 @@ pub fn provision_template_database(
 }
 
 /// Runs all pending Diesel migrations against the test database.
-#[allow(dead_code)]
 pub fn migrate_schema(url: &str) -> Result<(), UserPersistenceError> {
     let mut conn = PgConnection::establish(url)
         .map_err(|err| UserPersistenceError::connection(format!("{err:?}")))?;

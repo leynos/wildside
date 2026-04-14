@@ -16,10 +16,6 @@ use support::handle_cluster_setup_failure;
 use support::profile_interests::FIXTURE_AUTH_ID;
 
 #[path = "../src/server/config.rs"]
-#[allow(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
-)]
 mod server_config;
 pub(crate) use server_config::ServerConfig;
 
@@ -32,11 +28,14 @@ mod db_support;
 #[path = "startup_mode_composition_bdd/flow_support.rs"]
 mod flow_support;
 
+#[path = "startup_mode_composition_bdd/flows.rs"]
+mod flows;
+
 use db_support::{seed_route, seed_user, setup_db_context};
 use flow_support::{
-    World, assert_internal, assert_profile_response, is_skipped, run_comprehensive_flow,
-    run_validation_error_flow,
+    World, assert_internal, assert_profile_response, extract_validation_baseline, is_skipped,
 };
+use flows::{run_comprehensive_flow, run_validation_error_flow};
 
 const DB_PROFILE_NAME: &str = "Test User DB";
 const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
@@ -49,6 +48,7 @@ fn world() -> World {
         seeded_route_id: None,
         login: None,
         profile: None,
+        users_list: None,
         interests: None,
         preferences: None,
         catalogue_explore: None,
@@ -56,6 +56,9 @@ fn world() -> World {
         offline_bundles: None,
         walk_sessions: None,
         enrichment_provenance: None,
+        route_annotations: None,
+        route_submission: None,
+        validation_baseline: None,
         skip_reason: None,
     }
 }
@@ -74,6 +77,10 @@ fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
     // Profile should return expected display name
     let profile = world.profile.as_ref().expect("profile snapshot");
     assert_profile_response(profile, profile_name);
+
+    // Users list should return 200
+    let users_list = world.users_list.as_ref().expect("users_list snapshot");
+    assert_eq!(users_list.status, 200);
 
     // Preferences should return 200 with all required fields
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
@@ -146,6 +153,22 @@ fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
     assert_eq!(walk.status, 200);
     let walk_body = walk.body.as_ref().expect("walk_sessions body");
     assert!(walk_body.get("sessionId").is_some());
+
+    // Route annotations should return 200 (empty annotations for the route)
+    let annotations = world
+        .route_annotations
+        .as_ref()
+        .expect("route_annotations snapshot");
+    assert_eq!(annotations.status, 200);
+
+    // Route submission should return 202 Accepted with a requestId
+    let submission = world
+        .route_submission
+        .as_ref()
+        .expect("route_submission snapshot");
+    assert_eq!(submission.status, 202);
+    let submission_body = submission.body.as_ref().expect("route_submission body");
+    assert!(submission_body.get("requestId").is_some());
 }
 
 /// Assert validation error envelope structure.
@@ -313,6 +336,11 @@ fn validation_error_envelopes_are_identical_to_db_present_validation_errors(worl
     }
 
     assert_validation_error_envelope(world);
+
+    // Persist the fixture-mode envelope as the baseline for cross-mode
+    // comparison in the subsequent DB-present run.
+    let snapshot = world.preferences.as_ref().expect("preferences snapshot");
+    world.validation_baseline = Some(extract_validation_baseline(snapshot));
 }
 
 #[then("validation error envelopes remain stable")]
@@ -322,6 +350,19 @@ fn validation_error_envelopes_remain_stable(world: &mut World) {
     }
 
     assert_validation_error_envelope(world);
+
+    // Compare the DB-mode envelope against the persisted fixture-mode baseline
+    // to detect divergence between startup modes.
+    let snapshot = world.preferences.as_ref().expect("preferences snapshot");
+    let db_baseline = extract_validation_baseline(snapshot);
+    let fixture_baseline = world
+        .validation_baseline
+        .as_ref()
+        .expect("fixture-mode validation baseline should have been persisted");
+    assert_eq!(
+        fixture_baseline, &db_baseline,
+        "validation error envelopes must be identical across fixture and DB startup modes"
+    );
 }
 
 #[scenario(

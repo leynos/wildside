@@ -89,6 +89,11 @@ impl ServerConfig {
 
     /// Return the socket address the server will bind to.
     #[cfg(test)]
+    #[allow(
+        dead_code,
+        reason = "called by state_builders_composition_unit; dead in other integration test \
+                  binaries that include config.rs via #[path]"
+    )]
     #[must_use]
     pub fn bind_addr(&self) -> SocketAddr {
         self.bind_addr
@@ -111,6 +116,11 @@ impl ServerConfig {
 
     #[cfg(feature = "metrics")]
     /// Return the configured Prometheus middleware, if any.
+    #[allow(
+        dead_code,
+        reason = "called by state_builders_composition_unit; dead in other integration test \
+                  binaries that include config.rs via #[path]"
+    )]
     #[must_use]
     pub fn metrics(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()

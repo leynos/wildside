@@ -9,10 +9,6 @@ mod support;
 use support::handle_cluster_setup_failure;
 
 #[path = "../src/server/config.rs"]
-#[allow(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for DB-backed HTTP flows"
-)]
 mod server_config;
 pub(crate) use server_config::ServerConfig;
 

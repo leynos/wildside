@@ -29,32 +29,24 @@ use color_eyre::eyre::eyre;
 use pg_embedded_setup_unpriv::BootstrapError;
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 
-#[allow(dead_code)]
 const SHARED_CLUSTER_RETRIES: usize = 5;
-#[allow(dead_code)]
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 #[cfg(unix)]
-#[allow(dead_code)]
 const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
-#[allow(dead_code)]
 static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 
 /// Data directory for re-reading `postmaster.pid` at exit time.
 #[cfg(unix)]
-#[allow(dead_code)]
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 #[cfg(unix)]
-#[allow(dead_code)]
 static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
 #[cfg(unix)]
-#[allow(dead_code)]
 static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
-#[allow(dead_code)]
 fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
     if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
         return Ok(());
@@ -128,7 +120,6 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 ///     .expect("temporary database should be created");
 /// println!("connection URL: {}", temp_db.url());
 /// ```
-#[allow(dead_code)]
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_password();
     #[cfg(unix)]
@@ -186,7 +177,6 @@ fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
 /// when the on-disk PID still matches the stored value, guarding against PID
 /// reuse.
 #[cfg(unix)]
-#[allow(dead_code)]
 extern "C" fn stop_postgres_on_exit() {
     let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
     if stored_pid <= 0 {
@@ -226,7 +216,6 @@ extern "C" fn stop_postgres_on_exit() {
 /// shared cluster is stopped when the test binary exits. Uses
 /// `compare_exchange` to ensure the handler is registered at most once.
 #[cfg(unix)]
-#[allow(dead_code)]
 fn register_process_exit_cleanup(handle: &ClusterHandle) {
     let data_dir = &handle.settings().data_dir;
     let Some(pid) = read_postmaster_pid(data_dir) else {

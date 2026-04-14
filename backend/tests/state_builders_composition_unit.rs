@@ -1,14 +1,14 @@
-//! Unit tests proving deterministic adapter selection for all HTTP state ports.
+//! Unit tests proving fixture-mode adapter selection for HTTP state ports.
 //!
-//! These tests verify the composition invariant: when `ServerConfig.db_pool` is
-//! `Some(pool)`, every port in `HttpStatePorts` and `HttpStateExtraPorts` must
-//! resolve to a DB-backed adapter; when `db_pool` is `None`, every port must
-//! resolve to a fixture.
+//! These tests verify the fixture half of the composition invariant: when
+//! `ServerConfig.db_pool` is `None`, every port resolves to a fixture adapter.
+//! DB-mode composition is covered by the `startup_mode_composition_bdd` BDD
+//! suite, which exercises all ports against embedded PostgreSQL.
 //!
 //! The tests use an observable-behaviour assertion strategy: each port is
 //! exercised with a lightweight operation, and the response shape distinguishes
-//! fixture from DB-backed implementations without requiring `TypeId` introspection
-//! or changes to domain trait signatures.
+//! fixture from DB-backed implementations without requiring `TypeId`
+//! introspection or changes to domain trait signatures.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -87,30 +87,42 @@ async fn fixture_mode_wires_fixture_adapters() {
         users_result.is_ok(),
         "fixture users query should succeed; got: {users_result:?}"
     );
+
+    // Profile query returns a user for the fixture user ID
+    let profile_result = state.profile.fetch_profile(&user_id).await;
+    assert!(
+        profile_result.is_ok(),
+        "fixture profile query should succeed; got: {profile_result:?}"
+    );
+
+    // Preferences query returns default preferences
+    let prefs_result = state.preferences_query.fetch_preferences(&user_id).await;
+    assert!(
+        prefs_result.is_ok(),
+        "fixture preferences query should succeed; got: {prefs_result:?}"
+    );
+
+    // Catalogue explore returns a snapshot
+    let catalogue_result = state.catalogue.explore_snapshot().await;
+    assert!(
+        catalogue_result.is_ok(),
+        "fixture catalogue should succeed; got: {catalogue_result:?}"
+    );
+
+    // Enrichment provenance list returns empty records
+    use backend::domain::ports::ListEnrichmentProvenanceRequest;
+    let provenance_result = state
+        .enrichment_provenance
+        .list_recent(&ListEnrichmentProvenanceRequest {
+            limit: 10,
+            before: None,
+        })
+        .await;
+    assert!(
+        provenance_result.is_ok(),
+        "fixture enrichment provenance should succeed; got: {provenance_result:?}"
+    );
 }
 
-mod db_mode {
-    //! DB-mode composition tests (Stage C).
-    //!
-    //! Imports in this module are scaffolding for the full implementation;
-    //! they will become active once the stub body is filled in.
-
-    #[allow(unused_imports)]
-    use super::{build_http_state, fixture_config};
-
-    #[allow(unused_imports)]
-    use crate::support::atexit_cleanup::shared_cluster_handle;
-    #[allow(unused_imports)]
-    use crate::support::{handle_cluster_setup_failure, provision_template_database};
-    #[allow(unused_imports)]
-    use backend::domain::{ErrorCode, UserId};
-    #[allow(unused_imports)]
-    use backend::outbound::persistence::{DbPool, PoolConfig};
-
-    #[rstest::rstest]
-    #[test]
-    #[ignore = "DB mode composition covered by BDD suite; requires sync setup"]
-    fn db_mode_wires_db_adapters() {
-        // body to be filled in Stage C
-    }
-}
+// DB-mode composition is tested by the `startup_mode_composition_bdd` BDD
+// suite which exercises all ports against embedded PostgreSQL.

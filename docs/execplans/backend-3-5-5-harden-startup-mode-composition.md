@@ -182,9 +182,10 @@ Observable success criteria:
   `state_builders.rs` proving deterministic adapter selection for all 16
   ports.
 - [x] Stage C: add BDD behavioural suite exercising the full startup-mode
-  composition matrix at the HTTP boundary with embedded PostgreSQL (partial:
-  fixture-mode unit tests completed in Stage B, comprehensive HTTP-level BDD
-  artifacts created but deferred due to session middleware complexity).
+  composition matrix at the HTTP boundary with embedded PostgreSQL.
+  Completed: four BDD scenarios (fixture happy path, DB-present happy
+  path, schema-loss unhappy path, validation stability edge path) pass
+  against all 16 ports with cross-mode validation envelope comparison.
 - [ ] Stage D: record design decisions in
   `docs/wildside-backend-architecture.md` and mark roadmap item 3.5.5
   done in `docs/backend-roadmap.md`.
@@ -829,28 +830,6 @@ pub(super) fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState>
-```
-
-Recommended test helper for type-witness assertions (in `#[cfg(test)]`
-module only):
-
-```rust
-#[cfg(test)]
-mod tests {
-    use std::any::{Any, TypeId};
-
-    /// Assert that a trait-object port wraps the expected concrete type.
-    fn assert_concrete_type<Expected: 'static>(
-        port: &dyn Any,
-        port_name: &str,
-    ) {
-        assert_eq!(
-            port.type_id(),
-            TypeId::of::<Expected>(),
-            "port `{port_name}` resolved to unexpected concrete type",
-        );
-    }
-}
 ```
 
 Required adapter dependency direction (unchanged):
