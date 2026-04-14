@@ -177,7 +177,7 @@ mod jitter_tests {
         let ttl = jittered_ttl(base, jitter, &mut rng);
 
         assert!(ttl >= 1, "Large jitter must still clamp to at least 1");
-        assert!(ttl <= u64::MAX, "Large jitter must not exceed u64::MAX");
+        // Note: overflow is prevented by saturating arithmetic in jittered_ttl
     }
 
     #[test]
