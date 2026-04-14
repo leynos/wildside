@@ -67,10 +67,16 @@ mod ttl_integration_tests {
     use crate::domain::ports::{RouteCache, RouteCacheKey};
     use crate::outbound::cache::redis_route_cache::GenericRedisRouteCache;
     use crate::outbound::cache::test_helpers::{FakeProvider, TestPlan};
+    use rstest::{fixture, rstest};
 
+    #[fixture]
+    fn provider() -> FakeProvider {
+        FakeProvider::empty()
+    }
+
+    #[rstest]
     #[tokio::test]
-    async fn put_stores_entry_with_jittered_ttl_within_expected_range() {
-        let provider = FakeProvider::empty();
+    async fn put_stores_entry_with_jittered_ttl_within_expected_range(provider: FakeProvider) {
         let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
             provider.clone(),
             86_400,
@@ -90,9 +96,9 @@ mod ttl_integration_tests {
         assert!(ttl <= 95_040, "TTL {ttl} above upper bound 95040");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn put_with_zero_jitter_uses_exact_base_ttl() {
-        let provider = FakeProvider::empty();
+    async fn put_with_zero_jitter_uses_exact_base_ttl(provider: FakeProvider) {
         let base = 1000;
         let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
             provider.clone(),
@@ -110,9 +116,9 @@ mod ttl_integration_tests {
         assert_eq!(ttl, Some(base), "Zero jitter should use exact base TTL");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn put_followed_by_get_still_round_trips_correctly() {
-        let provider = FakeProvider::empty();
+    async fn put_followed_by_get_still_round_trips_correctly(provider: FakeProvider) {
         let cache =
             GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(provider, 3600, 0.10);
         let key = RouteCacheKey::new("route:round-trip-with-ttl").expect("valid key");

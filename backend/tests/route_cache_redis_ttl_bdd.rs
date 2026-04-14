@@ -6,7 +6,10 @@
 
 use backend::{
     domain::ports::{RouteCache, RouteCacheKey},
-    outbound::cache::{test_helpers::{FakeProvider, TestPlan}, GenericRedisRouteCache},
+    outbound::cache::{
+        GenericRedisRouteCache,
+        test_helpers::{FakeProvider, TestPlan},
+    },
 };
 use rstest::fixture;
 use rstest_bdd::Slot;
@@ -24,19 +27,25 @@ struct TtlJitterWorld {
 
 impl TtlJitterWorld {
     fn cache(&self) -> CacheHandle {
-        self.cache.get().expect("cache should be initialized").clone()
+        self.cache
+            .get()
+            .expect("cache should be initialized")
+            .clone()
     }
 
     fn provider(&self) -> ProviderHandle {
-        self.provider.get().expect("provider should be initialized").clone()
+        self.provider
+            .get()
+            .expect("provider should be initialized")
+            .clone()
     }
 
     fn bootstrap_cache(&self) {
         let provider = FakeProvider::empty();
         let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
             provider.clone(),
-            86_400,  // 24 hours
-            0.10,    // ±10% jitter
+            86_400, // 24 hours
+            0.10,   // ±10% jitter
         );
 
         self.provider.set(provider);
@@ -57,10 +66,7 @@ impl TtlJitterWorld {
         let keys = self.test_keys.get().expect("test keys should be set");
 
         keys.iter()
-            .filter_map(|key| {
-                provider.ttl_for(key)
-                    .expect("ttl_for should succeed")
-            })
+            .filter_map(|key| provider.ttl_for(key).expect("ttl_for should succeed"))
             .collect()
     }
 }

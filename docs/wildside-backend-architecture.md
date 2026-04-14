@@ -2313,7 +2313,7 @@ service that the backend connects to, separate from the Postgres database.
   with `cache:` and Apalis might use its own namespace for queue data.
 
 **Implementation:** The backend uses a Redis client library (`bb8-redis` for
-connection pooling). We initialise a Redis connection pool during
+connection pooling). We initialize a Redis connection pool during
 startup([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L686-L694)).
  This pool is made available to parts of the application that need it (e.g. via
 Actix application state or passed into domain services that require cache).
@@ -2326,9 +2326,10 @@ variation of +/- 10% to the base TTL, spreading expiry times across a window of
 approximately 21.6 to 26.4 hours. This prevents thundering herd problems where
 many keys expiring simultaneously would cause a spike of concurrent cache
 misses([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L343-L350)).
- The API does `GET cache:<hash>` to check for cached results. The JSON stored
-is the same that would be returned to the client, so the API can just forward
-it if found.
+Cache reads are performed by calling `RouteCache::get`, which the
+`RedisRouteCache` adapter fulfils by issuing a Redis `GET cache:<hash>`
+command internally. The JSON stored is the same that would be returned to the
+client, so the API can just forward it if found.
 
 We carefully design the key hashing to avoid both collisions and unnecessary
 differences. As mentioned, we create a stable JSON string of the route request

@@ -25,12 +25,12 @@ This task adds a 24-hour TTL with +/- 10% random jitter to the
 `RouteCache` adapter so entries expire individually across a window of
 roughly 21 h 36 min to 26 h 24 min. The jitter is applied per `put`
 invocation, spreading expiry times across the window and eliminating
-synchronised cache stampedes.
+synchronized cache stampedes.
 
 Observable success criteria:
 
 - The `ConnectionProvider` trait gains an expiry-aware write method
-  (`set_bytes_ex`) that accepts a TTL in seconds.
+  (`set_bytes_with_ttl`) that accepts a TTL in seconds.
 - `RedisPoolProvider` implements the new method using the Redis `SET ... EX`
   command.
 - `GenericRedisRouteCache::put` computes a jittered TTL and delegates to the
@@ -41,7 +41,7 @@ Observable success criteria:
 - The `FakeProvider` test double records the TTL for each write so tests can
   assert jitter boundaries without Redis.
 - `rstest` coverage proves:
-  - the jittered TTL falls within the expected 21 600 s - 26 400 s window;
+  - the jittered TTL falls within the expected 77 760 s – 95 040 s window;
   - the adapter's `put` path passes the computed TTL to the provider;
   - round-trip behaviour is unchanged (get after put still succeeds).
 - `rstest-bdd` coverage proves:
@@ -116,7 +116,7 @@ Observable success criteria:
   Likelihood: high (change is expected and planned).
   Mitigation: add the new method with a default implementation that ignores
   the TTL, then migrate implementations. Alternatively, add a new method
-  (`set_bytes_ex`) alongside the existing `set_bytes` so the old method
+  (`set_bytes_with_ttl`) alongside the existing `set_bytes` so the old method
   remains available for tests that do not care about expiry.
 
 - Risk: BDD scenarios verifying real Redis expiry may be flaky if the test
@@ -202,7 +202,7 @@ Hand-off order:
      variation
 
 2. **ConnectionProvider trait extension**:
-   - Added `set_bytes_ex` method accepting TTL parameter
+   - Added `set_bytes_with_ttl` method accepting TTL parameter
    - Implemented in `RedisPoolProvider` using Redis `SET ... EX` command
    - Retained backward-compatible `set_bytes` method
 
@@ -211,12 +211,12 @@ Hand-off order:
    - Changed from `Mutex<HashMap<String, Vec<u8>>>` to `Arc<Mutex<HashMap<String,
      CachedValue>>>` where `CachedValue = (Vec<u8>, Option<u64>)`
    - Added `ttl_for` helper method for test assertions
-   - Implemented `set_bytes_ex` to record TTL values
+   - Implemented `set_bytes_with_ttl` to record TTL values
 
 4. **GenericRedisRouteCache TTL integration**:
    - Added fields: `base_ttl: u64`, `jitter_fraction: f64`, `rng:
      Mutex<SmallRng>`
-   - Modified `put` to compute jittered TTL and call `set_bytes_ex`
+   - Modified `put` to compute jittered TTL and call `set_bytes_with_ttl`
    - Used compile-time constants: `DEFAULT_BASE_TTL_SECS = 86_400`,
      `DEFAULT_JITTER_FRACTION = 0.10`
    - Added test-only `with_provider_and_ttl` constructor for deterministic
@@ -267,7 +267,7 @@ Hand-off order:
    maintaining clarity.
 
 4. **Backward compatibility**: Retained `set_bytes` method on
-   `ConnectionProvider` alongside new `set_bytes_ex` to avoid breaking existing
+   `ConnectionProvider` alongside new `set_bytes_with_ttl` to avoid breaking existing
    test code that doesn't care about TTL.
 
 ## Outcomes & retrospective
@@ -363,7 +363,7 @@ Add a new method to `ConnectionProvider`:
 ///
 /// The entry expires after `ttl_seconds`. Implementations that do not
 /// support expiry may ignore the parameter.
-async fn set_bytes_ex(
+async fn set_bytes_with_ttl(
     &self,
     key: &str,
     value: Vec<u8>,
@@ -394,7 +394,7 @@ pub fn ttl_for(&self, key: &str) -> Option<u64>
 ```
 
 Retain the existing `set_bytes` method (without TTL) for backward
-compatibility. Update `GenericRedisRouteCache::put` to call `set_bytes_ex`
+compatibility. Update `GenericRedisRouteCache::put` to call `set_bytes_with_ttl`
 instead of `set_bytes`, passing the jittered TTL. The old `set_bytes`
 method remains available for any code that does not need TTL.
 
@@ -409,19 +409,19 @@ const DEFAULT_JITTER_FRACTION: f64 = 0.10;  // +/- 10%
 ```
 
 The adapter computes a jittered TTL on each `put` call and passes it to
-`set_bytes_ex`. For RNG injection, parameterize the adapter generically
+`set_bytes_with_ttl`. For RNG injection, parameterize the adapter generically
 over `R: rand::Rng + Send + Sync` or store a
 `Mutex<rand::rngs::SmallRng>` constructed from entropy at creation time.
 Test constructors accept a seeded RNG for deterministic assertions.
 
 Update the existing constructors (`new`, `connect`, `with_provider`) to
-initialise the TTL parameters with defaults. Add a test-only constructor
+initialize the TTL parameters with defaults. Add a test-only constructor
 or builder method that accepts a custom RNG seed and/or custom TTL
 parameters.
 
 Update `rstest` unit tests to verify:
 
-- `put` calls `set_bytes_ex` with a TTL in the expected jitter window.
+- `put` calls `set_bytes_with_ttl` with a TTL in the expected jitter window.
 - Round-trip behaviour (put then get) is unchanged.
 - The recorded TTL on `FakeProvider` is within the expected range.
 
@@ -591,15 +591,15 @@ The implementation is done only when all of the following are true:
     constant).
 - Adapter API:
   - The `RouteCache` port trait remains unchanged.
-  - `ConnectionProvider` gains `set_bytes_ex` accepting a TTL in seconds.
-  - `RedisPoolProvider` implements `set_bytes_ex` using `SET ... EX`.
+  - `ConnectionProvider` gains `set_bytes_with_ttl` accepting a TTL in seconds.
+  - `RedisPoolProvider` implements `set_bytes_with_ttl` using `SET ... EX`.
   - `FakeProvider` records the TTL for each write and exposes it for
     assertions.
 - Jitter helper:
   - A pure function computes jittered TTL from a base, jitter fraction,
     and injectable RNG.
   - Edge cases (zero base, zero jitter, large jitter) are covered by
-    `rstest` parameterised tests.
+    `rstest` parameterized tests.
 - Architectural boundaries:
   - Domain code knows only the `RouteCache` trait and `RouteCacheKey`.
   - No inbound adapter or domain service imports Redis, TTL, or RNG types.
@@ -626,9 +626,9 @@ Status: APPROVED and IMPLEMENTED.
 All validation criteria met:
 
 - TTL behaviour verified via unit and BDD tests
-- Adapter API extended with `set_bytes_ex`
+- Adapter API extended with `set_bytes_with_ttl`
 - Jitter helper implemented with comprehensive edge-case coverage
 - Architectural boundaries preserved (domain unchanged)
 - Full test coverage added
 - Documentation updated
-- Gates passed: `make check-fmt` ✓, `make lint` ✓ (Clippy), `make test` ⏳ (running)
+- Gates passed: `make check-fmt` ✓, `make lint` ✓ (Clippy), `make test` ✓
