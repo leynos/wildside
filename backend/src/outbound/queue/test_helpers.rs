@@ -30,18 +30,26 @@ impl FakeQueueProvider {
 
     /// Returns all job payloads that were pushed to this provider.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the mutex is poisoned.
-    pub(crate) fn pushed_jobs(&self) -> Vec<Value> {
-        self.pushed_jobs.lock().unwrap().clone()
+    /// Returns an error if the mutex is poisoned.
+    pub(crate) fn pushed_jobs(&self) -> Result<Vec<Value>, String> {
+        self.pushed_jobs
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|e| format!("failed to lock pushed_jobs mutex: {e}"))
     }
 }
 
 #[async_trait]
 impl QueueProvider for FakeQueueProvider {
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
-        self.pushed_jobs.lock().unwrap().push(payload);
+        self.pushed_jobs
+            .lock()
+            .map_err(|e| {
+                JobDispatchError::unavailable(format!("failed to lock pushed_jobs mutex: {e}"))
+            })?
+            .push(payload);
         Ok(())
     }
 }
