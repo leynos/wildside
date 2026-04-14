@@ -12,14 +12,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use backend::domain::ports::{JobDispatchError, RouteQueue};
-use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue, QueueProvider};
+use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
 
@@ -34,25 +32,6 @@ struct TestPlan {
     name: String,
 }
 
-/// Test helper: Failing queue provider for simulating database unavailability.
-#[derive(Clone)]
-struct FailingProvider {
-    error_message: String,
-}
-
-impl FailingProvider {
-    fn new(error_message: String) -> Self {
-        Self { error_message }
-    }
-}
-
-#[async_trait]
-impl QueueProvider for FailingProvider {
-    async fn push_job(&self, _payload: Value) -> Result<(), JobDispatchError> {
-        Err(JobDispatchError::unavailable(self.error_message.clone()))
-    }
-}
-
 struct TestContext {
     /// Tokio runtime reused for all async operations in this test.
     runtime: Runtime,
@@ -61,6 +40,8 @@ struct TestContext {
     queue: Option<Arc<dyn RouteQueue<Plan = TestPlan>>>,
     /// SQLx pool for verifying job persistence.
     pool: Option<PgPool>,
+    /// Database URL from the embedded cluster.
+    _database_url: String,
     /// Results of enqueue operations.
     enqueue_results: Vec<Result<(), JobDispatchError>>,
     /// Plans that were enqueued for later verification.
@@ -118,6 +99,7 @@ fn setup_test_context() -> Result<TestContext, String> {
         runtime,
         queue: Some(Arc::new(queue)),
         pool: Some(pool),
+        _database_url: database_url,
         enqueue_results: Vec::new(),
         enqueued_plans: Vec::new(),
         _database: temp_db,
@@ -146,11 +128,32 @@ fn a_test_database_with_apalis_storage_initialised(world: &Option<SharedContext>
 #[given("the queue adapter uses an invalid database connection")]
 fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
-    let mut ctx = world.lock().expect("context lock");
-    // Replace the queue with a failing provider that simulates database unavailability.
-    // This exercises the adapter's error mapping without requiring actual database failures.
-    let failing_provider = FailingProvider::new("Database connection unavailable".to_string());
-    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(failing_provider)));
+
+    with_context_async(
+        world,
+        |ctx| ctx.runtime.handle().clone(),
+        |_handle| async move {
+            // Build a pool with an invalid DSN (lazy connect so it succeeds at construction).
+            let broken_pool = PgPool::connect_lazy("postgres://invalid-host/nonexistent")
+                .expect("lazy pool creation should succeed");
+
+            // Try to create the Apalis provider - this may fail at setup time.
+            ApalisPostgresProvider::new(broken_pool).await
+        },
+        |ctx, provider_result| {
+            match provider_result {
+                Ok(provider) => {
+                    // Provider constructed (lazy pool), but enqueue will fail.
+                    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(provider)));
+                }
+                Err(err) => {
+                    // Provider construction failed - record the error directly.
+                    ctx.queue = None;
+                    ctx.enqueue_results.push(Err(err));
+                }
+            }
+        },
+    );
 }
 
 fn enqueue_test_plan_with_name(world: &SharedContext, name: String) {

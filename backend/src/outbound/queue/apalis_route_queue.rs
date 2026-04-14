@@ -273,7 +273,7 @@ mod tests {
             "enqueue should fail when provider returns error"
         );
 
-        match result.unwrap_err() {
+        match result.expect_err("expected error but call succeeded") {
             JobDispatchError::Unavailable { message } => {
                 assert!(
                     message.contains("simulated queue failure"),
@@ -324,9 +324,9 @@ mod tests {
     }
 
     /// Test plan type that always fails serialization.
-    struct TestPlanFailingSerialize;
+    struct FailingSerializePlan;
 
-    impl Serialize for TestPlanFailingSerialize {
+    impl Serialize for FailingSerializePlan {
         fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
@@ -337,12 +337,12 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn apalis_queue_serialize_failure_rejected() {
+    async fn apalis_queue_maps_serialization_failure_to_rejected() {
         let fake_provider = FakeQueueProvider::new();
-        let queue: GenericApalisRouteQueue<TestPlanFailingSerialize, _> =
+        let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
             GenericApalisRouteQueue::new(fake_provider.clone());
 
-        let plan = TestPlanFailingSerialize;
+        let plan = FailingSerializePlan;
 
         let result = queue.enqueue(&plan).await;
         assert!(
@@ -350,7 +350,7 @@ mod tests {
             "enqueue should fail when serialization fails"
         );
 
-        match result.unwrap_err() {
+        match result.expect_err("expected error but call succeeded") {
             JobDispatchError::Rejected { message } => {
                 assert!(
                     message.contains("Failed to serialize plan"),
