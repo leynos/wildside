@@ -405,12 +405,12 @@ Specifically, confirm:
   mapping.
 - The module-level `//!` comments in `cursor.rs`, `envelope.rs`, and
   `params.rs` are each a single line and could benefit from a brief paragraph
-  summarising the module's contract and integration guidance.
+  summarizing the module's contract and integration guidance.
 - Existing unit tests already cover default limit, maximum limit, zero limit
   rejection, cursor round-tripping, and error variants. New tests should
   focus on invariants that are *documented* but not yet *tested* — for
   example, verifying that the documented error display strings are stable, or
-  that the documented limit constants are consistent with the normalisation
+  that the documented limit constants are consistent with the normalization
   logic.
 
 Validation: no code changes; this stage produces only notes in the `Progress`
@@ -742,7 +742,7 @@ Feature: Pagination documentation invariants
 
 ### Error mapping reference table
 
-This table summarises the error mapping guidelines that will be documented:
+This table summarizes the error mapping guidelines that will be documented:
 
 | Error type       | Variant          | Suggested HTTP status | Envelope `code`         |
 |------------------|------------------|-----------------------|-------------------------|
