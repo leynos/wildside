@@ -324,6 +324,7 @@ mod tests {
     }
 
     /// Test plan type that always fails serialization.
+    #[derive(Debug, Clone)]
     struct FailingSerializePlan;
 
     impl Serialize for FailingSerializePlan {
