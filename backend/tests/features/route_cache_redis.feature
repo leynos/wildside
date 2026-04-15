@@ -33,3 +33,4 @@ Feature: Redis-backed route cache
     Given a running Redis-backed route cache
     When five plans are stored under distinct cache keys
     Then not all recorded TTLs are identical
+    And all recorded TTLs fall within the configured jitter window

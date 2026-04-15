@@ -1,8 +1,11 @@
-//! TTL and jitter behavioural tests for the Redis-backed `RouteCache` adapter.
+//! Unit-level TTL jitter tests using `FakeProvider` (no live Redis required).
 //!
-//! This module contains behavioural tests verifying TTL (time-to-live) and jitter
-//! functionality. Uses FakeProvider to capture intended TTL values at write time,
-//! avoiding reliance on Redis TTL countdown which can vary due to elapsed time.
+//! These tests verify that jittered TTL values computed by the adapter are
+//! captured correctly at write time. `FakeProvider` records the intended TTL
+//! for each `put` call, so assertions are drift-immune — they do not depend on
+//! Redis countdown timers or wall-clock elapsed time.
+//!
+//! For live-Redis TTL verification see `route_cache_redis_bdd.rs`.
 
 use backend::{
     domain::ports::{RouteCache, RouteCacheKey},
@@ -135,6 +138,21 @@ fn not_all_recorded_ttls_are_identical(world: &TtlJitterWorld) {
         !all_same,
         "At least two TTLs should differ (jitter should vary them), got all {first_ttl}"
     );
+}
+
+#[then("all recorded TTLs fall within the configured jitter window")]
+fn all_recorded_ttls_fall_within_the_configured_jitter_window(world: &TtlJitterWorld) {
+    use backend::outbound::cache::{DEFAULT_BASE_TTL_SECS, DEFAULT_JITTER_FRACTION};
+    let jitter = (DEFAULT_BASE_TTL_SECS as f64 * DEFAULT_JITTER_FRACTION) as u64;
+    let lower = DEFAULT_BASE_TTL_SECS - jitter;
+    let upper = DEFAULT_BASE_TTL_SECS + jitter;
+    let ttl_values = world.get_recorded_ttls();
+    for ttl in &ttl_values {
+        assert!(
+            *ttl >= lower && *ttl <= upper,
+            "TTL {ttl}s is outside expected window [{lower}s, {upper}s]"
+        );
+    }
 }
 
 #[scenario(

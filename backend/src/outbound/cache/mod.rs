@@ -15,6 +15,10 @@ pub use redis_route_cache::GenericRedisRouteCache;
 #[cfg(feature = "test-support")]
 pub use redis_route_cache::RedisPool;
 
+// Export TTL constants for integration tests that need to verify jitter windows
+#[cfg(any(test, feature = "test-support"))]
+pub use redis_route_cache::{DEFAULT_BASE_TTL_SECS, DEFAULT_JITTER_FRACTION};
+
 // Test helpers available in test builds and via test-support feature
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_helpers;

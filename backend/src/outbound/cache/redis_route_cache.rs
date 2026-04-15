@@ -24,10 +24,10 @@ use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
 pub type RedisPool = Pool<RedisConnectionManager>;
 
 /// Default base TTL for cache entries (24 hours in seconds).
-const DEFAULT_BASE_TTL_SECS: u64 = 86_400;
+pub const DEFAULT_BASE_TTL_SECS: u64 = 86_400;
 
 /// Default jitter fraction (+/- 10% of base TTL).
-const DEFAULT_JITTER_FRACTION: f64 = 0.10;
+pub const DEFAULT_JITTER_FRACTION: f64 = 0.10;
 
 /// Compute a TTL in seconds with uniform random jitter.
 ///
