@@ -16,6 +16,11 @@ const LIST_ARGS = ['ls', '--json', '--depth', 'Infinity'];
 const BULK_ADVISORY_PATH = '-/npm/v1/security/advisories/bulk';
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
+const DEPENDENCY_SECTION_NAMES = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+];
 const RETIRED_AUDIT_ENDPOINT_MESSAGE =
   'This endpoint is being retired. Use the bulk advisory endpoint instead.';
 
@@ -48,8 +53,13 @@ function isLocalWorkspaceVersion(version) {
   );
 }
 
+function shouldSkipPackageVersion(packageName, version) {
+  const isMissing = !packageName || !version;
+  return isMissing || isLocalWorkspaceVersion(version);
+}
+
 function addPackageVersion(versionsByPackage, packageName, version) {
-  if (!packageName || !version || isLocalWorkspaceVersion(version)) {
+  if (shouldSkipPackageVersion(packageName, version)) {
     return;
   }
 
@@ -58,28 +68,47 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   versionsByPackage.set(packageName, knownVersions);
 }
 
+function processDependencySection(section, versionsByPackage) {
+  for (const [packageName, dependency] of Object.entries(section)) {
+    if (!dependency || typeof dependency !== 'object') {
+      continue;
+    }
+
+    if (typeof dependency.version === 'string') {
+      addPackageVersion(versionsByPackage, packageName, dependency.version);
+    }
+
+    walkDependencyTree(dependency, versionsByPackage);
+  }
+}
+
+/**
+ * Walk a dependency section from `pnpm ls` and record the versions discovered.
+ *
+ * @param {Record<string, unknown> | undefined} section Dependency section from
+ *   a package tree node.
+ * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed
+ *   by package name.
+ * @example
+ * const versions = new Map();
+ * walkDependencySection({ validator: { version: '1.0.0' } }, versions);
+ * console.log([...versions.get('validator') ?? []]); // ['1.0.0']
+ */
+function walkDependencySection(section, versionsByPackage) {
+  if (!section || typeof section !== 'object') {
+    return;
+  }
+
+  processDependencySection(section, versionsByPackage);
+}
+
 function walkDependencyTree(node, versionsByPackage) {
   if (!node || typeof node !== 'object') {
     return;
   }
 
-  for (const sectionName of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-    const section = node[sectionName];
-    if (!section || typeof section !== 'object') {
-      continue;
-    }
-
-    for (const [packageName, dependency] of Object.entries(section)) {
-      if (!dependency || typeof dependency !== 'object') {
-        continue;
-      }
-
-      if (typeof dependency.version === 'string') {
-        addPackageVersion(versionsByPackage, packageName, dependency.version);
-      }
-
-      walkDependencyTree(dependency, versionsByPackage);
-    }
+  for (const sectionName of DEPENDENCY_SECTION_NAMES) {
+    walkDependencySection(node[sectionName], versionsByPackage);
   }
 }
 
@@ -146,28 +175,49 @@ function extractGithubAdvisoryId(advisoryUrl) {
   return match?.[0].toUpperCase();
 }
 
+function deriveAdvisoryKey(packageName, advisory) {
+  const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
+  const key = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
+  return { key, githubAdvisoryId };
+}
+
+/**
+ * Add bulk advisories for a package into the normalised advisory map.
+ *
+ * @param {string} packageName Package name associated with the advisory list.
+ * @param {unknown} packageAdvisories Advisory payload for the package.
+ * @param {Record<string, Record<string, unknown>>} advisories Advisory map
+ *   keyed by GitHub advisory ID or package-local fallback identifier.
+ * @example
+ * const advisories = {};
+ * addPackageAdvisories('validator', [{ id: 1, url: 'https://github.com/advisories/GHSA-abcd-1234-efgh' }], advisories);
+ * console.log(Object.keys(advisories).length); // 1
+ */
+function addPackageAdvisories(packageName, packageAdvisories, advisories) {
+  if (!Array.isArray(packageAdvisories)) {
+    return;
+  }
+
+  for (const advisory of packageAdvisories) {
+    const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
+
+    if (key in advisories) {
+      continue;
+    }
+
+    advisories[key] = {
+      ...advisory,
+      github_advisory_id: githubAdvisoryId,
+      package_name: packageName,
+    };
+  }
+}
+
 function normaliseBulkAdvisories(bulkPayload) {
   const advisories = {};
 
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
-    if (!Array.isArray(packageAdvisories)) {
-      continue;
-    }
-
-    for (const advisory of packageAdvisories) {
-      const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
-      const advisoryKey = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
-
-      if (advisoryKey in advisories) {
-        continue;
-      }
-
-      advisories[advisoryKey] = {
-        ...advisory,
-        github_advisory_id: githubAdvisoryId,
-        package_name: packageName,
-      };
-    }
+    addPackageAdvisories(packageName, packageAdvisories, advisories);
   }
 
   return advisories;
