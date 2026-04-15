@@ -64,6 +64,8 @@ async fn connect_maps_invalid_connection_strings_to_backend_errors(#[case] redis
 mod ttl_integration_tests {
     //! Integration tests for TTL (time-to-live) behaviour with jittered expiry.
 
+    use rand::SeedableRng;
+
     use crate::domain::ports::{RouteCache, RouteCacheKey};
     use crate::outbound::cache::redis_route_cache::GenericRedisRouteCache;
     use crate::outbound::cache::test_helpers::{FakeProvider, TestPlan};
@@ -81,6 +83,7 @@ mod ttl_integration_tests {
             provider.clone(),
             86_400,
             0.10,
+            Box::new(rand::rngs::StdRng::from_entropy()),
         );
         let key = RouteCacheKey::new("route:ttl-test").expect("valid key");
         let plan = TestPlan::new("req-1", 100);
@@ -104,6 +107,7 @@ mod ttl_integration_tests {
             provider.clone(),
             base,
             0.0,
+            Box::new(rand::rngs::StdRng::from_entropy()),
         );
         let key = RouteCacheKey::new("route:no-jitter").expect("valid key");
         let plan = TestPlan::default();
@@ -119,8 +123,12 @@ mod ttl_integration_tests {
     #[rstest]
     #[tokio::test]
     async fn put_followed_by_get_still_round_trips_correctly(provider: FakeProvider) {
-        let cache =
-            GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(provider, 3600, 0.10);
+        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
+            provider,
+            3600,
+            0.10,
+            Box::new(rand::rngs::StdRng::from_entropy()),
+        );
         let key = RouteCacheKey::new("route:round-trip-with-ttl").expect("valid key");
         let plan = TestPlan::new("req-2", 200);
 
