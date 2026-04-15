@@ -205,6 +205,17 @@ fn i_enqueue_the_same_test_plan_again(world: &Option<SharedContext>) {
 #[when("I attempt to enqueue a test plan")]
 fn i_attempt_to_enqueue_a_test_plan(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
+
+    // Check if the queue is available before attempting to enqueue.
+    // When the provider construction fails (e.g., invalid connection),
+    // the error is already recorded in enqueue_results, so we skip the enqueue.
+    let ctx = world.lock().expect("context lock");
+    if ctx.queue.is_none() {
+        // Queue unavailable - error already recorded by setup step
+        return;
+    }
+    drop(ctx);
+
     enqueue_test_plan_with_name(world, "test-plan".to_string());
 }
 
