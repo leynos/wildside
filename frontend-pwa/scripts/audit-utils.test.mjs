@@ -156,8 +156,8 @@ describe('runAuditJson', () => {
     expect(result).toEqual({
       json: {
         advisories: {
-          'GHSA-VGHF-HV5Q-VC2G': {
-            [githubAdvisoryIdKey]: 'GHSA-VGHF-HV5Q-VC2G',
+          'GHSA-vghf-hv5q-vc2g': {
+            [githubAdvisoryIdKey]: 'GHSA-vghf-hv5q-vc2g',
             id: 100000,
             [packageNameKey]: 'validator',
             severity: 'high',
@@ -199,6 +199,84 @@ describe('runAuditJson', () => {
 
     await expect(runAuditJson()).rejects.toThrow(
       'Bulk advisory audit failed (503 Service Unavailable)',
+    );
+  });
+
+  it('preserves advisory ID casing from the bulk payload URL', async () => {
+    spawnSyncMock
+      .mockReturnValueOnce(
+        createPnpmResult({
+          status: 1,
+          stdout: JSON.stringify({
+            error: {
+              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
+              message:
+                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
+            },
+          }),
+        }),
+      )
+      .mockReturnValueOnce(
+        createPnpmResult({
+          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies: {} }]),
+        }),
+      );
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () =>
+        JSON.stringify({
+          validator: [
+            {
+              id: 100000,
+              url: 'https://github.com/advisories/GHSA-Vghf-HV5Q-vC2G',
+              title: 'Validator SSRF',
+            },
+          ],
+        }),
+    });
+    const { runAuditJson } = await loadAuditUtils();
+
+    const result = await runAuditJson();
+
+    expect(result.json.advisories).toEqual({
+      'GHSA-Vghf-HV5Q-vC2G': expect.objectContaining({
+        [githubAdvisoryIdKey]: 'GHSA-Vghf-HV5Q-vC2G',
+        [packageNameKey]: 'validator',
+      }),
+    });
+  });
+
+  it('rejects blank bulk advisory responses instead of treating them as empty JSON', async () => {
+    spawnSyncMock
+      .mockReturnValueOnce(
+        createPnpmResult({
+          status: 1,
+          stdout: JSON.stringify({
+            error: {
+              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
+              message:
+                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
+            },
+          }),
+        }),
+      )
+      .mockReturnValueOnce(
+        createPnpmResult({
+          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies: {} }]),
+        }),
+      );
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => '   ',
+    });
+    const { runAuditJson } = await loadAuditUtils();
+
+    await expect(runAuditJson()).rejects.toThrow(
+      'Failed to parse bulk advisory audit JSON: response body was empty.',
     );
   });
 });

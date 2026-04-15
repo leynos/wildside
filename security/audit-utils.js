@@ -24,13 +24,19 @@ const DEPENDENCY_SECTION_NAMES = [
 const RETIRED_AUDIT_ENDPOINT_MESSAGE =
   'This endpoint is being retired. Use the bulk advisory endpoint instead.';
 
-function parseJsonOutput(stdout, commandLabel) {
-  if (!stdout) {
+function parseJsonOutput(payloadText, commandLabel, options = {}) {
+  const { requireNonEmpty = false } = options;
+  const text = payloadText?.trim?.() ?? '';
+  if (!text) {
+    if (requireNonEmpty) {
+      throw new Error(`Failed to parse ${commandLabel} JSON: response body was empty.`);
+    }
+
     return {};
   }
 
   try {
-    return JSON.parse(stdout);
+    return JSON.parse(text);
   } catch (error) {
     error.message = `Failed to parse ${commandLabel} JSON: ${error.message}`;
     throw error;
@@ -53,13 +59,9 @@ function isLocalWorkspaceVersion(version) {
   );
 }
 
-function shouldSkipPackageVersion(packageName, version) {
-  const isMissing = !packageName || !version;
-  return isMissing || isLocalWorkspaceVersion(version);
-}
-
 function addPackageVersion(versionsByPackage, packageName, version) {
-  if (shouldSkipPackageVersion(packageName, version)) {
+  const isMissing = !packageName || !version;
+  if (isMissing || isLocalWorkspaceVersion(version)) {
     return;
   }
 
@@ -68,47 +70,40 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   versionsByPackage.set(packageName, knownVersions);
 }
 
-function processDependencySection(section, versionsByPackage) {
-  for (const [packageName, dependency] of Object.entries(section)) {
-    if (!dependency || typeof dependency !== 'object') {
-      continue;
-    }
-
-    if (typeof dependency.version === 'string') {
-      addPackageVersion(versionsByPackage, packageName, dependency.version);
-    }
-
-    walkDependencyTree(dependency, versionsByPackage);
-  }
-}
-
 /**
- * Walk a dependency section from `pnpm ls` and record the versions discovered.
+ * Walk a dependency tree from `pnpm ls` and record the versions discovered.
  *
- * @param {Record<string, unknown> | undefined} section Dependency section from
- *   a package tree node.
+ * @param {Record<string, unknown> | undefined} node Dependency tree node from
+ *   `pnpm ls`.
  * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed
  *   by package name.
  * @example
  * const versions = new Map();
- * walkDependencySection({ validator: { version: '1.0.0' } }, versions);
+ * walkDependencies({ dependencies: { validator: { version: '1.0.0' } } }, versions);
  * console.log([...versions.get('validator') ?? []]); // ['1.0.0']
  */
-function walkDependencySection(section, versionsByPackage) {
-  if (!section || typeof section !== 'object') {
-    return;
-  }
-
-  processDependencySection(section, versionsByPackage);
-}
-
-function walkDependencyTree(node, versionsByPackage) {
+function walkDependencies(node, versionsByPackage) {
   if (!node || typeof node !== 'object') {
     return;
   }
 
   for (const sectionName of DEPENDENCY_SECTION_NAMES) {
-    walkDependencySection(node[sectionName], versionsByPackage);
+    const section = node[sectionName];
+    if (!section || typeof section !== 'object') {
+      continue;
+    }
+
+    for (const [packageName, dependency] of Object.entries(section)) {
+      if (!dependency || typeof dependency !== 'object') {
+        continue;
+      }
+
+      if (typeof dependency.version === 'string') {
+        addPackageVersion(versionsByPackage, packageName, dependency.version);
+      }
+
+      walkDependencies(dependency, versionsByPackage);
+    }
   }
 }
 
@@ -132,7 +127,7 @@ function collectInstalledPackageVersions() {
   const versionsByPackage = new Map();
 
   for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) {
-    walkDependencyTree(tree, versionsByPackage);
+    walkDependencies(tree, versionsByPackage);
   }
 
   return Object.fromEntries(
@@ -172,7 +167,7 @@ function extractGithubAdvisoryId(advisoryUrl) {
   }
 
   const match = advisoryUrl.match(/GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i);
-  return match?.[0].toUpperCase();
+  return match?.[0];
 }
 
 function deriveAdvisoryKey(packageName, advisory) {
@@ -181,43 +176,27 @@ function deriveAdvisoryKey(packageName, advisory) {
   return { key, githubAdvisoryId };
 }
 
-/**
- * Add bulk advisories for a package into the normalised advisory map.
- *
- * @param {string} packageName Package name associated with the advisory list.
- * @param {unknown} packageAdvisories Advisory payload for the package.
- * @param {Record<string, Record<string, unknown>>} advisories Advisory map
- *   keyed by GitHub advisory ID or package-local fallback identifier.
- * @example
- * const advisories = {};
- * addPackageAdvisories('validator', [{ id: 1, url: 'https://github.com/advisories/GHSA-abcd-1234-efgh' }], advisories);
- * console.log(Object.keys(advisories).length); // 1
- */
-function addPackageAdvisories(packageName, packageAdvisories, advisories) {
-  if (!Array.isArray(packageAdvisories)) {
-    return;
-  }
-
-  for (const advisory of packageAdvisories) {
-    const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
-
-    if (key in advisories) {
-      continue;
-    }
-
-    advisories[key] = {
-      ...advisory,
-      github_advisory_id: githubAdvisoryId,
-      package_name: packageName,
-    };
-  }
-}
-
 function normaliseBulkAdvisories(bulkPayload) {
   const advisories = {};
 
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
-    addPackageAdvisories(packageName, packageAdvisories, advisories);
+    if (!Array.isArray(packageAdvisories)) {
+      continue;
+    }
+
+    for (const advisory of packageAdvisories) {
+      const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
+
+      if (Object.hasOwn(advisories, key)) {
+        continue;
+      }
+
+      advisories[key] = {
+        ...advisory,
+        github_advisory_id: githubAdvisoryId,
+        package_name: packageName,
+      };
+    }
   }
 
   return advisories;
@@ -242,7 +221,9 @@ async function runBulkAdvisoryAudit() {
     );
   }
 
-  const bulkPayload = parseJsonOutput(responseText, 'bulk advisory audit');
+  const bulkPayload = parseJsonOutput(responseText, 'bulk advisory audit', {
+    requireNonEmpty: true,
+  });
   const advisories = normaliseBulkAdvisories(bulkPayload);
 
   return {
