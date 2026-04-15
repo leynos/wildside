@@ -1,15 +1,15 @@
 //! Server construction and middleware wiring.
 
-mod config;
+pub mod config;
 #[cfg(feature = "metrics")]
 mod metrics;
-mod state_builders;
+pub mod state_builders;
 
 pub use config::ServerConfig;
+pub use state_builders::build_http_state;
 
 #[cfg(feature = "metrics")]
 use metrics::MetricsLayer;
-use state_builders::build_http_state;
 
 use actix_session::{
     SessionMiddleware,

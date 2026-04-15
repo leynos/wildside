@@ -20,7 +20,7 @@ use uuid::Uuid;
 use super::support::atexit_cleanup::shared_cluster_handle;
 use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
 use super::support::{format_postgres_error, provision_template_database};
-use super::{ServerConfig, state_builders};
+use super::{ServerConfig, build_http_state};
 
 #[derive(Debug)]
 pub(crate) struct Snapshot {
@@ -235,7 +235,7 @@ pub(crate) fn run_profile_interests_flow(world: &mut World) {
         Some(db) => base_config.with_db_pool(db.pool.clone()),
         None => base_config,
     };
-    let state = state_builders::build_http_state(
+    let state = build_http_state(
         &config,
         Arc::new(FixtureRouteSubmissionService) as Arc<dyn RouteSubmissionService>,
     );

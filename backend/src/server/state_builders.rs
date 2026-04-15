@@ -283,7 +283,7 @@ fn build_enrichment_provenance_repository(
 }
 
 /// Build the shared HTTP state from configured ports and fixture fallbacks.
-pub(super) fn build_http_state(
+pub fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {

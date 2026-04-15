@@ -14,7 +14,7 @@ use backend::outbound::persistence::DbPool;
 use serde_json::Value;
 
 use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
-use super::{ServerConfig, state_builders};
+use super::{ServerConfig, build_http_state as build_server_http_state};
 
 mod db_support;
 
@@ -103,7 +103,7 @@ fn build_http_state(pool: DbPool) -> web::Data<HttpState> {
     let bind_addr = SocketAddr::from(([127, 0, 0, 1], 0));
     let config =
         ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr).with_db_pool(pool);
-    state_builders::build_http_state(
+    build_server_http_state(
         &config,
         Arc::new(FixtureRouteSubmissionService) as Arc<dyn RouteSubmissionService>,
     )

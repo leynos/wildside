@@ -14,41 +14,21 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use actix_web::cookie::Key;
+use backend::server::{ServerConfig, build_http_state};
 use rstest::{fixture, rstest};
 
 mod support;
-
-#[path = "../src/server/config.rs"]
-mod server_config;
-use server_config::ServerConfig;
-
-#[path = "../src/server/state_builders.rs"]
-mod state_builders;
-use state_builders::build_http_state;
 
 /// Helper to construct a fixture-mode `ServerConfig` with no database pool.
 #[fixture]
 fn fixture_config() -> ServerConfig {
     let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid addr");
-    let config = ServerConfig::new(
+    ServerConfig::new(
         Key::generate(),
         false,
         actix_web::cookie::SameSite::Lax,
         addr,
-    );
-    // Assert accessor round-trips — this also satisfies the dead-code lint in
-    // this compilation unit, where mod.rs (containing create_server) is absent.
-    assert_eq!(
-        config.bind_addr(),
-        addr,
-        "bind_addr should round-trip the value supplied to new()"
-    );
-    #[cfg(feature = "metrics")]
-    assert!(
-        config.metrics().is_none(),
-        "metrics should be None for a default-constructed ServerConfig"
-    );
-    config
+    )
 }
 
 /// Test that fixture mode builds a functional state and exhibits fixture behaviour.

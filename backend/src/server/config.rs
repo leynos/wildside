@@ -9,49 +9,12 @@ use actix_web_prom::PrometheusMetrics;
 
 /// Builder-style configuration for creating the HTTP server.
 pub struct ServerConfig {
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "used by create_server in the binary; dead in integration test binaries \
-                      that include config.rs via #[path] — expect would be unfulfilled in \
-                      the binary test target where create_server keeps the field alive"
-        )
-    )]
     pub(crate) key: Key,
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub(crate) cookie_secure: bool,
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub(crate) same_site: SameSite,
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub(crate) bind_addr: SocketAddr,
     pub(crate) db_pool: Option<DbPool>,
     #[cfg(feature = "metrics")]
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub(crate) prometheus: Option<PrometheusMetrics>,
 }
 
@@ -75,13 +38,6 @@ impl ServerConfig {
     /// When provided, the server will use database-backed implementations
     /// for ports that have adapters available (e.g., `RouteSubmissionService`).
     #[must_use]
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub fn with_db_pool(mut self, pool: DbPool) -> Self {
         self.db_pool = Some(pool);
         self
@@ -89,11 +45,6 @@ impl ServerConfig {
 
     /// Return the socket address the server will bind to.
     #[cfg(test)]
-    #[allow(
-        dead_code,
-        reason = "called by state_builders_composition_unit; dead in other integration test \
-                  binaries that include config.rs via #[path]"
-    )]
     #[must_use]
     pub fn bind_addr(&self) -> SocketAddr {
         self.bind_addr
@@ -102,13 +53,6 @@ impl ServerConfig {
     #[cfg(feature = "metrics")]
     /// Attach Prometheus middleware to the configuration.
     #[must_use]
-    #[cfg_attr(
-        test,
-        allow(
-            dead_code,
-            reason = "see key field — same binary-vs-integration asymmetry"
-        )
-    )]
     pub fn with_metrics(mut self, prometheus: Option<PrometheusMetrics>) -> Self {
         self.prometheus = prometheus;
         self
@@ -116,11 +60,6 @@ impl ServerConfig {
 
     #[cfg(feature = "metrics")]
     /// Return the configured Prometheus middleware, if any.
-    #[allow(
-        dead_code,
-        reason = "called by state_builders_composition_unit; dead in other integration test \
-                  binaries that include config.rs via #[path]"
-    )]
     #[must_use]
     pub fn metrics(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()

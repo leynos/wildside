@@ -4,6 +4,7 @@
 //!
 //! Structure follows the hexagonal layout: inbound adapters (HTTP/WebSocket),
 //! domain, and outbound adapters (persistence, cache, queue).
+extern crate self as backend;
 
 pub mod doc;
 pub mod domain;
@@ -13,6 +14,7 @@ pub mod example_data;
 pub mod inbound;
 mod middleware;
 pub mod outbound;
+pub mod server;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 pub use domain::TraceId;

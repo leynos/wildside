@@ -8,8 +8,11 @@ use std::sync::Arc;
 
 use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::{App, test as actix_test, web};
+use backend::domain::RouteSubmissionServiceImpl;
 use backend::domain::TRACE_ID_HEADER;
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+use backend::domain::ports::{
+    FixtureRouteSubmissionService, NoOpIdempotencyMetrics, RouteSubmissionService,
+};
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::inbound::http::annotations::get_annotations;
 use backend::inbound::http::catalogue::{get_descriptors, get_explore_catalogue};
@@ -22,12 +25,13 @@ use backend::inbound::http::users::{
     LoginRequest, current_user, list_users, login, update_interests,
 };
 use backend::inbound::http::walk_sessions::create_walk_session;
+use backend::outbound::persistence::DieselIdempotencyRepository;
 use serde_json::Value;
 use uuid::Uuid;
 
 use super::flow_support::{Snapshot, World, is_skipped};
 use super::support::profile_interests::build_session_middleware;
-use super::{ServerConfig, state_builders};
+use super::{ServerConfig, build_http_state};
 
 fn parse_json_body(bytes: &[u8]) -> Option<Value> {
     (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
@@ -45,6 +49,16 @@ fn build_server_config(world: &World) -> ServerConfig {
         config = config.with_db_pool(db.pool.clone());
     }
     config
+}
+
+fn build_route_submission(world: &World) -> Arc<dyn RouteSubmissionService> {
+    match &world.db {
+        Some(db) => Arc::new(RouteSubmissionServiceImpl::new(
+            Arc::new(DieselIdempotencyRepository::new(db.pool.clone())),
+            Arc::new(NoOpIdempotencyMetrics),
+        )),
+        None => Arc::new(FixtureRouteSubmissionService),
+    }
 }
 
 /// Capture a snapshot from a service response.
@@ -210,11 +224,7 @@ async fn run_comprehensive_flow_async(world: &mut World) {
     }
 
     let config = build_server_config(world);
-    // `FixtureRouteSubmissionService` is injected for both startup modes here
-    // because `state_builders::build_http_state` does not select this port via
-    // `db_pool`; the test harness wires route submission externally instead.
-    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
-    let state = state_builders::build_http_state(&config, route_submission);
+    let state = build_http_state(&config, build_route_submission(world));
 
     let app = actix_test::init_service(
         App::new()
@@ -286,11 +296,7 @@ async fn run_validation_error_flow_async(world: &mut World) {
     }
 
     let config = build_server_config(world);
-    // `FixtureRouteSubmissionService` is injected for both startup modes here
-    // because `state_builders::build_http_state` does not select this port via
-    // `db_pool`; the test harness wires route submission externally instead.
-    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
-    let state = state_builders::build_http_state(&config, route_submission);
+    let state = build_http_state(&config, build_route_submission(world));
 
     let app = actix_test::init_service(
         App::new()
