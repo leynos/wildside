@@ -160,9 +160,12 @@ impl RouteCacheWorld {
             .expect("seed corrupt bytes");
     }
 
-    async fn query_ttl_async(conn: &mut impl AsyncCommands, key: &str) -> Option<usize> {
-        let ttl: i64 = conn.ttl(key).await.unwrap_or(-2);
-        if ttl > 0 { Some(ttl as usize) } else { None }
+    async fn query_ttl_async(
+        conn: &mut impl AsyncCommands,
+        key: &str,
+    ) -> Result<Option<usize>, bb8_redis::redis::RedisError> {
+        let ttl: i64 = conn.ttl(key).await?;
+        Ok(if ttl > 0 { Some(ttl as usize) } else { None })
     }
 
     fn record_ttls_for_keys(&self, keys: &[String]) {
@@ -172,7 +175,11 @@ impl RouteCacheWorld {
             let mut conn = server.0.raw_connection().await.expect("raw redis conn");
             let mut out = Vec::new();
             for key in keys {
-                out.push(Self::query_ttl_async(&mut conn, key).await);
+                out.push(
+                    Self::query_ttl_async(&mut conn, key)
+                        .await
+                        .expect("TTL query should not fail"),
+                );
             }
             out
         });
@@ -442,7 +449,10 @@ fn all_recorded_ttls_fall_within_the_configured_jitter_window(world: &RouteCache
     }
     use backend::outbound::cache::{DEFAULT_BASE_TTL_SECS, DEFAULT_JITTER_FRACTION};
     let jitter = (DEFAULT_BASE_TTL_SECS as f64 * DEFAULT_JITTER_FRACTION) as usize;
-    let lower = DEFAULT_BASE_TTL_SECS as usize - jitter;
+    // Allow a small slack for Redis countdown drift between the SET and
+    // the subsequent TTL query.
+    let drift_slack_secs: usize = 2;
+    let lower = DEFAULT_BASE_TTL_SECS as usize - jitter - drift_slack_secs;
     let upper = DEFAULT_BASE_TTL_SECS as usize + jitter;
     let ttls = world.ttl_records.get().expect("TTLs recorded");
     for ttl in ttls {

@@ -202,9 +202,13 @@ Hand-off order:
      variation
 
 2. **ConnectionProvider trait extension**:
-   - Added `set_bytes_with_ttl` method accepting TTL parameter
+   - Added `set_bytes_with_ttl` method accepting `ttl_seconds:
+     Option<u64>` — `Some(n)` sets a TTL of `n` seconds, `None` stores
+     without expiry
    - Implemented in `RedisPoolProvider` using Redis `SET ... EX` command
-   - Retained backward-compatible `set_bytes` method
+     (for `Some`) or plain `SET` (for `None`)
+   - Retained backward-compatible `set_bytes` method as a convenience
+     wrapper that delegates to `set_bytes_with_ttl(key, value, None)`
 
 3. **FakeProvider test double enhancements**:
    - Modified internal store to record TTL alongside cached values
@@ -215,20 +219,27 @@ Hand-off order:
 
 4. **GenericRedisRouteCache TTL integration**:
    - Added fields: `base_ttl: u64`, `jitter_fraction: f64`, `rng:
-     Mutex<SmallRng>`
+     Mutex<Box<dyn rand::RngCore + Send>>` (seeded via
+     `StdRng::from_entropy()` in production constructors)
    - Modified `put` to compute jittered TTL and call `set_bytes_with_ttl`
    - Used compile-time constants: `DEFAULT_BASE_TTL_SECS = 86_400`,
      `DEFAULT_JITTER_FRACTION = 0.10`
-   - Added test-only `with_provider_and_ttl` constructor for deterministic
-     testing
+   - Added test-only `with_provider_and_ttl` constructor that accepts a
+     `Box<dyn rand::RngCore + Send>` for deterministic testing
 
 5. **Test coverage**:
    - Unit tests (`rstest`) verify jitter boundaries, TTL pass-through, and
      round-trip behaviour
-   - BDD scenario (`rstest-bdd`) verifies jitter produces varying TTLs in live
-     Redis
-   - Actual expiry testing skipped (would require 24+ hours wait) but jitter
-     verified via Redis `TTL` command
+   - BDD scenario (`rstest-bdd`) verifies jitter produces varying TTLs in
+     live Redis and that all recorded TTLs fall within the configured
+     jitter window (via the Redis `TTL` command)
+   - **Expiry coverage gap**: actual key-expiry testing (i.e. waiting for
+     a key to disappear) was not performed because the adapter uses a
+     compile-time 24-hour base TTL with no short-TTL override available
+     at runtime. Correctness of expiry is instead verified indirectly:
+     the `RedisPoolProvider` delegates to `SET ... EX` (confirmed by
+     unit tests), and the BDD TTL-window step confirms Redis reports the
+     expected TTL values immediately after writes
 
 6. **Documentation updates**:
    - Updated `docs/wildside-backend-architecture.md` Caching Layer section with
@@ -238,13 +249,17 @@ Hand-off order:
 ## Surprises & discoveries
 
 1. **SmallRng feature requirement**: The `rand` crate requires explicit
-   `small_rng` feature flag to use `SmallRng`. Added `rand = { version = "0.8",
-   features = ["small_rng"] }` to `Cargo.toml`.
+   `small_rng` feature flag to use `SmallRng`. Added `rand = { version =
+   "0.8", features = ["small_rng"] }` to `Cargo.toml`. Production code
+   was later refactored to store `Box<dyn rand::RngCore + Send>` seeded
+   via `StdRng::from_entropy()`, but the `small_rng` feature is still
+   used in test code for deterministic seeding with `SmallRng`.
 
-2. **BDD test fixture sharing**: The `rstest-bdd` `Slot` type requires `Clone`
-   on stored values. Since `GenericRedisRouteCache` cannot implement `Clone`
-   (contains `Mutex<SmallRng>`), wrapped cache in `Arc<RedisRouteCache<TestPlan>>`
-   via `CacheHandle` newtype.
+2. **BDD test fixture sharing**: The `rstest-bdd` `Slot` type requires
+   `Clone` on stored values. Since `GenericRedisRouteCache` cannot
+   implement `Clone` (contains `Mutex<Box<dyn RngCore + Send>>`),
+   wrapped cache in `Arc<RedisRouteCache<TestPlan>>` via `CacheHandle`
+   newtype.
 
 3. **Simplified BDD scenarios**: Initially planned TTL expiry scenarios with
    configurable TTL (e.g., 2-second wait), but the adapter uses compile-time
@@ -257,10 +272,12 @@ Hand-off order:
    than in `ConnectionProvider`, keeping jitter logic close to the TTL policy
    decision point.
 
-2. **RNG storage**: Used `Mutex<SmallRng>` within `GenericRedisRouteCache`
-   instead of passing RNG per-call, trading slight lock contention for simpler
-   API surface. `SmallRng` chosen over `ThreadRng` for lighter weight and
-   faster generation of jitter offsets.
+2. **RNG storage**: Used `Mutex<Box<dyn rand::RngCore + Send>>` within
+   `GenericRedisRouteCache` instead of passing RNG per-call, trading slight
+   lock contention for simpler API surface. Production constructors seed
+   via `StdRng::from_entropy()`, while test constructors
+   (`with_provider_and_ttl`) accept an arbitrary boxed `RngCore`,
+   enabling deterministic assertions without sacrificing thread safety.
 
 3. **Type alias for test helpers**: Added `CachedValue = (Vec<u8>,
    Option<u64>)` type alias to satisfy Clippy's `type_complexity` lint while
@@ -359,15 +376,15 @@ Add `rstest` unit tests in the same module or a sibling test module:
 Add a new method to `ConnectionProvider`:
 
 ```rust
-/// Write raw bytes for `key` with expiry.
+/// Write raw bytes for `key` with optional TTL.
 ///
-/// The entry expires after `ttl_seconds`. Implementations that do not
-/// support expiry may ignore the parameter.
+/// If `ttl_seconds` is `Some(n)`, the entry expires after `n` seconds.
+/// If `ttl_seconds` is `None`, the entry persists without expiry.
 async fn set_bytes_with_ttl(
     &self,
     key: &str,
     value: Vec<u8>,
-    ttl_seconds: u64,
+    ttl_seconds: Option<u64>,
 ) -> Result<(), RouteCacheError>;
 ```
 
@@ -393,10 +410,11 @@ assertions:
 pub fn ttl_for(&self, key: &str) -> Option<u64>
 ```
 
-Retain the existing `set_bytes` method (without TTL) for backward
-compatibility. Update `GenericRedisRouteCache::put` to call `set_bytes_with_ttl`
-instead of `set_bytes`, passing the jittered TTL. The old `set_bytes`
-method remains available for any code that does not need TTL.
+Retain `set_bytes` as a default-method wrapper that delegates to
+`set_bytes_with_ttl(key, value, None)`. Update
+`GenericRedisRouteCache::put` to call `set_bytes_with_ttl` with
+`Some(ttl)`, passing the jittered TTL. The wrapper `set_bytes` remains
+available for any code that does not need expiry.
 
 ### Stage C: integrate TTL into the adapter
 
@@ -409,10 +427,11 @@ const DEFAULT_JITTER_FRACTION: f64 = 0.10;  // +/- 10%
 ```
 
 The adapter computes a jittered TTL on each `put` call and passes it to
-`set_bytes_with_ttl`. For RNG injection, parameterize the adapter generically
-over `R: rand::Rng + Send + Sync` or store a
-`Mutex<rand::rngs::SmallRng>` constructed from entropy at creation time.
-Test constructors accept a seeded RNG for deterministic assertions.
+`set_bytes_with_ttl` as `Some(ttl)`. For RNG injection, the adapter
+stores `rng: Mutex<Box<dyn rand::RngCore + Send>>` seeded via
+`StdRng::from_entropy()` at creation time. Test constructors
+(`with_provider_and_ttl`) accept an arbitrary boxed `RngCore` for
+deterministic assertions.
 
 Update the existing constructors (`new`, `connect`, `with_provider`) to
 initialize the TTL parameters with defaults. Add a test-only constructor
@@ -585,15 +604,22 @@ The implementation is done only when all of the following are true:
     derived from a 24-hour base and +/- 10% uniform jitter.
   - The jittered TTL is always between 77 760 s and 95 040 s for the
     default parameters.
-  - Entries stored in Redis expire after their TTL elapses.
+  - Entries stored in Redis expire after their TTL elapses. *(Not
+    directly tested — verified indirectly via `SET ... EX` delegation
+    and Redis `TTL` command output; see expiry coverage gap above.)*
   - Entries stored in Redis are readable before their TTL elapses.
+    *(Not directly tested — covered by existing round-trip BDD
+    scenarios that read back within the 24-hour window.)*
   - Multiple writes produce measurably different TTLs (jitter is not
     constant).
 - Adapter API:
   - The `RouteCache` port trait remains unchanged.
-  - `ConnectionProvider` gains `set_bytes_with_ttl` accepting a TTL in seconds.
-  - `RedisPoolProvider` implements `set_bytes_with_ttl` using `SET ... EX`.
-  - `FakeProvider` records the TTL for each write and exposes it for
+  - `ConnectionProvider` gains `set_bytes_with_ttl` accepting
+    `ttl_seconds: Option<u64>`.
+  - `RedisPoolProvider` implements `set_bytes_with_ttl` using
+    `SET ... EX` for `Some(ttl)` and plain `SET` for `None`.
+  - `FakeProvider` records the TTL for each write (as `CachedValue =
+    (Vec<u8>, Option<u64>)`) and exposes it via `ttl_for` for
     assertions.
 - Jitter helper:
   - A pure function computes jittered TTL from a base, jitter fraction,
@@ -607,8 +633,10 @@ The implementation is done only when all of the following are true:
 - Tests:
   - New `rstest` coverage passes for jitter arithmetic and TTL
     pass-through.
-  - New `rstest-bdd` coverage passes for expiry, pre-expiry readability,
-    and jitter variation against a live `redis-server`.
+  - New `rstest-bdd` coverage passes for jitter variation and TTL
+    window verification against a live `redis-server`. Actual key-expiry
+    BDD scenarios are not included (see expiry coverage gap in Progress
+    section).
   - Existing Postgres-backed suites still pass through `make test`.
 - Documentation:
   - `docs/wildside-backend-architecture.md` records the TTL policy and
@@ -623,12 +651,15 @@ The implementation is done only when all of the following are true:
 
 Status: APPROVED and IMPLEMENTED.
 
-All validation criteria met:
+All validation criteria met (with one qualified exception):
 
 - TTL behaviour verified via unit and BDD tests
-- Adapter API extended with `set_bytes_with_ttl`
+- Adapter API extended with `set_bytes_with_ttl` (accepts
+  `Option<u64>`)
 - Jitter helper implemented with comprehensive edge-case coverage
 - Architectural boundaries preserved (domain unchanged)
-- Full test coverage added
+- Test coverage added — jitter arithmetic, TTL pass-through, jitter
+  variation, and TTL window verification are covered; actual key-expiry
+  testing is verified indirectly (see expiry coverage gap in Progress)
 - Documentation updated
-- Gates passed: `make check-fmt` ✓, `make lint` ✓ (Clippy), `make test` ✓
+- Gates passed: `make check-fmt`, `make lint` (Clippy), `make test`
