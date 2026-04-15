@@ -187,9 +187,17 @@ impl ApalisPostgresProvider {
     /// # }
     /// ```
     pub async fn new(pool: sqlx::PgPool) -> Result<Self, JobDispatchError> {
-        // Create Apalis tables if they don't exist.
-        // Note: setup() is only available for PostgresStorage<(), (), ()> but creates
-        // tables that work for any job type.
+        // `setup()` is defined exclusively on `impl PostgresStorage<(), (), ()>`
+        // by the apalis-postgres library (see `impl PostgresStorage<(), (), ()>`
+        // in apalis-sql/src/postgres.rs). It is not available on any other type
+        // parameter, so it cannot be called as
+        // `PostgresStorage::<serde_json::Value>::setup(&pool)`.
+        //
+        // This is safe: Apalis uses a single shared `apalis.jobs` table for all
+        // job types, not one table per type.  The `()` instantiation is a
+        // library-mandated convention for running schema migrations only; the
+        // `storage` field below operates on the correct `serde_json::Value` type
+        // at runtime.
         apalis_postgres::PostgresStorage::<(), (), ()>::setup(&pool)
             .await
             .map_err(|e| {
