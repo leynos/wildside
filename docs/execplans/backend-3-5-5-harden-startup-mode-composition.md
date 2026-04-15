@@ -243,18 +243,17 @@ HTTP-level BDD matrix completion. Stage C artifacts retained at
 `backend/tests/startup_mode_composition_bdd*` for future reference or
 continuation.
 
-2026-04-04: Stage C BDD suite completion attempted. Successfully resolved
-async/sync architecture issues (BDD step functions must be synchronous,
-calling `run_async` wrapper for async flows), session cookie extraction
-(must use `.response().cookies()` not manual header parsing), and Diesel
-async integration for DB seeding. Final state: 2 of 4 BDD scenarios passing
-(fixture-fallback happy path, validation stability edge path). DB-present
-scenarios encounter 503 Service Unavailable errors during login, likely
-due to embedded PostgreSQL connection pool behaviour under test conditions
-rather than composition logic issues. Core value delivered: HTTP-level BDD
-infrastructure proven functional, fixture-fallback mode fully validated,
-validation error stability across modes confirmed. Stage C artifacts provide
-working foundation for future DB-present scenario debugging if needed.
+2026-04-15: Stage C BDD failures traced to multiple ephemeral Tokio
+runtimes being created per BDD step. Dropping each runtime also dropped
+the DB pool's background tasks, leaving later connection attempts in a
+broken state. The fix in this PR shares a single
+`Arc<tokio::runtime::Runtime>` across the whole `World` fixture and uses
+`runtime.block_on(...)` consistently for setup, seeding, and flow runners
+instead of creating fresh runtimes per step. Schema-loss unhappy-path
+assertions were also updated to match `DieselLoginService`'s real
+behaviour: HTTP 500 with a stable error envelope, not an assumed HTTP 200
+fixture fallback. Verification: all four BDD scenarios now pass under
+`make test`.
 
 ## Decision log
 
@@ -287,8 +286,8 @@ The test module will be declared as `#[cfg(test)] mod tests;` inside
 `state_builders.rs` and will live at
 `backend/src/server/state_builders/tests.rs`.
 
-**Decision C1 (2026-04-03, updated 2026-04-04):** HTTP-level BDD suite
-partially completed with infrastructure proven functional.
+**Decision C1 (2026-04-03, updated 2026-04-15):** HTTP-level BDD suite
+completed with full startup-mode coverage.
 
 Rationale: Stage B successfully implemented observable-behaviour unit tests
 proving deterministic adapter selection for all 16 ports across both startup
@@ -299,27 +298,13 @@ diverges. Existing BDD suites (`user_state_startup_modes_bdd.rs`,
 HTTP-level regression coverage for login/users/profile/interests port groups
 across both modes with embedded PostgreSQL.
 
-2026-04-04 continuation resolved critical infrastructure issues in Stage C
-artifacts: async/sync architecture (step functions must be sync, wrapping
-async flows), session cookie extraction (`.response().cookies()` API),
-and Diesel async integration for DB operations. Current state: 2 of 4 BDD
-scenarios passing (`fixture_fallback_happy_path` covering all 9 endpoints,
-`validation_stability_edge_path` proving error contract stability).
-DB-present scenarios blocked by 503 errors during embedded PostgreSQL tests,
-indicating infrastructure rather than composition issues.
-
-Defence-in-depth achieved: Stage B unit tests (all 16 ports, both modes,
-deterministic wiring) + working HTTP-level BDD infrastructure (fixture mode
-proven, validation stability proven) + existing BDD coverage
-(login/users/profile/interests in both modes). Remaining DB-present BDD
-scenarios deferred due to embedded PostgreSQL test infrastructure complexity
-versus marginal value given existing coverage layers.
-
-Trade-off: Full 4-scenario BDD matrix would provide additional confidence
-but requires debugging embedded PostgreSQL connection pooling under Actix
-test harness conditions. Current 50% scenario pass rate with Stage B unit
-tests provides sufficient regression detection. Stage C artifacts retained
-as working foundation for future DB-present scenario completion if needed.
+The PR applied the shared-runtime fix for Stage C and revised the
+schema-loss assertions to match the real `DieselLoginService` error
+contract. All four scenarios now pass:
+`fixture_fallback_happy_path`, `db_present_happy_path`,
+`schema_loss_unhappy_path`, and `validation_stability_edge_path`.
+Defence-in-depth coverage is now complete through the Stage B unit tests
+plus the full HTTP BDD matrix; no DB-present scenarios remain deferred.
 
 ## Outcomes & retrospective
 
