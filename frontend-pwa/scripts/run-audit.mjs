@@ -1,6 +1,6 @@
-/** @file Ensures `pnpm audit` only fails for advisories covered by the
- * frontend workspace ledger and a validator dependency that includes the
- * upstream fix for the current advisory.
+/** @file Ensures the frontend audit only fails for advisories covered by the
+ * workspace ledger and a validator dependency that includes the upstream fix
+ * for the current advisory.
  *
  * The validator advisory is considered mitigated when the workspace ships a
  * version at or above the minimum safe release, falling back to the legacy
@@ -171,7 +171,7 @@ function isExecutedDirectly(meta) {
 }
 
 /**
- * Evaluate pnpm audit output and determine the appropriate exit code.
+ * Evaluate audit output and determine the appropriate exit code.
  *
  * @param {{ advisories?: Array<Record<string, unknown>>, status?: number }} payload Audit
  *   result containing advisories and the pnpm exit status.
@@ -211,22 +211,22 @@ export function evaluateAudit(payload, options = {}) {
 }
 
 /**
- * Execute `pnpm audit` and exit according to {@link evaluateAudit}.
+ * Execute the audit helper and exit according to {@link evaluateAudit}.
  *
- * @returns {number} Exit code produced by {@link evaluateAudit}.
+ * @returns {Promise<number>} Exit code produced by {@link evaluateAudit}.
  * @example
- * const exitCode = main();
+ * const exitCode = await main();
  * console.log(exitCode);
  */
-export function main() {
-  const { json, status } = runAuditJson();
+export async function main() {
+  const { json, status } = await runAuditJson();
   const advisories = collectAdvisories(json);
   return evaluateAudit({ advisories, status });
 }
 
 if (isExecutedDirectly(import.meta)) {
   try {
-    const exitCode = main();
+    const exitCode = await main();
     process.exit(exitCode);
   } catch (error) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
