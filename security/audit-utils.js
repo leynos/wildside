@@ -146,28 +146,36 @@ function extractGithubAdvisoryId(advisoryUrl) {
   return match?.[0].toUpperCase();
 }
 
+function addNormalisedAdvisory(advisories, packageName, advisory) {
+  const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
+  const advisoryKey = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
+
+  if (advisoryKey in advisories) {
+    return;
+  }
+
+  advisories[advisoryKey] = {
+    ...advisory,
+    github_advisory_id: githubAdvisoryId,
+    package_name: packageName,
+  };
+}
+
+function normalisePackageAdvisories(advisories, packageName, packageAdvisories) {
+  if (!Array.isArray(packageAdvisories)) {
+    return;
+  }
+
+  for (const advisory of packageAdvisories) {
+    addNormalisedAdvisory(advisories, packageName, advisory);
+  }
+}
+
 function normaliseBulkAdvisories(bulkPayload) {
   const advisories = {};
 
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
-    if (!Array.isArray(packageAdvisories)) {
-      continue;
-    }
-
-    for (const advisory of packageAdvisories) {
-      const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
-      const advisoryKey = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
-
-      if (advisoryKey in advisories) {
-        continue;
-      }
-
-      advisories[advisoryKey] = {
-        ...advisory,
-        github_advisory_id: githubAdvisoryId,
-        package_name: packageName,
-      };
-    }
+    normalisePackageAdvisories(advisories, packageName, packageAdvisories);
   }
 
   return advisories;
