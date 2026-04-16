@@ -81,6 +81,28 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   versionsByPackage.set(packageName, knownVersions);
 }
 
+/** Walk one dependency section from `pnpm ls` and record installed versions.
+ * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name.
+ * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
+ */
+function walkDependencySection(section, versionsByPackage) {
+  if (!section || typeof section !== 'object') {
+    return;
+  }
+
+  for (const [packageName, dependency] of Object.entries(section)) {
+    if (!dependency || typeof dependency !== 'object') {
+      continue;
+    }
+
+    if (typeof dependency.version === 'string') {
+      addPackageVersion(versionsByPackage, packageName, dependency.version);
+    }
+
+    walkDependencies(dependency, versionsByPackage);
+  }
+}
+
 /** Walk a `pnpm ls` tree and record every installed package version.
  * @param {Record<string, unknown> | undefined} node Dependency tree node from `pnpm ls`. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
  * @returns {void} @example const versions = new Map(); walkDependencies({ dependencies: { validator: { version: '13.15.23' } } }, versions); console.log([...versions.get('validator')]); // ['13.15.23']
@@ -91,22 +113,7 @@ function walkDependencies(node, versionsByPackage) {
   }
 
   for (const sectionName of DEPENDENCY_SECTION_NAMES) {
-    const section = node[sectionName];
-    if (!section || typeof section !== 'object') {
-      continue;
-    }
-
-    for (const [packageName, dependency] of Object.entries(section)) {
-      if (!dependency || typeof dependency !== 'object') {
-        continue;
-      }
-
-      if (typeof dependency.version === 'string') {
-        addPackageVersion(versionsByPackage, packageName, dependency.version);
-      }
-
-      walkDependencies(dependency, versionsByPackage);
-    }
+    walkDependencySection(node[sectionName], versionsByPackage);
   }
 }
 
