@@ -80,6 +80,7 @@ function addPackageVersion(versionsByPackage, packageName, version) {
 
 /** Walk one dependency section from `pnpm ls` and record installed versions.
  * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
+ * @returns {void} @example const versions = new Map(); walkDependencySection({ validator: { version: '13.15.23' } }, versions); console.log(versions.get('validator').has('13.15.23')); // true
  */
 function walkDependencySection(section, versionsByPackage) {
   if (!section || typeof section !== 'object') {
@@ -114,15 +115,11 @@ function walkDependencies(node, versionsByPackage) {
 }
 
 /** Build the installed package-version map from parsed `pnpm ls` output.
- * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name.
+ * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name. @example const versions = buildVersionMap([{ dependencies: { validator: { version: '13.15.23' } } }]); console.log(versions.get('validator').has('13.15.23')); // true
  */
 function buildVersionMap(packageTrees) {
   const versionsByPackage = new Map();
-
-  for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) {
-    walkDependencies(tree, versionsByPackage);
-  }
-
+  for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) walkDependencies(tree, versionsByPackage);
   return versionsByPackage;
 }
 
@@ -130,11 +127,7 @@ function buildVersionMap(packageTrees) {
  * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
  */
 function collectInstalledPackageVersions() {
-  const result = spawnSync('pnpm', LIST_ARGS, {
-    encoding: 'utf8',
-    maxBuffer: COMMAND_MAX_BUFFER,
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
+  const result = spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
 
   if (result.error) {
     throw result.error;
@@ -145,7 +138,12 @@ function collectInstalledPackageVersions() {
     throw new Error(`pnpm ls failed without producing a dependency tree (exit status ${status}).`);
   }
 
-  const packageTrees = parseJsonOutput(result.stdout?.trim() ?? '', 'pnpm ls');
+  const stdout = result.stdout?.trim();
+  if (!stdout) {
+    throw new Error('pnpm ls failed without producing a dependency tree.');
+  }
+
+  const packageTrees = parseJsonOutput(stdout, 'pnpm ls');
   const versionsByPackage = buildVersionMap(packageTrees);
 
   return Object.fromEntries(
@@ -244,7 +242,7 @@ function normalizeBulkAdvisories(bulkPayload) {
 
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
     if (!Array.isArray(packageAdvisories)) {
-      continue;
+      throw new TypeError(`Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`);
     }
 
     addPackageAdvisories(packageName, packageAdvisories, advisories);
@@ -359,7 +357,6 @@ export function partitionAdvisoriesById(advisories, allowedIds) {
   const allowed = new Set(allowedIds);
   const expected = [];
   const unexpected = [];
-
   for (const advisory of advisories) {
     const id = advisory.github_advisory_id;
     if (id && allowed.has(id)) {
@@ -373,7 +370,7 @@ export function partitionAdvisoriesById(advisories, allowedIds) {
 }
 
 /** Format one advisory as a report line.
- * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print. @returns {string} Human-readable bullet line for the advisory.
+ * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print. @returns {string} Human-readable bullet line for the advisory. @example formatAdvisoryLine({ github_advisory_id: 'GHSA-1', title: 'Example' }); // "- GHSA-1: Example"
  */
 function formatAdvisoryLine(advisory) {
   const id = advisory.github_advisory_id ?? 'UNKNOWN';
