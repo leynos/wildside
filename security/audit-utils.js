@@ -176,7 +176,31 @@ function deriveAdvisoryKey(packageName, advisory) {
   return { key, githubAdvisoryId };
 }
 
-function normaliseBulkAdvisories(bulkPayload) {
+/**
+ * Merge advisories for a single package into the shared accumulator,
+ * skipping entries whose key is already present.
+ *
+ * @param {string} packageName
+ * @param {unknown[]} packageAdvisories Validated array of raw advisory objects.
+ * @param {Record<string, unknown>} advisories Accumulator mutated in place.
+ */
+function addPackageAdvisories(packageName, packageAdvisories, advisories) {
+  for (const advisory of packageAdvisories) {
+    const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
+
+    if (Object.hasOwn(advisories, key)) {
+      continue;
+    }
+
+    advisories[key] = {
+      ...advisory,
+      github_advisory_id: githubAdvisoryId,
+      package_name: packageName,
+    };
+  }
+}
+
+function normalizeBulkAdvisories(bulkPayload) {
   const advisories = {};
 
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
@@ -184,19 +208,7 @@ function normaliseBulkAdvisories(bulkPayload) {
       continue;
     }
 
-    for (const advisory of packageAdvisories) {
-      const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
-
-      if (Object.hasOwn(advisories, key)) {
-        continue;
-      }
-
-      advisories[key] = {
-        ...advisory,
-        github_advisory_id: githubAdvisoryId,
-        package_name: packageName,
-      };
-    }
+    addPackageAdvisories(packageName, packageAdvisories, advisories);
   }
 
   return advisories;
@@ -224,7 +236,7 @@ async function runBulkAdvisoryAudit() {
   const bulkPayload = parseJsonOutput(responseText, 'bulk advisory audit', {
     requireNonEmpty: true,
   });
-  const advisories = normaliseBulkAdvisories(bulkPayload);
+  const advisories = normalizeBulkAdvisories(bulkPayload);
 
   return {
     json: { advisories },
