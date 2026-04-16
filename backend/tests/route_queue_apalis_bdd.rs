@@ -24,7 +24,7 @@ use tokio::runtime::Runtime;
 mod support;
 
 use support::atexit_cleanup::shared_cluster_handle;
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::provision_template_database;
 
 /// Simple test plan type for verifying queue behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,7 +110,7 @@ fn setup_test_context() -> Result<TestContext, String> {
 fn world() -> Option<SharedContext> {
     match setup_test_context() {
         Ok(ctx) => Some(Arc::new(Mutex::new(ctx))),
-        Err(reason) => handle_cluster_setup_failure(reason),
+        Err(reason) => panic!("route_queue_apalis setup failed: {reason}"),
     }
 }
 
@@ -346,7 +346,5 @@ fn two_independent_jobs_exist_in_storage(world: &Option<SharedContext>) {
 #[scenario(path = "tests/features/route_queue_apalis.feature")]
 #[rstest]
 fn route_queue_apalis(world: Option<SharedContext>) {
-    if world.is_none() {
-        eprintln!("Skipping route_queue_apalis: cluster setup failed");
-    }
+    assert!(world.is_some(), "route_queue_apalis: fixture setup failed");
 }
