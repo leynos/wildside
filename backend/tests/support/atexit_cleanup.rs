@@ -252,6 +252,7 @@ fn register_process_exit_cleanup(handle: &ClusterHandle) {
 mod tests {
     //! Unit tests for atexit cleanup helpers.
 
+    use super::*;
     use cap_std::ambient_authority;
     use cap_std::fs::Dir;
 
@@ -293,5 +294,25 @@ mod tests {
             "custom_value",
             "ensure_stable_password should not overwrite an existing PG_PASSWORD"
         );
+    }
+
+    #[test]
+    fn retry_helpers_are_linked() {
+        let _ = SHARED_CLUSTER_RETRIES;
+        let _ = SHARED_CLUSTER_RETRY_DELAY;
+        let _ = shared_cluster_handle as fn() -> BootstrapResult<&'static ClusterHandle>;
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_cleanup_helpers_are_linked() {
+        let _ = SHARED_CLUSTER_LOCK_FILE;
+        let _ = &PG_POSTMASTER_PID;
+        let _ = &PG_DATA_DIR;
+        let _ = &SHARED_CLUSTER_PROCESS_LOCK_FD;
+        let _ = &SHARED_CLUSTER_PROCESS_LOCK_INIT;
+        let _ = acquire_shared_cluster_process_lock as fn() -> BootstrapResult<()>;
+        let _ = stop_postgres_on_exit as extern "C" fn();
+        let _ = register_process_exit_cleanup as fn(&ClusterHandle);
     }
 }

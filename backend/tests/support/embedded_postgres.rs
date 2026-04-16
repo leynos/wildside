@@ -24,25 +24,18 @@ use uuid::Uuid;
 use super::format_postgres_error;
 
 /// Embedded migrations from the backend/migrations directory.
-#[allow(dead_code)]
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-#[allow(dead_code)]
 static TEMPLATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-#[allow(dead_code)]
 const TEMPLATE_NAME_PREFIX: &str = "backend_template";
-#[allow(dead_code)]
 const TEMPLATE_PROVISION_RETRIES: usize = 5;
-#[allow(dead_code)]
 const TEMPLATE_PROVISION_RETRY_DELAY: Duration = Duration::from_millis(500);
 
-#[allow(dead_code)]
 fn migrations_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
 }
 
-#[allow(dead_code)]
 fn template_database_name() -> Result<String, UserPersistenceError> {
     let hash = hash_directory(migrations_dir())
         .map_err(|err| UserPersistenceError::query(format!("hash migrations: {err}")))?;
@@ -50,7 +43,6 @@ fn template_database_name() -> Result<String, UserPersistenceError> {
     Ok(format!("{TEMPLATE_NAME_PREFIX}_{short_hash}"))
 }
 
-#[allow(dead_code)]
 fn new_test_database_name() -> String {
     format!("test_{}", Uuid::new_v4())
 }
@@ -76,7 +68,6 @@ fn new_test_database_name() -> String {
 ///        "template check: attempt 1/5: ..."
 ///      ))
 /// ```
-#[allow(dead_code)]
 fn provision_template_database_attempt(
     cluster: &ClusterHandle,
     attempt: usize,
@@ -97,7 +88,6 @@ fn provision_template_database_attempt(
 }
 
 /// Creates or reuses a template database with the latest migrations applied.
-#[allow(dead_code)]
 fn ensure_template_database(cluster: &ClusterHandle) -> Result<String, UserPersistenceError> {
     let template_name = template_database_name()?;
     let _lock = TEMPLATE_LOCK
@@ -176,6 +166,21 @@ mod tests {
 
     #[test]
     fn drop_users_table_is_linked() {
+        let _ = MIGRATIONS;
+        let _ = &TEMPLATE_LOCK;
+        let _ = TEMPLATE_NAME_PREFIX;
+        let _ = TEMPLATE_PROVISION_RETRIES;
+        let _ = TEMPLATE_PROVISION_RETRY_DELAY;
+        let _ = migrations_dir as fn() -> PathBuf;
+        let _ = template_database_name as fn() -> Result<String, UserPersistenceError>;
+        let _ = new_test_database_name as fn() -> String;
+        let _ = provision_template_database_attempt
+            as fn(&ClusterHandle, usize) -> Result<TemporaryDatabase, UserPersistenceError>;
+        let _ =
+            ensure_template_database as fn(&ClusterHandle) -> Result<String, UserPersistenceError>;
+        let _ = provision_template_database
+            as fn(&ClusterHandle) -> Result<TemporaryDatabase, UserPersistenceError>;
+        let _ = migrate_schema as fn(&str) -> Result<(), UserPersistenceError>;
         let _ = drop_users_table as fn(&str) -> Result<(), UserPersistenceError>;
     }
 }
