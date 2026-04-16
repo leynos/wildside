@@ -155,11 +155,11 @@ function collectInstalledPackageVersions() {
   );
 }
 
-/** Normalise a registry URL so bulk advisory requests always target a valid base URL.
+/** Normalize a registry URL so bulk advisory requests always target a valid base URL.
  * @param {string | undefined | null} rawRegistry Raw registry setting from env or pnpm config.
- * @returns {string} Registry URL with a trailing slash. @example normaliseRegistryUrl('https://registry.npmjs.org'); // 'https://registry.npmjs.org/'
+ * @returns {string} Registry URL with a trailing slash. @example normalizeRegistryUrl('https://registry.npmjs.org'); // 'https://registry.npmjs.org/'
  */
-function normaliseRegistryUrl(rawRegistry) {
+function normalizeRegistryUrl(rawRegistry) {
   const trimmed = String(rawRegistry ?? '').trim();
   const registry =
     trimmed && trimmed !== 'undefined' && trimmed !== 'null' ? trimmed : DEFAULT_REGISTRY;
@@ -172,11 +172,11 @@ function normaliseRegistryUrl(rawRegistry) {
 function readRegistryUrl() {
   const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
   if (envRegistry) {
-    return normaliseRegistryUrl(envRegistry);
+    return normalizeRegistryUrl(envRegistry);
   }
 
   try {
-    return normaliseRegistryUrl(
+    return normalizeRegistryUrl(
       execFileSync('pnpm', ['config', 'get', 'registry'], {
         encoding: 'utf8',
       }),
@@ -235,7 +235,7 @@ function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   }
 }
 
-/** Normalise bulk advisory responses into the shared advisory object shape.
+/** Normalize bulk advisory responses into the shared advisory object shape.
  * @param {Record<string, unknown> | undefined} bulkPayload Bulk advisory payload keyed by package name.
  * @returns {Record<string, unknown>} Deduplicated advisories keyed by GHSA identifier or package fallback. @example normalizeBulkAdvisories({ validator: [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }] }); // { 'GHSA-vghf-hv5q-vc2g': { github_advisory_id: 'GHSA-vghf-hv5q-vc2g', package_name: 'validator', id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' } }
  */
