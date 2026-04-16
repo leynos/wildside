@@ -116,13 +116,13 @@ fn world() -> Option<SharedContext> {
 
 // -- Step definitions --
 
-#[given("a test database with Apalis storage initialised")]
-fn a_test_database_with_apalis_storage_initialised(world: &Option<SharedContext>) {
+#[given("a test database with Apalis storage initialized")]
+fn a_test_database_with_apalis_storage_initialized(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
-    // Context setup already initialised the storage in the fixture.
+    // Context setup already initialized the storage in the fixture.
     let ctx = world.lock().expect("context lock");
-    assert!(ctx.queue.is_some(), "queue adapter should be initialised");
-    assert!(ctx.pool.is_some(), "pool should be initialised");
+    assert!(ctx.queue.is_some(), "queue adapter should be initialized");
+    assert!(ctx.pool.is_some(), "pool should be initialized");
 }
 
 #[given("the queue adapter uses an invalid database connection")]
