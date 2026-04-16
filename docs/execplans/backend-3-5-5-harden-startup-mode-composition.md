@@ -322,17 +322,19 @@ work. The relevant code and test landscape is as follows.
 
 This module is the composition root for all HTTP-facing domain ports. It
 is declared as `mod state_builders` inside `backend/src/server/mod.rs` and
-is not re-exported publicly. The module currently contains no `#[cfg(test)]`
+re-exports `build_http_state` publicly via `backend::server`. The module currently contains no `#[cfg(test)]`
 blocks.
 
 The main entry point is:
 
 ```rust
-pub(super) fn build_http_state(
+pub fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState>
 ```
+
+Callers import this function as `use backend::server::build_http_state`.
 
 This function calls individual builder helpers and assembles `HttpStatePorts`
 (11 ports) and `HttpStateExtraPorts` (5 ports) into a single `HttpState`.
@@ -808,11 +810,13 @@ relationships.
 Existing composition entry point (unchanged public signature):
 
 ```rust
-pub(super) fn build_http_state(
+pub fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState>
 ```
+
+Callers import this function as `use backend::server::build_http_state`.
 
 Required adapter dependency direction (unchanged):
 
