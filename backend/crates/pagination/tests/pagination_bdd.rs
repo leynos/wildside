@@ -263,9 +263,7 @@ fn serialized_links(world: &World) -> serde_json::Map<String, Value> {
     clippy::expect_used,
     reason = "BDD helpers use expect for clear failures"
 )]
-fn decoded_cursor(
-    decode_result: &Result<Cursor<FixtureKey>, CursorError>,
-) -> &Cursor<FixtureKey> {
+fn decoded_cursor(decode_result: &Result<Cursor<FixtureKey>, CursorError>) -> &Cursor<FixtureKey> {
     decode_result
         .as_ref()
         .expect("cursor decoding should succeed")
