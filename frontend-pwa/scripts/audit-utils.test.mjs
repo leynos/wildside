@@ -14,10 +14,23 @@ vi.mock('node:child_process', () => ({
 
 const originalFetch = globalThis.fetch;
 
+/**
+ * Create a pnpm-like child-process result for audit command tests.
+ * @param {{ status?: number, stdout?: string, error?: Error | undefined }} [options={}] Result overrides.
+ * @param {number} [options.status=0] Process exit status.
+ * @param {string} [options.stdout=''] Command stdout payload.
+ * @param {Error | undefined} [options.error=undefined] Spawn error to surface.
+ * @returns {{ error: Error | undefined, status: number, stdout: string }} Mocked pnpm result object.
+ */
 function createPnpmResult({ status = 0, stdout = '', error = undefined } = {}) {
   return { error, status, stdout };
 }
 
+/**
+ * Configure the retired-endpoint pnpm audit flow for fallback tests.
+ * @param {unknown[]} [lsPayload=[{ name: 'frontend-pwa', dependencies: {} }]] Parsed `pnpm ls` payload for the second mock result.
+ * @returns {void}
+ */
 function setupRetiredPnpmAudit(lsPayload = [{ name: 'frontend-pwa', dependencies: {} }]) {
   spawnSyncMock
     .mockReturnValueOnce(
@@ -39,6 +52,10 @@ function setupRetiredPnpmAudit(lsPayload = [{ name: 'frontend-pwa', dependencies
     );
 }
 
+/**
+ * Dynamically import the shared audit utility module under test.
+ * @returns {Promise<typeof import('../../security/audit-utils.js')>} Imported audit utility module.
+ */
 async function loadAuditUtils() {
   const module = await import('../../security/audit-utils.js');
   return module;

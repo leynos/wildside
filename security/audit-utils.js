@@ -1,14 +1,11 @@
-/** @file Shared helpers for dependency audits and advisory filtering.
- *
- * These helpers keep the security scripts aligned when package manager output
- * or audit endpoints need compatibility fallbacks.
- */
+/** @file Shared helpers for dependency audits and advisory filtering. */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const AUDIT_ARGS = ['audit', '--json'];
 const LIST_ARGS = ['ls', '--json', '--depth', 'Infinity'];
 const BULK_ADVISORY_PATH = '-/npm/v1/security/advisories/bulk';
+const BULK_AUDIT_TIMEOUT_MS = 30_000;
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
 const DEPENDENCY_SECTION_NAMES = [
@@ -82,8 +79,7 @@ function addPackageVersion(versionsByPackage, packageName, version) {
 }
 
 /** Walk one dependency section from `pnpm ls` and record installed versions.
- * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name.
- * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
+ * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
  */
 function walkDependencySection(section, versionsByPackage) {
   if (!section || typeof section !== 'object') {
@@ -118,8 +114,7 @@ function walkDependencies(node, versionsByPackage) {
 }
 
 /** Build the installed package-version map from parsed `pnpm ls` output.
- * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many.
- * @returns {Map<string, Set<string>>} Installed versions keyed by package name.
+ * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name.
  */
 function buildVersionMap(packageTrees) {
   const versionsByPackage = new Map();
@@ -216,9 +211,16 @@ function deriveAdvisoryKey(packageName, advisory) {
 
 /** Merge advisories for one package into the shared accumulator.
  * @param {string} packageName Package name from the bulk advisory payload. @param {unknown[]} packageAdvisories Validated array of raw advisory objects. @param {Record<string, unknown>} advisories Accumulator mutated in place.
+ * @returns {void} @example const advisories = {}; addPackageAdvisories('validator', [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g', title: 'Validator SSRF' }], advisories); console.log(advisories['GHSA-vghf-hv5q-vc2g'].package_name); // 'validator'
  */
 function addPackageAdvisories(packageName, packageAdvisories, advisories) {
-  for (const advisory of packageAdvisories) {
+  for (const [index, advisory] of packageAdvisories.entries()) {
+    const isPlainObject =
+      typeof advisory === 'object' && advisory !== null && !Array.isArray(advisory);
+    if (!isPlainObject) {
+      throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
+    }
+
     const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
 
     if (Object.hasOwn(advisories, key)) {
@@ -257,15 +259,31 @@ function normalizeBulkAdvisories(bulkPayload) {
 async function runBulkAdvisoryAudit() {
   const registryUrl = readRegistryUrl();
   const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(collectInstalledPackageVersions()),
-  });
-  const responseText = await response.text();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
+  let response;
+  let responseText;
+
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(collectInstalledPackageVersions()),
+      signal: controller.signal,
+    });
+    responseText = await response.text();
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Bulk advisory audit timed out after ${BULK_AUDIT_TIMEOUT_MS}ms at ${endpoint}`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -313,40 +331,19 @@ export async function runAuditJson() {
   return { json, status };
 }
 
-/**
- * Convert the advisories object returned by `pnpm audit` into a flat array that
- * is easier to filter.
- *
- * @param {{ advisories?: Record<string, unknown> }} auditJson Raw JSON payload
- *   from `pnpm audit`.
- * @returns {Array<Record<string, unknown>>} List of advisory objects.
- * @example
- * const advisories = collectAdvisories({ advisories: { "GHSA-123": { id: 1 } } });
- * console.log(advisories.length); // 1
+/** Convert the advisories object returned by `pnpm audit` into a flat array.
+ * @param {{ advisories?: Record<string, unknown> }} auditJson Raw JSON payload from `pnpm audit`.
+ * @returns {Array<Record<string, unknown>>} List of advisory objects. @example const advisories = collectAdvisories({ advisories: { "GHSA-123": { id: 1 } } }); console.log(advisories.length); // 1
  */
 export function collectAdvisories(auditJson) {
   return Object.values(auditJson.advisories ?? {});
 }
 
-/**
- * Split advisories into those whose GitHub advisory IDs are present in the
- * allowed list and those that are unexpected.
- *
- * @param {Array<{ github_advisory_id?: string }>} advisories Advisories to
- *   partition.
- * @param {Iterable<string>} allowedIds Advisory IDs the caller expects.
- * @returns {{ expected: typeof advisories, unexpected: typeof advisories }}
- *   Partitioned advisories.
- * @example
- * const { expected, unexpected } = partitionAdvisoriesById(
- *   [
- *     { github_advisory_id: 'GHSA-1' },
- *     { github_advisory_id: 'GHSA-2' },
- *   ],
- *   ['GHSA-2'],
- * );
- * console.log(expected.length); // 1
- * console.log(unexpected.length); // 1
+/** Split advisories into allowed and unexpected groups.
+ * @param {Array<{ github_advisory_id?: string }>} advisories Advisories to partition. @param {Iterable<string>} allowedIds Advisory IDs the caller expects.
+ * @returns {{ expected: typeof advisories, unexpected: typeof advisories }} Partitioned advisories.
+ * @example const { expected, unexpected } = partitionAdvisoriesById([{ github_advisory_id: 'GHSA-1' }, { github_advisory_id: 'GHSA-2' }], ['GHSA-2']); console.log(expected.length); // 1
+ * @example console.log(unexpected.length); // 1
  */
 export function partitionAdvisoriesById(advisories, allowedIds) {
   const allowed = new Set(allowedIds);
@@ -366,8 +363,7 @@ export function partitionAdvisoriesById(advisories, allowedIds) {
 }
 
 /** Format one advisory as a report line.
- * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print.
- * @returns {string} Human-readable bullet line for the advisory.
+ * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print. @returns {string} Human-readable bullet line for the advisory.
  */
 function formatAdvisoryLine(advisory) {
   const id = advisory.github_advisory_id ?? 'UNKNOWN';
@@ -375,19 +371,9 @@ function formatAdvisoryLine(advisory) {
   return `- ${id}${suffix}`;
 }
 
-/**
- * Report unexpected advisories to stderr.
- *
- * @param {Array<{ github_advisory_id?: string, title?: string }>} unexpected
- *   Advisories that were not permitted.
- * @param {string} heading Descriptive heading for the error output.
- * @returns {boolean} Whether any advisories were reported.
- * @example
- * const hadUnexpected = reportUnexpectedAdvisories(
- *   [{ github_advisory_id: 'GHSA-1', title: 'Example' }],
- *   'Unexpected advisories:',
- * );
- * console.log(hadUnexpected); // true
+/** Report unexpected advisories to stderr.
+ * @param {Array<{ github_advisory_id?: string, title?: string }>} unexpected Advisories that were not permitted. @param {string} heading Descriptive heading for the error output.
+ * @returns {boolean} Whether any advisories were reported. @example const hadUnexpected = reportUnexpectedAdvisories([{ github_advisory_id: 'GHSA-1', title: 'Example' }], 'Unexpected advisories:'); console.log(hadUnexpected); // true
  */
 export function reportUnexpectedAdvisories(unexpected, heading) {
   if (unexpected.length === 0) {
