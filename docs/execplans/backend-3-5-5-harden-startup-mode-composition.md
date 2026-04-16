@@ -123,13 +123,13 @@ Observable success criteria:
 ## Risks
 
 - Risk: the internal helper seams may need visibility changes (`pub(crate)`
-  or `pub(super)`) that ripple into existing test files that include
-  `state_builders.rs` via `#[path]` directives.
+  or `pub(super)`) that could have rippled into test files that formerly
+  included `state_builders.rs` via `#[path]` directives.
   Severity: medium.
   Likelihood: high.
-  Mitigation: audit all `#[path = "../src/server/state_builders.rs"]`
-  includes in the test tree before changing visibility. Keep the number of
-  visibility-expanded items minimal and document each one.
+  Mitigation: Resolved in Stage B: all
+  `#[path = "../src/server/state_builders.rs"]` includes in the test tree
+  were removed; tests now import symbols from `backend::server` directly.
 
 - Risk: adding trait-based introspection (for example, downcasting or
   marker traits) to detect adapter type at runtime would leak infrastructure
@@ -212,8 +212,11 @@ trait signatures and maintains hexagonal boundaries.
 2026-04-03: Stage B unit tests created as integration test at
 `backend/tests/state_builders_composition_unit.rs` rather than in-module
 because `state_builders.rs` is in the binary crate (`src/main.rs`), not the
-library crate (`src/lib.rs`). Integration tests using `#[path]` includes
-follow existing repository patterns.
+library crate (`src/lib.rs`). The initial implementation used `#[path]`
+includes following existing repository patterns; once `build_http_state`
+and `ServerConfig` were made public and re-exported from
+`backend::server`, all test files were updated to import them via
+`use backend::server::{ServerConfig, build_http_state}` instead.
 
 2026-04-03: DB-mode unit test requires synchronous cluster setup but
 `#[tokio::test]` creates async runtime, causing nested runtime panic. Rather
@@ -422,10 +425,13 @@ through HTTP-level flows:
   recording doubles that construct `HttpState` directly (bypassing
   `state_builders`).
 
-All six files access `state_builders.rs` via
+All six files originally accessed `state_builders.rs` via
 `#[path = "../src/server/state_builders.rs"]` include directives. None of
 them test the composition decision in isolation; they all test through the
-full HTTP request/response cycle.
+full HTTP request/response cycle. This pattern was superseded in Stage B:
+`build_http_state` and `ServerConfig` are now public and re-exported from
+`backend::server`, so tests import them directly without `#[path]`
+includes.
 
 **Gap**: there are no unit tests that prove "given `db_pool = Some(pool)`,
 every port in `HttpStatePorts` and `HttpStateExtraPorts` is a DB-backed
