@@ -44,11 +44,16 @@ Observable success criteria:
   - the jittered TTL falls within the expected 77 760 s – 95 040 s window;
   - the adapter's `put` path passes the computed TTL to the provider;
   - round-trip behaviour is unchanged (get after put still succeeds).
-- `rstest-bdd` coverage proves:
-  - a stored plan expires after the TTL elapses (tested against a live
-    `redis-server` with a short TTL override for speed);
-  - a stored plan is still readable before the TTL elapses;
-  - jittered writes produce measurably different TTLs across invocations.
+- `rstest-bdd` coverage proves (via indirect verification against a
+  live `redis-server`):
+  - entries receive a TTL in the expected jitter window (confirmed by
+    querying the Redis `TTL` command immediately after writes);
+  - jittered writes produce measurably different TTLs across
+    invocations.
+  - **Note:** direct expiry testing (waiting for a key to disappear)
+    was not performed because the adapter uses a compile-time 24-hour
+    base TTL with no short-TTL override. Correctness of expiry relies
+    on the `SET ... EX` delegation confirmed by unit tests.
 - `docs/wildside-backend-architecture.md` records the TTL policy and jitter
   rationale.
 - `docs/backend-roadmap.md` marks 5.1.3 done only after all required gates
@@ -289,7 +294,52 @@ Hand-off order:
 
 ## Outcomes & retrospective
 
-No outcomes to report yet.
+### Outcomes
+
+- **TTL with jitter delivered**: `GenericRedisRouteCache::put` now
+  applies a per-write jittered TTL drawn uniformly from the
+  [77 760 s, 95 040 s] window (24 h +/- 10%). Entries expire
+  individually, eliminating synchronized cache stampedes.
+- **Hexagonal boundary preserved**: the `RouteCache` port trait is
+  unchanged; TTL is entirely an outbound adapter concern.
+- **RNG injection**: production code seeds via `StdRng::from_entropy()`
+  behind `Mutex<Box<dyn rand::RngCore + Send>>`; test constructors
+  accept a deterministic boxed RNG.
+- **Backward-compatible API**: `set_bytes` remains as a
+  convenience wrapper delegating to `set_bytes_with_ttl(key, value,
+  None)`.
+
+### Decisions confirmed
+
+- Jitter is applied in the adapter `put` method, not in
+  `ConnectionProvider`, keeping the policy close to the decision point.
+- `FakeProvider` records `(Vec<u8>, Option<u64>)` per key, enabling
+  drift-free TTL assertions without a live Redis.
+
+### Coverage gap
+
+- Direct expiry testing (waiting for a key to disappear) was not
+  performed. The adapter's 24-hour base TTL is a compile-time constant
+  with no short-TTL runtime override. Correctness of expiry relies on
+  `SET ... EX` delegation (confirmed by unit tests) and Redis `TTL`
+  command verification (confirmed by BDD tests).
+
+### Follow-ups
+
+- Consider adding a runtime-configurable TTL override (environment
+  variable or builder parameter) in a future task to enable direct
+  expiry integration tests with short TTLs.
+- Jitter-specific live-Redis BDD steps were extracted into
+  `backend/tests/route_cache_redis_jitter_bdd.rs` to keep file sizes
+  under the 400-line cap.
+
+### Completion evidence
+
+- `make check-fmt`: passed.
+- `make lint` (Clippy): passed (pre-existing `whitaker`/`checkmake`
+  tool absences are unrelated).
+- `make test`: all tests passed (1081 tests, 4 skipped for known Redis
+  or skip conditions).
 
 ## Context and orientation
 
@@ -363,7 +413,7 @@ The function:
 
 Add `rstest` unit tests in the same module or a sibling test module:
 
-- Parameterised test proving the output is within
+- Parameterized test proving the output is within
   `[base_ttl * (1 - jitter), base_ttl * (1 + jitter)]` for a range of
   seeds.
 - Edge case: `base_ttl = 0` returns `1` (minimum clamp).

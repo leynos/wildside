@@ -12,7 +12,7 @@ use backend::{
     domain::ports::{RouteCache, RouteCacheError, RouteCacheKey},
     outbound::cache::RedisRouteCache,
 };
-use bb8_redis::{RedisConnectionManager, bb8::Pool, redis::AsyncCommands};
+use bb8_redis::{RedisConnectionManager, bb8::Pool};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -57,8 +57,6 @@ struct RouteCacheWorld {
     second_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     latest_put_result: Slot<Result<(), RouteCacheError>>,
     latest_error: Slot<RouteCacheError>,
-    ttl_records: Slot<Vec<Option<usize>>>,
-    stored_keys: Slot<Vec<String>>,
     skip_reason: Slot<String>,
     has_printed_skip_message: Slot<bool>,
 }
@@ -158,32 +156,6 @@ impl RouteCacheWorld {
             .0
             .block_on(async { server.0.seed_raw_bytes(key, bytes).await })
             .expect("seed corrupt bytes");
-    }
-
-    async fn query_ttl_async(
-        conn: &mut impl AsyncCommands,
-        key: &str,
-    ) -> Result<Option<usize>, bb8_redis::redis::RedisError> {
-        let ttl: i64 = conn.ttl(key).await?;
-        Ok(if ttl > 0 { Some(ttl as usize) } else { None })
-    }
-
-    fn record_ttls_for_keys(&self, keys: &[String]) {
-        let server = self.server.get().expect("redis server initialized");
-        let runtime = self.runtime();
-        let ttls = runtime.0.block_on(async {
-            let mut conn = server.0.raw_connection().await.expect("raw redis conn");
-            let mut out = Vec::new();
-            for key in keys {
-                out.push(
-                    Self::query_ttl_async(&mut conn, key)
-                        .await
-                        .expect("TTL query should not fail"),
-                );
-            }
-            out
-        });
-        self.ttl_records.set(ttls);
     }
 
     fn remember_error_from_first_get(&self) {
@@ -406,76 +378,10 @@ fn unreachable_redis_surfaces_as_a_backend_failure(world: RouteCacheWorld) {
     drop(world);
 }
 
-#[when("five plans are stored under distinct cache keys")]
-fn five_plans_are_stored_under_distinct_cache_keys(world: &RouteCacheWorld) {
-    if world.is_skipped() {
-        return;
-    }
-    let keys: Vec<String> = (0..5).map(|i| format!("route:jitter:{i}")).collect();
-    for (i, key) in keys.iter().enumerate() {
-        world.store_plan(key, TestPlan::new(&format!("req-jitter-{i}"), i as u64));
-        world
-            .latest_put_result
-            .get()
-            .expect("put result present")
-            .clone()
-            .expect("put should succeed");
-    }
-    world.record_ttls_for_keys(&keys);
-    world.stored_keys.set(keys);
-}
-
-#[then("not all recorded TTLs are identical")]
-fn not_all_recorded_ttls_are_identical(world: &RouteCacheWorld) {
-    if world.is_skipped() {
-        return;
-    }
-    let ttls = world.ttl_records.get().expect("TTLs recorded");
-    let all_some: Vec<usize> = ttls
-        .into_iter()
-        .map(|t| t.expect("TTL should be set (Some)"))
-        .collect();
-    let first = all_some[0];
-    assert!(
-        all_some.iter().any(|&t| t != first),
-        "expected TTLs to vary due to jitter, but all were {first}s"
-    );
-}
-
-#[then("all recorded TTLs fall within the configured jitter window")]
-fn all_recorded_ttls_fall_within_the_configured_jitter_window(world: &RouteCacheWorld) {
-    if world.is_skipped() {
-        return;
-    }
-    use backend::outbound::cache::{DEFAULT_BASE_TTL_SECS, DEFAULT_JITTER_FRACTION};
-    let jitter = (DEFAULT_BASE_TTL_SECS as f64 * DEFAULT_JITTER_FRACTION) as usize;
-    // Allow a small slack for Redis countdown drift between the SET and
-    // the subsequent TTL query.
-    let drift_slack_secs: usize = 2;
-    let lower = DEFAULT_BASE_TTL_SECS as usize - jitter - drift_slack_secs;
-    let upper = DEFAULT_BASE_TTL_SECS as usize + jitter;
-    let ttls = world.ttl_records.get().expect("TTLs recorded");
-    for ttl in ttls {
-        let t = ttl.expect("TTL should be Some");
-        assert!(
-            t >= lower && t <= upper,
-            "TTL {t}s is outside expected window [{lower}s, {upper}s]"
-        );
-    }
-}
-
 #[scenario(
     path = "tests/features/route_cache_redis.feature",
     name = "Distinct cache keys do not overwrite each other"
 )]
 fn distinct_cache_keys_do_not_overwrite_each_other(world: RouteCacheWorld) {
-    drop(world);
-}
-
-#[scenario(
-    path = "tests/features/route_cache_redis.feature",
-    name = "Jittered writes produce varying TTLs"
-)]
-fn jittered_writes_produce_varying_ttls(world: RouteCacheWorld) {
     drop(world);
 }
