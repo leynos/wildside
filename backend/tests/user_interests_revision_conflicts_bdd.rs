@@ -1,6 +1,6 @@
 //! Behavioural coverage for revision-safe interests updates against real DB wiring.
 
-pub(crate) use backend::server::{ServerConfig, build_http_state};
+pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;

@@ -20,7 +20,7 @@ use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionServi
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{LoginRequest, list_users, login};
 use backend::outbound::persistence::{DbPool, PoolConfig};
-use backend::server::{ServerConfig, build_http_state};
+use backend::test_support::server::{ServerConfig, build_http_state};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};

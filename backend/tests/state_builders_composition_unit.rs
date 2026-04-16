@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use actix_web::cookie::Key;
-use backend::server::{ServerConfig, build_http_state};
+use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::{fixture, rstest};
 
 mod support;

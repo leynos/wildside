@@ -1,12 +1,12 @@
 //! Server construction and middleware wiring.
 
-pub mod config;
+mod config;
 #[cfg(feature = "metrics")]
 mod metrics;
-pub mod state_builders;
+mod state_builders;
 
 pub use config::ServerConfig;
-pub use state_builders::build_http_state;
+pub(crate) use state_builders::build_http_state;
 
 #[cfg(feature = "metrics")]
 use metrics::MetricsLayer;
@@ -70,7 +70,7 @@ use std::sync::Arc;
 /// # Errors
 /// Returns [`std::io::Error`] if Prometheus metric registration fails.
 #[cfg(feature = "metrics")]
-fn build_route_submission_service(
+pub(crate) fn build_route_submission_service(
     config: &ServerConfig,
 ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
     match (&config.db_pool, &config.prometheus) {
@@ -106,7 +106,7 @@ fn build_route_submission_service(
 /// - `RouteSubmissionServiceImpl` with DB-backed storage and no-op metrics.
 /// - `FixtureRouteSubmissionService` when no DB pool is configured.
 #[cfg(not(feature = "metrics"))]
-fn build_route_submission_service(
+pub(crate) fn build_route_submission_service(
     config: &ServerConfig,
 ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
     match &config.db_pool {
@@ -201,7 +201,8 @@ fn build_app(
 ///
 /// # Parameters
 /// - `health_state`: shared readiness state updated once the server is initialised.
-/// - `config`: pre-built [`ServerConfig`] containing session, binding, and optional metrics settings.
+/// - `config`: pre-built server configuration containing session, binding, and
+///   optional metrics settings.
 ///
 /// # Returns
 /// A spawned [`Server`] that must be awaited to drive the listener.

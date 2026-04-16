@@ -5,6 +5,33 @@
 
 pub mod redis;
 
+pub mod server {
+    //! Test-only accessors for server construction seams.
+
+    use std::sync::Arc;
+
+    use crate::domain::ports::RouteSubmissionService;
+    use crate::inbound::http::state::HttpState;
+    use actix_web::web;
+
+    pub use crate::server::ServerConfig;
+
+    /// Build HTTP state from the same production seam used by the server.
+    pub fn build_http_state(
+        config: &ServerConfig,
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> web::Data<HttpState> {
+        crate::server::build_http_state(config, route_submission)
+    }
+
+    /// Build the route submission service using the same selector as production.
+    pub fn build_route_submission_service(
+        config: &ServerConfig,
+    ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
+        crate::server::build_route_submission_service(config)
+    }
+}
+
 pub mod cap_fs {
     //! Capability-safe filesystem helpers for tests.
     //!

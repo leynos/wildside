@@ -4,7 +4,7 @@
 //! and DB-present startup modes, proving that adapter selection remains
 //! deterministic at the HTTP boundary with embedded PostgreSQL backing.
 
-pub(crate) use backend::server::{ServerConfig, build_http_state};
+pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use std::sync::Arc;

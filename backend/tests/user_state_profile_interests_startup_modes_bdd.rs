@@ -1,6 +1,6 @@
 //! Behaviour coverage for 3.5.3 profile/interests startup-mode stability.
 
-pub(crate) use backend::server::{ServerConfig, build_http_state};
+pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;

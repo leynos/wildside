@@ -12,7 +12,7 @@ use backend::inbound::http::users::{
     InterestsRequest, LoginRequest, current_user, login, update_interests,
 };
 use backend::outbound::persistence::{DbPool, PoolConfig};
-use backend::server::{ServerConfig, build_http_state};
+use backend::test_support::server::{ServerConfig, build_http_state};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::rstest;
