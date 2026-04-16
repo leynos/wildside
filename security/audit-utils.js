@@ -117,6 +117,20 @@ function walkDependencies(node, versionsByPackage) {
   }
 }
 
+/** Build the installed package-version map from parsed `pnpm ls` output.
+ * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many.
+ * @returns {Map<string, Set<string>>} Installed versions keyed by package name.
+ */
+function buildVersionMap(packageTrees) {
+  const versionsByPackage = new Map();
+
+  for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) {
+    walkDependencies(tree, versionsByPackage);
+  }
+
+  return versionsByPackage;
+}
+
 /** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
  * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
  */
@@ -137,11 +151,7 @@ function collectInstalledPackageVersions() {
   }
 
   const packageTrees = parseJsonOutput(result.stdout?.trim() ?? '', 'pnpm ls');
-  const versionsByPackage = new Map();
-
-  for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) {
-    walkDependencies(tree, versionsByPackage);
-  }
+  const versionsByPackage = buildVersionMap(packageTrees);
 
   return Object.fromEntries(
     [...versionsByPackage.entries()]
@@ -355,6 +365,16 @@ export function partitionAdvisoriesById(advisories, allowedIds) {
   return { expected, unexpected };
 }
 
+/** Format one advisory as a report line.
+ * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print.
+ * @returns {string} Human-readable bullet line for the advisory.
+ */
+function formatAdvisoryLine(advisory) {
+  const id = advisory.github_advisory_id ?? 'UNKNOWN';
+  const suffix = advisory.title ? `: ${advisory.title}` : '';
+  return `- ${id}${suffix}`;
+}
+
 /**
  * Report unexpected advisories to stderr.
  *
@@ -376,9 +396,7 @@ export function reportUnexpectedAdvisories(unexpected, heading) {
 
   console.error(heading);
   for (const advisory of unexpected) {
-    const id = advisory.github_advisory_id ?? 'UNKNOWN';
-    const suffix = advisory.title ? `: ${advisory.title}` : '';
-    console.error(`- ${id}${suffix}`);
+    console.error(formatAdvisoryLine(advisory));
   }
   return true;
 }
