@@ -253,28 +253,27 @@ function normalizeBulkAdvisories(bulkPayload) {
   return advisories;
 }
 
-/** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
- * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+/** Post package versions to the npm bulk advisory endpoint and return the raw response.
+ * @param {URL} endpoint Bulk advisory endpoint URL. @param {Record<string, string[]>} packageVersions Installed package versions keyed by package name.
+ * @returns {Promise<{ response: Response, responseText: string }>} HTTP response and response body text.
  */
-async function runBulkAdvisoryAudit() {
-  const registryUrl = readRegistryUrl();
-  const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
+async function fetchBulkAdvisories(endpoint, packageVersions) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
-  let response;
-  let responseText;
 
   try {
-    response = await fetch(endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
       },
-      body: JSON.stringify(collectInstalledPackageVersions()),
+      body: JSON.stringify(packageVersions),
       signal: controller.signal,
     });
-    responseText = await response.text();
+    const responseText = await response.text();
+
+    return { response, responseText };
   } catch (error) {
     if (error?.name === 'AbortError') {
       throw new Error(`Bulk advisory audit timed out after ${BULK_AUDIT_TIMEOUT_MS}ms at ${endpoint}`);
@@ -284,6 +283,23 @@ async function runBulkAdvisoryAudit() {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/** Convert normalized advisories into the shared audit result structure.
+ * @param {Record<string, unknown>} advisories Normalized advisories keyed by advisory identifier.
+ * @returns {{ json: { advisories: Record<string, unknown> }, status: number }} Audit result payload and exit status.
+ */
+function toAdvisoryResult(advisories) {
+  return { json: { advisories }, status: Object.keys(advisories).length === 0 ? 0 : 1 };
+}
+
+/** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
+ * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ */
+async function runBulkAdvisoryAudit() {
+  const registryUrl = readRegistryUrl();
+  const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
+  const { response, responseText } = await fetchBulkAdvisories(endpoint, collectInstalledPackageVersions());
 
   if (!response.ok) {
     throw new Error(
@@ -291,15 +307,9 @@ async function runBulkAdvisoryAudit() {
     );
   }
 
-  const bulkPayload = parseJsonOutput(responseText, 'bulk advisory audit', {
-    requireNonEmpty: true,
-  });
-  const advisories = normalizeBulkAdvisories(bulkPayload);
+  const bulkPayload = parseJsonOutput(responseText, 'bulk advisory audit', { requireNonEmpty: true });
 
-  return {
-    json: { advisories },
-    status: Object.keys(advisories).length === 0 ? 0 : 1,
-  };
+  return toAdvisoryResult(normalizeBulkAdvisories(bulkPayload));
 }
 
 /** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
