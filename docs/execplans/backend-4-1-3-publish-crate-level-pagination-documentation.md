@@ -435,9 +435,10 @@ existing `# Example` section:
 
 3. `# Error mapping guidelines` — describe how consumers should translate
    `CursorError` and `PageParamsError` to HTTP responses. Recommend HTTP 400
-   (Bad Request) for all cursor and parameter errors. Provide a short table
-   or list mapping each error variant to a suggested response code and
-   envelope `code` field value.
+   (Bad Request) for client-side cursor and parameter errors, and HTTP 500
+   (Internal Server Error) for `CursorError::Serialize` (which indicates a
+   server-side bug). Provide a short table or list mapping each error variant
+   to a suggested response code and envelope `code` field value.
 
 4. `# Scope boundaries` — state what the crate intentionally does not
    provide: no Diesel query filters, no Actix extractors, no connection

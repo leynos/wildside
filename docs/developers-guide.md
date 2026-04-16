@@ -186,7 +186,7 @@ Each BDD test binary declares `mod common;` and imports from it:
 ```rust
 mod common;
 
-use common::{Cursor, CursorError, FixtureKey, World};
+use common::{Cursor, CursorError, Direction, FixtureKey, World};
 ```
 
 When a step definition is needed by more than one test binary, define it
@@ -233,6 +233,9 @@ When adding a new shared workspace crate:
    add a `*_documentation_bdd.rs` file with invariant scenarios.
 7. Ensure all test files stay under 400 lines; split by feature when
    needed.
+8. Run the repository quality gates before committing: `make check-fmt`,
+   `make lint`, and `make test` to verify formatting, linting, and all
+   tests pass.
 
 ## Redis cache adapter testing
 
