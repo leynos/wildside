@@ -69,6 +69,28 @@ use std::sync::Arc;
 ///
 /// # Errors
 /// Returns [`std::io::Error`] if Prometheus metric registration fails.
+///
+/// # Examples
+/// ```no_run
+/// use std::net::SocketAddr;
+/// use std::sync::Arc;
+///
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::domain::ports::RouteSubmissionService;
+/// use backend::test_support::server::{ServerConfig, build_route_submission_service};
+///
+/// let config = ServerConfig::new(
+///     Key::generate(),
+///     false,
+///     SameSite::Lax,
+///     SocketAddr::from(([127, 0, 0, 1], 0)),
+/// );
+///
+/// let route_submission: Arc<dyn RouteSubmissionService> =
+///     build_route_submission_service(&config)?;
+/// let _service = route_submission;
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[cfg(feature = "metrics")]
 pub(crate) fn build_route_submission_service(
     config: &ServerConfig,
@@ -105,6 +127,28 @@ pub(crate) fn build_route_submission_service(
 /// An `Arc<dyn RouteSubmissionService>` wrapping either:
 /// - `RouteSubmissionServiceImpl` with DB-backed storage and no-op metrics.
 /// - `FixtureRouteSubmissionService` when no DB pool is configured.
+///
+/// # Examples
+/// ```no_run
+/// use std::net::SocketAddr;
+/// use std::sync::Arc;
+///
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::domain::ports::RouteSubmissionService;
+/// use backend::test_support::server::{ServerConfig, build_route_submission_service};
+///
+/// let config = ServerConfig::new(
+///     Key::generate(),
+///     false,
+///     SameSite::Lax,
+///     SocketAddr::from(([127, 0, 0, 1], 0)),
+/// );
+///
+/// let route_submission: Arc<dyn RouteSubmissionService> =
+///     build_route_submission_service(&config)?;
+/// let _service = route_submission;
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[cfg(not(feature = "metrics"))]
 pub(crate) fn build_route_submission_service(
     config: &ServerConfig,
@@ -209,6 +253,28 @@ fn build_app(
 ///
 /// # Errors
 /// Propagates [`std::io::Error`] when binding the socket or starting the server fails.
+///
+/// # Examples
+/// ```no_run
+/// use std::net::SocketAddr;
+///
+/// use actix_web::cookie::{Key, SameSite};
+/// use actix_web::web;
+/// use backend::inbound::http::health::HealthState;
+/// use backend::server::{ServerConfig, create_server};
+///
+/// let health_state = web::Data::new(HealthState::new());
+/// let config = ServerConfig::new(
+///     Key::generate(),
+///     false,
+///     SameSite::Lax,
+///     SocketAddr::from(([127, 0, 0, 1], 0)),
+/// );
+///
+/// let server = create_server(health_state, config)?;
+/// let _server = server;
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub fn create_server(
     health_state: web::Data<HealthState>,
     config: ServerConfig,

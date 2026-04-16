@@ -156,7 +156,7 @@ fn assert_write_port_snapshots(world: &World) {
 }
 
 /// Assert shared happy-path contracts across both startup modes.
-fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
+fn assert_shared_happy_path_contracts(world: &World, profile_name: &str) {
     let login = world.login.as_ref().expect("login snapshot");
     assert_eq!(login.status, 200);
     assert!(login.session_cookie.is_some());
@@ -171,7 +171,7 @@ fn assert_shared_happy_path_contracts(world: &mut World, profile_name: &str) {
 }
 
 /// Assert validation error envelope structure.
-fn assert_validation_error_envelope(world: &mut World) {
+fn assert_validation_error_envelope(world: &World) {
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
     assert_eq!(preferences.status, 400);
     let body = preferences.body.as_ref().expect("error body");

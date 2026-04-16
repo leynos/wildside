@@ -303,10 +303,14 @@ async fn run_validation_error_flow_async(world: &mut World) {
 
     // Login to establish session
     let login_snapshot = perform_login(&app).await;
-    let cookie = match login_snapshot.session_cookie {
-        Some(c) => c,
-        None => return, // Login failed
+    let cookie = match login_snapshot.session_cookie.as_ref() {
+        Some(cookie) => cookie.clone(),
+        None => {
+            world.login = Some(login_snapshot);
+            return; // Login failed
+        }
     };
+    world.login = Some(login_snapshot);
 
     // Send invalid preferences request (missing required fields)
     let invalid_prefs = PreferencesRequest {
