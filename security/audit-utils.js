@@ -1,12 +1,7 @@
-/** @file Shared helpers for running dependency audits and reasoning about
- * advisories.
+/** @file Shared helpers for dependency audits and advisory filtering.
  *
- * These helpers centralise the JSON parsing and filtering logic used by the
- * security validation scripts. They keep the workspace wrappers aligned even
- * when the package manager needs a compatibility fallback.
- *
- * Cross-link: `frontend-pwa/scripts/run-audit.mjs` consumes these helpers to
- * enforce the validator patch requirement during workspace audits.
+ * These helpers keep the security scripts aligned when package manager output
+ * or audit endpoints need compatibility fallbacks.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -24,6 +19,10 @@ const DEPENDENCY_SECTION_NAMES = [
 const RETIRED_AUDIT_ENDPOINT_MESSAGE =
   'This endpoint is being retired. Use the bulk advisory endpoint instead.';
 
+/** Parse command JSON and optionally reject blank responses.
+ * @param {string | undefined | null} payloadText Raw command output. @param {string} commandLabel Label used in parse errors. @param {{ requireNonEmpty?: boolean }} [options={}] Parsing options.
+ * @returns {Record<string, unknown> | unknown[]} Parsed JSON value, or `{}` for optional blank output. @example parseJsonOutput('{"advisories":{}}', 'pnpm audit'); // { advisories: {} }
+ */
 function parseJsonOutput(payloadText, commandLabel, options = {}) {
   const { requireNonEmpty = false } = options;
   const text = payloadText?.trim?.() ?? '';
@@ -43,6 +42,10 @@ function parseJsonOutput(payloadText, commandLabel, options = {}) {
   }
 }
 
+/** Detect whether pnpm reported the retired audit endpoint.
+ * @param {unknown} payload Parsed `pnpm audit --json` payload.
+ * @returns {boolean} `true` when pnpm should fall back to the bulk advisory endpoint. @example isRetiredAuditEndpoint({ error: { code: 'ERR_PNPM_AUDIT_BAD_RESPONSE', message: 'Use the bulk advisory endpoint instead.' } }); // true
+ */
 function isRetiredAuditEndpoint(payload) {
   return (
     payload?.error?.code === 'ERR_PNPM_AUDIT_BAD_RESPONSE' &&
@@ -51,6 +54,10 @@ function isRetiredAuditEndpoint(payload) {
   );
 }
 
+/** Check whether a version points at a local workspace dependency.
+ * @param {string} version Package version or workspace reference.
+ * @returns {boolean} `true` when the version should be ignored for registry audits. @example isLocalWorkspaceVersion('workspace:*'); // true
+ */
 function isLocalWorkspaceVersion(version) {
   return (
     version.startsWith('file:') ||
@@ -59,6 +66,10 @@ function isLocalWorkspaceVersion(version) {
   );
 }
 
+/** Record an installed package version unless it is missing or workspace-local.
+ * @param {Map<string, Set<string>>} versionsByPackage Installed versions keyed by package name. @param {string} packageName Package name from `pnpm ls`. @param {string} version Installed package version.
+ * @returns {void} @example const versions = new Map(); addPackageVersion(versions, 'validator', '13.15.23'); console.log([...versions.get('validator')]); // ['13.15.23']
+ */
 function addPackageVersion(versionsByPackage, packageName, version) {
   const isMissing = !packageName || !version;
   if (isMissing || isLocalWorkspaceVersion(version)) {
@@ -70,17 +81,9 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   versionsByPackage.set(packageName, knownVersions);
 }
 
-/**
- * Walk a dependency tree from `pnpm ls` and record the versions discovered.
- *
- * @param {Record<string, unknown> | undefined} node Dependency tree node from
- *   `pnpm ls`.
- * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed
- *   by package name.
- * @example
- * const versions = new Map();
- * walkDependencies({ dependencies: { validator: { version: '1.0.0' } } }, versions);
- * console.log([...versions.get('validator') ?? []]); // ['1.0.0']
+/** Walk a `pnpm ls` tree and record every installed package version.
+ * @param {Record<string, unknown> | undefined} node Dependency tree node from `pnpm ls`. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
+ * @returns {void} @example const versions = new Map(); walkDependencies({ dependencies: { validator: { version: '13.15.23' } } }, versions); console.log([...versions.get('validator')]); // ['13.15.23']
  */
 function walkDependencies(node, versionsByPackage) {
   if (!node || typeof node !== 'object') {
@@ -107,6 +110,9 @@ function walkDependencies(node, versionsByPackage) {
   }
 }
 
+/** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
+ * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
+ */
 function collectInstalledPackageVersions() {
   const result = spawnSync('pnpm', LIST_ARGS, {
     encoding: 'utf8',
@@ -137,6 +143,10 @@ function collectInstalledPackageVersions() {
   );
 }
 
+/** Normalise a registry URL so bulk advisory requests always target a valid base URL.
+ * @param {string | undefined | null} rawRegistry Raw registry setting from env or pnpm config.
+ * @returns {string} Registry URL with a trailing slash. @example normaliseRegistryUrl('https://registry.npmjs.org'); // 'https://registry.npmjs.org/'
+ */
 function normaliseRegistryUrl(rawRegistry) {
   const trimmed = String(rawRegistry ?? '').trim();
   const registry =
@@ -144,6 +154,9 @@ function normaliseRegistryUrl(rawRegistry) {
   return registry.endsWith('/') ? registry : `${registry}/`;
 }
 
+/** Read the npm registry URL from the environment or pnpm config.
+ * @returns {string} Normalised registry URL, or the npm default when lookup fails. @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
+ */
 function readRegistryUrl() {
   const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
   if (envRegistry) {
@@ -161,6 +174,10 @@ function readRegistryUrl() {
   }
 }
 
+/** Extract a GitHub advisory identifier from an advisory URL.
+ * @param {unknown} advisoryUrl Advisory URL from pnpm or npm audit output.
+ * @returns {string | undefined} Matching GHSA identifier when one is present. @example extractGithubAdvisoryId('https://github.com/advisories/GHSA-vghf-hv5q-vc2g'); // 'GHSA-vghf-hv5q-vc2g'
+ */
 function extractGithubAdvisoryId(advisoryUrl) {
   if (typeof advisoryUrl !== 'string') {
     return undefined;
@@ -170,19 +187,18 @@ function extractGithubAdvisoryId(advisoryUrl) {
   return match?.[0];
 }
 
+/** Derive the advisory key used to deduplicate bulk advisory responses.
+ * @param {string} packageName Advisory package name. @param {{ id?: unknown, url?: unknown }} advisory Raw advisory object.
+ * @returns {{ key: string, githubAdvisoryId: string | undefined }} Stable advisory key and extracted GHSA identifier. @example deriveAdvisoryKey('validator', { id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }); // { key: 'GHSA-vghf-hv5q-vc2g', githubAdvisoryId: 'GHSA-vghf-hv5q-vc2g' }
+ */
 function deriveAdvisoryKey(packageName, advisory) {
   const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
   const key = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
   return { key, githubAdvisoryId };
 }
 
-/**
- * Merge advisories for a single package into the shared accumulator,
- * skipping entries whose key is already present.
- *
- * @param {string} packageName
- * @param {unknown[]} packageAdvisories Validated array of raw advisory objects.
- * @param {Record<string, unknown>} advisories Accumulator mutated in place.
+/** Merge advisories for one package into the shared accumulator.
+ * @param {string} packageName Package name from the bulk advisory payload. @param {unknown[]} packageAdvisories Validated array of raw advisory objects. @param {Record<string, unknown>} advisories Accumulator mutated in place.
  */
 function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   for (const advisory of packageAdvisories) {
@@ -200,6 +216,10 @@ function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   }
 }
 
+/** Normalise bulk advisory responses into the shared advisory object shape.
+ * @param {Record<string, unknown> | undefined} bulkPayload Bulk advisory payload keyed by package name.
+ * @returns {Record<string, unknown>} Deduplicated advisories keyed by GHSA identifier or package fallback. @example normalizeBulkAdvisories({ validator: [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }] }); // { 'GHSA-vghf-hv5q-vc2g': { github_advisory_id: 'GHSA-vghf-hv5q-vc2g', package_name: 'validator', id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' } }
+ */
 function normalizeBulkAdvisories(bulkPayload) {
   const advisories = {};
 
@@ -214,6 +234,9 @@ function normalizeBulkAdvisories(bulkPayload) {
   return advisories;
 }
 
+/** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
+ * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ */
 async function runBulkAdvisoryAudit() {
   const registryUrl = readRegistryUrl();
   const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
@@ -244,26 +267,8 @@ async function runBulkAdvisoryAudit() {
   };
 }
 
-/**
- * Run `pnpm audit --json` and return the parsed payload alongside the exit
- * status. Whitespace-only output is treated as an empty advisory list so that
- * callers can rely on deterministic results even when pnpm prints nothing.
- *
- * Newer npm registries now retire the legacy audit endpoints used by pnpm.
- * When that happens, the helper falls back to npm's supported bulk advisory
- * endpoint using the installed PNPM dependency tree.
- *
- * @returns {{
- *   json: { advisories?: Record<string, unknown> },
- *   status: number,
- * }} Parsed audit
- *   output and the pnpm exit status (defaults to zero when undefined).
- * @example
- * const { json, status } = await runAuditJson();
- * if (status !== 0) {
- *   throw new Error('pnpm audit failed');
- * }
- * console.log(Object.keys(json.advisories ?? {}));
+/** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
+ * @returns {{ json: { advisories?: Record<string, unknown> }, status: number }} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
  */
 export async function runAuditJson() {
   const result = spawnSync('pnpm', AUDIT_ARGS, {

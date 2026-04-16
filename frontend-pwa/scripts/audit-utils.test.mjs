@@ -18,6 +18,27 @@ function createPnpmResult({ status = 0, stdout = '', error = undefined } = {}) {
   return { error, status, stdout };
 }
 
+function setupRetiredPnpmAudit(lsPayload = [{ name: 'frontend-pwa', dependencies: {} }]) {
+  spawnSyncMock
+    .mockReturnValueOnce(
+      createPnpmResult({
+        status: 1,
+        stdout: JSON.stringify({
+          error: {
+            code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
+            message:
+              'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
+          },
+        }),
+      }),
+    )
+    .mockReturnValueOnce(
+      createPnpmResult({
+        stdout: JSON.stringify(lsPayload),
+      }),
+    );
+}
+
 async function loadAuditUtils() {
   const module = await import('../../security/audit-utils.js');
   return module;
@@ -71,42 +92,25 @@ describe('runAuditJson', () => {
   });
 
   it('falls back to the bulk advisory endpoint when pnpm audit hits the retired endpoint', async () => {
-    spawnSyncMock
-      .mockReturnValueOnce(
-        createPnpmResult({
-          status: 1,
-          stdout: JSON.stringify({
-            error: {
-              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
-              message:
-                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
-            },
-          }),
-        }),
-      )
-      .mockReturnValueOnce(
-        createPnpmResult({
-          stdout: JSON.stringify([
-            {
-              name: 'frontend-pwa',
-              path: '/tmp/frontend-pwa',
-              dependencies: {
-                '@app/types': {
-                  version: 'link:../packages/types',
-                },
-                validator: {
-                  version: '13.15.23',
-                  dependencies: {
-                    nanoid: {
-                      version: '3.3.11',
-                    },
-                  },
-                },
+    setupRetiredPnpmAudit([
+      {
+        name: 'frontend-pwa',
+        path: '/tmp/frontend-pwa',
+        dependencies: {
+          '@app/types': {
+            version: 'link:../packages/types',
+          },
+          validator: {
+            version: '13.15.23',
+            dependencies: {
+              nanoid: {
+                version: '3.3.11',
               },
             },
-          ]),
-        }),
-      );
+          },
+        },
+      },
+    ]);
     execFileSyncMock.mockReturnValueOnce('https://registry.npmjs.org/\n');
     fetch.mockResolvedValueOnce({
       ok: true,
@@ -171,24 +175,7 @@ describe('runAuditJson', () => {
   });
 
   it('throws a clear error when the bulk advisory endpoint fails', async () => {
-    spawnSyncMock
-      .mockReturnValueOnce(
-        createPnpmResult({
-          status: 1,
-          stdout: JSON.stringify({
-            error: {
-              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
-              message:
-                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
-            },
-          }),
-        }),
-      )
-      .mockReturnValueOnce(
-        createPnpmResult({
-          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies: {} }]),
-        }),
-      );
+    setupRetiredPnpmAudit();
     fetch.mockResolvedValueOnce({
       ok: false,
       status: 503,
@@ -203,24 +190,7 @@ describe('runAuditJson', () => {
   });
 
   it('preserves advisory ID casing from the bulk payload URL', async () => {
-    spawnSyncMock
-      .mockReturnValueOnce(
-        createPnpmResult({
-          status: 1,
-          stdout: JSON.stringify({
-            error: {
-              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
-              message:
-                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
-            },
-          }),
-        }),
-      )
-      .mockReturnValueOnce(
-        createPnpmResult({
-          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies: {} }]),
-        }),
-      );
+    setupRetiredPnpmAudit();
     fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -249,24 +219,7 @@ describe('runAuditJson', () => {
   });
 
   it('rejects blank bulk advisory responses instead of treating them as empty JSON', async () => {
-    spawnSyncMock
-      .mockReturnValueOnce(
-        createPnpmResult({
-          status: 1,
-          stdout: JSON.stringify({
-            error: {
-              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
-              message:
-                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
-            },
-          }),
-        }),
-      )
-      .mockReturnValueOnce(
-        createPnpmResult({
-          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies: {} }]),
-        }),
-      );
+    setupRetiredPnpmAudit();
     fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
