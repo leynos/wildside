@@ -5,7 +5,7 @@ Feature: Apalis-backed RouteQueue adapter with PostgreSQL storage
   So that enqueued work survives process restarts and can be consumed by workers
 
   Background:
-    Given a test database with Apalis storage initialised
+    Given a test database with Apalis storage initialized
 
   Scenario: Successfully enqueue a plan
     When I enqueue a test plan
