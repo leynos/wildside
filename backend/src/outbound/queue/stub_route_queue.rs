@@ -65,7 +65,7 @@ impl<P: Send + Sync> RouteQueue for StubRouteQueue<P> {
         // Stub discards jobs; real implementation will submit to Apalis.
         // Log a warning once so developers notice if this stub is used unintentionally.
         STUB_WARNING_LOGGED.call_once(|| {
-            tracing::warn!("StubRouteQueue: job discarded (queue adapter not implemented)");
+            tracing::warn!("StubRouteQueue: stub adapter selected; job discarded");
         });
         Ok(())
     }

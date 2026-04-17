@@ -11,7 +11,7 @@
 //! the domain-owned [`RouteQueue`](crate::domain::ports::RouteQueue) port with
 //! infrastructure-specific details isolated in this module.
 //!
-//! The Apalis adapter uses a provider abstraction (internal `QueueProvider` trait)
+//! The Apalis adapter uses an internal provider abstraction (`QueueProvider` trait)
 //! to enable unit testing without PostgreSQL, following the same pattern as
 //! [`RedisRouteCache`](crate::outbound::cache::RedisRouteCache).
 //!
@@ -31,7 +31,7 @@ pub use stub_route_queue::StubRouteQueue;
 
 mod apalis_route_queue;
 pub use apalis_route_queue::{
-    ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue, QueueProvider,
+    ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue,
 };
 
 #[cfg(test)]

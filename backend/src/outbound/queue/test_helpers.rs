@@ -52,10 +52,10 @@ impl QueueProvider for FakeQueueProvider {
     }
 }
 
-/// Fake queue provider that always returns an error.
+/// Fake queue provider that always returns an unavailability error.
 ///
-/// This provider simulates queue unavailability or rejection scenarios for
-/// testing error handling paths.
+/// This provider simulates queue unavailability scenarios for testing
+/// error handling paths. It always returns `JobDispatchError::Unavailable`.
 #[derive(Debug, Clone)]
 pub(crate) struct FailingQueueProvider {
     error_message: String,

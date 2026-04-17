@@ -153,10 +153,11 @@ Observable success criteria:
   into the domain.
   Severity: high.
   Likelihood: medium.
-  Mitigation: keep `Serialize + DeserializeOwned` bounds on the adapter
-  implementation only (not on the port trait), following the pattern
-  established by `RedisRouteCache`. Test with a representative fixture plan
-  type.
+  Mitigation: keep `Serialize` bounds on the adapter implementation only
+  (not on the port trait), following the pattern established by
+  `RedisRouteCache`. Use `serde_json::Value` as the intermediate payload
+  format between the adapter and provider. Test with a representative fixture
+  plan type.
 
 - Risk: Apalis uses `sqlx` for PostgreSQL access whereas the existing
   repository layer uses `diesel-async`. Two connection pool implementations
@@ -500,7 +501,8 @@ The adapter should follow this shape:
 // backend/src/outbound/queue/apalis_route_queue.rs
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
+use serde_json::Value;
 use std::marker::PhantomData;
 
 use crate::domain::ports::{JobDispatchError, RouteQueue};
@@ -508,8 +510,8 @@ use crate::domain::ports::{JobDispatchError, RouteQueue};
 /// Abstracts the queue storage backend for testability.
 #[async_trait]
 pub(crate) trait QueueProvider: Send + Sync {
-    /// Push a serialized job payload into the queue.
-    async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError>;
+    /// Push a JSON job payload into the queue.
+    async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError>;
 }
 
 /// Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
@@ -526,7 +528,7 @@ pub type ApalisRouteQueue<P> =
 #[async_trait]
 impl<P, Q> RouteQueue for GenericApalisRouteQueue<P, Q>
 where
-    P: Serialize + DeserializeOwned + Send + Sync,
+    P: Serialize + Send + Sync,
     Q: QueueProvider,
 {
     type Plan = P;
@@ -535,8 +537,10 @@ where
         &self,
         plan: &Self::Plan,
     ) -> Result<(), JobDispatchError> {
-        let payload = serde_json::to_vec(plan)
-            .map_err(|e| JobDispatchError::rejected(e.to_string()))?;
+        let payload = serde_json::to_value(plan)
+            .map_err(|e| JobDispatchError::rejected(
+                format!("Failed to serialize plan: {e}")
+            ))?;
         self.provider.push_job(payload).await
     }
 }
@@ -554,19 +558,22 @@ use sqlx::PgPool;
 /// Real provider backed by Apalis PostgreSQL storage.
 #[derive(Debug, Clone)]
 pub struct ApalisPostgresProvider {
-    storage: PostgresStorage<Vec<u8>>,
+    storage: PostgresStorage<Value>,
 }
 
 #[async_trait]
 impl QueueProvider for ApalisPostgresProvider {
     async fn push_job(
         &self,
-        payload: Vec<u8>,
+        payload: Value,
     ) -> Result<(), JobDispatchError> {
-        self.storage
-            .push_request(payload)
+        let mut storage = self.storage.clone();
+        storage
+            .push(payload)
             .await
-            .map_err(|e| JobDispatchError::unavailable(e.to_string()))
+            .map_err(|e| JobDispatchError::unavailable(
+                format!("Failed to enqueue job: {e}")
+            ))
     }
 }
 ```
@@ -842,12 +849,12 @@ In `backend/src/outbound/queue/apalis_route_queue.rs`, define:
 /// Abstracts the queue storage backend for testability.
 #[async_trait]
 pub(crate) trait QueueProvider: Send + Sync {
-    async fn push_job(&self, payload: Vec<u8>) -> Result<(), JobDispatchError>;
+    async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError>;
 }
 
 /// Apalis-backed provider using PostgreSQL storage.
 #[derive(Debug, Clone)]
-pub struct ApalisPostgresProvider { /* sqlx pool + storage */ }
+pub struct ApalisPostgresProvider { /* PostgresStorage<Value> */ }
 
 /// Generic queue adapter parameterised over plan type and provider.
 #[derive(Debug, Clone)]
