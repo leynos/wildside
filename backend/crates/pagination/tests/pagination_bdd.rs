@@ -1,29 +1,13 @@
 //! Behavioural tests for the pagination crate foundation.
 
-use pagination::{Cursor, CursorError, Direction, PageParams, Paginated, PaginationLinks};
+mod common;
+
+use common::{Cursor, CursorError, Direction, FixtureKey, World};
+use pagination::{PageParams, Paginated, PaginationLinks};
 use rstest::fixture;
-use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
-use serde::{Deserialize, Serialize};
+use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 use url::Url;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct FixtureKey {
-    created_at: String,
-    id: String,
-}
-
-#[derive(Debug, Default, ScenarioState)]
-struct World {
-    key: Slot<FixtureKey>,
-    cursor_token: Slot<String>,
-    decode_result: Slot<Result<Cursor<FixtureKey>, CursorError>>,
-    page_params: Slot<PageParams>,
-    request_url: Slot<Url>,
-    page: Slot<Paginated<String>>,
-    direction: Slot<Direction>,
-}
 
 #[fixture]
 fn world() -> World {
@@ -108,18 +92,28 @@ fn the_cursor_is_decoded(world: &World) {
         .set(Cursor::<FixtureKey>::decode(&token));
 }
 
-#[when("the parameters are normalized")]
-fn the_parameters_are_normalized(_world: &World) {}
-
 #[when("pagination parameters request limit {limit:u64}")]
+fn pagination_parameters_request_limit(world: &World, limit: u64) {
+    common::set_page_params_with_limit(world, limit);
+}
+
+/// Helper to build a paginated envelope with the given cursors.
 #[expect(
     clippy::expect_used,
-    reason = "BDD steps use expect for clear failures"
+    reason = "BDD helpers use expect for clear failures"
 )]
-fn pagination_parameters_request_limit(world: &World, limit: u64) {
-    let requested_limit = usize::try_from(limit).expect("fixture limit should fit usize");
-    let params = PageParams::new(None, Some(requested_limit)).expect("params should be valid");
-    world.page_params.set(params);
+fn build_paginated_envelope(
+    world: &World,
+    next_cursor: Option<&str>,
+    prev_cursor: Option<&str>,
+) -> Paginated<String> {
+    let params = world.page_params.get().expect("page params should be set");
+    let request_url = world.request_url.get().expect("request url should be set");
+    Paginated::new(
+        vec!["Ada".to_owned(), "Linus".to_owned()],
+        params.limit(),
+        PaginationLinks::from_request(&request_url, &params, next_cursor, prev_cursor),
+    )
 }
 
 #[when("a paginated envelope is built with next and prev cursors")]
@@ -146,24 +140,6 @@ fn a_paginated_envelope_is_built_without_pagination_cursors(world: &World) {
     world.page.set(page);
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "BDD helpers use expect for clear failures"
-)]
-fn build_paginated_envelope(
-    world: &World,
-    next_cursor: Option<&str>,
-    prev_cursor: Option<&str>,
-) -> Paginated<String> {
-    let params = world.page_params.get().expect("page params should be set");
-    let request_url = world.request_url.get().expect("request url should be set");
-    Paginated::new(
-        vec!["Ada".to_owned(), "Linus".to_owned()],
-        params.limit(),
-        PaginationLinks::from_request(&request_url, &params, next_cursor, prev_cursor),
-    )
-}
-
 #[then("the decoded cursor key matches the original key")]
 #[expect(
     clippy::expect_used,
@@ -175,11 +151,7 @@ fn the_decoded_cursor_key_matches_the_original_key(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.key(), &key);
+    assert_eq!(decoded_cursor(&decode_result).key(), &key);
 }
 
 #[then("cursor decoding fails")]
@@ -287,6 +259,16 @@ fn serialized_links(world: &World) -> serde_json::Map<String, Value> {
     links.clone()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "BDD helpers use expect for clear failures"
+)]
+fn decoded_cursor(decode_result: &Result<Cursor<FixtureKey>, CursorError>) -> &Cursor<FixtureKey> {
+    decode_result
+        .as_ref()
+        .expect("cursor decoding should succeed")
+}
+
 // Direction-aware cursor step definitions
 
 #[given("pagination direction Next")]
@@ -326,11 +308,7 @@ fn the_decoded_cursor_has_direction_next(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.direction(), Direction::Next);
+    assert_eq!(decoded_cursor(&decode_result).direction(), Direction::Next);
 }
 
 #[then("the decoded cursor has direction Prev")]
@@ -343,11 +321,7 @@ fn the_decoded_cursor_has_direction_prev(world: &World) {
         .decode_result
         .get()
         .expect("decode result should be set");
-    let cursor = decode_result
-        .as_ref()
-        .expect("cursor decoding should succeed");
-
-    assert_eq!(cursor.direction(), Direction::Prev);
+    assert_eq!(decoded_cursor(&decode_result).direction(), Direction::Prev);
 }
 
 #[scenario(path = "tests/features/pagination.feature")]

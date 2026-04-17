@@ -2000,6 +2000,20 @@ cursors (roadmap 4.1.2) are now implemented with a `Direction` enum supporting
 `Next` and `Prev` variants. Endpoint adoption and admin provenance compatibility
 work remain separate roadmap items in section 4.2.
 
+Crate-level documentation (roadmap 4.1.3) now provides a self-contained
+reference for developers integrating the pagination primitives. The
+documentation covers ordering requirements (total ordering via composite
+database indexes with UUID tie-breaking), default and maximum limits
+(DEFAULT_LIMIT=20, MAX_LIMIT=100), error mapping guidelines (HTTP 400 for
+client errors, HTTP 500 for serialization failures), and scope boundaries
+(explicit statement of what the crate does not provide: Diesel filters, Actix
+extractors, connection pooling, OpenAPI schema generation). The crate's module-
+level documentation in cursor.rs, envelope.rs, and params.rs was expanded to
+clarify integration contracts, including cursor encoding format (base64url
+JSON), backward-compatibility behaviour of the `dir` field, link construction
+query parameter preservation, and automatic limit normalization via the
+Deserialize implementation.
+
 ##### 3.4.3 Pagination Compatibility Requirements (Phase 4, Future Work)
 
 Opaque pagination remains deferred future work. The current public contract for
