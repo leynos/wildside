@@ -237,7 +237,7 @@ function addPackageAdvisories(packageName, packageAdvisories, advisories) {
  * @returns {Record<string, unknown>} Deduplicated advisories keyed by GHSA identifier or package fallback. @example normalizeBulkAdvisories({ validator: [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }] }); // { 'GHSA-vghf-hv5q-vc2g': { github_advisory_id: 'GHSA-vghf-hv5q-vc2g', package_name: 'validator', id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' } }
  */
 function normalizeBulkAdvisories(bulkPayload) {
-  if (typeof bulkPayload !== 'object' || bulkPayload === null || Array.isArray(bulkPayload)) {
+  if (!isPlainAdvisoryObject(bulkPayload)) {
     throw new TypeError('Invalid bulk advisory payload: expected an object keyed by package name.');
   }
   const advisories = {};
