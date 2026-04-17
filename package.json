@@ -29,6 +29,10 @@
   "engines": {
     "node": ">=22.18.0"
   },
+  "overrides": {
+    "basic-ftp": "5.3.0",
+    "dompurify": "3.4.0"
+  },
   "pnpm": {
     "overrides": {
       "@isaacs/brace-expansion": "5.0.1",
