@@ -438,10 +438,20 @@ async fn set_bytes_with_ttl(
 ) -> Result<(), RouteCacheError>;
 ```
 
-Implement in `RedisPoolProvider` using the Redis `SET ... EX` command:
+Implement in `RedisPoolProvider`, switching between `SET … EX` and plain
+`SET` depending on whether a TTL is provided:
 
 ```rust
-connection.set_ex::<_, _, ()>(key, value, ttl_seconds).await
+match ttl_seconds {
+    Some(ttl) => connection
+        .set_ex::<_, _, ()>(key, value, ttl)
+        .await
+        .map_err(map_redis_error),
+    None => connection
+        .set::<_, _, ()>(key, value)
+        .await
+        .map_err(map_redis_error),
+}
 ```
 
 Update `FakeProvider` in `test_helpers.rs` to record the TTL alongside
