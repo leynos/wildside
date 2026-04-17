@@ -351,21 +351,25 @@ The relevant current files are:
   signature for this task.
 - `backend/src/domain/ports/cache_key.rs`
   defines the validated `RouteCacheKey` wrapper.
-- `backend/src/outbound/cache/redis_route_cache.rs` (230 lines)
+- `backend/src/outbound/cache/redis_route_cache.rs` (364 lines)
   contains `ConnectionProvider`, `RedisPoolProvider`,
-  `GenericRedisRouteCache`, and `RedisRouteCache`. The `set_bytes` method
-  currently uses `connection.set::<_, _, ()>(key, value)` with no
-  expiry. This is the primary file to modify.
-- `backend/src/outbound/cache/test_helpers.rs` (104 lines)
+  `GenericRedisRouteCache`, and `RedisRouteCache`. Writes go through
+  `set_bytes_with_ttl`, which conditionally applies a TTL via
+  `SET … EX` or falls back to a plain `SET` for `None`. The
+  convenience wrapper `set_bytes` delegates to
+  `set_bytes_with_ttl(key, value, None)`.
+- `backend/src/outbound/cache/test_helpers.rs` (131 lines)
   contains `FakeProvider` (in-memory `ConnectionProvider` double) and
-  `TestPlan`. The fake must be extended to record TTL values.
-- `backend/src/outbound/cache/tests/mock_tests.rs` (63 lines)
+  `TestPlan`. The fake records TTL values alongside stored bytes.
+- `backend/src/outbound/cache/tests/mock_tests.rs` (212 lines)
   unit tests using `FakeProvider`.
-- `backend/src/outbound/cache/tests/live_tests.rs` (87 lines)
+- `backend/src/outbound/cache/tests/live_tests.rs` (86 lines)
   integration tests against a live `redis-server`.
-- `backend/tests/route_cache_redis_bdd.rs` (384 lines)
+- `backend/tests/route_cache_redis_bdd.rs` (387 lines)
   behavioural tests for the Redis-backed `RouteCache` adapter.
-- `backend/tests/features/route_cache_redis.feature` (31 lines)
+- `backend/tests/route_cache_redis_jitter_bdd.rs` (219 lines)
+  jitter-specific BDD tests extracted from the main BDD file.
+- `backend/tests/features/route_cache_redis.feature` (36 lines)
   Gherkin feature file for cache BDD scenarios.
 - `backend/src/test_support/redis.rs` (181 lines)
   `RedisTestServer` helper that starts a local `redis-server` process.
@@ -582,7 +586,7 @@ a clean global gate run.
 
 ## Concrete steps
 
-Run all commands from `/home/user/project`. Use `set -o pipefail` and
+Run all commands from the repository root. Use `set -o pipefail` and
 `tee` for every meaningful command so the exit code survives truncation
 and the log is retained.
 
