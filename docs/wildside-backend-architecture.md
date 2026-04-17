@@ -2105,12 +2105,13 @@ same binary in a different **mode**: if an environment variable or CLI flag
 (for instance, `WILDSIDE_MODE=worker`) is set, the `main` function will start
 the application in **worker mode** instead of starting the HTTP
 server([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L659-L663)).
- In worker mode, the application initializes the Apalis runtime, connects to
-the job queue (PostgreSQL), and begins polling for jobs to execute. This
-design allows the deployment of one container image in two roles: one
-Deployment for the API server, and another Deployment (with perhaps multiple
-replicas) for the
-workers([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L671-L673)).
+ In worker mode, the application will initialize the Apalis runtime,
+connect to the job queue (PostgreSQL), and begin polling for jobs to
+execute. This design will allow the deployment of one container image
+in two roles: one Deployment for the API server, and another
+Deployment (with perhaps multiple replicas) for the workers. Worker
+mode is planned but not yet enabled as of roadmap item
+5.2.1([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L671-L673)).
 
 **Job queue and Apalis config:** Apalis supports multiple backends for queues;
 the current implementation uses **PostgreSQL** as the job broker (roadmap item
@@ -2123,18 +2124,20 @@ domain-owned `RouteQueue` port – ensures that migrating to an AMQP backend
 (e.g., RabbitMQ) is a contained adapter change if queue throughput or routing
 requirements outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
-Each job type will have its own queue; for example, the configuration will define a
-high-priority queue for route generation jobs and a lower-priority queue for
-enrichment jobs. The Apalis configuration will register job types and
-their handlers, and set up consumers for each queue. Retry policies will also be
-configured: if a job fails, Apalis will retry it a limited number of times with
-exponential backoff delays. If a job continues to fail (e.g., bad data or a
-persistent issue), it will be moved to a **dead-letter queue** after max
-retries, so that failed jobs can be inspected or manually requeued once the
-issue is resolved. Each job will also have a **timeout** – for instance, the
-system will enforce that `GenerateRouteJob` must complete within 30 seconds,
-otherwise it is considered failed (to avoid stuck threads). Apalis allows
-setting such time limits per job or globally.
+Each job type will have its own queue; for example, the configuration
+will define a high-priority queue for route generation jobs and a
+lower-priority queue for enrichment jobs. The Apalis configuration will
+register job types and their handlers, and set up consumers for each
+queue. Retry policies will also be configured: if a job fails, Apalis
+will retry it a limited number of times with exponential backoff
+delays. If a job continues to fail (e.g., bad data or a persistent
+issue), it will be moved to a **dead-letter queue** after max retries,
+so that failed jobs can be inspected or manually requeued once the
+issue is resolved. Each job will also have a **timeout** – for
+instance, the system will enforce that `GenerateRouteJob` must
+complete within 30 seconds, otherwise it is considered failed (to
+avoid stuck threads). Apalis allows setting such time limits per job
+or globally.
 
 **Roadmap item 5.2.1 scope:** As of roadmap item 5.2.1, the backend includes an
 Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
