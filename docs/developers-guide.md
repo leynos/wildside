@@ -256,6 +256,50 @@ The hexagonal boundary is enforced via visibility:
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
 
+## Override parity check
+
+This repository pins certain security-sensitive dependencies in two separate
+override blocks so they resolve correctly regardless of whether Bun or pnpm is
+used for installation:
+
+- `overrides` — top-level; consumed by Bun.
+- `pnpm.overrides` — consumed by pnpm.
+
+The script `scripts/check-overrides-parity.mjs` verifies that both blocks
+contain identical values for every pinned dependency. It is run automatically
+in CI after the lockfile step and before dependency installation.
+
+### Running locally
+
+```sh
+node ./scripts/check-overrides-parity.mjs
+```
+
+A passing run prints:
+
+```text
+Override parity verified for basic-ftp, dompurify.
+```
+
+A failing run prints a per-dependency diff to stderr and exits with code `1`.
+
+### Resolving failures
+
+When the check fails, open `package.json` and ensure the version string in
+`overrides.<package>` exactly matches the version string in
+`pnpm.overrides.<package>`. Both entries must be present and identical.
+
+### CI integration
+
+The check runs as a step in `.github/workflows/ci.yml`:
+
+```yaml
+- run: node ./scripts/check-overrides-parity.mjs
+```
+
+It appears after `make lockfile` and before `make deps`. A failure here means
+the two override blocks have drifted; update `package.json` and recommit.
+
 ## Operational references
 
 - For local command quick reference and embedded PostgreSQL worker setup:

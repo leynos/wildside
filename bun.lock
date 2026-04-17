@@ -13,6 +13,7 @@
         "puppeteer": "^23.11.1",
         "validator": "^13.15.23",
         "vite": "^7.3.2",
+        "vitest": "^3.2.4",
       },
     },
     "frontend-pwa": {

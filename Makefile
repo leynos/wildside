@@ -163,7 +163,8 @@ test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
 
 test-frontend: deps typecheck
-	pnpm -r --if-present --silent run test
+	pnpm run test
+	pnpm run test:workspaces
 
 .PHONY: prepare-pg-worker
 .ONESHELL: prepare-pg-worker

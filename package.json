@@ -7,7 +7,8 @@
     "markdownlint-cli": "^0.45.0",
     "puppeteer": "^23.11.1",
     "validator": "^13.15.23",
-    "vite": "^7.3.2"
+    "vite": "^7.3.2",
+    "vitest": "^3.2.4"
   },
   "name": "myapp",
   "private": true,
@@ -23,7 +24,8 @@
     "fmt": "node ./scripts/run-workspace-script.mjs fmt",
     "lint": "node ./scripts/run-workspace-script.mjs lint",
     "typecheck": "node ./scripts/run-workspace-script.mjs typecheck",
-    "test": "node ./scripts/run-workspace-script.mjs test",
+    "test": "vitest run --config vitest.config.mjs",
+    "test:workspaces": "node ./scripts/run-workspace-script.mjs test",
     "audit": "node ./scripts/run-workspace-script.mjs audit",
     "audit:validate": "node security/validate-audit.js"
   },

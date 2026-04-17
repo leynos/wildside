@@ -6,6 +6,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 const OVERRIDES_TO_CHECK = ['basic-ftp', 'dompurify'];
 const PACKAGE_JSON_PATH = new URL('../package.json', import.meta.url);
@@ -16,7 +17,7 @@ const PACKAGE_JSON_PATH = new URL('../package.json', import.meta.url);
  * @param {unknown} value - The override value to display.
  * @returns {string} A stable string representation for logs.
  */
-function formatOverrideValue(value) {
+export function formatOverrideValue(value) {
   return value === undefined ? '<missing>' : JSON.stringify(value);
 }
 
@@ -36,7 +37,7 @@ async function readPackageJson() {
  * @param {Record<string, unknown>} packageJson - The parsed package manifest.
  * @returns {number} `0` when overrides match, otherwise `1`.
  */
-function checkOverridesParity(packageJson) {
+export function checkOverridesParity(packageJson) {
   const rootOverrides = packageJson.overrides ?? {};
   const pnpmOverrides = packageJson.pnpm?.overrides ?? {};
 
@@ -73,5 +74,7 @@ function checkOverridesParity(packageJson) {
   return 1;
 }
 
-const packageJson = await readPackageJson();
-process.exitCode = checkOverridesParity(packageJson);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const packageJson = await readPackageJson();
+  process.exitCode = checkOverridesParity(packageJson);
+}
