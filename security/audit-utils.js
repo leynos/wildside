@@ -8,13 +8,8 @@ const BULK_ADVISORY_PATH = '-/npm/v1/security/advisories/bulk';
 const BULK_AUDIT_TIMEOUT_MS = 30_000;
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
-const DEPENDENCY_SECTION_NAMES = [
-  'dependencies',
-  'devDependencies',
-  'optionalDependencies',
-];
-const RETIRED_AUDIT_ENDPOINT_MESSAGE =
-  'This endpoint is being retired. Use the bulk advisory endpoint instead.';
+const DEPENDENCY_SECTION_NAMES = ['dependencies', 'devDependencies', 'optionalDependencies'];
+const RETIRED_AUDIT_ENDPOINT_MESSAGE = 'This endpoint is being retired. Use the bulk advisory endpoint instead.';
 
 /** Parse command JSON and optionally reject blank responses.
  * @param {string | undefined | null} payloadText Raw command output. @param {string} commandLabel Label used in parse errors. @param {{ requireNonEmpty?: boolean }} [options={}] Parsing options.
@@ -27,10 +22,8 @@ function parseJsonOutput(payloadText, commandLabel, options = {}) {
     if (requireNonEmpty) {
       throw new Error(`Failed to parse ${commandLabel} JSON: response body was empty.`);
     }
-
     return {};
   }
-
   try {
     return JSON.parse(text);
   } catch (error) {
@@ -47,8 +40,7 @@ function isRetiredAuditEndpoint(payload) {
   return (
     payload?.error?.code === 'ERR_PNPM_AUDIT_BAD_RESPONSE' &&
     typeof payload?.error?.message === 'string' &&
-    payload.error.message.includes(RETIRED_AUDIT_ENDPOINT_MESSAGE)
-  );
+    payload.error.message.includes(RETIRED_AUDIT_ENDPOINT_MESSAGE));
 }
 
 /** Check whether a version points at a local workspace dependency.
@@ -59,8 +51,7 @@ function isLocalWorkspaceVersion(version) {
   return (
     version.startsWith('file:') ||
     version.startsWith('link:') ||
-    version.startsWith('workspace:')
-  );
+    version.startsWith('workspace:'));
 }
 
 /** Record an installed package version unless it is missing or workspace-local.
@@ -72,7 +63,6 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   if (isMissing || isLocalWorkspaceVersion(version)) {
     return;
   }
-
   const knownVersions = versionsByPackage.get(packageName) ?? new Set();
   knownVersions.add(version);
   versionsByPackage.set(packageName, knownVersions);
@@ -86,16 +76,13 @@ function walkDependencySection(section, versionsByPackage) {
   if (!section || typeof section !== 'object') {
     return;
   }
-
   for (const [packageName, dependency] of Object.entries(section)) {
     if (!dependency || typeof dependency !== 'object') {
       continue;
     }
-
     if (typeof dependency.version === 'string') {
       addPackageVersion(versionsByPackage, packageName, dependency.version);
     }
-
     walkDependencies(dependency, versionsByPackage);
   }
 }
@@ -108,10 +95,17 @@ function walkDependencies(node, versionsByPackage) {
   if (!node || typeof node !== 'object') {
     return;
   }
-
   for (const sectionName of DEPENDENCY_SECTION_NAMES) {
     walkDependencySection(node[sectionName], versionsByPackage);
   }
+}
+
+/** Check whether `pnpm ls` returned a dependency tree object.
+ * @param {unknown} value Parsed `pnpm ls` payload value.
+ * @returns {boolean} `true` when the value can be walked as one dependency tree. @example isDependencyTreeNode({ dependencies: {} }); // true
+ */
+function isDependencyTreeNode(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** Build the installed package-version map from parsed `pnpm ls` output.
@@ -119,7 +113,13 @@ function walkDependencies(node, versionsByPackage) {
  */
 function buildVersionMap(packageTrees) {
   const versionsByPackage = new Map();
-  for (const tree of Array.isArray(packageTrees) ? packageTrees : [packageTrees]) walkDependencies(tree, versionsByPackage);
+  const trees = Array.isArray(packageTrees) ? packageTrees : [packageTrees];
+  for (const tree of trees) {
+    if (!isDependencyTreeNode(tree)) {
+      throw new TypeError('pnpm ls returned an invalid dependency tree payload.');
+    }
+    walkDependencies(tree, versionsByPackage);
+  }
   return versionsByPackage;
 }
 
@@ -137,7 +137,6 @@ function collectInstalledPackageVersions() {
   if (status !== 0) {
     throw new Error(`pnpm ls failed without producing a dependency tree (exit status ${status}).`);
   }
-
   const stdout = result.stdout?.trim();
   if (!stdout) {
     throw new Error('pnpm ls failed without producing a dependency tree.');
@@ -159,8 +158,7 @@ function collectInstalledPackageVersions() {
  */
 function normalizeRegistryUrl(rawRegistry) {
   const trimmed = String(rawRegistry ?? '').trim();
-  const registry =
-    trimmed && trimmed !== 'undefined' && trimmed !== 'null' ? trimmed : DEFAULT_REGISTRY;
+  const registry = trimmed && trimmed !== 'undefined' && trimmed !== 'null' ? trimmed : DEFAULT_REGISTRY;
   return registry.endsWith('/') ? registry : `${registry}/`;
 }
 
@@ -213,8 +211,7 @@ function deriveAdvisoryKey(packageName, advisory) {
  */
 function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   for (const [index, advisory] of packageAdvisories.entries()) {
-    const isPlainObject =
-      typeof advisory === 'object' && advisory !== null && !Array.isArray(advisory);
+    const isPlainObject = typeof advisory === 'object' && advisory !== null && !Array.isArray(advisory);
     if (!isPlainObject) {
       throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
     }
@@ -238,9 +235,13 @@ function addPackageAdvisories(packageName, packageAdvisories, advisories) {
  * @returns {Record<string, unknown>} Deduplicated advisories keyed by GHSA identifier or package fallback. @example normalizeBulkAdvisories({ validator: [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }] }); // { 'GHSA-vghf-hv5q-vc2g': { github_advisory_id: 'GHSA-vghf-hv5q-vc2g', package_name: 'validator', id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' } }
  */
 function normalizeBulkAdvisories(bulkPayload) {
+  if (typeof bulkPayload !== 'object' || bulkPayload === null || Array.isArray(bulkPayload)) {
+    throw new TypeError('Invalid bulk advisory payload: expected an object keyed by package name.');
+  }
+
   const advisories = {};
 
-  for (const [packageName, packageAdvisories] of Object.entries(bulkPayload ?? {})) {
+  for (const [packageName, packageAdvisories] of Object.entries(bulkPayload)) {
     if (!Array.isArray(packageAdvisories)) {
       throw new TypeError(`Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`);
     }
@@ -254,6 +255,7 @@ function normalizeBulkAdvisories(bulkPayload) {
 /** Post package versions to the npm bulk advisory endpoint and return the raw response.
  * @param {URL} endpoint Bulk advisory endpoint URL. @param {Record<string, string[]>} packageVersions Installed package versions keyed by package name.
  * @returns {Promise<{ response: Response, responseText: string }>} HTTP response and response body text.
+ * @example const { responseText } = await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), { validator: ['13.15.23'] }); console.log(responseText); // '{}'
  */
 async function fetchBulkAdvisories(endpoint, packageVersions) {
   const controller = new AbortController();
@@ -285,7 +287,7 @@ async function fetchBulkAdvisories(endpoint, packageVersions) {
 
 /** Convert normalized advisories into the shared audit result structure.
  * @param {Record<string, unknown>} advisories Normalized advisories keyed by advisory identifier.
- * @returns {{ json: { advisories: Record<string, unknown> }, status: number }} Audit result payload and exit status.
+ * @returns {{ json: { advisories: Record<string, unknown> }, status: number }} Audit result payload and exit status. @example toAdvisoryResult({}); // { json: { advisories: {} }, status: 0 }
  */
 function toAdvisoryResult(advisories) {
   return { json: { advisories }, status: Object.keys(advisories).length === 0 ? 0 : 1 };
@@ -297,7 +299,10 @@ function toAdvisoryResult(advisories) {
 async function runBulkAdvisoryAudit() {
   const registryUrl = readRegistryUrl();
   const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
-  const { response, responseText } = await fetchBulkAdvisories(endpoint, collectInstalledPackageVersions());
+  const { response, responseText } = await fetchBulkAdvisories(
+    endpoint,
+    collectInstalledPackageVersions(),
+  );
 
   if (!response.ok) {
     throw new Error(
