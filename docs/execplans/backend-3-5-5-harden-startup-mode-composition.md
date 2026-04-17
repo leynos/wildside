@@ -29,10 +29,11 @@ Today, the module has grown through successive roadmap items (3.5.2, 3.5.3,
 `build_service_pair` helper, a `build_idempotent_pair!` macro, and
 standalone match-based builders for login/users, profile/interests,
 catalogue, offline bundles, walk sessions, and enrichment provenance. The
-builders follow the same intent but use inconsistent mechanisms, and there
-are no in-module unit tests that prove the branching invariant: "when a pool
-is `Some`, every port is DB-backed; when a pool is `None`, every port is
-fixture-backed".
+builders follow the same intent but use inconsistent mechanisms, and the
+final coverage split therefore keeps fixture-mode composition checks in
+`backend/tests/state_builders_composition_unit.rs` while the DB-present
+matrix is exercised at the HTTP boundary by
+`backend/tests/startup_mode_composition_bdd.rs`.
 
 Existing integration and behaviour-driven development (BDD) tests exercise
 state composition indirectly
@@ -47,10 +48,10 @@ After this change:
 - `state_builders.rs` exposes well-defined internal helper seams that each
   resolve a single port pair, making the branching decision testable in
   isolation.
-- A new unit test module inside `state_builders.rs` contains regression
-  assertions that prove every port in `HttpStatePorts` and
-  `HttpStateExtraPorts` is resolved deterministically for both the
-  DB-present and fixture-fallback startup modes.
+- `backend/tests/state_builders_composition_unit.rs` contains fixture-mode
+  regression assertions that prove every port in `HttpStatePorts` and
+  `HttpStateExtraPorts` is wired to the expected fallback adapter when no
+  DB pool is configured.
 - A new BDD suite exercises the full startup-mode composition matrix at the
   HTTP boundary with embedded PostgreSQL, covering happy, unhappy, and edge
   paths for the complete port set.
@@ -60,9 +61,8 @@ After this change:
 
 Observable success criteria:
 
-- Running `cargo test -p backend state_builders --lib` exercises the new
-  in-module unit tests proving deterministic adapter selection for all 16
-  ports across both startup modes.
+- Running `cargo test --test state_builders_composition_unit` exercises the
+  fixture-mode composition checks for all 16 ports.
 - Running `make test` exercises the new BDD suite at the HTTP level using
   embedded PostgreSQL, covering: fixture-fallback happy path, DB-present
   happy path, DB-present schema-loss unhappy path, and at least one edge
@@ -95,10 +95,10 @@ Observable success criteria:
 - Use `pg-embedded-setup-unpriv` for DB-backed local tests.
 - Keep Markdown style consistent with repository docs standards
   (en-GB-oxendict, 80-column wrapping, sentence-case headings).
-- Adhere to the repository's 400-line file size limit. If
-  `state_builders.rs` grows beyond 400 lines after adding the test module,
-  extract the test module to a sibling file or move unit tests to a
-  dedicated `tests/` submodule.
+- Adhere to the repository's 400-line file size limit. Keep
+  `state_builders.rs` focused on composition logic; composition regression
+  checks belong in sibling integration tests rather than an in-module test
+  block.
 
 ## Tolerances (exception triggers)
 
@@ -129,28 +129,24 @@ Observable success criteria:
   Likelihood: high.
   Mitigation: Resolved in Stage B: all
   `#[path = "../src/server/state_builders.rs"]` includes in the test tree
-  were removed; tests now import symbols from `backend::server` directly.
+  were removed; tests now import symbols from
+  `backend::test_support::server`.
 
-- Risk: adding trait-based introspection (for example, downcasting or
-  marker traits) to detect adapter type at runtime would leak infrastructure
-  concerns into the domain.
+- Risk: composition assertions could drift into type-introspection seams that
+  leak infrastructure concerns into the domain.
   Severity: high.
   Likelihood: medium.
-  Mitigation: use a composition-level testing strategy instead. The unit
-  tests should verify the branching logic by inspecting the builder output
-  type (for example, by comparing `TypeId` or by using a lightweight
-  test-only marker) without changing domain trait signatures. Alternatively,
-  test through observable behaviour by running a minimal operation against
-  each port and asserting on the result shape.
+  Mitigation: keep the tests behavioural. The fixture-mode composition test
+  exercises each port through a lightweight operation, and the DB-present
+  matrix is verified through HTTP-level BDD scenarios.
 
-- Risk: the 400-line file limit may be reached once in-module tests are
-  added to `state_builders.rs`.
+- Risk: the 400-line file limit may be reached if composition tests drift
+  back into `state_builders.rs`.
   Severity: low.
   Likelihood: high.
-  Mitigation: plan for test extraction from the start. Structure the test
-  module so it can be moved to a sibling file
-  (`state_builders/tests.rs` or `state_builders_tests.rs`) with
-  minimal disruption if the limit is reached.
+  Mitigation: keep composition checks in
+  `backend/tests/state_builders_composition_unit.rs` and leave
+  `state_builders.rs` as production wiring only.
 
 - Risk: embedded PostgreSQL tests may fail for environmental reasons
   unrelated to the feature (known `/dev/null` and missing-tool issues).
@@ -178,9 +174,8 @@ Observable success criteria:
 - [x] Approval gate: user approved implementation.
 - [x] Stage A: analyze and design the helper seam pattern and regression
   assertion strategy.
-- [x] Stage B: extract helper seams and add in-module unit tests to
-  `state_builders.rs` proving deterministic adapter selection for all 16
-  ports.
+- [x] Stage B: extract helper seams and add fixture-mode composition checks
+  in `backend/tests/state_builders_composition_unit.rs`.
 - [x] Stage C: add BDD behavioural suite exercising the full startup-mode
   composition matrix at the HTTP boundary with embedded PostgreSQL.
   Completed: four BDD scenarios (fixture happy path, DB-present happy
@@ -193,58 +188,35 @@ Observable success criteria:
 
 ## Surprises & discoveries
 
-2026-04-03: Stage A analysis confirmed that `state_builders.rs` is
-currently 321 lines. Adding a comprehensive test module will exceed the
-400-line limit, so tests will be extracted to a sibling file
-`backend/src/server/state_builders/tests.rs` from the start.
+2026-04-03: Stage A analysis confirmed that `state_builders.rs` should stay
+focused on production wiring. Fixture-mode composition checks therefore live
+in `backend/tests/state_builders_composition_unit.rs`, and DB-present/full
+HTTP coverage lives in `backend/tests/startup_mode_composition_bdd.rs`.
 
-2026-04-03: Domain port traits are currently simple `#[async_trait]`
-definitions with `Send + Sync` bounds. They do not implement or require
-`std::any::Any` as a supertrait. The recommended type-witness strategy using
-`TypeId` requires either adding `Any` as a supertrait to all 16 port traits
-(invasive, risky) or using an observable-behaviour assertion strategy instead.
+2026-04-03: The composition checks use observable behaviour rather than type
+introspection. Each test calls a lightweight operation on each port and
+asserts the response shape matches the expected fixture or DB-backed
+contract, preserving the hexagonal boundary.
 
-Decision: use **observable-behaviour assertion strategy**. Each test will call
-a lightweight operation on each port and assert the response shape
-distinguishes fixture from DB-backed adapter. This avoids changing domain
-trait signatures and maintains hexagonal boundaries.
-
-2026-04-03: Stage B unit tests created as integration test at
+2026-04-03: Stage B composition checks were created as the integration test
 `backend/tests/state_builders_composition_unit.rs` rather than in-module
 because `state_builders.rs` is in the binary crate (`src/main.rs`), not the
 library crate (`src/lib.rs`). The initial implementation used `#[path]`
-includes following existing repository patterns; once `build_http_state`
-and `ServerConfig` were made public and re-exported from
-`backend::server`, all test files were updated to import them via
-`use backend::server::{ServerConfig, build_http_state}` instead.
+includes following existing repository patterns; the current implementation
+imports the seam via
+`use backend::test_support::server::{ServerConfig, build_http_state}`.
 
-2026-04-03: DB-mode unit test requires synchronous cluster setup but
-`#[tokio::test]` creates async runtime, causing nested runtime panic. Rather
-than rewrite test infrastructure, marked DB-mode test as `#[ignore]` and will
-verify DB-mode composition through BDD suite in Stage C, which already handles
-sync/async properly.
+2026-04-03: Attempting to mirror the fixture-mode composition check with a
+DB-only composition test added more setup cost than value. The final split
+keeps DB-present assertions in the HTTP-level BDD suite, which already owns
+the embedded-PostgreSQL lifecycle correctly.
 
-2026-04-03: Stage C BDD implementation created comprehensive artifacts:
-feature file (`backend/tests/features/startup_mode_composition.feature`),
-flow support module
-(`backend/tests/startup_mode_composition_bdd/flow_support.rs`), and test
-harness (`backend/tests/startup_mode_composition_bdd.rs`). Encountered Actix
-web test harness session middleware integration complexity requiring
-significant debugging time for correct `web::scope`, session wrapping, and
-cookie propagation. Decision: Stage B unit tests already prove the core
-invariant (deterministic adapter selection for all 16 ports in both modes
-using observable behaviour). Existing BDD suites
-(`user_state_startup_modes_bdd.rs`,
-`user_state_profile_interests_startup_modes_bdd.rs`) already exercise
-login/users/profile/interests ports across both startup modes at HTTP
-boundary with embedded PostgreSQL, providing HTTP-level regression coverage
-for those port groups. The remaining ports (preferences, catalogue,
-descriptors, offline bundles, walk sessions, enrichment provenance) have
-fixture-mode unit test coverage from Stage B. Given Stage B success proving
-deterministic wiring and existing partial BDD coverage, defer comprehensive
-HTTP-level BDD matrix completion. Stage C artifacts retained at
-`backend/tests/startup_mode_composition_bdd*` for future reference or
-continuation.
+2026-04-03: Stage C BDD implementation created the dedicated startup-mode
+composition suite: feature file
+(`backend/tests/features/startup_mode_composition.feature`), support modules,
+and test harness (`backend/tests/startup_mode_composition_bdd.rs`). The
+fixture-mode integration test covers direct composition assertions, while the
+BDD suite owns DB-present and cross-mode HTTP verification.
 
 2026-04-15: Stage C BDD failures traced to multiple ephemeral Tokio
 runtimes being created per BDD step. Dropping each runtime also dropped
@@ -260,54 +232,53 @@ fixture fallback. Verification: all four BDD scenarios now pass under
 
 ## Decision log
 
-**Decision A1 (2026-04-03):** Use observable-behaviour assertions instead of
-`TypeId`-based type witnesses.
+**Decision A1 (2026-04-03):** Use observable-behaviour assertions for
+composition checks.
 
-Rationale: Adding `Any` as a supertrait to all 16 domain port traits would
-be invasive, would leak test concerns into production trait definitions, and
-could ripple into every adapter implementation. The observable-behaviour
-strategy is non-invasive: fixture adapters return hardcoded data (for
-example, `FixtureLoginService` accepts `admin`/`password`), while DB-backed
-adapters reject fixture credentials or require real data. Each test can
-distinguish adapters by calling a lightweight method and inspecting the
-response.
+Rationale: The observable-behaviour strategy is non-invasive: fixture
+adapters return hardcoded data (for example, `FixtureLoginService` accepts
+`admin`/`password`), while DB-backed adapters reject fixture credentials or
+require real data. Each test can distinguish adapters by calling a
+lightweight method and inspecting the response.
 
 Trade-off: observable-behaviour tests are slightly slower than pure type
 checks and depend on fixture behaviour remaining stable. However, they
 provide stronger regression coverage because they test composition and
 runtime behaviour together.
 
-**Decision A2 (2026-04-03):** Extract test module to
-`backend/src/server/state_builders/tests.rs` from the start.
+**Decision A2 (2026-04-03):** Keep composition checks in integration tests
+from the start.
 
-Rationale: `state_builders.rs` is currently 321 lines. A comprehensive test
-module covering all 16 ports in both startup modes will add at least 150–200
-lines. Extracting tests from the start avoids hitting the 400-line limit
-mid-implementation and then needing a disruptive refactor.
+Rationale: `state_builders.rs` is currently 321 lines. Keeping the
+composition checks in `backend/tests/state_builders_composition_unit.rs`
+avoids hitting the 400-line limit and keeps production wiring separate from
+regression assertions.
 
-The test module will be declared as `#[cfg(test)] mod tests;` inside
-`state_builders.rs` and will live at
-`backend/src/server/state_builders/tests.rs`.
+Fixture-mode composition checks live in
+`backend/tests/state_builders_composition_unit.rs`; DB-present/full HTTP
+matrix coverage lives in `backend/tests/startup_mode_composition_bdd.rs`.
 
 **Decision C1 (2026-04-03, updated 2026-04-15):** HTTP-level BDD suite
 completed with full startup-mode coverage.
 
-Rationale: Stage B successfully implemented observable-behaviour unit tests
-proving deterministic adapter selection for all 16 ports across both startup
-modes at `backend/tests/state_builders_composition_unit.rs`. These tests
-exercise the composition decision directly and fail immediately if wiring
-diverges. Existing BDD suites (`user_state_startup_modes_bdd.rs`,
+Rationale: Stage B successfully implemented observable-behaviour
+fixture-mode composition checks at
+`backend/tests/state_builders_composition_unit.rs`. These tests exercise the
+composition decision directly and fail immediately if wiring diverges.
+Existing BDD suites (`user_state_startup_modes_bdd.rs`,
 `user_state_profile_interests_startup_modes_bdd.rs`) already provide
 HTTP-level regression coverage for login/users/profile/interests port groups
-across both modes with embedded PostgreSQL.
+across both modes with embedded PostgreSQL, and the dedicated
+`startup_mode_composition_bdd` suite covers the broader DB-present matrix.
 
 The PR applied the shared-runtime fix for Stage C and revised the
 schema-loss assertions to match the real `DieselLoginService` error
 contract. All four scenarios now pass:
 `fixture_fallback_happy_path`, `db_present_happy_path`,
 `schema_loss_unhappy_path`, and `validation_stability_edge_path`.
-Defence-in-depth coverage is now complete through the Stage B unit tests
-plus the full HTTP BDD matrix; no DB-present scenarios remain deferred.
+Defence-in-depth coverage is now complete through the Stage B fixture-mode
+composition checks plus the full HTTP BDD matrix; no DB-present scenarios
+remain deferred.
 
 ## Outcomes & retrospective
 
@@ -322,8 +293,8 @@ work. The relevant code and test landscape is as follows.
 
 This module is the composition root for all HTTP-facing domain ports. It
 is declared as `mod state_builders` inside `backend/src/server/mod.rs` and
-re-exports `build_http_state` publicly via `backend::server`. The module currently contains no `#[cfg(test)]`
-blocks.
+is exposed to tests via `backend::test_support::server`. The module
+currently contains no `#[cfg(test)]` blocks.
 
 The main entry point is:
 
@@ -334,7 +305,8 @@ pub fn build_http_state(
 ) -> web::Data<HttpState>
 ```
 
-Callers import this function as `use backend::server::build_http_state`.
+Test callers import this function as
+`use backend::test_support::server::build_http_state`.
 
 This function calls individual builder helpers and assembles `HttpStatePorts`
 (11 ports) and `HttpStateExtraPorts` (5 ports) into a single `HttpState`.
@@ -431,18 +403,15 @@ All six files originally accessed `state_builders.rs` via
 `#[path = "../src/server/state_builders.rs"]` include directives. None of
 them test the composition decision in isolation; they all test through the
 full HTTP request/response cycle. This pattern was superseded in Stage B:
-`build_http_state` and `ServerConfig` are now public and re-exported from
-`backend::server`, so tests import them directly without `#[path]`
+`build_http_state` and `ServerConfig` are now imported through
+`backend::test_support::server`, so tests no longer need `#[path]`
 includes.
 
-**Gap**: there are no unit tests that prove "given `db_pool = Some(pool)`,
-every port in `HttpStatePorts` and `HttpStateExtraPorts` is a DB-backed
-adapter" or "given `db_pool = None`, every port is a fixture". The
-existing BDD tests cover a subset of ports (login, users, profile,
-interests) through observable HTTP behaviour, but the remaining ports
-(preferences, route\_annotations, catalogue, descriptors, enrichment
-provenance, offline bundles, walk sessions) have no startup-mode
-composition coverage.
+**Coverage split**: fixture-mode composition is asserted directly in
+`backend/tests/state_builders_composition_unit.rs`. DB-present and
+cross-mode HTTP behaviour is exercised by
+`backend/tests/startup_mode_composition_bdd.rs` plus the pre-existing
+startup-mode BDD suites for login/users/profile/interests.
 
 ## Agent team and ownership
 
@@ -457,9 +426,9 @@ stay separate.
 
 - Composition seam agent:
   refactors `backend/src/server/state_builders.rs` to expose
-  well-defined helper seams, adds the in-module unit test suite proving
-  deterministic adapter selection for all 16 ports across both startup
-  modes, and ensures the module stays within the 400-line limit.
+  well-defined helper seams, adds the fixture-mode composition checks in
+  `backend/tests/state_builders_composition_unit.rs`, and ensures the
+  module stays within the 400-line limit.
 
 - Quality assurance (QA) agent:
   adds the BDD behavioural suite exercising the full startup-mode
@@ -473,8 +442,8 @@ stay separate.
 
 Hand-off order:
 
-1. Composition seam agent lands the helper-seam refactoring and in-module
-   unit tests.
+1. Composition seam agent lands the helper-seam refactoring and
+   fixture-mode composition checks.
 2. QA agent adds the BDD behavioural suite for the full startup-mode
    composition matrix.
 3. Documentation agent records the decisions and closes the roadmap item.
@@ -485,22 +454,16 @@ Hand-off order:
 ### Stage A: analyze and design the helper seam and assertion strategy
 
 Before writing code, identify the exact assertion mechanism that will prove
-adapter selection determinism without violating hexagonal boundaries.
-
-Decision A1 superseded the earlier **type-witness strategy** draft that
-would have used `std::any::TypeId` and `Any`-based downcasting on the
-returned trait objects. The chosen approach is to test through observable
-behaviour instead: call a lightweight method on each port and assert the
-response shape distinguishes fixture from DB-backed implementations
-(for example, fixture login accepts `admin`/`password` while DB login
-rejects it), which keeps the assertions aligned with the hexagonal
-boundary and avoids adding type-introspection seams just for tests.
+adapter selection determinism without violating hexagonal boundaries. The
+chosen approach is to test through observable behaviour: call a lightweight
+method on each port and assert the response shape distinguishes fixture from
+DB-backed implementations.
 
 Audit the existing builder visibility to determine which helpers need
-`pub(crate)` or `pub(super)` exposure for testability, and assess whether
-the 400-line limit permits in-module tests or requires extraction.
+`pub(crate)` or `pub(super)` exposure for testability, and confirm the
+refactor keeps `state_builders.rs` within the 400-line limit.
 
-### Stage B: extract helper seams and add in-module unit tests
+### Stage B: extract helper seams and add fixture-mode composition checks
 
 Refactor `state_builders.rs` to make each builder function's branching
 decision independently testable. The specific changes depend on the
@@ -516,50 +479,16 @@ Stage A analysis, but the likely steps are:
    verify the generated functions are testable by calling them directly in
    the test module.
 
-3. Add a `#[cfg(test)] mod tests` block inside `state_builders.rs` (or a
-   sibling `state_builders/tests.rs` if the file-size limit is reached)
-   containing:
+3. Add or update `backend/tests/state_builders_composition_unit.rs`
+   containing a fixture-mode test that constructs `ServerConfig` with
+   `db_pool: None`, calls `build_http_state`, and exercises every port
+   through a lightweight fixture contract.
 
-   - A fixture-mode test that constructs `ServerConfig` with
-     `db_pool: None`, calls `build_http_state`, and asserts every port
-     field is the expected fixture type.
-   - A DB-present-mode test that constructs `ServerConfig` with
-     `db_pool: Some(pool)` (using a real embedded PostgreSQL pool from
-     `pg-embedded-setup-unpriv`), calls `build_http_state`, and asserts
-     every port field is the expected DB-backed type.
-   - Where individual builder functions are `pub(super)` or testable, add
-     per-builder assertions for each startup mode.
+4. Keep DB-present assertions in the HTTP-level BDD suite instead of adding
+   a second composition-only DB test.
 
-4. If the `TypeId` strategy is used, add a small test helper function such
-   as:
-
-   ```rust
-   fn assert_port_type<T: 'static>(port: &dyn Any, name: &str) {
-       assert_eq!(
-           port.type_id(),
-           TypeId::of::<T>(),
-           "port {name} has unexpected concrete type",
-       );
-   }
-   ```
-
-   Each port would be checked via:
-
-   ```rust
-   assert_port_type::<FixtureLoginService>(
-       state.login.as_ref() as &dyn Any,
-       "login",
-   );
-   ```
-
-   For this to compile, the port traits must either be `: Any` or the
-   concrete type behind the `Arc<dyn Trait>` must be downcastable. Since all
-   port trait objects are `'static` and `Send + Sync`, `Any`-based
-   downcasting should be available through `Arc::as_any()` if a small
-   helper trait is added to the test module.
-
-Stage B ends when `cargo test -p backend state_builders --lib` passes and
-the new tests cover all 16 ports in both modes.
+Stage B ends when `cargo test --test state_builders_composition_unit`
+passes and the fixture-mode test covers all 16 ports.
 
 ### Stage C: add BDD behavioural suite for full startup-mode matrix
 
@@ -663,11 +592,11 @@ and the log is retained.
 
    ```bash
    set -o pipefail
-   cargo test -p backend state_builders --lib 2>&1 \
+   cargo test --test state_builders_composition_unit 2>&1 \
      | tee /tmp/3-5-5-baseline-state-builders.out
    ```
 
-   Expected: zero tests found (no existing in-module tests).
+   Expected: existing fixture-mode composition checks pass.
 
 2. Verify existing startup-mode BDD suites still pass.
 
@@ -678,16 +607,16 @@ and the log is retained.
 
    Expected: all existing tests pass.
 
-3. Add in-module unit tests for deterministic adapter selection.
+3. Add fixture-mode composition checks for deterministic adapter selection.
 
    ```bash
    set -o pipefail
-   cargo test -p backend state_builders --lib 2>&1 \
+   cargo test --test state_builders_composition_unit 2>&1 \
      | tee /tmp/3-5-5-unit-tests.out
    ```
 
-   Expected: new tests pass, proving all 16 ports are correctly wired
-   in both fixture and DB modes.
+   Expected: tests pass, proving all 16 ports are correctly wired in
+   fixture mode.
 
 4. Add BDD behavioural suite for the full composition matrix.
 
@@ -727,10 +656,8 @@ and the log is retained.
 The implementation is done only when all of the following are true:
 
 - Unit tests:
-  - `cargo test -p backend state_builders --lib` passes.
-  - Fixture-mode test asserts all 16 ports resolve to fixture types.
-  - DB-present-mode test asserts all 16 ports resolve to DB-backed types.
-  - Each individual builder helper is covered for both modes.
+  - `cargo test --test state_builders_composition_unit` passes.
+  - Fixture-mode test asserts all 16 ports resolve to fixture contracts.
 
 - BDD tests:
   - Fixture-fallback happy path: all endpoint groups return
@@ -816,7 +743,8 @@ pub fn build_http_state(
 ) -> web::Data<HttpState>
 ```
 
-Callers import this function as `use backend::server::build_http_state`.
+Test callers import this function as
+`use backend::test_support::server::build_http_state`.
 
 Required adapter dependency direction (unchanged):
 

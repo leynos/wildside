@@ -82,12 +82,6 @@ impl ServerConfig {
     pub(crate) fn same_site(&self) -> SameSite {
         self.same_site
     }
-
-    /// Return the optional Prometheus middleware (test-only accessor).
-    #[cfg(feature = "metrics")]
-    pub(crate) fn prometheus_ref(&self) -> Option<&PrometheusMetrics> {
-        self.prometheus.as_ref()
-    }
 }
 
 #[cfg(test)]
@@ -113,7 +107,6 @@ mod tests {
         #[cfg(feature = "metrics")]
         {
             assert!(cfg.metrics().is_none());
-            assert!(cfg.prometheus_ref().is_none());
             let cfg2 =
                 ServerConfig::new(Key::generate(), false, SameSite::Lax, addr).with_metrics(None);
             assert!(cfg2.metrics().is_none());

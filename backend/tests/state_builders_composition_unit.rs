@@ -2,20 +2,32 @@
 //!
 //! These tests verify the fixture half of the composition invariant: when
 //! `ServerConfig.db_pool` is `None`, every port resolves to a fixture adapter.
-//! DB-mode composition is covered by the `startup_mode_composition_bdd` BDD
-//! suite, which exercises all ports against embedded PostgreSQL.
-//!
-//! The tests use an observable-behaviour assertion strategy: each port is
-//! exercised with a lightweight operation, and the response shape distinguishes
-//! fixture from DB-backed implementations without requiring `TypeId`
-//! introspection or changes to domain trait signatures.
+//! DB-mode composition is covered by `startup_mode_composition_bdd`.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use actix_web::cookie::Key;
+use actix_web::cookie::{Key, SameSite};
 use backend::test_support::server::{ServerConfig, build_http_state};
+use backend::{
+    domain::ports::{
+        CreateWalkSessionRequest, DeleteNoteRequest, DeleteOfflineBundleRequest,
+        FixtureRouteSubmissionService, GetOfflineBundleRequest, GetWalkSessionRequest,
+        ListEnrichmentProvenanceRequest, ListOfflineBundlesRequest,
+        ListWalkCompletionSummariesRequest, OfflineBundlePayload, RouteSubmissionRequest,
+        RouteSubmissionService, RouteSubmissionStatus, UpdatePreferencesRequest,
+        UpdateProgressRequest, UpdateUserInterestsRequest, UpsertNoteRequest,
+        UpsertOfflineBundleRequest, WalkSessionPayload,
+    },
+    domain::{
+        BoundingBox, ErrorCode, IdempotencyKey, InterestThemeId, OfflineBundleKind,
+        OfflineBundleStatus, UnitSystem, UserId, WalkPrimaryStatDraft, WalkPrimaryStatKind,
+        WalkSecondaryStatDraft, WalkSecondaryStatKind,
+    },
+};
+use chrono::{DateTime, Utc};
 use rstest::{fixture, rstest};
+use uuid::Uuid;
 
 mod support;
 
@@ -23,30 +35,68 @@ mod support;
 #[fixture]
 fn fixture_config() -> ServerConfig {
     let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid addr");
-    ServerConfig::new(
-        Key::generate(),
-        false,
-        actix_web::cookie::SameSite::Lax,
-        addr,
-    )
+    ServerConfig::new(Key::generate(), false, SameSite::Lax, addr)
 }
 
-/// Test that fixture mode builds a functional state and exhibits fixture behaviour.
-///
-/// This test exercises the login port as a representative smoke test. The key
-/// assertion is that `admin`/`password` succeeds, which is the hallmark of the
-/// `FixtureLoginService`. DB-backed login would reject these credentials.
+fn fixture_timestamp() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+        .expect("RFC3339 fixture timestamp")
+        .with_timezone(&Utc)
+}
+
+fn sample_bundle_payload(user_id: &UserId, route_id: Uuid) -> OfflineBundlePayload {
+    let timestamp = fixture_timestamp();
+    OfflineBundlePayload {
+        id: Uuid::new_v4(),
+        owner_user_id: Some(user_id.clone()),
+        device_id: "fixture-device".to_owned(),
+        kind: OfflineBundleKind::Route,
+        route_id: Some(route_id),
+        region_id: None,
+        bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
+        zoom_range: backend::domain::ZoomRange::new(11, 15).expect("valid zoom range"),
+        estimated_size_bytes: 1_500,
+        created_at: timestamp,
+        updated_at: timestamp,
+        status: OfflineBundleStatus::Queued,
+        progress: 0.0,
+    }
+}
+
+fn sample_walk_session(user_id: &UserId, route_id: Uuid) -> WalkSessionPayload {
+    let started_at = fixture_timestamp();
+    WalkSessionPayload {
+        id: Uuid::new_v4(),
+        user_id: user_id.clone(),
+        route_id,
+        started_at,
+        ended_at: Some(started_at),
+        primary_stats: vec![WalkPrimaryStatDraft {
+            kind: WalkPrimaryStatKind::Distance,
+            value: 1000.0,
+        }],
+        secondary_stats: vec![WalkSecondaryStatDraft {
+            kind: WalkSecondaryStatKind::Energy,
+            value: 120.0,
+            unit: Some("kcal".to_owned()),
+        }],
+        highlighted_poi_ids: vec![Uuid::new_v4()],
+    }
+}
+
+/// Test that fixture mode exhibits fixture behaviour across every port.
 #[rstest]
 #[tokio::test]
 async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
     use backend::domain::LoginCredentials;
-    use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 
     let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
+    let state = build_http_state(&fixture_config, route_submission.clone());
+    assert!(Arc::ptr_eq(
+        &state.get_ref().route_submission,
+        &route_submission
+    ));
 
-    let state = build_http_state(&fixture_config, route_submission);
-
-    // Fixture login accepts "admin"/"password" and returns a fixed user ID
     let fixture_creds =
         LoginCredentials::try_from_parts("admin", "password").expect("valid credentials");
     let login_result = state.login.authenticate(&fixture_creds).await;
@@ -61,36 +111,235 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         "fixture login returns fixed user ID"
     );
 
-    // Users query succeeds (fixture returns static list)
     let users_result = state.users.list_users(&user_id).await;
     assert!(
         users_result.is_ok(),
         "fixture users query should succeed; got: {users_result:?}"
     );
 
-    // Profile query returns a user for the fixture user ID
     let profile_result = state.profile.fetch_profile(&user_id).await;
     assert!(
         profile_result.is_ok(),
         "fixture profile query should succeed; got: {profile_result:?}"
     );
 
-    // Preferences query returns default preferences
+    let interests_result = state
+        .interests
+        .set_interests(UpdateUserInterestsRequest {
+            user_id: user_id.clone(),
+            interest_theme_ids: vec![InterestThemeId::from_uuid(Uuid::new_v4())],
+            expected_revision: Some(1),
+        })
+        .await;
+    assert!(
+        interests_result.is_ok(),
+        "fixture interests command should succeed; got: {interests_result:?}"
+    );
+    assert_eq!(interests_result.expect("interests").revision(), 2);
+
+    let preferences_result = state
+        .preferences
+        .update(UpdatePreferencesRequest {
+            user_id: user_id.clone(),
+            interest_theme_ids: vec![Uuid::new_v4()],
+            safety_toggle_ids: vec![Uuid::new_v4()],
+            unit_system: UnitSystem::Imperial,
+            expected_revision: Some(1),
+            idempotency_key: Some(IdempotencyKey::random()),
+        })
+        .await;
+    assert!(
+        preferences_result.is_ok(),
+        "fixture preferences command should succeed; got: {preferences_result:?}"
+    );
+    let preferences = preferences_result.expect("preferences response");
+    assert!(!preferences.replayed);
+    assert_eq!(preferences.preferences.revision, 2);
+    assert_eq!(preferences.preferences.unit_system, UnitSystem::Imperial);
+
     let prefs_result = state.preferences_query.fetch_preferences(&user_id).await;
     assert!(
         prefs_result.is_ok(),
         "fixture preferences query should succeed; got: {prefs_result:?}"
     );
 
-    // Catalogue explore returns a snapshot
+    let route_id = Uuid::new_v4();
+
+    let annotations_result = state
+        .route_annotations_query
+        .fetch_annotations(route_id, &user_id)
+        .await;
+    assert!(
+        annotations_result.is_ok(),
+        "fixture route annotations query should succeed; got: {annotations_result:?}"
+    );
+    assert_eq!(annotations_result.expect("annotations").route_id, route_id);
+
+    let upsert_note_result = state
+        .route_annotations
+        .upsert_note(UpsertNoteRequest {
+            note_id: Uuid::new_v4(),
+            route_id,
+            poi_id: None,
+            user_id: user_id.clone(),
+            body: "Fixture note".to_owned(),
+            expected_revision: Some(2),
+            idempotency_key: None,
+        })
+        .await;
+    assert!(
+        upsert_note_result.is_ok(),
+        "fixture route note upsert should succeed; got: {upsert_note_result:?}"
+    );
+    assert_eq!(upsert_note_result.expect("note response").note.revision, 3);
+
+    let delete_note_result = state
+        .route_annotations
+        .delete_note(DeleteNoteRequest {
+            note_id: Uuid::new_v4(),
+            user_id: user_id.clone(),
+            idempotency_key: Some(IdempotencyKey::random()),
+        })
+        .await;
+    assert!(
+        delete_note_result.is_ok(),
+        "fixture route note delete should succeed; got: {delete_note_result:?}"
+    );
+    assert!(!delete_note_result.expect("delete note response").deleted);
+
+    let update_progress_result = state
+        .route_annotations
+        .update_progress(UpdateProgressRequest {
+            route_id,
+            user_id: user_id.clone(),
+            visited_stop_ids: vec![Uuid::new_v4()],
+            expected_revision: Some(4),
+            idempotency_key: None,
+        })
+        .await;
+    assert!(
+        update_progress_result.is_ok(),
+        "fixture route progress update should succeed; got: {update_progress_result:?}"
+    );
+    assert_eq!(
+        update_progress_result
+            .expect("progress response")
+            .progress
+            .revision,
+        5
+    );
+
+    let route_submission_result = state
+        .route_submission
+        .submit(RouteSubmissionRequest {
+            idempotency_key: Some(IdempotencyKey::random()),
+            user_id: user_id.clone(),
+            payload: serde_json::json!({"origin": "A", "destination": "B"}),
+        })
+        .await;
+    assert!(
+        route_submission_result.is_ok(),
+        "fixture route submission should succeed; got: {route_submission_result:?}"
+    );
+    assert_eq!(
+        route_submission_result
+            .expect("route submission response")
+            .status,
+        RouteSubmissionStatus::Accepted
+    );
+
     let catalogue_result = state.catalogue.explore_snapshot().await;
     assert!(
         catalogue_result.is_ok(),
         "fixture catalogue should succeed; got: {catalogue_result:?}"
     );
 
-    // Enrichment provenance list returns empty records
-    use backend::domain::ports::ListEnrichmentProvenanceRequest;
+    let descriptors_result = state.descriptors.descriptor_snapshot().await;
+    assert!(
+        descriptors_result.is_ok(),
+        "fixture descriptors should succeed; got: {descriptors_result:?}"
+    );
+    assert!(
+        descriptors_result
+            .expect("descriptors")
+            .interest_themes
+            .is_empty()
+    );
+
+    let bundle = sample_bundle_payload(&user_id, route_id);
+
+    let offline_upsert_result = state
+        .offline_bundles
+        .upsert_bundle(UpsertOfflineBundleRequest {
+            user_id: user_id.clone(),
+            bundle: bundle.clone(),
+            idempotency_key: None,
+        })
+        .await;
+    assert!(
+        offline_upsert_result.is_ok(),
+        "fixture offline bundle upsert should succeed; got: {offline_upsert_result:?}"
+    );
+    assert_eq!(
+        offline_upsert_result
+            .expect("offline upsert response")
+            .bundle
+            .id,
+        bundle.id
+    );
+
+    let offline_delete_result = state
+        .offline_bundles
+        .delete_bundle(DeleteOfflineBundleRequest {
+            user_id: user_id.clone(),
+            bundle_id: bundle.id,
+            idempotency_key: Some(IdempotencyKey::random()),
+        })
+        .await;
+    assert!(
+        offline_delete_result.is_ok(),
+        "fixture offline bundle delete should succeed; got: {offline_delete_result:?}"
+    );
+    assert_eq!(
+        offline_delete_result
+            .expect("offline delete response")
+            .bundle_id,
+        bundle.id
+    );
+
+    let offline_list_result = state
+        .offline_bundles_query
+        .list_bundles(ListOfflineBundlesRequest {
+            owner_user_id: Some(user_id.clone()),
+            device_id: "fixture-device".to_owned(),
+        })
+        .await;
+    assert!(
+        offline_list_result.is_ok(),
+        "fixture offline bundle list should succeed; got: {offline_list_result:?}"
+    );
+    assert!(
+        offline_list_result
+            .expect("offline list response")
+            .bundles
+            .is_empty()
+    );
+
+    let offline_get_result = state
+        .offline_bundles_query
+        .get_bundle(GetOfflineBundleRequest {
+            bundle_id: bundle.id,
+        })
+        .await;
+    assert!(
+        offline_get_result.is_err(),
+        "fixture offline bundle get should be not found; got: {offline_get_result:?}"
+    );
+    assert_eq!(
+        offline_get_result.expect_err("offline get error").code(),
+        ErrorCode::NotFound,
+    );
+
     let provenance_result = state
         .enrichment_provenance
         .list_recent(&ListEnrichmentProvenanceRequest {
@@ -102,7 +351,55 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         provenance_result.is_ok(),
         "fixture enrichment provenance should succeed; got: {provenance_result:?}"
     );
-}
 
-// DB-mode composition is tested by the `startup_mode_composition_bdd` BDD
-// suite which exercises all ports against embedded PostgreSQL.
+    let walk_session = sample_walk_session(&user_id, route_id);
+
+    let walk_create_result = state
+        .walk_sessions
+        .create_session(CreateWalkSessionRequest {
+            session: walk_session.clone(),
+        })
+        .await;
+    assert!(
+        walk_create_result.is_ok(),
+        "fixture walk session create should succeed; got: {walk_create_result:?}"
+    );
+    assert_eq!(
+        walk_create_result
+            .expect("walk session response")
+            .session_id,
+        walk_session.id
+    );
+
+    let walk_get_result = state
+        .walk_sessions_query
+        .get_session(GetWalkSessionRequest {
+            session_id: walk_session.id,
+        })
+        .await;
+    assert!(
+        walk_get_result.is_err(),
+        "fixture walk session get should be not found; got: {walk_get_result:?}"
+    );
+    assert_eq!(
+        walk_get_result.expect_err("walk session get error").code(),
+        ErrorCode::NotFound,
+    );
+
+    let walk_list_result = state
+        .walk_sessions_query
+        .list_completion_summaries(ListWalkCompletionSummariesRequest {
+            user_id: user_id.clone(),
+        })
+        .await;
+    assert!(
+        walk_list_result.is_ok(),
+        "fixture walk completion summary list should succeed; got: {walk_list_result:?}"
+    );
+    assert!(
+        walk_list_result
+            .expect("walk summaries")
+            .summaries
+            .is_empty()
+    );
+}
