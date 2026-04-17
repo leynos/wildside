@@ -2123,16 +2123,16 @@ domain-owned `RouteQueue` port – ensures that migrating to an AMQP backend
 (e.g., RabbitMQ) is a contained adapter change if queue throughput or routing
 requirements outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
-Each job type can have its own queue; for example, the configuration defines a
+Each job type will have its own queue; for example, the configuration will define a
 high-priority queue for route generation jobs and a lower-priority queue for
-enrichment jobs. The Apalis configuration in the code registers job types and
-their handlers, and sets up consumers for each queue. Retry policies are also
+enrichment jobs. The Apalis configuration will register job types and
+their handlers, and set up consumers for each queue. Retry policies will also be
 configured: if a job fails, Apalis will retry it a limited number of times with
 exponential backoff delays. If a job continues to fail (e.g., bad data or a
 persistent issue), it will be moved to a **dead-letter queue** after max
 retries, so that failed jobs can be inspected or manually requeued once the
 issue is resolved. Each job will also have a **timeout** – for instance, the
-system might enforce that `GenerateRouteJob` must complete within 30 seconds,
+system will enforce that `GenerateRouteJob` must complete within 30 seconds,
 otherwise it is considered failed (to avoid stuck threads). Apalis allows
 setting such time limits per job or globally.
 

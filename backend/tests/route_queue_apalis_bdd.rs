@@ -163,7 +163,7 @@ fn enqueue_test_plan_with_name(world: &SharedContext, name: String) {
         world,
         |ctx| {
             (
-                ctx.queue.clone().expect("queue should be initialised"),
+                ctx.queue.clone().expect("queue should be initialized"),
                 plan.clone(),
             )
         },

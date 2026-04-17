@@ -21,10 +21,10 @@ use crate::domain::ports::{JobDispatchError, RouteQueue};
 ///
 /// # Visibility
 ///
-/// This trait is public to allow integration tests to provide custom test
-/// implementations, but it is not intended for use outside of testing scenarios.
+/// This trait is crate-internal to enable unit testing with fake providers
+/// while keeping the abstraction private from external consumers.
 #[async_trait]
-pub trait QueueProvider: Send + Sync {
+pub(crate) trait QueueProvider: Send + Sync {
     /// Pushes a JSON job payload into the queue.
     ///
     /// Implementations are responsible for any storage-specific encoding
