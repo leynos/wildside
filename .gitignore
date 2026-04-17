@@ -95,3 +95,4 @@ deploy/k8s/backend/secret.env
 
 # Grepai index
 .grepai/
+rustc-ice-*.txt
