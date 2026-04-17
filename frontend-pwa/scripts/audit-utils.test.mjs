@@ -206,7 +206,7 @@ describe('runAuditJson', () => {
     );
   });
 
-  it('preserves advisory ID casing from the bulk payload URL', async () => {
+  it('normalizes advisory IDs from the bulk payload URL to lowercase groups', async () => {
     setupRetiredPnpmAudit();
     fetch.mockResolvedValueOnce({
       ok: true,
@@ -228,8 +228,8 @@ describe('runAuditJson', () => {
     const result = await runAuditJson();
 
     expect(result.json.advisories).toEqual({
-      'GHSA-Vghf-HV5Q-vC2G': expect.objectContaining({
-        [githubAdvisoryIdKey]: 'GHSA-Vghf-HV5Q-vC2G',
+      'GHSA-vghf-hv5q-vc2g': expect.objectContaining({
+        [githubAdvisoryIdKey]: 'GHSA-vghf-hv5q-vc2g',
         [packageNameKey]: 'validator',
       }),
     });

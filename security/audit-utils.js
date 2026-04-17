@@ -152,6 +152,7 @@ function collectInstalledPackageVersions() {
 
 /** Return `true` when a raw registry string is a real URL and not a placeholder.
  * @param {string} value Trimmed registry string. @returns {boolean}
+ * @example isValidRegistryValue('https://registry.npmjs.org'); // true
  */
 function isValidRegistryValue(value) { return Boolean(value) && value !== 'undefined' && value !== 'null'; }
 
@@ -192,8 +193,12 @@ function extractGithubAdvisoryId(advisoryUrl) {
   if (typeof advisoryUrl !== 'string') {
     return undefined;
   }
-  const match = advisoryUrl.match(/GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i);
-  return match?.[0];
+  const match = advisoryUrl.match(/GHSA-([0-9a-z]{4})-([0-9a-z]{4})-([0-9a-z]{4})/i);
+  if (!match) {
+    return undefined;
+  }
+  const [, first, second, third] = match;
+  return `GHSA-${first.toLowerCase()}-${second.toLowerCase()}-${third.toLowerCase()}`;
 }
 
 /** Derive the advisory key used to deduplicate bulk advisory responses.
@@ -208,6 +213,7 @@ function deriveAdvisoryKey(packageName, advisory) {
 
 /** Return `true` when a value is a plain (non-array, non-null) object.
  * @param {unknown} value Value to test. @returns {boolean}
+ * @example isPlainAdvisoryObject({ id: 1 }); // true
  */
 function isPlainAdvisoryObject(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 
@@ -312,7 +318,7 @@ async function runBulkAdvisoryAudit() {
 }
 
 /** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
- * @returns {{ json: { advisories?: Record<string, unknown> }, status: number }} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
+ * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
  */
 export async function runAuditJson() {
   const result = spawnSync('pnpm', AUDIT_ARGS, {
@@ -347,6 +353,7 @@ export function collectAdvisories(auditJson) {
 
 /** Return `true` when an advisory's GHSA ID is present in the allow-set.
  * @param {{ github_advisory_id?: string }} advisory Advisory to check. @param {Set<string>} allowed Set of permitted advisory IDs. @returns {boolean}
+ * @example isExpectedAdvisory({ github_advisory_id: 'GHSA-vghf-hv5q-vc2g' }, new Set(['GHSA-vghf-hv5q-vc2g'])); // true
  */
 function isExpectedAdvisory(advisory, allowed) {
   const id = advisory.github_advisory_id;
