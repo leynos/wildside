@@ -72,6 +72,8 @@ jobs:
 
       - name: Check lockfile consistency
         run: make lockfile
+      - name: Check override parity
+        run: node ./scripts/check-overrides-parity.mjs
       - name: Install dependencies (frozen)
         run: make deps
 
