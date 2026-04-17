@@ -208,7 +208,7 @@ typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEm
 audit: deps
 	pnpm -r install
 	pnpm -r --if-present run audit
-	pnpm run audit
+	pnpm run audit:validate
 
 lockfile:
 	pnpm install --lockfile-only

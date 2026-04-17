@@ -1,4 +1,6 @@
-/** @file Validate audit exception entries against schema and expiry. */
+/** @file Validate audit exception entries against schema, expiry, and live
+ * advisories.
+ */
 import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from './constants.js';
@@ -93,7 +95,7 @@ function assertNoExpired(entries) {
 }
 
 /**
- * Validate that `pnpm audit` advisories align with the configured exceptions.
+ * Validate that current advisories align with the configured exceptions.
  *
  * Advisories are partitioned against the exception list; unexpected entries are
  * surfaced via {@link reportUnexpectedAdvisories}. The validator advisory
@@ -106,7 +108,7 @@ function assertNoExpired(entries) {
  *
  * @param {typeof data} entries Exception ledger entries keyed by advisory ID.
  * @param {ReturnType<typeof collectAdvisories>} advisories Advisories reported
- *   by `pnpm audit`.
+ *   by the shared audit helper.
  * @returns {void} Returns undefined when all advisories are mitigated.
  * @throws {Error} When unexpected advisories are reported or the validator
  *   mitigation is absent.
@@ -157,7 +159,7 @@ assertValidSchema(data);
 assertNoExpired(data);
 
 try {
-  const { json: auditJson, status } = runAuditJson();
+  const { json: auditJson, status } = await runAuditJson();
   const advisories = collectAdvisories(auditJson);
 
   if (status !== 0 && advisories.length === 0) {
