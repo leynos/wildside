@@ -76,6 +76,13 @@
 //! appropriate index and ordering clauses. The pagination crate does not
 //! validate ordering correctness at runtime.
 //!
+//! Property-based tests for ordering invariants are intentionally deferred to
+//! consumers. The correctness of the ordering guarantee depends on the key
+//! type and the underlying database index, both of which are outside the scope
+//! of this crate. Consumers are responsible for verifying, via their own
+//! integration or property-based tests, that their chosen key type satisfies
+//! the total-ordering and cross-page stability requirements documented above.
+//!
 //! # Default and Maximum Limits
 //!
 //! Page size limits are controlled by two shared constants:
