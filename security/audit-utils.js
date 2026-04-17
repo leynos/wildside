@@ -128,11 +128,9 @@ function buildVersionMap(packageTrees) {
  */
 function collectInstalledPackageVersions() {
   const result = spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
-
   if (result.error) {
     throw result.error;
   }
-
   const status = result.status ?? 0;
   if (status !== 0) {
     throw new Error(`pnpm ls failed without producing a dependency tree (exit status ${status}).`);
@@ -152,13 +150,18 @@ function collectInstalledPackageVersions() {
   );
 }
 
+/** Return `true` when a raw registry string is a real URL and not a placeholder.
+ * @param {string} value Trimmed registry string. @returns {boolean}
+ */
+function isValidRegistryValue(value) { return Boolean(value) && value !== 'undefined' && value !== 'null'; }
+
 /** Normalize a registry URL so bulk advisory requests always target a valid base URL.
  * @param {string | undefined | null} rawRegistry Raw registry setting from env or pnpm config.
  * @returns {string} Registry URL with a trailing slash. @example normalizeRegistryUrl('https://registry.npmjs.org'); // 'https://registry.npmjs.org/'
  */
 function normalizeRegistryUrl(rawRegistry) {
   const trimmed = String(rawRegistry ?? '').trim();
-  const registry = trimmed && trimmed !== 'undefined' && trimmed !== 'null' ? trimmed : DEFAULT_REGISTRY;
+  const registry = isValidRegistryValue(trimmed) ? trimmed : DEFAULT_REGISTRY;
   return registry.endsWith('/') ? registry : `${registry}/`;
 }
 
@@ -170,7 +173,6 @@ function readRegistryUrl() {
   if (envRegistry) {
     return normalizeRegistryUrl(envRegistry);
   }
-
   try {
     return normalizeRegistryUrl(
       execFileSync('pnpm', ['config', 'get', 'registry'], {
@@ -190,7 +192,6 @@ function extractGithubAdvisoryId(advisoryUrl) {
   if (typeof advisoryUrl !== 'string') {
     return undefined;
   }
-
   const match = advisoryUrl.match(/GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i);
   return match?.[0];
 }
@@ -205,23 +206,24 @@ function deriveAdvisoryKey(packageName, advisory) {
   return { key, githubAdvisoryId };
 }
 
+/** Return `true` when a value is a plain (non-array, non-null) object.
+ * @param {unknown} value Value to test. @returns {boolean}
+ */
+function isPlainAdvisoryObject(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+
 /** Merge advisories for one package into the shared accumulator.
  * @param {string} packageName Package name from the bulk advisory payload. @param {unknown[]} packageAdvisories Validated array of raw advisory objects. @param {Record<string, unknown>} advisories Accumulator mutated in place.
  * @returns {void} @example const advisories = {}; addPackageAdvisories('validator', [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g', title: 'Validator SSRF' }], advisories); console.log(advisories['GHSA-vghf-hv5q-vc2g'].package_name); // 'validator'
  */
 function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   for (const [index, advisory] of packageAdvisories.entries()) {
-    const isPlainObject = typeof advisory === 'object' && advisory !== null && !Array.isArray(advisory);
-    if (!isPlainObject) {
+    if (!isPlainAdvisoryObject(advisory)) {
       throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
     }
-
     const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
-
     if (Object.hasOwn(advisories, key)) {
       continue;
     }
-
     advisories[key] = {
       ...advisory,
       github_advisory_id: githubAdvisoryId,
@@ -238,14 +240,11 @@ function normalizeBulkAdvisories(bulkPayload) {
   if (typeof bulkPayload !== 'object' || bulkPayload === null || Array.isArray(bulkPayload)) {
     throw new TypeError('Invalid bulk advisory payload: expected an object keyed by package name.');
   }
-
   const advisories = {};
-
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload)) {
     if (!Array.isArray(packageAdvisories)) {
       throw new TypeError(`Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`);
     }
-
     addPackageAdvisories(packageName, packageAdvisories, advisories);
   }
 
@@ -260,7 +259,6 @@ function normalizeBulkAdvisories(bulkPayload) {
 async function fetchBulkAdvisories(endpoint, packageVersions) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
-
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -272,13 +270,11 @@ async function fetchBulkAdvisories(endpoint, packageVersions) {
       signal: controller.signal,
     });
     const responseText = await response.text();
-
     return { response, responseText };
   } catch (error) {
     if (error?.name === 'AbortError') {
       throw new Error(`Bulk advisory audit timed out after ${BULK_AUDIT_TIMEOUT_MS}ms at ${endpoint}`);
     }
-
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -324,14 +320,11 @@ export async function runAuditJson() {
     maxBuffer: COMMAND_MAX_BUFFER,
     stdio: ['ignore', 'pipe', 'inherit'],
   });
-
   if (result.error) {
     throw result.error;
   }
-
   const status = result.status ?? 0;
   const stdout = result.stdout ? result.stdout.trim() : '';
-
   if (!stdout) {
     return { json: { advisories: {} }, status };
   }
@@ -352,6 +345,14 @@ export function collectAdvisories(auditJson) {
   return Object.values(auditJson.advisories ?? {});
 }
 
+/** Return `true` when an advisory's GHSA ID is present in the allow-set.
+ * @param {{ github_advisory_id?: string }} advisory Advisory to check. @param {Set<string>} allowed Set of permitted advisory IDs. @returns {boolean}
+ */
+function isExpectedAdvisory(advisory, allowed) {
+  const id = advisory.github_advisory_id;
+  return Boolean(id) && allowed.has(id);
+}
+
 /** Split advisories into allowed and unexpected groups.
  * @param {Array<{ github_advisory_id?: string }>} advisories Advisories to partition. @param {Iterable<string>} allowedIds Advisory IDs the caller expects.
  * @returns {{ expected: typeof advisories, unexpected: typeof advisories }} Partitioned advisories.
@@ -363,8 +364,7 @@ export function partitionAdvisoriesById(advisories, allowedIds) {
   const expected = [];
   const unexpected = [];
   for (const advisory of advisories) {
-    const id = advisory.github_advisory_id;
-    if (id && allowed.has(id)) {
+    if (isExpectedAdvisory(advisory, allowed)) {
       expected.push(advisory);
     } else {
       unexpected.push(advisory);
