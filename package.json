@@ -19,6 +19,7 @@
   "packageManager": "pnpm@10.15.1",
   "scripts": {
     "build": "pnpm -r run build",
+    "check:overrides-parity": "node ./scripts/check-overrides-parity.mjs",
     "fmt": "node ./scripts/run-workspace-script.mjs fmt",
     "lint": "node ./scripts/run-workspace-script.mjs lint",
     "typecheck": "node ./scripts/run-workspace-script.mjs typecheck",
