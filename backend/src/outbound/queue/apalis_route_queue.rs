@@ -37,28 +37,27 @@ pub(crate) trait QueueProvider: Send + Sync {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
-    /// # use async_trait::async_trait;
-    /// # use serde_json::json;
-    /// # use backend::domain::ports::JobDispatchError;
-    /// # use backend::outbound::queue::QueueProvider;
-    /// # use serde_json::Value;
-    /// #
-    /// # struct MyProvider;
-    /// #
-    /// # #[async_trait]
-    /// # impl QueueProvider for MyProvider {
-    /// #     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
-    /// #         Ok(())
-    /// #     }
-    /// # }
-    /// #
-    /// # async fn example() -> Result<(), JobDispatchError> {
-    /// let provider = MyProvider;
-    /// let payload = json!({ "name": "route-123" });
-    /// provider.push_job(payload).await?;
-    /// # Ok(())
-    /// # }
+    /// ```rust,ignore
+    /// // QueueProvider is crate-internal; this example is for maintainers.
+    /// use async_trait::async_trait;
+    /// use serde_json::{json, Value};
+    /// use backend::domain::ports::JobDispatchError;
+    ///
+    /// struct MyProvider;
+    ///
+    /// #[async_trait]
+    /// impl QueueProvider for MyProvider {
+    ///     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// async fn example() -> Result<(), JobDispatchError> {
+    ///     let provider = MyProvider;
+    ///     let payload = json!({ "name": "route-123" });
+    ///     provider.push_job(payload).await?;
+    ///     Ok(())
+    /// }
     /// ```
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError>;
 }

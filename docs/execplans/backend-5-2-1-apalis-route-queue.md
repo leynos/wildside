@@ -820,6 +820,7 @@ it should be recreated with `mknod -m 666 /dev/null c 1 3`.
 
 ```toml
 # Queue adapter (Apalis with PostgreSQL)
+apalis-core = "1.0.0-rc.7"
 apalis-postgres = "1.0.0-rc.6"
 
 # SQLx for Apalis PostgreSQL pool (if not already present)
