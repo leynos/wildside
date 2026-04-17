@@ -50,16 +50,16 @@ impl ServerConfig {
         self.bind_addr
     }
 
-    #[cfg(feature = "metrics")]
     /// Attach Prometheus middleware to the configuration.
+    #[cfg(feature = "metrics")]
     #[must_use]
     pub fn with_metrics(mut self, prometheus: Option<PrometheusMetrics>) -> Self {
         self.prometheus = prometheus;
         self
     }
 
-    #[cfg(feature = "metrics")]
     /// Return the configured Prometheus middleware, if any.
+    #[cfg(feature = "metrics")]
     #[must_use]
     pub fn metrics(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()
@@ -83,8 +83,8 @@ impl ServerConfig {
         self.same_site
     }
 
-    #[cfg(feature = "metrics")]
     /// Return the optional Prometheus middleware (test-only accessor).
+    #[cfg(feature = "metrics")]
     pub(crate) fn prometheus_ref(&self) -> Option<&PrometheusMetrics> {
         self.prometheus.as_ref()
     }
@@ -92,6 +92,8 @@ impl ServerConfig {
 
 #[cfg(test)]
 mod tests {
+    //! Reachability checks for `ServerConfig` builders and accessors.
+
     use super::*;
     use actix_web::cookie::SameSite;
     use std::net::SocketAddr;
@@ -116,9 +118,5 @@ mod tests {
                 ServerConfig::new(Key::generate(), false, SameSite::Lax, addr).with_metrics(None);
             assert!(cfg2.metrics().is_none());
         }
-    }
-
-    fn _with_db_pool_is_callable(cfg: ServerConfig, pool: DbPool) {
-        let _ = cfg.with_db_pool(pool);
     }
 }

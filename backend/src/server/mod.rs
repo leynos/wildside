@@ -100,7 +100,7 @@ pub(crate) fn build_route_submission_service(
 ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
     #[cfg(feature = "metrics")]
     {
-        return match (&config.db_pool, &config.prometheus) {
+        match (&config.db_pool, config.metrics()) {
             (Some(pool), Some(prom)) => {
                 let idempotency_metrics = PrometheusIdempotencyMetrics::new(&prom.registry)
                     .map_err(|e| {
@@ -118,15 +118,17 @@ pub(crate) fn build_route_submission_service(
                 Arc::new(NoOpIdempotencyMetrics),
             ))),
             (None, _) => Ok(Arc::new(FixtureRouteSubmissionService)),
-        };
+        }
     }
 
     #[cfg(not(feature = "metrics"))]
-    match &config.db_pool {
-        Some(pool) => Ok(Arc::new(RouteSubmissionServiceImpl::with_noop_metrics(
-            Arc::new(DieselIdempotencyRepository::new(pool.clone())),
-        ))),
-        None => Ok(Arc::new(FixtureRouteSubmissionService)),
+    {
+        match &config.db_pool {
+            Some(pool) => Ok(Arc::new(RouteSubmissionServiceImpl::with_noop_metrics(
+                Arc::new(DieselIdempotencyRepository::new(pool.clone())),
+            ))),
+            None => Ok(Arc::new(FixtureRouteSubmissionService)),
+        }
     }
 }
 
