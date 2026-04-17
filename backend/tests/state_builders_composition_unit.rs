@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use actix_web::cookie::{Key, SameSite};
+use actix_web::web;
 use backend::test_support::server::{ServerConfig, build_http_state};
 use backend::{
     domain::ports::{
@@ -24,6 +25,7 @@ use backend::{
         OfflineBundleStatus, UnitSystem, UserId, WalkPrimaryStatDraft, WalkPrimaryStatKind,
         WalkSecondaryStatDraft, WalkSecondaryStatKind,
     },
+    inbound::http::state::HttpState,
 };
 use chrono::{DateTime, Utc};
 use rstest::{fixture, rstest};
@@ -84,18 +86,8 @@ fn sample_walk_session(user_id: &UserId, route_id: Uuid) -> WalkSessionPayload {
     }
 }
 
-/// Test that fixture mode exhibits fixture behaviour across every port.
-#[rstest]
-#[tokio::test]
-async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
+async fn login_and_get_user_id(state: &web::Data<HttpState>) -> UserId {
     use backend::domain::LoginCredentials;
-
-    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
-    let state = build_http_state(&fixture_config, route_submission.clone());
-    assert!(Arc::ptr_eq(
-        &state.get_ref().route_submission,
-        &route_submission
-    ));
 
     let fixture_creds =
         LoginCredentials::try_from_parts("admin", "password").expect("valid credentials");
@@ -110,19 +102,24 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         "123e4567-e89b-12d3-a456-426614174000",
         "fixture login returns fixed user ID"
     );
+    user_id
+}
 
-    let users_result = state.users.list_users(&user_id).await;
+async fn users_and_profile_ok(state: &web::Data<HttpState>, user_id: &UserId) {
+    let users_result = state.users.list_users(user_id).await;
     assert!(
         users_result.is_ok(),
         "fixture users query should succeed; got: {users_result:?}"
     );
 
-    let profile_result = state.profile.fetch_profile(&user_id).await;
+    let profile_result = state.profile.fetch_profile(user_id).await;
     assert!(
         profile_result.is_ok(),
         "fixture profile query should succeed; got: {profile_result:?}"
     );
+}
 
+async fn interests_flow(state: &web::Data<HttpState>, user_id: &UserId) {
     let interests_result = state
         .interests
         .set_interests(UpdateUserInterestsRequest {
@@ -136,7 +133,9 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         "fixture interests command should succeed; got: {interests_result:?}"
     );
     assert_eq!(interests_result.expect("interests").revision(), 2);
+}
 
+async fn preferences_write_and_read_ok(state: &web::Data<HttpState>, user_id: &UserId) {
     let preferences_result = state
         .preferences
         .update(UpdatePreferencesRequest {
@@ -157,17 +156,17 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
     assert_eq!(preferences.preferences.revision, 2);
     assert_eq!(preferences.preferences.unit_system, UnitSystem::Imperial);
 
-    let prefs_result = state.preferences_query.fetch_preferences(&user_id).await;
+    let prefs_result = state.preferences_query.fetch_preferences(user_id).await;
     assert!(
         prefs_result.is_ok(),
         "fixture preferences query should succeed; got: {prefs_result:?}"
     );
+}
 
-    let route_id = Uuid::new_v4();
-
+async fn route_annotations_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
     let annotations_result = state
         .route_annotations_query
-        .fetch_annotations(route_id, &user_id)
+        .fetch_annotations(route_id, user_id)
         .await;
     assert!(
         annotations_result.is_ok(),
@@ -228,7 +227,9 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
             .revision,
         5
     );
+}
 
+async fn route_submission_flow(state: &web::Data<HttpState>, user_id: &UserId) {
     let route_submission_result = state
         .route_submission
         .submit(RouteSubmissionRequest {
@@ -247,7 +248,9 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
             .status,
         RouteSubmissionStatus::Accepted
     );
+}
 
+async fn catalogue_and_descriptors_ok(state: &web::Data<HttpState>) {
     let catalogue_result = state.catalogue.explore_snapshot().await;
     assert!(
         catalogue_result.is_ok(),
@@ -265,8 +268,10 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
             .interest_themes
             .is_empty()
     );
+}
 
-    let bundle = sample_bundle_payload(&user_id, route_id);
+async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
+    let bundle = sample_bundle_payload(user_id, route_id);
 
     let offline_upsert_result = state
         .offline_bundles
@@ -339,7 +344,9 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         offline_get_result.expect_err("offline get error").code(),
         ErrorCode::NotFound,
     );
+}
 
+async fn enrichment_provenance_ok(state: &web::Data<HttpState>) {
     let provenance_result = state
         .enrichment_provenance
         .list_recent(&ListEnrichmentProvenanceRequest {
@@ -351,8 +358,10 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
         provenance_result.is_ok(),
         "fixture enrichment provenance should succeed; got: {provenance_result:?}"
     );
+}
 
-    let walk_session = sample_walk_session(&user_id, route_id);
+async fn walk_sessions_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
+    let walk_session = sample_walk_session(user_id, route_id);
 
     let walk_create_result = state
         .walk_sessions
@@ -402,4 +411,29 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
             .summaries
             .is_empty()
     );
+}
+
+/// Test that fixture mode exhibits fixture behaviour across every port.
+#[rstest]
+#[tokio::test]
+async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
+    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
+    let state = build_http_state(&fixture_config, route_submission.clone());
+    assert!(Arc::ptr_eq(
+        &state.get_ref().route_submission,
+        &route_submission
+    ));
+
+    let user_id = login_and_get_user_id(&state).await;
+    users_and_profile_ok(&state, &user_id).await;
+    interests_flow(&state, &user_id).await;
+    preferences_write_and_read_ok(&state, &user_id).await;
+
+    let route_id = Uuid::new_v4();
+    route_annotations_flow(&state, &user_id, route_id).await;
+    route_submission_flow(&state, &user_id).await;
+    catalogue_and_descriptors_ok(&state).await;
+    offline_bundles_flow(&state, &user_id, route_id).await;
+    enrichment_provenance_ok(&state).await;
+    walk_sessions_flow(&state, &user_id, route_id).await;
 }
