@@ -25,18 +25,18 @@ components and interactions:
   WebSocket
   upgrades([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L36-L44)).
 
-- **Background Workers:** A pool of worker processes (running the same binary
-  in “worker mode”) that execute long-running tasks
-  asynchronously([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L37-L45)
+- **Background Workers:** A planned pool of worker processes that will consume
+  PostgreSQL-backed Apalis jobs once the route-worker bootstrap and dispatch
+  flow land in the backend
+  binary([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L37-L45)
   )(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L659-L663)).
 
 - **PostgreSQL (with PostGIS):** The primary data store for both application
   data and geospatial data.
 
-- **Redis Cache/Queue:** An in-memory store used for caching expensive results
-  and for brokering background job
-  queues([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L654-L662)).
+- **Redis Cache:** An in-memory store used for caching expensive
+  results([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L654-L662)).
 
 - **Martin Tile Server:** A separate service (Martin) that serves map tiles
   from the same PostGIS
@@ -54,11 +54,12 @@ components and interactions:
   behavior([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L50-L58)).
 
 All these pieces communicate primarily through well-defined interfaces
-(HTTP/HTTPS, WebSocket, or via Redis for internal job queues). The monolithic
-design means the API server contains the domain logic and adapter code for
-database, cache, etc., but thanks to the hexagonal structure, each concern is
-isolated behind abstractions. The system can evolve into multiple services if
-needed by extracting modules, since the boundaries are already enforced.
+(HTTP/HTTPS, WebSocket, PostgreSQL-backed job tables for Apalis queueing, and
+Redis for caching). The monolithic design means the API server contains the
+domain logic and adapter code for database, cache, etc., but thanks to the
+hexagonal structure, each concern is isolated behind abstractions. The system
+can evolve into multiple services if needed by extracting modules, since the
+boundaries are already enforced.
 
 **Hexagonal architecture approach:** Within the application, code is divided
 into layers corresponding to **domain**, **ports**, and **adapters**. Core
@@ -106,10 +107,11 @@ hexagonal (ports and adapters) architecture. It leverages **Actix Web** for
 high-performance async HTTP/WS handling, **Diesel** (with Postgres/PostGIS) for
 persistence, **bb8** for async connection
 pooling([4](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/keyset-pagination-design.md#L34-L40)),
- **Redis** for caching and as a job queue, and **Apalis** for robust background
-job execution. The design emphasizes clear domain boundaries, scalability (via
-potential service extraction or horizontal scaling of the monolith and
-workers), and thorough observability for both technical and product metrics.
+ **Redis** for caching, **PostgreSQL** for Apalis-backed queue persistence, and
+**Apalis** for robust background job execution. The design emphasizes clear
+domain boundaries, scalability (via potential service extraction or horizontal
+scaling of the monolith and workers), and thorough observability for both
+technical and product metrics.
 
 ## Core Components and Layers
 
@@ -1568,16 +1570,19 @@ before invoking a port. Canonical examples include:
 >
 > **Design decision (2025-12-10):** Introduce `backend::outbound` as the home
 > for driven adapter implementations. The module contains three sub-modules:
-> `persistence` (Diesel/PostgreSQL), `cache` (Redis), and `queue` (Apalis
-> stub). The persistence adapter provides `DieselUserRepository` implementing
+> `persistence` (Diesel/PostgreSQL), `cache` (Redis), and `queue`
+> (Apalis/PostgreSQL plus the retained stub adapter for tests). The
+> persistence adapter provides `DieselUserRepository` implementing
 > `UserRepository` with async support via `diesel-async` and `bb8` connection
 > pooling. The cache adapter now provides `RedisRouteCache`, which implements
 > `RouteCache` with `bb8-redis` connection pooling and JSON payloads stored as
-> raw Redis bytes. Internal Diesel and Redis details remain private to the
-> adapters; only domain types cross the boundary. The queue adapter remains a
-> stub until the job-queue roadmap items land. Migrations reside in
-> `backend/migrations/` and define the PostgreSQL schema including audit
-> timestamps and auto-update triggers.
+> raw Redis bytes. The queue adapter provides the PostgreSQL-backed
+> `RouteQueue` implementation in
+> `backend/src/outbound/queue/apalis_route_queue.rs`, while `StubRouteQueue`
+> remains available for tests that do not need PostgreSQL. Internal Diesel,
+> Redis, and Apalis details remain private to the adapters; only domain types
+> cross the boundary. Migrations reside in `backend/migrations/` and define
+> the PostgreSQL schema including audit timestamps and auto-update triggers.
 >
 > **Design decision (2025-12-19):** Introduce driving ports
 > `UserProfileQuery` and `UserInterestsCommand` plus domain types
@@ -2100,18 +2105,14 @@ Wildside uses a background job processing system to handle tasks that are too
 slow or heavy to perform inline with an HTTP request. We chose **Apalis** – a
 Rust background job framework – to manage this. The **background workers** run
 as a separate process (or separate set of processes) from the main Actix Web
-server, though they share the same codebase. We achieve this by running the
-same binary in a different **mode**: if an environment variable or CLI flag
-(for instance, `WILDSIDE_MODE=worker`) is set, the `main` function will start
-the application in **worker mode** instead of starting the HTTP
-server([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L659-L663)).
- In worker mode, the application will initialize the Apalis runtime,
-connect to the job queue (PostgreSQL), and begin polling for jobs to
-execute. This design will allow the deployment of one container image
-in two roles: one Deployment for the API server, and another
-Deployment (with perhaps multiple replicas) for the workers. Worker
-mode is planned but not yet enabled as of roadmap item
-5.2.1([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L671-L673)).
+server, though they share the same codebase. The intended deployment shape is
+to run the same binary in different roles, selected by bootstrap
+configuration such as `WILDSIDE_MODE=worker` or a CLI flag, so the API server
+and worker fleet can be deployed independently. The current
+`backend/src/main.rs`, however, still boots only the Actix HTTP server; it
+does not yet switch into an Apalis worker bootstrap path. Roadmap item 5.2.1
+therefore covers only the PostgreSQL-backed `RouteQueue` adapter, not
+request-path dispatch into `RouteQueue` or the route-worker consumption flow.
 
 **Job queue and Apalis config:** Apalis supports multiple backends for queues;
 the current implementation uses **PostgreSQL** as the job broker (roadmap item
@@ -2144,12 +2145,11 @@ Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
 (`backend/src/outbound/queue/apalis_route_queue.rs`). This adapter implements
 the `RouteQueue` port trait using `apalis-postgres` (`PostgresStorage`) for job
 persistence and maps infrastructure failures to domain-owned `JobDispatchError`
-variants. The adapter uses a separate `sqlx::PgPool` connection pool, which
-coexists with the Diesel `bb8` pool used by repository adapters. Both pools
-connect to the same PostgreSQL instance with independent lifecycle management,
-mirroring how the Redis cache adapter uses its own `bb8-redis` pool
-independently of Diesel. The Apalis job tables are managed by
-`PostgresStorage::setup()`, not by Diesel migrations.
+variants. The adapter uses a dedicated `sqlx::PgPool` for
+`PostgresStorage`, independent of the Diesel `bb8` pool used by repository
+adapters even when both connect to the same PostgreSQL instance. The Apalis
+job tables are managed by `PostgresStorage::setup()`, not by Diesel
+migrations.
 
 Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
@@ -2212,8 +2212,7 @@ message like `{"request_id": X, "status": "running", "progress": 50}` to Redis.
 The API server, which is subscribed (perhaps via a small background task in
 Actix) to these channels, will then forward that to the appropriate WebSocket
 client (we track which user/socket is waiting on that request_id).
-Alternatively, since Apalis is backed by Redis, it might support status
-callbacks. If direct pub/sub is too complex, we could opt for a simpler
+If direct pub/sub is too complex, we could opt for a simpler
 approach: the client relies on polling the GET route status endpoint for now
 (which reads from DB), and only final completion is pushed via WS. However, the
 design intent is to have real-time updates, so a pub/sub or direct push is
@@ -2233,18 +2232,16 @@ immediate WS notifications.
 **Scaling and mode switching:** With this design, we can scale the backend
 horizontally. We could run, say, 2 replicas of the API server (behind the
 ingress load balancer) to handle more concurrent users, and 4 replicas of the
-worker to process jobs in parallel. The workers compete for jobs from the Redis
-queue, and Apalis will ensure each job is only taken by one worker. If load
-increases (lots of route requests), we can increase the number of worker pods
-independently of the API pods, which is a nice scalability feature enabled by
-our decoupling. In local development, we can even run the server in one
-terminal and a worker in another. The `WILDSIDE_MODE` environment or a
-command-line flag triggers the mode: by default (or `mode=server`) it runs
-Actix HTTP server; with `mode=worker` it runs Apalis
-workers([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L659-L663)).
- This is explicitly implemented in `main.rs` such that if `mode=worker`, we do
-not start `HttpServer`, but instead configure Apalis and run `Monitor::run()`
-or similar to start consuming the queue.
+worker to process jobs in parallel. The workers will compete for jobs from the
+PostgreSQL-backed Apalis queue tables, and Apalis will ensure each job is only
+taken by one worker. If load increases (lots of route requests), we can
+increase the number of worker pods independently of the API pods, which is a
+nice scalability feature enabled by our decoupling. In local development, the
+intended shape is still to run the server in one terminal and a worker in
+another. A future `WILDSIDE_MODE` environment variable or command-line flag
+can select that role, but `backend/src/main.rs` does not yet implement the
+worker bootstrap. Later roadmap work must add that startup path alongside the
+request-path `RouteQueue` dispatch flow.
 
 **Observability (Jobs):** The job execution system is instrumented with metrics
 and tracing as well. We count all jobs executed and their outcomes using
@@ -2547,9 +2544,10 @@ workflows ensuring declarative, reproducible environments.
 
 ### Workloads and Scaling
 
-- Build a single backend image that can run in `server` or `worker` mode via
-  `WILDSIDE_MODE`. Deploy two `Deployment` objects so API replicas and Apalis
-  workers scale independently.
+- Build a single backend image that can eventually run in `server` or
+  `worker` mode via `WILDSIDE_MODE`. Deploy two `Deployment` objects so API
+  replicas and Apalis workers scale independently once the worker bootstrap
+  path lands.
 - Configure resource requests/limits and horizontal pod autoscalers based on
   CPU and queue depth metrics. Keep at least two API replicas for high
   availability.
