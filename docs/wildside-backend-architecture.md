@@ -2123,7 +2123,8 @@ Message Queuing Protocol (AMQP) broker service in production and testing. The
 hexagonal boundary – specifically the `QueueProvider` trait and the
 domain-owned `RouteQueue` port – ensures that migrating to an AMQP backend
 (e.g., RabbitMQ) is a contained adapter change if queue throughput or routing
-requirements outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
+requirements outgrow PostgreSQL
+`NOTIFY`/`SKIP LOCKED` capabilities.
 
 Each job type will have its own queue; for example, the configuration
 will define a high-priority queue for route generation jobs and a
