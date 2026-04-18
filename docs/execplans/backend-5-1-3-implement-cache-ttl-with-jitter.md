@@ -590,7 +590,8 @@ Run all commands from the repository root. Use `set -o pipefail` and
 `tee` for every meaningful command so the exit code survives truncation
 and the log is retained.
 
-1. Baseline: confirm the current adapter has no TTL behaviour.
+1. Baseline: run cache tests to observe current TTL-with-jitter
+   behaviour.
 
    ```bash
    set -o pipefail
