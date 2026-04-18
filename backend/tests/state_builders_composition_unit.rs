@@ -217,9 +217,11 @@ async fn catalogue_and_descriptors_ok(state: &web::Data<HttpState>) {
     );
 }
 
-async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
-    let bundle = sample_bundle_payload(user_id, route_id);
-
+async fn upsert_offline_bundle(
+    state: &web::Data<HttpState>,
+    user_id: &UserId,
+    bundle: &backend::domain::ports::OfflineBundlePayload,
+) {
     let offline_upsert_result = state
         .offline_bundles
         .upsert_bundle(UpsertOfflineBundleRequest {
@@ -239,12 +241,14 @@ async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, ro
             .id,
         bundle.id
     );
+}
 
+async fn delete_offline_bundle(state: &web::Data<HttpState>, user_id: &UserId, bundle_id: Uuid) {
     let offline_delete_result = state
         .offline_bundles
         .delete_bundle(DeleteOfflineBundleRequest {
             user_id: user_id.clone(),
-            bundle_id: bundle.id,
+            bundle_id,
             idempotency_key: Some(IdempotencyKey::random()),
         })
         .await;
@@ -256,14 +260,21 @@ async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, ro
         offline_delete_result
             .expect("offline delete response")
             .bundle_id,
-        bundle.id
+        bundle_id
     );
+}
 
+async fn list_and_get_offline_bundles(
+    state: &web::Data<HttpState>,
+    user_id: &UserId,
+    device_id: &str,
+    bundle_id: Uuid,
+) {
     let offline_list_result = state
         .offline_bundles_query
         .list_bundles(ListOfflineBundlesRequest {
             owner_user_id: Some(user_id.clone()),
-            device_id: "fixture-device".to_owned(),
+            device_id: device_id.to_owned(),
         })
         .await;
     assert!(
@@ -279,9 +290,7 @@ async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, ro
 
     let offline_get_result = state
         .offline_bundles_query
-        .get_bundle(GetOfflineBundleRequest {
-            bundle_id: bundle.id,
-        })
+        .get_bundle(GetOfflineBundleRequest { bundle_id })
         .await;
     assert!(
         offline_get_result.is_err(),
@@ -291,6 +300,13 @@ async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, ro
         offline_get_result.expect_err("offline get error").code(),
         ErrorCode::NotFound,
     );
+}
+
+async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
+    let bundle = sample_bundle_payload(user_id, route_id);
+    upsert_offline_bundle(state, user_id, &bundle).await;
+    delete_offline_bundle(state, user_id, bundle.id).await;
+    list_and_get_offline_bundles(state, user_id, "fixture-device", bundle.id).await;
 }
 
 async fn enrichment_provenance_ok(state: &web::Data<HttpState>) {
