@@ -13,6 +13,7 @@
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{JobDispatchError, RouteQueue};
+use backend::outbound::queue::test_helpers::FailingQueueProvider;
 use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
@@ -147,12 +148,26 @@ fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedCo
                     ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(provider)));
                 }
                 Err(err) => {
-                    // Provider construction failed - record the error directly.
-                    ctx.queue = None;
-                    ctx.enqueue_results.push(Err(err));
+                    // Keep a queue adapter present so the failure is exercised
+                    // through `RouteQueue::enqueue`, not during setup.
+                    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(
+                        FailingQueueProvider::new(format!(
+                            "unavailable: broken connection ({err})"
+                        )),
+                    )));
                 }
             }
         },
+    );
+
+    let ctx = world.lock().expect("context lock");
+    assert!(
+        ctx.queue.is_some(),
+        "queue adapter should remain initialized"
+    );
+    assert!(
+        ctx.enqueue_results.is_empty(),
+        "Given step must not record enqueue failures"
     );
 }
 
@@ -205,17 +220,6 @@ fn i_enqueue_the_same_test_plan_again(world: &Option<SharedContext>) {
 #[when("I attempt to enqueue a test plan")]
 fn i_attempt_to_enqueue_a_test_plan(world: &Option<SharedContext>) {
     let Some(world) = world else { return };
-
-    // Check if the queue is available before attempting to enqueue.
-    // When the provider construction fails (e.g., invalid connection),
-    // the error is already recorded in enqueue_results, so we skip the enqueue.
-    let ctx = world.lock().expect("context lock");
-    if ctx.queue.is_none() {
-        // Queue unavailable - error already recorded by setup step
-        return;
-    }
-    drop(ctx);
-
     enqueue_test_plan_with_name(world, "test-plan".to_string());
 }
 

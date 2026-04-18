@@ -32,5 +32,5 @@ pub use stub_route_queue::StubRouteQueue;
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
 
-#[cfg(test)]
-mod test_helpers;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_helpers;
