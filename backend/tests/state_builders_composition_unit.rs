@@ -1,8 +1,13 @@
-//! Unit tests proving fixture-mode adapter selection for HTTP state ports.
+//! Unit tests proving fixture-mode selection for config-selected HTTP state
+//! ports.
 //!
-//! These tests verify the fixture half of the composition invariant: when
-//! `ServerConfig.db_pool` is `None`, every port resolves to a fixture adapter.
-//! DB-mode composition is covered by `startup_mode_composition_bdd`.
+//! These tests verify the fixture half of the `build_http_state` composition
+//! invariant: when `ServerConfig.db_pool` is `None`, the ports selected from
+//! `ServerConfig` resolve to fixture adapters. `route_submission` is supplied
+//! directly by the caller to `build_http_state`, so this module only checks
+//! that the supplied `Arc` is forwarded unchanged rather than derived from
+//! `ServerConfig`. DB-mode composition is covered by
+//! `startup_mode_composition_bdd`.
 
 use std::sync::Arc;
 
