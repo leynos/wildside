@@ -68,6 +68,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Rust compiler crash dumps
+rustc-ice-*.txt
+
 # Local databases
 /vectors.db
 /vectors.db-shm

@@ -60,3 +60,153 @@ async fn connect_maps_invalid_connection_strings_to_backend_errors(#[case] redis
 
     assert!(matches!(result, RouteCacheError::Backend { .. }));
 }
+
+mod ttl_integration_tests {
+    //! Integration tests for TTL (time-to-live) behaviour with jittered expiry.
+
+    use rand::SeedableRng;
+
+    use crate::domain::ports::{RouteCache, RouteCacheKey};
+    use crate::outbound::cache::redis_route_cache::GenericRedisRouteCache;
+    use crate::outbound::cache::test_helpers::{FakeProvider, TestPlan};
+    use rstest::{fixture, rstest};
+
+    #[fixture]
+    fn provider() -> FakeProvider {
+        FakeProvider::empty()
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn put_stores_entry_with_jittered_ttl_within_expected_range(provider: FakeProvider) {
+        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
+            provider.clone(),
+            86_400,
+            0.10,
+            Box::new(rand::rngs::StdRng::from_entropy()),
+        );
+        let key = RouteCacheKey::new("route:ttl-test").expect("valid key");
+        let plan = TestPlan::new("req-1", 100);
+
+        cache.put(&key, &plan).await.expect("put should succeed");
+
+        let ttl = provider
+            .ttl_for("route:ttl-test")
+            .expect("ttl_for should succeed");
+        assert!(ttl.is_some(), "TTL should be recorded");
+        let ttl = ttl.expect("TTL exists");
+        assert!(ttl >= 77_760, "TTL {ttl} below lower bound 77760");
+        assert!(ttl <= 95_040, "TTL {ttl} above upper bound 95040");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn put_with_zero_jitter_uses_exact_base_ttl(provider: FakeProvider) {
+        let base = 1000;
+        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
+            provider.clone(),
+            base,
+            0.0,
+            Box::new(rand::rngs::StdRng::from_entropy()),
+        );
+        let key = RouteCacheKey::new("route:no-jitter").expect("valid key");
+        let plan = TestPlan::default();
+
+        cache.put(&key, &plan).await.expect("put should succeed");
+
+        let ttl = provider
+            .ttl_for("route:no-jitter")
+            .expect("ttl_for should succeed");
+        assert_eq!(ttl, Some(base), "Zero jitter should use exact base TTL");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn put_followed_by_get_still_round_trips_correctly(provider: FakeProvider) {
+        let cache = GenericRedisRouteCache::<TestPlan, _>::with_provider_and_ttl(
+            provider,
+            3600,
+            0.10,
+            Box::new(rand::rngs::StdRng::from_entropy()),
+        );
+        let key = RouteCacheKey::new("route:round-trip-with-ttl").expect("valid key");
+        let plan = TestPlan::new("req-2", 200);
+
+        cache.put(&key, &plan).await.expect("put should succeed");
+        let loaded = cache.get(&key).await.expect("get should succeed");
+
+        assert_eq!(loaded, Some(plan));
+    }
+}
+
+mod jitter_tests {
+    //! Unit tests for the jittered TTL calculation helper function.
+
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+    use rstest::rstest;
+
+    use crate::outbound::cache::redis_route_cache::jittered_ttl;
+
+    #[rstest]
+    #[case(42)]
+    #[case(100)]
+    #[case(999)]
+    fn jittered_ttl_stays_within_bounds_for_24h_base_and_10_percent_jitter(#[case] seed: u64) {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let base = 86_400;
+        let jitter = 0.10;
+
+        let ttl = jittered_ttl(base, jitter, &mut rng);
+
+        assert!(ttl >= 77_760, "TTL {ttl} below lower bound 77760");
+        assert!(ttl <= 95_040, "TTL {ttl} above upper bound 95040");
+    }
+
+    #[test]
+    fn jittered_ttl_returns_at_least_one_for_zero_base() {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let ttl = jittered_ttl(0, 0.10, &mut rng);
+
+        assert_eq!(ttl, 1, "Zero base must clamp to 1");
+    }
+
+    #[test]
+    fn jittered_ttl_returns_exact_base_for_zero_jitter() {
+        let mut rng = StdRng::seed_from_u64(123);
+        let base = 1000;
+
+        let ttl = jittered_ttl(base, 0.0, &mut rng);
+
+        assert_eq!(ttl, base, "Zero jitter must return exact base");
+    }
+
+    #[test]
+    fn jittered_ttl_handles_large_jitter_without_overflow() {
+        let mut rng = StdRng::seed_from_u64(456);
+        let base = (u64::MAX / 2) + 1000; // This would overflow when computing 2 * delta
+        let jitter = 1.0;
+
+        let ttl = jittered_ttl(base, jitter, &mut rng);
+
+        assert!(ttl >= 1, "Large jitter must still clamp to at least 1");
+        // Note: overflow is prevented by saturating arithmetic in jittered_ttl
+    }
+
+    #[test]
+    fn jittered_ttl_produces_varying_values_across_multiple_calls() {
+        let mut rng = StdRng::seed_from_u64(789);
+        let base = 86_400;
+        let jitter = 0.10;
+
+        let mut values = Vec::new();
+        for _ in 0..10 {
+            values.push(jittered_ttl(base, jitter, &mut rng));
+        }
+
+        let first = values[0];
+        let all_same = values.iter().all(|&v| v == first);
+        assert!(!all_same, "Jittered TTL must vary across calls");
+    }
+}

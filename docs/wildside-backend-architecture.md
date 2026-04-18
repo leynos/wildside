@@ -2312,18 +2312,24 @@ service that the backend connects to, separate from the Postgres database.
   cache vs jobs to avoid collisions. For example, cache keys might be prefixed
   with `cache:` and Apalis might use its own namespace for queue data.
 
-**Implementation:** The backend will use a Redis client library (e.g.
-`redis-rs` or `bb8-redis` for pooling). We initialize a Redis connection pool
-(likely via bb8 too, for consistency) during
+**Implementation:** The backend uses a Redis client library (`bb8-redis` for
+connection pooling). We initialize a Redis connection pool during
 startup([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L686-L694)).
  This pool is made available to parts of the application that need it (e.g. via
-Actix application state or passed into domain services that require cache). For
-route caching, a simple get/set API is used: the worker writes
-`SET cache:<hash> <route_json> EX 86400` (for a 24h
-expiry)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L343-L350)),
- and the API on a new request does `GET cache:<hash>` to check. The JSON stored
-is the same that would be returned to the client, so the API can just forward
-it if found.
+Actix application state or passed into domain services that require cache).
+
+For route caching, the `RedisRouteCache` adapter implements the `RouteCache`
+port and stores JSON-encoded plans in Redis with a time-to-live (TTL). Each
+cached entry is written using `SET cache:<hash> <route_json> EX <ttl>` with a
+jittered TTL derived from a 24-hour base. The jitter applies uniform random
+variation of +/- 10% to the base TTL, spreading expiry times across a window of
+approximately 21.6 to 26.4 hours. This prevents thundering herd problems where
+many keys expiring simultaneously would cause a spike of concurrent cache
+misses([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L343-L350)).
+Cache reads are performed by calling `RouteCache::get`, which the
+`RedisRouteCache` adapter fulfils by issuing a Redis `GET cache:<hash>`
+command internally. The JSON stored is the same that would be returned to the
+client, so the API can just forward it if found.
 
 We carefully design the key hashing to avoid both collisions and unnecessary
 differences. As mentioned, we create a stable JSON string of the route request
@@ -2331,12 +2337,23 @@ input with sorted keys and trimmed numeric precision, then hash (SHA-256
 truncated or base64) to get a fixed-length
 key([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L393-L400)).
  We use that as the Redis key. This ensures that minor numerical differences
-(like a coordinate that differs only in the 7th decimal place) don’t prevent
+(like a coordinate that differs only in the 7th decimal place) don't prevent
 cache hits, while different requests (different preferences or location)
-reliably yield different keys. The cache TTL is set to balance between reusing
-results and not serving stale data if the underlying map updates – 24 hours is
-a reasonable default for
-MVP([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L146-L149)).
+reliably yield different keys.
+
+The cache TTL policy balances result reuse against serving stale data. The base
+TTL of 24 hours is suitable for route plans where the underlying map data
+changes infrequently([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L146-L149)).
+ To prevent cache expiry storms (thundering herd), the adapter applies +/- 10%
+uniform random jitter to each TTL on write, spreading expirations across a
+~4.8-hour window centred around the 24-hour base. This jitter is computed
+per-`put` invocation using an injectable RNG (a `SmallRng` seeded from entropy
+at cache construction), ensuring that batch writes of related keys do not share
+identical expiry times. The jitter computation uses saturating arithmetic and
+clamps the result to at least 1 second to avoid overflow or zero-TTL edge
+cases. The jitter approach is transparent to the domain layer—the `RouteCache`
+port signature remains unchanged, keeping TTL concerns isolated to the outbound
+adapter.
 
 **Cache invalidation:** In this MVP design, we assume data doesn’t change
 frequently (POIs don’t vanish or change often in a day), so caching route

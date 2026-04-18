@@ -28,3 +28,9 @@ Feature: Redis-backed route cache
     When distinct plans are stored under cache keys "route:first" and "route:second"
     And both cache keys are read back
     Then each cache key keeps its own plan
+
+  Scenario: Jittered writes produce varying TTLs
+    Given a running Redis-backed route cache
+    When five plans are stored under distinct cache keys
+    Then not all recorded TTLs are identical
+    And all recorded TTLs fall within the configured jitter window

@@ -30,6 +30,9 @@ struct RuntimeHandle(Arc<Runtime>);
 #[derive(Clone)]
 struct RedisServerHandle(Arc<RedisTestServer>);
 
+#[derive(Clone)]
+struct CacheHandle(Arc<RedisRouteCache<TestPlan>>);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
     request_id: String,
@@ -49,7 +52,7 @@ impl TestPlan {
 struct RouteCacheWorld {
     runtime: Slot<RuntimeHandle>,
     server: Slot<RedisServerHandle>,
-    cache: Slot<RedisRouteCache<TestPlan>>,
+    cache: Slot<CacheHandle>,
     first_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     second_loaded_plan: Slot<Result<Option<TestPlan>, RouteCacheError>>,
     latest_put_result: Slot<Result<(), RouteCacheError>>,
@@ -63,7 +66,7 @@ impl RouteCacheWorld {
         self.runtime.get().expect("runtime should be initialized")
     }
 
-    fn cache(&self) -> RedisRouteCache<TestPlan> {
+    fn cache(&self) -> CacheHandle {
         self.cache.get().expect("cache should be initialized")
     }
 
@@ -103,7 +106,7 @@ impl RouteCacheWorld {
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.server.set(RedisServerHandle(Arc::new(server)));
-        self.cache.set(cache);
+        self.cache.set(CacheHandle(Arc::new(cache)));
 
         false
     }
@@ -121,7 +124,8 @@ impl RouteCacheWorld {
         };
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
-        self.cache.set(RedisRouteCache::new(pool));
+        self.cache
+            .set(CacheHandle(Arc::new(RedisRouteCache::new(pool))));
     }
 
     fn store_plan(&self, key: &str, plan: TestPlan) {
@@ -130,7 +134,7 @@ impl RouteCacheWorld {
         let cache = self.cache();
         let result = runtime
             .0
-            .block_on(async move { cache.put(&key, &plan).await });
+            .block_on(async move { cache.0.put(&key, &plan).await });
         self.latest_put_result.set(result);
     }
 
@@ -138,7 +142,7 @@ impl RouteCacheWorld {
         let key = RouteCacheKey::new(key).expect("valid key");
         let runtime = self.runtime();
         let cache = self.cache();
-        let result = runtime.0.block_on(async move { cache.get(&key).await });
+        let result = runtime.0.block_on(async move { cache.0.get(&key).await });
         slot.set(result);
     }
 

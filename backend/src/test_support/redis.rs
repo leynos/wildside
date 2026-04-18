@@ -85,6 +85,18 @@ impl RedisTestServer {
         Pool::builder().build(manager).await
     }
 
+    /// Return a bare multiplexed connection to the running test server.
+    ///
+    /// Useful for issuing raw Redis commands (e.g. `TTL`) that are not
+    /// exposed through the cache adapter API.
+    #[cfg(feature = "test-support")]
+    pub async fn raw_connection(
+        &self,
+    ) -> Result<bb8_redis::redis::aio::MultiplexedConnection, RedisError> {
+        let client = bb8_redis::redis::Client::open(self.redis_url().as_str())?;
+        client.get_multiplexed_async_connection().await
+    }
+
     /// Seed raw bytes directly into Redis for unhappy-path assertions.
     #[cfg(feature = "test-support")]
     pub async fn seed_raw_bytes(&self, key: &str, bytes: Vec<u8>) -> Result<(), RedisError> {

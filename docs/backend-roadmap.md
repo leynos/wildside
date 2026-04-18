@@ -279,7 +279,7 @@ queue, cache, and repository ports defined in section 1.
 - [x] 5.1.1. Implement `RouteCache` using Redis with `bb8-redis` for connection
   pooling, replacing the current stub adapter.
 - [x] 5.1.2. Add serialization with `serde_json` for cached plan payloads.
-- [ ] 5.1.3. Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%)
+- [x] 5.1.3. Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%)
   to prevent thundering herd on cache expiry.
 - [ ] 5.1.4. Add contract tests for cache key canonicalization (sorted themes,
   rounded coordinates, Secure Hash Algorithm 256-bit (SHA-256) key format).
