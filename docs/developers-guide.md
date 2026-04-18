@@ -342,7 +342,7 @@ other tooling:
   `0` on success or `1` on any mismatch or missing block.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
-  JSON-stringified string otherwise.
+  JSON-stringified value otherwise.
 
 Example import:
 
