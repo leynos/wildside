@@ -510,37 +510,27 @@ Update `rstest` unit tests to verify:
 
 ### Stage D: add behavioural coverage
 
-Add new scenarios to
+Add a jitter scenario to
 `backend/tests/features/route_cache_redis.feature`:
 
 ```gherkin
-Scenario: Cached plans expire after their TTL elapses
-  Given a running Redis-backed route cache with a 2-second TTL
-  When a plan is stored under cache key "route:expiry"
-  And the test waits 3 seconds
-  And the cache is read for key "route:expiry"
-  Then the cache reports a miss
-
-Scenario: Cached plans are readable before TTL expiry
-  Given a running Redis-backed route cache with a 10-second TTL
-  When a plan is stored under cache key "route:fresh"
-  And the cache is read for key "route:fresh"
-  Then the same plan is returned from the cache
-
 Scenario: Jittered writes produce varying TTLs
-  Given a running Redis-backed route cache with jitter enabled
+  Given a running Redis-backed route cache
   When five plans are stored under distinct cache keys
   Then not all recorded TTLs are identical
+  And all recorded TTLs fall within the configured jitter window
 ```
 
-Implement step definitions in `backend/tests/route_cache_redis_bdd.rs`
-(or a new companion file if the existing file exceeds 400 lines).
+Implement step definitions in
+`backend/tests/route_cache_redis_jitter_bdd.rs` (extracted from the
+main BDD file to stay within the 400-line limit).
 
-The "2-second TTL" scenario uses a test constructor on the adapter that
-overrides the base TTL and disables jitter (sets `jitter_fraction = 0`)
-for deterministic expiry. The "jitter enabled" scenario uses a short base
-TTL with standard jitter and inspects the Redis `TTL` command to verify
-that not all keys share the same expiry.
+Direct short-TTL expiry and pre-expiry scenarios are deferred: the
+shipped adapter uses a compile-time 24-hour base TTL with no short-TTL
+runtime override, so realistic expiry tests are impractical. Instead,
+the jitter scenario queries Redis `TTL` immediately after writes to
+verify that recorded TTLs vary and fall within the configured jitter
+window (base +/- jitter fraction).
 
 Mark live-Redis BDD scenarios with the existing skip mechanism
 (`should_skip_redis_tests()` / `SKIP_REDIS_TESTS=1`) so they remain
