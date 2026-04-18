@@ -95,7 +95,7 @@ jobs:
         run: make audit
 
       - name: Install Nixie
-        run: uv tool install --from git+https://github.com/leynos/nixie nixie
+        run: uv tool install nixie-cli
 
       - name: Nixie
         run: make nixie
