@@ -4,10 +4,8 @@
 //! `ServerConfig.db_pool` is `None`, every port resolves to a fixture adapter.
 //! DB-mode composition is covered by `startup_mode_composition_bdd`.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 
-use actix_web::cookie::{Key, SameSite};
 use actix_web::web;
 use backend::test_support::server::{ServerConfig, build_http_state};
 use backend::{
@@ -15,76 +13,20 @@ use backend::{
         CreateWalkSessionRequest, DeleteNoteRequest, DeleteOfflineBundleRequest,
         FixtureRouteSubmissionService, GetOfflineBundleRequest, GetWalkSessionRequest,
         ListEnrichmentProvenanceRequest, ListOfflineBundlesRequest,
-        ListWalkCompletionSummariesRequest, OfflineBundlePayload, RouteSubmissionRequest,
-        RouteSubmissionService, RouteSubmissionStatus, UpdatePreferencesRequest,
-        UpdateProgressRequest, UpdateUserInterestsRequest, UpsertNoteRequest,
-        UpsertOfflineBundleRequest, WalkSessionPayload,
+        ListWalkCompletionSummariesRequest, RouteSubmissionRequest, RouteSubmissionService,
+        RouteSubmissionStatus, UpdatePreferencesRequest, UpdateProgressRequest,
+        UpdateUserInterestsRequest, UpsertNoteRequest, UpsertOfflineBundleRequest,
     },
-    domain::{
-        BoundingBox, ErrorCode, IdempotencyKey, InterestThemeId, OfflineBundleKind,
-        OfflineBundleStatus, UnitSystem, UserId, WalkPrimaryStatDraft, WalkPrimaryStatKind,
-        WalkSecondaryStatDraft, WalkSecondaryStatKind,
-    },
+    domain::{ErrorCode, IdempotencyKey, InterestThemeId, UnitSystem, UserId},
     inbound::http::state::HttpState,
 };
-use chrono::{DateTime, Utc};
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use uuid::Uuid;
 
+#[path = "state_builders_composition_unit/support.rs"]
 mod support;
 
-/// Helper to construct a fixture-mode `ServerConfig` with no database pool.
-#[fixture]
-fn fixture_config() -> ServerConfig {
-    let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid addr");
-    ServerConfig::new(Key::generate(), false, SameSite::Lax, addr)
-}
-
-fn fixture_timestamp() -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-        .expect("RFC3339 fixture timestamp")
-        .with_timezone(&Utc)
-}
-
-fn sample_bundle_payload(user_id: &UserId, route_id: Uuid) -> OfflineBundlePayload {
-    let timestamp = fixture_timestamp();
-    OfflineBundlePayload {
-        id: Uuid::new_v4(),
-        owner_user_id: Some(user_id.clone()),
-        device_id: "fixture-device".to_owned(),
-        kind: OfflineBundleKind::Route,
-        route_id: Some(route_id),
-        region_id: None,
-        bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
-        zoom_range: backend::domain::ZoomRange::new(11, 15).expect("valid zoom range"),
-        estimated_size_bytes: 1_500,
-        created_at: timestamp,
-        updated_at: timestamp,
-        status: OfflineBundleStatus::Queued,
-        progress: 0.0,
-    }
-}
-
-fn sample_walk_session(user_id: &UserId, route_id: Uuid) -> WalkSessionPayload {
-    let started_at = fixture_timestamp();
-    WalkSessionPayload {
-        id: Uuid::new_v4(),
-        user_id: user_id.clone(),
-        route_id,
-        started_at,
-        ended_at: Some(started_at),
-        primary_stats: vec![WalkPrimaryStatDraft {
-            kind: WalkPrimaryStatKind::Distance,
-            value: 1000.0,
-        }],
-        secondary_stats: vec![WalkSecondaryStatDraft {
-            kind: WalkSecondaryStatKind::Energy,
-            value: 120.0,
-            unit: Some("kcal".to_owned()),
-        }],
-        highlighted_poi_ids: vec![Uuid::new_v4()],
-    }
-}
+use support::{fixture_config, sample_bundle_payload, sample_walk_session};
 
 async fn login_and_get_user_id(state: &web::Data<HttpState>) -> UserId {
     use backend::domain::LoginCredentials;
