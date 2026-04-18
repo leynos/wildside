@@ -267,7 +267,8 @@ used for installation:
 
 The script `scripts/check-overrides-parity.mjs` verifies that both blocks
 contain identical values for every pinned dependency. It is run automatically
-in CI after the lockfile step and before dependency installation.
+in Continuous Integration (CI) after the lockfile step and before dependency
+installation.
 
 ### Running locally
 
