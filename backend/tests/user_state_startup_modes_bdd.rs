@@ -20,6 +20,7 @@ use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionServi
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{LoginRequest, list_users, login};
 use backend::outbound::persistence::{DbPool, PoolConfig};
+use backend::test_support::server::{ServerConfig, build_http_state};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
@@ -30,17 +31,6 @@ mod support;
 use support::atexit_cleanup::shared_cluster_handle;
 use support::embedded_postgres::drop_users_table;
 use support::{handle_cluster_setup_failure, provision_template_database};
-
-#[path = "../src/server/config.rs"]
-#[expect(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
-)]
-mod server_config;
-pub use server_config::ServerConfig;
-
-#[path = "../src/server/state_builders.rs"]
-mod state_builders;
 
 const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 const FIXTURE_USERS_NAME: &str = "Ada Lovelace";
@@ -83,7 +73,7 @@ fn build_http_state_for_tests(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    state_builders::build_http_state(config, route_submission)
+    build_http_state(config, route_submission)
 }
 
 fn is_fixture_users(body: &Value) -> bool {

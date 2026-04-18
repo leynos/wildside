@@ -1,5 +1,6 @@
 //! Behavioural coverage for revision-safe interests updates against real DB wiring.
 
+pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
@@ -7,17 +8,6 @@ use uuid::Uuid;
 mod support;
 
 use support::handle_cluster_setup_failure;
-
-#[path = "../src/server/config.rs"]
-#[expect(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for DB-backed HTTP flows"
-)]
-mod server_config;
-pub(crate) use server_config::ServerConfig;
-
-#[path = "../src/server/state_builders.rs"]
-mod state_builders;
 
 #[path = "user_interests_revision_conflicts_bdd/flow_support.rs"]
 mod flow_support;

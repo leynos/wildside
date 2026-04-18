@@ -12,6 +12,7 @@ use backend::inbound::http::users::{
     InterestsRequest, LoginRequest, current_user, login, update_interests,
 };
 use backend::outbound::persistence::{DbPool, PoolConfig};
+use backend::test_support::server::{ServerConfig, build_http_state};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
 use rstest::rstest;
@@ -26,17 +27,6 @@ use support::profile_interests::{
     build_session_middleware,
 };
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
-
-#[expect(
-    dead_code,
-    reason = "server config include exposes members unused in this integration test"
-)]
-#[path = "../src/server/config.rs"]
-mod server_config;
-pub use server_config::ServerConfig;
-
-#[path = "../src/server/state_builders.rs"]
-mod state_builders;
 
 #[derive(Debug)]
 struct Snapshot {
@@ -66,7 +56,7 @@ fn build_http_state_for_tests(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    state_builders::build_http_state(config, route_submission)
+    build_http_state(config, route_submission)
 }
 
 fn server_config(pool: Option<DbPool>) -> ServerConfig {

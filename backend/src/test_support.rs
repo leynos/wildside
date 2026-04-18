@@ -5,6 +5,85 @@
 
 pub mod redis;
 
+pub mod server {
+    //! Test-only accessors for server construction seams.
+
+    use std::sync::Arc;
+
+    use crate::domain::ports::RouteSubmissionService;
+    use crate::inbound::http::state::HttpState;
+    use actix_web::web;
+
+    pub use crate::server::ServerConfig;
+
+    /// Build HTTP state from the same production seam used by the server.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::net::SocketAddr;
+    /// use std::sync::Arc;
+    ///
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use actix_web::web;
+    /// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+    /// use backend::inbound::http::state::HttpState;
+    /// use backend::test_support::server::{ServerConfig, build_http_state};
+    ///
+    /// let config = ServerConfig::new(
+    ///     Key::generate(),
+    ///     false,
+    ///     SameSite::Lax,
+    ///     SocketAddr::from(([127, 0, 0, 1], 0)),
+    /// );
+    /// let route_submission: Arc<dyn RouteSubmissionService> =
+    ///     Arc::new(FixtureRouteSubmissionService);
+    ///
+    /// let state: web::Data<HttpState> = build_http_state(&config, route_submission.clone());
+    ///
+    /// assert!(Arc::ptr_eq(
+    ///     &state.get_ref().route_submission,
+    ///     &route_submission,
+    /// ));
+    /// ```
+    pub fn build_http_state(
+        config: &ServerConfig,
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> web::Data<HttpState> {
+        crate::server::build_http_state(config, route_submission)
+    }
+
+    /// Build the route submission service using the same selector as production.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::net::SocketAddr;
+    /// use std::sync::Arc;
+    ///
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use backend::domain::ports::RouteSubmissionService;
+    /// use backend::test_support::server::{ServerConfig, build_route_submission_service};
+    ///
+    /// let config = ServerConfig::new(
+    ///     Key::generate(),
+    ///     false,
+    ///     SameSite::Lax,
+    ///     SocketAddr::from(([127, 0, 0, 1], 0)),
+    /// );
+    ///
+    /// let route_submission: Arc<dyn RouteSubmissionService> =
+    ///     build_route_submission_service(&config)?;
+    /// let _service = route_submission;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn build_route_submission_service(
+        config: &ServerConfig,
+    ) -> std::io::Result<Arc<dyn RouteSubmissionService>> {
+        crate::server::build_route_submission_service(config)
+    }
+}
+
 pub mod cap_fs {
     //! Capability-safe filesystem helpers for tests.
     //!

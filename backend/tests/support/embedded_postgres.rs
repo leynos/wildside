@@ -166,6 +166,21 @@ mod tests {
 
     #[test]
     fn drop_users_table_is_linked() {
+        let _ = MIGRATIONS;
+        let _ = &TEMPLATE_LOCK;
+        let _ = TEMPLATE_NAME_PREFIX;
+        let _ = TEMPLATE_PROVISION_RETRIES;
+        let _ = TEMPLATE_PROVISION_RETRY_DELAY;
+        let _ = migrations_dir as fn() -> PathBuf;
+        let _ = template_database_name as fn() -> Result<String, UserPersistenceError>;
+        let _ = new_test_database_name as fn() -> String;
+        let _ = provision_template_database_attempt
+            as fn(&ClusterHandle, usize) -> Result<TemporaryDatabase, UserPersistenceError>;
+        let _ =
+            ensure_template_database as fn(&ClusterHandle) -> Result<String, UserPersistenceError>;
+        let _ = provision_template_database
+            as fn(&ClusterHandle) -> Result<TemporaryDatabase, UserPersistenceError>;
+        let _ = migrate_schema as fn(&str) -> Result<(), UserPersistenceError>;
         let _ = drop_users_table as fn(&str) -> Result<(), UserPersistenceError>;
     }
 }

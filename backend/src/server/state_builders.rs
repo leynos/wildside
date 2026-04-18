@@ -283,7 +283,32 @@ fn build_enrichment_provenance_repository(
 }
 
 /// Build the shared HTTP state from configured ports and fixture fallbacks.
-pub(super) fn build_http_state(
+///
+/// # Examples
+///
+/// ```rust
+/// use std::net::SocketAddr;
+/// use std::sync::Arc;
+///
+/// use actix_web::cookie::{Key, SameSite};
+/// use actix_web::web;
+/// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+/// use backend::inbound::http::state::HttpState;
+/// use backend::test_support::server::{ServerConfig, build_http_state};
+///
+/// let config = ServerConfig::new(
+///     Key::generate(),
+///     false,
+///     SameSite::Lax,
+///     SocketAddr::from(([127, 0, 0, 1], 0)),
+/// );
+/// let route_submission: Arc<dyn RouteSubmissionService> =
+///     Arc::new(FixtureRouteSubmissionService);
+///
+/// let state: web::Data<HttpState> = build_http_state(&config, route_submission);
+/// let _ = state;
+/// ```
+pub fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {

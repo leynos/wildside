@@ -1,5 +1,6 @@
 //! Behaviour coverage for 3.5.3 profile/interests startup-mode stability.
 
+pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
@@ -12,17 +13,6 @@ use support::profile_interests::{
     SECOND_THEME_ID,
 };
 use support::{drop_table, handle_cluster_setup_failure};
-
-#[path = "../src/server/config.rs"]
-#[expect(
-    dead_code,
-    reason = "tests import ServerConfig from server_config for BDD startup-mode checks"
-)]
-mod server_config;
-pub(crate) use server_config::ServerConfig;
-
-#[path = "../src/server/state_builders.rs"]
-mod state_builders;
 
 #[path = "user_state_profile_interests_startup_modes_bdd/flow_support.rs"]
 mod flow_support;
