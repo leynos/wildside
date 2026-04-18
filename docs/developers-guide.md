@@ -256,6 +256,37 @@ The hexagonal boundary is enforced via visibility:
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
 
+## Root-level script tests
+
+Repository-level Node.js scripts under `scripts/` are tested with
+[Vitest](https://vitest.dev/). The root `vitest.config.mjs` configures test
+discovery:
+
+- **Environment:** `node`
+- **Test file pattern:** `scripts/**/*.test.mjs`
+
+Run these tests with:
+
+```sh
+pnpm run test
+```
+
+Workspace package tests (frontend, etc.) are run separately:
+
+```sh
+pnpm run test:workspaces
+```
+
+`make test` runs both in sequence.
+
+### Adding tests for a new script
+
+1. Create a test file alongside the script: `scripts/<name>.test.mjs`.
+2. Use `vi.mock` / `vi.resetModules` from Vitest to isolate each import.
+3. If the script has CLI side-effects, gate them behind a direct-invocation
+   guard (see "Programmatic API" under "Override parity check") so the module
+   can be imported cleanly in tests.
+
 ## Override parity check
 
 This repository pins certain security-sensitive dependencies in two separate
@@ -300,6 +331,36 @@ The check runs as a step in `.github/workflows/ci.yml`:
 
 It appears after `make lockfile` and before `make deps`. A failure here means
 the two override blocks have drifted; update `package.json` and recommit.
+
+### Programmatic API
+
+`scripts/check-overrides-parity.mjs` exports two functions for use in tests or
+other tooling:
+
+- **`checkOverridesParity(packageJson)`** — accepts a parsed `package.json`
+  object, writes diagnostics to `console.log` or `console.error`, and returns
+  `0` on success or `1` on any mismatch or missing block.
+- **`formatOverrideValue(value)`** — formats a single override value for
+  human-readable diagnostics; returns `"<missing>"` for `undefined` and a
+  JSON-stringified string otherwise.
+
+Example import:
+
+```js
+import {
+  checkOverridesParity,
+  formatOverrideValue,
+} from './scripts/check-overrides-parity.mjs';
+```
+
+The CLI entry point is protected by a direct-invocation guard so importing the
+module does not trigger any file I/O or process side-effects:
+
+```js
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // only runs when invoked directly as `node ./scripts/check-overrides-parity.mjs`
+}
+```
 
 ## Operational references
 
