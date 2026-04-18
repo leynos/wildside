@@ -418,10 +418,12 @@ The relevant current files are:
   and `JobDispatchError::rejected("…")`).
 
 - `backend/src/outbound/queue/mod.rs`
-  currently exports only `StubRouteQueue<P>`, which is generic over any
-  `P: Send + Sync`, implements `RouteQueue` with a no-op `enqueue` that logs a
-  warning once per process. The stub has a small unit test confirming enqueue
-  succeeds.
+  now exposes `StubRouteQueue<P>`, which is generic over any `P: Send + Sync`
+  and implements `RouteQueue` with a no-op `enqueue` that logs a warning once
+  per process, alongside the Apalis adapter re-exports
+  `ApalisPostgresProvider`, `ApalisRouteQueue<P>`, and
+  `GenericApalisRouteQueue<P, Q>`. The stub still has a small unit test
+  confirming enqueue succeeds.
 
 - `backend/src/domain/route_submission/mod.rs`
   contains two `TODO(#276)` markers (lines 241 and 295) where queue dispatch
