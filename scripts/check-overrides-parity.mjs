@@ -6,6 +6,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const OVERRIDES_TO_CHECK = ['basic-ftp', 'dompurify'];
@@ -74,7 +75,7 @@ export function checkOverridesParity(packageJson) {
   return 1;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const packageJson = await readPackageJson();
   process.exitCode = checkOverridesParity(packageJson);
 }
