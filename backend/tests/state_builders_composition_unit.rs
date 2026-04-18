@@ -217,53 +217,6 @@ async fn catalogue_and_descriptors_ok(state: &web::Data<HttpState>) {
     );
 }
 
-async fn upsert_offline_bundle(
-    state: &web::Data<HttpState>,
-    user_id: &UserId,
-    bundle: &backend::domain::ports::OfflineBundlePayload,
-) {
-    let offline_upsert_result = state
-        .offline_bundles
-        .upsert_bundle(UpsertOfflineBundleRequest {
-            user_id: user_id.clone(),
-            bundle: bundle.clone(),
-            idempotency_key: None,
-        })
-        .await;
-    assert!(
-        offline_upsert_result.is_ok(),
-        "fixture offline bundle upsert should succeed; got: {offline_upsert_result:?}"
-    );
-    assert_eq!(
-        offline_upsert_result
-            .expect("offline upsert response")
-            .bundle
-            .id,
-        bundle.id
-    );
-}
-
-async fn delete_offline_bundle(state: &web::Data<HttpState>, user_id: &UserId, bundle_id: Uuid) {
-    let offline_delete_result = state
-        .offline_bundles
-        .delete_bundle(DeleteOfflineBundleRequest {
-            user_id: user_id.clone(),
-            bundle_id,
-            idempotency_key: Some(IdempotencyKey::random()),
-        })
-        .await;
-    assert!(
-        offline_delete_result.is_ok(),
-        "fixture offline bundle delete should succeed; got: {offline_delete_result:?}"
-    );
-    assert_eq!(
-        offline_delete_result
-            .expect("offline delete response")
-            .bundle_id,
-        bundle_id
-    );
-}
-
 async fn list_and_get_offline_bundles(
     state: &web::Data<HttpState>,
     user_id: &UserId,
@@ -302,10 +255,58 @@ async fn list_and_get_offline_bundles(
     );
 }
 
+fn assert_ok_and_id<T, E, F>(res: Result<T, E>, expected: Uuid, id_of: F, labels: (&str, &str))
+where
+    E: std::fmt::Debug,
+    F: FnOnce(&T) -> Uuid,
+{
+    let (op_name, expect_label) = labels;
+    match res {
+        Ok(v) => {
+            let got = id_of(&v);
+            assert_eq!(
+                got, expected,
+                "fixture {op_name} returned unexpected id; expected={expected}, got={got}"
+            );
+            let _ = (expect_label, &v);
+        }
+        Err(e) => panic!("fixture {op_name} should succeed; got: {e:?}"),
+    }
+}
+
 async fn offline_bundles_flow(state: &web::Data<HttpState>, user_id: &UserId, route_id: Uuid) {
     let bundle = sample_bundle_payload(user_id, route_id);
-    upsert_offline_bundle(state, user_id, &bundle).await;
-    delete_offline_bundle(state, user_id, bundle.id).await;
+
+    let upsert_res = state
+        .offline_bundles
+        .upsert_bundle(UpsertOfflineBundleRequest {
+            user_id: user_id.clone(),
+            bundle: bundle.clone(),
+            idempotency_key: None,
+        })
+        .await;
+    assert_ok_and_id(
+        upsert_res,
+        bundle.id,
+        |v| v.bundle.id,
+        ("offline bundle upsert", "offline upsert response"),
+    );
+
+    let delete_res = state
+        .offline_bundles
+        .delete_bundle(DeleteOfflineBundleRequest {
+            user_id: user_id.clone(),
+            bundle_id: bundle.id,
+            idempotency_key: Some(IdempotencyKey::random()),
+        })
+        .await;
+    assert_ok_and_id(
+        delete_res,
+        bundle.id,
+        |v| v.bundle_id,
+        ("offline bundle delete", "offline delete response"),
+    );
+
     list_and_get_offline_bundles(state, user_id, "fixture-device", bundle.id).await;
 }
 
