@@ -11,10 +11,6 @@ vi.mock('node:fs/promises', () => ({
 
 const moduleUrl = new URL('./check-overrides-parity.mjs', import.meta.url);
 const modulePath = fileURLToPath(moduleUrl);
-const SYNCED = {
-  'basic-ftp': '5.3.0',
-  dompurify: '3.4.0',
-};
 
 /**
  * Load a fresh copy of the module under test after resetting the module cache.
@@ -24,6 +20,20 @@ const SYNCED = {
 async function loadModule() {
   vi.resetModules();
   return import('./check-overrides-parity.mjs');
+}
+
+/** Convenience fixture data shared across parity tests. */
+const SYNCED = { 'basic-ftp': '5.3.0', dompurify: '3.4.0' };
+
+/**
+ * Load a fresh module and immediately invoke checkOverridesParity.
+ *
+ * @param {object} packageJson - The package.json fixture to check.
+ * @returns {Promise<number>} The exit-code returned by checkOverridesParity.
+ */
+async function runParityCheck(packageJson) {
+  const { checkOverridesParity } = await loadModule();
+  return checkOverridesParity(packageJson);
 }
 
 describe('formatOverrideValue', () => {
@@ -47,17 +57,6 @@ describe('formatOverrideValue', () => {
 describe('checkOverridesParity', () => {
   let consoleLogSpy;
   let consoleErrorSpy;
-
-  /**
-   * Run the parity check against a provided manifest object.
-   *
-   * @param {Record<string, unknown>} packageJson - The manifest to validate.
-   * @returns {Promise<number>} The parity check exit code.
-   */
-  async function runParityCheck(packageJson) {
-    const { checkOverridesParity } = await loadModule();
-    return checkOverridesParity(packageJson);
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
