@@ -11,6 +11,10 @@ vi.mock('node:fs/promises', () => ({
 
 const moduleUrl = new URL('./check-overrides-parity.mjs', import.meta.url);
 const modulePath = fileURLToPath(moduleUrl);
+const SYNCED = {
+  'basic-ftp': '5.3.0',
+  dompurify: '3.4.0',
+};
 
 /**
  * Load a fresh copy of the module under test after resetting the module cache.
@@ -44,6 +48,17 @@ describe('checkOverridesParity', () => {
   let consoleLogSpy;
   let consoleErrorSpy;
 
+  /**
+   * Run the parity check against a provided manifest object.
+   *
+   * @param {Record<string, unknown>} packageJson - The manifest to validate.
+   * @returns {Promise<number>} The parity check exit code.
+   */
+  async function runParityCheck(packageJson) {
+    const { checkOverridesParity } = await loadModule();
+    return checkOverridesParity(packageJson);
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -56,21 +71,12 @@ describe('checkOverridesParity', () => {
   });
 
   it('returns 0 and logs success when both override blocks match', async () => {
-    const { checkOverridesParity } = await loadModule();
-    const packageJson = {
-      overrides: {
-        'basic-ftp': '5.3.0',
-        dompurify: '3.4.0',
-      },
-      pnpm: {
-        overrides: {
-          'basic-ftp': '5.3.0',
-          dompurify: '3.4.0',
-        },
-      },
-    };
+    const result = await runParityCheck({
+      overrides: SYNCED,
+      pnpm: { overrides: SYNCED },
+    });
 
-    expect(checkOverridesParity(packageJson)).toBe(0);
+    expect(result).toBe(0);
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining('basic-ftp, dompurify'),
     );
@@ -78,21 +84,15 @@ describe('checkOverridesParity', () => {
   });
 
   it('returns 1 and reports the mismatched dependency version', async () => {
-    const { checkOverridesParity } = await loadModule();
-    const packageJson = {
+    const result = await runParityCheck({
       overrides: {
         'basic-ftp': '5.3.0',
         dompurify: '3.3.0',
       },
-      pnpm: {
-        overrides: {
-          'basic-ftp': '5.3.0',
-          dompurify: '3.4.0',
-        },
-      },
-    };
+      pnpm: { overrides: SYNCED },
+    });
 
-    expect(checkOverridesParity(packageJson)).toBe(1);
+    expect(result).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Override mismatch for "dompurify":'),
     );
@@ -100,17 +100,9 @@ describe('checkOverridesParity', () => {
   });
 
   it('returns 1 when the top-level overrides block is absent', async () => {
-    const { checkOverridesParity } = await loadModule();
-    const packageJson = {
-      pnpm: {
-        overrides: {
-          'basic-ftp': '5.3.0',
-          dompurify: '3.4.0',
-        },
-      },
-    };
+    const result = await runParityCheck({ pnpm: { overrides: SYNCED } });
 
-    expect(checkOverridesParity(packageJson)).toBe(1);
+    expect(result).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('overrides: <missing>'),
     );
@@ -120,34 +112,22 @@ describe('checkOverridesParity', () => {
   });
 
   it('returns 1 when the pnpm overrides block is absent', async () => {
-    const { checkOverridesParity } = await loadModule();
-    const packageJson = {
-      overrides: {
-        'basic-ftp': '5.3.0',
-        dompurify: '3.4.0',
-      },
-    };
+    const result = await runParityCheck({ overrides: SYNCED });
 
-    expect(checkOverridesParity(packageJson)).toBe(1);
+    expect(result).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalled();
     expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 
   it('returns 1 when an individual top-level entry is missing', async () => {
-    const { checkOverridesParity } = await loadModule();
-    const packageJson = {
+    const result = await runParityCheck({
       overrides: {
         dompurify: '3.4.0',
       },
-      pnpm: {
-        overrides: {
-          'basic-ftp': '5.3.0',
-          dompurify: '3.4.0',
-        },
-      },
-    };
+      pnpm: { overrides: SYNCED },
+    });
 
-    expect(checkOverridesParity(packageJson)).toBe(1);
+    expect(result).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Override mismatch for "basic-ftp":'),
     );
@@ -157,9 +137,9 @@ describe('checkOverridesParity', () => {
   });
 
   it('returns 1 when both override blocks are absent', async () => {
-    const { checkOverridesParity } = await loadModule();
+    const result = await runParityCheck({});
 
-    expect(checkOverridesParity({})).toBe(1);
+    expect(result).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalled();
     expect(consoleLogSpy).not.toHaveBeenCalled();
   });
