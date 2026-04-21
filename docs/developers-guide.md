@@ -256,6 +256,13 @@ The hexagonal boundary is enforced via visibility:
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
 
+
+## Queue adapter testing
+
+The backend includes an Apalis-backed `RouteQueue` adapter that persists jobs
+to PostgreSQL storage via `apalis-postgres` / `PostgresStorage`. The adapter
+implements the hexagonal `RouteQueue` port defined in the domain layer.
+
 ## Root-level script tests
 
 Repository-level Node.js scripts under `scripts/` are tested with
@@ -372,3 +379,116 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 - For embedded PostgreSQL API details and migration notes:
   - [pg-embed-setup-unpriv users' guide](pg-embed-setup-unpriv-users-guide.md)
   - [pg-embed-setup-unpriv v0.5.0 migration guide](pg-embed-setup-unpriv-v0-5-0-migration-guide.md)
+
+### Apalis queue adapter boundaries
+
+The hexagonal boundary is enforced via visibility:
+
+| Component                            | Visibility                | Purpose                                    |
+|--------------------------------------|---------------------------|--------------------------------------------|
+| `ApalisRouteQueue<P>`                | `pub`                     | Public adapter for domain use              |
+| `ApalisPostgresProvider`             | `pub`                     | Production `QueueProvider` implementation  |
+| `GenericApalisRouteQueue<P, Q>`      | Internal; not re-exported | Generic adapter implementation             |
+| `QueueProvider`                      | `pub(crate)`              | Test seam for provider abstraction         |
+| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only)  | In-memory test double                      |
+| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only)  | Always-failing test double                 |
+| `setup_apalis_storage`               | `pub` (test support)      | BDD harness for Apalis schema provisioning |
+
+Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
+implements this port without exposing `apalis-postgres` or `sqlx` types in the
+public API.
+
+
+### Queue architecture and public API
+
+Public production API:
+
+- `ApalisRouteQueue<P>` – A type alias for the concrete Apalis-backed queue
+  implementation. This is the supported public entry point for production code.
+- `ApalisPostgresProvider` – The production `QueueProvider` implementation.
+  Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
+  the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
+
+Implementation details within `outbound::queue`:
+
+- `GenericApalisRouteQueue<P, Q>` – Declared `pub` inside the private
+  `apalis_route_queue` module, but not re-exported at crate root. It
+  parameterises the adapter over the queue provider type `Q` so tests can
+  substitute doubles.
+- `QueueProvider` – Declared `pub(crate)` inside the private
+  `apalis_route_queue` module. Defines `async fn push_job(&self,
+  payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
+  seam; not part of the crate's supported public API.
+
+
+### Queue build requirements
+
+The queue adapter requires:
+
+**Production dependencies:**
+
+- `apalis-core` – Core Apalis job-queue primitives
+- `apalis-postgres` – PostgreSQL storage backend for Apalis
+- `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
+  pool used by `ApalisPostgresProvider`
+- `serde` / `serde_json` – Payload serialisation
+
+**Test infrastructure:**
+
+- `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
+- No feature flags required; BDD tests are in the `tests/` integration
+  harness and run unconditionally with `cargo test`
+
+To run BDD tests locally:
+
+```bash
+
+# Run the Apalis BDD suite
+cargo test -p backend --test route_queue_apalis_bdd
+```
+
+
+### Queue test infrastructure
+
+**Unit tests** (run by default):
+
+- Located in the `tests` module inside
+  `backend/src/outbound/queue/apalis_route_queue.rs`
+- Use `FakeQueueProvider` – an in-memory `QueueProvider` double that records
+  all pushed payloads for assertion
+- Use `FailingQueueProvider` – always returns
+  `JobDispatchError::Unavailable`, for error-path testing
+- Fast, deterministic, no external dependencies
+- Run as part of the standard `cargo test` / `make test` gate
+
+**BDD integration tests** (require embedded PostgreSQL):
+
+- Feature file: `backend/tests/features/route_queue_apalis.feature`
+- Step implementation: `backend/tests/route_queue_apalis_bdd.rs`
+- Use `pg-embedded-setup-unpriv` to provision an embedded PostgreSQL cluster
+- Apalis tables are created by `setup_apalis_storage` from
+  `backend/tests/support/embedded_postgres.rs`, which calls
+  `PostgresStorage::<(), (), ()>::setup(&pool)` after connecting a
+  `sqlx::PgPool`
+- Run as part of `cargo test --test route_queue_apalis_bdd` / `make test`
+
+
+### `setup_apalis_storage` harness
+
+BDD tests use `setup_apalis_storage` from
+`backend/tests/support/embedded_postgres.rs`:
+
+```rust
+use backend::tests::support::embedded_postgres::setup_apalis_storage;
+
+// Provision Apalis schema on an embedded PostgreSQL URL
+let pool = runtime.block_on(setup_apalis_storage(&db_url))
+    .expect("Apalis storage setup");
+```
+
+The helper:
+
+- Connects a `sqlx::PgPool` to the supplied URL
+- Calls `PostgresStorage::<(), (), ()>::setup(&pool)` to run Apalis
+  schema migrations idempotently
+- Returns the pool for use in subsequent BDD steps
