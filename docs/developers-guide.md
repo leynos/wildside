@@ -256,7 +256,6 @@ The hexagonal boundary is enforced via visibility:
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
 
-
 ## Queue adapter testing
 
 The backend includes an Apalis-backed `RouteQueue` adapter that persists jobs
@@ -398,7 +397,6 @@ Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
 public API.
 
-
 ### Queue architecture and public API
 
 Public production API:
@@ -419,7 +417,6 @@ Implementation details within `outbound::queue`:
   `apalis_route_queue` module. Defines `async fn push_job(&self,
   payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
   seam; not part of the crate's supported public API.
-
 
 ### Queue build requirements
 
@@ -442,11 +439,9 @@ The queue adapter requires:
 To run BDD tests locally:
 
 ```bash
-
 # Run the Apalis BDD suite
 cargo test -p backend --test route_queue_apalis_bdd
 ```
-
 
 ### Queue test infrastructure
 
@@ -471,7 +466,6 @@ cargo test -p backend --test route_queue_apalis_bdd
   `PostgresStorage::<(), (), ()>::setup(&pool)` after connecting a
   `sqlx::PgPool`
 - Run as part of `cargo test --test route_queue_apalis_bdd` / `make test`
-
 
 ### `setup_apalis_storage` harness
 
