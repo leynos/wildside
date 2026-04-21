@@ -213,7 +213,9 @@ Hand-off order:
 - [x] Add any new `rstest` unit tests for invariants not already covered.
 - [x] Run crate-scoped gates: `cargo test -p pagination`, `cargo clippy -p
   pagination -- -D warnings`, `cargo fmt -p pagination -- --check`.
-- [x] Run full gates: `make check-fmt`, `make lint`, `make test`.
+- [-] Run full gates: `make check-fmt`, `make lint`, `make test` —
+  `make lint` failed due to missing `actionlint` (environment issue;
+  feature-scoped gates all pass).
 - [x] Record design decision in `docs/wildside-backend-architecture.md`.
 - [x] Mark roadmap item 4.1.3 done in `docs/backend-roadmap.md`.
 - [x] Update this ExecPlan to COMPLETE status.
