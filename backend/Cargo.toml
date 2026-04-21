@@ -102,12 +102,12 @@ libc = "0.2"
 tempfile = "3"
 
 [[bin]]
-name = "ingest-osm"
-path = "src/bin/ingest_osm.rs"
+name = "openapi-dump"
+path = "src/bin/openapi_dump.rs"
 
 [[bin]]
-name = "ingest-osm"
-path = "src/bin/ingest_osm.rs"
+name = "er-snapshots"
+path = "src/bin/er_snapshots.rs"
 
 [[bin]]
 name = "ingest-osm"
