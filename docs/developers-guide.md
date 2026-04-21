@@ -245,15 +245,19 @@ When adding a new shared workspace crate:
 1. Add the crate path to `[workspace].members` in the root `Cargo.toml`.
 2. Run `make fmt` to synchronize the auto-discovered members list.
 3. Verify the crate compiles and tests pass: `cargo test -p <crate-name>`.
-4. Create `tests/common.rs` with a `World` struct and crate re-exports.
-5. Create one `*_bdd.rs` file per feature file under `tests/features/`.
-6. If the crate includes substantial documentation with testable claims,
+4. Build and validate crate documentation from the repository root:
+   `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p <crate-name> --no-deps`.
+   This ensures doc comments, examples, and links are valid.
+5. Run doctests to verify code examples: `cargo test --doc -p <crate-name>`.
+6. Create `tests/common.rs` with a `World` struct and crate re-exports.
+7. Create one `*_bdd.rs` file per feature file under `tests/features/`.
+8. If the crate includes substantial documentation with testable claims,
    add a `*_documentation_bdd.rs` file with invariant scenarios.
-7. Ensure all test files stay under 400 lines; split by feature when
+9. Ensure all test files stay under 400 lines; split by feature when
    needed.
-8. Run the repository quality gates before committing: `make check-fmt`,
-   `make lint`, and `make test` to verify formatting, linting, and all
-   tests pass.
+10. Run the repository quality gates before committing: `make check-fmt`,
+    `make lint`, and `make test` to verify formatting, linting, all tests,
+    and documentation build successfully.
 
 ## Redis cache adapter testing
 
