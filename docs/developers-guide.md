@@ -147,20 +147,24 @@ intent and avoid broad rewrites that obscure regressions.
 ## Shared workspace crate testing
 
 Shared workspace crates (such as `backend/crates/pagination`) provide
-domain-neutral primitives consumed by multiple layers of the hexagonal
-architecture. Their test suites follow a specific structure to keep
-individual files under the 400-line limit and to validate both functional
-behaviour and documented invariants.
+domain-neutral primitives consumed only by adapters, not by the domain layer.
+Domain modules must depend on domain ports and must not import
+framework-specific types or `backend/src/models`. Test suites for these crates
+follow a specific structure to keep individual files under the 400-line limit
+and to validate both functional behaviour and documented invariants.
 
 ### File layout
 
-Shared crate BDD suites split into three files under `tests/`:
+Shared crate BDD suites live under `tests/` and scale by feature file count.
+Each suite typically includes:
 
-| File                           | Purpose                                                        |
+| File type                      | Purpose                                                        |
 |--------------------------------|----------------------------------------------------------------|
 | `common.rs`                    | Shared fixtures, world state, re-exports, and helpers          |
 | `<crate>_bdd.rs`               | Core functional scenarios (one `#[scenario]` per feature file) |
-| `<crate>_documentation_bdd.rs` | Scenarios verifying documented invariants                      |
+| `<crate>_documentation_bdd.rs` | Scenarios verifying documented invariants (optional)           |
+
+Additional `*_bdd.rs` files are created as needed when feature files are added.
 
 For the pagination crate, this yields:
 
