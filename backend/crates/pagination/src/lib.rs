@@ -101,10 +101,10 @@
 //!
 //! ```no_run
 //! # use pagination::{PageParams, DEFAULT_LIMIT, MAX_LIMIT};
-//! let default_page = PageParams::new(None, None).unwrap();
+//! let default_page = PageParams::new(None, None).expect("failed to create PageParams");
 //! assert_eq!(default_page.limit(), DEFAULT_LIMIT);
 //!
-//! let capped_page = PageParams::new(None, Some(200)).unwrap();
+//! let capped_page = PageParams::new(None, Some(200)).expect("failed to create PageParams");
 //! assert_eq!(capped_page.limit(), MAX_LIMIT);
 //!
 //! let zero_limit = PageParams::new(None, Some(0));
