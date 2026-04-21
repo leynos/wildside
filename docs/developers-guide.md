@@ -180,6 +180,11 @@ The `common.rs` module contains:
   each piece of scenario state.
 - **Domain-specific fixture types** (for example, a composite ordering key
   struct that mirrors the crate documentation examples).
+- **Helper functions** that encapsulate multi-step setup shared across
+  more than one step definition (for example, constructing a `PageParams`
+  value from a raw limit). Helpers live in `common.rs` rather than a step
+  binary so that both `<crate>_bdd.rs` and `<crate>_documentation_bdd.rs`
+  can call them without duplicating logic.
 
 Each BDD test binary declares `mod common;` and imports from it:
 
@@ -193,6 +198,15 @@ When a step definition is needed by more than one test binary, define it
 in both binaries rather than extracting it into the common module.
 `rstest-bdd` step macros must appear in the same compilation unit as the
 `#[scenario]` binding that references them.
+
+When a setup action is needed by more than one step definition — across
+either the same or different test binaries — extract it into a `pub fn`
+in `common.rs`. Helper functions must not carry `#[given]`, `#[when]`, or
+`#[then]` attributes; they are plain Rust functions called by step
+definitions. Annotate helpers that use `.expect()` with
+`#[expect(clippy::expect_used, reason = "BDD helpers use expect for clear failures")]`.
+Prefer a helper over a duplicated step body as soon as the same
+boilerplate appears in two or more places.
 
 ### Hexagonal consumption rules
 
