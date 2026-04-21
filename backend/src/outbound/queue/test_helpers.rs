@@ -44,6 +44,8 @@ impl Default for FakeQueueProvider {
         Self::new()
     }
 }
+
+#[async_trait]
 impl QueueProvider for FakeQueueProvider {
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
         self.pushed_jobs
