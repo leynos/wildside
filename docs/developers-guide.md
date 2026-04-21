@@ -174,7 +174,7 @@ For the pagination crate, this yields:
 
 The `common.rs` module contains:
 
-- **Re-exports** of the crate's public API types so step definitions import
+- **Re-exports** of the crate's public API types, so step definitions import
   from `common::` rather than directly from the crate.
 - **A `World` struct** deriving `ScenarioState` with `Slot<T>` fields for
   each piece of scenario state.
