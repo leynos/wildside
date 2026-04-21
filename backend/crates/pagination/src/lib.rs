@@ -99,7 +99,7 @@
 //! - If the limit is zero, [`PageParams::new`] returns
 //!   `Err(PageParamsError::InvalidLimit)`.
 //!
-//! ```no_run
+//! ```
 //! # use pagination::{PageParams, DEFAULT_LIMIT, MAX_LIMIT};
 //! let default_page = PageParams::new(None, None).expect("failed to create PageParams");
 //! assert_eq!(default_page.limit(), DEFAULT_LIMIT);
