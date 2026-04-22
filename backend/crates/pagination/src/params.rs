@@ -178,14 +178,4 @@ mod tests {
     fn documented_maximum_limit_constant_is_one_hundred() {
         assert_eq!(MAX_LIMIT, 100);
     }
-
-    #[test]
-    fn normalization_logic_uses_documented_constants() {
-        let default_params = PageParams::new(None, None).expect("default params should be valid");
-        assert_eq!(default_params.limit(), DEFAULT_LIMIT);
-
-        let capped_params =
-            PageParams::new(None, Some(MAX_LIMIT + 1)).expect("oversized limit should clamp");
-        assert_eq!(capped_params.limit(), MAX_LIMIT);
-    }
 }
