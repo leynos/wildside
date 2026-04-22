@@ -129,6 +129,28 @@ mod tests {
     }
 
     #[test]
+    fn page_params_accepts_limit_one_below_maximum() {
+        let params = PageParams::new(None, Some(MAX_LIMIT - 1))
+            .expect("limit one below maximum should be valid");
+        assert_eq!(
+            params.limit(),
+            MAX_LIMIT - 1,
+            "limit below MAX_LIMIT should pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn page_params_clamps_limit_one_above_maximum() {
+        let params = PageParams::new(None, Some(MAX_LIMIT + 1))
+            .expect("limit one above maximum should clamp");
+        assert_eq!(
+            params.limit(),
+            MAX_LIMIT,
+            "limit one above MAX_LIMIT should be clamped to MAX_LIMIT"
+        );
+    }
+
+    #[test]
     fn page_params_reject_zero_limit() {
         let result = PageParams::new(None, Some(0));
 

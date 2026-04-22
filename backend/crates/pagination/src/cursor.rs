@@ -376,4 +376,24 @@ mod tests {
 
         assert_eq!(cursor.direction(), Direction::Next);
     }
+
+    #[test]
+    fn encode_returns_serialize_error_when_key_cannot_be_serialized() {
+        use std::collections::HashMap;
+        #[derive(Hash, PartialEq, Eq)]
+        struct FailingKey;
+        impl Serialize for FailingKey {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("fail"))
+            }
+        }
+        let cursor = Cursor {
+            key: HashMap::from([(FailingKey, String::new())]),
+            dir: Direction::Next,
+        };
+        let CursorError::Serialize { message } = cursor.encode().unwrap_err() else {
+            panic!()
+        };
+        assert!(message.contains("fail"));
+    }
 }
