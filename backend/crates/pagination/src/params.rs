@@ -107,6 +107,7 @@ fn normalize_limit(limit: Option<usize>) -> Result<usize, PageParamsError> {
 mod tests {
     //! Unit tests for page parameter normalization.
 
+    use rstest::rstest;
     use serde_json::json;
 
     use super::{DEFAULT_LIMIT, MAX_LIMIT, PageParams, PageParamsError};
@@ -120,15 +121,6 @@ mod tests {
     }
 
     #[test]
-    fn page_params_cap_limit_to_shared_maximum() {
-        let params = PageParams::new(Some("opaque".to_owned()), Some(MAX_LIMIT + 50))
-            .expect("oversized limit should clamp");
-
-        assert_eq!(params.limit(), MAX_LIMIT);
-        assert_eq!(params.cursor(), Some("opaque"));
-    }
-
-    #[test]
     fn page_params_accepts_limit_one_below_maximum() {
         let params = PageParams::new(None, Some(MAX_LIMIT - 1))
             .expect("limit one below maximum should be valid");
@@ -139,14 +131,17 @@ mod tests {
         );
     }
 
-    #[test]
-    fn page_params_clamps_limit_one_above_maximum() {
-        let params = PageParams::new(None, Some(MAX_LIMIT + 1))
-            .expect("limit one above maximum should clamp");
+    #[rstest]
+    #[case(MAX_LIMIT + 1)]
+    #[case(MAX_LIMIT + 50)]
+    #[case(MAX_LIMIT + 999)]
+    fn page_params_clamps_oversized_limits(#[case] input: usize) {
+        let params = PageParams::new(None, Some(input))
+            .expect("oversized limit should clamp");
         assert_eq!(
             params.limit(),
             MAX_LIMIT,
-            "limit one above MAX_LIMIT should be clamped to MAX_LIMIT"
+            "limit above MAX_LIMIT should be clamped to MAX_LIMIT"
         );
     }
 
