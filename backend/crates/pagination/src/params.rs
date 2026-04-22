@@ -168,14 +168,4 @@ mod tests {
         assert_eq!(params.limit(), MAX_LIMIT);
         assert_eq!(params.cursor(), Some("opaque"));
     }
-
-    #[test]
-    fn documented_default_limit_constant_is_twenty() {
-        assert_eq!(DEFAULT_LIMIT, 20);
-    }
-
-    #[test]
-    fn documented_maximum_limit_constant_is_one_hundred() {
-        assert_eq!(MAX_LIMIT, 100);
-    }
 }

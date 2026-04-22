@@ -7,6 +7,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use rstest::{fixture, rstest};
 use test_support::{cleanup_path, open_registry_dir, unique_missing_path, unique_temp_path};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+type FixtureResult = Result<RegistryFixture, Box<dyn std::error::Error>>;
+
 struct RegistryFixture {
     path: Utf8PathBuf,
 }
@@ -16,28 +19,21 @@ impl RegistryFixture {
         self.path.clone()
     }
 
-    fn load(&self) -> SeedRegistry {
-        let dir = match open_registry_dir(&self.path) {
-            Ok(dir) => dir,
-            Err(error) => panic!("open registry dir: {error}"),
-        };
-        let Some(file_name) = self.path.file_name() else {
-            panic!("registry file name");
-        };
-        let registry_file_name = Utf8Path::new(file_name);
-
-        match SeedRegistry::from_file(&dir, registry_file_name) {
-            Ok(registry) => registry,
-            Err(error) => panic!("load registry: {error}"),
-        }
+    fn load(&self) -> Result<SeedRegistry, Box<dyn std::error::Error>> {
+        let dir = open_registry_dir(&self.path)?;
+        let file_name = Utf8Path::new(
+            self.path
+                .file_name()
+                .ok_or("registry path missing file name")?,
+        );
+        Ok(SeedRegistry::from_file(&dir, file_name)?)
     }
 }
 
 impl Drop for RegistryFixture {
     fn drop(&mut self) {
-        if let Err(error) = cleanup_path(&self.path) {
-            panic!("cleanup temp dir: {error}");
-        }
+        // Best-effort cleanup; Drop cannot propagate errors.
+        drop(cleanup_path(&self.path));
     }
 }
 
@@ -51,29 +47,45 @@ const VALID_JSON: &str = r#"{
     "seeds": [{"name": "mossy-owl", "seed": 2026, "userCount": 12}]
 }"#;
 
-#[fixture]
-fn registry_fixture() -> RegistryFixture {
-    RegistryFixture {
-        path: write_registry(VALID_JSON),
+fn check_eq<T: PartialEq + std::fmt::Debug>(actual: &T, expected: &T, context: &str) -> TestResult {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!("{context}: expected {expected:?}, got {actual:?}").into())
     }
 }
 
-#[test]
-fn parse_args_returns_help_for_help_flag() {
-    let args = vec!["--help".to_owned()];
+fn check<T, E: std::fmt::Debug>(result: Result<T, E>, context: &str) -> TestResult {
+    match result {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{context}: {err:?}").into()),
+    }
+}
 
-    let outcome = parse_args(args.into_iter()).expect("parse args");
-
-    assert!(matches!(outcome, ParseOutcome::Help));
+#[fixture]
+fn registry_fixture() -> FixtureResult {
+    Ok(RegistryFixture {
+        path: write_registry(VALID_JSON)?,
+    })
 }
 
 #[test]
-fn parse_args_requires_registry_path() {
+fn parse_args_returns_help_for_help_flag() -> TestResult {
+    let args = vec!["--help".to_owned()];
+    let outcome = parse_args(args.into_iter())?;
+    if !matches!(outcome, ParseOutcome::Help) {
+        return Err(format!("expected Help outcome, got {outcome:?}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parse_args_requires_registry_path() -> TestResult {
     let args = vec!["--seed".to_owned(), "42".to_owned()];
-
-    let err = parse_args(args.into_iter()).expect_err("expected error");
-
-    assert_eq!(err, CliError::MissingRegistryPath);
+    let err = parse_args(args.into_iter())
+        .err()
+        .ok_or("expected parse_args to fail")?;
+    check_eq(&err, &CliError::MissingRegistryPath, "parse_args error")
 }
 
 #[rstest]
@@ -81,53 +93,53 @@ fn parse_args_requires_registry_path() {
 #[case("--seed")]
 #[case("--name")]
 #[case("--user-count")]
-fn parse_args_reports_missing_value(#[case] flag: &'static str) {
+fn parse_args_reports_missing_value(#[case] flag: &'static str) -> TestResult {
     let args = vec![flag.to_owned()];
-
-    let err = parse_args(args.into_iter()).expect_err("expected error");
-
-    assert_eq!(err, CliError::MissingValue { flag });
+    let err = parse_args(args.into_iter())
+        .err()
+        .ok_or("expected parse_args to fail")?;
+    check_eq(&err, &CliError::MissingValue { flag }, "parse_args error")
 }
 
 #[test]
-fn parse_args_reports_unknown_arguments() {
+fn parse_args_reports_unknown_arguments() -> TestResult {
     let args = vec![
         "--registry".to_owned(),
         "seeds.json".to_owned(),
         "--nope".to_owned(),
     ];
-
-    let err = parse_args(args.into_iter()).expect_err("expected error");
-
-    assert_eq!(
-        err,
-        CliError::UnknownArgument {
+    let err = parse_args(args.into_iter())
+        .err()
+        .ok_or("expected parse_args to fail")?;
+    check_eq(
+        &err,
+        &CliError::UnknownArgument {
             value: "--nope".to_owned(),
-        }
-    );
+        },
+        "parse_args error",
+    )
 }
 
 #[test]
-fn parse_args_reports_invalid_numbers() {
+fn parse_args_reports_invalid_numbers() -> TestResult {
     let args = vec![
         "--registry".to_owned(),
         "seeds.json".to_owned(),
         "--seed".to_owned(),
         "not-a-number".to_owned(),
     ];
-
-    let err = parse_args(args.into_iter()).expect_err("expected error");
-
+    let err = parse_args(args.into_iter())
+        .err()
+        .ok_or("expected parse_args to fail")?;
     let CliError::InvalidNumber { flag, value, .. } = err else {
-        panic!("expected invalid number error");
+        return Err("expected invalid number error".into());
     };
-
-    assert_eq!(flag, "--seed");
-    assert_eq!(value, "not-a-number");
+    check_eq(&flag, &"--seed", "flag")?;
+    check_eq(&value, &"not-a-number".to_owned(), "value")
 }
 
 #[test]
-fn parse_args_parses_full_options() {
+fn parse_args_parses_full_options() -> TestResult {
     let args = vec![
         "--registry".to_owned(),
         "seeds.json".to_owned(),
@@ -138,139 +150,136 @@ fn parse_args_parses_full_options() {
         "--user-count".to_owned(),
         "9".to_owned(),
     ];
-
-    let ParseOutcome::Options(options) = parse_args(args.into_iter()).expect("parse args") else {
-        panic!("expected options");
+    let ParseOutcome::Options(options) = parse_args(args.into_iter())? else {
+        return Err("expected options".into());
     };
-
-    assert_eq!(options.registry_path, Utf8PathBuf::from("seeds.json"));
-    assert_eq!(options.seed, Some(2026));
-    assert_eq!(options.name.as_deref(), Some("river-stone"));
-    assert_eq!(options.user_count, Some(9));
+    check_eq(
+        &options.registry_path,
+        &Utf8PathBuf::from("seeds.json"),
+        "registry_path",
+    )?;
+    check_eq(&options.seed, &Some(2026), "seed")?;
+    check_eq(&options.name.as_deref(), &Some("river-stone"), "name")?;
+    check_eq(&options.user_count, &Some(9), "user_count")
 }
 
 #[rstest]
-fn apply_update_appends_explicit_seed(registry_fixture: RegistryFixture) {
-    let path = registry_fixture.path();
+fn apply_update_appends_explicit_seed(registry_fixture: FixtureResult) -> TestResult {
+    let fixture = registry_fixture?;
+    let path = fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(808),
         name: Some("river-stone".to_owned()),
         user_count: Some(4),
     };
-
-    let update = apply_update(&options).expect("apply update");
-
-    assert_eq!(
-        update,
-        Update {
+    let update = apply_update(&options)?;
+    check_eq(
+        &update,
+        &Update {
             name: "river-stone".to_owned(),
             seed: 808,
             user_count: 4,
-        }
-    );
-
-    let registry = registry_fixture.load();
-    assert!(registry.find_seed("river-stone").is_ok());
+        },
+        "update",
+    )?;
+    let registry = fixture.load()?;
+    check(registry.find_seed("river-stone"), "find river-stone")
 }
 
 #[rstest]
-fn apply_update_generates_name_from_seed(registry_fixture: RegistryFixture) {
-    let path = registry_fixture.path();
+fn apply_update_generates_name_from_seed(registry_fixture: FixtureResult) -> TestResult {
+    let fixture = registry_fixture?;
+    let path = fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(2026),
         name: None,
         user_count: None,
     };
-
-    let update = apply_update(&options).expect("apply update");
-    let expected_name = seed_name_for_seed(2026).expect("seed name");
-
-    assert_eq!(update.name, expected_name);
-    assert_eq!(update.seed, 2026);
-    assert_eq!(update.user_count, DEFAULT_USER_COUNT);
-
-    let registry = registry_fixture.load();
-    assert!(registry.find_seed(&update.name).is_ok());
+    let update = apply_update(&options)?;
+    let expected_name = seed_name_for_seed(2026)?;
+    check_eq(&update.name, &expected_name, "update.name")?;
+    check_eq(&update.seed, &2026, "update.seed")?;
+    check_eq(&update.user_count, &DEFAULT_USER_COUNT, "update.user_count")?;
+    let registry = fixture.load()?;
+    check(registry.find_seed(&update.name), "find generated name")
 }
 
 #[rstest]
-fn apply_update_reports_duplicate_explicit_name(registry_fixture: RegistryFixture) {
-    let path = registry_fixture.path();
+fn apply_update_reports_duplicate_explicit_name(registry_fixture: FixtureResult) -> TestResult {
+    let fixture = registry_fixture?;
+    let path = fixture.path();
     let options = Options {
         registry_path: path.clone(),
         seed: Some(404),
         name: Some("mossy-owl".to_owned()),
         user_count: None,
     };
-
-    let err = apply_update(&options).expect_err("expected duplicate error");
-
+    let err = apply_update(&options)
+        .err()
+        .ok_or("expected duplicate error")?;
     let CliError::RegistryError { source } = err else {
-        panic!("expected registry error");
+        return Err("expected registry error".into());
     };
-
-    assert_eq!(
-        source,
-        RegistryError::DuplicateSeedName {
+    check_eq(
+        &source,
+        &RegistryError::DuplicateSeedName {
             name: "mossy-owl".to_owned(),
-        }
-    );
+        },
+        "duplicate error",
+    )
 }
 
 #[test]
-fn apply_update_reports_duplicate_generated_name() {
-    let generated_name = seed_name_for_seed(2026).expect("seed name");
+fn apply_update_reports_duplicate_generated_name() -> TestResult {
+    let generated_name = seed_name_for_seed(2026)?;
     let json = registry_json_with_seed(&generated_name, 2026);
-    let path = write_registry(&json);
+    let path = write_registry(&json)?;
     let options = Options {
         registry_path: path.clone(),
         seed: Some(2026),
         name: None,
         user_count: None,
     };
-
-    let err = apply_update(&options).expect_err("expected duplicate error");
-
-    assert_eq!(
-        err,
-        CliError::DuplicateGeneratedName {
+    let err = apply_update(&options)
+        .err()
+        .ok_or("expected duplicate error")?;
+    check_eq(
+        &err,
+        &CliError::DuplicateGeneratedName {
             name: generated_name,
-        }
-    );
+        },
+        "duplicate generated error",
+    )
 }
 
 #[test]
-fn apply_update_reports_registry_io_errors() {
-    let path =
-        unique_temp_path("seed-registry-cli", "missing.json").expect("create temp registry path");
-    let file_name = Utf8PathBuf::from(path.file_name().expect("registry file name"));
+fn apply_update_reports_registry_io_errors() -> TestResult {
+    let path = unique_temp_path("seed-registry-cli", "missing.json")?;
+    let file_name = Utf8PathBuf::from(path.file_name().ok_or("registry path missing file name")?);
     let options = Options {
         registry_path: path.clone(),
         seed: Some(1),
         name: Some("river-stone".to_owned()),
         user_count: None,
     };
-
-    let err = apply_update(&options).expect_err("expected error");
-
+    let err = apply_update(&options).err().ok_or("expected error")?;
     let CliError::RegistryError { source } = err else {
-        panic!("expected registry error");
+        return Err("expected registry error".into());
     };
-
     match source {
         RegistryError::IoError { path: err_path, .. } => {
-            assert_eq!(err_path, file_name);
+            check_eq(&err_path, &file_name, "io error path")?;
         }
-        _ => panic!("expected IO error"),
+        other => return Err(format!("expected IO error, got {other:?}").into()),
     }
-
-    cleanup_path(&path).expect("cleanup temp dir");
+    cleanup_path(&path)?;
+    Ok(())
 }
 
 #[test]
-fn apply_update_reports_open_registry_dir_errors() {
+fn apply_update_reports_open_registry_dir_errors() -> TestResult {
     let path = unique_missing_path("seeds.json");
     let options = Options {
         registry_path: path.clone(),
@@ -278,39 +287,38 @@ fn apply_update_reports_open_registry_dir_errors() {
         name: Some("river-stone".to_owned()),
         user_count: None,
     };
-
-    let err = apply_update(&options).expect_err("expected error");
-
+    let err = apply_update(&options).err().ok_or("expected error")?;
     let CliError::RegistryError { source } = err else {
-        panic!("expected registry error");
+        return Err("expected registry error".into());
     };
-
     match source {
         RegistryError::IoError {
             path: err_path,
             message,
         } => {
-            assert_eq!(err_path, path);
-            assert!(!message.is_empty());
+            check_eq(&err_path, &path, "io error path")?;
+            if message.is_empty() {
+                return Err("io error message should not be empty".into());
+            }
+            Ok(())
         }
-        _ => panic!("expected IO error"),
+        other => Err(format!("expected IO error, got {other:?}").into()),
     }
 }
 
 #[test]
-fn success_message_formats_expected_output() {
+fn success_message_formats_expected_output() -> TestResult {
     let update = Update {
         name: "mossy-owl".to_owned(),
         seed: 2026,
         user_count: 12,
     };
-
     let message = success_message(&update, Utf8Path::new("seeds.json"));
-
-    assert_eq!(
-        message,
-        "Added seed \"mossy-owl\" (seed=2026, userCount=12) to seeds.json"
-    );
+    check_eq(
+        &message,
+        &"Added seed \"mossy-owl\" (seed=2026, userCount=12) to seeds.json".to_owned(),
+        "success message",
+    )
 }
 
 fn registry_json_with_seed(name: &str, seed: u64) -> String {
@@ -324,20 +332,10 @@ fn registry_json_with_seed(name: &str, seed: u64) -> String {
     )
 }
 
-fn write_registry(json: &str) -> Utf8PathBuf {
-    let path = match unique_temp_path("seed-registry-cli", "seeds.json") {
-        Ok(path) => path,
-        Err(error) => panic!("create temp registry path: {error}"),
-    };
-    let dir = match open_registry_dir(&path) {
-        Ok(dir) => dir,
-        Err(error) => panic!("open registry dir: {error}"),
-    };
-    let Some(file_name) = path.file_name() else {
-        panic!("registry file name");
-    };
-    if let Err(error) = dir.write(file_name, json) {
-        panic!("write registry: {error}");
-    }
-    path
+fn write_registry(json: &str) -> Result<Utf8PathBuf, Box<dyn std::error::Error>> {
+    let path = unique_temp_path("seed-registry-cli", "seeds.json")?;
+    let dir = open_registry_dir(&path)?;
+    let file_name = path.file_name().ok_or("registry path missing file name")?;
+    dir.write(file_name, json)?;
+    Ok(path)
 }

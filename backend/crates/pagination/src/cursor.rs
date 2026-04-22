@@ -391,8 +391,8 @@ mod tests {
             key: HashMap::from([(FailingKey, String::new())]),
             dir: Direction::Next,
         };
-        let CursorError::Serialize { message } = cursor.encode().unwrap_err() else {
-            panic!()
+        let Err(CursorError::Serialize { message }) = cursor.encode() else {
+            panic!("expected Serialize error")
         };
         assert!(message.contains("fail"));
     }
