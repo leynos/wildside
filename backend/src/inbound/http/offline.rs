@@ -228,6 +228,8 @@ impl From<OfflineBundlePayload> for OfflineBundleResponse {
 ///
 /// # Examples
 /// ```no_run
+/// use backend::inbound::http::offline::ListOfflineBundlesQuery;
+///
 /// let query = ListOfflineBundlesQuery { device_id: Some("ios-iphone-15".to_owned()) };
 /// let expected_json_shape = r#"{"bundles":[{"id":"..."}]}"#;
 /// assert_eq!(query.device_id.as_deref(), Some("ios-iphone-15"));

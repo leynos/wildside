@@ -59,6 +59,25 @@ fn make_query_service(
     OfflineBundleQueryService::new(Arc::new(repo))
 }
 
+fn make_race_idempotency_repo(
+    lookup_result: impl FnOnce(
+        &IdempotencyLookupQuery,
+    ) -> Result<IdempotencyLookupResult, IdempotencyRepositoryError>
+    + Send
+    + 'static,
+) -> MockIdempotencyRepository {
+    let mut repo = MockIdempotencyRepository::new();
+    repo.expect_store_in_progress().times(1).return_once(|_| {
+        Err(IdempotencyRepositoryError::DuplicateKey {
+            message: "race".to_owned(),
+        })
+    });
+    repo.expect_lookup()
+        .times(1)
+        .return_once(move |query| lookup_result(query));
+    repo
+}
+
 #[rstest]
 #[tokio::test]
 async fn upsert_persists_bundle_without_idempotency_key() -> TestResult {
@@ -202,19 +221,8 @@ async fn upsert_returns_replayed_response_when_payload_matches() -> TestResult {
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_save().times(0);
 
-    let mut idempotency_repo = MockIdempotencyRepository::new();
-    idempotency_repo
-        .expect_store_in_progress()
-        .times(1)
-        .return_once(|_| {
-            Err(IdempotencyRepositoryError::DuplicateKey {
-                message: "race".to_owned(),
-            })
-        });
-    idempotency_repo
-        .expect_lookup()
-        .times(1)
-        .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
+    let mut idempotency_repo =
+        make_race_idempotency_repo(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
     idempotency_repo.expect_update_response_snapshot().times(0);
 
     let service = OfflineBundleCommandService::new(
@@ -311,19 +319,9 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() -> TestR
     repo.expect_find_by_id().times(0);
     repo.expect_delete().times(0);
 
-    let mut idempotency_repo = MockIdempotencyRepository::new();
-    idempotency_repo
-        .expect_store_in_progress()
-        .times(1)
-        .return_once(|_| {
-            Err(IdempotencyRepositoryError::DuplicateKey {
-                message: "race".to_owned(),
-            })
-        });
-    idempotency_repo
-        .expect_lookup()
-        .times(1)
-        .return_once(move |_| Ok(IdempotencyLookupResult::ConflictingPayload(conflicting)));
+    let idempotency_repo = make_race_idempotency_repo(move |_| {
+        Ok(IdempotencyLookupResult::ConflictingPayload(conflicting))
+    });
 
     let service = OfflineBundleCommandService::new(
         Arc::new(repo),
