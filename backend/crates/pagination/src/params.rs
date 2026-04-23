@@ -136,8 +136,7 @@ mod tests {
     #[case(MAX_LIMIT + 50)]
     #[case(MAX_LIMIT + 999)]
     fn page_params_clamps_oversized_limits(#[case] input: usize) {
-        let params = PageParams::new(None, Some(input))
-            .expect("oversized limit should clamp");
+        let params = PageParams::new(None, Some(input)).expect("oversized limit should clamp");
         assert_eq!(
             params.limit(),
             MAX_LIMIT,
