@@ -51,9 +51,10 @@ const METRIC_PROBABILITY_DENOMINATOR: u32 = 10;
 ///
 /// # Errors
 ///
-/// Returns [`GenerationError`] if:
-/// - Display name generation fails after maximum retries
-/// - The registry has no interest themes (required for user generation)
+/// Returns [`GenerationError`] if display name generation fails after the
+/// maximum number of retries. Registries without interest themes are rejected
+/// at parse time by [`SeedRegistry::from_json`], so this function does not
+/// need to guard against that case.
 ///
 /// # Example
 ///
@@ -119,12 +120,7 @@ fn generate_single_user(
     );
 
     // Select unit system (~90% metric, ~10% imperial)
-    let unit_system =
-        if rng.random_ratio(METRIC_PROBABILITY_NUMERATOR, METRIC_PROBABILITY_DENOMINATOR) {
-            UnitSystemSeed::Metric
-        } else {
-            UnitSystemSeed::Imperial
-        };
+    let unit_system = select_unit_system(rng);
 
     Ok(ExampleUserSeed {
         id,
@@ -163,6 +159,19 @@ fn generate_display_name(rng: &mut ChaCha8Rng) -> Result<String, GenerationError
     Err(GenerationError::DisplayNameGenerationFailed {
         max_attempts: MAX_NAME_ATTEMPTS,
     })
+}
+
+/// Draws a unit-system preference using the configured metric probability.
+///
+/// Returns [`UnitSystemSeed::Metric`] with probability
+/// `METRIC_PROBABILITY_NUMERATOR / METRIC_PROBABILITY_DENOMINATOR`, and
+/// [`UnitSystemSeed::Imperial`] otherwise.
+fn select_unit_system(rng: &mut ChaCha8Rng) -> UnitSystemSeed {
+    if rng.random_ratio(METRIC_PROBABILITY_NUMERATOR, METRIC_PROBABILITY_DENOMINATOR) {
+        UnitSystemSeed::Metric
+    } else {
+        UnitSystemSeed::Imperial
+    }
 }
 
 /// Selects a deterministic subset of IDs from the provided slice.

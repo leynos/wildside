@@ -126,28 +126,29 @@ fn safety_toggles_are_subset_of_registry(test_registry: RegistryResult) -> TestR
     })
 }
 
-#[rstest]
-fn generates_both_unit_systems(test_registry: RegistryResult) -> TestResult {
-    let registry = test_registry?;
-    // Use a seed that produces enough users to likely see both systems
-    let seed_def = registry.find_seed("test-seed")?;
-    let users = generate_example_users(&registry, seed_def)?;
-    let has_metric = users
-        .iter()
-        .any(|u| u.unit_system == UnitSystemSeed::Metric);
-    let has_imperial = users
-        .iter()
-        .any(|u| u.unit_system == UnitSystemSeed::Imperial);
-    // With 10 users and 90/10 split, we expect both to appear
-    if !has_metric {
-        return Err("Expected at least one metric user".into());
+#[test]
+fn select_unit_system_can_produce_both_variants() {
+    // Drive `select_unit_system` directly so the assertion does not depend on
+    // the full RNG trace used by `generate_example_users` (name generation,
+    // subset selection, and so on).
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    let mut saw_metric = false;
+    let mut saw_imperial = false;
+    // With a 9:1 metric:imperial ratio, 200 draws reliably cover both variants
+    // for a fixed seed while keeping the test deterministic.
+    for _ in 0..200 {
+        match select_unit_system(&mut rng) {
+            UnitSystemSeed::Metric => saw_metric = true,
+            UnitSystemSeed::Imperial => saw_imperial = true,
+        }
+        if saw_metric && saw_imperial {
+            return;
+        }
     }
-    // Note: with 10 users there's a small chance (~35%) of no imperial,
-    // but for this specific seed we know the distribution
-    if !has_imperial {
-        return Err("Expected at least one imperial user".into());
-    }
-    Ok(())
+    panic!(
+        "select_unit_system failed to produce both variants: \
+         metric={saw_metric}, imperial={saw_imperial}"
+    );
 }
 
 #[test]

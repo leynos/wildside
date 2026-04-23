@@ -255,9 +255,11 @@ When adding a new shared workspace crate:
    add a `*_documentation_bdd.rs` file with invariant scenarios.
 9. Ensure all test files stay under 400 lines; split by feature when
    needed.
-10. Run the repository quality gates before committing: `make check-fmt`,
-    `make lint`, and `make test` to verify formatting, linting, all tests,
-    and documentation build successfully.
+10. Run the repository quality gates before committing: `make check-fmt`
+    to verify formatting, `make lint` to verify linting, and `make test` to
+    run the test suites. Documentation build and validation is performed
+    separately via the `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p
+    <crate-name> --no-deps` command described in step 4 above.
 
 ## Redis cache adapter testing
 

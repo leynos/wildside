@@ -48,7 +48,13 @@ pub struct World {
 ///
 /// # Panics
 ///
-/// Panics if the limit exceeds `usize::MAX` or if the limit is zero.
+/// Panics in either of the following cases:
+///
+/// - If `usize::try_from(limit)` fails (i.e. `limit` exceeds `usize::MAX`),
+///   with the message `"fixture limit should fit usize"`.
+/// - If `PageParams::new(None, Some(requested_limit))` returns `Err` (for
+///   example, when `requested_limit` is zero or otherwise invalid), with the
+///   message `"params should be valid"`.
 #[expect(
     clippy::expect_used,
     reason = "BDD helpers use expect for clear failures"

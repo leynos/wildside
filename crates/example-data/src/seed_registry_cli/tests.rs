@@ -55,7 +55,7 @@ fn check_eq<T: PartialEq + std::fmt::Debug>(actual: &T, expected: &T, context: &
     }
 }
 
-fn check<T, E: std::fmt::Debug>(result: Result<T, E>, context: &str) -> TestResult {
+fn assert_result_ok<T, E: std::fmt::Debug>(result: Result<T, E>, context: &str) -> TestResult {
     match result {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{context}: {err:?}").into()),
@@ -184,7 +184,7 @@ fn apply_update_appends_explicit_seed(registry_fixture: FixtureResult) -> TestRe
         "update",
     )?;
     let registry = fixture.load()?;
-    check(registry.find_seed("river-stone"), "find river-stone")
+    assert_result_ok(registry.find_seed("river-stone"), "find river-stone")
 }
 
 #[rstest]
@@ -203,7 +203,7 @@ fn apply_update_generates_name_from_seed(registry_fixture: FixtureResult) -> Tes
     check_eq(&update.seed, &2026, "update.seed")?;
     check_eq(&update.user_count, &DEFAULT_USER_COUNT, "update.user_count")?;
     let registry = fixture.load()?;
-    check(registry.find_seed(&update.name), "find generated name")
+    assert_result_ok(registry.find_seed(&update.name), "find generated name")
 }
 
 #[rstest]
