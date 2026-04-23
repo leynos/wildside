@@ -72,19 +72,27 @@ fn safety_toggle_accepts_valid_payload(
     Ok(())
 }
 
+fn default_safety_preset_draft(
+    icon_key: SemanticIconIdentifier,
+    localizations: LocalizationMap,
+    safety_toggle_ids: Vec<Uuid>,
+) -> SafetyPresetDraft {
+    SafetyPresetDraft {
+        id: Uuid::new_v4(),
+        slug: "quiet-hours".to_owned(),
+        icon_key,
+        localizations,
+        safety_toggle_ids,
+    }
+}
+
 #[rstest]
 fn safety_preset_rejects_empty_toggle_ids(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
     let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
-    let result = SafetyPreset::new(SafetyPresetDraft {
-        id: Uuid::new_v4(),
-        slug: "quiet-hours".to_owned(),
-        icon_key,
-        localizations,
-        safety_toggle_ids: vec![],
-    });
+    let result = SafetyPreset::new(default_safety_preset_draft(icon_key, localizations, vec![]));
 
     assert_eq!(
         result.expect_err("missing toggles should fail"),
@@ -100,13 +108,11 @@ fn safety_preset_rejects_duplicate_toggle_ids(
 ) -> TestResult {
     let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let toggle_id = Uuid::new_v4();
-    let result = SafetyPreset::new(SafetyPresetDraft {
-        id: Uuid::new_v4(),
-        slug: "quiet-hours".to_owned(),
+    let result = SafetyPreset::new(default_safety_preset_draft(
         icon_key,
         localizations,
-        safety_toggle_ids: vec![toggle_id, toggle_id],
-    });
+        vec![toggle_id, toggle_id],
+    ));
 
     assert!(matches!(
         result,
@@ -121,13 +127,11 @@ fn safety_preset_accepts_unique_toggle_ids(
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
     let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
-    let preset = SafetyPreset::new(SafetyPresetDraft {
-        id: Uuid::new_v4(),
-        slug: "quiet-hours".to_owned(),
+    let preset = SafetyPreset::new(default_safety_preset_draft(
         icon_key,
         localizations,
-        safety_toggle_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
-    })?;
+        vec![Uuid::new_v4(), Uuid::new_v4()],
+    ))?;
 
     assert_eq!(preset.safety_toggle_ids().len(), 2);
     Ok(())
