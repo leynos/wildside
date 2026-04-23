@@ -3,8 +3,8 @@
 use super::*;
 use std::io;
 
-fn map_mutex_poison(ctx: &str, error: impl std::fmt::Display) -> io::Error {
-    io::Error::other(format!("{ctx}: {error}"))
+fn map_mutex_poison(context: &str, error: impl std::fmt::Display) -> io::Error {
+    io::Error::other(format!("{context}: {error}"))
 }
 
 pub(super) fn assert_successful_job_outcome(

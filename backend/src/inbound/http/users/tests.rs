@@ -120,7 +120,7 @@ async fn login_and_get_cookie(
         .response()
         .cookies()
         .find(|c| c.name() == "session")
-        .ok_or_else(|| io::Error::other("session cookie"))?
+        .ok_or_else(|| io::Error::other("missing session cookie in login response"))?
         .into_owned())
 }
 
@@ -155,7 +155,7 @@ async fn login_rejects_invalid_credentials(
 }
 
 #[actix_web::test]
-async fn login_rejects_wrong_credentials_with_unauthorised_status() -> TestResult {
+async fn login_rejects_wrong_credentials_with_unauthorized_status() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/login")
