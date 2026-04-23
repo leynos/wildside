@@ -6,6 +6,16 @@ use super::*;
 use crate::error::RegistryError;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+struct SelectSubsetCase {
+    ids: Vec<Uuid>,
+    min_count: usize,
+    max_count: usize,
+    iterations: usize,
+    expected_min: usize,
+    expected_max: usize,
+    expect_full_source: bool,
+}
 type RegistryResult = Result<SeedRegistry, RegistryError>;
 
 /// Generates users from the named seed and checks that `predicate` holds for each.
@@ -187,33 +197,78 @@ fn users_have_at_most_max_safety_toggles(test_registry: RegistryResult) -> TestR
     })
 }
 
-#[test]
-fn select_subset_respects_bounds() {
+#[rstest]
+#[case::respects_bounds(SelectSubsetCase {
+    ids: deterministic_ids(10),
+    min_count: 2,
+    max_count: 5,
+    iterations: 100,
+    expected_min: 2,
+    expected_max: 5,
+    expect_full_source: false,
+})]
+#[case::normalizes_inverted_bounds(SelectSubsetCase {
+    ids: deterministic_ids(10),
+    min_count: 5,
+    max_count: 2,
+    iterations: 100,
+    expected_min: 2,
+    expected_max: 5,
+    expect_full_source: false,
+})]
+#[case::handles_empty_slice(SelectSubsetCase {
+    ids: Vec::new(),
+    min_count: 1,
+    max_count: 3,
+    iterations: 1,
+    expected_min: 0,
+    expected_max: 0,
+    expect_full_source: false,
+})]
+#[case::clamps_to_available(SelectSubsetCase {
+    ids: deterministic_ids(2),
+    min_count: 5,
+    max_count: 10,
+    iterations: 1,
+    expected_min: 2,
+    expected_max: 2,
+    expect_full_source: true,
+})]
+fn select_subset_handles_expected_bounds(#[case] case: SelectSubsetCase) {
     let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let ids: Vec<Uuid> = (0..10).map(|_| Uuid::new_v4()).collect();
+    let expected_ids = case
+        .ids
+        .iter()
+        .copied()
+        .collect::<std::collections::HashSet<_>>();
 
-    for _ in 0..100 {
-        let subset = select_subset(&mut rng, &ids, 2, 5);
-        assert!(subset.len() >= 2, "Subset too small: {}", subset.len());
-        assert!(subset.len() <= 5, "Subset too large: {}", subset.len());
+    for _ in 0..case.iterations {
+        let subset = select_subset(&mut rng, &case.ids, case.min_count, case.max_count);
+
+        assert!(
+            subset.len() >= case.expected_min,
+            "Subset too small: {}",
+            subset.len()
+        );
+        assert!(
+            subset.len() <= case.expected_max,
+            "Subset too large: {}",
+            subset.len()
+        );
+
+        if case.expect_full_source {
+            assert_eq!(subset.len(), case.ids.len());
+            assert_eq!(
+                subset
+                    .iter()
+                    .copied()
+                    .collect::<std::collections::HashSet<_>>(),
+                expected_ids
+            );
+        }
     }
 }
 
-#[test]
-fn select_subset_handles_empty_slice() {
-    let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let ids: Vec<Uuid> = vec![];
-
-    let subset = select_subset(&mut rng, &ids, 1, 3);
-    assert!(subset.is_empty());
-}
-
-#[test]
-fn select_subset_clamps_to_available() {
-    let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let ids: Vec<Uuid> = vec![Uuid::new_v4(), Uuid::new_v4()];
-
-    // Request more than available
-    let subset = select_subset(&mut rng, &ids, 5, 10);
-    assert!(subset.len() <= 2);
+fn deterministic_ids(count: u128) -> Vec<Uuid> {
+    (0..count).map(Uuid::from_u128).collect()
 }

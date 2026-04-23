@@ -40,7 +40,7 @@ const METRIC_PROBABILITY_DENOMINATOR: u32 = 10;
 
 /// Generates example users from a seed definition.
 ///
-/// Uses the seed's `seed` value to initialise a deterministic RNG, ensuring
+/// Uses the seed's `seed` value to initialize a deterministic RNG, ensuring
 /// identical output for the same seed definition. The generated users have:
 ///
 /// - Unique UUIDs (deterministically generated)
@@ -189,9 +189,15 @@ fn select_subset(
         return Vec::new();
     }
 
+    let (ordered_min_count, ordered_max_count) = if min_count <= max_count {
+        (min_count, max_count)
+    } else {
+        (max_count, min_count)
+    };
+
     // Clamp bounds to available IDs
-    let clamped_min = min_count.min(ids.len());
-    let clamped_max = max_count.min(ids.len());
+    let clamped_min = ordered_min_count.min(ids.len());
+    let clamped_max = ordered_max_count.min(ids.len());
 
     // Determine count (handle case where min == max)
     let count = if clamped_min == clamped_max {
