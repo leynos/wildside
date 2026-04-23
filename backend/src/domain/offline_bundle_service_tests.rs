@@ -43,6 +43,13 @@ fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
     Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
 }
 
+fn resolve_owner_user_id(payload: &OfflineBundlePayload) -> io::Result<crate::domain::UserId> {
+    payload
+        .owner_user_id
+        .clone()
+        .ok_or_else(|| io::Error::other("bundle owner must be set for this test"))
+}
+
 fn make_service(
     repo: MockOfflineBundleRepository,
 ) -> OfflineBundleCommandService<MockOfflineBundleRepository, FixtureIdempotencyRepository> {
@@ -82,10 +89,7 @@ fn make_race_idempotency_repo(
 #[tokio::test]
 async fn upsert_persists_bundle_without_idempotency_key() -> TestResult {
     let payload = sample_bundle_payload()?;
-    let user_id = payload
-        .owner_user_id
-        .clone()
-        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
+    let user_id = resolve_owner_user_id(&payload)?;
     let expected_id = payload.id;
     let mut repo = MockOfflineBundleRepository::new();
 
@@ -111,10 +115,7 @@ async fn upsert_persists_bundle_without_idempotency_key() -> TestResult {
 #[tokio::test]
 async fn upsert_with_idempotency_stores_bundle_mutation_record() -> TestResult {
     let payload = sample_bundle_payload()?;
-    let user_id = payload
-        .owner_user_id
-        .clone()
-        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
+    let user_id = resolve_owner_user_id(&payload)?;
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
@@ -167,10 +168,7 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record() -> TestResult {
 #[tokio::test]
 async fn upsert_rejects_existing_bundle_owned_by_different_user() -> TestResult {
     let payload = sample_bundle_payload()?;
-    let user_id = payload
-        .owner_user_id
-        .clone()
-        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
+    let user_id = resolve_owner_user_id(&payload)?;
     let mut existing_payload = payload.clone();
     existing_payload.owner_user_id = Some(crate::domain::UserId::random());
     let existing_bundle = crate::domain::OfflineBundle::try_from(existing_payload)?;
