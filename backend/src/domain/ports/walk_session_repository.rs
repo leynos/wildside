@@ -70,6 +70,7 @@ mod tests {
 
     use chrono::Utc;
     use rstest::rstest;
+    use std::error::Error as StdError;
 
     use super::*;
     use crate::domain::{
@@ -77,29 +78,24 @@ mod tests {
         WalkSessionDraft,
     };
 
-    fn build_session(user_id: UserId) -> WalkSession {
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn build_session(user_id: UserId) -> TestResult<WalkSession> {
         let started_at = Utc::now();
-        WalkSession::new(WalkSessionDraft {
+        Ok(WalkSession::new(WalkSessionDraft {
             id: Uuid::new_v4(),
             user_id,
             route_id: Uuid::new_v4(),
             started_at,
             ended_at: Some(started_at),
-            primary_stats: vec![
-                WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 1000.0)
-                    .expect("valid primary stat"),
-            ],
-            secondary_stats: vec![
-                WalkSecondaryStat::new(
-                    WalkSecondaryStatKind::Energy,
-                    100.0,
-                    Some("kcal".to_owned()),
-                )
-                .expect("valid secondary stat"),
-            ],
+            primary_stats: vec![WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 1000.0)?],
+            secondary_stats: vec![WalkSecondaryStat::new(
+                WalkSecondaryStatKind::Energy,
+                100.0,
+                Some("kcal".to_owned()),
+            )?],
             highlighted_poi_ids: vec![Uuid::new_v4()],
-        })
-        .expect("valid session")
+        })?)
     }
 
     #[rstest]
@@ -128,7 +124,7 @@ mod tests {
     #[tokio::test]
     async fn fixture_save_succeeds() {
         let repo = FixtureWalkSessionRepository;
-        let session = build_session(UserId::random());
+        let session = build_session(UserId::random()).expect("valid session");
 
         repo.save(&session).await.expect("fixture save succeeds");
     }

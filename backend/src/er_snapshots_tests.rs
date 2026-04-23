@@ -1,7 +1,6 @@
 //! Unit tests for ER snapshot orchestration behaviour.
 
-use std::env;
-use std::path::PathBuf;
+use std::{env, error::Error as StdError, path::PathBuf};
 
 use cap_std::{ambient_authority, fs::Dir};
 use rstest::{fixture, rstest};
@@ -12,6 +11,8 @@ use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryErr
 use crate::er_snapshots::{SnapshotGenerationError, SnapshotRequest, generate_from_repository};
 use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
 use crate::test_support::er_snapshots::FixtureMermaidRenderer;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 #[derive(Debug, Clone)]
 struct FixtureRepository {
@@ -45,30 +46,35 @@ fn failing_renderer() -> FixtureMermaidRenderer {
 fn generate_from_repository_writes_mermaid_and_svg(
     repository: FixtureRepository,
     successful_renderer: FixtureMermaidRenderer,
-) {
-    let output_dir = temp_output_dir("writes");
+) -> TestResult {
+    let output_dir = temp_output_dir("writes")?;
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
         should_render_svg: true,
     };
 
-    let result = generate_from_repository(&repository, &successful_renderer, &request)
-        .expect("snapshot generation should succeed");
-    let mermaid = read_file_to_string(&result.mermaid_path).expect("read mermaid snapshot");
-    let svg = read_file_to_string(result.svg_path.as_ref().expect("svg path")).expect("read svg");
+    let result = generate_from_repository(&repository, &successful_renderer, &request)?;
+    let mermaid = read_file_to_string(&result.mermaid_path)?;
+    let svg = read_file_to_string(
+        result
+            .svg_path
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("svg path"))?,
+    )?;
 
     assert!(mermaid.starts_with("%% Generated from backend migrations."));
     assert!(mermaid.contains("erDiagram"));
     assert!(svg.contains("<svg>"));
     cleanup(output_dir);
+    Ok(())
 }
 
 #[rstest]
 fn generate_from_repository_keeps_output_clean_when_renderer_fails(
     repository: FixtureRepository,
     failing_renderer: FixtureMermaidRenderer,
-) {
-    let output_dir = temp_output_dir("renderer-fails");
+) -> TestResult {
+    let output_dir = temp_output_dir("renderer-fails")?;
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
         should_render_svg: true,
@@ -86,51 +92,49 @@ fn generate_from_repository_keeps_output_clean_when_renderer_fails(
         output_dir.join("schema-baseline.svg").as_path()
     ));
     cleanup(output_dir);
+    Ok(())
 }
 
 #[rstest]
 fn generate_from_repository_is_deterministic_across_reruns(
     repository: FixtureRepository,
     successful_renderer: FixtureMermaidRenderer,
-) {
-    let output_dir = temp_output_dir("deterministic");
+) -> TestResult {
+    let output_dir = temp_output_dir("deterministic")?;
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
         should_render_svg: false,
     };
 
-    let first = generate_from_repository(&repository, &successful_renderer, &request)
-        .expect("first generation should succeed");
-    let first_mermaid = read_file_to_string(&first.mermaid_path).expect("read first snapshot");
+    let first = generate_from_repository(&repository, &successful_renderer, &request)?;
+    let first_mermaid = read_file_to_string(&first.mermaid_path)?;
 
-    let second = generate_from_repository(&repository, &successful_renderer, &request)
-        .expect("second generation should succeed");
-    let second_mermaid = read_file_to_string(&second.mermaid_path).expect("read second snapshot");
+    let second = generate_from_repository(&repository, &successful_renderer, &request)?;
+    let second_mermaid = read_file_to_string(&second.mermaid_path)?;
 
     assert_eq!(first_mermaid, second_mermaid);
     cleanup(output_dir);
+    Ok(())
 }
 
 #[rstest]
 fn generate_from_repository_removes_stale_svg_when_render_is_disabled(
     repository: FixtureRepository,
     successful_renderer: FixtureMermaidRenderer,
-) {
-    let output_dir = temp_output_dir("stale-svg");
+) -> TestResult {
+    let output_dir = temp_output_dir("stale-svg")?;
     let stale_svg_path = output_dir.join("schema-baseline.svg");
     write_file(
         &stale_svg_path,
         "<svg><text>stale</text></svg>\n".as_bytes(),
-    )
-    .expect("write stale svg fixture");
+    )?;
 
     let request = SnapshotRequest {
         output_dir: output_dir.clone(),
         should_render_svg: false,
     };
 
-    let result = generate_from_repository(&repository, &successful_renderer, &request)
-        .expect("snapshot generation should succeed");
+    let result = generate_from_repository(&repository, &successful_renderer, &request)?;
 
     assert!(
         path_exists(&result.mermaid_path),
@@ -143,6 +147,7 @@ fn generate_from_repository_removes_stale_svg_when_render_is_disabled(
     );
 
     cleanup(output_dir);
+    Ok(())
 }
 
 fn fixture_diagram() -> SchemaDiagram {
@@ -185,13 +190,13 @@ fn fixture_diagram() -> SchemaDiagram {
     }
 }
 
-fn temp_output_dir(prefix: &str) -> PathBuf {
+fn temp_output_dir(prefix: &str) -> TestResult<PathBuf> {
     let path = env::temp_dir().join(format!(
         "backend-er-snapshots-{prefix}-{}",
         Uuid::new_v4().simple()
     ));
-    Dir::create_ambient_dir_all(&path, ambient_authority()).expect("create temp output directory");
-    path
+    Dir::create_ambient_dir_all(&path, ambient_authority())?;
+    Ok(path)
 }
 
 fn cleanup(path: PathBuf) {

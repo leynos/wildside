@@ -1,6 +1,7 @@
 //! Assertion helpers for Overpass enrichment worker behaviour tests.
 
 use super::*;
+use std::io;
 
 pub(super) fn assert_successful_job_outcome(
     outcome: &crate::domain::OverpassEnrichmentJobOutcome,
@@ -62,8 +63,11 @@ pub(super) fn assert_provenance_recorded(
     expected_source_url: &str,
     expected_imported_at: DateTime<Utc>,
     expected_bounding_box: [f64; 4],
-) {
-    let persisted = provenance_repo.persisted.lock().expect("provenance mutex");
+) -> TestResult {
+    let persisted = provenance_repo
+        .persisted
+        .lock()
+        .map_err(|_| io::Error::other("provenance mutex"))?;
     assert_eq!(
         persisted.len(),
         1,
@@ -87,10 +91,14 @@ pub(super) fn assert_provenance_recorded(
         "expected provenance bounding box to be {expected_bounding_box:?}, got {:?}",
         record.bounding_box
     );
+    Ok(())
 }
 
-pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usize) {
-    let successes = metrics.successes.lock().expect("metrics mutex");
+pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usize) -> TestResult {
+    let successes = metrics
+        .successes
+        .lock()
+        .map_err(|_| io::Error::other("metrics mutex"))?;
     assert_eq!(
         successes.len(),
         expected_count,
@@ -99,19 +107,26 @@ pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usiz
     );
     drop(successes);
 
-    let failures = metrics.failures.lock().expect("metrics mutex");
+    let failures = metrics
+        .failures
+        .lock()
+        .map_err(|_| io::Error::other("metrics mutex"))?;
     assert!(
         failures.is_empty(),
         "expected no failure metrics when asserting success, found {}",
         failures.len()
     );
+    Ok(())
 }
 
 pub(super) fn assert_metrics_failure(
     metrics: &MetricsStub,
     expected_failure_kind: EnrichmentJobFailureKind,
-) {
-    let successes = metrics.successes.lock().expect("metrics mutex");
+) -> TestResult {
+    let successes = metrics
+        .successes
+        .lock()
+        .map_err(|_| io::Error::other("metrics mutex"))?;
     assert!(
         successes.is_empty(),
         "expected no success metrics when asserting failure, found {}",
@@ -119,7 +134,10 @@ pub(super) fn assert_metrics_failure(
     );
     drop(successes);
 
-    let failures = metrics.failures.lock().expect("metrics mutex");
+    let failures = metrics
+        .failures
+        .lock()
+        .map_err(|_| io::Error::other("metrics mutex"))?;
     assert_eq!(
         failures.len(),
         1,
@@ -131,4 +149,5 @@ pub(super) fn assert_metrics_failure(
         "expected failure metric kind to be {expected_failure_kind:?}, got {:?}",
         failures[0].kind
     );
+    Ok(())
 }

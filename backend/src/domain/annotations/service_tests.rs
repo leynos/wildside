@@ -1,6 +1,6 @@
 //! Tests for the route annotations service.
 
-use std::sync::Arc;
+use std::{error::Error as StdError, sync::Arc};
 
 use super::RouteAnnotationsService;
 use crate::domain::ports::{
@@ -15,6 +15,8 @@ use uuid::Uuid;
 mod test_helpers;
 
 use test_helpers::ReplayCase;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 fn make_service(
     repo: MockRouteAnnotationRepository,
@@ -85,8 +87,8 @@ async fn upsert_note_rejects_revision_mismatch() {
 }
 
 #[tokio::test]
-async fn upsert_note_replays_cached_response_for_same_idempotency_key() {
-    ReplayCase::Note.assert_replay().await;
+async fn upsert_note_replays_cached_response_for_same_idempotency_key() -> TestResult {
+    ReplayCase::Note.assert_replay().await
 }
 
 #[tokio::test]
@@ -141,8 +143,8 @@ async fn delete_note_returns_false_when_not_found() {
 }
 
 #[tokio::test]
-async fn delete_note_replays_cached_response_for_same_idempotency_key() {
-    ReplayCase::Delete.assert_replay().await;
+async fn delete_note_replays_cached_response_for_same_idempotency_key() -> TestResult {
+    ReplayCase::Delete.assert_replay().await
 }
 
 #[tokio::test]
@@ -203,6 +205,6 @@ async fn update_progress_rejects_revision_mismatch() {
 }
 
 #[tokio::test]
-async fn update_progress_replays_cached_response_for_same_idempotency_key() {
-    ReplayCase::Progress.assert_replay().await;
+async fn update_progress_replays_cached_response_for_same_idempotency_key() -> TestResult {
+    ReplayCase::Progress.assert_replay().await
 }

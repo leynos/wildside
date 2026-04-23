@@ -75,20 +75,23 @@ impl EnrichmentJobMetrics for PrometheusEnrichmentJobMetrics {
 mod tests {
     //! Regression coverage for enrichment job counters.
 
+    use std::error::Error as StdError;
+
     use super::*;
     use crate::domain::ports::{EnrichmentJobFailureKind, EnrichmentJobSuccess};
     use rstest::rstest;
 
-    fn make_metrics() -> (Registry, PrometheusEnrichmentJobMetrics) {
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn make_metrics() -> TestResult<(Registry, PrometheusEnrichmentJobMetrics)> {
         let registry = Registry::new();
-        let metrics = PrometheusEnrichmentJobMetrics::new(&registry)
-            .expect("metric registration should succeed");
-        (registry, metrics)
+        let metrics = PrometheusEnrichmentJobMetrics::new(&registry)?;
+        Ok((registry, metrics))
     }
 
     #[test]
-    fn registers_counters_with_registry() {
-        let (registry, metrics) = make_metrics();
+    fn registers_counters_with_registry() -> TestResult {
+        let (registry, metrics) = make_metrics()?;
         metrics.record("success");
         let families = registry.gather();
 
@@ -102,14 +105,15 @@ mod tests {
                 .any(|metric| metric.name() == "enrichment_jobs_total"),
             "enrichment_jobs_total should be registered"
         );
+        Ok(())
     }
 
     #[rstest]
     #[case::success("success")]
     #[case::failure("failure")]
     #[tokio::test]
-    async fn records_outcome_in_both_metric_families(#[case] status: &str) {
-        let (_registry, metrics) = make_metrics();
+    async fn records_outcome_in_both_metric_families(#[case] status: &str) -> TestResult {
+        let (_registry, metrics) = make_metrics()?;
 
         match status {
             "success" => {
@@ -119,8 +123,7 @@ mod tests {
                         persisted_poi_count: 4,
                         transfer_bytes: 1_024,
                     })
-                    .await
-                    .expect("recording success should not fail");
+                    .await?;
             }
             "failure" => {
                 metrics
@@ -128,8 +131,7 @@ mod tests {
                         attempt_count: 2,
                         kind: EnrichmentJobFailureKind::RetryExhausted,
                     })
-                    .await
-                    .expect("recording failure should not fail");
+                    .await?;
             }
             _ => panic!("unknown status case: {status}"),
         }
@@ -149,5 +151,6 @@ mod tests {
             1,
             "enrichment_jobs_total should increment for {status}",
         );
+        Ok(())
     }
 }

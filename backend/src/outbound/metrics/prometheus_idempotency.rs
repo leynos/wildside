@@ -84,15 +84,18 @@ impl IdempotencyMetrics for PrometheusIdempotencyMetrics {
 #[cfg(test)]
 mod tests {
     //! Regression coverage for this module.
+    use std::error::Error as StdError;
+
     use super::*;
     use rstest::rstest;
 
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
     /// Helper to create a fresh metrics instance for testing.
-    fn make_metrics() -> (Registry, PrometheusIdempotencyMetrics) {
+    fn make_metrics() -> TestResult<(Registry, PrometheusIdempotencyMetrics)> {
         let registry = Registry::new();
-        let metrics = PrometheusIdempotencyMetrics::new(&registry)
-            .expect("metric registration should succeed");
-        (registry, metrics)
+        let metrics = PrometheusIdempotencyMetrics::new(&registry)?;
+        Ok((registry, metrics))
     }
 
     /// Helper to record a metric by outcome type and verify the counter.
@@ -101,7 +104,7 @@ mod tests {
         outcome: &str,
         user_scope: &str,
         age_bucket: Option<&str>,
-    ) {
+    ) -> TestResult {
         let labels = IdempotencyMetricLabels {
             user_scope: user_scope.to_string(),
             age_bucket: age_bucket.map(String::from),
@@ -113,7 +116,7 @@ mod tests {
             "conflict" => metrics.record_conflict(&labels).await,
             _ => panic!("unknown outcome: {outcome}"),
         };
-        result.expect("recording should succeed");
+        result?;
 
         let expected_bucket = age_bucket.unwrap_or("n/a");
         let counter =
@@ -125,11 +128,12 @@ mod tests {
             1,
             "{outcome} counter should be incremented"
         );
+        Ok(())
     }
 
     #[test]
-    fn registers_metric_with_registry() {
-        let (registry, metrics) = make_metrics();
+    fn registers_metric_with_registry() -> TestResult {
+        let (registry, metrics) = make_metrics()?;
 
         let labels = IdempotencyMetricLabels {
             user_scope: "a1b2c3d4".to_string(),
@@ -144,11 +148,12 @@ mod tests {
                 .any(|f| f.name() == "wildside_idempotency_requests_total"),
             "metric should be registered"
         );
+        Ok(())
     }
 
     #[test]
-    fn increments_counter_with_correct_labels() {
-        let (_registry, metrics) = make_metrics();
+    fn increments_counter_with_correct_labels() -> TestResult {
+        let (_registry, metrics) = make_metrics()?;
 
         let labels = IdempotencyMetricLabels {
             user_scope: "deadbeef".to_string(),
@@ -165,11 +170,12 @@ mod tests {
             2,
             "counter should be incremented twice"
         );
+        Ok(())
     }
 
     #[test]
-    fn uses_na_for_missing_age_bucket() {
-        let (_registry, metrics) = make_metrics();
+    fn uses_na_for_missing_age_bucket() -> TestResult {
+        let (_registry, metrics) = make_metrics()?;
 
         let labels = IdempotencyMetricLabels {
             user_scope: "abcd1234".to_string(),
@@ -185,6 +191,7 @@ mod tests {
             1,
             "counter should use n/a for missing age bucket"
         );
+        Ok(())
     }
 
     /// Parameterised test for all three outcome recording methods.
@@ -196,8 +203,8 @@ mod tests {
     async fn records_outcome_and_increments_counter(
         #[case] outcome: &str,
         #[case] age_bucket: Option<&str>,
-    ) {
-        let (_registry, metrics) = make_metrics();
-        record_and_verify(&metrics, outcome, "testuser", age_bucket).await;
+    ) -> TestResult {
+        let (_registry, metrics) = make_metrics()?;
+        record_and_verify(&metrics, outcome, "testuser", age_bucket).await
     }
 }

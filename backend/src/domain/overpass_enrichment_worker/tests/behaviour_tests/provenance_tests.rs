@@ -1,6 +1,7 @@
 //! Provenance persistence behaviour cases for Overpass enrichment worker tests.
 
 use super::*;
+use std::io;
 
 struct ProvenanceFailureCase {
     provenance_error: EnrichmentProvenanceRepositoryError,
@@ -9,43 +10,58 @@ struct ProvenanceFailureCase {
 }
 
 #[fixture]
-fn worker_fixture(now: DateTime<Utc>) -> WorkerTestFixture {
-    WorkerTestFixtureBuilder::new(now)
+fn worker_fixture(now: TestResult<DateTime<Utc>>) -> TestResult<WorkerTestFixture> {
+    Ok(WorkerTestFixtureBuilder::new(now?)
         .with_source_responses(vec![Ok(response(1, 32))])
         .with_repo_responses(vec![Ok(())])
         .with_provenance_responses(vec![Ok(())])
-        .build()
+        .build())
 }
 
 fn set_source_script(
     source: &SourceStub,
     scripted: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
-) {
-    *source.scripted.lock().expect("source mutex") = scripted.into();
+) -> TestResult {
+    *source
+        .scripted
+        .lock()
+        .map_err(|_| io::Error::other("source mutex"))? = scripted.into();
+    Ok(())
 }
 
-fn set_repo_script(repo: &RepoStub, scripted: Vec<Result<(), OsmPoiRepositoryError>>) {
-    *repo.scripted.lock().expect("repo mutex") = scripted.into();
+fn set_repo_script(
+    repo: &RepoStub,
+    scripted: Vec<Result<(), OsmPoiRepositoryError>>,
+) -> TestResult {
+    *repo
+        .scripted
+        .lock()
+        .map_err(|_| io::Error::other("repo mutex"))? = scripted.into();
+    Ok(())
 }
 
 fn set_provenance_script(
     provenance_repo: &ProvenanceRepoStub,
     scripted: Vec<Result<(), EnrichmentProvenanceRepositoryError>>,
-) {
-    *provenance_repo.scripted.lock().expect("provenance mutex") = scripted.into();
+) -> TestResult {
+    *provenance_repo
+        .scripted
+        .lock()
+        .map_err(|_| io::Error::other("provenance mutex"))? = scripted.into();
+    Ok(())
 }
 
 async fn assert_provenance_failure_records_metrics_and_maps_error(
     fixture: WorkerTestFixture,
     job: OverpassEnrichmentRequest,
     case: ProvenanceFailureCase,
-) {
-    set_source_script(fixture.source.as_ref(), vec![Ok(response(1, 32))]);
-    set_repo_script(fixture.repo.as_ref(), vec![Ok(())]);
+) -> TestResult {
+    set_source_script(fixture.source.as_ref(), vec![Ok(response(1, 32))])?;
+    set_repo_script(fixture.repo.as_ref(), vec![Ok(())])?;
     set_provenance_script(
         fixture.provenance_repo.as_ref(),
         vec![Err(case.provenance_error)],
-    );
+    )?;
 
     let error = fixture
         .worker
@@ -66,7 +82,7 @@ async fn assert_provenance_failure_records_metrics_and_maps_error(
             .metrics
             .successes
             .lock()
-            .expect("metrics mutex")
+            .map_err(|_| io::Error::other("metrics mutex"))?
             .is_empty()
     );
     assert_eq!(
@@ -74,14 +90,20 @@ async fn assert_provenance_failure_records_metrics_and_maps_error(
             .metrics
             .failures
             .lock()
-            .expect("metrics mutex")
+            .map_err(|_| io::Error::other("metrics mutex"))?
             .len(),
         1
     );
     assert_eq!(
-        fixture.metrics.failures.lock().expect("metrics mutex")[0].kind,
+        fixture
+            .metrics
+            .failures
+            .lock()
+            .map_err(|_| io::Error::other("metrics mutex"))?[0]
+            .kind,
         EnrichmentJobFailureKind::PersistenceFailed
     );
+    Ok(())
 }
 
 #[rstest]
@@ -102,19 +124,23 @@ async fn assert_provenance_failure_records_metrics_and_maps_error(
 #[tokio::test]
 async fn provenance_failure_records_metric_and_maps_error(
     job: OverpassEnrichmentRequest,
-    worker_fixture: WorkerTestFixture,
+    worker_fixture: TestResult<WorkerTestFixture>,
     #[case] case: ProvenanceFailureCase,
-) {
-    assert_provenance_failure_records_metrics_and_maps_error(worker_fixture, job, case).await;
+) -> TestResult {
+    let worker_fixture = worker_fixture?;
+    assert_provenance_failure_records_metrics_and_maps_error(worker_fixture, job, case).await?;
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
 async fn source_url_is_persisted_verbatim(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     mut job: OverpassEnrichmentRequest,
-    worker_fixture: WorkerTestFixture,
-) {
+    worker_fixture: TestResult<WorkerTestFixture>,
+) -> TestResult {
+    let now = now?;
+    let worker_fixture = worker_fixture?;
     let edge_source_url =
         "https://overpass.example/api/interpreter?mirror=2&query=name%3Dfoo+bar#regional";
     job.bounding_box = [-3.399_999, 55.900_001, -3.100_001, 56.000_001];
@@ -122,24 +148,21 @@ async fn source_url_is_persisted_verbatim(
     set_source_script(
         worker_fixture.source.as_ref(),
         vec![Ok(response_with_source_url(1, 128, edge_source_url))],
-    );
-    set_repo_script(worker_fixture.repo.as_ref(), vec![Ok(())]);
-    set_provenance_script(worker_fixture.provenance_repo.as_ref(), vec![Ok(())]);
+    )?;
+    set_repo_script(worker_fixture.repo.as_ref(), vec![Ok(())])?;
+    set_provenance_script(worker_fixture.provenance_repo.as_ref(), vec![Ok(())])?;
 
-    let outcome = worker_fixture
-        .worker
-        .process_job(job.clone())
-        .await
-        .expect("job succeeds");
+    let outcome = worker_fixture.worker.process_job(job.clone()).await?;
     assert_eq!(outcome.persisted_poi_count, 1);
     let persisted = worker_fixture
         .provenance_repo
         .persisted
         .lock()
-        .expect("provenance mutex");
+        .map_err(|_| io::Error::other("provenance mutex"))?;
     assert_eq!(persisted.len(), 1);
     assert_eq!(persisted[0].job_id, job.job_id);
     assert_eq!(persisted[0].source_url, edge_source_url);
     assert_eq!(persisted[0].imported_at, now);
     assert_eq!(persisted[0].bounding_box, job.bounding_box);
+    Ok(())
 }

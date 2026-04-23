@@ -1,59 +1,61 @@
 //! Unit tests for catalogue domain type construction.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, error::Error as StdError};
 
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::localization::{LocalizationMap, LocalizedStringSet};
 use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
-#[fixture]
-fn localizations() -> LocalizationMap {
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+fn localizations() -> TestResult<LocalizationMap> {
     let mut values = BTreeMap::new();
     values.insert(
         "en-GB".to_owned(),
         LocalizedStringSet::new("Scenic route", Some("Scenic".to_owned()), None),
     );
-    LocalizationMap::new(values).expect("valid localizations")
+    Ok(LocalizationMap::new(values)?)
 }
 
-#[fixture]
-fn icon_key() -> SemanticIconIdentifier {
-    SemanticIconIdentifier::new("category:nature").expect("valid icon key")
+fn icon_key() -> TestResult<SemanticIconIdentifier> {
+    Ok(SemanticIconIdentifier::new("category:nature")?)
 }
 
-#[fixture]
-fn image() -> ImageAsset {
-    ImageAsset::new("https://example.test/hero.jpg", "Cliff path").expect("valid image")
+fn image() -> TestResult<ImageAsset> {
+    Ok(ImageAsset::new(
+        "https://example.test/hero.jpg",
+        "Cliff path",
+    )?)
 }
 
-fn valid_route_summary_draft() -> RouteSummaryDraft {
-    RouteSummaryDraft {
+fn valid_route_summary_draft() -> TestResult<RouteSummaryDraft> {
+    Ok(RouteSummaryDraft {
         id: Uuid::new_v4(),
         route_id: Uuid::new_v4(),
         category_id: Uuid::new_v4(),
         theme_id: Uuid::new_v4(),
         slug: Some("coastal-route".to_owned()),
-        localizations: localizations(),
-        hero_image: image(),
+        localizations: localizations()?,
+        hero_image: image()?,
         distance_metres: 3_500,
         duration_seconds: 4_200,
         rating: 4.7,
         badge_ids: vec![Uuid::new_v4()],
         difficulty: "moderate".to_owned(),
         interest_theme_ids: vec![Uuid::new_v4()],
-    }
+    })
 }
 
 #[rstest]
-fn image_asset_new_creates_valid_asset() {
-    let asset = ImageAsset::new("https://example.test/promo.jpg", "Rocky coast")
-        .expect("image asset should be valid");
+fn image_asset_new_creates_valid_asset() -> TestResult {
+    let asset = ImageAsset::new("https://example.test/promo.jpg", "Rocky coast")?;
 
     assert_eq!(asset.url, "https://example.test/promo.jpg");
     assert_eq!(asset.alt, "Rocky coast");
+    Ok(())
 }
 
 #[rstest]
@@ -80,8 +82,7 @@ fn image_asset_new_rejects_empty_or_whitespace_alt(#[case] alt: &str) {
     ));
 }
 
-#[fixture]
-fn route_summary_draft() -> RouteSummaryDraft {
+fn route_summary_draft() -> TestResult<RouteSummaryDraft> {
     valid_route_summary_draft()
 }
 
@@ -89,31 +90,28 @@ fn community_pick_draft(
     route_summary_id: Option<Uuid>,
     user_id: Option<Uuid>,
     curator_display_name: impl Into<String>,
-) -> CommunityPickDraft {
-    CommunityPickDraft {
+) -> TestResult<CommunityPickDraft> {
+    Ok(CommunityPickDraft {
         id: Uuid::new_v4(),
         route_summary_id,
         user_id,
-        localizations: localizations(),
+        localizations: localizations()?,
         curator_display_name: curator_display_name.into(),
-        curator_avatar: image(),
+        curator_avatar: image()?,
         rating: 4.0,
         distance_metres: 1_250,
         duration_seconds: 2_400,
         saves: 0,
-    }
+    })
 }
 
 #[rstest]
-fn route_category_rejects_invalid_slug(
-    icon_key: SemanticIconIdentifier,
-    localizations: LocalizationMap,
-) {
+fn route_category_rejects_invalid_slug() -> TestResult {
     let result = RouteCategory::new(RouteCategoryDraft {
         id: Uuid::new_v4(),
         slug: "Nature Walk".to_owned(),
-        icon_key,
-        localizations,
+        icon_key: icon_key()?,
+        localizations: localizations()?,
         route_count: 10,
     });
 
@@ -123,41 +121,34 @@ fn route_category_rejects_invalid_slug(
             field: "route_category.slug",
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn theme_new_accepts_valid_payload(
-    icon_key: SemanticIconIdentifier,
-    localizations: LocalizationMap,
-    image: ImageAsset,
-) {
+fn theme_new_accepts_valid_payload() -> TestResult {
     let theme = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key,
-        localizations,
-        image,
+        icon_key: icon_key()?,
+        localizations: localizations()?,
+        image: image()?,
         walk_count: 25,
         distance_range_metres: [1_000, 6_000],
         rating: 4.2,
-    })
-    .expect("valid theme");
+    })?;
 
     assert_eq!(theme.slug(), "nature");
+    Ok(())
 }
 
 #[rstest]
-fn theme_rejects_invalid_range(
-    icon_key: SemanticIconIdentifier,
-    localizations: LocalizationMap,
-    image: ImageAsset,
-) {
+fn theme_rejects_invalid_range() -> TestResult {
     let result = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key,
-        localizations,
-        image,
+        icon_key: icon_key()?,
+        localizations: localizations()?,
+        image: image()?,
         walk_count: 25,
         distance_range_metres: [6_000, 1_000],
         rating: 4.2,
@@ -170,21 +161,18 @@ fn theme_rejects_invalid_range(
             ..
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn route_collection_rejects_empty_difficulty(
-    icon_key: SemanticIconIdentifier,
-    localizations: LocalizationMap,
-    image: ImageAsset,
-) {
+fn route_collection_rejects_empty_difficulty() -> TestResult {
     let result = RouteCollection::new(RouteCollectionDraft {
         id: Uuid::new_v4(),
         slug: "coastal-collection".to_owned(),
-        icon_key,
-        localizations,
-        lead_image: image.clone(),
-        map_preview: image,
+        icon_key: icon_key()?,
+        localizations: localizations()?,
+        lead_image: image()?,
+        map_preview: image()?,
         distance_range_metres: [500, 2_500],
         duration_range_seconds: [1_200, 3_600],
         difficulty: "  ".to_owned(),
@@ -197,18 +185,19 @@ fn route_collection_rejects_empty_difficulty(
             field: "route_collection.difficulty",
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn route_summary_new_accepts_valid_payload() {
-    let summary =
-        RouteSummary::new(valid_route_summary_draft()).expect("valid route summary draft");
+fn route_summary_new_accepts_valid_payload() -> TestResult {
+    let summary = RouteSummary::new(valid_route_summary_draft()?)?;
 
     assert_eq!(summary.slug(), Some("coastal-route"));
+    Ok(())
 }
 
 #[rstest]
-fn route_summary_allows_missing_slug() {
+fn route_summary_allows_missing_slug() -> TestResult {
     let summary = RouteSummary::new(RouteSummaryDraft {
         slug: None,
         distance_metres: 2_100,
@@ -217,16 +206,17 @@ fn route_summary_allows_missing_slug() {
         badge_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
         difficulty: "easy".to_owned(),
         interest_theme_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
-        ..valid_route_summary_draft()
-    })
-    .expect("valid route summary draft");
+        ..valid_route_summary_draft()?
+    })?;
 
     assert_eq!(summary.slug(), None);
+    Ok(())
 }
 
 #[rstest]
-fn trending_highlight_rejects_empty_delta(localizations: LocalizationMap) {
-    let result = TrendingRouteHighlight::new(Uuid::new_v4(), Uuid::new_v4(), "   ", localizations);
+fn trending_highlight_rejects_empty_delta() -> TestResult {
+    let result =
+        TrendingRouteHighlight::new(Uuid::new_v4(), Uuid::new_v4(), "   ", localizations()?);
 
     assert!(matches!(
         result,
@@ -234,11 +224,12 @@ fn trending_highlight_rejects_empty_delta(localizations: LocalizationMap) {
             field: "trending_route_highlight.trend_delta",
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn community_pick_rejects_empty_curator_name() {
-    let result = CommunityPick::new(community_pick_draft(None, None, "  "));
+fn community_pick_rejects_empty_curator_name() -> TestResult {
+    let result = CommunityPick::new(community_pick_draft(None, None, "  ")?);
 
     assert!(matches!(
         result,
@@ -246,27 +237,28 @@ fn community_pick_rejects_empty_curator_name() {
             field: "community_pick.curator_display_name",
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn community_pick_accepts_optional_references() {
-    let pick = CommunityPick::new(community_pick_draft(None, None, "Trail Team"))
-        .expect("valid community pick");
+fn community_pick_accepts_optional_references() -> TestResult {
+    let pick = CommunityPick::new(community_pick_draft(None, None, "Trail Team")?)?;
 
     assert!(pick.route_summary_id().is_none());
     assert!(pick.user_id().is_none());
+    Ok(())
 }
 
 #[rstest]
 #[case(-0.1)]
 #[case(5.1)]
-fn theme_rejects_out_of_range_rating(#[case] rating: f32) {
+fn theme_rejects_out_of_range_rating(#[case] rating: f32) -> TestResult {
     let result = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
-        image: image(),
+        icon_key: icon_key()?,
+        localizations: localizations()?,
+        image: image()?,
         walk_count: 25,
         distance_range_metres: [1_000, 6_000],
         rating,
@@ -279,16 +271,17 @@ fn theme_rejects_out_of_range_rating(#[case] rating: f32) {
             ..
         })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn theme_rejects_negative_walk_count() {
+fn theme_rejects_negative_walk_count() -> TestResult {
     let result = Theme::new(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
-        icon_key: icon_key(),
-        localizations: localizations(),
-        image: image(),
+        icon_key: icon_key()?,
+        localizations: localizations()?,
+        image: image()?,
         walk_count: -1,
         distance_range_metres: [1_000, 6_000],
         rating: 4.2,
@@ -301,13 +294,14 @@ fn theme_rejects_negative_walk_count() {
             ..
         })
     ));
+    Ok(())
 }
 
 #[rstest]
 #[case(-0.1)]
 #[case(5.1)]
-fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
-    let mut draft = route_summary_draft();
+fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) -> TestResult {
+    let mut draft = route_summary_draft()?;
     draft.rating = rating;
     let result = RouteSummary::new(draft);
 
@@ -318,6 +312,7 @@ fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
             ..
         })
     ));
+    Ok(())
 }
 
 #[rstest]
@@ -326,8 +321,8 @@ fn route_summary_rejects_out_of_range_rating(#[case] rating: f32) {
 fn route_summary_rejects_negative_numeric_fields(
     #[case] field: &str,
     #[case] expected_error_field: &str,
-) {
-    let mut draft = route_summary_draft();
+) -> TestResult {
+    let mut draft = route_summary_draft()?;
     match field {
         "distance_metres" => draft.distance_metres = -1,
         "duration_seconds" => draft.duration_seconds = -1,
@@ -342,13 +337,14 @@ fn route_summary_rejects_negative_numeric_fields(
             ..
         }) if actual_field == expected_error_field
     ));
+    Ok(())
 }
 
 #[rstest]
 #[case(-0.1)]
 #[case(5.1)]
-fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) {
-    let mut draft = community_pick_draft(None, None, "Trail Team");
+fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) -> TestResult {
+    let mut draft = community_pick_draft(None, None, "Trail Team")?;
     draft.rating = rating;
     let result = CommunityPick::new(draft);
 
@@ -359,6 +355,7 @@ fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) {
             ..
         })
     ));
+    Ok(())
 }
 
 #[rstest]
@@ -367,8 +364,8 @@ fn community_pick_rejects_out_of_range_rating(#[case] rating: f32) {
 fn community_pick_rejects_negative_numeric_fields(
     #[case] field: &str,
     #[case] expected_error_field: &str,
-) {
-    let mut draft = community_pick_draft(None, None, "Trail Team");
+) -> TestResult {
+    let mut draft = community_pick_draft(None, None, "Trail Team")?;
     match field {
         "duration_seconds" => draft.duration_seconds = -1,
         "saves" => draft.saves = -1,
@@ -383,4 +380,5 @@ fn community_pick_rejects_negative_numeric_fields(
             ..
         }) if actual_field == expected_error_field
     ));
+    Ok(())
 }

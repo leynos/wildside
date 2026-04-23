@@ -54,11 +54,13 @@ impl UsersQuery for DieselUsersQuery {
 #[cfg(test)]
 mod tests {
     //! Regression coverage for users query mapping and response shape.
-    use std::sync::Mutex;
+    use std::{error::Error as StdError, sync::Mutex};
 
     use super::*;
     use crate::domain::ErrorCode;
     use rstest::rstest;
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     #[derive(Clone, Copy)]
     enum StubFailure {
@@ -96,8 +98,12 @@ mod tests {
             }
         }
 
-        fn set_find_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").find_failure = Some(failure);
+        fn set_find_failure(&self, failure: StubFailure) -> Result<(), UserPersistenceError> {
+            self.state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?
+                .find_failure = Some(failure);
+            Ok(())
         }
     }
 
@@ -108,7 +114,10 @@ mod tests {
         }
 
         async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError> {
-            let state = self.state.lock().expect("state lock");
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?;
             if let Some(failure) = state.find_failure {
                 return Err(failure.to_error());
             }
@@ -120,40 +129,38 @@ mod tests {
         }
     }
 
-    fn user_id(id: &str) -> UserId {
-        UserId::new(id).expect("valid user id")
+    fn user_id(id: &str) -> TestResult<UserId> {
+        Ok(UserId::new(id)?)
     }
 
-    fn user(id: &str, display_name: &str) -> User {
-        User::try_from_strings(id, display_name).expect("valid user")
+    fn user(id: &str, display_name: &str) -> TestResult<User> {
+        Ok(User::try_from_strings(id, display_name)?)
     }
 
     #[tokio::test]
-    async fn list_users_returns_authenticated_user_when_present() {
-        let auth_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace");
+    async fn list_users_returns_authenticated_user_when_present() -> TestResult {
+        let auth_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace")?;
         let authenticated_user_id = auth_user.id().clone();
         let repository = Arc::new(StubUserRepository::with_user(auth_user.clone()));
         let query = DieselUsersQuery::from_repository(repository);
 
-        let users = query
-            .list_users(&authenticated_user_id)
-            .await
-            .expect("query should succeed");
+        let users = query.list_users(&authenticated_user_id).await?;
 
         assert_eq!(users, vec![auth_user]);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn list_users_returns_empty_list_when_authenticated_user_missing() {
+    async fn list_users_returns_empty_list_when_authenticated_user_missing() -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
         let query = DieselUsersQuery::from_repository(repository);
 
         let users = query
-            .list_users(&user_id("11111111-1111-1111-1111-111111111111"))
-            .await
-            .expect("query should succeed");
+            .list_users(&user_id("11111111-1111-1111-1111-111111111111")?)
+            .await?;
 
         assert!(users.is_empty());
+        Ok(())
     }
 
     #[rstest]
@@ -163,16 +170,17 @@ mod tests {
     async fn list_users_maps_persistence_failures(
         #[case] failure: StubFailure,
         #[case] expected_code: ErrorCode,
-    ) {
+    ) -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
-        repository.set_find_failure(failure);
+        repository.set_find_failure(failure)?;
         let query = DieselUsersQuery::from_repository(repository);
 
         let err = query
-            .list_users(&user_id("11111111-1111-1111-1111-111111111111"))
+            .list_users(&user_id("11111111-1111-1111-1111-111111111111")?)
             .await
             .expect_err("repository failures should map to domain errors");
 
         assert_eq!(err.code(), expected_code);
+        Ok(())
     }
 }

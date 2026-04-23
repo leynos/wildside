@@ -131,7 +131,9 @@ mod tests {
     use actix_web::{App, test as actix_test, web};
     use rstest::rstest;
     use serde_json::{Value, json};
-    use std::sync::Arc;
+    use std::{error::Error as StdError, io, sync::Arc};
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     fn test_app() -> App<
         impl actix_web::dev::ServiceFactory<
@@ -171,7 +173,7 @@ mod tests {
             Response = actix_web::dev::ServiceResponse,
             Error = actix_web::Error,
         >,
-    ) -> actix_web::cookie::Cookie<'static> {
+    ) -> TestResult<actix_web::cookie::Cookie<'static>> {
         let login_req = actix_test::TestRequest::post()
             .uri("/api/v1/login")
             .set_json(&LoginRequest {
@@ -181,18 +183,18 @@ mod tests {
             .to_request();
         let login_res = actix_test::call_service(app, login_req).await;
         assert!(login_res.status().is_success());
-        login_res
+        Ok(login_res
             .response()
             .cookies()
             .find(|c| c.name() == "session")
-            .expect("session cookie")
-            .into_owned()
+            .ok_or_else(|| io::Error::other("session cookie"))?
+            .into_owned())
     }
 
     #[actix_web::test]
-    async fn submit_route_accepts_request_without_idempotency_key() {
+    async fn submit_route_accepts_request_without_idempotency_key() -> TestResult {
         let app = actix_test::init_service(test_app()).await;
-        let cookie = login_and_get_cookie(&app).await;
+        let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
             .uri("/api/v1/routes")
@@ -209,12 +211,13 @@ mod tests {
         let body: Value = actix_test::read_body_json(response).await;
         assert!(body.get("requestId").is_some());
         assert_eq!(body.get("status").and_then(Value::as_str), Some("accepted"));
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn submit_route_accepts_request_with_valid_idempotency_key() {
+    async fn submit_route_accepts_request_with_valid_idempotency_key() -> TestResult {
         let app = actix_test::init_service(test_app()).await;
-        let cookie = login_and_get_cookie(&app).await;
+        let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
             .uri("/api/v1/routes")
@@ -231,6 +234,7 @@ mod tests {
 
         let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+        Ok(())
     }
 
     #[rstest]
@@ -238,9 +242,9 @@ mod tests {
     #[case("550e8400")]
     #[case("")]
     #[actix_web::test]
-    async fn submit_route_rejects_invalid_idempotency_key(#[case] invalid_key: &str) {
+    async fn submit_route_rejects_invalid_idempotency_key(#[case] invalid_key: &str) -> TestResult {
         let app = actix_test::init_service(test_app()).await;
-        let cookie = login_and_get_cookie(&app).await;
+        let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
             .uri("/api/v1/routes")
@@ -254,6 +258,7 @@ mod tests {
 
         let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
     }
 
     #[actix_web::test]

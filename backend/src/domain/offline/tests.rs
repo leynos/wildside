@@ -1,7 +1,9 @@
 //! Regression coverage for offline bundle domain types.
 
+use std::{error::Error as StdError, io};
+
 use chrono::{Duration, TimeZone, Utc};
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use uuid::Uuid;
 
 use super::{
@@ -10,57 +12,62 @@ use super::{
 };
 use crate::domain::UserId;
 
-#[fixture]
-fn route_bundle_draft() -> OfflineBundleDraft {
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+fn route_bundle_draft() -> TestResult<OfflineBundleDraft> {
     let created_at = Utc
         .with_ymd_and_hms(2026, 2, 20, 8, 0, 0)
         .single()
-        .expect("valid timestamp");
+        .ok_or_else(|| io::Error::other("valid timestamp"))?;
 
-    OfflineBundleDraft {
+    Ok(OfflineBundleDraft {
         id: Uuid::new_v4(),
         owner_user_id: Some(UserId::random()),
         device_id: "ios-phone".to_owned(),
         kind: OfflineBundleKind::Route,
         route_id: Some(Uuid::new_v4()),
         region_id: None,
-        bounds: BoundingBox::new(-3.25, 55.92, -3.10, 56.01).expect("valid bounds"),
-        zoom_range: ZoomRange::new(12, 16).expect("valid zoom"),
+        bounds: BoundingBox::new(-3.25, 55.92, -3.10, 56.01)?,
+        zoom_range: ZoomRange::new(12, 16)?,
         estimated_size_bytes: 12_000_000,
         created_at,
         updated_at: created_at,
         status: OfflineBundleStatus::Queued,
         progress: 0.0,
-    }
+    })
 }
 
 #[rstest]
-fn route_bundle_draft_constructs_bundle(route_bundle_draft: OfflineBundleDraft) {
-    let bundle = OfflineBundle::new(route_bundle_draft.clone()).expect("valid bundle");
+fn route_bundle_draft_constructs_bundle() -> TestResult {
+    let route_bundle_draft = route_bundle_draft()?;
+    let bundle = OfflineBundle::new(route_bundle_draft.clone())?;
 
     assert_eq!(bundle.kind(), OfflineBundleKind::Route);
     assert_eq!(bundle.route_id(), route_bundle_draft.route_id);
     assert!(bundle.region_id().is_none());
     assert_eq!(bundle.status(), OfflineBundleStatus::Queued);
     assert_eq!(bundle.progress(), 0.0);
+    Ok(())
 }
 
 #[rstest]
-fn route_bundle_draft_trims_device_id(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
+fn route_bundle_draft_trims_device_id() -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.device_id = "  ios-phone  ".to_owned();
 
-    let bundle = OfflineBundle::new(draft).expect("valid bundle");
+    let bundle = OfflineBundle::new(draft)?;
     assert_eq!(bundle.device_id(), "ios-phone");
+    Ok(())
 }
 
 #[rstest]
-fn route_bundle_draft_rejects_empty_device_id(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
+fn route_bundle_draft_rejects_empty_device_id() -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.device_id = "   ".to_owned();
 
     let result = OfflineBundle::new(draft);
     assert!(matches!(result, Err(OfflineValidationError::EmptyDeviceId)));
+    Ok(())
 }
 
 #[rstest]
@@ -75,12 +82,11 @@ fn route_bundle_draft_rejects_empty_device_id(route_bundle_draft: OfflineBundleD
     OfflineValidationError::MissingRegionIdForRegionBundle
 )]
 fn region_bundle_validation_errors(
-    route_bundle_draft: OfflineBundleDraft,
     #[case] route_id: Option<Uuid>,
     #[case] region_id: Option<String>,
     #[case] expected_error: OfflineValidationError,
-) {
-    let mut draft = route_bundle_draft;
+) -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.kind = OfflineBundleKind::Region;
     draft.route_id = route_id;
     draft.region_id = region_id;
@@ -89,11 +95,12 @@ fn region_bundle_validation_errors(
     assert!(matches!(result, Err(ref e)
         if std::mem::discriminant(e) == std::mem::discriminant(&expected_error)
     ));
+    Ok(())
 }
 
 #[rstest]
-fn route_bundle_requires_route_id(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
+fn route_bundle_requires_route_id() -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.route_id = None;
 
     let result = OfflineBundle::new(draft);
@@ -101,6 +108,7 @@ fn route_bundle_requires_route_id(route_bundle_draft: OfflineBundleDraft) {
         result,
         Err(OfflineValidationError::MissingRouteIdForRouteBundle)
     ));
+    Ok(())
 }
 
 #[rstest]
@@ -109,17 +117,17 @@ fn route_bundle_requires_route_id(route_bundle_draft: OfflineBundleDraft) {
 #[case(OfflineBundleStatus::Complete, 1.0)]
 #[case(OfflineBundleStatus::Failed, 0.25)]
 fn valid_status_progress_pairs_construct(
-    route_bundle_draft: OfflineBundleDraft,
     #[case] status: OfflineBundleStatus,
     #[case] progress: f32,
-) {
-    let mut draft = route_bundle_draft;
+) -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.status = status;
     draft.progress = progress;
 
-    let bundle = OfflineBundle::new(draft).expect("status/progress pair should be valid");
+    let bundle = OfflineBundle::new(draft)?;
     assert_eq!(bundle.status(), status);
     assert_eq!(bundle.progress(), progress);
+    Ok(())
 }
 
 #[rstest]
@@ -127,11 +135,10 @@ fn valid_status_progress_pairs_construct(
 #[case(OfflineBundleStatus::Downloading, 1.0)]
 #[case(OfflineBundleStatus::Complete, 0.8)]
 fn invalid_status_progress_pairs_rejected(
-    route_bundle_draft: OfflineBundleDraft,
     #[case] status: OfflineBundleStatus,
     #[case] progress: f32,
-) {
-    let mut draft = route_bundle_draft;
+) -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.status = status;
     draft.progress = progress;
 
@@ -140,11 +147,12 @@ fn invalid_status_progress_pairs_rejected(
         result,
         Err(OfflineValidationError::InvalidStatusProgress { .. })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn invalid_progress_range_rejected(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
+fn invalid_progress_range_rejected() -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.progress = 1.1;
 
     let result = OfflineBundle::new(draft);
@@ -152,11 +160,12 @@ fn invalid_progress_range_rejected(route_bundle_draft: OfflineBundleDraft) {
         result,
         Err(OfflineValidationError::InvalidProgress { .. })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn updated_at_must_not_precede_created_at(route_bundle_draft: OfflineBundleDraft) {
-    let mut draft = route_bundle_draft;
+fn updated_at_must_not_precede_created_at() -> TestResult {
+    let mut draft = route_bundle_draft()?;
     draft.updated_at = draft.created_at - Duration::seconds(1);
 
     let result = OfflineBundle::new(draft);
@@ -164,6 +173,7 @@ fn updated_at_must_not_precede_created_at(route_bundle_draft: OfflineBundleDraft
         result,
         Err(OfflineValidationError::UpdatedBeforeCreated)
     ));
+    Ok(())
 }
 
 #[rstest]

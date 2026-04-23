@@ -52,6 +52,9 @@ mod tests {
     use super::*;
     use crate::domain::ErrorCode;
     use rstest::rstest;
+    use std::error::Error as StdError;
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     struct SuccessUserRepository {
         user: User,
@@ -97,33 +100,31 @@ mod tests {
         }
     }
 
-    fn user_id(value: &str) -> UserId {
-        UserId::new(value).expect("valid user id")
+    fn user_id(value: &str) -> TestResult<UserId> {
+        Ok(UserId::new(value)?)
     }
 
-    fn user(id: &str, display_name: &str) -> User {
-        User::try_from_strings(id, display_name).expect("valid user")
+    fn user(id: &str, display_name: &str) -> TestResult<User> {
+        Ok(User::try_from_strings(id, display_name)?)
     }
 
     #[tokio::test]
-    async fn fetch_profile_returns_user_when_present() {
-        let profile_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace");
+    async fn fetch_profile_returns_user_when_present() -> TestResult {
+        let profile_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace")?;
         let query = DieselUserProfileQuery::new(Arc::new(SuccessUserRepository {
             user: profile_user.clone(),
         }));
 
-        let profile = query
-            .fetch_profile(profile_user.id())
-            .await
-            .expect("profile should load");
+        let profile = query.fetch_profile(profile_user.id()).await?;
 
         assert_eq!(profile, profile_user);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn fetch_profile_returns_internal_error_when_user_missing() {
+    async fn fetch_profile_returns_internal_error_when_user_missing() -> TestResult {
         let query = DieselUserProfileQuery::new(Arc::new(MissingUserRepository));
-        let authenticated_user = user_id("11111111-1111-1111-1111-111111111111");
+        let authenticated_user = user_id("11111111-1111-1111-1111-111111111111")?;
 
         let err = query
             .fetch_profile(&authenticated_user)
@@ -132,6 +133,7 @@ mod tests {
 
         assert_eq!(err.code(), ErrorCode::InternalError);
         assert!(err.message().contains(authenticated_user.as_ref()));
+        Ok(())
     }
 
     #[rstest]
@@ -147,14 +149,15 @@ mod tests {
     async fn fetch_profile_maps_persistence_failures(
         #[case] failure: UserPersistenceError,
         #[case] expected_code: ErrorCode,
-    ) {
+    ) -> TestResult {
         let query = DieselUserProfileQuery::new(Arc::new(FailingUserRepository { error: failure }));
 
         let err = query
-            .fetch_profile(&user_id("11111111-1111-1111-1111-111111111111"))
+            .fetch_profile(&user_id("11111111-1111-1111-1111-111111111111")?)
             .await
             .expect_err("repository failures should map to domain errors");
 
         assert_eq!(err.code(), expected_code);
+        Ok(())
     }
 }

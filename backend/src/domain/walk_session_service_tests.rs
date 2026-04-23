@@ -1,9 +1,9 @@
 //! Tests for walk session service.
 
-use std::sync::Arc;
+use std::{error::Error as StdError, sync::Arc};
 
 use chrono::{DateTime, Utc};
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use uuid::Uuid;
 
 use super::*;
@@ -12,16 +12,15 @@ use crate::domain::{
     WalkPrimaryStat, WalkPrimaryStatKind, WalkSecondaryStat, WalkSecondaryStatKind,
 };
 
-fn fixture_timestamp() -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-        .expect("RFC3339 fixture timestamp")
-        .with_timezone(&Utc)
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
 }
 
-#[fixture]
-fn sample_create_request() -> CreateWalkSessionRequest {
-    let started_at = fixture_timestamp();
-    CreateWalkSessionRequest {
+fn sample_create_request() -> TestResult<CreateWalkSessionRequest> {
+    let started_at = fixture_timestamp()?;
+    Ok(CreateWalkSessionRequest {
         session: WalkSessionPayload {
             id: Uuid::new_v4(),
             user_id: crate::domain::UserId::random(),
@@ -39,7 +38,7 @@ fn sample_create_request() -> CreateWalkSessionRequest {
             }],
             highlighted_poi_ids: vec![Uuid::new_v4()],
         },
-    }
+    })
 }
 
 /// Helper to assert that repository query errors map to InternalError.
@@ -63,10 +62,8 @@ async fn assert_query_error_maps_to_internal<Fut, T>(
 
 #[rstest]
 #[tokio::test]
-async fn create_session_persists_and_returns_stable_id(
-    sample_create_request: CreateWalkSessionRequest,
-) {
-    let request = sample_create_request;
+async fn create_session_persists_and_returns_stable_id() -> TestResult {
+    let request = sample_create_request()?;
     let expected_session_id = request.session.id;
 
     let mut repo = MockWalkSessionRepository::new();
@@ -81,14 +78,13 @@ async fn create_session_persists_and_returns_stable_id(
 
     assert_eq!(response.session_id, expected_session_id);
     assert!(response.completion_summary.is_some());
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn create_session_maps_validation_error_to_invalid_request(
-    sample_create_request: CreateWalkSessionRequest,
-) {
-    let mut request = sample_create_request;
+async fn create_session_maps_validation_error_to_invalid_request() -> TestResult {
+    let mut request = sample_create_request()?;
     request.session.primary_stats = vec![crate::domain::WalkPrimaryStatDraft {
         kind: WalkPrimaryStatKind::Distance,
         value: -1.0,
@@ -104,14 +100,13 @@ async fn create_session_maps_validation_error_to_invalid_request(
         .expect_err("invalid request");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn create_session_maps_connection_error_to_service_unavailable(
-    sample_create_request: CreateWalkSessionRequest,
-) {
-    let request = sample_create_request;
+async fn create_session_maps_connection_error_to_service_unavailable() -> TestResult {
+    let request = sample_create_request()?;
 
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
@@ -126,18 +121,16 @@ async fn create_session_maps_connection_error_to_service_unavailable(
         .expect_err("service unavailable");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::ServiceUnavailable);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn create_session_rejects_existing_session_owned_by_different_user(
-    sample_create_request: CreateWalkSessionRequest,
-) {
-    let request = sample_create_request;
+async fn create_session_rejects_existing_session_owned_by_different_user() -> TestResult {
+    let request = sample_create_request()?;
     let mut existing_payload = request.session.clone();
     existing_payload.user_id = crate::domain::UserId::random();
-    let existing_session =
-        crate::domain::WalkSession::try_from(existing_payload).expect("valid existing session");
+    let existing_session = crate::domain::WalkSession::try_from(existing_payload)?;
 
     let mut repo = MockWalkSessionRepository::new();
     repo.expect_find_by_id()
@@ -152,6 +145,7 @@ async fn create_session_rejects_existing_session_owned_by_different_user(
         .expect_err("foreign session id takeover must be forbidden");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
+    Ok(())
 }
 
 #[tokio::test]
@@ -171,9 +165,9 @@ async fn get_session_returns_not_found_when_missing() {
 }
 
 #[tokio::test]
-async fn list_completion_summaries_returns_payloads() {
+async fn list_completion_summaries_returns_payloads() -> TestResult {
     let user_id = crate::domain::UserId::random();
-    let started_at = fixture_timestamp();
+    let started_at = fixture_timestamp()?;
     let session = crate::domain::WalkSession::new(crate::domain::WalkSessionDraft {
         id: Uuid::new_v4(),
         user_id: user_id.clone(),
@@ -209,6 +203,7 @@ async fn list_completion_summaries_returns_payloads() {
         .expect("list succeeds");
 
     assert_eq!(response.summaries.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]

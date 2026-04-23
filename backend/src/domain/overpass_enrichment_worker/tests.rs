@@ -1,6 +1,8 @@
 //! Unit tests for Overpass enrichment worker orchestration.
 
 use std::collections::{BTreeMap, VecDeque};
+use std::error::Error as StdError;
+use std::io;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -28,6 +30,8 @@ use crate::domain::ports::{
 use crate::test_support::overpass_enrichment::{
     AttemptOffsetJitter, MutableClock, NoJitter, RecordingSleeper,
 };
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 struct SourceStub {
     scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,
@@ -72,7 +76,9 @@ impl OverpassEnrichmentSource for SourceStub {
         let active_now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_active.fetch_max(active_now, Ordering::SeqCst);
         if let Some(entered) = &self.entered {
-            entered.send(active_now).expect("send entry");
+            entered.send(active_now).map_err(|error| {
+                OverpassEnrichmentSourceError::invalid_request(error.to_string())
+            })?;
         }
         if let Some(release) = &self.release {
             release.notified().await;
@@ -80,7 +86,7 @@ impl OverpassEnrichmentSource for SourceStub {
         self.active.fetch_sub(1, Ordering::SeqCst);
         self.scripted
             .lock()
-            .expect("source mutex")
+            .map_err(|_| OverpassEnrichmentSourceError::invalid_request("source mutex"))?
             .pop_front()
             .unwrap_or_else(|| {
                 Err(OverpassEnrichmentSourceError::invalid_request(
@@ -94,12 +100,28 @@ trait ScriptedRepositoryRecord {
     const MUTEX_MESSAGE: &'static str;
 }
 
+trait ScriptedRepositoryError {
+    fn mutex_error(message: &str) -> Self;
+}
+
 impl ScriptedRepositoryRecord for Vec<OsmPoiIngestionRecord> {
     const MUTEX_MESSAGE: &'static str = "repo mutex";
 }
 
 impl ScriptedRepositoryRecord for EnrichmentProvenanceRecord {
     const MUTEX_MESSAGE: &'static str = "provenance mutex";
+}
+
+impl ScriptedRepositoryError for OsmPoiRepositoryError {
+    fn mutex_error(message: &str) -> Self {
+        Self::query(message)
+    }
+}
+
+impl ScriptedRepositoryError for EnrichmentProvenanceRepositoryError {
+    fn mutex_error(message: &str) -> Self {
+        Self::query(message)
+    }
 }
 
 struct ScriptedRepositoryStub<T, E> {
@@ -111,6 +133,7 @@ struct ScriptedRepositoryStub<T, E> {
 impl<T, E> ScriptedRepositoryStub<T, E>
 where
     T: Clone + ScriptedRepositoryRecord,
+    E: ScriptedRepositoryError,
 {
     fn new(scripted: Vec<Result<(), E>>) -> Self {
         Self {
@@ -122,13 +145,16 @@ where
 
     fn persist_internal(&self, record: &T) -> Result<(), E> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let mut scripted = self.scripted.lock().expect(T::MUTEX_MESSAGE);
+        let mut scripted = self
+            .scripted
+            .lock()
+            .map_err(|_| E::mutex_error(T::MUTEX_MESSAGE))?;
         match scripted.pop_front() {
             Some(Ok(())) => {
                 drop(scripted);
                 self.persisted
                     .lock()
-                    .expect(T::MUTEX_MESSAGE)
+                    .map_err(|_| E::mutex_error(T::MUTEX_MESSAGE))?
                     .push(record.clone());
                 Ok(())
             }
@@ -192,7 +218,10 @@ impl MetricsStub {
         entries: &Mutex<Vec<T>>,
         payload: &T,
     ) -> Result<(), EnrichmentJobMetricsError> {
-        entries.lock().expect("metrics mutex").push(payload.clone());
+        entries
+            .lock()
+            .map_err(|_| EnrichmentJobMetricsError::export("metrics mutex"))?
+            .push(payload.clone());
         Ok(())
     }
 }
@@ -214,10 +243,11 @@ impl EnrichmentJobMetrics for MetricsStub {
 }
 
 #[fixture]
-fn now() -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 2, 26, 12, 0, 0)
+fn now() -> TestResult<DateTime<Utc>> {
+    Ok(Utc
+        .with_ymd_and_hms(2026, 2, 26, 12, 0, 0)
         .single()
-        .expect("valid time")
+        .ok_or_else(|| io::Error::other("valid time"))?)
 }
 #[fixture]
 fn job() -> OverpassEnrichmentRequest {

@@ -142,30 +142,29 @@ impl WorkerTestFixture {
         self.clock.advance(delta);
     }
 
-    fn circuit_state(&self) -> CircuitBreakerState {
-        self.worker
+    fn circuit_state(&self) -> TestResult<CircuitBreakerState> {
+        Ok(self
+            .worker
             .policy_state
             .lock()
-            .expect("policy mutex")
-            .circuit_state()
+            .map_err(|_| std::io::Error::other("policy mutex"))?
+            .circuit_state())
     }
 }
 
 #[rstest]
 #[tokio::test]
 async fn happy_path_persists_and_records_success(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
-) {
+) -> TestResult {
+    let now = now?;
     let fixture = WorkerTestFixtureBuilder::new(now)
         .with_source_responses(vec![Ok(response(2, 512))])
         .with_repo_responses(vec![Ok(())])
         .build();
 
-    let out = fixture
-        .process_job(job.clone())
-        .await
-        .expect("job succeeds");
+    let out = fixture.process_job(job.clone()).await?;
     assert_successful_job_outcome(&out, 1, 2);
     assert_stub_call_counts(
         StubCallCounters {
@@ -184,8 +183,9 @@ async fn happy_path_persists_and_records_success(
         "https://overpass.example/api/interpreter",
         now,
         job.bounding_box,
-    );
-    assert_metrics_success(fixture.metrics.as_ref(), 1);
+    )?;
+    assert_metrics_success(fixture.metrics.as_ref(), 1)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -196,10 +196,11 @@ struct QuotaCase {
 }
 
 async fn assert_quota_denial_short_circuits_source(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
     case: QuotaCase,
-) {
+) -> TestResult {
+    let now = now?;
     let fixture = WorkerTestFixtureBuilder::new(now)
         .with_source_responses(vec![Ok(response(1, 10))])
         .with_provenance_responses(vec![])
@@ -223,7 +224,8 @@ async fn assert_quota_denial_short_circuits_source(
             provenance_repository: 0,
         },
     );
-    assert_metrics_failure(fixture.metrics.as_ref(), case.expected_kind);
+    assert_metrics_failure(fixture.metrics.as_ref(), case.expected_kind)?;
+    Ok(())
 }
 
 #[rstest]
@@ -239,19 +241,20 @@ async fn assert_quota_denial_short_circuits_source(
 })]
 #[tokio::test]
 async fn quota_limit_denial_short_circuits_source(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
     #[case] case: QuotaCase,
-) {
-    assert_quota_denial_short_circuits_source(now, job, case).await;
+) -> TestResult {
+    assert_quota_denial_short_circuits_source(now, job, case).await
 }
 
 #[rstest]
 #[tokio::test]
 async fn retry_uses_jittered_exponential_backoff(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
-) {
+) -> TestResult {
+    let now = now?;
     let sleeper = Arc::new(RecordingSleeper::default());
     let fixture = WorkerTestFixtureBuilder::new(now)
         .with_source_responses(vec![
@@ -265,7 +268,7 @@ async fn retry_uses_jittered_exponential_backoff(
         .with_jitter(Arc::new(AttemptOffsetJitter))
         .build();
 
-    let out = fixture.process_job(job).await.expect("eventual success");
+    let out = fixture.process_job(job).await?;
     assert_successful_job_outcome(&out, 3, 1);
     assert_stub_call_counts(
         StubCallCounters {
@@ -283,9 +286,15 @@ async fn retry_uses_jittered_exponential_backoff(
         sleeper.lock_durations().as_slice(),
         [Duration::from_millis(101), Duration::from_millis(202)]
     );
-    assert_metrics_success(fixture.metrics.as_ref(), 1);
+    assert_metrics_success(fixture.metrics.as_ref(), 1)?;
     assert_eq!(
-        fixture.metrics.successes.lock().expect("metrics mutex")[0].attempt_count,
+        fixture
+            .metrics
+            .successes
+            .lock()
+            .map_err(|_| std::io::Error::other("metrics mutex"))?[0]
+            .attempt_count,
         3
     );
+    Ok(())
 }

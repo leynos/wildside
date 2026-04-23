@@ -161,22 +161,7 @@ impl UserRepository for DieselUserRepository {
 mod tests {
     //! Regression coverage for this module.
     use super::*;
-    use rstest::{fixture, rstest};
-
-    #[fixture]
-    fn sample_user_id() -> UserId {
-        UserId::new("11111111-1111-1111-1111-111111111111").expect("valid fixture UUID")
-    }
-
-    #[fixture]
-    fn sample_display_name() -> DisplayName {
-        DisplayName::new("Test User").expect("valid fixture display name")
-    }
-
-    #[fixture]
-    fn sample_user(sample_user_id: UserId, sample_display_name: DisplayName) -> User {
-        User::new(sample_user_id, sample_display_name)
-    }
+    use rstest::rstest;
 
     #[rstest]
     fn pool_error_maps_to_connection_error() {

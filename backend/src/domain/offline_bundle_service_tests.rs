@@ -1,10 +1,10 @@
 //! Tests for offline bundle service.
 
-use std::sync::Arc;
+use std::{error::Error as StdError, io, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use mockable::DefaultClock;
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -18,30 +18,29 @@ use crate::domain::{
     IdempotencyRecord, MutationType, OfflineBundleKind, OfflineBundleStatus, ZoomRange,
 };
 
-#[fixture]
-fn sample_bundle_payload() -> OfflineBundlePayload {
-    let timestamp = fixture_timestamp();
-    OfflineBundlePayload {
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+fn sample_bundle_payload() -> TestResult<OfflineBundlePayload> {
+    let timestamp = fixture_timestamp()?;
+    Ok(OfflineBundlePayload {
         id: Uuid::new_v4(),
         owner_user_id: Some(crate::domain::UserId::random()),
         device_id: "fixture-device".to_owned(),
         kind: OfflineBundleKind::Route,
         route_id: Some(Uuid::new_v4()),
         region_id: None,
-        bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
-        zoom_range: ZoomRange::new(11, 15).expect("valid zoom"),
+        bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0)?,
+        zoom_range: ZoomRange::new(11, 15)?,
         estimated_size_bytes: 1_500,
         created_at: timestamp,
         updated_at: timestamp,
         status: OfflineBundleStatus::Queued,
         progress: 0.0,
-    }
+    })
 }
 
-fn fixture_timestamp() -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-        .expect("RFC3339 fixture timestamp")
-        .with_timezone(&Utc)
+fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
 }
 
 fn make_service(
@@ -62,14 +61,12 @@ fn make_query_service(
 
 #[rstest]
 #[tokio::test]
-async fn upsert_persists_bundle_without_idempotency_key(
-    sample_bundle_payload: OfflineBundlePayload,
-) {
-    let payload = sample_bundle_payload;
+async fn upsert_persists_bundle_without_idempotency_key() -> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = payload
         .owner_user_id
         .clone()
-        .expect("bundle owner is set for this test");
+        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
     let expected_id = payload.id;
     let mut repo = MockOfflineBundleRepository::new();
 
@@ -88,24 +85,22 @@ async fn upsert_persists_bundle_without_idempotency_key(
 
     assert_eq!(response.bundle.id, expected_id);
     assert!(!response.is_replayed);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn upsert_with_idempotency_stores_bundle_mutation_record(
-    sample_bundle_payload: OfflineBundlePayload,
-) {
-    let payload = sample_bundle_payload;
+async fn upsert_with_idempotency_stores_bundle_mutation_record() -> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = payload
         .owner_user_id
         .clone()
-        .expect("bundle owner is set for this test");
+        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
         MockIdempotencyRepository,
-    >::hash_payload(&payload)
-    .expect("payload hash");
+    >::hash_payload(&payload)?;
 
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_find_by_id().times(1).return_once(|_| Ok(None));
@@ -146,22 +141,20 @@ async fn upsert_with_idempotency_stores_bundle_mutation_record(
         .expect("upsert succeeds");
 
     assert!(!response.is_replayed);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn upsert_rejects_existing_bundle_owned_by_different_user(
-    sample_bundle_payload: OfflineBundlePayload,
-) {
-    let payload = sample_bundle_payload;
+async fn upsert_rejects_existing_bundle_owned_by_different_user() -> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = payload
         .owner_user_id
         .clone()
-        .expect("bundle owner is set for this test");
+        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
     let mut existing_payload = payload.clone();
     existing_payload.owner_user_id = Some(crate::domain::UserId::random());
-    let existing_bundle =
-        crate::domain::OfflineBundle::try_from(existing_payload).expect("valid existing bundle");
+    let existing_bundle = crate::domain::OfflineBundle::try_from(existing_payload)?;
 
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_find_by_id()
@@ -180,33 +173,30 @@ async fn upsert_rejects_existing_bundle_owned_by_different_user(
         .expect_err("cross-user upsert must be forbidden");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Forbidden);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn upsert_returns_replayed_response_when_payload_matches(
-    sample_bundle_payload: OfflineBundlePayload,
-) {
-    let payload = sample_bundle_payload;
+async fn upsert_returns_replayed_response_when_payload_matches() -> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = crate::domain::UserId::random();
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
         MockIdempotencyRepository,
-    >::hash_payload(&payload)
-    .expect("payload hash");
+    >::hash_payload(&payload)?;
     let response_snapshot = serde_json::to_value(UpsertOfflineBundleResponse {
         bundle: payload.clone(),
         is_replayed: false,
-    })
-    .expect("response snapshot");
+    })?;
     let record = IdempotencyRecord {
         key: idempotency_key.clone(),
         mutation_type: MutationType::Bundles,
         payload_hash: payload_hash.clone(),
         response_snapshot,
         user_id: user_id.clone(),
-        created_at: fixture_timestamp(),
+        created_at: fixture_timestamp()?,
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -242,6 +232,7 @@ async fn upsert_returns_replayed_response_when_payload_matches(
         .expect("replayed response");
 
     assert!(response.is_replayed);
+    Ok(())
 }
 
 #[tokio::test]
@@ -299,22 +290,21 @@ async fn list_bundles_maps_connection_error_to_service_unavailable() {
 }
 
 #[tokio::test]
-async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
+async fn delete_rejects_payload_conflict_for_existing_idempotency_key() -> TestResult {
     let bundle_id = Uuid::new_v4();
     let user_id = crate::domain::UserId::random();
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
         MockIdempotencyRepository,
-    >::hash_payload(&json!({ "bundleId": bundle_id }))
-    .expect("payload hash");
+    >::hash_payload(&json!({ "bundleId": bundle_id }))?;
     let conflicting = IdempotencyRecord {
         key: idempotency_key.clone(),
         mutation_type: MutationType::Bundles,
         payload_hash,
         response_snapshot: json!({"bundleId": bundle_id}),
         user_id: user_id.clone(),
-        created_at: fixture_timestamp(),
+        created_at: fixture_timestamp()?,
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -350,6 +340,7 @@ async fn delete_rejects_payload_conflict_for_existing_idempotency_key() {
         .expect_err("conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+    Ok(())
 }
 
 enum IdempotencyRegressionCase {
@@ -364,20 +355,21 @@ enum IdempotencyRegressionCase {
 #[case::upsert_replay(IdempotencyRegressionCase::UpsertReplay)]
 #[case::upsert_conflict(IdempotencyRegressionCase::UpsertConflict)]
 #[tokio::test]
-async fn idempotency_regression_paths(#[case] case: IdempotencyRegressionCase) {
+async fn idempotency_regression_paths(#[case] case: IdempotencyRegressionCase) -> TestResult {
     match case {
         IdempotencyRegressionCase::InvalidDeviceId(device_id) => {
-            idempotency_tests::assert_list_bundles_rejects_invalid_device_id(device_id).await
+            idempotency_tests::assert_list_bundles_rejects_invalid_device_id(device_id).await?
         }
         IdempotencyRegressionCase::UpsertReplay => {
             idempotency_tests::assert_upsert_replays_response_when_duplicate_key_race_finds_record(
             )
-            .await
+            .await?
         }
         IdempotencyRegressionCase::UpsertConflict => idempotency_tests::
             assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record()
-            .await,
+            .await?,
     }
+    Ok(())
 }
 
 #[path = "offline_bundle_service_idempotency_tests.rs"]

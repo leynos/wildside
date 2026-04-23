@@ -23,13 +23,13 @@ fn fixture_source_report_for_geofence_filtering() -> OsmSourceReport {
 
 #[rstest]
 #[tokio::test]
-async fn ingest_replays_existing_provenance_without_reingesting() {
+async fn ingest_replays_existing_provenance_without_reingesting() -> TestResult {
     let request = request();
     let existing = OsmIngestionProvenanceRecord {
         geofence_id: request.geofence_id.clone(),
         source_url: request.source_url.clone(),
         input_digest: request.input_digest.clone(),
-        imported_at: fixture_timestamp(),
+        imported_at: fixture_timestamp()?,
         geofence_bounds: request.geofence_bounds,
         raw_poi_count: 9,
         filtered_poi_count: 3,
@@ -45,7 +45,7 @@ async fn ingest_replays_existing_provenance_without_reingesting() {
         .return_once(move |_, _| Ok(Some(existing)));
     provenance_repo.expect_persist_ingestion().times(0);
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let outcome = service
         .ingest(request)
         .await
@@ -54,6 +54,7 @@ async fn ingest_replays_existing_provenance_without_reingesting() {
     assert_eq!(outcome.status, OsmIngestionStatus::Replayed);
     assert_eq!(outcome.raw_poi_count, 9);
     assert_eq!(outcome.persisted_poi_count, 3);
+    Ok(())
 }
 
 fn is_filtered_poi_records(records: &[OsmPoiIngestionRecord]) -> bool {
@@ -77,7 +78,7 @@ fn is_provenance_record_expected(record: &OsmIngestionProvenanceRecord) -> bool 
 
 #[rstest]
 #[tokio::test]
-async fn ingest_filters_pois_by_geofence_and_persists_provenance() {
+async fn ingest_filters_pois_by_geofence_and_persists_provenance() -> TestResult {
     let request = request();
 
     let mut source_repo = MockOsmSourceRepository::new();
@@ -99,7 +100,7 @@ async fn ingest_filters_pois_by_geofence_and_persists_provenance() {
         })
         .return_once(|_, _| Ok(()));
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let outcome = service
         .ingest(request)
         .await
@@ -109,17 +110,18 @@ async fn ingest_filters_pois_by_geofence_and_persists_provenance() {
     assert_eq!(outcome.raw_poi_count, 4);
     assert_eq!(outcome.persisted_poi_count, 2);
     assert_eq!(outcome.geofence_bounds, GEOFENCE_BOUNDS);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn ingest_replays_on_provenance_conflict() {
+async fn ingest_replays_on_provenance_conflict() -> TestResult {
     let request = request();
     let existing = OsmIngestionProvenanceRecord {
         geofence_id: request.geofence_id.clone(),
         source_url: request.source_url.clone(),
         input_digest: request.input_digest.clone(),
-        imported_at: fixture_timestamp(),
+        imported_at: fixture_timestamp()?,
         geofence_bounds: request.geofence_bounds,
         raw_poi_count: 5,
         filtered_poi_count: 1,
@@ -157,7 +159,7 @@ async fn ingest_replays_on_provenance_conflict() {
         .in_sequence(&mut sequence)
         .return_once(move |_, _| Ok(Some(existing)));
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let outcome = service
         .ingest(request)
         .await
@@ -166,11 +168,12 @@ async fn ingest_replays_on_provenance_conflict() {
     assert_eq!(outcome.status, OsmIngestionStatus::Replayed);
     assert_eq!(outcome.raw_poi_count, 5);
     assert_eq!(outcome.persisted_poi_count, 1);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn ingest_returns_service_unavailable_when_conflict_lookup_is_missing() {
+async fn ingest_returns_service_unavailable_when_conflict_lookup_is_missing() -> TestResult {
     let request = request();
 
     let mut source_repo = MockOsmSourceRepository::new();
@@ -205,7 +208,7 @@ async fn ingest_returns_service_unavailable_when_conflict_lookup_is_missing() {
         .in_sequence(&mut sequence)
         .return_once(|_, _| Ok(None));
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let error = service
         .ingest(request)
         .await
@@ -217,11 +220,12 @@ async fn ingest_returns_service_unavailable_when_conflict_lookup_is_missing() {
             .message()
             .contains("ingestion provenance conflict occurred but rerun key was not found")
     );
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() {
+async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() -> TestResult {
     let request = request();
 
     let mut source_repo = MockOsmSourceRepository::new();
@@ -248,7 +252,7 @@ async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() {
             })
         });
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let error = service
         .ingest(request)
         .await
@@ -260,6 +264,7 @@ async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() {
             .message()
             .contains("failed to persist ingestion provenance")
     );
+    Ok(())
 }
 
 #[rstest]
@@ -272,7 +277,7 @@ async fn ingest_maps_atomic_persistence_failures_to_service_unavailable() {
 #[tokio::test]
 async fn ingest_maps_source_failures_to_service_unavailable(
     #[case] source_error: OsmSourceRepositoryError,
-) {
+) -> TestResult {
     let request = request();
 
     let mut source_repo = MockOsmSourceRepository::new();
@@ -288,7 +293,7 @@ async fn ingest_maps_source_failures_to_service_unavailable(
         .return_once(|_, _| Ok(None));
     provenance_repo.expect_persist_ingestion().times(0);
 
-    let service = make_service(source_repo, provenance_repo, fixture_clock());
+    let service = make_service(source_repo, provenance_repo, fixture_clock()?);
     let error = service
         .ingest(request)
         .await
@@ -296,4 +301,5 @@ async fn ingest_maps_source_failures_to_service_unavailable(
 
     assert_eq!(error.code(), ErrorCode::ServiceUnavailable);
     assert!(error.message().contains("failed to ingest OSM source"));
+    Ok(())
 }

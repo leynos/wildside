@@ -191,17 +191,21 @@ mod tests {
     //! Unit tests for example data configuration parsing.
 
     use super::*;
+    use std::error::Error as StdError;
     use std::ffi::OsString;
 
     use env_lock::lock_env;
     use rstest::{fixture, rstest};
 
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
     struct SettingsLoader;
 
     impl SettingsLoader {
-        fn load(&self) -> ExampleDataSettings {
-            ExampleDataSettings::load_from_iter([OsString::from("backend")])
-                .expect("config should load")
+        fn load(&self) -> TestResult<ExampleDataSettings> {
+            Ok(ExampleDataSettings::load_from_iter([OsString::from(
+                "backend",
+            )])?)
         }
     }
 
@@ -211,7 +215,9 @@ mod tests {
     }
 
     #[rstest]
-    fn default_values_are_used_when_missing(load_settings_from_empty_args: SettingsLoader) {
+    fn default_values_are_used_when_missing(
+        load_settings_from_empty_args: SettingsLoader,
+    ) -> TestResult {
         let _guard = lock_env([
             ("EXAMPLE_DATA_IS_ENABLED", None::<String>),
             ("EXAMPLE_DATA_SEED_NAME", None::<String>),
@@ -219,15 +225,18 @@ mod tests {
             ("EXAMPLE_DATA_REGISTRY_PATH", None::<String>),
         ]);
 
-        let settings = load_settings_from_empty_args.load();
+        let settings = load_settings_from_empty_args.load()?;
         assert!(!settings.is_enabled());
         assert_eq!(settings.seed_name(), DEFAULT_SEED_NAME);
         assert_eq!(settings.registry_path(), default_registry_path());
         assert!(settings.count.is_none());
+        Ok(())
     }
 
     #[rstest]
-    fn environment_overrides_are_respected(load_settings_from_empty_args: SettingsLoader) {
+    fn environment_overrides_are_respected(
+        load_settings_from_empty_args: SettingsLoader,
+    ) -> TestResult {
         let _guard = lock_env([
             ("EXAMPLE_DATA_IS_ENABLED", Some("true".to_owned())),
             ("EXAMPLE_DATA_SEED_NAME", Some("rainbow-fox".to_owned())),
@@ -238,7 +247,7 @@ mod tests {
             ),
         ]);
 
-        let settings = load_settings_from_empty_args.load();
+        let settings = load_settings_from_empty_args.load()?;
         assert!(settings.is_enabled());
         assert_eq!(settings.seed_name(), "rainbow-fox");
         assert_eq!(
@@ -246,5 +255,6 @@ mod tests {
             PathBuf::from("/tmp/example_registry.json")
         );
         assert_eq!(settings.count, Some(5));
+        Ok(())
     }
 }

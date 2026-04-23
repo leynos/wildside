@@ -12,7 +12,9 @@ use crate::inbound::http::state::HttpStatePorts;
 use actix_web::{App, test as actix_test, web};
 use rstest::rstest;
 use serde_json::Value;
-use std::sync::Arc;
+use std::{error::Error as StdError, io, sync::Arc};
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 #[derive(Debug)]
 struct ValidationExpectation<'a> {
@@ -26,7 +28,7 @@ async fn assert_login_validation_error(
     username: &str,
     password: &str,
     expected: ValidationExpectation<'_>,
-) {
+) -> TestResult {
     let app = actix_test::init_service(test_app()).await;
 
     let request = actix_test::TestRequest::post()
@@ -40,7 +42,7 @@ async fn assert_login_validation_error(
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
     let body = actix_test::read_body(response).await;
-    let value: Value = serde_json::from_slice(&body).expect("error payload");
+    let value: Value = serde_json::from_slice(&body)?;
     assert_eq!(
         value.get("message").and_then(Value::as_str),
         Some(expected.message)
@@ -52,7 +54,7 @@ async fn assert_login_validation_error(
     let details = value
         .get("details")
         .and_then(|v| v.as_object())
-        .expect("details present");
+        .ok_or_else(|| io::Error::other("details present"))?;
     assert_eq!(
         details.get("field").and_then(Value::as_str),
         Some(expected.field)
@@ -61,6 +63,7 @@ async fn assert_login_validation_error(
         details.get("code").and_then(Value::as_str),
         Some(expected.code)
     );
+    Ok(())
 }
 
 fn test_app() -> App<
@@ -103,7 +106,7 @@ async fn login_and_get_cookie(
         Response = actix_web::dev::ServiceResponse,
         Error = actix_web::Error,
     >,
-) -> actix_web::cookie::Cookie<'static> {
+) -> TestResult<actix_web::cookie::Cookie<'static>> {
     let login_req = actix_test::TestRequest::post()
         .uri("/api/v1/login")
         .set_json(&LoginRequest {
@@ -113,12 +116,12 @@ async fn login_and_get_cookie(
         .to_request();
     let login_res = actix_test::call_service(app, login_req).await;
     assert!(login_res.status().is_success());
-    login_res
+    Ok(login_res
         .response()
         .cookies()
         .find(|c| c.name() == "session")
-        .expect("session cookie")
-        .into_owned()
+        .ok_or_else(|| io::Error::other("session cookie"))?
+        .into_owned())
 }
 
 #[rstest]
@@ -147,12 +150,12 @@ async fn login_rejects_invalid_credentials(
     #[case] username: &str,
     #[case] password: &str,
     #[case] expected: ValidationExpectation<'_>,
-) {
-    assert_login_validation_error(username, password, expected).await;
+) -> TestResult {
+    assert_login_validation_error(username, password, expected).await
 }
 
 #[actix_web::test]
-async fn login_rejects_wrong_credentials_with_unauthorised_status() {
+async fn login_rejects_wrong_credentials_with_unauthorised_status() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/login")
@@ -165,7 +168,7 @@ async fn login_rejects_wrong_credentials_with_unauthorised_status() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
     let body = actix_test::read_body(response).await;
-    let value: Value = serde_json::from_slice(&body).expect("error payload");
+    let value: Value = serde_json::from_slice(&body)?;
     assert_eq!(
         value.get("message").and_then(Value::as_str),
         Some("invalid credentials")
@@ -174,12 +177,13 @@ async fn login_rejects_wrong_credentials_with_unauthorised_status() {
         value.get("code").and_then(Value::as_str),
         Some("unauthorized")
     );
+    Ok(())
 }
 
 #[actix_web::test]
-async fn list_users_returns_camel_case_json() {
+async fn list_users_returns_camel_case_json() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let cookie = login_and_get_cookie(&app).await?;
 
     let users_req = actix_test::TestRequest::get()
         .uri("/api/v1/users")
@@ -188,13 +192,14 @@ async fn list_users_returns_camel_case_json() {
     let users_res = actix_test::call_service(&app, users_req).await;
     assert!(users_res.status().is_success());
     let body = actix_test::read_body(users_res).await;
-    let value: Value = serde_json::from_slice(&body).expect("response JSON");
-    let first = &value.as_array().expect("array")[0];
+    let value: Value = serde_json::from_slice(&body)?;
+    let first = &value.as_array().ok_or_else(|| io::Error::other("array"))?[0];
     assert_eq!(
         first.get("displayName").and_then(Value::as_str),
         Some("Ada Lovelace")
     );
     assert!(first.get("display_name").is_none());
+    Ok(())
 }
 
 #[actix_web::test]
@@ -211,9 +216,9 @@ async fn list_users_rejects_without_session() {
 }
 
 #[actix_web::test]
-async fn update_interests_rejects_too_many_ids() {
+async fn update_interests_rejects_too_many_ids() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let cookie = login_and_get_cookie(&app).await?;
     let payload = InterestsRequest {
         interest_theme_ids: vec![
             "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
@@ -231,7 +236,7 @@ async fn update_interests_rejects_too_many_ids() {
 
     assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
     let body = actix_test::read_body(response).await;
-    let value: Value = serde_json::from_slice(&body).expect("error payload");
+    let value: Value = serde_json::from_slice(&body)?;
     assert_eq!(
         value.get("message").and_then(Value::as_str),
         Some("interest theme ids must contain at most 100 items")
@@ -243,7 +248,7 @@ async fn update_interests_rejects_too_many_ids() {
     let details = value
         .get("details")
         .and_then(|val| val.as_object())
-        .expect("details present");
+        .ok_or_else(|| io::Error::other("details present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
@@ -260,6 +265,7 @@ async fn update_interests_rejects_too_many_ids() {
         details.get("count").and_then(Value::as_u64),
         Some((INTEREST_THEME_IDS_MAX + 1) as u64)
     );
+    Ok(())
 }
 
 #[rstest]
@@ -273,7 +279,7 @@ fn interests_request_validation_rejects_invalid_ids(
     #[case] value: &str,
     #[case] expected_code: &str,
     #[case] expected_message: &str,
-) {
+) -> TestResult {
     let payload = InterestsRequest {
         interest_theme_ids: vec![value.to_owned()],
         expected_revision: None,
@@ -287,7 +293,7 @@ fn interests_request_validation_rejects_invalid_ids(
     let details = api_error
         .details()
         .and_then(|value| value.as_object())
-        .expect("details present");
+        .ok_or_else(|| io::Error::other("details present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some(expected_code)
@@ -297,10 +303,11 @@ fn interests_request_validation_rejects_invalid_ids(
         Some("interestThemeIds")
     );
     assert_eq!(details.get("index").and_then(Value::as_u64), Some(0));
+    Ok(())
 }
 
 #[test]
-fn interests_request_validation_rejects_too_many_ids() {
+fn interests_request_validation_rejects_too_many_ids() -> TestResult {
     let payload = InterestsRequest {
         interest_theme_ids: vec![
             "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned();
@@ -320,7 +327,7 @@ fn interests_request_validation_rejects_too_many_ids() {
     let details = api_error
         .details()
         .and_then(|value| value.as_object())
-        .expect("details present");
+        .ok_or_else(|| io::Error::other("details present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
@@ -337,32 +344,35 @@ fn interests_request_validation_rejects_too_many_ids() {
         details.get("count").and_then(Value::as_u64),
         Some((INTEREST_THEME_IDS_MAX + 1) as u64)
     );
+    Ok(())
 }
 
 #[test]
-fn interests_request_validation_accepts_valid_ids() {
+fn interests_request_validation_accepts_valid_ids() -> TestResult {
     let payload = InterestsRequest {
         interest_theme_ids: vec!["3fa85f64-5717-4562-b3fc-2c963f66afa6".to_owned()],
         expected_revision: Some(7),
     };
 
-    let parsed = parse_interest_theme_ids(payload).expect("valid interest theme ids");
+    let parsed = parse_interest_theme_ids(payload)
+        .map_err(|_| io::Error::other("valid interest theme ids"))?;
     assert_eq!(parsed.expected_revision, Some(7));
     assert_eq!(parsed.interest_theme_ids.len(), 1);
     assert_eq!(
         parsed.interest_theme_ids[0].as_ref(),
         "3fa85f64-5717-4562-b3fc-2c963f66afa6"
     );
+    Ok(())
 }
 
 #[test]
-fn interests_request_serializes_expected_revision_in_camel_case() {
+fn interests_request_serializes_expected_revision_in_camel_case() -> TestResult {
     let request = InterestsRequest {
         interest_theme_ids: vec![],
         expected_revision: Some(3),
     };
 
-    let value = serde_json::to_value(request).expect("request serializes");
+    let value = serde_json::to_value(request)?;
     assert_eq!(
         value.get("expectedRevision").and_then(Value::as_u64),
         Some(3)
@@ -371,4 +381,5 @@ fn interests_request_serializes_expected_revision_in_camel_case() {
         value.get("expected_revision").is_none(),
         "snake_case key should not be present"
     );
+    Ok(())
 }

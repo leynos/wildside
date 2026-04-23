@@ -142,17 +142,20 @@ pub struct UserInterestsSchema {
 mod tests {
     //! Regression coverage for this module.
     use super::*;
+    use std::error::Error as StdError;
     use utoipa::PartialSchema;
 
-    fn schema_to_json<T: PartialSchema>() -> String {
-        serde_json::to_string(&T::schema()).expect("schema serializes to JSON")
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn schema_to_json<T: PartialSchema>() -> serde_json::Result<String> {
+        serde_json::to_string(&T::schema())
     }
 
     fn assert_schema_contains<T: PartialSchema + ToSchema>(
         expected_name: &str,
         expected_fields: &[&str],
-    ) {
-        let schema_json = schema_to_json::<T>();
+    ) -> TestResult {
+        let schema_json = schema_to_json::<T>()?;
         let name = T::name();
         // utoipa replaces :: with . in schema names
         assert_eq!(name, expected_name);
@@ -162,40 +165,41 @@ mod tests {
                 "schema should contain {field} field"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn error_code_schema_has_expected_name() {
-        assert_schema_contains::<ErrorCodeSchema>("crate.domain.ErrorCode", &["invalid_request"]);
+    fn error_code_schema_has_expected_name() -> TestResult {
+        assert_schema_contains::<ErrorCodeSchema>("crate.domain.ErrorCode", &["invalid_request"])
     }
 
     #[test]
-    fn error_schema_has_expected_name() {
-        assert_schema_contains::<ErrorSchema>("crate.domain.Error", &["message", "traceId"]);
+    fn error_schema_has_expected_name() -> TestResult {
+        assert_schema_contains::<ErrorSchema>("crate.domain.Error", &["message", "traceId"])
     }
 
     #[test]
-    fn user_schema_has_expected_name() {
-        assert_schema_contains::<UserSchema>("crate.domain.User", &["displayName"]);
+    fn user_schema_has_expected_name() -> TestResult {
+        assert_schema_contains::<UserSchema>("crate.domain.User", &["displayName"])
     }
 
     #[test]
-    fn interest_theme_id_schema_has_expected_name() {
-        assert_schema_contains::<InterestThemeIdSchema>("crate.domain.InterestThemeId", &["uuid"]);
+    fn interest_theme_id_schema_has_expected_name() -> TestResult {
+        assert_schema_contains::<InterestThemeIdSchema>("crate.domain.InterestThemeId", &["uuid"])
     }
 
     #[test]
-    fn user_interests_schema_has_expected_name() {
+    fn user_interests_schema_has_expected_name() -> TestResult {
         assert_schema_contains::<UserInterestsSchema>(
             "crate.domain.UserInterests",
             &["interestThemeIds", "revision"],
-        );
+        )
     }
 
     #[test]
-    fn error_code_schema_variants_match_domain() {
+    fn error_code_schema_variants_match_domain() -> TestResult {
         // Verify the schema contains all expected error code variants
-        let schema_json = schema_to_json::<ErrorCodeSchema>();
+        let schema_json = schema_to_json::<ErrorCodeSchema>()?;
         assert!(
             schema_json.contains("invalid_request"),
             "missing invalid_request"
@@ -212,6 +216,7 @@ mod tests {
             schema_json.contains("service_unavailable"),
             "missing service_unavailable"
         );
+        Ok(())
     }
 
     /// Verify domain ErrorCode serialization matches schema renames.
@@ -219,7 +224,7 @@ mod tests {
     /// Uses pattern matching for compile-time exhaustiveness: if a new domain
     /// variant is added, this test will fail to compile until updated.
     #[test]
-    fn error_code_schema_matches_domain_serialization() {
+    fn error_code_schema_matches_domain_serialization() -> TestResult {
         use crate::domain::ErrorCode;
 
         /// Map domain variant to expected serialized string.
@@ -249,7 +254,7 @@ mod tests {
         ];
 
         for code in variants {
-            let serialized = serde_json::to_string(&code).expect("ErrorCode serializes");
+            let serialized = serde_json::to_string(&code)?;
             let expected = expected_serialization(code);
             assert_eq!(
                 serialized,
@@ -257,5 +262,6 @@ mod tests {
                 "domain ErrorCode::{code:?} should serialize to {expected}"
             );
         }
+        Ok(())
     }
 }

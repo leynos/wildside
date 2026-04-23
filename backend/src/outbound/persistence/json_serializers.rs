@@ -108,9 +108,12 @@ mod tests {
     use super::*;
     use rstest::{fixture, rstest};
     use serde_json::json;
+    use std::error::Error as StdError;
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     #[fixture]
-    fn sample_localization_map() -> LocalizationMap {
+    fn sample_localization_map() -> TestResult<LocalizationMap> {
         let mut values = BTreeMap::new();
         values.insert(
             "en-GB".to_owned(),
@@ -124,22 +127,28 @@ mod tests {
                 Some("Une balade en pleine nature".to_owned()),
             ),
         );
-        LocalizationMap::new(values).expect("fixture should be valid")
+        Ok(LocalizationMap::new(values)?)
     }
 
     #[fixture]
-    fn sample_image_asset() -> ImageAsset {
-        ImageAsset::new("https://example.test/hero.jpg", "Route hero")
-            .expect("fixture should be valid")
+    fn sample_image_asset() -> TestResult<ImageAsset> {
+        Ok(ImageAsset::new(
+            "https://example.test/hero.jpg",
+            "Route hero",
+        )?)
     }
 
     // -- localization round-trip --
 
     #[rstest]
-    fn localization_map_round_trips_through_json(sample_localization_map: LocalizationMap) {
+    fn localization_map_round_trips_through_json(
+        sample_localization_map: TestResult<LocalizationMap>,
+    ) -> TestResult {
+        let sample_localization_map = sample_localization_map?;
         let json = localization_map_to_json(&sample_localization_map);
-        let decoded = json_to_localization_map(json).expect("decode should succeed");
+        let decoded = json_to_localization_map(json)?;
         assert_eq!(decoded, sample_localization_map);
+        Ok(())
     }
 
     #[rstest]
@@ -165,10 +174,14 @@ mod tests {
     // -- image asset round-trip --
 
     #[rstest]
-    fn image_asset_round_trips_through_json(sample_image_asset: ImageAsset) {
+    fn image_asset_round_trips_through_json(
+        sample_image_asset: TestResult<ImageAsset>,
+    ) -> TestResult {
+        let sample_image_asset = sample_image_asset?;
         let json = image_asset_to_json(&sample_image_asset);
-        let decoded = json_to_image_asset(&json).expect("decode should succeed");
+        let decoded = json_to_image_asset(&json)?;
         assert_eq!(decoded, sample_image_asset);
+        Ok(())
     }
 
     #[rstest]
@@ -191,10 +204,11 @@ mod tests {
     // -- semantic icon identifier --
 
     #[rstest]
-    fn semantic_icon_identifier_accepts_valid_key() {
+    fn semantic_icon_identifier_accepts_valid_key() -> TestResult {
         let result = json_to_semantic_icon_identifier("category:nature");
         assert!(result.is_ok());
-        assert_eq!(result.expect("valid").as_ref(), "category:nature");
+        assert_eq!(result?.as_ref(), "category:nature");
+        Ok(())
     }
 
     #[rstest]

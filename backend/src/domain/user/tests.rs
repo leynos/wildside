@@ -1,9 +1,13 @@
 //! Tests for the domain user model.
 
+use std::error::Error as StdError;
+
 use super::*;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 const VALID_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 
@@ -234,16 +238,23 @@ fn the_user_is_constructed(
 }
 
 #[then("the user is returned")]
-fn the_user_is_returned(result: Result<User, UserValidationError>, valid_id: TestUserId) {
-    let user = result.expect("user should be created");
+fn the_user_is_returned(
+    result: Result<User, UserValidationError>,
+    valid_id: TestUserId,
+) -> TestResult {
+    let user = result?;
     assert_eq!(user.id().as_ref(), valid_id.as_ref());
+    Ok(())
 }
 
 #[rstest]
-fn constructing_a_user_happy_path(valid_display_name: TestDisplayName, valid_id: TestUserId) {
+fn constructing_a_user_happy_path(
+    valid_display_name: TestDisplayName,
+    valid_id: TestUserId,
+) -> TestResult {
     let payload = a_valid_user_payload(valid_id.clone(), valid_display_name);
     let result = the_user_is_constructed(payload);
-    the_user_is_returned(result, valid_id);
+    the_user_is_returned(result, valid_id)
 }
 
 #[given("a payload with an empty display name")]

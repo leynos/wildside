@@ -202,10 +202,12 @@ fn map_unit_system(unit_system: UnitSystemSeed) -> UnitSystem {
 mod tests {
     //! Unit tests for example data seeding orchestration.
 
+    use std::error::Error as StdError;
+
     use super::*;
     use crate::domain::ports::MockExampleDataSeedRepository;
     use mockable::DefaultClock;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
     const REGISTRY_JSON: &str = r#"{
         "version": 1,
@@ -214,14 +216,16 @@ mod tests {
         "seeds": [{"name": "mossy-owl", "seed": 42, "userCount": 2}]
     }"#;
 
-    #[fixture]
-    fn registry() -> SeedRegistry {
-        SeedRegistry::from_json(REGISTRY_JSON).expect("registry should parse")
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn registry() -> TestResult<SeedRegistry> {
+        Ok(SeedRegistry::from_json(REGISTRY_JSON)?)
     }
 
     #[rstest]
     #[tokio::test]
-    async fn seed_applies_for_new_seed(registry: SeedRegistry) {
+    async fn seed_applies_for_new_seed() -> TestResult {
+        let registry = registry()?;
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data()
             .withf(|request| {
@@ -242,11 +246,13 @@ mod tests {
         assert_eq!(outcome.result, SeedingResult::Applied);
         assert_eq!(outcome.user_count, 2);
         assert_eq!(outcome.seed_key, "mossy-owl");
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn seed_skips_when_already_seeded(registry: SeedRegistry) {
+    async fn seed_skips_when_already_seeded() -> TestResult {
+        let registry = registry()?;
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data()
             .times(1)
@@ -259,11 +265,13 @@ mod tests {
             .expect("seed succeeds");
 
         assert_eq!(outcome.result, SeedingResult::AlreadySeeded);
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn seed_rejects_unknown_seed(registry: SeedRegistry) {
+    async fn seed_rejects_unknown_seed() -> TestResult {
+        let registry = registry()?;
         let seeder = ExampleDataSeeder::new(
             Arc::new(MockExampleDataSeedRepository::new()),
             Arc::new(DefaultClock),
@@ -274,11 +282,13 @@ mod tests {
             .expect_err("missing seed should error");
 
         assert!(matches!(error, ExampleDataSeedingError::Registry(_)));
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn user_count_overflow_is_rejected(registry: SeedRegistry) {
+    async fn user_count_overflow_is_rejected() -> TestResult {
+        let registry = registry()?;
         let mut repo = MockExampleDataSeedRepository::new();
         repo.expect_seed_example_data().times(0);
 
@@ -293,6 +303,7 @@ mod tests {
             error,
             ExampleDataSeedingError::UserCountOverflow { count } if count == overflow_count
         ));
+        Ok(())
     }
 
     #[rstest]
