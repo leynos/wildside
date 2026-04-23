@@ -43,7 +43,8 @@ const METRIC_PROBABILITY_DENOMINATOR: u32 = 10;
 /// Uses the seed's `seed` value to initialize a deterministic RNG, ensuring
 /// identical output for the same seed definition. The generated users have:
 ///
-/// - Unique UUIDs (deterministically generated)
+/// - Deterministic, collision-resistant UUIDs (not guaranteed unique without
+///   de-duplication)
 /// - Valid display names matching backend constraints
 /// - A subset of interest themes from the registry
 /// - A subset of safety toggles from the registry

@@ -258,32 +258,31 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_command_preserves_session_id() {
+    async fn fixture_command_preserves_session_id() -> TestResult {
         let command = FixtureWalkSessionCommand;
-        let sample_payload = sample_payload().expect("sample payload");
+        let sample_payload = sample_payload()?;
         let request = CreateWalkSessionRequest {
             session: sample_payload,
         };
 
-        let response = command
-            .create_session(request.clone())
-            .await
-            .expect("fixture create succeeds");
+        let response = command.create_session(request.clone()).await?;
 
         assert_eq!(response.session_id, request.session.id);
         assert!(response.completion_summary.is_some());
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn payload_round_trip_through_domain_entity() {
-        let payload = sample_payload().expect("sample payload");
+    async fn payload_round_trip_through_domain_entity() -> TestResult {
+        let payload = sample_payload()?;
 
-        let session = WalkSession::try_from(payload.clone()).expect("valid session payload");
+        let session = WalkSession::try_from(payload.clone())?;
         let restored = WalkSessionPayload::from(session);
 
         assert_eq!(restored.id, payload.id);
         assert_eq!(restored.route_id, payload.route_id);
         assert_eq!(restored.primary_stats.len(), payload.primary_stats.len());
+        Ok(())
     }
 }

@@ -3,6 +3,10 @@
 use super::*;
 use std::io;
 
+fn map_mutex_poison(ctx: &str, error: impl std::fmt::Display) -> io::Error {
+    io::Error::other(format!("{ctx}: {error}"))
+}
+
 pub(super) fn assert_successful_job_outcome(
     outcome: &crate::domain::OverpassEnrichmentJobOutcome,
     expected_attempts: u32,
@@ -67,7 +71,7 @@ pub(super) fn assert_provenance_recorded(
     let persisted = provenance_repo
         .persisted
         .lock()
-        .map_err(|_| io::Error::other("provenance mutex"))?;
+        .map_err(|error| map_mutex_poison("provenance mutex", error))?;
     assert_eq!(
         persisted.len(),
         1,
@@ -98,7 +102,7 @@ pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usiz
     let successes = metrics
         .successes
         .lock()
-        .map_err(|_| io::Error::other("metrics mutex"))?;
+        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
     assert_eq!(
         successes.len(),
         expected_count,
@@ -110,7 +114,7 @@ pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usiz
     let failures = metrics
         .failures
         .lock()
-        .map_err(|_| io::Error::other("metrics mutex"))?;
+        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
     assert!(
         failures.is_empty(),
         "expected no failure metrics when asserting success, found {}",
@@ -126,7 +130,7 @@ pub(super) fn assert_metrics_failure(
     let successes = metrics
         .successes
         .lock()
-        .map_err(|_| io::Error::other("metrics mutex"))?;
+        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
     assert!(
         successes.is_empty(),
         "expected no success metrics when asserting failure, found {}",
@@ -137,7 +141,7 @@ pub(super) fn assert_metrics_failure(
     let failures = metrics
         .failures
         .lock()
-        .map_err(|_| io::Error::other("metrics mutex"))?;
+        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
     assert_eq!(
         failures.len(),
         1,

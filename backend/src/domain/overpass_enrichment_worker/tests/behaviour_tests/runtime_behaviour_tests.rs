@@ -139,7 +139,7 @@ async fn semaphore_limits_concurrent_calls(job: OverpassEnrichmentRequest) -> Te
     timeout(Duration::from_secs(1), entered_rx.recv())
         .await
         .map_err(|_| std::io::Error::other("first entered"))?
-        .ok_or_else(|| std::io::Error::other("entry exists"))?;
+        .ok_or_else(|| std::io::Error::other("recv() returned None"))?;
 
     let second_fixture = Arc::clone(&fixture);
     let second = tokio::spawn(async move { second_fixture.process_job(job).await });
@@ -153,7 +153,7 @@ async fn semaphore_limits_concurrent_calls(job: OverpassEnrichmentRequest) -> Te
     timeout(Duration::from_secs(1), entered_rx.recv())
         .await
         .map_err(|_| std::io::Error::other("second entered"))?
-        .ok_or_else(|| std::io::Error::other("entry exists"))?;
+        .ok_or_else(|| std::io::Error::other("recv() returned None"))?;
     release.notify_one();
 
     first.await??;

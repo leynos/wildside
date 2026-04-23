@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, error::Error as StdError};
 
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -12,6 +12,7 @@ use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
+#[fixture]
 fn localizations() -> TestResult<LocalizationMap> {
     let mut values = BTreeMap::new();
     values.insert(
@@ -21,31 +22,32 @@ fn localizations() -> TestResult<LocalizationMap> {
     Ok(LocalizationMap::new(values)?)
 }
 
+#[fixture]
 fn icon_key() -> TestResult<SemanticIconIdentifier> {
     Ok(SemanticIconIdentifier::new("descriptor:tag")?)
 }
 
 #[rstest]
-fn tag_accepts_valid_payload() -> TestResult {
-    let tag = Tag::new(
-        Uuid::new_v4(),
-        "family-friendly",
-        icon_key()?,
-        localizations()?,
-    )?;
+fn tag_accepts_valid_payload(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
+    let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon_key, localizations)?;
 
     assert_eq!(tag.slug(), "family-friendly");
     Ok(())
 }
 
 #[rstest]
-fn badge_rejects_invalid_slug() -> TestResult {
-    let result = Badge::new(
-        Uuid::new_v4(),
-        "Family Friendly",
-        icon_key()?,
-        localizations()?,
-    );
+fn badge_rejects_invalid_slug(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
+    let result = Badge::new(Uuid::new_v4(), "Family Friendly", icon_key, localizations);
 
     assert!(matches!(
         result,
@@ -57,20 +59,30 @@ fn badge_rejects_invalid_slug() -> TestResult {
 }
 
 #[rstest]
-fn safety_toggle_accepts_valid_payload() -> TestResult {
-    let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon_key()?, localizations()?)?;
+fn safety_toggle_accepts_valid_payload(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
+    let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon_key, localizations)?;
 
     assert_eq!(toggle.slug(), "well-lit");
     Ok(())
 }
 
 #[rstest]
-fn safety_preset_rejects_empty_toggle_ids() -> TestResult {
+fn safety_preset_rejects_empty_toggle_ids(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
     let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
-        icon_key: icon_key()?,
-        localizations: localizations()?,
+        icon_key,
+        localizations,
         safety_toggle_ids: vec![],
     });
 
@@ -82,13 +94,18 @@ fn safety_preset_rejects_empty_toggle_ids() -> TestResult {
 }
 
 #[rstest]
-fn safety_preset_rejects_duplicate_toggle_ids() -> TestResult {
+fn safety_preset_rejects_duplicate_toggle_ids(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
     let toggle_id = Uuid::new_v4();
     let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
-        icon_key: icon_key()?,
-        localizations: localizations()?,
+        icon_key,
+        localizations,
         safety_toggle_ids: vec![toggle_id, toggle_id],
     });
 
@@ -100,12 +117,17 @@ fn safety_preset_rejects_duplicate_toggle_ids() -> TestResult {
 }
 
 #[rstest]
-fn safety_preset_accepts_unique_toggle_ids() -> TestResult {
+fn safety_preset_accepts_unique_toggle_ids(
+    localizations: TestResult<LocalizationMap>,
+    icon_key: TestResult<SemanticIconIdentifier>,
+) -> TestResult {
+    let localizations = localizations?;
+    let icon_key = icon_key?;
     let preset = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
-        icon_key: icon_key()?,
-        localizations: localizations()?,
+        icon_key,
+        localizations,
         safety_toggle_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
     })?;
 

@@ -7,7 +7,9 @@ use super::super::calculate_age_bucket;
 
 /// Fixed reference time for deterministic tests.
 fn fixed_now() -> chrono::DateTime<Utc> {
-    Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap()
+    Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0)
+        .single()
+        .expect("failed to construct fixed timestamp for tests")
 }
 
 /// Parameterized test for age bucket boundary values.

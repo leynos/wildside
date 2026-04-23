@@ -193,7 +193,11 @@ async fn list_users_returns_camel_case_json() -> TestResult {
     assert!(users_res.status().is_success());
     let body = actix_test::read_body(users_res).await;
     let value: Value = serde_json::from_slice(&body)?;
-    let first = &value.as_array().ok_or_else(|| io::Error::other("array"))?[0];
+    let first = value
+        .as_array()
+        .ok_or_else(|| io::Error::other("expected users response array"))?
+        .first()
+        .ok_or_else(|| io::Error::other("expected at least one user in response"))?;
     assert_eq!(
         first.get("displayName").and_then(Value::as_str),
         Some("Ada Lovelace")

@@ -14,7 +14,7 @@ struct SelectSubsetCase {
     iterations: usize,
     expected_min: usize,
     expected_max: usize,
-    expect_full_source: bool,
+    is_full_source_expected: bool,
 }
 type RegistryResult = Result<SeedRegistry, RegistryError>;
 
@@ -142,22 +142,22 @@ fn select_unit_system_can_produce_both_variants() {
     // the full RNG trace used by `generate_example_users` (name generation,
     // subset selection, and so on).
     let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let mut saw_metric = false;
-    let mut saw_imperial = false;
+    let mut has_seen_metric = false;
+    let mut has_seen_imperial = false;
     // With a 9:1 metric:imperial ratio, 200 draws reliably cover both variants
     // for a fixed seed while keeping the test deterministic.
     for _ in 0..200 {
         match select_unit_system(&mut rng) {
-            UnitSystemSeed::Metric => saw_metric = true,
-            UnitSystemSeed::Imperial => saw_imperial = true,
+            UnitSystemSeed::Metric => has_seen_metric = true,
+            UnitSystemSeed::Imperial => has_seen_imperial = true,
         }
-        if saw_metric && saw_imperial {
+        if has_seen_metric && has_seen_imperial {
             return;
         }
     }
     panic!(
         "select_unit_system failed to produce both variants: \
-         metric={saw_metric}, imperial={saw_imperial}"
+         metric={has_seen_metric}, imperial={has_seen_imperial}"
     );
 }
 
@@ -205,7 +205,7 @@ fn users_have_at_most_max_safety_toggles(test_registry: RegistryResult) -> TestR
     iterations: 100,
     expected_min: 2,
     expected_max: 5,
-    expect_full_source: false,
+    is_full_source_expected: false,
 })]
 #[case::normalizes_inverted_bounds(SelectSubsetCase {
     ids: deterministic_ids(10),
@@ -214,7 +214,7 @@ fn users_have_at_most_max_safety_toggles(test_registry: RegistryResult) -> TestR
     iterations: 100,
     expected_min: 2,
     expected_max: 5,
-    expect_full_source: false,
+    is_full_source_expected: false,
 })]
 #[case::handles_empty_slice(SelectSubsetCase {
     ids: Vec::new(),
@@ -223,7 +223,7 @@ fn users_have_at_most_max_safety_toggles(test_registry: RegistryResult) -> TestR
     iterations: 1,
     expected_min: 0,
     expected_max: 0,
-    expect_full_source: false,
+    is_full_source_expected: false,
 })]
 #[case::clamps_to_available(SelectSubsetCase {
     ids: deterministic_ids(2),
@@ -232,11 +232,11 @@ fn users_have_at_most_max_safety_toggles(test_registry: RegistryResult) -> TestR
     iterations: 1,
     expected_min: 2,
     expected_max: 2,
-    expect_full_source: true,
+    is_full_source_expected: true,
 })]
 fn select_subset_handles_expected_bounds(#[case] case: SelectSubsetCase) {
     let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let expected_ids = case
+    let source_ids = case
         .ids
         .iter()
         .copied()
@@ -256,14 +256,19 @@ fn select_subset_handles_expected_bounds(#[case] case: SelectSubsetCase) {
             subset.len()
         );
 
-        if case.expect_full_source {
+        assert!(
+            subset.iter().all(|id| source_ids.contains(id)),
+            "Subset contains IDs outside the source collection"
+        );
+
+        if case.is_full_source_expected {
             assert_eq!(subset.len(), case.ids.len());
             assert_eq!(
                 subset
                     .iter()
                     .copied()
                     .collect::<std::collections::HashSet<_>>(),
-                expected_ids
+                source_ids
             );
         }
     }

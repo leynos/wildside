@@ -18,7 +18,7 @@ fn walk_session_draft() -> TestResult<WalkSessionDraft> {
     let started_at = Utc
         .with_ymd_and_hms(2026, 2, 20, 9, 0, 0)
         .single()
-        .ok_or_else(|| io::Error::other("valid timestamp"))?;
+        .ok_or_else(|| io::Error::other("failed to construct timestamp"))?;
 
     Ok(WalkSessionDraft {
         id: Uuid::new_v4(),
