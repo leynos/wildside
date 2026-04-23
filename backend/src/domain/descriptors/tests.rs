@@ -12,6 +12,10 @@ use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
+fn unwrap_fixtures<T, U>((left, right): (TestResult<T>, TestResult<U>)) -> TestResult<(T, U)> {
+    Ok((left?, right?))
+}
+
 #[fixture]
 fn localizations() -> TestResult<LocalizationMap> {
     let mut values = BTreeMap::new();
@@ -32,8 +36,7 @@ fn tag_accepts_valid_payload(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let tag = Tag::new(Uuid::new_v4(), "family-friendly", icon_key, localizations)?;
 
     assert_eq!(tag.slug(), "family-friendly");
@@ -45,8 +48,7 @@ fn badge_rejects_invalid_slug(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let result = Badge::new(Uuid::new_v4(), "Family Friendly", icon_key, localizations);
 
     assert!(matches!(
@@ -63,8 +65,7 @@ fn safety_toggle_accepts_valid_payload(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let toggle = SafetyToggle::new(Uuid::new_v4(), "well-lit", icon_key, localizations)?;
 
     assert_eq!(toggle.slug(), "well-lit");
@@ -76,8 +77,7 @@ fn safety_preset_rejects_empty_toggle_ids(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),
@@ -98,8 +98,7 @@ fn safety_preset_rejects_duplicate_toggle_ids(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let toggle_id = Uuid::new_v4();
     let result = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
@@ -121,8 +120,7 @@ fn safety_preset_accepts_unique_toggle_ids(
     localizations: TestResult<LocalizationMap>,
     icon_key: TestResult<SemanticIconIdentifier>,
 ) -> TestResult {
-    let localizations = localizations?;
-    let icon_key = icon_key?;
+    let (localizations, icon_key) = unwrap_fixtures((localizations, icon_key))?;
     let preset = SafetyPreset::new(SafetyPresetDraft {
         id: Uuid::new_v4(),
         slug: "quiet-hours".to_owned(),

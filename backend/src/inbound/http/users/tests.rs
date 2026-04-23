@@ -54,7 +54,7 @@ async fn assert_login_validation_error(
     let details = value
         .get("details")
         .and_then(|v| v.as_object())
-        .ok_or_else(|| io::Error::other("details present"))?;
+        .ok_or_else(|| io::Error::other("expected details to be present"))?;
     assert_eq!(
         details.get("field").and_then(Value::as_str),
         Some(expected.field)
@@ -252,7 +252,7 @@ async fn update_interests_rejects_too_many_ids() -> TestResult {
     let details = value
         .get("details")
         .and_then(|val| val.as_object())
-        .ok_or_else(|| io::Error::other("details present"))?;
+        .ok_or_else(|| io::Error::other("expected details to be present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
@@ -297,7 +297,7 @@ fn interests_request_validation_rejects_invalid_ids(
     let details = api_error
         .details()
         .and_then(|value| value.as_object())
-        .ok_or_else(|| io::Error::other("details present"))?;
+        .ok_or_else(|| io::Error::other("expected details to be present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some(expected_code)
@@ -331,7 +331,7 @@ fn interests_request_validation_rejects_too_many_ids() -> TestResult {
     let details = api_error
         .details()
         .and_then(|value| value.as_object())
-        .ok_or_else(|| io::Error::other("details present"))?;
+        .ok_or_else(|| io::Error::other("expected details to be present"))?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
@@ -358,8 +358,12 @@ fn interests_request_validation_accepts_valid_ids() -> TestResult {
         expected_revision: Some(7),
     };
 
-    let parsed = parse_interest_theme_ids(payload)
-        .map_err(|_| io::Error::other("valid interest theme ids"))?;
+    let parsed = parse_interest_theme_ids(payload).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("failed to parse interest theme ids: {error:?}"),
+        )
+    })?;
     assert_eq!(parsed.expected_revision, Some(7));
     assert_eq!(parsed.interest_theme_ids.len(), 1);
     assert_eq!(

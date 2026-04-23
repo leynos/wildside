@@ -102,7 +102,7 @@ pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usiz
     let successes = metrics
         .successes
         .lock()
-        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
+        .map_err(|error| map_mutex_poison("metrics.successes mutex", error))?;
     assert_eq!(
         successes.len(),
         expected_count,
@@ -114,7 +114,7 @@ pub(super) fn assert_metrics_success(metrics: &MetricsStub, expected_count: usiz
     let failures = metrics
         .failures
         .lock()
-        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
+        .map_err(|error| map_mutex_poison("metrics.failures mutex", error))?;
     assert!(
         failures.is_empty(),
         "expected no failure metrics when asserting success, found {}",
@@ -130,7 +130,7 @@ pub(super) fn assert_metrics_failure(
     let successes = metrics
         .successes
         .lock()
-        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
+        .map_err(|error| map_mutex_poison("metrics.successes mutex", error))?;
     assert!(
         successes.is_empty(),
         "expected no success metrics when asserting failure, found {}",
@@ -141,7 +141,7 @@ pub(super) fn assert_metrics_failure(
     let failures = metrics
         .failures
         .lock()
-        .map_err(|error| map_mutex_poison("metrics mutex", error))?;
+        .map_err(|error| map_mutex_poison("metrics.failures mutex", error))?;
     assert_eq!(
         failures.len(),
         1,

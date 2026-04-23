@@ -223,7 +223,7 @@ mod tests {
     //! Regression coverage for this module.
 
     use chrono::{DateTime, Utc};
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::error::Error as StdError;
 
     use super::*;
@@ -235,6 +235,7 @@ mod tests {
         Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
     }
 
+    #[fixture]
     fn sample_payload() -> TestResult<WalkSessionPayload> {
         let started_at = fixture_timestamp()?;
         Ok(WalkSessionPayload {
@@ -258,9 +259,11 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_command_preserves_session_id() -> TestResult {
+    async fn fixture_command_preserves_session_id(
+        sample_payload: TestResult<WalkSessionPayload>,
+    ) -> TestResult {
         let command = FixtureWalkSessionCommand;
-        let sample_payload = sample_payload()?;
+        let sample_payload = sample_payload?;
         let request = CreateWalkSessionRequest {
             session: sample_payload,
         };
@@ -274,8 +277,10 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn payload_round_trip_through_domain_entity() -> TestResult {
-        let payload = sample_payload()?;
+    async fn payload_round_trip_through_domain_entity(
+        sample_payload: TestResult<WalkSessionPayload>,
+    ) -> TestResult {
+        let payload = sample_payload?;
 
         let session = WalkSession::try_from(payload.clone())?;
         let restored = WalkSessionPayload::from(session);
