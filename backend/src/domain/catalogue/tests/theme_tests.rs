@@ -4,20 +4,11 @@ use super::*;
 use rstest::rstest;
 
 #[rstest]
-fn theme_new_accepts_valid_payload(
-    icon_key: TestResult<SemanticIconIdentifier>,
-    localizations: TestResult<LocalizationMap>,
-    image: TestResult<ImageAsset>,
-) -> TestResult {
+fn theme_new_accepts_valid_payload(default_theme_draft: TestResult<ThemeDraft>) -> TestResult {
+    let default_theme_draft = default_theme_draft?;
     let theme = Theme::new(ThemeDraft {
-        id: Uuid::new_v4(),
-        slug: "nature".to_owned(),
-        icon_key: icon_key?,
-        localizations: localizations?,
-        image: image?,
         walk_count: 25,
-        distance_range_metres: [1_000, 6_000],
-        rating: 4.2,
+        ..default_theme_draft.clone()
     })?;
 
     assert_eq!(theme.slug(), "nature");
@@ -54,19 +45,13 @@ fn theme_invalid_inputs(
 #[case(5.1)]
 fn theme_rejects_out_of_range_rating(
     #[case] rating: f32,
-    icon_key: TestResult<SemanticIconIdentifier>,
-    localizations: TestResult<LocalizationMap>,
-    image: TestResult<ImageAsset>,
+    default_theme_draft: TestResult<ThemeDraft>,
 ) -> TestResult {
+    let default_theme_draft = default_theme_draft?;
     let result = Theme::new(ThemeDraft {
-        id: Uuid::new_v4(),
-        slug: "nature".to_owned(),
-        icon_key: icon_key?,
-        localizations: localizations?,
-        image: image?,
-        walk_count: 25,
-        distance_range_metres: [1_000, 6_000],
         rating,
+        walk_count: 25,
+        ..default_theme_draft.clone()
     });
 
     assert!(matches!(
