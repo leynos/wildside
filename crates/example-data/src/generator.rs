@@ -201,29 +201,29 @@ fn select_subset(
 #[cfg(test)]
 mod tests {
     //! Regression tests for deterministic example user generation.
-
+    use super::*;
     use rstest::{fixture, rstest};
 
-    use super::*;
-
     /// Generates users from the named seed and asserts a predicate holds for all users.
-    ///
     /// # Panics
-    ///
     /// Panics if the seed is not found, generation fails, or the predicate
     /// returns `false` for any user.
     fn assert_all_users<F>(registry: &SeedRegistry, seed_name: &str, predicate: F)
     where
         F: Fn(&ExampleUserSeed) -> bool,
     {
-        let seed_def = registry.find_seed(seed_name).expect("seed should be found");
-        let users = generate_example_users(registry, seed_def).expect("generation should succeed");
-
+        let seed_def = match registry.find_seed(seed_name) {
+            Ok(seed_def) => seed_def,
+            Err(error) => panic!("seed should be found: {error}"),
+        };
+        let users = match generate_example_users(registry, seed_def) {
+            Ok(users) => users,
+            Err(error) => panic!("generation should succeed: {error}"),
+        };
         for user in &users {
             assert!(predicate(user), "Predicate failed for user: {user:?}");
         }
     }
-
     const TEST_REGISTRY_JSON: &str = r#"{
         "version": 1,
         "interestThemeIds": [
@@ -243,7 +243,10 @@ mod tests {
 
     #[fixture]
     fn test_registry() -> SeedRegistry {
-        SeedRegistry::from_json(TEST_REGISTRY_JSON).expect("valid test registry")
+        match SeedRegistry::from_json(TEST_REGISTRY_JSON) {
+            Ok(registry) => registry,
+            Err(error) => panic!("valid test registry: {error}"),
+        }
     }
 
     #[rstest]

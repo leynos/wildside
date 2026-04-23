@@ -17,15 +17,27 @@ impl RegistryFixture {
     }
 
     fn load(&self) -> SeedRegistry {
-        let dir = open_registry_dir(&self.path).expect("open registry dir");
-        let file_name = Utf8Path::new(self.path.file_name().expect("registry file name"));
-        SeedRegistry::from_file(&dir, file_name).expect("load registry")
+        let dir = match open_registry_dir(&self.path) {
+            Ok(dir) => dir,
+            Err(error) => panic!("open registry dir: {error}"),
+        };
+        let Some(file_name) = self.path.file_name() else {
+            panic!("registry file name");
+        };
+        let registry_file_name = Utf8Path::new(file_name);
+
+        match SeedRegistry::from_file(&dir, registry_file_name) {
+            Ok(registry) => registry,
+            Err(error) => panic!("load registry: {error}"),
+        }
     }
 }
 
 impl Drop for RegistryFixture {
     fn drop(&mut self) {
-        cleanup_path(&self.path).expect("cleanup temp dir");
+        if let Err(error) = cleanup_path(&self.path) {
+            panic!("cleanup temp dir: {error}");
+        }
     }
 }
 
@@ -313,10 +325,19 @@ fn registry_json_with_seed(name: &str, seed: u64) -> String {
 }
 
 fn write_registry(json: &str) -> Utf8PathBuf {
-    let path =
-        unique_temp_path("seed-registry-cli", "seeds.json").expect("create temp registry path");
-    let dir = open_registry_dir(&path).expect("open registry dir");
-    let file_name = path.file_name().expect("registry file name");
-    dir.write(file_name, json).expect("write registry");
+    let path = match unique_temp_path("seed-registry-cli", "seeds.json") {
+        Ok(path) => path,
+        Err(error) => panic!("create temp registry path: {error}"),
+    };
+    let dir = match open_registry_dir(&path) {
+        Ok(dir) => dir,
+        Err(error) => panic!("open registry dir: {error}"),
+    };
+    let Some(file_name) = path.file_name() else {
+        panic!("registry file name");
+    };
+    if let Err(error) = dir.write(file_name, json) {
+        panic!("write registry: {error}");
+    }
     path
 }

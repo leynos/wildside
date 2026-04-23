@@ -63,10 +63,13 @@ fn server_config_with_metrics_preserves_value(
     cookie_secure: bool,
     same_site_policy: SameSite,
 ) {
-    let metrics = PrometheusMetricsBuilder::new("test")
+    let metrics = match PrometheusMetricsBuilder::new("test")
         .endpoint("/metrics")
         .build()
-        .expect("metrics should be buildable in tests");
+    {
+        Ok(metrics) => metrics,
+        Err(error) => panic!("metrics should be buildable in tests: {error}"),
+    };
     let config = ServerConfig::new(session_key, cookie_secure, same_site_policy, bind_addr)
         .with_metrics(Some(metrics));
 
@@ -114,8 +117,10 @@ async fn assert_server_marks_ready(
 ) {
     assert!(!health_state.is_ready(), "state should start unready");
 
-    let server = create_server(health_state.clone(), server_config)
-        .expect("server should build from configuration");
+    let server = match create_server(health_state.clone(), server_config) {
+        Ok(server) => server,
+        Err(error) => panic!("server should build from configuration: {error}"),
+    };
     let handle = server.handle();
     let server_join = actix_rt::spawn(server);
 
@@ -123,14 +128,20 @@ async fn assert_server_marks_ready(
         health_state.is_ready(),
         "server creation should mark readiness"
     );
-    timeout(Duration::from_secs(5), handle.stop(true))
-        .await
-        .expect("timed out waiting for server.stop");
-    let join_result = timeout(Duration::from_secs(5), server_join)
-        .await
-        .expect("timed out waiting for server task join")
-        .expect("server task should not panic");
-    join_result.expect("server should stop without IO errors");
+    if let Err(error) = timeout(Duration::from_secs(5), handle.stop(true)).await {
+        panic!("timed out waiting for server.stop: {error}");
+    }
+    let join_result = match timeout(Duration::from_secs(5), server_join).await {
+        Ok(join_result) => join_result,
+        Err(error) => panic!("timed out waiting for server task join: {error}"),
+    };
+    let join_result = match join_result {
+        Ok(join_result) => join_result,
+        Err(error) => panic!("server task should not panic: {error}"),
+    };
+    if let Err(error) = join_result {
+        panic!("server should stop without IO errors: {error}");
+    }
 }
 
 #[cfg(feature = "metrics")]
@@ -144,10 +155,13 @@ async fn create_server_marks_ready_with_optional_metrics(
     #[case] with_metrics: bool,
 ) {
     let config = if with_metrics {
-        let metrics = PrometheusMetricsBuilder::new("test")
+        let metrics = match PrometheusMetricsBuilder::new("test")
             .endpoint("/metrics")
             .build()
-            .expect("metrics should build in tests");
+        {
+            Ok(metrics) => metrics,
+            Err(error) => panic!("metrics should build in tests: {error}"),
+        };
         server_config.with_metrics(Some(metrics))
     } else {
         server_config.with_metrics(None)
