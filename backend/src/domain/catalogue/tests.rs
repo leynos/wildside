@@ -141,18 +141,25 @@ fn theme_new_accepts_valid_payload() -> TestResult {
     Ok(())
 }
 
-#[rstest]
-fn theme_rejects_invalid_range() -> TestResult {
-    let result = Theme::new(ThemeDraft {
+fn default_theme_draft() -> TestResult<ThemeDraft> {
+    Ok(ThemeDraft {
         id: Uuid::new_v4(),
         slug: "nature".to_owned(),
         icon_key: icon_key()?,
         localizations: localizations()?,
         image: image()?,
-        walk_count: 25,
-        distance_range_metres: [6_000, 1_000],
+        walk_count: 1,
+        distance_range_metres: [1_000, 6_000],
         rating: 4.2,
-    });
+    })
+}
+
+#[rstest]
+fn theme_rejects_invalid_range() -> TestResult {
+    let mut draft = default_theme_draft()?;
+    draft.walk_count = 25;
+    draft.distance_range_metres = [6_000, 1_000];
+    let result = Theme::new(draft);
 
     assert!(matches!(
         result,
@@ -276,16 +283,9 @@ fn theme_rejects_out_of_range_rating(#[case] rating: f32) -> TestResult {
 
 #[rstest]
 fn theme_rejects_negative_walk_count() -> TestResult {
-    let result = Theme::new(ThemeDraft {
-        id: Uuid::new_v4(),
-        slug: "nature".to_owned(),
-        icon_key: icon_key()?,
-        localizations: localizations()?,
-        image: image()?,
-        walk_count: -1,
-        distance_range_metres: [1_000, 6_000],
-        rating: 4.2,
-    });
+    let mut draft = default_theme_draft()?;
+    draft.walk_count = -1;
+    let result = Theme::new(draft);
 
     assert!(matches!(
         result,
