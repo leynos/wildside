@@ -1,5 +1,7 @@
 //! Tests for HTTP error mapping.
 
+use std::{error::Error as StdError, io};
+
 use super::*;
 use crate::domain::Error;
 use actix_web::ResponseError;
@@ -8,6 +10,8 @@ use actix_web::http::StatusCode;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use serde_json::json;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 const TRACE_ID: &str = "00000000-0000-0000-0000-000000000000";
 
@@ -48,7 +52,7 @@ async fn assert_error_response(
     error: Error,
     expected_status: StatusCode,
     expected_trace_id: Option<&str>,
-) -> Error {
+) -> TestResult<Error> {
     let response = ResponseError::error_response(&error);
     assert_eq!(response.status(), expected_status);
 
@@ -59,19 +63,16 @@ async fn assert_error_response(
     match expected_trace_id {
         Some(expected) => {
             let trace_id = header
-                .expect("Trace-Id header is set by error_response")
-                .to_str()
-                .expect("Trace-Id not valid UTF-8");
+                .ok_or_else(|| io::Error::other("Trace-Id header is set by error_response"))?
+                .to_str()?;
             assert_eq!(trace_id, expected);
         }
         None => assert!(header.is_none(), "Trace-Id header should not be present"),
     }
 
-    let bytes = to_bytes(response.into_body())
-        .await
-        .expect("reading response body succeeds");
+    let bytes = to_bytes(response.into_body()).await?;
 
-    serde_json::from_slice(&bytes).expect("Error JSON deserialisation succeeds")
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[rstest]
@@ -80,13 +81,13 @@ async fn error_responses_include_trace_id_and_payloads(
     #[from(internal_error_case)] internal_error: Error,
     #[from(invalid_request_case)] invalid_request: Error,
     expected_trace_id: String,
-) {
+) -> TestResult {
     let redacted = assert_error_response(
         internal_error,
         StatusCode::INTERNAL_SERVER_ERROR,
         Some(expected_trace_id.as_str()),
     )
-    .await;
+    .await?;
     assert_eq!(redacted.code(), ErrorCode::InternalError);
     assert_eq!(redacted.message(), "Internal server error");
     assert!(redacted.details().is_none());
@@ -96,22 +97,24 @@ async fn error_responses_include_trace_id_and_payloads(
         StatusCode::BAD_REQUEST,
         Some(expected_trace_id.as_str()),
     )
-    .await;
+    .await?;
     assert_eq!(payload.code(), ErrorCode::InvalidRequest);
     assert_eq!(payload.message(), "bad");
     assert_eq!(payload.details(), Some(&json!({"field": "name"})));
+    Ok(())
 }
 
 #[rstest]
 #[actix_web::test]
-async fn error_without_trace_id_omits_trace_header() {
+async fn error_without_trace_id_omits_trace_header() -> TestResult {
     let error = Error::invalid_request("bad").with_details(json!({"field": "name"}));
 
-    let payload = assert_error_response(error, StatusCode::BAD_REQUEST, None).await;
+    let payload = assert_error_response(error, StatusCode::BAD_REQUEST, None).await?;
     assert_eq!(payload.code(), ErrorCode::InvalidRequest);
     assert_eq!(payload.message(), "bad");
     assert_eq!(payload.trace_id(), None);
     assert_eq!(payload.details(), Some(&json!({"field": "name"})));
+    Ok(())
 }
 
 #[given("a forbidden error code")]

@@ -224,20 +224,21 @@ mod tests {
 
     use chrono::{DateTime, Utc};
     use rstest::{fixture, rstest};
+    use std::error::Error as StdError;
 
     use super::*;
     use crate::domain::{WalkPrimaryStatKind, WalkSecondaryStatKind};
 
-    fn fixture_timestamp() -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-            .expect("RFC3339 fixture timestamp")
-            .with_timezone(&Utc)
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
+        Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
     }
 
     #[fixture]
-    fn sample_payload() -> WalkSessionPayload {
-        let started_at = fixture_timestamp();
-        WalkSessionPayload {
+    fn sample_payload() -> TestResult<WalkSessionPayload> {
+        let started_at = fixture_timestamp()?;
+        Ok(WalkSessionPayload {
             id: Uuid::new_v4(),
             user_id: crate::domain::UserId::random(),
             route_id: Uuid::new_v4(),
@@ -253,36 +254,40 @@ mod tests {
                 unit: Some("kcal".to_owned()),
             }],
             highlighted_poi_ids: vec![Uuid::new_v4()],
-        }
+        })
     }
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_command_preserves_session_id(sample_payload: WalkSessionPayload) {
+    async fn fixture_command_preserves_session_id(
+        sample_payload: TestResult<WalkSessionPayload>,
+    ) -> TestResult {
         let command = FixtureWalkSessionCommand;
+        let sample_payload = sample_payload?;
         let request = CreateWalkSessionRequest {
             session: sample_payload,
         };
 
-        let response = command
-            .create_session(request.clone())
-            .await
-            .expect("fixture create succeeds");
+        let response = command.create_session(request.clone()).await?;
 
         assert_eq!(response.session_id, request.session.id);
         assert!(response.completion_summary.is_some());
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn payload_round_trip_through_domain_entity(sample_payload: WalkSessionPayload) {
-        let payload = sample_payload;
+    async fn payload_round_trip_through_domain_entity(
+        sample_payload: TestResult<WalkSessionPayload>,
+    ) -> TestResult {
+        let payload = sample_payload?;
 
-        let session = WalkSession::try_from(payload.clone()).expect("valid session payload");
+        let session = WalkSession::try_from(payload.clone())?;
         let restored = WalkSessionPayload::from(session);
 
         assert_eq!(restored.id, payload.id);
         assert_eq!(restored.route_id, payload.route_id);
         assert_eq!(restored.primary_stats.len(), payload.primary_stats.len());
+        Ok(())
     }
 }

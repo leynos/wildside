@@ -89,6 +89,9 @@ mod tests {
     use super::*;
     use crate::domain::ErrorCode;
     use rstest::rstest;
+    use std::error::Error as StdError;
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     #[derive(Clone, Copy)]
     enum StubFailure {
@@ -129,20 +132,33 @@ mod tests {
             }
         }
 
-        fn set_find_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").find_failure = Some(failure);
+        fn set_find_failure(&self, failure: StubFailure) -> Result<(), UserPersistenceError> {
+            self.state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?
+                .find_failure = Some(failure);
+            Ok(())
         }
 
-        fn set_upsert_failure(&self, failure: StubFailure) {
-            self.state.lock().expect("state lock").upsert_failure = Some(failure);
+        fn set_upsert_failure(&self, failure: StubFailure) -> Result<(), UserPersistenceError> {
+            self.state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?
+                .upsert_failure = Some(failure);
+            Ok(())
         }
 
         fn upsert_call_count(&self) -> usize {
             self.upsert_calls.load(Ordering::Relaxed)
         }
 
-        fn stored_user(&self) -> Option<User> {
-            self.state.lock().expect("state lock").stored_user.clone()
+        fn stored_user(&self) -> Result<Option<User>, UserPersistenceError> {
+            Ok(self
+                .state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?
+                .stored_user
+                .clone())
         }
     }
 
@@ -150,7 +166,10 @@ mod tests {
     impl UserRepository for StubUserRepository {
         async fn upsert(&self, user: &User) -> Result<(), UserPersistenceError> {
             self.upsert_calls.fetch_add(1, Ordering::Relaxed);
-            let mut state = self.state.lock().expect("state lock");
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?;
             if let Some(failure) = state.upsert_failure {
                 return Err(failure.to_error());
             }
@@ -159,7 +178,10 @@ mod tests {
         }
 
         async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError> {
-            let state = self.state.lock().expect("state lock");
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| UserPersistenceError::query("state lock"))?;
             if let Some(failure) = state.find_failure {
                 return Err(failure.to_error());
             }
@@ -171,47 +193,49 @@ mod tests {
         }
     }
 
-    fn credentials(username: &str, password: &str) -> LoginCredentials {
-        LoginCredentials::try_from_parts(username, password).expect("valid test credentials")
+    fn credentials(username: &str, password: &str) -> TestResult<LoginCredentials> {
+        Ok(LoginCredentials::try_from_parts(username, password)?)
     }
 
-    fn fixture_user(display_name: &str) -> User {
-        User::try_from_strings(FIXTURE_USER_ID, display_name).expect("valid fixture user")
+    fn fixture_user(display_name: &str) -> TestResult<User> {
+        Ok(User::try_from_strings(FIXTURE_USER_ID, display_name)?)
     }
 
     #[tokio::test]
-    async fn authenticate_with_fixture_credentials_creates_missing_user() {
+    async fn authenticate_with_fixture_credentials_creates_missing_user() -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
         let service = DieselLoginService::from_repository(repository.clone());
 
         let user_id = service
-            .authenticate(&credentials("admin", "password"))
-            .await
-            .expect("fixture credentials should authenticate");
+            .authenticate(&credentials("admin", "password")?)
+            .await?;
 
         assert_eq!(user_id.as_ref(), FIXTURE_USER_ID);
         assert_eq!(repository.upsert_call_count(), 1);
-        let stored = repository.stored_user().expect("user should be stored");
+        let stored = repository
+            .stored_user()?
+            .ok_or_else(|| Error::internal("user should be stored"))?;
         assert_eq!(stored.id().as_ref(), FIXTURE_USER_ID);
         assert_eq!(stored.display_name().as_ref(), FIXTURE_DISPLAY_NAME);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn authenticate_keeps_existing_display_name_when_user_already_exists() {
-        let existing_user = fixture_user("Existing Admin");
+    async fn authenticate_keeps_existing_display_name_when_user_already_exists() -> TestResult {
+        let existing_user = fixture_user("Existing Admin")?;
         let repository = Arc::new(StubUserRepository::with_user(existing_user));
         let service = DieselLoginService::from_repository(repository.clone());
 
         let _ = service
-            .authenticate(&credentials("admin", "password"))
-            .await
-            .expect("fixture credentials should authenticate");
+            .authenticate(&credentials("admin", "password")?)
+            .await?;
 
         assert_eq!(repository.upsert_call_count(), 0);
         let stored = repository
-            .stored_user()
-            .expect("existing user should remain");
+            .stored_user()?
+            .ok_or_else(|| Error::internal("existing user should remain"))?;
         assert_eq!(stored.display_name().as_ref(), "Existing Admin");
+        Ok(())
     }
 
     #[rstest]
@@ -221,18 +245,19 @@ mod tests {
     async fn authenticate_rejects_non_fixture_credentials(
         #[case] username: &str,
         #[case] password: &str,
-    ) {
+    ) -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
         let service = DieselLoginService::from_repository(repository.clone());
 
         let err = service
-            .authenticate(&credentials(username, password))
+            .authenticate(&credentials(username, password)?)
             .await
             .expect_err("non fixture credentials must fail");
 
         assert_eq!(err.code(), ErrorCode::Unauthorized);
         assert_eq!(err.message(), "invalid credentials");
         assert_eq!(repository.upsert_call_count(), 0);
+        Ok(())
     }
 
     #[rstest]
@@ -242,17 +267,18 @@ mod tests {
     async fn authenticate_maps_find_errors(
         #[case] failure: StubFailure,
         #[case] expected_code: ErrorCode,
-    ) {
+    ) -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
-        repository.set_find_failure(failure);
+        repository.set_find_failure(failure)?;
         let service = DieselLoginService::from_repository(repository);
 
         let err = service
-            .authenticate(&credentials("admin", "password"))
+            .authenticate(&credentials("admin", "password")?)
             .await
             .expect_err("find failures should surface as domain errors");
 
         assert_eq!(err.code(), expected_code);
+        Ok(())
     }
 
     #[rstest]
@@ -262,16 +288,17 @@ mod tests {
     async fn authenticate_maps_upsert_errors(
         #[case] failure: StubFailure,
         #[case] expected_code: ErrorCode,
-    ) {
+    ) -> TestResult {
         let repository = Arc::new(StubUserRepository::default());
-        repository.set_upsert_failure(failure);
+        repository.set_upsert_failure(failure)?;
         let service = DieselLoginService::from_repository(repository);
 
         let err = service
-            .authenticate(&credentials("admin", "password"))
+            .authenticate(&credentials("admin", "password")?)
             .await
             .expect_err("upsert failures should surface as domain errors");
 
         assert_eq!(err.code(), expected_code);
+        Ok(())
     }
 }

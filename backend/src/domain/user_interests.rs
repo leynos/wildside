@@ -22,10 +22,14 @@ impl UserInterests {
     /// # Examples
     ///
     /// ```
-    /// use backend::domain::{UserId, InterestThemeId, UserInterests};
+    /// use backend::domain::{InterestThemeId, UserId, UserInterests};
+    /// use uuid::Uuid;
     ///
     /// let user_id = UserId::random();
-    /// let theme_ids = vec![InterestThemeId::random(), InterestThemeId::random()];
+    /// let theme_ids = vec![
+    ///     InterestThemeId::from_uuid(Uuid::nil()),
+    ///     InterestThemeId::from_uuid(Uuid::max()),
+    /// ];
     /// let interests = UserInterests::new(user_id, theme_ids, 1);
     ///
     /// assert_eq!(interests.revision(), 1);

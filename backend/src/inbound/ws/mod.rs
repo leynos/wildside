@@ -108,41 +108,47 @@ mod tests {
     use super::*;
     use actix_web::http::{StatusCode, header::HeaderValue};
     use rstest::rstest;
+    use std::error::Error as StdError;
 
-    fn header(value: &str) -> HeaderValue {
-        HeaderValue::from_str(value).expect("valid header value")
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn header(value: &str) -> Result<HeaderValue, actix_web::http::header::InvalidHeaderValue> {
+        HeaderValue::from_str(value)
     }
 
     #[rstest]
     #[case("http://localhost:3000")]
     #[case("https://yourdomain.example")]
     #[case("https://chat.yourdomain.example")]
-    fn accepts_configured_origins(#[case] origin: &str) {
-        let header = header(origin);
+    fn accepts_configured_origins(#[case] origin: &str) -> TestResult {
+        let header = header(origin)?;
         assert!(validate_origin(&header).is_ok());
+        Ok(())
     }
 
     #[rstest]
     #[case("http://localhost")]
     #[case("https://example.com")]
     #[case("wss://yourdomain.example")]
-    fn rejects_disallowed_origins(#[case] origin: &str) {
-        let header = header(origin);
+    fn rejects_disallowed_origins(#[case] origin: &str) -> TestResult {
+        let header = header(origin)?;
         let error = validate_origin(&header).expect_err("origin should be rejected");
         assert_eq!(
             error.as_response_error().status_code(),
             StatusCode::FORBIDDEN
         );
+        Ok(())
     }
 
     #[test]
-    fn rejects_non_utf8_origin_header() {
-        let header = HeaderValue::from_bytes(&[0x80]).expect("opaque header value");
+    fn rejects_non_utf8_origin_header() -> TestResult {
+        let header = HeaderValue::from_bytes(&[0x80])?;
         let error = validate_origin(&header).expect_err("origin should be rejected");
         assert_eq!(
             error.as_response_error().status_code(),
             StatusCode::BAD_REQUEST
         );
+        Ok(())
     }
 
     #[test]
@@ -163,8 +169,9 @@ mod tests {
     #[case("https://chat.yourdomain.example", true)]
     #[case("https://yourdomain.example.evil.com", false)]
     #[case("wss://yourdomain.example", false)]
-    fn evaluates_allow_list(#[case] origin: &str, #[case] expected: bool) {
-        let parsed = Url::parse(origin).expect("url should parse");
+    fn evaluates_allow_list(#[case] origin: &str, #[case] expected: bool) -> TestResult {
+        let parsed = Url::parse(origin)?;
         assert_eq!(is_allowed_origin(&parsed), expected);
+        Ok(())
     }
 }

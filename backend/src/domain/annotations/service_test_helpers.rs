@@ -1,6 +1,6 @@
 //! Helper types and functions for route annotation service tests.
 
-use std::future::Future;
+use std::{error::Error as StdError, future::Future};
 
 use super::{RouteAnnotationsService, make_service_with_idempotency};
 use crate::domain::annotations::idempotency::PayloadHashable;
@@ -15,6 +15,8 @@ use crate::domain::{
 };
 use chrono::Utc;
 use uuid::Uuid;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 pub(super) struct IdempotencyReplaySpec {
     pub(super) idempotency_key: IdempotencyKey,
@@ -37,7 +39,7 @@ pub(super) enum ReplayCase {
 }
 
 impl ReplayCase {
-    pub(super) async fn assert_replay(self) {
+    pub(super) async fn assert_replay(self) -> TestResult {
         match self {
             ReplayCase::Note => Self::assert_note_replay().await,
             ReplayCase::Progress => Self::assert_progress_replay().await,
@@ -45,7 +47,7 @@ impl ReplayCase {
         }
     }
 
-    pub(super) async fn assert_note_replay() {
+    pub(super) async fn assert_note_replay() -> TestResult {
         let user_id = UserId::random();
         let idempotency_key = IdempotencyKey::random();
         let route_id = Uuid::new_v4();
@@ -65,7 +67,7 @@ impl ReplayCase {
             user_id.clone(),
             RouteNoteContent::new("cached"),
         );
-        let payload_hash = request.compute_payload_hash().expect("payload hash");
+        let payload_hash = request.compute_payload_hash()?;
         let response = UpsertNoteResponse {
             note: note.clone(),
             replayed: false,
@@ -92,10 +94,10 @@ impl ReplayCase {
                 assert!(response.replayed);
             },
         )
-        .await;
+        .await
     }
 
-    pub(super) async fn assert_progress_replay() {
+    pub(super) async fn assert_progress_replay() -> TestResult {
         let route_id = Uuid::new_v4();
         let user_id = UserId::random();
         let idempotency_key = IdempotencyKey::random();
@@ -111,7 +113,7 @@ impl ReplayCase {
             .visited_stop_ids(visited_stop_ids)
             .revision(2)
             .build();
-        let payload_hash = request.compute_payload_hash().expect("payload hash");
+        let payload_hash = request.compute_payload_hash()?;
         let response = UpdateProgressResponse {
             progress: progress.clone(),
             replayed: false,
@@ -138,10 +140,10 @@ impl ReplayCase {
                 assert!(response.replayed);
             },
         )
-        .await;
+        .await
     }
 
-    pub(super) async fn assert_delete_replay() {
+    pub(super) async fn assert_delete_replay() -> TestResult {
         let user_id = UserId::random();
         let idempotency_key = IdempotencyKey::random();
         let note_id = Uuid::new_v4();
@@ -150,7 +152,7 @@ impl ReplayCase {
             user_id: user_id.clone(),
             idempotency_key: Some(idempotency_key.clone()),
         };
-        let payload_hash = request.compute_payload_hash().expect("payload hash");
+        let payload_hash = request.compute_payload_hash()?;
         let response = DeleteNoteResponse {
             deleted: true,
             replayed: false,
@@ -177,23 +179,18 @@ impl ReplayCase {
                 assert!(response.replayed);
             },
         )
-        .await;
+        .await
     }
 }
 
 pub(super) fn mock_idempotency_replay<Res>(
     spec: IdempotencyReplaySpec,
     response: Res,
-) -> MockIdempotencyRepository
+) -> TestResult<MockIdempotencyRepository>
 where
     Res: serde::Serialize + 'static,
 {
-    let response_snapshot = match serde_json::to_value(response) {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            panic!("response snapshot failed: {error}");
-        }
-    };
+    let response_snapshot = serde_json::to_value(response)?;
     let expected_mutation_type = spec.mutation_type;
     let record = IdempotencyRecord {
         key: spec.idempotency_key.clone(),
@@ -220,7 +217,7 @@ where
         .return_once(move |_| Ok(IdempotencyLookupResult::MatchingPayload(record)));
     idempotency_repo.expect_store().times(0);
 
-    idempotency_repo
+    Ok(idempotency_repo)
 }
 
 pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, CallFut, AssertFn>(
@@ -228,7 +225,8 @@ pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, CallFut,
     setup_repo: RepoFn,
     call_service: CallFn,
     assert_response: AssertFn,
-) where
+) -> TestResult
+where
     Res: serde::Serialize + Clone + 'static,
     RepoFn: FnOnce(&mut MockRouteAnnotationRepository),
     CallFn: FnOnce(
@@ -242,14 +240,10 @@ pub(super) async fn assert_replay_for_request<Req, Res, RepoFn, CallFn, CallFut,
     setup_repo(&mut repo);
 
     let idempotency_repo =
-        mock_idempotency_replay(request_spec.spec, request_spec.response.clone());
+        mock_idempotency_replay(request_spec.spec, request_spec.response.clone())?;
     let service = make_service_with_idempotency(repo, idempotency_repo);
 
-    let response = match call_service(service, request_spec.request).await {
-        Ok(response) => response,
-        Err(error) => {
-            panic!("cached response failed: {error}");
-        }
-    };
+    let response = call_service(service, request_spec.request).await?;
     assert_response(response);
+    Ok(())
 }

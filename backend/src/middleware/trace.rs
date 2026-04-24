@@ -107,6 +107,9 @@ mod tests {
     //! Verifies trace headers and error propagation in the middleware.
     use super::*;
     use actix_web::{App, HttpResponse, web};
+    use std::{error::Error as StdError, io};
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     #[actix_web::test]
     async fn adds_trace_id_header() {
@@ -123,10 +126,10 @@ mod tests {
 
     async fn test_trace_with_handler<F, Fut, Res>(
         handler: F,
-    ) -> (
+    ) -> TestResult<(
         actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
         String,
-    )
+    )>
     where
         F: Fn() -> Fut + Clone + 'static,
         Fut: std::future::Future<Output = Res> + 'static,
@@ -141,35 +144,36 @@ mod tests {
         let trace_id = res
             .headers()
             .get(TRACE_ID_HEADER)
-            .expect("trace id header")
-            .to_str()
-            .expect("header is ascii")
+            .ok_or_else(|| io::Error::other("trace id header"))?
+            .to_str()?
             .to_owned();
-        (res, trace_id)
+        Ok((res, trace_id))
     }
 
     #[actix_web::test]
-    async fn exposes_trace_id_in_handler() {
+    async fn exposes_trace_id_in_handler() -> TestResult {
         let (res, trace_id) = test_trace_with_handler(|| async move {
-            let id = TraceId::current().expect("trace id in scope");
-            HttpResponse::Ok().body(id.to_string())
+            let id = TraceId::current().ok_or_else(|| io::Error::other("trace id in scope"))?;
+            Ok::<HttpResponse, io::Error>(HttpResponse::Ok().body(id.to_string()))
         })
-        .await;
+        .await?;
         let body = actix_web::test::read_body(res).await;
-        let body = std::str::from_utf8(&body).expect("utf8 body");
+        let body = std::str::from_utf8(&body)?;
         assert_eq!(trace_id, body);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn propagates_trace_id_in_error() {
+    async fn propagates_trace_id_in_error() -> TestResult {
         use crate::domain::Error;
 
         let (res, trace_id) = test_trace_with_handler(|| async move {
             // Error::internal captures the scoped TraceId automatically.
             Result::<HttpResponse, Error>::Err(Error::internal("boom"))
         })
-        .await;
+        .await?;
         let body: Error = actix_web::test::read_body_json(res).await;
         assert_eq!(body.trace_id(), Some(trace_id.as_str()));
+        Ok(())
     }
 }

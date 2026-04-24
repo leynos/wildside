@@ -3,7 +3,7 @@
 //! Tests cover idempotency key handling, payload hash matching, conflict
 //! detection, and concurrent insert race conditions.
 
-use std::sync::Arc;
+use std::{error::Error as StdError, sync::Arc};
 
 use chrono::Utc;
 use serde_json::json;
@@ -18,6 +18,10 @@ use crate::domain::{
     IdempotencyKey, IdempotencyLookupQuery, IdempotencyLookupResult, IdempotencyRecord,
     MutationType, PayloadHash, UserId, canonicalize_and_hash,
 };
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+mod age_bucket_tests;
 
 /// Helper to build a RouteSubmissionRequest for tests.
 fn build_request(
@@ -38,18 +42,18 @@ fn build_record(
     payload_hash: PayloadHash,
     request_id: Uuid,
     user_id: UserId,
-) -> IdempotencyRecord {
+) -> TestResult<IdempotencyRecord> {
     let response = RouteSubmissionResponse::accepted(request_id);
-    let response_snapshot = serde_json::to_value(&response).expect("serialization should succeed");
+    let response_snapshot = serde_json::to_value(&response)?;
 
-    IdempotencyRecord {
+    Ok(IdempotencyRecord {
         key,
         mutation_type: MutationType::Routes,
         payload_hash,
         response_snapshot,
         user_id,
         created_at: Utc::now(),
-    }
+    })
 }
 
 /// Default test payload.
@@ -104,10 +108,10 @@ fn setup_race_condition_test(
     our_payload: serde_json::Value,
     their_hash: PayloadHash,
     their_request_id: Uuid,
-) -> (
+) -> TestResult<(
     RouteSubmissionServiceImpl<MockIdempotencyRepository>,
     RouteSubmissionRequest,
-) {
+)> {
     let idempotency_key = IdempotencyKey::random();
     let user_id = UserId::random();
 
@@ -116,7 +120,7 @@ fn setup_race_condition_test(
         their_hash,
         their_request_id,
         user_id.clone(),
-    );
+    )?;
 
     let mut mock_repo = MockIdempotencyRepository::new();
 
@@ -144,7 +148,7 @@ fn setup_race_condition_test(
     let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_repo));
     let request = build_request(Some(idempotency_key), user_id, our_payload);
 
-    (service, request)
+    Ok((service, request))
 }
 
 fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyRepository> {
@@ -152,19 +156,17 @@ fn make_service() -> RouteSubmissionServiceImpl<FixtureIdempotencyRepository> {
 }
 
 #[tokio::test]
-async fn accepts_request_without_idempotency_key() {
+async fn accepts_request_without_idempotency_key() -> TestResult {
     let service = make_service();
     let request = build_request(None, UserId::random(), default_payload());
 
-    let response = service
-        .submit(request)
-        .await
-        .expect("submission should succeed");
+    let response = service.submit(request).await?;
     assert_eq!(response.status, RouteSubmissionStatus::Accepted);
+    Ok(())
 }
 
 #[tokio::test]
-async fn accepts_request_with_new_idempotency_key() {
+async fn accepts_request_with_new_idempotency_key() -> TestResult {
     let service = make_service();
     let request = build_request(
         Some(IdempotencyKey::random()),
@@ -173,19 +175,17 @@ async fn accepts_request_with_new_idempotency_key() {
     );
 
     // FixtureIdempotencyStore always returns NotFound, so new keys are accepted.
-    let response = service
-        .submit(request)
-        .await
-        .expect("submission should succeed");
+    let response = service.submit(request).await?;
     assert_eq!(response.status, RouteSubmissionStatus::Accepted);
+    Ok(())
 }
 
 #[tokio::test]
-async fn replays_response_for_matching_payload() {
+async fn replays_response_for_matching_payload() -> TestResult {
     let idempotency_key = IdempotencyKey::random();
     let user_id = UserId::random();
     let payload = default_payload();
-    let payload_hash = canonicalize_and_hash(&payload).expect("payload hash");
+    let payload_hash = canonicalize_and_hash(&payload)?;
     let original_request_id = Uuid::new_v4();
 
     let existing_record = build_record(
@@ -193,7 +193,7 @@ async fn replays_response_for_matching_payload() {
         payload_hash,
         original_request_id,
         user_id.clone(),
-    );
+    )?;
 
     let mut mock_repo = MockIdempotencyRepository::new();
     expect_lookup_returns(
@@ -206,27 +206,25 @@ async fn replays_response_for_matching_payload() {
     let service = RouteSubmissionServiceImpl::with_noop_metrics(Arc::new(mock_repo));
     let request = build_request(Some(idempotency_key), user_id, payload);
 
-    let response = service
-        .submit(request)
-        .await
-        .expect("submission should succeed");
+    let response = service.submit(request).await?;
 
     assert_eq!(response.status, RouteSubmissionStatus::Replayed);
     assert_eq!(response.request_id, original_request_id);
+    Ok(())
 }
 
 #[tokio::test]
-async fn returns_conflict_for_different_payload() {
+async fn returns_conflict_for_different_payload() -> TestResult {
     let idempotency_key = IdempotencyKey::random();
     let user_id = UserId::random();
-    let original_hash = canonicalize_and_hash(&default_payload()).expect("payload hash");
+    let original_hash = canonicalize_and_hash(&default_payload())?;
 
     let existing_record = build_record(
         idempotency_key.clone(),
         original_hash,
         Uuid::new_v4(),
         user_id.clone(),
-    );
+    )?;
 
     let mut mock_repo = MockIdempotencyRepository::new();
     expect_lookup_returns(
@@ -250,12 +248,13 @@ async fn returns_conflict_for_different_payload() {
             .message()
             .contains("idempotency key already used with different payload")
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn handles_concurrent_insert_race_with_matching_payload() {
+async fn handles_concurrent_insert_race_with_matching_payload() -> TestResult {
     let payload = default_payload();
-    let payload_hash = canonicalize_and_hash(&payload).expect("payload hash");
+    let payload_hash = canonicalize_and_hash(&payload)?;
     let original_request_id = Uuid::new_v4();
 
     let (service, request) = setup_race_condition_test(
@@ -263,28 +262,26 @@ async fn handles_concurrent_insert_race_with_matching_payload() {
         payload,
         payload_hash,
         original_request_id,
-    );
+    )?;
 
-    let response = service
-        .submit(request)
-        .await
-        .expect("submission should succeed after race resolution");
+    let response = service.submit(request).await?;
 
     assert_eq!(response.status, RouteSubmissionStatus::Replayed);
     assert_eq!(response.request_id, original_request_id);
+    Ok(())
 }
 
 #[tokio::test]
-async fn handles_concurrent_insert_race_with_conflicting_payload() {
+async fn handles_concurrent_insert_race_with_conflicting_payload() -> TestResult {
     let our_payload = default_payload();
-    let their_hash = canonicalize_and_hash(&alternative_payload()).expect("payload hash");
+    let their_hash = canonicalize_and_hash(&alternative_payload())?;
 
     let (service, request) = setup_race_condition_test(
         false, // is_matching_payload
         our_payload,
         their_hash,
         Uuid::new_v4(), // their_request_id doesn't matter for conflict case
-    );
+    )?;
 
     let error = service
         .submit(request)
@@ -292,54 +289,7 @@ async fn handles_concurrent_insert_race_with_conflicting_payload() {
         .expect_err("submission should fail with conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
-}
-
-// Tests for helper functions
-
-mod age_bucket_tests {
-    //! Coverage for age bucket helper logic.
-    use chrono::{Duration, TimeZone, Utc};
-    use rstest::rstest;
-
-    use super::super::calculate_age_bucket;
-
-    /// Fixed reference time for deterministic tests.
-    fn fixed_now() -> chrono::DateTime<Utc> {
-        Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap()
-    }
-
-    /// Parameterized test for age bucket boundary values.
-    ///
-    /// Tests cover all bucket boundaries and edge cases:
-    /// - `0-1m`: 0 to 59 seconds
-    /// - `1-5m`: 1 to 4 minutes
-    /// - `5-30m`: 5 to 29 minutes
-    /// - `30m-2h`: 30 to 119 minutes
-    /// - `2h-6h`: 120 to 359 minutes
-    /// - `6h-24h`: 360 to 1439 minutes
-    /// - `>24h`: 1440+ minutes
-    /// - Future timestamps (clock skew) clamp to `0-1m`
-    #[rstest]
-    #[case::zero_seconds(0, "0-1m")]
-    #[case::thirty_seconds(30, "0-1m")]
-    #[case::one_minute(60, "1-5m")]
-    #[case::four_minutes(4 * 60, "1-5m")]
-    #[case::five_minutes(5 * 60, "5-30m")]
-    #[case::twenty_nine_minutes(29 * 60, "5-30m")]
-    #[case::thirty_minutes(30 * 60, "30m-2h")]
-    #[case::one_hour(60 * 60, "30m-2h")]
-    #[case::two_hours(2 * 60 * 60, "2h-6h")]
-    #[case::five_hours(5 * 60 * 60, "2h-6h")]
-    #[case::six_hours(6 * 60 * 60, "6h-24h")]
-    #[case::twenty_three_hours(23 * 60 * 60, "6h-24h")]
-    #[case::twenty_four_hours(24 * 60 * 60, ">24h")]
-    #[case::forty_eight_hours(48 * 60 * 60, ">24h")]
-    #[case::future_timestamp_clamps(-5 * 60, "0-1m")]
-    fn age_bucket_boundaries(#[case] offset_seconds: i64, #[case] expected: &str) {
-        let now = fixed_now();
-        let created = now - Duration::seconds(offset_seconds);
-        assert_eq!(calculate_age_bucket(created, now), expected);
-    }
+    Ok(())
 }
 
 mod user_scope_hash_tests {

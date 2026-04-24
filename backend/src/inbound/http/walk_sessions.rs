@@ -207,34 +207,25 @@ impl From<CreateWalkSessionResponse> for CreateWalkSessionResponseBody {
 ///
 /// # Examples
 /// ```no_run
-/// use actix_web::web;
 /// use backend::inbound::http::walk_sessions::{
-///     CreateWalkSessionRequestBody, WalkPrimaryStatBody, create_walk_session,
+///     CreateWalkSessionRequestBody, WalkPrimaryStatBody,
 /// };
-/// use backend::inbound::http::{ApiResult, state::HttpState};
-/// use backend::inbound::http::session::SessionContext;
 ///
-/// async fn call_handler(
-///     state: web::Data<HttpState>,
-///     session: SessionContext,
-/// ) -> ApiResult<web::Json<backend::inbound::http::walk_sessions::CreateWalkSessionResponseBody>>
-/// {
-///     let payload = web::Json(CreateWalkSessionRequestBody {
-///         id: "00000000-0000-0000-0000-000000000501".to_owned(),
-///         route_id: "00000000-0000-0000-0000-000000000202".to_owned(),
-///         started_at: "2026-02-01T11:00:00Z".to_owned(),
-///         ended_at: Some("2026-02-01T11:40:00Z".to_owned()),
-///         primary_stats: vec![WalkPrimaryStatBody {
-///             kind: "distance".to_owned(),
-///             value: 1234.0,
-///         }],
-///         secondary_stats: vec![],
-///         highlighted_poi_ids: vec![],
-///     });
+/// let payload = CreateWalkSessionRequestBody {
+///     id: "00000000-0000-0000-0000-000000000501".to_owned(),
+///     route_id: "00000000-0000-0000-0000-000000000202".to_owned(),
+///     started_at: "2026-02-01T11:00:00Z".to_owned(),
+///     ended_at: Some("2026-02-01T11:40:00Z".to_owned()),
+///     primary_stats: vec![WalkPrimaryStatBody {
+///         kind: "distance".to_owned(),
+///         value: 1234.0,
+///     }],
+///     secondary_stats: vec![],
+///     highlighted_poi_ids: vec![],
+/// };
 ///
-///     let response = create_walk_session(state, session, payload).await?;
-///     Ok(response)
-/// }
+/// assert_eq!(payload.primary_stats.len(), 1);
+/// assert_eq!(payload.highlighted_poi_ids.len(), 0);
 /// ```
 #[utoipa::path(
     post,

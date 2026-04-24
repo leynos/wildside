@@ -45,6 +45,8 @@ pub struct ListWalkCompletionSummariesResponse {
 ///
 /// ```rust,no_run
 /// # async fn example() -> Result<(), backend::domain::Error> {
+/// use backend::domain::ports::WalkSessionQuery;
+///
 /// let query = backend::domain::ports::FixtureWalkSessionQuery;
 /// let request = backend::domain::ports::ListWalkCompletionSummariesRequest {
 ///     user_id: backend::domain::UserId::random(),
@@ -65,6 +67,8 @@ pub trait WalkSessionQuery: Send + Sync {
     ///
     /// ```rust,no_run
     /// # async fn example() {
+    /// use backend::domain::ports::WalkSessionQuery;
+    ///
     /// let query = backend::domain::ports::FixtureWalkSessionQuery;
     /// let request = backend::domain::ports::GetWalkSessionRequest {
     ///     session_id: uuid::Uuid::new_v4(),
@@ -87,6 +91,8 @@ pub trait WalkSessionQuery: Send + Sync {
     ///
     /// ```rust,no_run
     /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// use backend::domain::ports::WalkSessionQuery;
+    ///
     /// let query = backend::domain::ports::FixtureWalkSessionQuery;
     /// let request = backend::domain::ports::ListWalkCompletionSummariesRequest {
     ///     user_id: backend::domain::UserId::random(),

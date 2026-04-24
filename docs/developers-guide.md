@@ -123,6 +123,10 @@ Scenario state is isolated by default:
 - Example-data scenarios and steps:
   - Feature files: `crates/example-data/tests/features/`
   - Scenario bindings: `crates/example-data/tests/*_bdd.rs`
+- Shared workspace crate scenarios and steps:
+  - Feature files: `backend/crates/<crate>/tests/features/`
+  - Scenario bindings: `backend/crates/<crate>/tests/*_bdd.rs`
+  - Shared fixtures: `backend/crates/<crate>/tests/common.rs`
 
 ## Adding or changing behavioural tests
 
@@ -139,6 +143,123 @@ When adding a new behaviour:
 
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
+
+## Shared workspace crate testing
+
+Shared workspace crates (such as `backend/crates/pagination`) provide
+domain-neutral primitives consumed only by adapters, not by the domain layer.
+Domain modules must depend on domain ports and must not import
+framework-specific types or `backend/src/models`. Test suites for these crates
+follow a specific structure to keep individual files under the 400-line limit
+and to validate both functional behaviour and documented invariants.
+
+### File layout
+
+Shared crate BDD suites live under `tests/` and scale by feature file count.
+Each suite typically includes:
+
+| File type                      | Purpose                                                        |
+|--------------------------------|----------------------------------------------------------------|
+| `common.rs`                    | Shared fixtures, world state, re-exports, and helpers          |
+| `<crate>_bdd.rs`               | Core functional scenarios (one `#[scenario]` per feature file) |
+| `<crate>_documentation_bdd.rs` | Scenarios verifying documented invariants (optional)           |
+
+Additional `*_bdd.rs` files are created as needed when feature files are added.
+
+For the pagination crate, this yields:
+
+- `tests/common.rs` — `World` state struct, `FixtureKey`, and re-exports
+- `tests/pagination_bdd.rs` — pagination foundation and direction-aware
+  cursor scenarios
+- `tests/pagination_documentation_bdd.rs` — documentation invariant
+  scenarios (default limits, error variants, display strings)
+
+### Fixture module pattern
+
+The `common.rs` module contains:
+
+- **Re-exports** of the crate's public API types, so step definitions import
+  from `common::` rather than directly from the crate.
+- **A `World` struct** deriving `ScenarioState` with `Slot<T>` fields for
+  each piece of scenario state.
+- **Domain-specific fixture types** (for example, a composite ordering key
+  struct that mirrors the crate documentation examples).
+- **Helper functions** that encapsulate multi-step setup shared across
+  more than one step definition (for example, constructing a `PageParams`
+  value from a raw limit). Helpers live in `common.rs` rather than a step
+  binary so that both `<crate>_bdd.rs` and `<crate>_documentation_bdd.rs`
+  can call them without duplicating logic.
+
+Each BDD test binary declares `mod common;` and imports from it:
+
+```rust
+mod common;
+
+use common::{Cursor, CursorError, Direction, FixtureKey, World};
+```
+
+When a step definition is needed by more than one test binary, define it
+in both binaries rather than extracting it into the common module.
+`rstest-bdd` step macros must appear in the same compilation unit as the
+`#[scenario]` binding that references them.
+
+When a setup action is needed by more than one step definition — across
+either the same or different test binaries — extract it into a `pub fn`
+in `common.rs`. Helper functions must not carry `#[given]`, `#[when]`, or
+`#[then]` attributes; they are plain Rust functions called by step
+definitions. Annotate helpers that use `.expect()` with
+`#[expect(clippy::expect_used, reason = "BDD helpers use expect for clear failures")]`.
+Prefer a helper over a duplicated step body as soon as the same
+boilerplate appears in two or more places.
+
+### Hexagonal consumption rules
+
+Shared workspace crates sit below the adapter layer and must remain
+transport-agnostic:
+
+- **Inbound adapters** consume shared crate types for deserialization and
+  response wrapping (for example, deserializing `PageParams` from query
+  strings and wrapping results in `Paginated<T>`).
+- **Outbound adapters** consume shared crate types for query construction
+  (for example, using `Cursor` keys for keyset filtering in Diesel
+  queries).
+- **Domain code** does not depend on shared crate types directly. Ports
+  define their own parameter and return types; adapters convert at the
+  boundary.
+- **Error mapping** is performed by inbound adapters, not by the shared
+  crate. The crate documents recommended HTTP status codes and envelope
+  `code` values, but the adapter layer owns the final mapping.
+
+### Documentation invariant testing
+
+When a shared crate includes crate-level documentation that makes specific
+claims (default values, error behaviour, normalization rules), create a
+dedicated `*_documentation_bdd.rs` test file with scenarios that verify
+those claims at runtime. This ensures documentation and implementation
+remain in sync as a gating requirement.
+
+### Integration guidance for new crates
+
+When adding a new shared workspace crate:
+
+1. Add the crate path to `[workspace].members` in the root `Cargo.toml`.
+2. Run `make fmt` to synchronize the auto-discovered members list.
+3. Verify the crate compiles and tests pass: `cargo test -p <crate-name>`.
+4. Build and validate crate documentation from the repository root:
+   `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p <crate-name> --no-deps`.
+   This ensures doc comments, examples, and links are valid.
+5. Run doctests to verify code examples: `cargo test --doc -p <crate-name>`.
+6. Create `tests/common.rs` with a `World` struct and crate re-exports.
+7. Create one `*_bdd.rs` file per feature file under `tests/features/`.
+8. If the crate includes substantial documentation with testable claims,
+   add a `*_documentation_bdd.rs` file with invariant scenarios.
+9. Ensure all test files stay under 400 lines; split by feature when
+   needed.
+10. Run the repository quality gates before committing: `make check-fmt`
+    to verify formatting, `make lint` to verify linting, and `make test` to
+    run the test suites. Documentation build and validation is performed
+    separately via the `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p
+    <crate-name> --no-deps` command described in step 4 above.
 
 ## Redis cache adapter testing
 

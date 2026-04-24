@@ -2,6 +2,16 @@
 
 use super::*;
 
+async fn recv_with_timeout<T>(
+    receiver: &mut mpsc::UnboundedReceiver<T>,
+    label: &str,
+) -> std::io::Result<T> {
+    timeout(Duration::from_secs(1), receiver.recv())
+        .await
+        .map_err(|_| std::io::Error::other(format!("{label} timed out")))?
+        .ok_or_else(|| std::io::Error::other(format!("{label} recv() returned None")))
+}
+
 struct CircuitBreakerTestFixtureBuilder {
     now: DateTime<Utc>,
     source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
@@ -60,7 +70,7 @@ impl CircuitBreakerTestFixture {
         self.worker_fixture.advance_clock(delta);
     }
 
-    fn circuit_state(&self) -> CircuitBreakerState {
+    fn circuit_state(&self) -> TestResult<CircuitBreakerState> {
         self.worker_fixture.circuit_state()
     }
 
@@ -75,12 +85,9 @@ impl CircuitBreakerTestFixture {
 
 #[rstest]
 #[tokio::test]
-async fn half_open_probe_success_closes_circuit(
-    now: DateTime<Utc>,
-    job: OverpassEnrichmentRequest,
-) {
+async fn half_open_probe_success_closes_circuit(job: OverpassEnrichmentRequest) -> TestResult {
     let fixture = CircuitBreakerTestFixtureBuilder::new(
-        now,
+        now()?,
         vec![
             Err(OverpassEnrichmentSourceError::transport("failure")),
             Ok(response(1, 20)),
@@ -96,14 +103,8 @@ async fn half_open_probe_success_closes_circuit(
         .await
         .expect_err("initial failure");
     fixture.advance_clock(Duration::from_secs(61));
-    fixture
-        .process_job(job.clone())
-        .await
-        .expect("probe succeeds");
-    fixture
-        .process_job(job)
-        .await
-        .expect("closed circuit allows call");
+    fixture.process_job(job.clone()).await?;
+    fixture.process_job(job).await?;
 
     assert_eq!(
         fixture
@@ -113,12 +114,13 @@ async fn half_open_probe_success_closes_circuit(
             .load(Ordering::SeqCst),
         3
     );
-    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Closed);
+    assert_eq!(fixture.circuit_state()?, CircuitBreakerState::Closed);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnrichmentRequest) {
+async fn semaphore_limits_concurrent_calls(job: OverpassEnrichmentRequest) -> TestResult {
     let (entered_tx, mut entered_rx) = mpsc::unbounded_channel();
     let release = Arc::new(Notify::new());
     let source = Arc::new(SourceStub::blocking(
@@ -130,7 +132,7 @@ async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnri
         release.clone(),
     ));
     let fixture = Arc::new(
-        WorkerTestFixtureBuilder::new(now)
+        WorkerTestFixtureBuilder::new(now()?)
             .with_source(source.clone())
             .with_repo_responses(vec![Ok(()), Ok(())])
             .with_provenance_responses(vec![Ok(()), Ok(())])
@@ -144,10 +146,7 @@ async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnri
     let first_fixture = Arc::clone(&fixture);
     let first_job = job.clone();
     let first = tokio::spawn(async move { first_fixture.process_job(first_job).await });
-    timeout(Duration::from_secs(1), entered_rx.recv())
-        .await
-        .expect("first entered")
-        .expect("entry exists");
+    recv_with_timeout(&mut entered_rx, "first entered").await?;
 
     let second_fixture = Arc::clone(&fixture);
     let second = tokio::spawn(async move { second_fixture.process_job(job).await });
@@ -158,25 +157,20 @@ async fn semaphore_limits_concurrent_calls(now: DateTime<Utc>, job: OverpassEnri
     );
 
     release.notify_one();
-    timeout(Duration::from_secs(1), entered_rx.recv())
-        .await
-        .expect("second entered")
-        .expect("entry exists");
+    recv_with_timeout(&mut entered_rx, "second entered").await?;
     release.notify_one();
 
-    first.await.expect("first join").expect("first succeeds");
-    second.await.expect("second join").expect("second succeeds");
+    first.await??;
+    second.await??;
     assert_eq!(source.max_active.load(Ordering::SeqCst), 1);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn circuit_opens_and_blocks_until_cooldown(
-    now: DateTime<Utc>,
-    job: OverpassEnrichmentRequest,
-) {
+async fn circuit_opens_and_blocks_until_cooldown(job: OverpassEnrichmentRequest) -> TestResult {
     let fixture = CircuitBreakerTestFixtureBuilder::new(
-        now,
+        now()?,
         vec![
             Err(OverpassEnrichmentSourceError::transport("failure-1")),
             Err(OverpassEnrichmentSourceError::transport("failure-2")),
@@ -208,5 +202,6 @@ async fn circuit_opens_and_blocks_until_cooldown(
             provenance_repository: 0,
         },
     );
-    assert_eq!(fixture.circuit_state(), CircuitBreakerState::Open);
+    assert_eq!(fixture.circuit_state()?, CircuitBreakerState::Open);
+    Ok(())
 }

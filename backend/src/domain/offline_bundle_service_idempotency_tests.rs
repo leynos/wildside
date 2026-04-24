@@ -1,6 +1,6 @@
 //! Additional idempotency and device validation tests for offline bundle service.
 
-use std::sync::Arc;
+use std::{error::Error as StdError, io, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use mockable::DefaultClock;
@@ -13,13 +13,13 @@ use crate::domain::ports::{
 };
 use crate::domain::{IdempotencyLookupResult, IdempotencyRecord, MutationType};
 
-fn fixture_timestamp() -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-        .expect("RFC3339 fixture timestamp")
-        .with_timezone(&Utc)
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
 }
 
-pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &str) {
+pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &str) -> TestResult {
     let mut repo = MockOfflineBundleRepository::new();
     repo.expect_list_for_owner_and_device().times(0);
 
@@ -33,40 +33,40 @@ pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &st
         .expect_err("invalid device id should be rejected");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
+    Ok(())
 }
 
 #[rstest]
 #[case("")]
 #[case("  \t\n ")]
 #[tokio::test]
-async fn list_bundles_rejects_invalid_device_id(#[case] device_id: &str) {
-    assert_list_bundles_rejects_invalid_device_id(device_id).await;
+async fn list_bundles_rejects_invalid_device_id(#[case] device_id: &str) -> TestResult {
+    assert_list_bundles_rejects_invalid_device_id(device_id).await
 }
 
-pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds_record() {
-    let payload = sample_bundle_payload();
+pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds_record()
+-> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = payload
         .owner_user_id
         .clone()
-        .expect("bundle owner is set for this test");
+        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
         MockIdempotencyRepository,
-    >::hash_payload(&payload)
-    .expect("payload hash");
+    >::hash_payload(&payload)?;
     let response_snapshot = serde_json::to_value(UpsertOfflineBundleResponse {
         bundle: payload.clone(),
         is_replayed: false,
-    })
-    .expect("response snapshot");
+    })?;
     let record = IdempotencyRecord {
         key: idempotency_key.clone(),
         mutation_type: MutationType::Bundles,
         payload_hash: payload_hash.clone(),
         response_snapshot,
         user_id: user_id.clone(),
-        created_at: fixture_timestamp(),
+        created_at: fixture_timestamp()?,
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -99,32 +99,31 @@ pub(super) async fn assert_upsert_replays_response_when_duplicate_key_race_finds
             bundle: payload,
             idempotency_key: Some(idempotency_key),
         })
-        .await
-        .expect("replayed response");
+        .await?;
 
     assert!(response.is_replayed);
+    Ok(())
 }
 
 pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds_conflicting_record()
- {
-    let payload = sample_bundle_payload();
+-> TestResult {
+    let payload = sample_bundle_payload()?;
     let user_id = payload
         .owner_user_id
         .clone()
-        .expect("bundle owner is set for this test");
+        .ok_or_else(|| io::Error::other("bundle owner is set for this test"))?;
     let idempotency_key = IdempotencyKey::random();
     let payload_hash = OfflineBundleCommandService::<
         MockOfflineBundleRepository,
         MockIdempotencyRepository,
-    >::hash_payload(&payload)
-    .expect("payload hash");
+    >::hash_payload(&payload)?;
     let conflicting_record = IdempotencyRecord {
         key: idempotency_key.clone(),
         mutation_type: MutationType::Bundles,
         payload_hash,
         response_snapshot: json!({"bundleId": payload.id}),
         user_id: user_id.clone(),
-        created_at: fixture_timestamp(),
+        created_at: fixture_timestamp()?,
     };
 
     let mut repo = MockOfflineBundleRepository::new();
@@ -164,4 +163,5 @@ pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds
         .expect_err("conflict");
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
+    Ok(())
 }

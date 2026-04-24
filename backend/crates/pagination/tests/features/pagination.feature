@@ -14,10 +14,8 @@ Feature: Pagination crate foundation
 
   Scenario: Page parameters use the shared default and maximum limits
     Given pagination parameters without a limit
-    When the parameters are normalized
     Then the normalized limit is 20
     When pagination parameters request limit 500
-    And the parameters are normalized
     Then the normalized limit is 100
 
   Scenario: Paginated envelopes build self next and prev links

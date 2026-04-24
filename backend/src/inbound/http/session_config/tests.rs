@@ -5,6 +5,9 @@ use super::*;
 use mockable::{Env as MockableEnv, MockEnv};
 use rstest::rstest;
 use std::collections::HashMap;
+use std::error::Error as StdError;
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 struct TestEnv {
     inner: MockEnv,
@@ -37,14 +40,14 @@ fn expect_error(
 
 struct TestEnvBuilder {
     vars: HashMap<String, String>,
-    _key_file: Option<TempKeyFile>,
+    key_len: Option<usize>,
 }
 
 impl TestEnvBuilder {
     fn new() -> Self {
         Self {
             vars: HashMap::new(),
-            _key_file: None,
+            key_len: None,
         }
     }
 
@@ -53,10 +56,7 @@ impl TestEnvBuilder {
     }
 
     fn with_key_len(mut self, len: usize) -> Self {
-        let key_file = TempKeyFile::new(len).expect("key file creation should succeed");
-        self.vars
-            .insert(KEY_FILE_ENV.to_string(), key_file.path_str());
-        self._key_file = Some(key_file);
+        self.key_len = Some(len);
         self
     }
 
@@ -84,12 +84,20 @@ impl TestEnvBuilder {
             .with_allow_ephemeral("0")
     }
 
-    fn build(self) -> TestEnv {
-        let env = build_mock_env(self.vars);
-        TestEnv {
-            inner: env,
-            _key_file: self._key_file,
+    fn build(self) -> std::io::Result<TestEnv> {
+        let key_file = match self.key_len {
+            Some(len) => Some(TempKeyFile::new(len)?),
+            None => None,
+        };
+        let mut vars = self.vars;
+        if let Some(file) = key_file.as_ref() {
+            vars.insert(KEY_FILE_ENV.to_string(), file.path_str());
         }
+        let env = build_mock_env(vars);
+        Ok(TestEnv {
+            inner: env,
+            _key_file: key_file,
+        })
     }
 }
 
@@ -157,26 +165,28 @@ fn release_missing_env_vars_are_rejected<F>(
     #[case] builder: TestEnvBuilder,
     #[case] matcher: F,
     #[case] description: &str,
-) where
+) -> TestResult
+where
     F: FnOnce(&SessionConfigError) -> bool,
 {
-    let env = builder.build();
+    let env = builder.build()?;
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
         description,
     );
     assert!(matcher(&err), "{description}");
+    Ok(())
 }
 
 #[rstest]
 #[case("maybe")]
 #[case("")]
-fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) {
+fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) -> TestResult {
     let env = TestEnvBuilder::new()
         .with_valid_key()
         .with_release_defaults()
         .with_cookie_secure(value)
-        .build();
+        .build()?;
 
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
@@ -189,6 +199,7 @@ fn release_invalid_cookie_secure_is_rejected(#[case] value: &str) {
             ..
         }
     ));
+    Ok(())
 }
 
 #[rstest]
@@ -213,15 +224,17 @@ fn release_invalid_configurations_are_rejected<F>(
     #[case] builder: TestEnvBuilder,
     #[case] matcher: F,
     #[case] description: &str,
-) where
+) -> TestResult
+where
     F: FnOnce(&SessionConfigError) -> bool,
 {
-    let env = builder.build();
+    let env = builder.build()?;
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
         description,
     );
     assert!(matcher(&err), "{description}");
+    Ok(())
 }
 
 #[rstest]
@@ -244,64 +257,66 @@ fn release_key_errors_are_rejected<F>(
     #[case] builder: TestEnvBuilder,
     #[case] matcher: F,
     #[case] description: &str,
-) where
+) -> TestResult
+where
     F: FnOnce(&SessionConfigError) -> bool,
 {
-    let env = builder.build();
+    let env = builder.build()?;
     let err = expect_error(
         session_settings_from_env(&env, BuildMode::Release),
         description,
     );
     assert!(matcher(&err), "{description}");
+    Ok(())
 }
 
 #[rstest]
-fn release_valid_settings_succeed() {
+fn release_valid_settings_succeed() -> TestResult {
     let env = TestEnvBuilder::new()
         .with_valid_key()
         .with_release_defaults()
-        .build();
+        .build()?;
 
-    let settings =
-        session_settings_from_env(&env, BuildMode::Release).expect("expected valid settings");
+    let settings = session_settings_from_env(&env, BuildMode::Release)?;
     assert!(settings.cookie_secure);
     assert_eq!(settings.same_site, SameSite::Strict);
+    Ok(())
 }
 
 #[rstest]
-fn debug_defaults_allow_ephemeral_key() {
-    let env = TestEnvBuilder::new().build();
-    let settings =
-        session_settings_from_env(&env, BuildMode::Debug).expect("debug defaults should succeed");
+fn debug_defaults_allow_ephemeral_key() -> TestResult {
+    let env = TestEnvBuilder::new().build()?;
+    let settings = session_settings_from_env(&env, BuildMode::Debug)?;
     assert!(settings.cookie_secure);
     assert_eq!(settings.same_site, SameSite::Lax);
+    Ok(())
 }
 
 #[rstest]
-fn debug_invalid_same_site_falls_back_to_default() {
+fn debug_invalid_same_site_falls_back_to_default() -> TestResult {
     let env = TestEnvBuilder::new()
         .with_valid_key()
         .with_cookie_secure("1")
         .with_same_site("unexpected")
         .with_allow_ephemeral("0")
-        .build();
+        .build()?;
 
-    let settings = session_settings_from_env(&env, BuildMode::Debug)
-        .expect("debug should fall back to defaults");
+    let settings = session_settings_from_env(&env, BuildMode::Debug)?;
     assert_eq!(settings.same_site, SameSite::Lax);
+    Ok(())
 }
 
 #[rstest]
-fn debug_explicit_overrides_are_applied() {
+fn debug_explicit_overrides_are_applied() -> TestResult {
     let env = TestEnvBuilder::new()
         .with_valid_key()
         .with_cookie_secure("0")
         .with_same_site("Strict")
         .with_allow_ephemeral("0")
-        .build();
+        .build()?;
 
-    let settings = session_settings_from_env(&env, BuildMode::Debug)
-        .expect("debug should accept explicit overrides");
+    let settings = session_settings_from_env(&env, BuildMode::Debug)?;
     assert!(!settings.cookie_secure);
     assert_eq!(settings.same_site, SameSite::Strict);
+    Ok(())
 }

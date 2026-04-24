@@ -46,6 +46,8 @@ pub struct GetOfflineBundleResponse {
 ///
 /// ```rust,no_run
 /// # async fn example() -> Result<(), backend::domain::Error> {
+/// use backend::domain::ports::OfflineBundleQuery;
+///
 /// let query = backend::domain::ports::FixtureOfflineBundleQuery;
 /// let request = backend::domain::ports::ListOfflineBundlesRequest {
 ///     owner_user_id: Some(backend::domain::UserId::random()),
@@ -69,6 +71,8 @@ pub trait OfflineBundleQuery: Send + Sync {
     ///
     /// ```rust,no_run
     /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// use backend::domain::ports::OfflineBundleQuery;
+    ///
     /// let query = backend::domain::ports::FixtureOfflineBundleQuery;
     /// let request = backend::domain::ports::ListOfflineBundlesRequest {
     ///     owner_user_id: None,
@@ -93,6 +97,8 @@ pub trait OfflineBundleQuery: Send + Sync {
     ///
     /// ```rust,no_run
     /// # async fn example() {
+    /// use backend::domain::ports::OfflineBundleQuery;
+    ///
     /// let query = backend::domain::ports::FixtureOfflineBundleQuery;
     /// let request = backend::domain::ports::GetOfflineBundleRequest {
     ///     bundle_id: uuid::Uuid::new_v4(),

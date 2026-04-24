@@ -1,6 +1,7 @@
 //! Persistence failure behaviour cases for Overpass enrichment worker tests.
 
 use super::*;
+use std::io;
 
 struct PersistenceFailureCase {
     repo_error: OsmPoiRepositoryError,
@@ -9,10 +10,11 @@ struct PersistenceFailureCase {
 }
 
 async fn assert_persistence_failure_records_metrics_and_maps_error(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
     case: PersistenceFailureCase,
-) {
+) -> TestResult {
+    let now = now?;
     let source = Arc::new(SourceStub::scripted(vec![Ok(response(1, 32))]));
     let repo = Arc::new(RepoStub::new(vec![Err(case.repo_error)]));
     let provenance_repo = Arc::new(ProvenanceRepoStub::new(vec![Ok(())]));
@@ -45,20 +47,38 @@ async fn assert_persistence_failure_records_metrics_and_maps_error(
     assert_eq!(source.calls.load(Ordering::SeqCst), 1);
     assert_eq!(repo.calls.load(Ordering::SeqCst), 1);
     assert_eq!(provenance_repo.calls.load(Ordering::SeqCst), 0);
-    assert!(metrics.successes.lock().expect("metrics mutex").is_empty());
-    assert_eq!(metrics.failures.lock().expect("metrics mutex").len(), 1);
+    assert!(
+        metrics
+            .successes
+            .lock()
+            .map_err(|_| io::Error::other("metrics mutex"))?
+            .is_empty()
+    );
     assert_eq!(
-        metrics.failures.lock().expect("metrics mutex")[0].kind,
+        metrics
+            .failures
+            .lock()
+            .map_err(|_| io::Error::other("metrics mutex"))?
+            .len(),
+        1
+    );
+    assert_eq!(
+        metrics
+            .failures
+            .lock()
+            .map_err(|_| io::Error::other("metrics mutex"))?[0]
+            .kind,
         EnrichmentJobFailureKind::PersistenceFailed
     );
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
 async fn persistence_connection_failure_records_metric_and_maps_to_service_unavailable(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
-) {
+) -> TestResult {
     assert_persistence_failure_records_metrics_and_maps_error(
         now,
         job,
@@ -68,15 +88,15 @@ async fn persistence_connection_failure_records_metric_and_maps_to_service_unava
             expected_message_fragment: "unavailable",
         },
     )
-    .await;
+    .await
 }
 
 #[rstest]
 #[tokio::test]
 async fn persistence_query_failure_records_metric_and_maps_to_internal(
-    now: DateTime<Utc>,
+    now: TestResult<DateTime<Utc>>,
     job: OverpassEnrichmentRequest,
-) {
+) -> TestResult {
     assert_persistence_failure_records_metrics_and_maps_error(
         now,
         job,
@@ -86,5 +106,5 @@ async fn persistence_query_failure_records_metric_and_maps_to_internal(
             expected_message_fragment: "failed",
         },
     )
-    .await;
+    .await
 }

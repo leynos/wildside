@@ -120,32 +120,34 @@ impl OfflineBundleRepository for FixtureOfflineBundleRepository {
 mod tests {
     //! Regression coverage for this module.
 
+    use std::error::Error as StdError;
+
     use chrono::Utc;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
     use super::*;
     use crate::domain::{
         BoundingBox, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus, ZoomRange,
     };
 
-    #[fixture]
-    fn bundle_fixture() -> OfflineBundle {
-        OfflineBundle::new(OfflineBundleDraft {
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn bundle_fixture() -> TestResult<OfflineBundle> {
+        Ok(OfflineBundle::new(OfflineBundleDraft {
             id: Uuid::new_v4(),
             owner_user_id: Some(UserId::random()),
             device_id: "fixture-device".to_owned(),
             kind: OfflineBundleKind::Route,
             route_id: Some(Uuid::new_v4()),
             region_id: None,
-            bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
-            zoom_range: ZoomRange::new(11, 15).expect("valid zoom"),
+            bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0)?,
+            zoom_range: ZoomRange::new(11, 15)?,
             estimated_size_bytes: 1_500,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             status: OfflineBundleStatus::Queued,
             progress: 0.0,
-        })
-        .expect("valid bundle")
+        })?)
     }
 
     #[rstest]
@@ -172,16 +174,14 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_save_and_delete_succeed(bundle_fixture: OfflineBundle) {
+    async fn fixture_save_and_delete_succeed() -> TestResult {
         let repo = FixtureOfflineBundleRepository;
-        let bundle = bundle_fixture;
+        let bundle = bundle_fixture()?;
 
-        repo.save(&bundle).await.expect("fixture save succeeds");
-        let was_deleted = repo
-            .delete(&bundle.id())
-            .await
-            .expect("fixture delete succeeds");
+        repo.save(&bundle).await?;
+        let was_deleted = repo.delete(&bundle.id()).await?;
         assert!(!was_deleted);
+        Ok(())
     }
 
     #[rstest]

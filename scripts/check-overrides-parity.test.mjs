@@ -23,7 +23,7 @@ async function loadModule() {
 }
 
 /** Convenience fixture data shared across parity tests. */
-const SYNCED = { 'basic-ftp': '5.3.0', dompurify: '3.4.0' };
+const SYNCED = { 'basic-ftp': '5.3.0', dompurify: '3.4.0', uuid: '14.0.0' };
 
 /**
  * Load a fresh module and immediately invoke checkOverridesParity.
@@ -77,7 +77,7 @@ describe('checkOverridesParity', () => {
 
     expect(result).toBe(0);
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('basic-ftp, dompurify'),
+      expect.stringContaining('basic-ftp, dompurify, uuid'),
     );
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
@@ -87,6 +87,7 @@ describe('checkOverridesParity', () => {
       overrides: {
         'basic-ftp': '5.3.0',
         dompurify: '3.3.0',
+        uuid: '14.0.0',
       },
       pnpm: { overrides: SYNCED },
     });
@@ -122,6 +123,7 @@ describe('checkOverridesParity', () => {
     const result = await runParityCheck({
       overrides: {
         dompurify: '3.4.0',
+        uuid: '14.0.0',
       },
       pnpm: { overrides: SYNCED },
     });
@@ -172,11 +174,13 @@ describe('direct execution guard', () => {
         overrides: {
           'basic-ftp': '5.3.0',
           dompurify: '3.4.0',
+          uuid: '14.0.0',
         },
         pnpm: {
           overrides: {
             'basic-ftp': '5.3.0',
             dompurify: '3.4.0',
+            uuid: '14.0.0',
           },
         },
       }),
@@ -188,7 +192,7 @@ describe('direct execution guard', () => {
     expect(readFileMock).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBe(0);
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      'Override parity verified for basic-ftp, dompurify.',
+      'Override parity verified for basic-ftp, dompurify, uuid.',
     );
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });

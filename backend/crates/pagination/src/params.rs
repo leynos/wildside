@@ -1,4 +1,16 @@
 //! Query parameter parsing and normalization for paginated endpoints.
+//!
+//! This module provides the [`PageParams`] type for parsing and normalizing
+//! `cursor` and `limit` query parameters, the [`PageParamsError`] type for
+//! validation failures, and the shared constants [`DEFAULT_LIMIT`] and
+//! [`MAX_LIMIT`].
+//!
+//! The [`PageParams`] type implements `Deserialize` with automatic
+//! normalization: missing limits default to [`DEFAULT_LIMIT`], oversized limits
+//! are capped at [`MAX_LIMIT`], and zero limits are rejected. This behaviour
+//! integrates with HTTP framework query extractors (such as Actix Web's
+//! `Query<PageParams>`) to ensure consistent limit handling across all
+//! endpoints.
 
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -95,6 +107,7 @@ fn normalize_limit(limit: Option<usize>) -> Result<usize, PageParamsError> {
 mod tests {
     //! Unit tests for page parameter normalization.
 
+    use rstest::rstest;
     use serde_json::json;
 
     use super::{DEFAULT_LIMIT, MAX_LIMIT, PageParams, PageParamsError};
@@ -108,12 +121,27 @@ mod tests {
     }
 
     #[test]
-    fn page_params_cap_limit_to_shared_maximum() {
-        let params = PageParams::new(Some("opaque".to_owned()), Some(MAX_LIMIT + 50))
-            .expect("oversized limit should clamp");
+    fn page_params_accepts_limit_one_below_maximum() {
+        let params = PageParams::new(None, Some(MAX_LIMIT - 1))
+            .expect("limit one below maximum should be valid");
+        assert_eq!(
+            params.limit(),
+            MAX_LIMIT - 1,
+            "limit below MAX_LIMIT should pass through unchanged"
+        );
+    }
 
-        assert_eq!(params.limit(), MAX_LIMIT);
-        assert_eq!(params.cursor(), Some("opaque"));
+    #[rstest]
+    #[case(MAX_LIMIT + 1)]
+    #[case(MAX_LIMIT + 50)]
+    #[case(MAX_LIMIT + 999)]
+    fn page_params_clamps_oversized_limits(#[case] input: usize) {
+        let params = PageParams::new(None, Some(input)).expect("oversized limit should clamp");
+        assert_eq!(
+            params.limit(),
+            MAX_LIMIT,
+            "limit above MAX_LIMIT should be clamped to MAX_LIMIT"
+        );
     }
 
     #[test]

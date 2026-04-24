@@ -194,70 +194,70 @@ impl OfflineBundleCommand for FixtureOfflineBundleCommand {
 mod tests {
     //! Regression coverage for this module.
 
+    use std::error::Error as StdError;
+
     use chrono::{DateTime, Utc};
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
     use super::*;
 
-    fn fixture_timestamp() -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
-            .expect("RFC3339 fixture timestamp")
-            .with_timezone(&Utc)
+    type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    fn fixture_timestamp() -> TestResult<DateTime<Utc>> {
+        Ok(DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")?.with_timezone(&Utc))
     }
 
-    #[fixture]
-    fn sample_payload() -> OfflineBundlePayload {
-        let timestamp = fixture_timestamp();
-        OfflineBundlePayload {
+    fn sample_payload() -> TestResult<OfflineBundlePayload> {
+        let timestamp = fixture_timestamp()?;
+        Ok(OfflineBundlePayload {
             id: Uuid::new_v4(),
             owner_user_id: Some(UserId::random()),
             device_id: "fixture-device".to_owned(),
             kind: OfflineBundleKind::Route,
             route_id: Some(Uuid::new_v4()),
             region_id: None,
-            bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0).expect("valid bounds"),
-            zoom_range: ZoomRange::new(11, 15).expect("valid zoom"),
+            bounds: BoundingBox::new(-3.2, 55.9, -3.0, 56.0)?,
+            zoom_range: ZoomRange::new(11, 15)?,
             estimated_size_bytes: 1_500,
             created_at: timestamp,
             updated_at: timestamp,
             status: OfflineBundleStatus::Queued,
             progress: 0.0,
-        }
+        })
     }
 
     #[rstest]
-    fn payload_round_trip_through_domain_entity(sample_payload: OfflineBundlePayload) {
-        let payload = sample_payload;
+    fn payload_round_trip_through_domain_entity() -> TestResult {
+        let payload = sample_payload()?;
 
-        let bundle = OfflineBundle::try_from(payload.clone()).expect("payload is valid");
+        let bundle = OfflineBundle::try_from(payload.clone())?;
         let restored = OfflineBundlePayload::from(bundle);
 
         assert_eq!(restored.id, payload.id);
         assert_eq!(restored.device_id, payload.device_id);
         assert_eq!(restored.kind, payload.kind);
+        Ok(())
     }
 
     #[rstest]
     #[tokio::test]
-    async fn fixture_command_returns_input_bundle(sample_payload: OfflineBundlePayload) {
+    async fn fixture_command_returns_input_bundle() -> TestResult {
         let command = FixtureOfflineBundleCommand;
         let request = UpsertOfflineBundleRequest {
             user_id: UserId::random(),
-            bundle: sample_payload,
+            bundle: sample_payload()?,
             idempotency_key: None,
         };
 
-        let response = command
-            .upsert_bundle(request.clone())
-            .await
-            .expect("fixture upsert succeeds");
+        let response = command.upsert_bundle(request.clone()).await?;
 
         assert_eq!(response.bundle.id, request.bundle.id);
         assert!(!response.is_replayed);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn fixture_delete_returns_requested_bundle_id() {
+    async fn fixture_delete_returns_requested_bundle_id() -> TestResult {
         let command = FixtureOfflineBundleCommand;
         let request = DeleteOfflineBundleRequest {
             user_id: UserId::random(),
@@ -265,12 +265,10 @@ mod tests {
             idempotency_key: Some(IdempotencyKey::random()),
         };
 
-        let response = command
-            .delete_bundle(request.clone())
-            .await
-            .expect("fixture delete succeeds");
+        let response = command.delete_bundle(request.clone()).await?;
 
         assert_eq!(response.bundle_id, request.bundle_id);
         assert!(!response.is_replayed);
+        Ok(())
     }
 }

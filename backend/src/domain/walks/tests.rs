@@ -1,5 +1,7 @@
 //! Regression coverage for walk session domain types.
 
+use std::{error::Error as StdError, io};
+
 use chrono::{Duration, TimeZone, Utc};
 use rstest::{fixture, rstest};
 use uuid::Uuid;
@@ -10,48 +12,49 @@ use super::{
 };
 use crate::domain::UserId;
 
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
 #[fixture]
-fn walk_session_draft() -> WalkSessionDraft {
+fn walk_session_draft() -> TestResult<WalkSessionDraft> {
     let started_at = Utc
         .with_ymd_and_hms(2026, 2, 20, 9, 0, 0)
         .single()
-        .expect("valid timestamp");
+        .ok_or_else(|| io::Error::other("failed to construct timestamp"))?;
 
-    WalkSessionDraft {
+    Ok(WalkSessionDraft {
         id: Uuid::new_v4(),
         user_id: UserId::random(),
         route_id: Uuid::new_v4(),
         started_at,
         ended_at: Some(started_at + Duration::minutes(45)),
         primary_stats: vec![
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 3600.0)
-                .expect("valid distance stat"),
-            WalkPrimaryStat::new(WalkPrimaryStatKind::Duration, 2700.0)
-                .expect("valid duration stat"),
+            WalkPrimaryStat::new(WalkPrimaryStatKind::Distance, 3600.0)?,
+            WalkPrimaryStat::new(WalkPrimaryStatKind::Duration, 2700.0)?,
         ],
         secondary_stats: vec![
             WalkSecondaryStat::new(
                 WalkSecondaryStatKind::Energy,
                 220.0,
                 Some("kcal".to_owned()),
-            )
-            .expect("valid energy stat"),
-            WalkSecondaryStat::new(WalkSecondaryStatKind::Count, 18.0, None)
-                .expect("valid count stat"),
+            )?,
+            WalkSecondaryStat::new(WalkSecondaryStatKind::Count, 18.0, None)?,
         ],
         highlighted_poi_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
-    }
+    })
 }
 
 #[rstest]
-fn walk_session_constructs_from_valid_draft(walk_session_draft: WalkSessionDraft) {
-    let draft = walk_session_draft;
-    let session = WalkSession::new(draft.clone()).expect("valid walk session");
+fn walk_session_constructs_from_valid_draft(
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let draft = walk_session_draft?;
+    let session = WalkSession::new(draft.clone())?;
 
     assert_eq!(session.route_id(), draft.route_id);
     assert_eq!(session.primary_stats().len(), 2);
     assert_eq!(session.secondary_stats().len(), 2);
     assert_eq!(session.highlighted_poi_ids().len(), 2);
+    Ok(())
 }
 
 #[rstest]
@@ -130,8 +133,10 @@ fn secondary_stat_rejects_blank_unit() {
 }
 
 #[rstest]
-fn session_rejects_ended_at_before_started_at(walk_session_draft: WalkSessionDraft) {
-    let mut draft = walk_session_draft;
+fn session_rejects_ended_at_before_started_at(
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let mut draft = walk_session_draft?;
     draft.ended_at = Some(draft.started_at - Duration::seconds(1));
 
     let result = WalkSession::new(draft);
@@ -139,19 +144,20 @@ fn session_rejects_ended_at_before_started_at(walk_session_draft: WalkSessionDra
         result,
         Err(WalkValidationError::EndedBeforeStarted)
     ));
+    Ok(())
 }
 
 #[rstest]
 #[case(WalkPrimaryStatKind::Distance)]
 #[case(WalkPrimaryStatKind::Duration)]
 fn session_rejects_duplicate_primary_stat_kinds(
-    walk_session_draft: WalkSessionDraft,
     #[case] kind: WalkPrimaryStatKind,
-) {
-    let mut draft = walk_session_draft;
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let mut draft = walk_session_draft?;
     draft.primary_stats = vec![
-        WalkPrimaryStat::new(kind, 1200.0).expect("valid primary stat"),
-        WalkPrimaryStat::new(kind, 900.0).expect("valid primary stat"),
+        WalkPrimaryStat::new(kind, 1200.0)?,
+        WalkPrimaryStat::new(kind, 900.0)?,
     ];
 
     let result = WalkSession::new(draft);
@@ -161,23 +167,22 @@ fn session_rejects_duplicate_primary_stat_kinds(
             kind: actual_kind
         }) if actual_kind == kind
     ));
+    Ok(())
 }
 
 #[rstest]
 #[case(WalkSecondaryStatKind::Energy, Some("kcal"), Some("kJ"))]
 #[case(WalkSecondaryStatKind::Count, None, None)]
 fn session_rejects_duplicate_secondary_stat_kinds(
-    walk_session_draft: WalkSessionDraft,
     #[case] kind: WalkSecondaryStatKind,
     #[case] first_unit: Option<&str>,
     #[case] second_unit: Option<&str>,
-) {
-    let mut draft = walk_session_draft;
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let mut draft = walk_session_draft?;
     draft.secondary_stats = vec![
-        WalkSecondaryStat::new(kind, 10.0, first_unit.map(str::to_owned))
-            .expect("valid secondary stat"),
-        WalkSecondaryStat::new(kind, 14.0, second_unit.map(str::to_owned))
-            .expect("valid secondary stat"),
+        WalkSecondaryStat::new(kind, 10.0, first_unit.map(str::to_owned))?,
+        WalkSecondaryStat::new(kind, 14.0, second_unit.map(str::to_owned))?,
     ];
 
     let result = WalkSession::new(draft);
@@ -187,11 +192,14 @@ fn session_rejects_duplicate_secondary_stat_kinds(
             kind: actual_kind
         }) if actual_kind == kind
     ));
+    Ok(())
 }
 
 #[rstest]
-fn session_rejects_duplicate_highlighted_poi_ids(walk_session_draft: WalkSessionDraft) {
-    let mut draft = walk_session_draft;
+fn session_rejects_duplicate_highlighted_poi_ids(
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let mut draft = walk_session_draft?;
     let duplicate = Uuid::new_v4();
     draft.highlighted_poi_ids = vec![duplicate, duplicate];
 
@@ -200,27 +208,31 @@ fn session_rejects_duplicate_highlighted_poi_ids(walk_session_draft: WalkSession
         result,
         Err(WalkValidationError::DuplicateHighlightedPoiId { .. })
     ));
+    Ok(())
 }
 
 #[rstest]
-fn completion_summary_requires_completed_session(walk_session_draft: WalkSessionDraft) {
-    let mut draft = walk_session_draft;
+fn completion_summary_requires_completed_session(
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let mut draft = walk_session_draft?;
     draft.ended_at = None;
-    let session = WalkSession::new(draft).expect("session without end is valid");
+    let session = WalkSession::new(draft)?;
 
     let result = session.completion_summary();
     assert!(matches!(
         result,
         Err(WalkValidationError::SessionNotCompleted)
     ));
+    Ok(())
 }
 
 #[rstest]
-fn completion_summary_contains_session_payload(walk_session_draft: WalkSessionDraft) {
-    let session = WalkSession::new(walk_session_draft).expect("valid session");
-    let summary = session
-        .completion_summary()
-        .expect("completed session should produce summary");
+fn completion_summary_contains_session_payload(
+    walk_session_draft: TestResult<WalkSessionDraft>,
+) -> TestResult {
+    let session = WalkSession::new(walk_session_draft?)?;
+    let summary = session.completion_summary()?;
 
     assert_eq!(summary.session_id(), session.id());
     assert_eq!(summary.route_id(), session.route_id());
@@ -229,4 +241,5 @@ fn completion_summary_contains_session_payload(walk_session_draft: WalkSessionDr
         summary.highlighted_poi_ids().len(),
         session.highlighted_poi_ids().len()
     );
+    Ok(())
 }

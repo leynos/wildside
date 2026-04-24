@@ -12,7 +12,9 @@ use crate::inbound::http::users::LoginRequest;
 use actix_web::http::StatusCode;
 use actix_web::{App, test as actix_test, web};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{error::Error as StdError, io, sync::Arc};
+
+type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 fn test_app() -> App<
     impl actix_web::dev::ServiceFactory<
@@ -52,7 +54,7 @@ async fn login_and_get_cookie(
         Response = actix_web::dev::ServiceResponse,
         Error = actix_web::Error,
     >,
-) -> actix_web::cookie::Cookie<'static> {
+) -> TestResult<actix_web::cookie::Cookie<'static>> {
     let login_req = actix_test::TestRequest::post()
         .uri("/api/v1/login")
         .set_json(&LoginRequest {
@@ -62,12 +64,12 @@ async fn login_and_get_cookie(
         .to_request();
     let login_res = actix_test::call_service(app, login_req).await;
     assert!(login_res.status().is_success());
-    login_res
+    Ok(login_res
         .response()
         .cookies()
         .find(|cookie| cookie.name() == "session")
-        .expect("session cookie")
-        .into_owned()
+        .ok_or_else(|| io::Error::other("session cookie"))?
+        .into_owned())
 }
 
 fn sample_walk_session_payload() -> Value {
@@ -90,9 +92,9 @@ fn sample_walk_session_payload() -> Value {
 }
 
 #[actix_web::test]
-async fn create_walk_session_returns_stable_session_id() {
+async fn create_walk_session_returns_stable_session_id() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let cookie = login_and_get_cookie(&app).await?;
 
     let request = actix_test::TestRequest::post()
         .uri("/api/v1/walk-sessions")
@@ -108,12 +110,13 @@ async fn create_walk_session_returns_stable_session_id() {
         Some("00000000-0000-0000-0000-000000000501")
     );
     assert!(body.get("completionSummary").is_some());
+    Ok(())
 }
 
 #[actix_web::test]
-async fn create_walk_session_rejects_invalid_route_id() {
+async fn create_walk_session_rejects_invalid_route_id() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let cookie = login_and_get_cookie(&app).await?;
 
     let mut payload = sample_walk_session_payload();
     payload["routeId"] = Value::String("not-a-uuid".to_owned());
@@ -126,12 +129,13 @@ async fn create_walk_session_rejects_invalid_route_id() {
     let response = actix_test::call_service(&app, request).await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    Ok(())
 }
 
 #[actix_web::test]
-async fn create_walk_session_rejects_invalid_primary_stat_kind() {
+async fn create_walk_session_rejects_invalid_primary_stat_kind() -> TestResult {
     let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await;
+    let cookie = login_and_get_cookie(&app).await?;
 
     let mut payload = sample_walk_session_payload();
     payload["primaryStats"][0]["kind"] = Value::String("pace".to_owned());
@@ -144,6 +148,7 @@ async fn create_walk_session_rejects_invalid_primary_stat_kind() {
     let response = actix_test::call_service(&app, request).await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    Ok(())
 }
 
 #[actix_web::test]
