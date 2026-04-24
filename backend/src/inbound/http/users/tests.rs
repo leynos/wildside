@@ -24,6 +24,19 @@ struct ValidationExpectation<'a> {
     top_code: &'a str,
 }
 
+fn get_details_object(value: &Value) -> io::Result<&serde_json::Map<String, Value>> {
+    value
+        .get("details")
+        .and_then(Value::as_object)
+        .ok_or_else(|| io::Error::other("expected details object to be present"))
+}
+
+fn as_object(value: &Value) -> io::Result<&serde_json::Map<String, Value>> {
+    value
+        .as_object()
+        .ok_or_else(|| io::Error::other("expected JSON object"))
+}
+
 async fn assert_login_validation_error(
     username: &str,
     password: &str,
@@ -51,10 +64,7 @@ async fn assert_login_validation_error(
         value.get("code").and_then(Value::as_str),
         Some(expected.top_code)
     );
-    let details = value
-        .get("details")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| io::Error::other("expected details to be present"))?;
+    let details = get_details_object(&value)?;
     assert_eq!(
         details.get("field").and_then(Value::as_str),
         Some(expected.field)
@@ -249,10 +259,7 @@ async fn update_interests_rejects_too_many_ids() -> TestResult {
         value.get("code").and_then(Value::as_str),
         Some("invalid_request")
     );
-    let details = value
-        .get("details")
-        .and_then(|val| val.as_object())
-        .ok_or_else(|| io::Error::other("expected details to be present"))?;
+    let details = get_details_object(&value)?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
@@ -294,10 +301,11 @@ fn interests_request_validation_rejects_invalid_ids(
 
     assert_eq!(api_error.code(), ErrorCode::InvalidRequest);
     assert_eq!(api_error.message(), expected_message);
-    let details = api_error
-        .details()
-        .and_then(|value| value.as_object())
-        .ok_or_else(|| io::Error::other("expected details to be present"))?;
+    let details = as_object(
+        api_error
+            .details()
+            .ok_or_else(|| io::Error::other("expected error details payload to be present"))?,
+    )?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some(expected_code)
@@ -328,10 +336,11 @@ fn interests_request_validation_rejects_too_many_ids() -> TestResult {
         api_error.message(),
         "interest theme ids must contain at most 100 items"
     );
-    let details = api_error
-        .details()
-        .and_then(|value| value.as_object())
-        .ok_or_else(|| io::Error::other("expected details to be present"))?;
+    let details = as_object(
+        api_error
+            .details()
+            .ok_or_else(|| io::Error::other("expected error details payload to be present"))?,
+    )?;
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("too_many_interest_theme_ids")
