@@ -1552,9 +1552,9 @@ before invoking a port. Canonical examples include:
   validation, duration bounds, and non-empty interest selections.
 - `InterestThemeId` and `UserId` — newtypes around UUIDs guaranteeing correct
   namespace usage and enabling compile-time distinction between identifiers.
-- `CacheKey` — encapsulates the canonical hash input for caching so that the
-  service, rather than the handler, is responsible for namespacing and TTL
-  rules.
+- `RouteCacheKey` — encapsulates canonical cache-key derivation for route
+  requests so the service, rather than the handler or Redis adapter, owns
+  namespacing and request normalization rules.
 - `LoginCredentials` — trims usernames, zeroizes passwords via the `zeroize`
   crate, and exposes `LoginCredentials::try_from_parts` so `POST /api/v1/login`
   handlers never poke at DTO fields directly.
@@ -1922,6 +1922,9 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    `route:v1:<sha256>`; anonymous routes expire after 24 hours with ±10 %
    jitter while saved routes remove the TTL. Rotate the namespace (`v2`,
    `v3`, …) whenever schema or engine changes invalidate cached content.
+   The canonicalization seam lives in `backend/src/domain/ports/cache_key.rs`;
+   `backend/src/outbound/cache/redis_route_cache.rs` only persists the derived
+   key.
 
 This workflow ensures first-run requests succeed quickly while the dataset
 improves automatically for subsequent users.
