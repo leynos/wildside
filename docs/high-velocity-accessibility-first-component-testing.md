@@ -1,1211 +1,729 @@
-# An Architectural Blueprint for High-Velocity, Accessibility-First Component Testing
+# An Architectural Blueprint for High-Velocity, Accessibility-First Testing
 
-## I. Strategic Framework: A Two-Tiered Approach to Accessibility-First Testing
+## I. Strategic Framework: A Multi-Layered Approach to Accessible Testing
 
-The foundational principle that accessibility testing must be a rapid, integral
-part of the development lifecycle—not a deferred, slow process—requires a
-testing architecture that is both performant and robust. The initial strategy,
-while ambitious in its pursuit of speed, encountered a fundamental tooling
-deadlock. This section deconstructs that impasse, justifies a strategic pivot
-to a more mature and compatible toolchain, and establishes the precise
-capabilities and limitations of the proposed two-tiered testing model. This
-revised framework leverages Vitest for immediate, component-level feedback and
-Playwright for comprehensive, end-to-end validation, ensuring that the core
-philosophy is upheld through a pragmatic and technically sound approach.
+Achieving an **accessibility-first** testing strategy at high velocity requires a test architecture that is both **fast** and **thorough**. We must embed accessibility into everyday development without creating a slow feedback loop. The proposed framework adopts a multi-layered approach: a rapid inner loop for component tests and a comprehensive outer loop for end-to-end (E2E) validation.
 
-### 1.1 Deconstructing the Tooling Deadlock: Why the Bun and ,`happy-dom`, Approach is Untenable
+This architecture reflects recent tooling decisions. Notably, we leverage the speed of the **Bun** runtime for most unit and integration tests, while compensating for its limitations with a parallel **Node.js** harness for accessibility scans. On top of this, we employ **Playwright** as an outer test loop to cover all aspects of the user experience. Each layer has a distinct role, ensuring that accessibility is verified at every stage without compromising developer productivity.
 
-An effective testing strategy must be built upon a compatible and stable set of
-tools. The initial investigation, centered on the Bun runtime, revealed a
-critical and currently insurmountable incompatibility between its recommended
-DOM simulation environment and the industry-standard accessibility testing
-engine, `axe-core`. This incompatibility is not a minor issue but a hard
-blocker that invalidates the approach for accessibility-first component testing.
+### 1.1 Deconstructing the Happy-DOM Deadlock: Bun vs. `axe-core`
 
-The Bun ecosystem is engineered for exceptional performance, and its
-documentation explicitly recommends `happy-dom` as the preferred library for
-simulating a browser environment in its test runner.[^5]
+Initial experiments exposed a fundamental deadlock between Bun's default DOM simulation and the industry-standard accessibility engine, **`axe-core`**. Bun’s test runner is engineered for extreme speed and recommends using **Happy DOM** for simulating the browser environment. **Happy DOM** is a lightweight, fast implementation of browser APIs – but its quest for speed comes at a cost. It diverges from web standards in subtle ways that clash with `axe-core`.
 
-`happy-dom` is a lightweight JavaScript implementation of web browser APIs,
-designed for speed. However, this speed is achieved in part through a
-less-than-complete adherence to certain web standards, which creates a direct
-conflict with `axe-core`.
+The most critical incompatibility lies in Happy DOM’s handling of the **`Node.isConnected`** property. This DOM API indicates if a node is attached to the document. `axe-core` relies on modifying `isConnected` during its DOM traversal. In Happy DOM, `isConnected` is implemented as a read-only property (and not fully standard), causing `axe-core` to throw runtime errors when it attempts to set it. In practice, this means any accessibility scan using `axe-core` fails outright under Happy DOM1. Community reports and library documentation confirm this issue: the maintainers of `vitest-axe` (a Vitest/Jest integration for axe) explicitly warn that their matcher is **incompatible** with Happy DOM environments.
 
-The root of the problem lies in `happy-dom`'s implementation of the
-`Node.prototype.isConnected` property. This property is a fundamental DOM API
-that indicates whether a node is connected to the main document's DOM tree.
-`axe-core` relies on this property to traverse the DOM and accurately assess
-the state of various elements. Multiple documented issues within the
-`happy-dom` and `axe-core` communities confirm that `happy-dom`'s
-implementation is non-standard, often presenting as a read-only getter where
-`axe-core` expects to be able to set it, leading to `TypeError` exceptions
-during an accessibility scan.[^7] This bug effectively prevents
+Unfortunately, Bun’s test runner **does not yet support** the more standards-compliant **JSDOM** environment (the de facto choice for Node-based DOM testing). JSDOM would solve the `isConnected` issue, but Bun cannot use it as a drop-in replacement at this time2. This presents a catch-22:
 
-`axe-core` from functioning correctly. Libraries designed to bridge testing
-frameworks and `axe-core`, such as `vitest-axe`, explicitly warn users that
-their functionality is incompatible with the `happy-dom` environment due to
-this underlying issue.[^9]
+- Bun’s recommended path for DOM tests is Happy DOM (for speed).
 
-The logical alternative within the Node.js ecosystem is `jsdom`, a more
-comprehensive and standards-compliant implementation of the DOM. While slightly
-slower than `happy-dom`, `jsdom` is the de facto standard for DOM simulation
-and is generally compatible with `axe-core` (with some caveats discussed
-later). However, the `bun test` runner does not currently support `jsdom` as a
-test environment. This is a known limitation, with support being a
-long-standing feature request within the Bun project.[^10]
+- `axe-core` cannot operate under Happy DOM due to fundamental API mismatch.
 
-This creates an unavoidable causal chain of failure for the initial strategy:
+- The only viable alternative (JSDOM) isn’t supported in Bun’s native runner.
 
-1. The prescribed and officially recommended path for DOM testing with
-   `bun test` is to use `happy-dom`.
-2. The industry-standard accessibility engine, `axe-core`, cannot operate
-   within the `happy-dom` environment due to a fundamental API incompatibility.
-3. The only viable alternative DOM environment, `jsdom`, is not supported by
-   the `bun test` runner.
+In summary, **Bun alone cannot run component-level accessibility scans** today. This impasse is not a matter of configuration or minor bug; it’s a fundamental limitation of the current Bun + Happy DOM pairing. We must therefore adjust our strategy to retain Bun’s performance benefits *and* enable `axe-core` scans through other means. The solution is a **hybrid testing approach**: run most tests in Bun for speed, but outsource accessibility-specific tests to a Node.js environment that supports JSDOM.
 
-Consequently, there is no currently available path to perform `axe-core`-based
-accessibility testing on components within Bun's native test runner. The
-decision to pivot away from this toolchain is therefore not a matter of
-preference but a technical necessity.
+### 1.2 A Hybrid Solution: Node.js + JSDOM for A11y Scans
 
-### 1.2 The Pivot to Vitest: A Pragmatic, Node.js-Based Solution
+To resolve the deadlock, we introduce a **parallel Node.js test harness** dedicated to accessibility checks. Rather than abandoning Bun entirely (and its performance gains), we isolate the `axe-core` scans into their own test suite running on Node.js. In practice, this means writing our accessibility tests in separate files – for example, naming them `*.a11y.test.tsx` – and executing them with a Node-based runner that uses JSDOM. All other unit and integration tests continue to run with `bun test` using Happy DOM as usual.
 
-Given the technical constraints of the Bun ecosystem for this specific use
-case, a pivot to a more mature, Node.js-based test runner is required. Vitest
-emerges as the ideal candidate, offering a compelling balance of high
-performance, deep ecosystem compatibility, and a seamless developer experience
-that aligns perfectly with the accessibility-first philosophy.
+Under this hybrid model, **Bun** remains the primary test engine for the vast majority of tests (ensuring fast feedback), and **Node+JSDOM** is invoked as needed for the specific cases that require `axe-core`. This dual setup gives us the “best of both worlds”:
 
-Vitest is a modern test runner built on top of the Vite tooling ecosystem. Its
-primary advantage in this context is its first-class support for multiple test
-environments. Unlike `bun test`, Vitest allows developers to explicitly
-configure the test environment in its configuration file, with full support for
-both `'jsdom'` and `'happy-dom'`.[^11] This capability directly resolves the
-central blocker encountered with Bun, as it allows the selection of
+- **Fast feedback for logic and UI structure:** Bun’s test runner with Happy DOM provides near-instant execution for tests that verify component behavior, state management, and basic rendering structure. Developers get immediate feedback in their inner loop without waiting on a heavy browser simulation.
 
-`jsdom`, the environment required for stable `axe-core` integration.
+- **Standards-compliant DOM for accessibility rules:** A Node environment can host JSDOM, a more complete DOM implementation that `axe-core` supports. By running `axe` in this context, we can catch semantic and structural accessibility issues that Bun/Happy DOM would miss or error on.
 
-While Bun's runtime is renowned for its raw JavaScript execution speed, Vitest
-is also architected for performance. It leverages worker threads to run tests
-in parallel and features a highly optimized, instant watch mode that provides
-near-immediate feedback during development.[^15] This performance profile
-ensures that component-level accessibility checks remain exceptionally fast,
-satisfying the core requirement that they should not become a "slow bus" in the
-development workflow.
+To keep the Node-based tests efficient, we leverage **tsgo** (TypeScript’s new fast compiler) to compile and launch these tests. A typical setup could use a lightweight command (for example, `npx tsgo`) to transpile the `*.a11y.test.tsx` files on the fly and execute them in Node. This avoids the overhead of a full Jest or Vitest context for the accessibility suite. Essentially, we treat these a11y tests as a specialized batch of scripts: they set up JSDOM, render components, run `axe-core`, and report results.
 
-Furthermore, the transition to Vitest is facilitated by a robust ecosystem. The
-`vitest-axe` library, a direct fork of the widely-used `jest-axe`, provides a
-purpose-built, ergonomic API for integrating `axe-core` into Vitest tests.[^9]
-This package provides the necessary custom matchers and helper functions to
-make writing accessibility assertions simple and readable, lowering the barrier
-to adoption for the development team.
+Crucially, the separation of test files by naming convention means we can run the two suites independently. A typical workflow might include two NPM scripts: one for the **fast tests** (`npm run test:unit` using Bun) and one for the **a11y tests** (`npm run test:a11y` using Node). In continuous integration, these can run in parallel or in sequence, but they are logically isolated. This prevents any slow-down of the primary suite; if accessibility scans are a bit slower due to JSDOM’s overhead, they won’t make the core test run (which developers execute frequently) any slower. It also provides flexibility – for example, a developer in rapid prototyping mode can run just the Bun tests, and only run the axe checks when needed or in a pre-commit hook.
 
-The strategic decision here involves a classic engineering trade-off. The
-theoretical maximum execution speed offered by the Bun runtime is exchanged for
-the stability, compatibility, and proven ecosystem of the Vitest/Node.js
-toolchain. This is not a compromise on the principle of speed but a pragmatic
-choice that enables the primary goal: a working, reliable, and fast
-accessibility-first component testing framework. By choosing the stable path,
-the team can immediately implement its accessibility strategy without being
-blocked by the ecosystem immaturity of a newer tool. This pivot ensures that
-the team's accessibility-first ambitions are realized in practice, not just in
-theory.
+By introducing a Node+JSDOM harness for `axe-core`, we unblock our accessibility-first strategy without sacrificing performance. Bun remains at the center of our testing, but we now have a reliable secondary path to perform **automated accessibility audits** at the component level.
 
-### 1.3 Setting Realistic Expectations: Understanding ,`axe-core`, Limitations in ,`jsdom`
+### 1.3 Acknowledging Limits: What JSDOM **Can’t** Catch
 
-While pivoting to Vitest with a `jsdom` environment solves the primary tooling
-deadlock, it is crucial to understand the inherent limitations of testing in
-any non-rendering, simulated DOM. `jsdom` is a pure JavaScript implementation
-of the DOM; it parses HTML and provides APIs for manipulation, but it does not
-perform layout, painting, or rendering as a real browser does. This fundamental
-characteristic means that certain classes of accessibility rules, specifically
-those that rely on visual computation, cannot be reliably tested at the
-component level. Acknowledging these limitations is essential for preventing a
-false sense of security and for defining the distinct and necessary role of
-end-to-end testing in a real browser.
+Even with JSDOM enabling `axe-core` scans, it’s important to set realistic expectations. **No simulated DOM environment (Happy DOM or JSDOM) can replace a real browser for certain accessibility validations.** JSDOM is purely a DOM parser and engine; it does **not** perform visual rendering, apply CSS layout, or run the browser’s accessibility tree computations. This means some accessibility rules are beyond its scope.
 
-The official `axe-core` documentation explicitly states that it offers "limited
-support for JSDOM" and advises that rules known to be incompatible should be
-disabled to prevent inaccurate results.[^2] The most significant and
-widely-known incompatible rule is
+The official Axe documentation notes "limited support for JSDOM" and advises disabling rules that are known to yield false results in a headless DOM3. The most prominent example is the **color contrast** rule. Verifying color contrast requires computing rendered text colors against background pixels – something impossible without an actual rendering engine (JSDOM has no concept of pixels or CSS cascade in effect). Any `axe-core` rule that depends on actual rendering or CSS will fail or produce irrelevant results under JSDOM. Besides `color-contrast`, other rules in this category include:
 
-`color-contrast`. This rule requires the ability to compute the final, rendered
-foreground colour of text and the actual background colour(s) it is painted on.
-Since `jsdom` does not render pixels, it cannot perform this calculation,
-making the rule non-functional in this environment.[^2]
+- **Target size** (minimum touch target dimensions)
 
-Other rules that depend on layout and visual rendering are similarly affected.
-For example, rules like `scrollable-region-focusable` (which checks if a
-scrollable area is keyboard-focusable) or `target-size` (which checks if
-interactive elements are large enough to be easily tapped) rely on computed
-dimensions and visibility, which are not fully available in `jsdom`.
-Additionally, when testing components in isolation, page-level rules can
-generate misleading failures. For instance, the `region` rule, which ensures
-all page content is contained within landmarks, will often fail when testing a
-single component that is not rendered within a full page structure containing
-`<main>`, `<nav>`, etc..[^22]
+- **Scrollable region focusable** (requires knowing if overflow renders scrollbars)
 
-These limitations are not a flaw but a defining characteristic of the testing
-environment. They naturally lead to a powerful, two-tiered testing strategy
-where each layer has a distinct responsibility:
+- **Visual focus indicators** (CSS outline or highlight on focusable elements)
 
-1. **Component Layer (Vitest + **`jsdom`**):** This layer provides
-   instantaneous feedback on the _structural and semantic_ integrity of a
-   component's accessibility. It is perfect for catching issues related to
-   missing ARIA attributes, incorrect roles, improper state management
-   (`aria-expanded`), and ensuring accessible names are present. These are the
-   foundational elements of an accessible component.
-2. **E2E Layer (Playwright):** This layer validates the component in a real,
-   rendering browser. Its responsibility is to catch the _visual and
-   interactional_ accessibility issues that `jsdom` cannot, such as colour
-   contrast, focus visibility, keyboard trap prevention, and correct focus
-   order.
+- Etc.
 
-This separation of concerns is the cornerstone of an efficient and effective
-accessibility testing strategy. It prevents redundant testing, ensures each
-layer provides maximum value, and transforms a technical limitation into a
-strategic advantage by clarifying the purpose and scope of each type of test.
+We address this by **disabling such rules in the component-layer tests** and deferring their verification to the Playwright E2E layer. In practice, our Node-based axe test harness will load `axe-core` with a configuration that turns off rules like `color-contrast` and any others that rely on styles or layout. For example, we globally disable `color-contrast` in these tests and explicitly document that **contrast must be checked in the browser**. Similarly, a rule like `scrollable-region-focusable` (which might flag an element for not being keyboard-focusable if it’s scrollable) is unreliable without actual CSS overflow calculations; we’ll ignore it in JSDOM scans and instead have a keyboard navigation test cover it in the E2E suite.
 
-To provide immediate, actionable guidance, the following table outlines the
-`axe-core` rules that should be disabled within the Vitest `jsdom` environment.
+Understanding these limits reinforces our need for the **outer test loop**. The inner loop (Bun + Node/axe tests) catches semantic issues (like missing ARIA labels, improper roles, missing alt text, etc.), but it **cannot fully guarantee** things like proper color contrast, focus order on actual UI, or dynamic content announcements. We explicitly rely on **real browser testing with Playwright** to cover those. This separation of concerns ensures we don’t develop a false sense of security from our fast tests – we know exactly which checks happen later in the pipeline.
 
-| Rule ID                       | Reason for Disabling in `jsdom`                                                                                                                      | Recommended Action                                                                                                |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `color-contrast`              | `jsdom` is a non-rendering environment and cannot compute visual styles or colour values. This rule will not work correctly.                         | Disable globally in `vitest.config.ts`. Defer all colour contrast testing to the Playwright E2E layer.            |
-| `scrollable-region-focusable` | This rule relies on computed styles and layout to determine if an element is genuinely scrollable, which is unreliable in `jsdom`.                   | Disable globally in `vitest.config.ts`. Validate keyboard accessibility of scrollable areas in Playwright.        |
-| `region`                      | This page-level rule requires content to be within landmarks (e.g., `<main>`). It will produce false positives when testing components in isolation. | Disable on a per-test basis when testing isolated components. Enable for full-page component tests if applicable. |
-| `page-has-heading-one`        | This page-level rule requires a single `<h1>`. It is not relevant for most isolated component tests.                                                 | Disable on a per-test basis when testing isolated components.                                                     |
-| `bypass`                      | This page-level rule checks for a skip navigation link. It is irrelevant for isolated component tests.                                               | Disable on a per-test basis when testing isolated components.                                                     |
+With the strategic foundation laid, we can now delve into each layer of the architecture: the fast feedback inner loop powered by Bun (augmented with Node-based axe scans), and the comprehensive outer loop powered by Playwright.
 
-## II. The Inner Loop: High-Speed Component Accessibility with Vitest and ,`axe-core`
+## II. The Inner Loop: Fast, Accessible Component Testing with Bun & JSDOM
 
-The "inner loop" represents the rapid, iterative cycle of coding and testing
-that developers engage in moment-to-moment. To make accessibility a default
-consideration, tests within this loop must be exceptionally fast and provide
-clear, actionable feedback. This section provides a complete technical
-blueprint for configuring a high-velocity component accessibility testing
-environment using Vitest, `jsdom`, and `axe-core`.
+The “inner loop” is where developers spend most of their time. It encompasses the rapid unit and component tests run during active development – often on every file save or commit. Our goal for this layer is to **make accessibility a built-in aspect of these fast tests**. Every time a developer tests a component’s logic or rendering, we want accessibility checks to happen automatically and with minimal overhead.
 
-### 2.1 Vitest Environment Configuration: The Foundation for Speed and Reliability
+To achieve this, we structure the inner loop into two synergistic parts:
 
-A well-structured Vitest configuration is the foundation of our testing
-strategy. The `vitest.config.ts` file serves as the central control panel,
-allowing us to define the test environment, establish setup hooks, and organize
-test execution to align with our accessibility-first principles.
+- **2.1 Bun Test Runner + Happy DOM for Core Tests** – ultra-fast execution of component tests for logic, state, and basic rendering using Bun’s native test framework.
 
-First, we must establish `jsdom` as the default environment for all tests. This
-ensures that browser-like globals such as `document` and `window` are
-available, enabling us to render components and interact with a simulated DOM.
-This is accomplished by setting the `test.environment` property to
-`'jsdom'`.[^11]
+- **2.2 Node + JSDOM Axe Tests for Accessibility** – focused tests that specifically scan components with `axe-core` to catch semantic issues, running in a Node environment in parallel to the Bun tests.
 
-Next, to maintain clean and organized tests, we will leverage Vitest's
-`test.setupFiles` option. This property points to a script that runs before
-every test file, making it the ideal location to perform global setup tasks,
-such as extending Vitest's `expect` API with our custom accessibility
-matcher.[^11]
+- **2.3 Accessible-First Test Practices** – a set of conventions for writing tests (in both parts above) that ensure we’re using accessible selectors and asserting on meaningful output, effectively doubling as accessibility verification.
 
-To operationalize the "accessibility tests run first" philosophy, we will
-employ a file-naming convention. By creating a distinct pattern for
-accessibility-specific tests, such as `*.a11y.test.ts`, we can configure our CI
-pipeline to execute these tests as a separate, prioritized job. The
-`test.include` array in our configuration will be set to recognize both our
-accessibility-specific files and standard test files.[^24] This convention
-provides a clear signal of intent and allows for strategic test execution in CI.
+Together, these ensure that by the time a component leaves the inner loop, it isn’t just functionally correct – it’s also **accessible by design**.
 
-The following is a complete, annotated `vitest.config.ts` file that implements
-these foundational settings:
+### 2.1 Ultra-Fast Execution with Bun and Happy DOM
 
-```typescript
-// vitest.config.ts
-import { defineConfig } from 'vitest/config';
+Bun’s built-in test runner serves as our default for all standard tests. We configure `bun test` with Happy DOM as the global DOM (`--preload ./tests/setup-happy-dom.ts` in our NPM script) so that each test file can create `document` and `window` as if running in a browser. The payoff is speed: Bun’s runtime and Happy DOM allow most tests to run in **milliseconds**, keeping the feedback loop extremely tight.
 
-export default defineConfig({
-  test: {
-    // 1. Set the default test environment to 'jsdom'.
-    // This provides a browser-like environment for component rendering and testing.
-    environment: 'jsdom',
+In these Bun-driven tests, we cover things like:
 
-    // 2. Specify global setup files.
-    // This file will run before each test suite, perfect for extending `expect`.
-    setupFiles: ['./tests/setup.ts'],
+- **Component Rendering and Props:** Does the component render the right output given certain props or state?
 
-    // 3. Define the patterns for test files.
-    // By including a specific pattern for accessibility tests first,
-    // we establish a convention that can be leveraged in CI for prioritization.
-    include: ['**/*.a11y.test.ts', '**/*.test.ts'],
+- **State Transitions:** When we simulate a user action or change a context value, does the component update correctly?
 
-    // 4. (Optional but Recommended) Enable globals for a Jest-like experience.
-    // This avoids the need to import `test`, `expect`, etc., in every file.
-    globals: true,
-  },
-});
+- **Basic Accessibility attributes:** If a component is supposed to have certain ARIA attributes or roles, are they present in the rendered output?
+
+For example, suppose we have a `<ThemeProvider>` context and a `<MobileShell>` layout component. A Bun test might verify that when the theme context is applied, the DOM gets a `data-theme` attribute on the `<html>` element:
 
 ```
+tsxCopy code`import { describe, it, expect } from 'bun:test';
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
 
-This configuration establishes a robust and reliable foundation. It ensures a
-consistent testing environment, provides a hook for global test enhancements,
-and introduces a clear convention for organizing and prioritizing accessibility
-tests, directly supporting the core strategic goals.
+// ... import our ThemeProvider and a test component
 
-### 2.2 Seamless Axe Integration with ,`vitest-axe`
+describe('ThemeProvider integration', () => {
+  it('applies the default theme to <html> and <body>', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
 
-With the Vitest environment configured, the next step is to integrate the
-`axe-core` engine. The `vitest-axe` library provides a seamless bridge, acting
-as a direct fork of the popular `jest-axe` package and offering an identical,
-developer-friendly API.[^9] This integration involves two key components: the
-
-`axe` function, which runs the accessibility scan, and the `toHaveNoViolations`
-custom matcher, which provides an ergonomic way to assert the results.
-
-The integration is primarily handled within the test setup file we specified in
-our `vitest.config.ts` (e.g., `./tests/setup.ts`). In this file, we will import
-the necessary matchers from `vitest-axe` and use Vitest's `expect.extend`
-method to make them globally available in all our test files.[^9]
-
-For TypeScript projects, an additional step is required to ensure type safety
-and autocompletion for the new matcher. By importing
-`vitest-axe/extend-expect`, we leverage module augmentation to inform the
-TypeScript compiler about the `toHaveNoViolations` matcher on the `expect`
-object. This setup file must then be included in the project's `tsconfig.json`
-to be recognized by the type checker.
-
-Here is the complete setup:
-
-**1. Test Setup File (**`./tests/setup.ts`**)**
-
-```typescript
-//./tests/setup.ts
-
-// Import the matcher extensions for TypeScript type safety and autocompletion.
-// This file augments the 'vitest' module's `expect` interface.
-import 'vitest-axe/extend-expect';
-
-// Alternatively, for more granular control or in a JavaScript project,
-// you can manually extend expect.
-/*
-import { expect } from 'vitest';
-import * as matchers from 'vitest-axe/matchers';
-expect.extend(matchers);
-*/
-
-```
-
-**2. TypeScript Configuration (**`tsconfig.json`**)**
-
-Ensure the setup file is included in your `tsconfig.json` so TypeScript can
-process the type augmentations.
-
-```json
-{
-  "compilerOptions": {
-    //... your existing compiler options
-  },
-  "include": [
-    "src", 
-    "./tests/setup.ts", // Add the setup file here
-    "vitest.config.ts"
-  ]
-}
-
-```
-
-This minimal setup provides a powerful and type-safe integration. By handling
-the `expect.extend` call globally in the setup file, individual test files can
-remain clean and focused solely on writing assertions, without boilerplate
-configuration in every file.
-
-### 2.3 Implementation Deep Dive: The ,`toHaveNoAxeViolations`, Custom Matcher
-
-While using a pre-built library like `vitest-axe` is efficient, understanding
-the mechanism behind its core matcher, `toHaveNoViolations`, is crucial for
-advanced debugging, customization, and building confidence in the toolchain.
-Vitest's `expect.extend` API is fully compatible with Jest's and allows for the
-creation of powerful, asynchronous custom matchers.[^27] We can construct a
-best-practice implementation of this matcher from first principles,
-demonstrating how it processes the
-
-`axe-core` results and generates a highly readable error report.
-
-The `axe-core` engine, when run, returns a results object containing several
-arrays, the most important of which is `violations`. If this array is empty,
-the scan passed. If it contains one or more objects, each object represents a
-distinct accessibility defect. Each violation object is a rich data structure
-containing properties essential for debugging:
-
-- `id`: The unique identifier for the rule that failed (e.g., `image-alt`,
-  `label`).
-- `impact`: The severity of the issue, categorized as `'minor'`, `'moderate'`,
-  `'serious'`, or `'critical'`.
-- `help`: A human-readable description of the issue.
-- `helpUrl`: A URL to a Deque University page with detailed documentation and
-  remediation guidance.
-- nodes: An array of objects, each representing a DOM element that violated the
-  rule, containing its HTML snippet (html) and CSS selector (target).
-
-31
-
-Our custom matcher will be an `async` function that receives this `axe-core`
-results object. Its primary logic is to check if the `violations` array is
-empty. If it is, the matcher passes. If not, it fails and must return a
-meticulously formatted error message that leverages the rich data in each
-violation object to provide an exceptional developer experience for debugging.
-
-The following is a complete, production-quality implementation of the
-`toHaveNoAxeViolations` matcher, including TypeScript definitions.
-
-**1. Custom Matcher Implementation (can be placed in **`./tests/setup.ts`**)**
-
-```typescript
-import { expect } from 'vitest';
-import type { AxeResults, Result } from 'axe-core';
-import { red, green, dim } from 'kleur/colors'; // For coloured console output
-
-// Helper function to format a single violation for readability
-function formatViolation(violation: Result): string {
-  const impactColour = {
-    minor: dim,
-    moderate: (str: string) => str, // Default colour
-    serious: red,
-    critical: red,
-  };
-
-  const impact = violation.impact ?? 'moderate';
-  const colouredImpact = impactColour[impact](impact.toUpperCase());
-
-  const nodes = violation.nodes.map((node, index) => 
-    `  ${index + 1}. Target: ${node.target.join(', ')}\n     HTML: ${dim(node.html)}`
-  ).join('\n');
-
-  return (
-    `\n(${colouredImpact}) ${green(violation.id)}: ${violation.help}\n` +
-    `${dim(violation.helpUrl)}\n\n${nodes}`
-  );
-}
-
-expect.extend({
-  async toHaveNoAxeViolations(results: AxeResults) {
-    const { violations } = results;
-    const pass = violations.length === 0;
-
-    if (pass) {
-      return {
-        pass: true,
-        message: () => 'Expected document to have axe violations',
-      };
-    }
-
-    const violationSummary = violations.map(formatViolation).join('\n');
-    const plural = violations.length === 1? 'violation' : 'violations';
-
-    return {
-      pass: false,
-      message: () => 
-        `Expected document to have no axe violations, but found ${violations.length} ${plural}:\n${violationSummary}`,
-    };
-  },
-});
-
-```
-
-**2. TypeScript Type Declarations (in a **`vitest.d.ts`** file)**
-
-```typescript
-// vitest.d.ts
-import 'vitest';
-import type { AxeResults } from 'axe-core';
-
-interface CustomMatchers<R = unknown> {
-  toHaveNoAxeViolations(): Promise<R>;
-}
-
-declare module 'vitest' {
-  interface Assertion<T = any> extends CustomMatchers<T> {}
-  interface AsymmetricMatchersContaining extends CustomMatchers {}
-}
-
-```
-
-By providing this transparent implementation, the testing framework is
-demystified. The team is empowered to understand, trust, and even customize
-their tooling. For example, the `formatViolation` function could be modified to
-link to an internal design system's documentation for specific components,
-further enhancing the developer workflow. This approach elevates the testing
-strategy from a set of prescribed rules to a living, adaptable system owned by
-the team.
-
-### 2.4 Practical Application: Component Test Patterns
-
-With the testing environment fully configured, we can now apply it to
-real-world components. The pattern for writing these tests is straightforward
-and integrates cleanly with established component testing practices, such as
-those from React Testing Library. The core workflow involves rendering the
-component into the `jsdom` environment, running the `axe` scan on the resulting
-DOM container, and asserting the outcome with our custom matcher.
-
-A key practice in component-level accessibility testing is contextual
-configuration. While we have a global configuration for `axe-core`, individual
-components may have unique requirements. For example, a standalone `Modal`
-component, when tested in isolation, will not be part of a larger page
-structure with landmarks like `<main>`. Running page-level rules like `region`
-against it would produce a false-positive failure. The `axe` function allows
-for a second options argument where rules can be disabled on a per-test basis,
-ensuring that our tests are precise and free of noise.[^37]
-
-Below are practical examples demonstrating how to test different component
-states and apply contextual rule configuration.
-
-**Example[^1]: Testing a Basic, Static Component**
-
-This test checks a simple `Button` component for any structural accessibility
-issues.
-
-```typescript
-// src/components/Button/Button.a11y.test.ts
-import { render, screen } from '@testing-library/react';
-import { axe } from 'vitest-axe';
-import Button from './Button';
-
-test('should have no automatically detectable accessibility violations', async () => {
-  // Render the component into the jsdom environment
-  const { container } = render(<Button>Click Me</Button>);
-  
-  // Run the axe scan on the rendered container
-  const results = await axe(container);
-
-  // Assert that there are no violations
-  await expect(results).toHaveNoAxeViolations();
-
-  // It's also good practice to assert the accessible name
-  expect(screen.getByRole('button', { name: 'Click Me' })).toBeInTheDocument();
-});
-
-```
-
-**Example[^2]: Testing a Dynamic Component with State Changes**
-
-This test evaluates a `Modal` component, ensuring it is accessible both when
-hidden and when visible. It also demonstrates how to disable a page-level rule
-that is irrelevant in this isolated context.
-
-```typescript
-// src/components/Modal/Modal.a11y.test.ts
-import { render } from '@testing-library/react';
-import { axe } from 'vitest-axe';
-import Modal from './Modal';
-
-describe('Modal Accessibility', () => {
-  test('should have no violations when closed', async () => {
-    const { container } = render(<Modal isOpen={false} title="My Modal" />);
-    // Axe does not test hidden regions by default, but this confirms no issues in the rendered-but-hidden DOM
-    const results = await axe(container);
-    await expect(results).toHaveNoAxeViolations();
-  });
-
-  test('should have no violations when open', async () => {
-    const { container } = render(<Modal isOpen={true} title="My Modal" />);
-    
-    // Configure axe for this specific scan
-    const results = await axe(container, {
-      rules: {
-        // The 'region' rule requires content to be in a landmark, which is not
-        // applicable when testing a modal in isolation. We disable it here.
-        region: { enabled: false }
-      }
+    act(() => {
+      root.render(<ThemeProvider><span id="probe" /></ThemeProvider>);
     });
 
-    await expect(results).toHaveNoAxeViolations();
+    const probe = container.querySelector('#probe');
+    expect(probe).toBeTruthy();
+    // Check that the theme data attribute was applied globally
+    expect(document.documentElement.getAttribute('data-theme')).toBe('wildside-night');
+    expect(document.body.getAttribute('data-theme')).toBe('wildside-night');
+    
+    root.unmount();
   });
 });
-
+`
 ```
 
-These patterns demonstrate a robust and flexible approach. By combining
-standard component rendering with targeted `axe` scans and contextual
-configuration, the team can efficiently validate the foundational accessibility
-of their components within the rapid inner development loop.
+In this snippet, the Bun test quickly sets up a React root in a fake DOM, renders a component, and makes assertions. The usage of `document.querySelector` and standard DOM APIs is possible thanks to Happy DOM. Tests like this run blazingly fast (no real browser, no JSDOM overhead) and can be run hundreds of times a minute during development.
 
-## III. The Outer Loop: Comprehensive E2E and Interactional Validation with Playwright
+**Happy DOM Caveat:** As discussed, Happy DOM isn’t fully standards-compliant. We **limit our usage of Happy DOM to tests that do not require full fidelity**. That typically means we avoid deep CSS or canvas-related testing here. For most React component output and event simulation, Happy DOM is sufficient and incredibly fast. Whenever we bump into a limitation (like an API not implemented or a discrepancy), we document it. In many cases, simple polyfills or slight test adjustments can work around minor differences.
 
-While the inner loop provides immediate feedback on the structural and semantic
-accessibility of components, it cannot validate aspects that depend on a real
-browser's rendering engine and user interaction model. The "outer
-loop"—integration and end-to-end (E2E) testing—is where we close these gaps.
-Playwright serves as the cornerstone of this outer loop, providing the tools to
-perform comprehensive audits that go far beyond static analysis, ensuring our
-application is not just compliant in code but truly usable in practice.
+### 2.2 Automated Accessibility Scans via Node + JSDOM
 
-### 3.1 Strategic Axe Scans in E2E Tests
+To complement Bun’s lightning-fast tests, we run a parallel suite of **accessibility-focused tests** in Node. These tests are responsible for running `axe-core` against our components. They ensure that from a semantic standpoint, components meet WCAG guidelines (no missing labels, correct roles, valid ARIA attributes, etc.) before we even integrate them into pages.
 
-Integrating `axe-core` into the E2E suite via the `@axe-core/playwright`
-package provides the ability to run scans in a fully-rendered browser
-environment, catching issues like colour contrast that are impossible to detect
-in `jsdom`.[^39] However, an undisciplined application of these scans can
-drastically slow down the E2E suite, violating the principle that accessibility
-tests should not be a "slow bus." The key to success is a strategic, targeted
-approach.
+**Test Structure and Naming:** We suffix these files with `.a11y.test.tsx` (for example, `Button.a11y.test.tsx`, `Modal.a11y.test.tsx`) to clearly distinguish them. This naming serves two purposes: it signals their purpose, and it allows us to target them specifically in our test scripts. We might configure our package scripts such that `npm run test:a11y` only picks up files matching `*.a11y.test.tsx`. In CI, this makes it trivial to run the accessibility suite separately from (and possibly in parallel with) the main Bun test suite.
 
-Instead of running a full-page scan after every single user interaction, scans
-should be treated as deliberate assertions performed at key, stable states
-within a user flow. These states typically occur after a page load or a
-significant client-side transition, such as opening a modal, submitting a form
-that reveals validation errors, or expanding an accordion panel.[^40]
+**JSDOM Setup:** Each a11y test file uses **JSDOM** as its DOM environment. We can either initialize JSDOM manually within the test, or use a Node test runner that supports JSDOM globally. One lightweight approach is writing a small harness script that, for each `.a11y.test.tsx` file:
 
-Furthermore, to maintain performance and precision, scans should be scoped to
-the relevant part of the UI whenever possible. The `AxeBuilder` API provides an
-`.include()` method that constrains the analysis to a specific CSS selector.
-This is highly effective for validating dynamic components without the overhead
-of re-scanning the entire page.
+- Spins up a JSDOM instance (e.g. using `new JSDOM('<!DOCTYPE html><html><body></body></html>')` and setting global `window` and `document`).
 
-The following example demonstrates this strategic approach by testing the
-accessibility of a modal dialog within a larger user flow.
+- Mounts the React component into that JSDOM document (likely using ReactDOM or Testing Library’s `render`).
 
-```typescript
-// tests/e2e/modal-flow.spec.ts
-import { test, expect } from '@playwright/test';
+- Runs `axe-core` on the JSDOM’s DOM tree.
+
+- Asserts that there are no violations.
+
+We can automate this using familiar libraries. For instance, **React Testing Library** can be used to render components into the JSDOM document easily, and the **axe-core API** (via something like `jest-axe` or `vitest-axe` utilities) can perform the scan. The following illustrates a typical pattern, written in a Jest/Vitest style (which is similar to what our custom harness would do):
+
+```
+tsxCopy code`// Button.a11y.test.tsx
+import { render, screen } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+import Button from './Button';
+
+// Extend expect for the axe matcher (if using jest-axe)
+expect.extend(toHaveNoViolations);
+
+test('Button has no accessibility violations and is properly labelled', async () => {
+  const { container } = render(<Button>Click Me</Button>);
+  
+  const results = await axe(container);
+  expect(results).toHaveNoViolations();  // Custom matcher asserts zero axe issues
+
+  // Also verify accessible name and role are correct as a sanity check:
+  const btn = screen.getByRole('button', { name: /click me/i });
+  expect(btn).toBeInTheDocument();
+});
+`
+```
+
+In this example, when run in a Node+JSDOM environment, the `Button` component is rendered off-screen and scanned. The test will fail if, for instance, the `<Button>` component is missing an accessible name or has ARIA attributes misused. By including a Testing Library query (`getByRole('button', { name: /click me/i })`), we double-verify that the component is not only *free of axe-detectable violations* but also that it adheres to expected accessibility APIs (here, that a button with text "Click Me" indeed yields an element with role `button` and that label).
+
+We apply this pattern to all interactive components. A more complex example is a **Modal** component which might be hidden or shown based on props:
+
+```
+tsxCopy code`// Modal.a11y.test.tsx
+import { render } from '@testing-library/react';
+import { axe } from 'jest-axe';
+import Modal from './Modal';
+
+describe('Modal component accessibility', () => {
+  test('has no violations when closed', async () => {
+    const { container } = render(<Modal open={false} title="Sample Modal" />);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+    // Even though modal is closed (perhaps rendered off-screen or not at all), 
+    // we ensure no stray violations like missing landmarks.
+  });
+
+  test('has no violations when open', async () => {
+    const { container } = render(<Modal open={true} title="Sample Modal"><p>Content</p></Modal>);
+    // Temporarily disable a page-level rule that is irrelevant in isolation:
+    const results = await axe(container, {
+      rules: {
+        region: { enabled: false }  // disable landmark rule since modal isn't wrapped in <main> here
+      }
+    });
+    expect(results).toHaveNoViolations();
+  });
+});
+`
+```
+
+In the second test, we demonstrate **contextual rule configuration**: the `region` rule (which requires content be within landmarks like `<main>`) is not applicable when testing a Modal in isolation, so we disable it. This ability to tweak axe’s rules per test helps avoid false positives and keeps our test signal clean. Every axe violation we see in this suite should correspond to a genuine issue that a user might encounter.
+
+**Execution and Performance:** Running these Node/JSDOM tests is slower than the Bun tests – JSDOM startup and axe analysis take time – but they are still relatively fast. A simple component scan might take on the order of tens of milliseconds to a couple hundred milliseconds. We mitigate performance concerns by a) running these tests in parallel (Node can leverage multiple processes or threads if we use a test runner), and b) keeping each test focused on a single component or state to avoid heavy DOMs. In CI, we could further parallelize by splitting the accessibility tests across multiple machines if needed (though likely not necessary unless the suite grows very large).
+
+The key outcome of this inner-loop accessibility suite is **immediate feedback on semantic issues**. If a developer forgets an `aria-label` on a button, a test fails right when they run `npm test`. This is far better than catching it days later in a manual audit or in a slow E2E test. It turns accessibility into a daily concern rather than a QA afterthought.
+
+### 2.3 Accessible-First Test Practices: Enforcing Good Habits
+
+Having the right tools is only half the battle. We also enforce **strict conventions in how tests are written**, to ensure our test code itself encourages accessible implementation. Two key practices are:
+
+- **Use of Accessible Queries:** Tests must interact with the rendered DOM the same way a user or assistive technology would – i.e. by using accessible labels, roles, and text content. We forbid selecting elements by obscure hooks or internal IDs whenever a semantic alternative exists. In practice, this means favoring Testing Library queries like `getByRole`, `getByLabelText`, or `getByText` over queries like `querySelector('[data-testid="..."]')`. If our tests cannot find an element by a meaningful label or role, that’s a red flag that the component might not be accessible.
+
+*Policy:* The use of `data-testid` (or similar testing-only attributes) is considered a last resort. In code review, any test that uses a test ID must justify why a role or label could not be used instead. Often, the remedy is to improve the component (e.g. add an `aria-label` or proper text) such that a more user-centric query becomes possible. This policy creates a virtuous cycle: it pushes developers to build components with accessibility in mind (so they are easily testable), and it makes the tests more robust by tying them to user-visible strings and roles.
+
+*Automation:* Biome loads the `tools/grit/rule-testing-*.grit` patterns, which emit the
+`test/no-testid-selectors`, `test/no-queryselector`,
+`test/prefer-byrole-for-actions`, and `test/no-raw-dom-lookup` diagnostics for
+test files. These rules error on any `*ByTestId` lookup (or raw
+`querySelector*`), warn when `getByText` is clicked, and therefore keep our
+tests aligned with the role-first guidance from Testing Library and
+Playwright. If a semantic selector is genuinely impossible, add an
+`ACCESSIBILITY:` justification next to a targeted
+`// biome-ignore lint/test/no-testid-selectors` suppression so reviewers can
+see the trade-off.
+
+*Example:* In the `GlobalControls` component test, instead of selecting a toggle button by an ID or class, we query it by its accessible name:
+
+```
+tsxCopy code`const displayToggle = mountNode.querySelector("button[aria-label='Switch to Full View']");
+expect(displayToggle).toBeTruthy();
+`
+```
+
+Here we rely on the presence of `aria-label="Switch to Full View"` on the button. If that label were missing or changed, the test would fail – which is good, because the accessible contract of the UI changed. In a future refactor, we might rewrite such a query using Testing Library’s `getByRole('button', { name: 'Switch to Full View' })` for clarity. Either way, the test asserts something a screen reader user would care about: that there is a button with that label.
+
+#### 2.3.1 Exemplars awaiting refactor
+
+We still have a handful of high-visibility suites leaning on test IDs and DOM
+structure hooks. They are valuable targets when socialising the upcoming lint
+rule:
+
+- `tests/routes.stage1.test.tsx` (quick-map and offline manager flows) uses
+  selectors such as `[data-testid='quick-walk-stops-panel']` and
+  `offline-delete-button`. The fix is to surface accessible names – for
+  example, ensure the stops tab owns an `aria-labelledby`, label the delete
+  buttons “Delete {map name}”, and then switch the tests to
+  `getByRole('tabpanel', { name: /stops/i })` or
+  `getAllByRole('button', { name: /delete .* offline map/i })`.
+- `tests/global-controls.test.tsx` relies on a hidden
+  `<span data-testid="mode-probe">` shim to assert state transitions. Replace
+  this with assertions against the real control’s `aria-pressed` state and
+  visible label (`getByRole('button', { name: /display mode/i })`).
+- `tests/quick-map-fragment.test.tsx` queries map panels via
+  `[data-testid='quick-walk-map-container']`. Once the container has a sensible
+  label (for example `aria-label="Quick walk map"`), the test can use
+  `getByRole('region', { name: /quick walk map/i })` and remain resilient.
+
+Documenting these specific call sites gives reviewers a short list of “fix me
+next” examples and shows what the accessible alternative should look like.
+
+- **Assertions on Accessibility Outcomes:** In addition to low-level assertions (like “this state toggled” or “this element exists”), we add assertions specifically for accessibility expectations. For instance, after clicking a button that opens a modal, we might assert that focus moved to the modal dialog element (using `expect(dialog).toHaveFocus()` or checking `document.activeElement`). Or after toggling a theme, we assert that the `<html lang>` or `data-theme` attributes are correctly set. By writing these into tests, we ensure that accessibility features (focus management, ARIA attributes, language attributes, etc.) aren’t accidentally broken. It’s far easier to debug an automated test failure pointing to a missing `lang` attribute than to wait for a manual audit.
+
+To enforce these practices, we integrate ESLint rules and testing guidelines:
+
+- We enable **ESLint plugins like Testing Library’s `prefer-user-event` and `prefer-accessible-queries`** which warn if a test uses `getByTestId` when a role query is available, or if it calls low-level DOM methods instead of simulating real user events.
+
+- In pull request reviews, the team is instructed to flag any test code that doesn’t adhere to accessible-first querying. Over time this becomes second nature.
+
+By combining tooling (axe scans, proper libraries) with conventions (only use accessible queries, assert on ARIA/focus behaviors), our inner loop becomes a strong quality gate. A developer cannot merge a component that is functionally perfect but accessibly flawed – the tests would catch it.
+
+## III. The Outer Loop: Comprehensive E2E Validation with Playwright
+
+While the inner loop verifies individual components in isolation, the **outer loop** ensures that the application works as a cohesive, accessible whole. Here we use **Playwright** to run end-to-end tests in real browsers. The outer loop addresses everything that a simulated environment cannot: actual rendering, styling, user interactions across components, and integration of features like routing and dynamic content. It is our final safety net and a place to conduct more intensive audits, including visual and internationalization checks.
+
+Playwright was chosen for its robust multi-browser support (Chromium, Firefox, WebKit), its powerful automation APIs, and built-in test runner that integrates assertions, parallelization, and rich reporting. This section outlines how we leverage Playwright for various accessibility-focused E2E tasks:
+
+- **3.1 In-Browser Axe Scans:** Running `axe-core` in a **real browser** context to catch issues like color contrast, focus order, and other things JSDOM can’t detect.
+
+- **3.2 Advanced Interaction Tests:** Simulating keyboard navigation, verifying focus management (e.g., modals trapping focus, return focus on close), and other workflow-oriented checks.
+
+- **3.3 Accessibility Tree Snapshots:** Capturing and diffing the browser’s accessibility tree to detect unintended semantic changes over time.
+
+- **3.4 Visual Regression across Viewports/Themes:** Taking screenshots of pages/components in various layouts to catch visual bugs that could affect usability or clarity.
+
+- **3.5 Localization and Language Verification:** Testing the app under different locale settings to ensure language-specific attributes and content appear correctly.
+
+This battery of tests runs less frequently (e.g., on pull request or nightly builds) due to being heavier, but it is exhaustive in ensuring real-world accessibility compliance.
+
+### 3.1 Strategic Axe Scans in the Browser
+
+We integrate `axe-core` into Playwright tests via the `@axe-core/playwright` utility. This allows us to inject the axe script into pages and analyze the rendered output for violations. The **advantage** here is that in a real browser, axe can evaluate everything – including CSS, canvas, and the actual computed tree. For example, the color contrast rule will now produce meaningful results because it can compute actual colors on the page.
+
+However, we must be strategic to avoid slowing down the suite. Running a full axe scan after every action would turn our E2E tests into a slog. Instead, we treat accessibility scans as **targeted assertions** at critical checkpoints of a user flow:
+
+- **After initial page load:** We often scan the fully loaded page to ensure no glaring issues on the baseline UI.
+
+- **After major UI transitions:** For example, after opening a modal, after navigating to a new page, after triggering a form validation that reveals errors, etc. These are points where new content appears or state significantly changes, warranting a re-check.
+
+- **Scope the scan to changed regions:** Using `AxeBuilder.include(selector)` we can limit analysis to specific parts of the DOM. For instance, after opening a modal, we can scan *only* the modal dialog element instead of the entire page (which saves time and focuses results).
+
+**Example – Modal Workflow:** Consider a test of an e-commerce flow where clicking "Add to Cart" opens a dialog. We can write:
+
+```
+tsCopy code`import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 
-test.describe('Modal Flow Accessibility', () => {
-  test('should have no accessibility violations on the main page', async ({ page }) => {
+test.describe('Add to Cart Modal Flow', () => {
+  test('main page has no axe violations on load', async ({ page }) => {
     await page.goto('/products');
-
-    const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
-    
-    expect(accessibilityScanResults.violations).toEqual([]);
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toEqual([]);
   });
 
-  test('modal dialog should be accessible after opening', async ({ page }) => {
+  test('modal dialog is accessible after opening', async ({ page }) => {
     await page.goto('/products');
-    
-    // User interaction that triggers a state change
+    // Trigger the modal
     await page.getByRole('button', { name: 'Add to Cart' }).click();
-    
-    // Wait for the UI to reach a stable state before scanning
-    const modalDialog = page.locator('#add-to-cart-modal');
-    await expect(modalDialog).toBeVisible();
-
-    // Perform a targeted scan only on the modal dialog
-    const modalScanResults = await new AxeBuilder({ page })
-     .include('#add-to-cart-modal')
-     .analyze();
-      
-    expect(modalScanResults.violations).toEqual([]);
+    // Ensure modal is visible
+    const modal = page.locator('#add-to-cart-modal');
+    await expect(modal).toBeVisible();
+    // Run axe only inside the modal
+    const modalResults = await new AxeBuilder({ page }).include('#add-to-cart-modal').analyze();
+    expect(modalResults.violations).toEqual([]);
   });
 });
-
+`
 ```
 
-This pattern balances the need for comprehensive validation in a real browser
-with the imperative of maintaining a fast E2E suite. It treats accessibility
-scans as precise assertions on specific UI states, ensuring that they add
-significant value without becoming a performance bottleneck.
+In this snippet, the first test scans the full page and expects zero violations (meaning our base page structure is solid). The second test specifically clicks the "Add to Cart" button (again, using an **accessible query** by role and name, ensuring the button is labeled properly) and then waits for the modal. We then scan just the modal content for violations. If, say, the modal was missing an `aria-label` on its header or had a form control without a label, `axe-core` would catch it here.
 
-### 3.2 Advanced Playwright Audits: Beyond ,`axe-core`
+By **scoping axe scans and using them sparingly**, we avoid a performance hit. Each scan might take a second or two on a large page, so we do it only where it yields new information. The principle is: **treat accessibility scans as assertions, not as a blanket afterthought**. This way, our E2E tests remain fast enough to run in CI while still covering critical scenarios.
 
-The true power of Playwright in an accessibility testing strategy lies in its
-ability to automate checks that `axe-core` cannot perform. `axe-core` is
-fundamentally a static analysis tool that inspects the DOM at a single point in
-time. Playwright, as a browser automation framework, can test the dynamic,
-interactive experience of a user who relies on assistive technologies. This
-allows us to validate not just the code's compliance, but the application's
-usability.
+### 3.2 Interactive Behavior and Focus Management
 
-#### 3.2.1 Automating Keyboard Navigation Audits
+Automated accessibility testing must extend beyond static analysis. Many accessibility issues are only apparent when users actually interact with the UI. With Playwright’s control of the browser, we can simulate these interactions and validate the application’s response. Two major areas we concentrate on are **keyboard navigation** and **focus handling**.
 
-Ensuring that all interactive functionality is operable through a keyboard is a
-cornerstone of web accessibility (WCAG 2.1.1). Playwright's `page.keyboard` API
-provides a comprehensive toolset for simulating keyboard interactions, allowing
-us to automate the manual process of "tabbing through" a page.[^39]
+#### 3.2.1 Keyboard Navigation Flow Tests
 
-A robust keyboard navigation test involves several steps:
+A core WCAG principle is that **all functionality should be operable via keyboard** (no mouse required). We write E2E tests that mimic a user pressing `Tab`, `Shift+Tab`, `Enter`, and `Escape` keys to navigate and activate components.
 
-1. Simulate pressing the `Tab` key to move focus forward and `Shift+Tab` to
-   move focus backward.
-2. After each key press, identify the currently focused element
-   (`page.locator(':focus')`).
-3. Assert that the focus moves in a logical and predictable order.
-4. Assert that focus is never "trapped" within a component (except
-   intentionally in a modal).
-5. Assert that interactive elements like buttons and dropdowns can be activated
-   using `Enter` or `Space`.
+For example, consider verifying the navigation menu and search input in a header:
 
-```typescript
-// tests/e2e/keyboard-nav.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('should allow full keyboard navigation of the main header', async ({ page }) => {
+```
+tsCopy code`test('Home page header is fully keyboard-navigable', async ({ page }) => {
   await page.goto('/');
 
-  const navLink = page.getByRole('link', { name: 'Products' });
-  const searchInput = page.getByRole('searchbox', { name: 'Search' });
-  const accountButton = page.getByRole('button', { name: 'My Account' });
-
-  // Start by focusing an element before the header to ensure a clean start
-  await page.locator('body').press('Tab'); 
-
-  // Tab forward
+  // Press Tab repeatedly and check focus moves in the expected order
   await page.keyboard.press('Tab');
-  await expect(navLink).toBeFocused();
-
-  await page.keyboard.press('Tab');
-  await expect(searchInput).toBeFocused();
-
-  await page.keyboard.press('Tab');
-  await expect(accountButton).toBeFocused();
-
-  // Tab backward
-  await page.keyboard.press('Shift+Tab');
-  await expect(searchInput).toBeFocused();
-});
-
-```
-
-#### 3.2.2 Structural Integrity with Accessibility Tree Snapshots
-
-While HTML snapshots are brittle and visual snapshots are prone to failing on
-minor style changes, Playwright's accessibility tree snapshots provide a stable
-and meaningful way to track the semantic structure of a component. The
-accessibility tree is the data structure that browsers provide to assistive
-technologies like screen readers. Capturing it via
-`page.accessibility.snapshot()` gives us a direct view of what a screen reader
-user will experience.[^47]
-
-The `toMatchAriaSnapshot()` assertion compares the current accessibility tree
-of a locator against a stored baseline YAML file. This is incredibly powerful
-for regression testing complex components. It is resilient to changes in CSS or
-irrelevant `div` wrappers but will correctly fail if a change is made that
-alters the semantic meaning, such as removing an `aria-label` or changing a
-`heading` level.[^48]
-
-```typescript
-// tests/e2e/product-card.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('product card component should maintain a consistent accessibility structure', async ({ page }) => {
-  await page.goto('/products/widget-pro');
+  let focused = await page.evaluate(() => document.activeElement?.textContent);
+  expect(focused).toMatch(/Products/i);  // focus on "Products" link
   
-  const productCard = page.locator('.product-card');
+  await page.keyboard.press('Tab');
+  focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  expect(focused).toBe('Search');  // now search box is focused (identified by its aria-label)
+  
+  await page.keyboard.press('Tab');
+  focused = await page.evaluate(() => document.activeElement?.textContent);
+  expect(focused).toMatch(/My Account/i);  // now "My Account" button is focused
 
-  // This will generate a `product-card.spec.ts-snapshots/product-card-component-should...-1.snap` file on first run.
-  // Subsequent runs will compare against this snapshot.
-  await expect(productCard).toMatchAriaSnapshot();
+  // Reverse navigation
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('Tab');
+  await page.keyboard.up('Shift');
+  focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  expect(focused).toBe('Search');
 });
-
+`
 ```
 
-#### 3.2.3 Verifying Internationalization and Localization (,`lang`, attribute)
+This script tabs through the interactive elements of the header and uses the `document.activeElement` to check which element is currently focused. We verify that focus cycles through **Products link → Search input → My Account button** in order, and that it can go backwards as well. If an element was not reachable via Tab (e.g., missing a `tabindex` or not a natural focusable element), this test would catch it.
 
-Properly declaring the language of the page via the `lang` attribute on the
-`<html>` element is a critical accessibility requirement (WCAG 3.1.1).
-Playwright's emulation features allow us to test this with precision. By using
-the `test.use({ locale: '...' })` configuration, we can simulate a user
-visiting from a specific region, triggering the application's
-internationalization (i18n) logic.[^51]
+We do similar tests for menus, dialogs, and other composite components:
 
-A comprehensive localization test combines this emulation with assertions that
-verify both the `lang` attribute and the presence of translated text on the
-page.
+- Ensuring that pressing **Enter** on a focused button triggers the expected action (Playwright’s `page.keyboard.press('Enter')` can be used).
 
-```typescript
-// tests/e2e/localization.spec.ts
-import { test, expect } from '@playwright/test';
+- Ensuring **Escape** closes dialogs or dropdowns when focused inside them.
 
-test.describe('German Localization', () => {
-  // Use Playwright's locale emulation for all tests in this block
-  test.use({ locale: 'de-DE' });
+- Verifying there are no **keyboard traps**: focus should never get stuck in a loop or lost off-screen. For modals, we *want* focus trap within the modal while it’s open (so Tab doesn’t go behind the modal), but when the modal closes, focus should return to a sensible place (often the button that opened it).
 
-  test('should display the page in German with the correct lang attribute', async ({ page }) => {
-    await page.goto('/');
+These tests give us confidence that a sighted keyboard user or a visually impaired user using keyboard + screen reader can navigate and operate the app fully.
 
-    // 1. Verify the lang attribute on the HTML element
-    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+#### 3.2.2 Focus Handling in Dialogs and Overlays
 
-    // 2. Verify a key piece of text has been translated
-    await expect(page.getByRole('heading', { name: 'Willkommen' })).toBeVisible();
-  });
+Building on keyboard tests, we specifically check **modal dialogs, popovers, and other overlays** for proper focus management:
+
+- When a modal opens, the first interactive element inside it should receive focus (or the modal container itself, if it has `tabindex="-1"` to catch focus).
+
+- Tab should wrap within the modal (since modals typically trap focus until closed).
+
+- When the modal closes, focus should restore to the element that opened it (or another logical location).
+
+Playwright makes it straightforward to test these conditions:
+
+```
+tsCopy code`// Assume the "Add to Cart" modal from earlier tests
+await page.getByRole('button', { name: 'Add to Cart' }).click();
+const modalDialog = page.locator('#add-to-cart-modal');
+await expect(modalDialog).toBeVisible();
+
+// The first focusable element in modal should be focused.
+const firstFocusable = modalDialog.locator('button').first();
+await expect(firstFocusable).toBeFocused();
+
+// Press Tab repeatedly within modal and ensure focus stays in modal
+for (let i = 0; i < 5; i++) {
+  await page.keyboard.press('Tab');
+  const activeId = await page.evaluate(() => document.activeElement?.closest('#add-to-cart-modal')?.id);
+  expect(activeId).toBe('add-to-cart-modal');
+}
+
+// Close modal (press Escape or click close button)
+await page.keyboard.press('Escape');
+await expect(modalDialog).toBeHidden();
+
+// After closing, focus should return to the "Add to Cart" button
+const triggerButton = page.getByRole('button', { name: 'Add to Cart' });
+await expect(triggerButton).toBeFocused();
+`
+```
+
+This sequence rigorously checks focus containment and restoration. If any step fails (focus leaves the modal, or doesn’t return after closing), we know we have a bug in our focus management logic (perhaps a missing call to `.focus()` or incorrect `tabindex` attributes).
+
+Such tests ensure **operability** – one of the four principles of accessibility (POUR: Perceivable, Operable, Understandable, Robust). They catch issues that static analysis never could (for example, `axe-core` might not tell you that focus got lost when a dialog closed).
+
+### 3.3 Accessibility Tree Snapshots for Semantic Regression
+
+In a complex UI, it’s possible to inadvertently change or break semantic structure while refactoring, even if everything “looks” fine visually. To guard against this, we use **accessibility tree snapshots** in Playwright. The accessibility tree is what assistive technologies actually interact with – essentially a computed structure derived from the DOM, listing elements with roles, names, and properties as a screen reader would perceive them.
+
+Playwright provides an API `page.accessibility.snapshot()` that returns this tree. We have adopted a pattern of taking **snapshot files** (in a serialized format like JSON or YAML) of key components or pages, and then using a custom matcher to compare future runs against the baseline. This is analogous to visual snapshot testing, but for semantics.
+
+We created a custom Expect matcher (e.g., `toMatchAriaSnapshot()`) which simplifies this. The first time a test runs, it will generate a snapshot file (for example, `product-card.spec.ts-snapshots/product-card-accessibility.yml`). Subsequent runs will diff the current accessibility tree against that file and fail the test if there’s any difference (except for whitelisted changes).
+
+**Example – Product Card Component:**
+
+```
+tsCopy code`test('ProductCard maintains accessible structure', async ({ page }) => {
+  await page.goto('/products/widget-pro');
+  const card = page.locator('.product-card');
+  // Expect the accessibility tree of the product card to match the stored baseline
+  await expect(card).toMatchAriaSnapshot();
 });
-
+`
 ```
 
-These advanced techniques demonstrate that the E2E layer's role is not merely
-to re-run `axe-core` in a different context. Its primary purpose is to validate
-the dynamic, experiential aspects of accessibility that define a truly
-inclusive user experience.
-
-### 3.3 Forensic Analysis with Playwright Trace Viewer
-
-When accessibility tests fail, particularly in a headless CI environment where
-direct interaction is impossible, efficient debugging is paramount. The
-Playwright Trace Viewer is an indispensable tool for this forensic analysis. By
-configuring tests to generate a trace on failure or retry
-(`--trace on-first-retry`), we capture a complete, interactive recording of the
-entire test execution.[^57]
-
-The trace file is a self-contained web application that provides a
-multi-faceted view of the test run:
-
-- **Actions Timeline:** A step-by-step list of every Playwright action
-  performed.
-- **DOM Snapshots:** For each action, it captures "Before," "Action," and
-  "After" snapshots of the DOM. These are not static images but fully
-  interactive DOMs that can be inspected with browser DevTools.
-- **Console and Network Logs:** A complete record of all console messages and
-  network requests, correlated with the timeline.
-- Source Code: The test code is displayed, with the currently selected action
-  highlighted.
-
-58
-
-For an accessibility failure, the workflow is as follows:
-
-1. A test fails in the CI pipeline.
-2. The CI job artifacts will include a `trace.zip` file.
-3. Download and open this file locally using the command
-   `pnpm exec playwright show-trace trace.zip`.
-4. The Trace Viewer opens. Navigate to the failed
-   `expect(accessibilityScanResults)` assertion.
-5. Select the action immediately preceding the scan (e.g., `page.click()`).
-6. Inspect the "After" DOM snapshot. This shows the exact state of the page
-   when `axe-core` ran its analysis.
-7. Use the built-in DevTools within the snapshot to inspect the problematic
-   elements, verify their attributes, and understand why the accessibility rule
-   failed.
-
-This capability is invaluable for diagnosing issues that are difficult to
-reproduce locally, such as those caused by timing, race conditions, or subtle
-differences in the CI environment. It transforms debugging from a process of
-guesswork into a precise, evidence-based analysis.
-
-## IV. Performance Optimization and CI/CD Integration
-
-A robust testing strategy is only effective if it is seamlessly integrated into
-the team's daily workflow and provides feedback in a timely manner. This
-section details the critical steps for optimizing the performance of the entire
-test suite and establishing a CI/CD pipeline that enforces accessibility
-standards without impeding development velocity.
-
-### 4.1 CI Acceleration with Test Sharding
-
-As a test suite grows, its execution time can become a significant bottleneck
-in the CI/CD pipeline. Test sharding is a powerful technique for mitigating
-this by distributing the test suite across multiple parallel jobs. Vitest has
-built-in support for sharding, which integrates perfectly with the matrix
-strategy feature of CI platforms like GitHub Actions.[^62]
-
-The process involves two key stages. First, the main test job is configured
-with a matrix to create several parallel runners (shards). Each runner is
-assigned a unique index and executes a fraction of the total test files using
-the `--shard` CLI flag. To enable the results to be combined later, each shard
-must run with the `--reporter=blob` flag, which outputs results in a
-machine-readable format.[^63]
-
-Second, a final job is configured to run after all shard jobs have completed.
-This job downloads the blob reports from each shard (which are saved as
-artifacts) and runs the `vitest run --merge-reports` command. This command
-consolidates all the partial results into a single, unified test report.[^63]
-
-This approach deliberately trades total compute minutes for a drastic reduction
-in wall-clock time. While running four parallel jobs consumes more total CPU
-time than a single sequential job (due to setup overhead in each), it provides
-feedback to developers significantly faster. This prioritizes developer
-productivity and a tight feedback loop, which is a core tenet of the
-accessibility-first philosophy.
-
-The following is a complete, production-ready GitHub Actions workflow
-(`.github/workflows/ci.yml`) that implements this sharding strategy for the
-Vitest suite. It installs dependencies with a frozen lockfile so CI and local
-builds resolve identical versions. The repository commits `pnpm-lock.yaml`, and
-the workflow's install step runs `pnpm install --frozen-lockfile`, failing if
-the lockfile is missing or stale.
-
-```yaml
-#.github/workflows/ci.yml
-name: Vitest CI
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    name: Run Vitest Shard ${{ matrix.shardIndex }} of ${{ matrix.shardTotal }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          corepack: true
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Vitest shard
-        run: pnpm exec vitest run --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-
-      - name: Upload blob report artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: blob-report-${{ matrix.shardIndex }}
-          path: .vitest-reports/*.blob
-          retention-days: 1
-
-  merge-reports:
-    name: Merge and Publish Reports
-    runs-on: ubuntu-latest
-    if: always() # Run this job even if some test shards fail
-    needs: [test] # This job depends on the completion of all shard jobs
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          corepack: true
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Download all blob reports
-        uses: actions/download-artifact@v4
-        with:
-          path:.vitest-reports
-          pattern: blob-report-*
-          merge-multiple: true
-
-      - name: Merge blob reports into a single HTML report
-        run: pnpm exec vitest run --merge-reports
-
-      - name: Upload final HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: vitest-html-report
-          path: vitest-report/
-          retention-days: 7
+On first run, `toMatchAriaSnapshot()` will save something like:
 
 ```
+yamlCopy code`role: 'group'
+name: 'Widget Pro'
+children:
+  - role: 'image'
+    name: 'Widget Pro product image'
+  - role: 'heading'
+    name: 'Widget Pro'
+    level: 2
+  - role: 'paragraph'
+    name: '$19.99'
+  - role: 'button'
+    name: 'Add to Cart'
+`
+```
 
-### 4.2 Actionable Reporting and Triage Workflow
+(This is a conceptual illustration of what the accessibility snapshot might contain.)
 
-Catching accessibility violations is only half the battle; the results must be
-presented in an actionable format and integrated into a clear triage workflow.
-Both Vitest and Playwright can generate comprehensive HTML reports that provide
-a navigable UI for exploring test results, including detailed error messages,
-stack traces, and, in Playwright's case, embedded screenshots and traces.[^65]
-These reports should always be uploaded as artifacts in CI for easy access.
+If a developer accidentally changed the `h2` in `ProductCard` to an `h3` or removed an aria-label on the image, the next test run would produce a different snapshot and cause a failure. This kind of regression test is **highly sensitive to meaningful changes** but **robust to cosmetic ones**. Unlike raw HTML snapshots (which would break on any minor markup change), the accessibility snapshot ignores irrelevant container `<div>`s or styling hooks and focuses purely on roles, names, and structure. If an extra `<div>` is added for layout but doesn’t affect roles or names, the snapshot remains the same. But if, say, a heading level changes or a label is lost, the difference is caught immediately.
 
-To prevent the team from being overwhelmed by a raw list of violations, a
-structured triage process based on severity is essential. The `axe-core`
-violation object provides an `impact` property, which categorizes each issue as
-`'minor'`, `'moderate'`, `'serious'`, or `'critical'`.[^31] This property is
-the key to automating triage.
+This technique gives us confidence that as we refactor or iterate on components, we’re not silently altering the user’s accessible experience. It’s especially useful for ensuring things like:
 
-A recommended triage workflow is as follows:
+- Headings hierarchy remains correct (no suddenly skipping from h2 to h4, etc.).
 
-1. **Critical/Serious Violations:** These represent significant barriers to
-   accessibility and should be treated as build-breaking failures. Any pull
-   request that introduces a violation of this severity should be blocked from
-   merging until the issue is resolved. This enforces a high standard of
-   quality.
-2. **Moderate Violations:** These are significant issues that should be
-   addressed promptly. The CI process can be configured to automatically create
-   a ticket in the team's issue tracker (e.g., Jira, GitHub Issues) for any new
-   moderate violations. This ensures the issue is captured and can be
-   prioritized within the current or subsequent sprint without blocking the
-   immediate pull request.
-3. **Minor Violations:** These are lower-priority issues, often related to best
-   practices. These can be logged and reviewed periodically as part of routine
-   maintenance or tech debt grooming.
+- Buttons and links retain their names.
 
-This workflow can be automated with a script in the CI pipeline. After the test
-run, the script would parse the JSON output from the test reporter, iterate
-through the `axe-core` violations, and take action based on the `impact` level.
-This automation removes the manual burden of triaging every issue, ensures that
-critical defects are never ignored, and systematically feeds actionable work
-back into the development process.
+- Images keep their alt text or accessible name.
 
-## V. Synthesis and Strategic Recommendations
+- Regions and landmarks (like nav, main, footer) remain in place.
 
-The proposed testing framework represents a comprehensive, pragmatic solution
-to the challenge of embedding accessibility into a high-velocity development
-process. It moves beyond a single tool and instead establishes a holistic,
-two-tiered strategy where each layer has a distinct, complementary, and vital
-role. This final section synthesizes this model into a high-level overview and
-provides a clear, actionable roadmap for implementation.
+We incorporate accessibility snapshot tests for all major composite components and pages. They serve as a guardrail for semantic consistency.
 
-### 5.1 The Unified Testing Model: Component and E2E Layers
+### 3.4 Visual Regression Testing across Breakpoints and Themes
 
-The core of this strategy is the separation of concerns between the fast,
-component-level "inner loop" and the comprehensive, E2E "outer loop." The
-Component Layer, powered by Vitest and `jsdom`, provides developers with
-instantaneous feedback on the structural and semantic correctness of their UI
-components. The E2E Layer, powered by Playwright, validates the final, rendered
-user experience in a real browser, covering visual and interactional aspects of
-accessibility that are impossible to test in a simulated environment.
+Accessibility isn’t just about screen readers and keyboard nav – visual presentation matters too. Issues like text getting cut off, color contrast in different themes, or layout breakage on small screens can dramatically affect usability. To catch these, we include **visual regression tests** in our Playwright suite.
 
-The following table provides a clear, at-a-glance summary of this unified
-model, outlining the purpose and capabilities of each layer.
+Using Playwright’s screenshot capabilities, we generate snapshots of pages or components under various conditions and compare them to baselines. Key dimensions we cover:
 
-| Dimension           | Component Layer (Vitest)                                                                                           | E2E Layer (Playwright)                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Primary Tool**    | Vitest, `vitest-axe`, `@testing-library`                                                                           | Playwright, `@axe-core/playwright`                                                                                                  |
-| **Environment**     | Node.js with `jsdom` (non-rendering)                                                                               | Real Browsers (Chromium, Firefox, WebKit)                                                                                           |
-| **Scope of Test**   | Isolated UI components                                                                                             | Integrated user flows and full pages                                                                                                |
-| **Execution Speed** | Milliseconds per file (Extremely Fast)                                                                             | Seconds to minutes per suite (Moderate)                                                                                             |
-| **Defects Caught**  | **Structural & Semantic:** Missing ARIA attributes, incorrect roles, invalid properties, missing accessible names. | **Visual & Interactional:** Color contrast, focus order, keyboard traps, focus visibility, layout issues, correct `lang` attribute. |
-| **Role in CI/CD**   | **Rapid Feedback Loop:** Runs on every commit, providing immediate feedback to developers in their inner loop.     | **Pre-Merge Quality Gate:** Runs on pull requests to validate the integrated application before merging to the main branch.         |
+- **Different screen sizes (responsive breakpoints):** We test layouts on a small mobile viewport (e.g. 375×667) vs a desktop viewport (e.g. 1280×800). This ensures our responsive design doesn’t introduce inaccessible overflow or hiding of content on small screens.
 
-This model ensures that accessibility is considered at every stage of the
-development lifecycle. It empowers developers with the right tool for the right
-job, preventing simple structural errors long before they reach integration,
-and using the power of a real browser to validate the aspects that truly matter
-to the end-user experience.
+- **Light and Dark themes:** Since our application supports theme switching (e.g., `wildside-day` vs `wildside-night` themes), we capture each in screenshots. This helps verify color contrast in each theme and catches any color-specific asset issues (like an icon that’s not visible on a dark background).
 
-### 5.2 Implementation Roadmap
+- **Critical pages/components:** We focus on pages like the home dashboard, forms, and any component with complex styling (e.g., data visualization or maps in our context) for visual snapshots.
 
-To ensure a smooth and successful adoption of this strategy, a phased
-implementation is recommended. This allows the team to build foundational
-capabilities first and incrementally roll out the complete framework.
+**Example – Responsive Header Snapshot:**
 
-1. **Phase 1: Environment Setup (1-2 Days)**
+```
+tsCopy code`test.describe('Header visual regression', () => {
+  // Test at two breakpoints
+  const viewports = { mobile: { width: 360, height: 740 }, desktop: { width: 1280, height: 800 } };
+  for (const [label, size] of Object.entries(viewports)) {
+    test(`header looks correct in ${label} view`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto('/');  // go to homepage which includes the header
+      // If theme defaults to dark, ensure it’s set for consistency
+      await expect(page).toHaveScreenshot(`header-${label}.png`);
+    });
+  }
+});
+`
+```
 
-    - Install all required dependencies: `vitest`, `jsdom`, `vitest-axe`,
-      `@testing-library/react`.
-    - Create and configure the `vitest.config.ts` file to use the `jsdom`
-      environment and specify the test setup file.
-    - Update the `tsconfig.json` to include the new configuration and setup
-      files.
+The first run will save `header-mobile.png` and `header-desktop.png`. Subsequent runs will compare screenshots pixel-by-pixel. If a CSS change accidentally pushed the header’s menu off-screen on mobile, the diff will flag it. We have to manage the usual challenges of visual testing (ensuring consistent fonts, ignoring dynamic content), but Playwright has mechanisms for that (like disabling animations, using a standard font/locale).
 
-2. **Phase 2: Core Tooling (1 Day)**
+For theme variations, we might have a test that explicitly toggles the theme:
 
-    - Create the `./tests/setup.ts` file and add the import for
-      `vitest-axe/extend-expect` to globally register the custom matcher.
-    - (Optional but Recommended) Implement the custom `toHaveNoAxeViolations`
-      matcher logic for enhanced error reporting, as detailed in Section 2.3.
+```
+tsCopy code`test('Settings panel visual regression in dark and light mode', async ({ page }) => {
+  await page.goto('/settings');
+  // Dark theme (default)
+  await expect(page.locator('#settings-panel')).toHaveScreenshot('settings-dark.png');
+  // Toggle theme button
+  await page.getByRole('button', { name: 'Switch to light theme' }).click();
+  await expect(page.locator('#settings-panel')).toHaveScreenshot('settings-light.png');
+});
+`
+```
 
-3. **Phase 3: Initial Rollout (2-3 Days)**
+Now we have baseline images for both dark and light modes of the settings panel. If in light mode some text becomes illegible (e.g., if we accidentally had white text on a light background), the screenshot difference will alert us. This is effectively an automated **contrast check** across themes, complementing what axe does. Axe will catch low contrast if configured, but visual snapshots give a human-verifiable artifact to review if something changes.
 
-    - Select a single, well-defined component (e.g., a Button or an Input).
-    - Create a `*.a11y.test.ts` file for this component.
-    - Write the first accessibility tests using the established pattern to
-      validate the entire setup from configuration to assertion.
+Visual regression tests are run sparingly because they can be resource-intensive and occasionally flaky (due to antialiasing differences, etc.). We mitigate flakiness by:
 
-4. **Phase 4: E2E Integration (3-5 Days)**
+- Freezing dynamic data (e.g., use test accounts or stubbed dates so that today’s date or random data doesn’t spoil the snapshot).
 
-    - Install `@axe-core/playwright`.
-    - Identify a critical user flow (e.g., login, add to cart).
-    - Implement an initial Playwright test that performs a strategic `axe` scan
-      at a key stable state within that flow.
-    - Implement a dedicated Playwright test for keyboard navigation on a primary
-      navigation menu or a complex form.
-    - Implement a Playwright accessibility tree snapshot test for a complex,
-      shared component.
+- Using tolerances or masking for known nondeterministic regions if needed.
 
-5. **Phase 5: CI/CD Integration (2-3 Days)**
+- Running on consistent infrastructure (same browser versions, etc., via Playwright’s Docker or the cloud workers).
 
-    - Implement the sharded GitHub Actions workflow as detailed in Section 4.1.
-    - Configure the workflow to upload the final HTML reports from both Vitest
-      and Playwright as artifacts.
-    - Establish branch protection rules to require the E2E tests to pass before
-  merging.
+The payoff is worthwhile: we get an assurance that the UI looks as intended and remains usable at a glance. Many accessibility issues manifest visually (like an off-screen element or overlapping text), so these tests catch problems that neither axe nor unit tests would.
 
-### 5.3 Concluding Philosophy: Building an Inclusive Default
+### 3.5 Localization and Internationalization Checks
 
-This architectural blueprint achieves the user's core objective: it transforms
-accessibility testing from a slow, deferred activity into a fast, integral, and
-early component of the development lifecycle. By embedding rapid structural
-checks directly into the developer's inner loop with Vitest, the framework
-encourages a proactive mindset. Accessibility is no longer a separate,
-downstream concern but a fundamental aspect of component quality, checked with
-the same speed and rigor as unit tests.
+Finally, accessibility extends to supporting users from different locales and languages. An often overlooked aspect is ensuring that our app properly handles localization – both in terms of content and technical attributes like the page’s language. We add E2E tests to validate internationalization (i18n) features:
 
-The Playwright layer completes the picture by providing the necessary
-validation of the real-world user experience, ensuring that the final product
-is not only technically compliant but genuinely usable. By combining these two
-powerful layers and optimizing their execution within a modern CI/CD pipeline,
-this strategy creates a system where the default path is the inclusive path. It
-builds a culture where accessibility is not an audit to be passed, but a
-quality to be built in from the very first line of code.
+- **Locale-specific content loading:** If our app is translated or supports multiple languages, we verify that switching to a locale yields the correct text. For example, toggling the language setting to French should cause the UI text to change to French.
 
-## Works cited
+- **Language attributes:** We ensure the `<html lang="">` attribute is set correctly whenever the locale changes, and that any region-specific sub-tags (like `en-GB` vs `en-US`) are handled if needed. The `lang` attribute is critical for screen readers to switch voice profiles.
 
-1. dequelabs/axe-core: Accessibility engine for automated … - GitHub,
-   accessed on 17 August 2025,
-   [https://github.com/dequelabs/axe-core](https://github.com/dequelabs/axe-core)
-2. axe-core - NPM, accessed on 17 August 2025,
-   [https://www.npmjs.com/package/axe-core](https://www.npmjs.com/package/axe-core)
-3. axe-core | Yarn, accessed on 17 August 2025,
-   [https://classic.yarnpkg.com/en/package/axe-core](https://classic.yarnpkg.com/en/package/axe-core)
-4. DOM testing – Test runner | Bun Docs, accessed on 17 August 2025,
-   [https://bun.com/docs/test/dom](https://bun.com/docs/test/dom)
-5. `bun test` | Bun中文文档, accessed on 17 August 2025,
-   [https://www.bunjs.cn/docs/cli/test](https://www.bunjs.cn/docs/cli/test)
-6. Incompatible with happy-dom · Issue #47 · nzbin/photoviewer - GitHub,
-   accessed on 17 August 2025,
-   [https://github.com/nzbin/photoviewer/issues/47](https://github.com/nzbin/photoviewer/issues/47)
-7. TypeError: Attempted to assign to readonly property · Issue … - GitHub,
-   accessed on 17 August 2025,
-   [https://github.com/capricorn86/happy-dom/issues/1188](https://github.com/capricorn86/happy-dom/issues/1188)
-8. chaance/vitest-axe: Custom Vitest matcher for testing … - GitHub, accessed
-   on 17 August 2025,
-   [https://github.com/chaance/vitest-axe](https://github.com/chaance/vitest-axe)
-9. Support JSDOM · Issue #3554 · oven-sh/bun - GitHub, accessed on 17 August
-   2025,
-   [https://github.com/oven-sh/bun/issues/3554](https://github.com/oven-sh/bun/issues/3554)
-10. Setup - Testing Library, accessed on 17 August 2025,
-    [https://testing-library.com/docs/svelte-testing-library/setup/](https://testing-library.com/docs/svelte-testing-library/setup/)
-11. Test Environment | Guide - Vitest, accessed on 17 August 2025,
-    [https://vitest.dev/guide/environment](https://vitest.dev/guide/environment)
-12. Setting Up Vitest, Testing Library, And jest-dom In Your Vite Project -
-    Vincent Taneri, accessed on 17 August 2025,
-    [https://vitaneri.com/posts/setting-up-vitest-testing-library-and-jest-dom-in-your-vite-project](https://vitaneri.com/posts/setting-up-vitest-testing-library-and-jest-dom-in-your-vite-project)
-13. Riot Component Unit Test with Vitest (JsDom env) - DEV Community, accessed
-    on 17 August 2025,
-    [https://dev.to/steeve/riot-component-unit-test-with-vitest-jsdom-env-182l](https://dev.to/steeve/riot-component-unit-test-with-vitest-jsdom-env-182l)
-14. Bun's Test Runner: The Future of JavaScript Testing? - The Green Report,
-    accessed on 17 August 2025,
-    [https://www.thegreenreport.blog/articles/buns-test-runner-the-future-of-javascript-testing/buns-test-runner-the-future-of-javascript-testing.html](https://www.thegreenreport.blog/articles/buns-test-runner-the-future-of-javascript-testing/buns-test-runner-the-future-of-javascript-testing.html)
-15. Getting Started | Guide - Vitest, accessed on 17 August 2025,
-    [https://vitest.dev/guide/](https://vitest.dev/guide/)
-16. How to speed Up Vitest | BuildPulse Blog, accessed on 17 August 2025,
-    [https://buildpulse.io/blog/how-to-speed-up-vitest](https://buildpulse.io/blog/how-to-speed-up-vitest)
-17. vitest-axe - NPM, accessed on 17 August 2025,
-    [https://www.npmjs.com/package/vitest-axe](https://www.npmjs.com/package/vitest-axe)
-18. node_modules/axe-core/[README.md](http://README.md) ·
-    77c1e831998452adb223c418c519914764a2d9e6, accessed on 17 August 2025,
-    [https://gitlab.rz.uni-freiburg.de/im1043/demo/-/blob/77c1e831998452adb223c418c519914764a2d9e6/node_modules/axe-core/README.md](https://gitlab.rz.uni-freiburg.de/im1043/demo/-/blob/77c1e831998452adb223c418c519914764a2d9e6/node_modules/axe-core/README.md)
-19. Catch Low-Hanging Accessibility Fruit with axe-core - Robert Pearce,
-    accessed on 17 August 2025,
-    [https://robertwpearce.com/catch-low-hanging-accessibility-fruit-with-axe-core.html](https://robertwpearce.com/catch-low-hanging-accessibility-fruit-with-axe-core.html)
-20. jest-axe - NPM, accessed on 17 August 2025,
-    [https://www.npmjs.com/package/jest-axe](https://www.npmjs.com/package/jest-axe)
-21. NickColley/jest-axe: Custom Jest matcher for aXe for testing accessibility
-    ♿️ - GitHub, accessed on 17 August 2025,
-    [https://github.com/NickColley/jest-axe](https://github.com/NickColley/jest-axe)
-22. Vitest config doesn't detect jsdom environment - Stack Overflow, accessed
-    on 17 August 2025,
-    [https://stackoverflow.com/questions/75482384/vitest-config-doesnt-detect-jsdom-environment](https://stackoverflow.com/questions/75482384/vitest-config-doesnt-detect-jsdom-environment)
-23. Configuring Vitest, accessed on 17 August 2025,
-    [https://vitest.dev/config/](https://vitest.dev/config/)
-24. Vitest expect extend - typescript - Stack Overflow, accessed on 17 August
-    2025,
-    [https://stackoverflow.com/questions/77902133/vitest-expect-extend](https://stackoverflow.com/questions/77902133/vitest-expect-extend)
-25. View Raw - UNPKG, accessed on 17 August 2025,
-    [https://unpkg.com/vitest-axe@0.1.0/README.md](https://unpkg.com/vitest-axe@0.1.0/README.md)
-26. Extending Matchers | Guide | Vitest, accessed on 17 August 2025,
-    [https://vitest.dev/guide/extending-matchers](https://vitest.dev/guide/extending-matchers)
-27. Expect - Vitest, accessed on 17 August 2025,
-    [https://vitest.dev/api/expect](https://vitest.dev/api/expect)
-28. Custom Test Matchers - tutorials - Nut.js, accessed on 17 August 2025,
-    [https://nutjs.dev/tutorials/custom-test-matchers](https://nutjs.dev/tutorials/custom-test-matchers)
-29. Custom Assertions - Full Stack Testing, accessed on 17 August 2025,
-    [https://testing.epicweb.dev/10](https://testing.epicweb.dev/10)
-30. Using the Accessibility Results with Java - Deque Docs, accessed on 17
-    August 2025,
-    [https://docs.deque.com/devtools-for-web/4/en/java-use-results/](https://docs.deque.com/devtools-for-web/4/en/java-use-results/)
-31. Understanding Axe-Core: The Engine Behind Axe - NashTech Blog, accessed on
-    17 August 2025,
-    [https://blog.nashtechglobal.com/understanding-axe-core-the-engine-behind-axe/](https://blog.nashtechglobal.com/understanding-axe-core-the-engine-behind-axe/)
-32. Axe API Documentation | Deque Systems, accessed on 17 August 2025,
-    [https://www.deque.com/axe/core-documentation/api-documentation/](https://www.deque.com/axe/core-documentation/api-documentation/)
-33. axe-core/doc/[rule-development.md](http://rule-development.md) at develop -
-    GitHub, accessed on 17 August 2025,
-    [https://github.com/dequelabs/axe-core/blob/develop/doc/rule-development.md](https://github.com/dequelabs/axe-core/blob/develop/doc/rule-development.md)
-34. List of Axe HTML 4.7 rules - Deque University, accessed on 17 August 2025,
-    [https://dequeuniversity.com/rules/axe/4.7](https://dequeuniversity.com/rules/axe/4.7)
-35. How to configure accessibility rules for wcag2aa in com.deque.html.axe-core
-    for selenium java - Stack Overflow, accessed on 17 August 2025,
-    [https://stackoverflow.com/questions/68312526/how-to-configure-accessibility-rules-for-wcag2aa-in-com-deque-html-axe-core-for](https://stackoverflow.com/questions/68312526/how-to-configure-accessibility-rules-for-wcag2aa-in-com-deque-html-axe-core-for)
-36. Accessibility - FOLIO Wiki, accessed on 17 August 2025,
-    [https://folio-org.atlassian.net/wiki/spaces/A11Y/pages/5374493](https://folio-org.atlassian.net/wiki/spaces/A11Y/pages/5374493)
-37. Accessibility - FOLIO Wiki, accessed on 17 August 2025,
-    [https://folio-org.atlassian.net/wiki/spaces/A11Y/pages/5374493/Front-end+accessibility+testing+with+BigTest+Jest+RTL](https://folio-org.atlassian.net/wiki/spaces/A11Y/pages/5374493/Front-end+accessibility+testing+with+BigTest+Jest+RTL)
-38. Testing Accessibility Features With Playwright - This Dot Labs, accessed on
-    17 August 2025,
-    [https://www.thisdot.co/blog/testing-accessibility-features-with-playwright](https://www.thisdot.co/blog/testing-accessibility-features-with-playwright)
-39. Automated Accessibility Testing at Slack, accessed on 17 August 2025,
-    [https://slack.engineering/automated-accessibility-testing-at-slack/](https://slack.engineering/automated-accessibility-testing-at-slack/)
-40. Accessibility testing - Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/accessibility-testing](https://playwright.dev/docs/accessibility-testing)
-41. Axe Accessibility Testing with Playwright + HTML Reports: The Complete
-    Guide, accessed on 17 August 2025,
-    [https://harshasuraweera.medium.com/axe-accessibility-testing-with-playwright-html-reports-the-complete-guide-1664636cdad1](https://harshasuraweera.medium.com/axe-accessibility-testing-with-playwright-html-reports-the-complete-guide-1664636cdad1)
-42. Accessibility testing | Playwright Java, accessed on 17 August 2025,
-    [https://playwright.dev/java/docs/accessibility-testing](https://playwright.dev/java/docs/accessibility-testing)
-43. Keyboard | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/api/class-keyboard](https://playwright.dev/docs/api/class-keyboard)
-44. Streamlining Accessibility Testing with Playwright Automation - Hicron
-    Software, accessed on 17 August 2025,
-    [https://hicronsoftware.com/blog/accessibility-testing-with-playwright-automation/](https://hicronsoftware.com/blog/accessibility-testing-with-playwright-automation/)
-45. How To Handle Keyboard Actions in Playwright | Playwright Java Tutorial -
-    YouTube, accessed on 17 August 2025,
-    [https://www.youtube.com/watch?v=-PDv3ep8iuM](https://www.youtube.com/watch?v=-PDv3ep8iuM)
-46. Accessibility Testing in Playwright -
-    [Components.Guide](http://Components.Guide), accessed on 17 August 2025,
-    [https://components.guide/accessibility-first/playwright](https://components.guide/accessibility-first/playwright)
-47. Snapshot testing | Playwright .NET, accessed on 17 August 2025,
-    [https://playwright.dev/dotnet/docs/aria-snapshots](https://playwright.dev/dotnet/docs/aria-snapshots)
-48. Snapshot testing | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/aria-snapshots](https://playwright.dev/docs/aria-snapshots)
-49. toHaveNoViolations does not exist on type Matchers
-50. TestOptions | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/api/class-testoptions](https://playwright.dev/docs/api/class-testoptions)
-51. Emulation - Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/emulation](https://playwright.dev/docs/emulation)
-52. Test use options - Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/test-use-options](https://playwright.dev/docs/test-use-options)
-53. Playwright Mastery: Integrating Web Servers, API Schemas, Geolocation, and
-    Localization — Part I | by th@n@n | Medium, accessed on 17 August 2025,
-    [https://medium.com/@thananjayan1988/playwright-mastery-integrating-web-servers-api-schemas-geolocation-and-localization-d6de093b6a4e](https://medium.com/@thananjayan1988/playwright-mastery-integrating-web-servers-api-schemas-geolocation-and-localization-d6de093b6a4e)
-54. Testing localization with Playwright - Tim Deschryver, accessed on 17
-    August 2025,
-    [https://timdeschryver.dev/blog/testing-localization-with-playwright](https://timdeschryver.dev/blog/testing-localization-with-playwright)
-55. Multi-language localization testing with Playwright & Nightwatch.js -
-    YouTube, accessed on 17 August 2025,
-    [https://www.youtube.com/watch?v=foAb4BZ0F58](https://www.youtube.com/watch?v=foAb4BZ0F58)
-56. Trace viewer - Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/trace-viewer-intro](https://playwright.dev/docs/trace-viewer-intro)
-57. Trace viewer - Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/trace-viewer](https://playwright.dev/docs/trace-viewer)
-58. Trace viewer | Playwright Python, accessed on 17 August 2025,
-    [https://playwright.dev/python/docs/trace-viewer](https://playwright.dev/python/docs/trace-viewer)
-59. Debugging Tests | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/debug](https://playwright.dev/docs/debug)
-60. Debugging with Playwright - Martioli, accessed on 17 August 2025,
-    [https://blog.martioli.com/debugging-tests-with-playwright/](https://blog.martioli.com/debugging-tests-with-playwright/)
-61. Merging Vitest Coverage Reports from Sharded Tests for Codecov …,
-    accessed on 17 August 2025,
-    [https://akshaykale12.medium.com/merging-vitest-coverage-reports-from-sharded-tests-for-codecov-ae831d55fc5f](https://akshaykale12.medium.com/merging-vitest-coverage-reports-from-sharded-tests-for-codecov-ae831d55fc5f)
-62. Improving Performance - Vitest, accessed on 17 August 2025,
-    [https://main.vitest.dev/guide/improving-performance](https://main.vitest.dev/guide/improving-performance)
-63. How to shard with coverage enabled? · vitest-dev vitest · Discussion #4755
-    - GitHub, accessed on 17 August 2025,
-    [https://github.com/vitest-dev/vitest/discussions/4755](https://github.com/vitest-dev/vitest/discussions/4755)
-64. Playwright test reporter – Artillery Docs, accessed on 17 August 2025,
-    [https://www.artillery.io/docs/playwright-reporter](https://www.artillery.io/docs/playwright-reporter)
-65. Testing Approach (Framework) and Reporting Style : r/Playwright - Reddit,
-    accessed on 17 August 2025,
-    [https://www.reddit.com/r/Playwright/comments/1jh80la/testing_approach_framework_and_reporting_style/](https://www.reddit.com/r/Playwright/comments/1jh80la/testing_approach_framework_and_reporting_style/)
-66. Reporters | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/test-reporters](https://playwright.dev/docs/test-reporters)
-67. Installation | Playwright, accessed on 17 August 2025,
-    [https://playwright.dev/docs/intro](https://playwright.dev/docs/intro)
-68. axe-core/axe.d.ts at develop - GitHub, accessed on 17 August 2025,
-    [https://github.com/dequelabs/axe-core/blob/develop/axe.d.ts](https://github.com/dequelabs/axe-core/blob/develop/axe.d.ts)
+- **Directionality:** If we ever support right-to-left (RTL) languages, tests would verify that the `dir="rtl"` attribute is applied and that layout flips appropriately. (For now, assume LTR only, but the tests are structured to accommodate this if needed.)
+
+Playwright allows us to simulate different locales by launching contexts with a specific locale. For example, `browser.newContext({ locale: 'fr-FR' })` would make `navigator.language` report French. Alternatively, if our app has a UI control for language, we use that.
+
+**Example – Language Toggle:**
+
+```
+tsCopy code`test('app supports English and Spanish locales', async ({ page }) => {
+  await page.goto('/');
+  // Default is English
+  expect(await page.locator('html').getAttribute('lang')).toBe('en');
+  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  
+  // Switch locale via UI control (assuming a button or menu)
+  await page.getByRole('button', { name: 'Español' }).click();
+  // Now the page should be in Spanish
+  expect(await page.locator('html').getAttribute('lang')).toBe('es');
+  await expect(page.getByRole('heading', { name: 'Bienvenido' })).toBeVisible();
+});
+`
+```
+
+In this test, we verify two things: the `<html lang>` attribute changes from "en" to "es", and the content of a heading changed from "Welcome" to "Bienvenido". If either fails, it indicates a localization issue (either content didn’t load, or we forgot to update the lang attribute in the code).
+
+For more thorough coverage, we can run an entire suite in a non-default locale using Playwright’s test config. For instance, duplicate some critical E2E tests under a fixture where the context is launched with `{ locale: 'es-ES' }`. That way, we are not only testing the toggle, but also that the Spanish version of various flows has no axe violations and passes the same checks as English. This ensures no translation accidentally introduces an accessibility issue (e.g., a Spanish string that’s extremely long might cause a layout overflow which our visual tests would catch).
+
+By treating localization as a first-class aspect of testing, we safeguard the **understandability** aspect of accessibility for all our supported audiences. It also has practical benefits: we catch missing translation keys or formatting issues early.
+
+## IV. Performance Strategy and CI Integration
+
+Having a comprehensive test suite is great, but it must run efficiently to be viable in a fast-paced development setting. Our strategy layers the tests in such a way that we **fail fast** on the cheapest tests and defer the heavier tests to later, possibly parallelized, stages. We also integrate these layers into our Continuous Integration pipeline so that accessibility is continuously enforced.
+
+### 4.1 Layered Test Execution for Speed
+
+The test architecture naturally splits into tiers which we can execute separately:
+
+- **Layer 1: Bun Unit/Integration Tests** – Extremely fast, should be run on every commit and even every file change in watch mode. These catch basic regressions immediately. If any of these fail, there’s no need to proceed further until fixed.
+
+- **Layer 2: Node/JSDOM Axe Tests** – These are a bit slower but still relatively quick. They can run in parallel to Layer 1. In a local dev flow, a developer might not run these on every save, but certainly before pushing code. In CI, we run them on each PR. If an accessibility rule fails here, we fail the build (for serious issues) or at least flag it for fixing.
+
+- **Layer 3: Playwright E2E Tests** – This is the slowest layer, involving real browsers and possibly multiple iterations (various viewports, etc.). We execute this layer less frequently, typically on pull request validation and nightly full runs. Within this layer, we can configure Playwright to shard tests across multiple workers (it automatically runs tests in parallel across CPU cores, and can run across browser types concurrently if configured). So even though each test is heavy, the suite can still complete in a reasonable time.
+
+In CI, we take advantage of parallel jobs:
+
+- We run the **Bun tests** in one job. Given Bun’s speed, this job might finish in, say, 30 seconds.
+
+- Simultaneously, run the **axe a11y tests** in another job. This might also take on the order of seconds to a minute, depending on how many components we scan.
+
+- In parallel, run the **Playwright E2E tests** in another job. This could take a few minutes, especially if running on 3 browsers or doing visual comparisons, but often Playwright can keep it around 2-5 minutes by parallelizing internally.
+
+By splitting these, the overall CI time is roughly the max of these, not the sum. The **longest** will be the Playwright job. If that is, say, 4 minutes, and the others finish in 1 minute, our total CI test time is ~4 minutes. This is acceptable for a PR gate in exchange for the thorough coverage we get.
+
+We configure our GitHub Actions (or equivalent CI) to reflect this structure:
+
+- Job “Test: Bun” – runs `bun test` on all non-a11y tests.
+
+- Job “Test: Accessibility (Node)” – runs our Node script for axe tests.
+
+- Job “Test: E2E” – runs `npx playwright test` (possibly with some flags for trace or report).
+
+- An overall workflow that depends on all three finishing. We can set fail-fast for certain jobs if desired (for instance, if Bun tests fail, maybe abort others to save resources).
+
+This way, a quick failure (like a unit test failing or a basic axe rule failing) doesn’t require waiting for the whole E2E suite to complete – developers get immediate feedback on what broke.
+
+Additionally, if test runtime ever becomes a concern (say our component count triples and Node axe tests slow down), we can further partition those tests. For example, run axe tests in parallel shards (maybe split by test file name across two processes). But at our current scope, this likely isn’t necessary.
+
+### 4.2 CI Reporting and Failure Triage
+
+Integrating into CI also means handling results smartly. We treat any **accessibility violation of high severity as a build failure**. For instance:
+
+- If axe reports a **critical or serious** violation in either the component tests or E2E scans, the CI job fails. This prevents merging code that would introduce major accessibility regressions.
+
+- We may allow **minor** or **moderate** issues to pass but log them, depending on our strictness level, with an automated task created to fix them. In practice, since our inner loop is catching most issues early, we expect few if any moderate issues by the time E2E runs. But for example, color contrast might be flagged as serious (which we’d treat as immediate failure requiring a fix), whereas something like a missing document `<title>` might be moderate (we would still fix it but it might not block the PR).
+
+We use Playwright and our Node tests’ reporting capabilities to output machine-readable results (like JSON). A post-processing step in CI could parse the axe results and summarize any violations. We also generate **HTML reports** for easier debugging:
+
+- The Node axe tests can produce an HTML report of all violations, with links to relevant DOM nodes and suggestions (using the output from `axe-core`).
+
+- Playwright, by default, can produce an HTML report that includes screenshots, failing test traces, etc. We enable this and have the CI upload it as an artifact on failure.
+
+Our team’s workflow is then: if a test fails, especially an accessibility one, the engineer can download the report artifact and see exactly what failed – for example, a Playwright trace showing that after clicking a button, the focus did not move as expected, or an axe report highlighting a missing form label.
+
+Finally, we maintain a **culture of accessibility ownership**. Failing tests are not just turned green by updating the tests – the expectation is to *fix the underlying issue*. Because the tests are designed to catch real problems, the correct response to a failure is usually to correct the component or page (e.g., add the missing `aria-label`, adjust the color contrast in CSS, fix the focus logic in JavaScript).
+
+To help manage this, we integrate severity tagging:
+
+- Tests or checks can be annotated with severity levels (for example, using axe’s impact ratings). Our CI parser can distinguish and perhaps post a comment on the PR: “⚠️ Accessibility issue detected: **low contrast on button text** (critical). This must be resolved before merge.”
+
+- For less critical issues that slip through, we create backlog tickets automatically. But ideally, our gating ensures everything important is caught and fixed in the same development cycle.
+
+## V. Synthesis and Implementation Roadmap
+
+The proposed testing framework delivers a **holistic, layered approach** to accessibility testing without sacrificing development speed. We combine fast component-level checks with full browser validation to ensure that every new UI piece is both **rapidly verified** and **truly accessible** in practice. Below is a summary of the two major layers and their roles:
+
+**Dimension****Component Layer (Bun + Node/JSDOM)****E2E Layer (Playwright)****Primary Tools**Bun test runner (Happy DOM) for units; Node + JSDOM for axe scansPlaywright test runner (Chromium, Firefox, WebKit) with Axe**Environment**Simulated DOM (Happy DOM for speed; JSDOM for standards)Real browser environment (headless or headed as needed)**Scope of Tests**Isolated components and small integration pieces in memoryFull pages and user flows in the deployed app context**Execution Speed**Very fast (milliseconds per test file under Bun; a bit more for axe)Slower (seconds per test, overall minutes per suite)**Defects Caught****Structural/Semantic issues:** missing labels, incorrect roles, improper ARIA, form associations. Basic functional bugs in components.
+*(Visual/style issues generally not caught here due to Happy DOM/JSDOM limits.)***Visual & Interactive issues:** color contrast failures, element focus order, keyboard traps, missing focus outlines, responsive layout breakages, incorrect `lang` attributes, any integration logic issues. Plus validation of flows (modals, nav, etc.).**When to Run**On every code change or commit (developer inner loop); each PR as quick check.On each PR merge request (CI gating) and nightly full runs. Can be run locally for full regression before major releases.**CI Role**Fast feedback – fails the build quickly if a core test or axe rule fails, preventing bad code early.Final quality gate – ensures the merged product is accessible in reality. Also provides artifacts (screenshots, trace) for review.
+This model ensures **accessibility is woven into every stage**: a developer gets immediate feedback in their IDE or terminal for obvious issues, and the CI catches anything that requires a real browser to detect.
+
+### 5.1 Implementation Plan
+
+To adopt this framework, a phased rollout is advisable:
+
+**Phase 1: Setup Bun and Basic Testing (Day 0-1)**
+
+- **Install/Verify Bun** in the project. Ensure the `bun:test` script is working with Happy DOM. Add a `tests/setup-happy-dom.ts` to configure any globals or polyfills (for example, setting `document.doctype` if needed, or configuring `window.fetch` if used in tests).
+
+- **Establish Test Structure:** Decide on a directory convention (e.g., all tests in `tests/` folder, mirroring src structure). Ensure naming for a11y tests is in place (e.g., `*.a11y.test.tsx`).
+
+- **Sample Bun Tests:** Write a couple of simple Bun tests for existing components to validate that the framework is running and fast. For example, test a context provider or a presentational component. This lays groundwork and confidence in Bun’s runner.
+
+**Phase 2: Integrate Node A11y Testing (Day 1-2)**
+
+- **Add Dependencies:** Install `axe-core` (or `jest-axe`) and `@testing-library/react` as devDependencies for the Node tests. Also install `jsdom` if not already included (though some testing libraries bring it in). Optionally, add `tsgo` or configure `tsc` for quick compilation of tests.
+
+- **Node Test Script:** Create an NPM script, e.g., `"test:a11y": "node scripts/run-a11y-tests.js"`. This script can discover `*.a11y.test.tsx` files (via glob), compile them (using tsgo or esbuild), and execute them. As an interim, one could use a tool like Mocha or Vitest in Node just for these tests – but a lightweight custom runner might suffice.
+
+- **First Axe Test:** Write an a11y test for a simple component (like a `<Button>` or a form input) and deliberately introduce a violation (e.g., remove an aria-label) to see that it catches it. Then fix the violation and see tests pass. This validates the Node axe pipeline.
+
+- **Disable Incompatible Rules:** Configure the axe wrapper to disable `color-contrast` and other problematic rules globally for JSDOM. This can be done in a setup portion of the Node tests (for example, using `axe.configure` to turn off certain checks). Document these disabled rules clearly, referencing that Playwright will cover them.
+
+**Phase 3: Expand Coverage in Inner Loop (Week 1 ongoing)**
+
+- **Write Tests for Key Components:** Start adding tests (both Bun and a11y) for all crucial components in the codebase. Prioritize components that are reused often or have complex accessibility considerations (dialogs, menus, inputs, etc.). Leverage the patterns illustrated (render, axe scan, role/name assertions).
+
+- **Enforce Query Convention:** Introduce the ESLint rules for Testing Library to ensure no one slips in a `getByTestId`. Add this to the CI lint step. Also, communicate the guideline to the team: test as a user, not via implementation details.
+
+- **Team Training:** Host a short workshop or provide docs on how to write these new tests. Show examples of good patterns. This will help scale the effort as multiple developers contribute tests.
+
+**Phase 4: Playwright Setup (Week 2)**
+
+- **Install Playwright and Config:** Add Playwright test runner (`@playwright/test`) and run `npx playwright install` to get browser binaries. Create `playwright.config.ts` with proper settings: use a base URL (if running against a dev server or Storybook), configure timeouts, and set test directory (e.g., `tests/e2e`). Also enable trace on failure and screenshot on failure for debugging.
+
+- **Axe in Playwright:** Import `@axe-core/playwright` in a test to ensure it works. Write a basic test that navigates to a page and runs an axe scan. This is to validate that our environment can do in-browser scans (and to fine-tune any needed delays/wait-fors to stabilize the page).
+
+- **Visual Baseline:** Write a simple visual test for a static page and generate the baseline screenshot. Commit this baseline image to the repo (we generally commit reference snapshots to track changes over time). Ensure that small pixel differences don’t cause noise – adjust threshold or screenshot options if needed (like disabling anti-aliasing via CSS in test).
+
+- **Accessibility Snapshots:** Implement the `toMatchAriaSnapshot` matcher. This might involve calling `page.accessibility.snapshot()` and doing a deep comparison with a stored object. We can also use existing example implementations from Playwright community if available. Start by snapshotting a simple component or page to test the flow (store file, compare on next run).
+
+**Phase 5: Full E2E Test Development (Week 2-3)**
+
+- **Implement Scenario Tests:** Begin writing tests for critical user flows: e.g., “user can navigate through main menu with keyboard,” “opening and closing modals manages focus correctly,” “form error messages are announced or present in DOM,” etc. Use the patterns from 3.2.1 and 3.2.2. These tests might require building out some test fixture data or using a staging environment if working with real backend – ensure they are deterministic.
+
+- **Implement Visual & I18n Tests:** Add tests for visual snapshots of key pages in both themes, and for switching language as described. Mark these as either part of the main Playwright suite or a separate suite if we want to run them less frequently (Playwright can tag tests, e.g., `@visual` tag, to filter runs).
+
+- **Parallelize where possible:** Playwright will parallelize by default; confirm that our tests are isolated (avoid tests interfering with each other by using fresh page/context for each, which Playwright does by default per test). Use test fixtures for different viewport sizes or locales to run those in parallel threads.
+
+**Phase 6: CI Integration (Week 3)**
+
+- **Set up CI jobs:** Modify the pipeline to include the three jobs (Bun tests, Node a11y, Playwright). Use caching where possible (cache `node_modules` or Playwright browsers for speed). If using GitHub Actions, ensure runners have necessary dependencies (or use the official Playwright action).
+
+- **Artifact & Reporting:** Configure each job to output results. For Bun/Node tests, a simple console output might suffice, but we can also output JUnit or HTML reports using tools like `bun test --reporter junit` or a custom format. For Playwright, enable the HTML report and artifacts (videos, traces on failure). Upload these in the CI (Actions artifacts).
+
+- **Failure Criteria:** Decide the threshold for failing. Likely any failing test fails the job. For axe violations, since our tests assert zero violations, it naturally fails if any. We might incorporate an allow-list mechanism if there are legacy known issues (though ideally fix them instead).
+
+- **Notification:** Update PR template or guidelines to mention that a PR will not be merged if accessibility tests fail. Possibly integrate a status check that specifically surfaces “Accessibility Checks” vs “Unit Tests” so it’s clear where an issue lies.
+
+**Phase 7: Ongoing Maintenance and Coverage (Week 4+)**
+
+- **Backfill Tests:** Gradually increase coverage by adding tests for remaining components and pages. Our goal is not 100% coverage for coverage’s sake, but rather covering all **accessibility aspects** of each element. Use the a11y test suite as a checklist for components – if a component has an interactive role, ensure it has at least one axe test verifying its basics.
+
+- **Update Snapshots Intentionally:** When a legitimate UI change occurs (e.g., we redesign a component’s structure or text), update the corresponding accessibility and visual snapshots. Treat these updates as code changes requiring review – double-check that the new output is correct (e.g., if a heading level changed, is that semantically acceptable?).
+
+- **Monitor Flakiness:** Keep an eye on E2E test stability. If a test is flaky (randomly failing), investigate and fix it promptly, as flaky tests can erode team trust in the suite. Playwright’s trace viewer can help debug intermittent failures. It might be a timing issue or a test that needs a slight adjustment (like waiting for an animation to finish).
+
+- **Continuous Improvement:** As new accessibility best practices or tools emerge, integrate them. For example, if a library for detecting screen reader announcements becomes available, we could add tests for live region updates. Or if Bun adds support for JSDOM in the future, we might simplify the Node harness and run axe directly in Bun (dropping the complexity). Remain adaptable to improve the framework.
+
+By following this roadmap, we incrementally build up a robust testing regimen. Each phase delivers tangible benefits (immediate bug catching, new coverage) without overwhelming the team. Within a few weeks, accessibility testing moves from an abstract concern to an everyday part of development, with developers empowered by quick feedback and protected by comprehensive end-to-end checks.
+
+### 5.2 Outcomes and Benefits
+
+In conclusion, this accessibility-first testing architecture embeds the mantra “**shift left** on accessibility” into our development lifecycle. Fast Bun tests and Node axe checks mean issues are caught at the earliest possible moment. Playwright E2E ensures that nothing slips through the cracks when it comes to real user experience. We no longer rely solely on periodic manual audits or the diligence of individual developers remembering every ARIA rule – the system has our back.
+
+**Key benefits we expect:**
+
+- **Higher Quality UIs:** Fewer accessibility bugs reach production, resulting in an inclusive product by default.
+
+- **Developer Efficiency:** Quick inner loop tests prevent context-switching; developers fix issues while the code is fresh in mind. The outer loop, while slower, is automated and saves QA effort by catching issues that would be hard to find manually.
+
+- **Documentation by Tests:** The tests themselves serve as living documentation of our accessibility expectations. New team members can read tests to understand how components should behave (e.g., “Modal should return focus to opener on close – see test X”). This knowledge sharing is invaluable.
+
+- **Compliance and Confidence:** We can confidently assert conformance to standards (like WCAG 2.1 AA) because we have automated checks for many criteria (contrast, focus order, semantics, etc.). This mitigates risk from a legal/compliance standpoint and broadens our user reach.
+
+By modernizing the original design to use **Bun for speed** and a **Node assist for axe**, we preserve the core philosophy: accessibility testing should enhance, not hinder, our development velocity. Every layer of testing reinforces the other, and together they create a safety net where accessibility regressions simply cannot survive unnoticed. This is the essence of high-velocity, accessibility-first development – moving fast **without breaking things** for our users.
+
+## Footnotes
+
+- *Happy DOM issue tracker – documented incompatibility of `Node.isConnected` implementation with axe-core’s expectations.* ↩
+
+- *Bun GitHub issue #3554 – tracking request for JSDOM support in Bun’s test runner (unresolved as of 2025).* ↩
+
+- *Deque `axe-core` documentation – notes on JSDOM support and rules like color-contrast being inapplicable in headless DOM.* ↩
