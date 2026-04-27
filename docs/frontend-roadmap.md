@@ -326,14 +326,15 @@ Explore, and Customize.
       entry points.
   - Requires 2.2.3.
   - Port sliders, segment toggles, surface options, route preview selections,
-    and disabled/planned generate states.
+    an explicit "Popular Hotspots" / "Hidden Gems" control mapped to
+    `discoveryMix`, and disabled/planned generate states.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `customize.editing`,
     `customize.preview_selected`, and `customize.generate_planned`;
     `docs/wildside-high-level-design.md` §Route Generation Controls; and
     `../wildside-mockup-v2a/docs/wildside-mockup-design.md` `/customize`
     localization strategy.
-  - Success: Customize can generate a valid route draft object without making a
-    backend request.
+  - Success: Customize can generate a valid route draft object, including
+    `discoveryMix`, without making a backend request.
 - [ ] 2.2.5. Add bottom navigation and route-group affordances for the catalogue
       journey.
   - Requires 2.2.2, 2.2.3, and 2.2.4.
@@ -448,11 +449,16 @@ Itinerary, Saved, and Walk completion. See
 - [ ] 3.1.1. Add route draft, request, status, and route-plan schemas.
   - Requires 1.3.1 and 2.2.4.
   - Model route preferences, generation request IDs, statuses, route geometry,
-    ordered stops, inline POIs, and sparse-data errors.
+    ordered stops, inline POIs, POI narrative snippet metadata, cache state,
+    attribution, and sparse-data errors.
   - See `docs/wildside-pwa-data-model.md` §Generated routes and
     `docs/wildside-ux-state-graph-v0.1.json` states `route_generation.draft`,
-    `route_generation.data_sparse`, and `route_generation.failed`.
-  - Success: route plans can be rendered offline from one persisted object.
+    `route_generation.data_sparse`, and `route_generation.failed`; and
+    `docs/wildside-high-level-design.md` §§In-Walk Navigation Experience and
+    AI/LLM Integration Strategy.
+  - Success: route plans and narrative snippets can be rendered offline from
+    one persisted object, with missing snippets shown as recoverable loading or
+    unavailable states.
 - [ ] 3.1.2. Implement route-generation mutation and polling hooks.
   - Requires 3.1.1.
   - Wrap planned `POST /api/v1/routes`, `GET /api/v1/routes/{requestId}`, and
@@ -495,13 +501,16 @@ Client-Side Logic with XState.
 - [ ] 3.2.2. Implement wizard step 2 for discovery and accessibility
       preferences.
   - Requires 3.2.1.
-  - Reuse safety descriptors where labels overlap and keep draft state separate
-    from persisted preferences until submission.
+  - Reuse safety descriptors where labels overlap, expose the
+    "Popular Hotspots" / "Hidden Gems" `discoveryMix` control, and keep draft
+    state separate from persisted preferences until submission.
   - See `docs/wildside-ux-state-graph-v0.1.json` `wizard.step2`;
     `docs/wildside-pwa-data-model.md` §§Safety toggles and presets; and
-    `docs/pure-accessible-and-localizable-react-components.md` §2.2.
+    `docs/pure-accessible-and-localizable-react-components.md` §2.2; and
+    `docs/wildside-high-level-design.md` §POI Scoring & Personalization
+    Algorithm.
   - Success: slider and toggle summaries remain localized and deterministic in
-    tests.
+    tests, and generated route requests carry the selected `discoveryMix`.
 - [ ] 3.2.3. Implement wizard step 3 review and generation transition.
   - Requires 3.1.2 and 3.2.2.
   - Show draft summary, route-generation states, generated stops, weather or
@@ -547,8 +556,33 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     persistence plan.
   - Success: switching overlays and hovering stops does not recreate the
     MapLibre instance.
-- [ ] 3.3.3. Implement Quick Map tabs for map, stops, and notes.
+- [ ] 3.3.3. Implement route-start and location permission UX.
   - Requires 3.3.2.
+  - Support current GPS, dropped-pin start selection, map-centre fallback, last
+    known location, and denied-permission recovery without blocking route
+    browsing.
+  - See `docs/wildside-high-level-design.md` §Route Generation Controls;
+    `docs/wildside-ux-state-graph-v0.1.json` states
+    `map.location_permission_prompt` and `map.location_denied`; and
+    `docs/wildside-pwa-design.md` §§Map architecture and Accessible
+    client-side routing.
+  - Success: users can create a valid route draft after granting location,
+    denying location, or manually placing a start pin.
+- [ ] 3.3.4. Implement map-led quick generation as a primary route surface.
+  - Requires 3.3.3 and 3.1.2.
+  - Let users pan and zoom the map, inspect tappable POIs, tune duration,
+    interests, `discoveryMix`, and start point, then request a generated walk
+    from the map without entering the full wizard.
+  - See `docs/wildside-high-level-design.md` §§Interactive Map & Discovery and
+    Route Generation Controls; `docs/wildside-ux-state-graph-v0.1.json` states
+    `map.quick.map_tab`, `route_generation.requesting`, and
+    `route_generation.data_sparse`; and `docs/sitemap.md` §Quick Route
+    Generation.
+  - Success: `/map/quick` can generate, retry, or broaden a walk request from
+    map context with keyboard-operable controls and recoverable sparse-data
+    copy.
+- [ ] 3.3.5. Implement Quick Map tabs for map, stops, and notes.
+  - Requires 3.3.4.
   - Use Radix tabs, hash-aware tab selection, route draft controls, POI
     highlights, and localized notes placeholders.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `map.quick.map_tab`,
@@ -557,8 +591,8 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     implementation notes.
   - Success: deep links select the correct tab and `aria-selected` matches
     visual state.
-- [ ] 3.3.4. Implement Itinerary tabs and navigation-active states.
-  - Requires 3.3.3.
+- [ ] 3.3.6. Implement Itinerary tabs and navigation-active states.
+  - Requires 3.3.5.
   - Render route plan geometry, ordered stops, POI detail dialogs, share dialog,
     navigation active and paused states, and progress events.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `itinerary.map_tab`,
@@ -567,9 +601,21 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     §In-Walk Navigation Experience.
   - Success: the user can start, pause, resume, and complete a walk without
     losing the map viewport or selected stop.
-- [ ] 3.3.5. Implement Saved route tabs, empty state, favourite, share, and
+- [ ] 3.3.7. Add pedestrian instructions and degraded-location recovery.
+  - Requires 3.3.6.
+  - Render next-turn instructions, upcoming POI highlights, off-route copy,
+    degraded-GPS confidence states, pause/resume affordances, and manual
+    progress fallback when reliable tracking is unavailable.
+  - See `docs/wildside-high-level-design.md` §In-Walk Navigation Experience;
+    `docs/wildside-ux-state-graph-v0.1.json` states
+    `itinerary.navigation_active`, `itinerary.navigation_paused`, and
+    `map.location_denied`; and `docs/wildside-pwa-data-model.md` §§Notes and
+    progress and Walk session and completion.
+  - Success: active navigation remains usable when GPS confidence drops, the
+    user leaves the route, or the device is offline.
+- [ ] 3.3.8. Implement Saved route tabs, empty state, favourite, share, and
       start-route transitions.
-  - Requires 3.3.4.
+  - Requires 3.3.6.
   - Reuse route-plan and annotation models while preserving the saved-route UX
     graph states.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `saved.empty`,
@@ -588,7 +634,7 @@ Walk session and completion; and `docs/wildside-ux-state-graph-v0.1.json`
 `apiContracts.routeAnnotations`.
 
 - [ ] 3.4.1. Implement route annotations read and write hooks.
-  - Requires 1.3.3 and 3.3.4.
+  - Requires 1.3.3 and 3.3.6.
   - Wrap `GET /api/v1/routes/{route_id}/annotations`,
     `POST /api/v1/routes/{route_id}/notes`, and
     `PUT /api/v1/routes/{route_id}/progress`.
@@ -606,13 +652,23 @@ Walk session and completion; and `docs/wildside-ux-state-graph-v0.1.json`
   - Success: a failed progress update never marks a stop as permanently visited
     without server or queued confirmation.
 - [ ] 3.4.3. Add route-plan persistence for generated and saved walks.
-  - Requires 3.1.2 and 3.3.5.
+  - Requires 3.1.2 and 3.3.8.
   - Persist route plans and related POIs in the Query cache so Map, Saved, and
     Completion can render without refetching.
   - See `docs/wildside-pwa-data-model.md` §Generated routes and
     `docs/local-first-react.md` §Implementing Offline Persistence.
   - Success: reloading the app can restore the last generated route and saved
     route details from local storage.
+- [ ] 3.4.4. Implement POI narrative snippet lifecycle and cache behaviour.
+  - Requires 3.1.1 and 3.4.3.
+  - Render loading, available, stale, unavailable, and refreshed snippet states
+    for POI detail surfaces, preserving attribution and avoiding duplicate LLM
+    requests after reload.
+  - See `docs/wildside-high-level-design.md` §§In-Walk Navigation Experience and
+    AI/LLM Integration Strategy; `docs/wildside-pwa-data-model.md` §Generated
+    routes; and `docs/local-first-react.md` §Implementing Offline Persistence.
+  - Success: cached route plans can show existing narrative snippets offline,
+    while missing snippets degrade to explicit unavailable copy.
 
 ### 3.5. Verify the generation and map slice
 
@@ -629,17 +685,18 @@ and `T006`.
     `spec/openapi.json`; and `spec/asyncapi.yaml`.
   - Success: route-generation tests prove retry safety without a live backend.
 - [ ] 3.5.2. Add map provider stability and overlay tests.
-  - Requires 3.3.2 through 3.3.5.
+  - Requires 3.3.2 through 3.3.8.
   - Mock MapLibre and assert instance stability, layer toggles, POI highlights,
-    tab switching, and hash deep links.
+    tab switching, route-start fallback, and hash deep links.
   - See `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T003`
     and `../wildside-mockup-v2a/tests/map-state-provider.test.ts`.
   - Success: tests fail if overlay updates tear down the map canvas.
 - [ ] 3.5.3. Add Playwright coverage for wizard-to-itinerary and saved-route
       flows.
-  - Requires 3.2.3, 3.3.4, and 3.3.5.
+  - Requires 3.2.3, 3.3.6, 3.3.7, 3.3.8, and 3.4.4.
   - Exercise keyboard flow through wizard steps, generated-route success,
-    itinerary tab navigation, saved-route actions, and share dialogs.
+    itinerary tab navigation, pedestrian instructions, degraded-GPS recovery,
+    narrative snippet fallback, saved-route actions, and share dialogs.
   - See `docs/high-velocity-accessibility-first-component-testing.md` §III and
     `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T006`.
   - Success: a user can reach completion-ready navigation using only keyboard
@@ -800,7 +857,7 @@ completion.
     sessions.
 - [ ] 4.4.2. Implement Walk Complete summary, rating toast, share dialog, save,
       and remix transitions.
-  - Requires 4.4.1 and 3.3.5.
+  - Requires 4.4.1 and 3.3.8.
   - Render distance, duration, favourite moments, sharing affordances, save
     transition, and remix link back to the wizard.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `walk_complete.summary`,
@@ -885,6 +942,17 @@ session handling. See `docs/wildside-ux-state-graph-v0.1.json` assumption
   - See `spec/asyncapi.yaml`.
   - Success: unused WebSocket user events are either wired into auth UX or
     documented as backend-only legacy scope.
+- [ ] 5.1.3. Decide entitlement and free-tier UX before premium controls ship.
+  - Requires phase 4.
+  - Define how free walk-generation limits, unlimited generation, expanded
+    interest themes, and offline-map entitlement are presented without blocking
+    the core generative loop.
+  - See `docs/wildside-high-level-design.md` §§Risk 5: Market Adoption and
+    Monetization and Post-MVP & Future Vision; and
+    `docs/wildside-ux-state-graph-v0.1.json` assumption `A003`.
+  - Success: entitlement is either promoted into a route/account slice with
+    acceptance criteria or documented as out of scope for the first production
+    release.
 
 ### 5.2. Evaluate richer catalogue and list pagination
 
@@ -962,3 +1030,15 @@ Integration Strategy.
     Integration Strategy.
   - Success: advanced media and intent features have prototype success criteria
     before entering the main roadmap.
+- [ ] 5.4.3. Define feedback and reporting UX for route and data quality.
+  - Requires phase 4.
+  - Decide whether users can report bad POIs, unsafe route segments, stale
+    narrative snippets, poor generated walks, or accessibility mismatches, and
+    define moderation and privacy expectations before adding visible write
+    paths.
+  - See `docs/wildside-high-level-design.md` §§Risk 1: Data Quality and
+    Maintenance and Advanced Features & Community Integration; and
+    `docs/wildside-pwa-data-model.md` §§Notes and progress and Trending and
+    community picks.
+  - Success: feedback either has explicit data contracts and user-visible
+    recovery copy or remains a documented post-MVP research item.
