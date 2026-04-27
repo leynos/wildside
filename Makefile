@@ -1,5 +1,5 @@
 SHELL := bash
-export PATH := $(HOME)/.bun/bin:$(HOME)/.cargo/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(PATH)
+BUN_PATH := $(HOME)/.bun/bin:$(PATH)
 KUBE_VERSION ?= 1.31.0
 
 define ensure_tool
@@ -229,7 +229,7 @@ check-fmt:
 	$(CHECK_FMT_CMD)
 
 markdownlint:
-	bun x --package=markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) markdownlint-cli2 '**/*.md'
+	@PATH="$(BUN_PATH)" bun x --package=markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) markdownlint-cli2 '**/*.md'
 
 nixie:
 	bun install

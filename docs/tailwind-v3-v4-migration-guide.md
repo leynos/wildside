@@ -1,6 +1,6 @@
 # Tailwind CSS v4 migration guide
 
-Here is what you need to know about Tailwind CSS v4 (May 2025).
+Key points about Tailwind CSS v4 migration as of May 2025.
 
 ## I. Core Architecture & Performance
 
@@ -11,7 +11,7 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
      generating CSS on-demand.
 2. **CSS-First Configuration via `@theme`:**
    - The primary configuration mechanism shifts from `tailwind.config.js` (for
-     theme values) to your main CSS file using the `@theme` directive.
+     theme values) to the main CSS file using the `@theme` directive.
 
      ```css
      /* app.css */
@@ -19,7 +19,7 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
 
      @theme {
        --font-sans: "Inter", system-ui, sans-serif;
-       --color-brand-500: oklch(0.637 0.237 25.331); /* Example OKLCH color */
+       --color-brand-500: oklch(0.637 0.237 25.331); /* Example OKLCH colour */
        --breakpoint-lg: 64rem;
        --spacing: 0.25rem; /* Base for numeric spacing utilities */
      }
@@ -32,15 +32,15 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
      `var(--color-brand-500)`).
    - The default theme is still provided but can be extended, overridden, or
      entirely replaced using this CSS-native approach. For instance,
-     `--color-*: initial;` within `@theme` will remove all default color
+     `--color-*: initial;` within `@theme` will remove all default colour
      utilities, allowing a fully custom palette.
 
 3. **Modern CSS Baseline:**
    - Targets **Safari 16.4+, Chrome 111+, Firefox 128+**. This is non-negotiable
      as v4 relies on features like `@property`, `color-mix()`, and modern
      cascade layers. Older browser support requires sticking to v3.4.
-   - The default color palette leverages OKLCH for more vibrant, perceptually
-     uniform colors out-of-the-box.
+   - The default colour palette uses OKLCH for more vibrant, perceptually
+     uniform colours by default.
 
 ## II. Build & Integration
 
@@ -65,11 +65,11 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
 1. **Configuration File Shift:**
    - While `tailwind.config.js` can still be used for plugin definitions or
      complex setups (loaded via `@config "path/to/config.js";`), theme
-     customization (colors, spacing, fonts, breakpoints) should primarily occur
+     customisation (colours, spacing, fonts, breakpoints) should primarily occur
      in CSS via `@theme`.
    - The `content` array for source file scanning is still primarily configured
-     via JS config if used, or Tailwind attempts automatic detection. Use
-     `@source` in CSS for explicit path additions/exclusions.
+     through JS config if used, or Tailwind attempts automatic detection. Use
+     `@source` in CSS for explicit path additions and exclusions.
 2. **Utility Deprecations & Renames:**
    - The `npx @tailwindcss/upgrade` tool is highly recommended and automates
      most of this.
@@ -79,9 +79,9 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
    - `ring` default width is now `1px` (was `3px`); use `ring-3` for the old
      default.
 3. **Default Value Adjustments:**
-   - Default border color is now `currentColor`. Explicitly add color classes
-     like `border-gray-200` if you relied on the v3 default gray.
-   - Default ring color is `currentColor` (was `blue-500`).
+   - Default border colour is now `currentColor`. Explicitly add colour classes
+     like `border-gray-200` if the v3 default grey was assumed.
+   - Default ring colour is `currentColor` (was `blue-500`).
 4. **Selector Modifications:**
    - `space-x-*`/`space-y-*` utilities now use `margin-bottom`/`margin-right` on
      `:not(:last-child)` for performance. This might affect inline elements or
@@ -109,7 +109,7 @@ Here is what you need to know about Tailwind CSS v4 (May 2025).
    - Due to isolated processing of these style blocks by build tools, theme
      variables, custom utilities, and variants defined in global CSS are not
      automatically available.
-   - Use `@reference "../path/to/your/main.css";` _inside_ the scoped style
+   - Use `@reference "../path/to/main.css";` _inside_ the scoped style
      block to make these available without duplicating CSS output.
    - Alternatively, directly use CSS variables (`var(--color-brand-500)`)
      instead of `@apply` for better performance and simpler processing.

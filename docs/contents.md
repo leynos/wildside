@@ -25,13 +25,13 @@
 ## Frontend development
 
 - [Wildside front-end roadmap](frontend-roadmap.md) – GIST-aligned
-  implementation roadmap for the PWA front-end. _Audience: frontend developers
-  and project planners._
-- [Pure, accessible, and localizable React components](pure-accessible-and-localizable-react-components.md)
-  – building accessible, localizable components with Radix, TanStack, and
+  implementation roadmap for the Progressive Web Application (PWA) front-end.
+  _Audience: frontend developers and project planners._
+- [Pure, accessible, and localisable React components](pure-accessible-and-localizable-react-components.md)
+  – building accessible, localisable components with Radix, TanStack, and
   DaisyUI. _Audience: frontend developers._
 - [Wildside PWA design](wildside-pwa-design.md) – frontend architecture,
-  offline-first behaviour, and localization strategy. _Audience: frontend
+  offline-first behaviour, and localisation strategy. _Audience: frontend
   developers and contributors._
 - [Wildside PWA data model](wildside-pwa-data-model.md) – mockup-derived,
   backend-compatible entity shapes for the PWA. _Audience: frontend and backend
@@ -45,7 +45,7 @@
   Tailwind, DaisyUI, Radix, i18n, map, and testing stack reference. _Audience:
   frontend developers._
 - [Data model-driven card architecture](data-model-driven-card-architecture.md)
-  – entity-owned localization and SI-unit card modelling. _Audience: frontend
+  – entity-owned localisation and SI-unit card modelling. _Audience: frontend
   developers and data model maintainers._
 - [Architecting resilient local-first applications in React](local-first-react.md)
   – strategies for offline-first apps using Zustand and TanStack Query.
