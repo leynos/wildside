@@ -890,36 +890,25 @@ components accessible requires a combination of appropriate ARIA attributes and
 JavaScript-driven keyboard interaction patterns, as defined in the WAI-ARIA
 Authoring Practices Guide (APG).^60^
 
-| **Component**                  | **Key HTML Structure**                                                                      | **Required ARIA Roles/States/Properties**                                                                                                                                                                     | **Expected Keyboard Interaction** |
-| ------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| **Navigation Menu (Dropdown)** | A `<button>` to toggle the menu, followed by a `<ul>` containing `<li>` and `<a>` elements. | **Button:** `aria-haspopup="true"`, `aria-expanded="true/false"`, `aria-controls="[menu-id]"` **UL:** `role="menu"`, `id="[menu-id]"` **LI:** `role="none"` or `role="presentation"` **A:** `role="menuitem"` | Enter, Space, and arrow keys open or move through the menu. |
-
-Button: Enter, Space, Down Arrow opens menu and focuses first item. Up Arrow
-opens menu and focuses last item.
-
-Menu Items: Up/Down Arrow navigates items. Escape closes menu and returns focus
-to the button. Tab moves out of the menu. Enter activates the item.59
-
-| | **Tabs** | A container (`<div>` or `<ul>`) for the tab buttons, and a
-container for the tab panels. | **Tab Container:** `role="tablist"` **Tab
-Buttons:** `role="tab"`, `aria-selected="true/false"`,
-`aria-controls="[panel-id]"` **Panel Container:** `role="tabpanel"`,
-`id="[panel-id]"` |
-
-**Tab List:** `Left/Right Arrow` (or `Up/Down` for vertical) navigates between
-tabs. `Home`/`End` goes to first/last tab. `Enter`/`Space` activates a tab (if
-not auto-activated). `Tab` moves focus into the active panel.^64^
-
-| | **Accordion** | A series of heading elements (`<h3>`), each containing a
-`<button>`. Each is followed by a content panel (`<div>`). | **Heading:**
-Contains the button. **Button:** `aria-expanded="true/false"`,
-`aria-controls="[panel-id]"` **Panel:** `id="[panel-id]"` |
-
-**Header Button:** `Enter`/`Space` toggles the associated panel's visibility.
-`Tab` moves to the next focusable element. Optional: `Up/Down Arrow` can be used
-to navigate between accordion headers.^66^
-
-|
+- **Navigation menu (dropdown):** Use a `<button>` to toggle the menu, followed
+  by a `<ul>` containing `<li>` and `<a>` elements. The button should expose
+  `aria-haspopup="true"`, `aria-expanded="true/false"`, and
+  `aria-controls="[menu-id]"`. The list can use `role="menu"` and the links can
+  use `role="menuitem"` where the component follows the full APG menu pattern.
+  Enter, Space, and arrow keys open or move through the menu. Escape closes the
+  menu and returns focus to the button.^59^
+- **Tabs:** Use a tab container with `role="tablist"`, tab buttons with
+  `role="tab"`, `aria-selected="true/false"`, and
+  `aria-controls="[panel-id]"`, and panels with `role="tabpanel"` and matching
+  IDs. Left and Right Arrow, or Up and Down Arrow for vertical tabs, navigate
+  between tabs. Home and End move to the first and last tabs. Enter or Space
+  activates a tab when tabs are not auto-activated. Tab moves focus into the
+  active panel.^64^
+- **Accordion:** Use heading elements containing buttons, followed by associated
+  content panels. Each button should expose `aria-expanded="true/false"` and
+  `aria-controls="[panel-id]"`; each panel should use the matching ID. Enter and
+  Space toggle the associated panel. Tab moves to the next focusable element.
+  Optional Up and Down Arrow support can navigate between accordion headers.^66^
 
 Data synthesized from WAI-ARIA Authoring Practices Guide sources: ^59^
 

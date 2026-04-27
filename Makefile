@@ -229,7 +229,11 @@ check-fmt:
 	$(CHECK_FMT_CMD)
 
 markdownlint:
-	@PATH="$(BUN_PATH)" bun x --package=markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) markdownlint-cli2 '**/*.md'
+	@if PATH="$(BUN_PATH)" command -v markdownlint-cli2 >/dev/null 2>&1; then \
+	  PATH="$(BUN_PATH)" markdownlint-cli2 '**/*.md'; \
+	else \
+	  PATH="$(BUN_PATH)" bun x --package=markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) markdownlint-cli2 '**/*.md'; \
+	fi
 
 nixie:
 	bun install
