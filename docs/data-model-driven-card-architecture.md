@@ -6,10 +6,9 @@ Last updated: 25 November 2025
 
 Every card in the mockup must render from a concrete entity data model that
 already contains its localized strings and International System of Units
-(SI)-based measurements.
-Locale bundles should keep only UI chrome and formatting scaffolding. This
-document audits current card usages and defines the schemas, localization
-rules, and migration steps to align the codebase.
+(SI)-based measurements. Locale bundles should keep only UI chrome and
+formatting scaffolding. This document audits current card usages and defines the
+schemas, localization rules, and migration steps to align the codebase.
 
 For a backend-compatible perspective (hexagonal domain boundaries, ports, and
 offline-first persistence), see `docs/wildside-mockup-data-model.md`.
@@ -17,25 +16,25 @@ offline-first persistence), see `docs/wildside-mockup-data-model.md`.
 ## Principles to enforce
 
 - Entity models own their names, descriptions, badges, and imagery per locale.
-- Attribute labels come from stable internal identifiers resolved via
-  descriptor registries (difficulties, interests, surfaces, tags).
-- Numeric values are stored in SI base units; conversion happens at render
-  time via the existing unit-format helpers.
+- Attribute labels come from stable internal identifiers resolved via descriptor
+  registries (difficulties, interests, surfaces, tags).
+- Numeric values are stored in SI base units; conversion happens at render time
+  via the existing unit-format helpers.
 - Counts stay as integers; pluralization belongs to the translation system.
 - Components receive fully formed entities and only format/present them.
 
 ## Card inventory and current data sources
 
 - **Explore screen (`explore-sections.tsx`)**: category chips, featured walk,
-  popular theme cards, curated collection cards, trending route cards,
-  community pick panel. Data comes from `data/explore.ts`; names/descriptions
-  live directly in fixtures (English only).
+  popular theme cards, curated collection cards, trending route cards, community
+  pick panel. Data comes from `data/explore.ts`; names/descriptions live
+  directly in fixtures (English only).
 - **Discover screen (`discover-screen.tsx`)**: interest chips driven by
   `resolveDiscoverInterests` over the interest registry; labels drawn from
   Fluent keys.
-- **Customize screen (`customize-sections.tsx`)**: segment toggle cards,
-  surface option cards, route preview cards, advanced preference toggle cards.
-  Text is currently split between fixtures and Fluent keys.
+- **Customize screen (`customize-sections.tsx`)**: segment toggle cards, surface
+  option cards, route preview cards, advanced preference toggle cards. Text is
+  currently split between fixtures and Fluent keys.
 - **Offline screen (`offline-screen.tsx`)**: offline suggestion cards, offline
   download cards, undo cards, auto-management preference cards; strings are
   hard-coded in `data/stage-four.ts` with some UI copy in Fluent.
@@ -132,9 +131,8 @@ available locale. Components must not construct names from translation keys.
   - `OfflineMapArea`: `id`, `localizations`, `sizeBytes: number`,
     `progress: number`, `status: "complete" | "updating" | "downloading"`,
     `image: ImageAsset`, `lastUpdated: Instant`
-  - `OfflineSuggestion`: `id`, `localizations`, `ctaLocalizations` (call-to-action,
-    CTA),
-    `accentClass`, `iconToken`
+  - `OfflineSuggestion`: `id`, `localizations`, `ctaLocalizations`
+    (call-to-action, CTA), `accentClass`, `iconToken`
   - `AutoManagementOption`: `id`, `localizations`, `iconToken`,
     `defaultEnabled: boolean`, optional numeric parameters (`days`, etc.) in SI
     units
@@ -219,8 +217,8 @@ erDiagram
   COMMUNITY_PICK ||--|| ROUTE : is_based_on_optional
 ```
 
-Figure 2 sketches the class-level model with localisation-aware fields and
-asset references that underpin the card architecture.
+Figure 2 sketches the class-level model with localisation-aware fields and asset
+references that underpin the card architecture.
 
 ```mermaid
 classDiagram
@@ -369,8 +367,8 @@ classDiagram
 - Fluent bundles keep only chrome (button labels, aria labels, unit labels,
   plural rules). Remove entity names, descriptions, and badges from
   `public/locales/*/common.ftl` once migration lands.
-- Descriptor registries remain in `data/registries/*` but store
-  `localizations` instead of `labelKey/defaultLabel`.
+- Descriptor registries remain in `data/registries/*` but store `localizations`
+  instead of `labelKey/defaultLabel`.
 - Component props shift from `title`/`description` strings to entire entity
   objects. Helpers (e.g., `formatDistance`) continue to format numbers with
   translated unit labels.
@@ -413,18 +411,17 @@ classDiagram
   - Refactor safety accordion sections to reference `SafetyToggle` entities and
     presets with localization maps; prune Fluent keys.
 - Status (1 Dec 2025): Customize sliders, chips, route previews, and advanced
-    toggles now resolve names/descriptions from localization maps; safety
-    sections draw from `SafetyToggle` entities with preset toggle mappings and
-    the redundant Fluent messages have been removed.
+  toggles now resolve names/descriptions from localization maps; safety sections
+  draw from `SafetyToggle` entities with preset toggle mappings and the
+  redundant Fluent messages have been removed.
 - **Phase 3: offline & map**
   - Migrate offline suggestions and downloads to SI/numeric fields and
     localization maps; update cards and undo states.
   - Reshape `WalkPointOfInterest` and saved routes; ensure tags use registries
     and unit formatting covers all numerical values.
-- Status (6 Dec 2025): Offline suggestions/downloads now expose
-  localisation maps with SI sizes and relative timestamps; saved routes/POIs
-  resolve tags via registries and route metrics render through the unit
-  formatters.
+- Status (6 Dec 2025): Offline suggestions/downloads now expose localisation
+  maps with SI sizes and relative timestamps; saved routes/POIs resolve tags via
+  registries and route metrics render through the unit formatters.
 - **Phase 4: wizard & completion**
   - Move wizard route summary and generated stops to the shared route/stop
     schemas; delete entity strings from Fluent.

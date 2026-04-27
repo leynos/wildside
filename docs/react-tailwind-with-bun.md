@@ -1,10 +1,12 @@
 # React + Tailwind with Bun 1.3.0 — a short, no‑nonsense guide
 
-> **Note:** The playground now ships via a Vite build that targets GitHub
-> Pages, but this guide remains as a reference for Bun-centric experiments and
-> the optional `server.ts` preview helper.
+> **Note:** The playground now ships via a Vite build that targets GitHub Pages,
+> but this guide remains as a reference for Bun-centric experiments and the
+> optional `server.ts` preview helper.
 
-This is a pragmatic walkthrough for building and serving a tiny React + Tailwind app using **Bun 1.3.0**. It leans on Bun’s built‑in dev server (HMR, React Fast Refresh) and production bundler.
+This is a pragmatic walkthrough for building and serving a tiny React + Tailwind
+app using **Bun 1.3.0**. It leans on Bun’s built‑in dev server (HMR, React Fast
+Refresh) and production bundler.
 
 ---
 
@@ -49,13 +51,15 @@ bun init --react=tailwind
 What you get:
 
 - React + TS/JS wired up for Bun’s **HTML‑first** dev server.
-- Tailwind preconfigured (content paths, `@tailwind` directives, PostCSS config).
+- Tailwind preconfigured (content paths, `@tailwind` directives, PostCSS
+  config).
 
 ---
 
 ## 2) Run the dev server (with HMR)
 
-Bun 1.3 can serve HTML entry points directly and handle bundling/transpilation under the hood.
+Bun 1.3 can serve HTML entry points directly and handle bundling/transpilation
+under the hood.
 
 ```bash
 bun './**/*.html'
@@ -63,15 +67,19 @@ bun './**/*.html'
 bun ./index.html
 ```
 
-You’ll see a URL like `http://localhost:3000/` and a routes table. Open it in the browser. Edits to React components hot‑reload instantly (React Fast Refresh).
+You’ll see a URL like `http://localhost:3000/` and a routes table. Open it in
+the browser. Edits to React components hot‑reload instantly (React Fast
+Refresh).
 
-> Tip: Bun pipes browser `console.log` back to your terminal. Handy for quick debugging.
+> Tip: Bun pipes browser `console.log` back to your terminal. Handy for quick
+> debugging.
 
 ---
 
 ## 3) Hello React + Tailwind
 
-The template includes a basic app. If starting from a blank template, here’s the minimal shape.
+The template includes a basic app. If starting from a blank template, here’s the
+minimal shape.
 
 **`index.html`** (HTML import entry; Bun resolves and bundles dependencies):
 
@@ -124,14 +132,12 @@ function App() {
 createRoot(document.getElementById("root")!).render(<App />);
 ```
 
-Tailwind config (`tailwind.config.{js,ts}`) should include your content globs, e.g.:
+Tailwind config (`tailwind.config.{js,ts}`) should include your content globs,
+e.g.:
 
 ```js
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{ts,tsx,js,jsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: { extend: {} },
   plugins: [],
 };
@@ -141,13 +147,14 @@ export default {
 
 ## 4) Build for production
 
-Bun bundles HTML, TS/JS, CSS assets. Use `--production` for minification and tree‑shaking.
+Bun bundles HTML, TS/JS, CSS assets. Use `--production` for minification and
+tree‑shaking.
 
 ```bash
 bun build ./index.html --production --outdir=dist
 ```
 
-You’ll get a *fully bundled* `dist/` directory ready to host anywhere.
+You’ll get a _fully bundled_ `dist/` directory ready to host anywhere.
 
 ---
 
@@ -159,7 +166,8 @@ You’ll get a *fully bundled* `dist/` directory ready to host anywhere.
 
 ### With Bun itself (simple static server)
 
-For local preview or DIY hosting, a tiny Bun server can serve the `dist` folder. Example SPA‑safe server that falls back to `index.html`:
+For local preview or DIY hosting, a tiny Bun server can serve the `dist` folder.
+Example SPA‑safe server that falls back to `index.html`:
 
 ```ts
 // server.ts
@@ -192,7 +200,8 @@ bun run server.ts
 
 ## 6) (Optional) One‑process full‑stack dev
 
-If you prefer a single process serving your SPA **and** APIs during development, use HTML imports + `Bun.serve()` routes.
+If you prefer a single process serving your SPA **and** APIs during development,
+use HTML imports + `Bun.serve()` routes.
 
 ```ts
 // dev-serve.ts
@@ -220,10 +229,14 @@ You still get HMR, HTML bundling, and a tidy `/api/*` space without CORS faff.
 
 ## 7) Troubleshooting
 
-- **Tailwind classes not applying**: check `content` globs; ensure `index.css` is linked in `index.html`.
-- **404s in production for client‑side routes**: add the SPA fallback (see server example) or configure your static host’s rewrite rules.
-- **HMR not triggering**: ensure you started via `bun './**/*.html'` or a `Bun.serve()` with `development.hmr: true`.
-- **TypeScript module quirks**: Bun defaults to `"module": "Preserve"`; avoid incompatible TS transforms in your own config.
+- **Tailwind classes not applying**: check `content` globs; ensure `index.css`
+  is linked in `index.html`.
+- **404s in production for client‑side routes**: add the SPA fallback (see
+  server example) or configure your static host’s rewrite rules.
+- **HMR not triggering**: ensure you started via `bun './**/*.html'` or a
+  `Bun.serve()` with `development.hmr: true`.
+- **TypeScript module quirks**: Bun defaults to `"module": "Preserve"`; avoid
+  incompatible TS transforms in your own config.
 
 ---
 
@@ -236,10 +249,13 @@ bun build --compile ./index.html --outfile myapp
 ./myapp  # starts a server; routes can be added in code
 ```
 
-Use this for kiosk‑style SPAs or internal tools where “download and run” beats provisioning infra.
+Use this for kiosk‑style SPAs or internal tools where “download and run” beats
+provisioning infra.
 
 ---
 
 ## That’s it
 
-You’ve got: scaffold → dev server with HMR → Tailwind styling → production bundle → optional Bun‑served hosting. Compact, fast, and pleasantly free of yak‑hair.
+You’ve got: scaffold → dev server with HMR → Tailwind styling → production
+bundle → optional Bun‑served hosting. Compact, fast, and pleasantly free of
+yak‑hair.

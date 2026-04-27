@@ -2,24 +2,24 @@
 
 ## Route Structure
 
-| Path | Component | Description |
-| - | - | - |
-| `/` | Redirect | Redirects to `/welcome` |
-| `/welcome` | `WelcomeScreen` | Landing page with branding and value propositions |
-| `/discover` | `DiscoverScreen` | Interest selection onboarding |
-| `/explore` | `ExploreScreen` | Route catalogue and discovery |
-| `/customize` | `CustomizeScreen` | Walk customiser with preferences |
-| `/wizard` | Redirect | Redirects to `/wizard/step-1` |
-| `/wizard/step-1` | `WizardStepOne` | Route preferences wizard (step 1) |
-| `/wizard/step-2` | `WizardStepTwo` | Route preferences wizard (step 2) |
-| `/wizard/step-3` | `WizardStepThree` | Route preferences wizard (step 3) |
-| `/map` | Layout route | Wraps child routes with MapStateProvider |
-| `/map/quick` | `QuickWalkScreen` | Quick walk generation and preview |
-| `/map/itinerary` | `ItineraryScreen` | Detailed walk itinerary view |
-| `/saved` | `SavedScreen` | Saved walk details |
-| `/walk-complete` | `WalkCompleteScreen` | Walk completion summary |
-| `/offline` | `OfflineScreen` | Offline map manager |
-| `/safety-accessibility` | `SafetyAccessibilityScreen` | Safety preferences |
+| Path                    | Component                   | Description                                       |
+| ----------------------- | --------------------------- | ------------------------------------------------- |
+| `/`                     | Redirect                    | Redirects to `/welcome`                           |
+| `/welcome`              | `WelcomeScreen`             | Landing page with branding and value propositions |
+| `/discover`             | `DiscoverScreen`            | Interest selection onboarding                     |
+| `/explore`              | `ExploreScreen`             | Route catalogue and discovery                     |
+| `/customize`            | `CustomizeScreen`           | Walk customiser with preferences                  |
+| `/wizard`               | Redirect                    | Redirects to `/wizard/step-1`                     |
+| `/wizard/step-1`        | `WizardStepOne`             | Route preferences wizard (step 1)                 |
+| `/wizard/step-2`        | `WizardStepTwo`             | Route preferences wizard (step 2)                 |
+| `/wizard/step-3`        | `WizardStepThree`           | Route preferences wizard (step 3)                 |
+| `/map`                  | Layout route                | Wraps child routes with MapStateProvider          |
+| `/map/quick`            | `QuickWalkScreen`           | Quick walk generation and preview                 |
+| `/map/itinerary`        | `ItineraryScreen`           | Detailed walk itinerary view                      |
+| `/saved`                | `SavedScreen`               | Saved walk details                                |
+| `/walk-complete`        | `WalkCompleteScreen`        | Walk completion summary                           |
+| `/offline`              | `OfflineScreen`             | Offline map manager                               |
+| `/safety-accessibility` | `SafetyAccessibilityScreen` | Safety preferences                                |
 
 ## Navigation Groups
 
@@ -100,18 +100,18 @@ stateDiagram-v2
 
 ## Feature Modules
 
-| Feature | Route(s) | Key Components |
-| - | - | - |
-| Welcome | `/welcome` | `WelcomeScreen` |
-| Discover | `/discover` | `DiscoverScreen` |
-| Explore | `/explore` | `ExploreScreen` |
-| Customize | `/customize` | `CustomizeScreen` |
-| Wizard | `/wizard/*` | `WizardStepOne`, `WizardStepTwo`, `WizardStepThree` |
-| Map | `/map/*` | `QuickWalkScreen`, `ItineraryScreen` |
-| Saved | `/saved` | `SavedScreen` |
-| Walk Complete | `/walk-complete` | `WalkCompleteScreen` |
-| Offline | `/offline` | `OfflineScreen` |
-| Safety | `/safety-accessibility` | `SafetyAccessibilityScreen` |
+| Feature       | Route(s)                | Key Components                                      |
+| ------------- | ----------------------- | --------------------------------------------------- |
+| Welcome       | `/welcome`              | `WelcomeScreen`                                     |
+| Discover      | `/discover`             | `DiscoverScreen`                                    |
+| Explore       | `/explore`              | `ExploreScreen`                                     |
+| Customize     | `/customize`            | `CustomizeScreen`                                   |
+| Wizard        | `/wizard/*`             | `WizardStepOne`, `WizardStepTwo`, `WizardStepThree` |
+| Map           | `/map/*`                | `QuickWalkScreen`, `ItineraryScreen`                |
+| Saved         | `/saved`                | `SavedScreen`                                       |
+| Walk Complete | `/walk-complete`        | `WalkCompleteScreen`                                |
+| Offline       | `/offline`              | `OfflineScreen`                                     |
+| Safety        | `/safety-accessibility` | `SafetyAccessibilityScreen`                         |
 
 ## User Flows
 

@@ -1,10 +1,14 @@
 # Tailwind CSS v4 LLM Development Guidelines
 
-You are an expert web developer specializing in Tailwind CSS v4. Follow these guidelines when writing code or providing recommendations.
+You are an expert web developer specializing in Tailwind CSS v4. Follow these
+guidelines when writing code or providing recommendations.
 
 ## Core Principles
 
-Tailwind CSS v4 is a complete rewrite with a new high-performance Oxide engine, CSS-first configuration, and modern web platform features. It requires modern browsers (Safari 16.4+, Chrome 111+, Firefox 128+) and is NOT compatible with older browsers.
+Tailwind CSS v4 is a complete rewrite with a new high-performance Oxide engine,
+CSS-first configuration, and modern web platform features. It requires modern
+browsers (Safari 16.4+, Chrome 111+, Firefox 128+) and is NOT compatible with
+older browsers.
 
 ## Installation & Setup
 
@@ -19,12 +23,12 @@ Tailwind CSS v4 is a complete rewrite with a new high-performance Oxide engine, 
 
 ```js
 // vite.config.js
-import { defineConfig } from 'vite'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [tailwindcss()]
-})
+  plugins: [tailwindcss()],
+});
 ```
 
 ### Package Installation
@@ -35,7 +39,8 @@ npm install tailwindcss@next @tailwindcss/vite@next
 
 ## Configuration (CSS-First)
 
-**IMPORTANT**: v4 uses CSS-first configuration, NOT JavaScript config files. Use the `@theme` directive in your CSS file:
+**IMPORTANT**: v4 uses CSS-first configuration, NOT JavaScript config files. Use
+the `@theme` directive in your CSS file:
 
 ```css
 @import "tailwindcss";
@@ -45,30 +50,35 @@ npm install tailwindcss@next @tailwindcss/vite@next
   --color-brand-50: oklch(0.98 0.01 142.12);
   --color-brand-500: oklch(0.64 0.15 142.12);
   --color-brand-900: oklch(0.25 0.08 142.12);
-  
+
   /* Typography */
   --font-display: "Satoshi", "Inter", sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
-  
+
   /* Spacing */
   --spacing-18: 4.5rem;
   --spacing-72: 18rem;
-  
+
   /* Breakpoints */
   --breakpoint-3xl: 1920px;
   --breakpoint-4xl: 2560px;
-  
+
   /* Shadows */
   --shadow-brutal: 8px 8px 0px 0px #000;
-  
+
   /* Animation */
   --animate-wiggle: wiggle 1s ease-in-out infinite;
 }
 
 /* Define keyframes for animations */
 @keyframes wiggle {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
 }
 ```
 
@@ -123,7 +133,7 @@ Use the `@utility` directive instead of `@layer utilities`:
 @utility btn-primary {
   background: var(--color-blue-600);
   color: white;
-  
+
   &:hover {
     background: var(--color-blue-700);
   }
@@ -199,9 +209,7 @@ Use the `@utility` directive instead of `@layer utilities`:
 ### Text Shadows
 
 ```html
-<h1 class="text-shadow-lg text-shadow-blue-500/50">
-  Text with colored shadow
-</h1>
+<h1 class="text-shadow-lg text-shadow-blue-500/50">Text with colored shadow</h1>
 ```
 
 ### Mask Utilities
@@ -222,31 +230,25 @@ Use the `@utility` directive instead of `@layer utilities`:
 </div>
 ```
 
-#### not-* variant
+#### not-\* variant
 
 ```html
-<div class="bg-blue-500 not-hover:bg-gray-500">
-  Blue except when hovering
-</div>
+<div class="bg-blue-500 not-hover:bg-gray-500">Blue except when hovering</div>
 ```
 
-#### nth-* variants
+#### nth-\* variants
 
 ```html
-<div class="nth-2:bg-red-500 nth-odd:bg-blue-500">
-  Nth child styling
-</div>
+<div class="nth-2:bg-red-500 nth-odd:bg-blue-500">Nth child styling</div>
 ```
 
 #### inert variant
 
 ```html
-<div class="inert:opacity-50 inert:pointer-events-none">
-  Styled when inert
-</div>
+<div class="inert:opacity-50 inert:pointer-events-none">Styled when inert</div>
 ```
 
-#### in-*variant (like group-* but without group class)
+#### in-_variant (like group-_ but without group class)
 
 ```html
 <article>
@@ -276,14 +278,14 @@ v4 uses OKLCH color space for wider gamut support:
 }
 
 @layer base {
-  [data-theme='dark'] {
+  [data-theme="dark"] {
     --color-primary: oklch(0.7 0.2 240);
     --color-background: oklch(0.15 0.02 240);
   }
-  
-  [data-theme='high-contrast'] {
-    --color-primary: oklch(0.0 0 0);
-    --color-background: oklch(1.0 0 0);
+
+  [data-theme="high-contrast"] {
+    --color-primary: oklch(0 0 0);
+    --color-background: oklch(1 0 0);
   }
 }
 ```
@@ -302,18 +304,14 @@ v4 uses OKLCH color space for wider gamut support:
 
 ```html
 <!-- Better contrast and vibrancy with OKLCH -->
-<div class="bg-blue-500 text-white">
-  Vivid colors on modern displays
-</div>
+<div class="bg-blue-500 text-white">Vivid colors on modern displays</div>
 ```
 
 ### 3. Container Queries for True Responsive Design
 
 ```html
 <div class="@container">
-  <div class="p-4 @lg:p-8 @xl:p-12">
-    Responds to container, not viewport
-  </div>
+  <div class="p-4 @lg:p-8 @xl:p-12">Responds to container, not viewport</div>
 </div>
 ```
 
@@ -321,14 +319,10 @@ v4 uses OKLCH color space for wider gamut support:
 
 ```html
 <!-- Native cascade layers -->
-<div class="layer-[utilities]:z-10">
-  Proper layer management
-</div>
+<div class="layer-[utilities]:z-10">Proper layer management</div>
 
 <!-- Color mixing -->
-<div class="bg-blue-500/50">
-  Uses color-mix() under the hood
-</div>
+<div class="bg-blue-500/50">Uses color-mix() under the hood</div>
 ```
 
 ## Performance Optimizations
@@ -378,7 +372,9 @@ src/
 ### Animation with @starting-style
 
 ```html
-<div class="translate-y-0 @starting-style:translate-y-full transition-transform duration-500">
+<div
+  class="translate-y-0 @starting-style:translate-y-full transition-transform duration-500"
+>
   Slides up on mount
 </div>
 ```
@@ -1458,7 +1454,8 @@ m-[12px], p-[24px], grid-cols-[200px_minmax(900px,_1fr)_100px]
 ### Leverage v4's Performance Features
 
 - Use automatic content detection (no manual `content` config needed)
-- Prefer container queries over viewport queries for true component responsiveness
+- Prefer container queries over viewport queries for true component
+  responsiveness
 - Use CSS variables from `@theme` for dynamic styling
 - Leverage the new OKLCH color system for better color consistency
 
@@ -1489,10 +1486,10 @@ m-[12px], p-[24px], grid-cols-[200px_minmax(900px,_1fr)_100px]
 ```svelte
 <script>
   let { variant = "primary", children } = $props();
-  
+
   const buttonClasses = $derived(() => [
     'px-4 py-2 rounded-md font-medium transition-colors',
-    variant === 'primary' 
+    variant === 'primary'
       ? 'bg-brand text-white hover:bg-brand/90'
       : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
   ].join(' '));
@@ -1515,7 +1512,8 @@ m-[12px], p-[24px], grid-cols-[200px_minmax(900px,_1fr)_100px]
 
 ### Browser DevTools Tips
 
-1. **Inspect CSS Variables**: Check `:root` in DevTools to see all theme variables
+1. **Inspect CSS Variables**: Check `:root` in DevTools to see all theme
+   variables
 2. **Check Cascade Layers**: Use the Layers panel to understand style precedence
 3. **Verify OKLCH Support**: Test colors in modern browsers vs fallbacks
 4. **Container Query Debugging**: Use the @container panel in DevTools
@@ -1544,7 +1542,8 @@ npm list | grep postcss
 
 - [ ] Backup your project
 - [ ] Ensure Node.js 20+ is installed
-- [ ] Check browser support requirements (Safari 16.4+, Chrome 111+, Firefox 128+)
+- [ ] Check browser support requirements (Safari 16.4+, Chrome 111+, Firefox
+      128+)
 
 ### Automated Migration
 
@@ -1577,18 +1576,26 @@ npx @tailwindcss/upgrade@next
 
 ```html
 <div class="@container group">
-  <article class="
+  <article
+    class="
     bg-white dark:bg-gray-900 
     rounded-xl shadow-sm border border-gray-200 dark:border-gray-800
     overflow-hidden transition-all duration-200
     hover:shadow-md hover:-translate-y-0.5
     @sm:flex @sm:items-center
-  ">
+  "
+  >
     <div class="@sm:flex-shrink-0">
-      <img class="h-48 w-full object-cover @sm:h-full @sm:w-48" src="..." alt="...">
+      <img
+        class="h-48 w-full object-cover @sm:h-full @sm:w-48"
+        src="..."
+        alt="..."
+      />
     </div>
     <div class="p-6 @sm:p-8">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white @lg:text-xl">
+      <h3
+        class="text-lg font-semibold text-gray-900 dark:text-white @lg:text-xl"
+      >
         Card Title
       </h3>
       <p class="mt-2 text-gray-600 dark:text-gray-300 @lg:text-lg">
@@ -1602,16 +1609,20 @@ npx @tailwindcss/upgrade@next
 ### 3D Interactive Button
 
 ```html
-<button class="
+<button
+  class="
   relative px-6 py-3 bg-blue-600 text-white font-medium rounded-lg
   transform-3d perspective-1000 
   transition-all duration-200
   hover:rotate-x-12 hover:scale-105 hover:shadow-xl
   active:scale-95 active:rotate-x-6
   focus:outline-none focus:ring-2 focus:ring-blue-500/50
-">
+"
+>
   3D Button
 </button>
 ```
 
-Remember: Tailwind CSS v4 is designed for modern browsers and modern development workflows. Embrace the new CSS-first approach and leverage the powerful new features for better performance and developer experience.
+Remember: Tailwind CSS v4 is designed for modern browsers and modern development
+workflows. Embrace the new CSS-first approach and leverage the powerful new
+features for better performance and developer experience.
