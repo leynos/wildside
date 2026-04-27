@@ -12,6 +12,110 @@ The primary source material is `docs/wildside-pwa-design.md`,
 in `../wildside-mockup-v2a`. The styling, testing, localization, and PWA
 constraints come from the supporting documents under `docs/`.
 
+The roadmap is a catalogue of correctly sized implementation tasks. It
+signposts authoritative design documents, ADRs, schemas, and API contracts
+through inline citations, but it is not the principal source of product policy,
+schema shape, platform, or UX requirements.
+
+## 0. Source-of-truth reconciliation before implementation
+
+Idea: if the front-end sources of truth are reconciled before foundational build
+work begins, implementation tasks can cite stable design authority instead of
+accumulating decisions inside the roadmap.
+
+This phase catalogues the documentation reconciliation work needed before the
+roadmap is used as an implementation queue. It keeps design decisions in design
+documents or ADRs, resolves known inconsistencies where older PWA material
+differs from the v2a stack direction, and then refreshes roadmap citations so
+later phases remain task-focused.
+
+### 0.1. Catalogue authority, overlaps, and contradictions
+
+This step answers which document owns each front-end requirement and where
+contradictions need a design-document or ADR update. The outcome informs the
+source documents that phases 1-5 should cite.
+
+- [ ] 0.1.1. Build a front-end source authority catalogue.
+  - Classify `docs/v2a-front-end-stack.md`,
+    `docs/wildside-pwa-design.md`, `docs/wildside-pwa-data-model.md`,
+    `docs/wildside-ux-state-graph-v0.1.json`, `docs/sitemap.md`,
+    `spec/openapi.json`, `spec/asyncapi.yaml`, and relevant ADRs as
+    authoritative, supporting, superseded, or needing reconciliation per topic.
+  - Record that `docs/v2a-front-end-stack.md` takes precedence where it conflicts
+    with older PWA platform guidance.
+  - Success: every platform, data, UX-state, API, and styling topic referenced by
+    this roadmap has one named authoritative source or a named reconciliation
+    follow-up.
+- [ ] 0.1.2. Catalogue contradictions and duplicated requirements.
+  - Requires 0.1.1.
+  - Review the v2a stack, accessible PWA guide, semantic Tailwind/DaisyUI guide,
+    Wildside PWA design, Wildside PWA data model, UX state graph, sitemap, and
+    API specs for conflicting or duplicated requirements.
+  - Label each finding as "update design document", "merge into PWA design",
+    "update data model", "write ADR", or "roadmap citation fix".
+  - Success: no finding is resolved by adding requirement prose only to this
+    roadmap.
+
+### 0.2. Move decisions into the right design authority
+
+This step answers which inconsistencies can be settled in existing design
+documents and which require a separate ADR. The outcome informs the concrete
+implementation tasks in phases 1-4.
+
+- [ ] 0.2.1. Reconcile PWA platform guidance under the v2a stack direction.
+  - Requires 0.1.2.
+  - Update, merge, or supersede `docs/wildside-pwa-design.md` so PWA platform
+    requirements align with `docs/v2a-front-end-stack.md` on stack ownership,
+    local-first persistence, MapLibre, localization, semantic styling, and test
+    tooling.
+  - See `docs/v2a-front-end-stack.md` §§Overview, State management, Map stack,
+    and Testing and verification stack; and `docs/wildside-pwa-design.md`.
+  - Success: later roadmap tasks can cite one current PWA design source for
+    platform implementation requirements.
+- [ ] 0.2.2. Formalize substantive platform policy decisions as ADRs.
+  - Requires 0.1.2.
+  - Write ADRs, rather than roadmap prose, for decisions that affect long-lived
+    platform policy, such as client-state ownership, service-worker/deployment
+    scope, cache and persistence versioning, outbox retry semantics, map tile
+    provider strategy, or test-gate policy.
+  - See `docs/v2a-front-end-stack.md`,
+    `docs/building-accessible-and-responsive-progressive-web-applications.md`,
+    and `docs/wildside-pwa-design.md`.
+  - Success: each substantive policy choice is either documented in a design
+    document section small enough to own it clearly or linked from a dedicated
+    ADR.
+- [ ] 0.2.3. Reconcile schema and contract inconsistencies in source documents.
+  - Requires 0.1.2.
+  - Update `docs/wildside-pwa-data-model.md`, OpenAPI, AsyncAPI, or their owning
+    design notes for schema-shape and contract gaps before implementation tasks
+    depend on them.
+  - Include known reconciliation areas such as localized media alt text,
+    narrative-snippet cache state, feedback/reporting contracts, offline
+    mutation types, and route-plan persistence metadata.
+  - Success: implementation tasks cite schemas and contracts that already contain
+    the relevant field shapes, event shapes, and mutation semantics.
+
+### 0.3. Refresh the roadmap after authority is settled
+
+This step answers whether the roadmap remains an implementation catalogue after
+the design sources are cleaned up. The outcome unblocks phase 1 without using the
+roadmap as a hidden design document.
+
+- [ ] 0.3.1. Replace decision prose in later phases with citations.
+  - Requires steps 0.1-0.2.
+  - Audit phases 1-5 for wording that makes the roadmap the primary source of a
+    requirement, policy, schema shape, or UX rule.
+  - Convert those passages into implementation tasks that cite the authoritative
+    design document, ADR, API spec, or UX graph section.
+  - Success: each task still has measurable acceptance criteria, but the
+    underlying requirement lives in a cited source document.
+- [ ] 0.3.2. Recheck dependencies after reconciliation.
+  - Requires 0.3.1.
+  - Update task dependencies where ADRs, design-document merges, schema updates,
+    or contract updates now gate implementation.
+  - Success: no phase 1-5 task depends on an unresolved design contradiction or
+    undocumented policy decision.
+
 ## 1. Foundational front-end contracts and build spine
 
 Idea: if the front-end settles its runtime stack, route-state contract,
