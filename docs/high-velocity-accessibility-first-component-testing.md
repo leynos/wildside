@@ -35,7 +35,7 @@ Required coverage for reusable components:
 - accessible name and role for the primary interactive element,
 - keyboard-operable state changes,
 - disabled, loading and error states,
-- localisation-sensitive labels or formatted values, and
+- localization-sensitive labels or formatted values, and
 - focus behaviour where the component owns focus movement.
 
 ### 1.2 Node and JSDOM accessibility scans
@@ -87,10 +87,10 @@ The expected behaviour is:
 - route changes focus the main heading or main landmark after navigation, and
 - no keyboard trap exists outside components that intentionally contain focus.
 
-### 3.2.3 Localisation and direction tests
+### 3.2.3 Localization and direction tests
 
 Locale tests should validate document `lang`, `dir`, translated UI chrome,
-entity localisation fallback and long-string layout resilience. Right-to-left
+entity localization fallback and long-string layout resilience. Right-to-left
 coverage should be added when an RTL locale enters the supported locale set.
 
 ## IV. Semantic test conventions
@@ -129,7 +129,7 @@ core smoke suite already covers the release-blocking flows.
 - [ ] Playwright covers keyboard navigation, focus management and route
       announcements.
 - [ ] Theme and viewport checks catch colour contrast and responsive regressions.
-- [ ] Localisation checks cover at least one non-default locale for each major
+- [ ] Localization checks cover at least one non-default locale for each major
       registry-driven surface.
 - [ ] Snapshot updates require deliberate review.
 

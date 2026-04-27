@@ -136,9 +136,9 @@ a component must adapt to the space allocated by its parent.
 - [ ] Radix state is reflected through `data-*` or ARIA selectors.
 - [ ] `@apply` is limited to Tailwind utilities.
 - [ ] Repeated product concepts use small semantic wrappers.
-- [ ] Tests query controls by accessible role, name or label.
+- [ ] Tests query controls by accessible role, name, or label.
 
-## 11. Tokens and daisyUI roles
+## 10. Tokens and daisyUI roles
 
 Primitive token values belong in `packages/tokens/`. Semantic roles map those
 values to daisyUI variables such as `--color-primary`, `--color-base-100` and

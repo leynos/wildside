@@ -65,7 +65,7 @@ Key points about Tailwind CSS v4 migration as of May 2025.
 1. **Configuration File Shift:**
    - While `tailwind.config.js` can still be used for plugin definitions or
      complex setups (loaded via `@config "path/to/config.js";`), theme
-     customisation (colours, spacing, fonts, breakpoints) should primarily occur
+     customization (colours, spacing, fonts, breakpoints) should primarily occur
      in CSS via `@theme`.
    - The `content` array for source file scanning is still primarily configured
      through JS config if used, or Tailwind attempts automatic detection. Use
@@ -83,10 +83,12 @@ Key points about Tailwind CSS v4 migration as of May 2025.
      like `border-gray-200` if the v3 default grey was assumed.
    - Default ring colour is `currentColor` (was `blue-500`).
 4. **Selector Modifications:**
-   - `space-x-*`/`space-y-*` utilities now use `margin-bottom`/`margin-right` on
-     `:not(:last-child)` for performance. This might affect inline elements or
-     layouts with existing tweaked margins. Flex/grid `gap` is often a better
-     alternative.
+   - `space-x-*` and `space-y-*` utilities now use logical margins applied to
+     children via the `:where(...):not(:last-child)` selector. `space-x-*` uses
+     `margin-inline-start` and `margin-inline-end`; `space-y-*` uses
+     `margin-block-start` and `margin-block-end`. This improves right-to-left
+     behaviour. Flex and grid `gap` remain recommended alternatives for most
+     layouts.
    - Variant stacking order is now left-to-right (e.g.,
      `dark:md:hover:bg-red-500`) for CSS-like consistency.
 5. **Custom Utility Definition:**
@@ -149,7 +151,7 @@ Key points about Tailwind CSS v4 migration as of May 2025.
 
 1. **Preprocessors (Sass/Less/Stylus):**
    - Not designed for use with Tailwind v4. Tailwind itself, with its CSS-native
-     features and internal processing via Lightning CSS, fulfills most
+     features and internal processing via Lightning CSS, fulfils most
      preprocessor roles.
 2. **`theme()` Function in CSS:**
    - Deprecated. Use `var(--css-variable-name)` instead. For media queries where

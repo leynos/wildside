@@ -5,7 +5,7 @@ full copy of the upstream component reference. Use the official daisyUI
 documentation for exhaustive component markup, modifier lists and browser
 support details: <https://daisyui.com/docs/>.
 
-## daisyUI 5 install notes
+## daisyUI 5 installation notes
 
 Wildside should load daisyUI through Tailwind v4 CSS configuration:
 
@@ -100,8 +100,10 @@ come from the Wildside token source.
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
 
-  --size-selector: 0.25rem; /* Keep at 0.25rem unless a larger selector is intentional. If so, use 0.28125rem or 0.3125rem. */
-  --size-field: 0.25rem; /* Keep at 0.25rem unless a larger field is intentional. If so, use 0.28125rem or 0.3125rem. */
+  /* Keep at 0.25rem unless larger selectors are intentional. */
+  --size-selector: 0.25rem;
+  /* Keep at 0.25rem unless larger fields are intentional. */
+  --size-field: 0.25rem;
 
   --border: 1px;
   --depth: 1;

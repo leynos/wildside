@@ -8,7 +8,7 @@
 | `/welcome`              | `WelcomeScreen`             | Landing page with branding and value propositions |
 | `/discover`             | `DiscoverScreen`            | Interest selection onboarding                     |
 | `/explore`              | `ExploreScreen`             | Route catalogue and discovery                     |
-| `/customize`            | `CustomizeScreen`           | Walk customiser with preferences                  |
+| `/customize`            | `CustomizeScreen`           | Walk customizer with preferences                  |
 | `/wizard`               | Redirect                    | Redirects to `/wizard/step-1`                     |
 | `/wizard/step-1`        | `WizardStepOne`             | Route preferences wizard (step 1)                 |
 | `/wizard/step-2`        | `WizardStepTwo`             | Route preferences wizard (step 2)                 |
@@ -29,7 +29,7 @@ The map-related screens share a common bottom navigation:
 
 - **Map** (`/map/quick`) - Quick walk generation
 - **Discover** (`/explore`) - Route catalogue
-- **Routes** (`/customize`) - Walk customiser
+- **Routes** (`/customize`) - Walk customizer
 - **Profile** (`/offline`) - Offline settings
 
 ### Nested Routes
@@ -44,6 +44,11 @@ The `/map` layout route provides shared state via `MapStateProvider`:
 
 ## State Transition Diagram
 
+The diagram summarizes the main PWA journey from Welcome through discovery,
+route customization, map review, saved routes, offline downloads, and safety
+settings. Most transitions either advance the route-generation flow or return
+users to the map-backed route review surface.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Welcome: App launch
@@ -52,7 +57,7 @@ stateDiagram-v2
     Discover --> Explore: Start exploring
 
     Explore --> WizardStep1: Start wizard
-    Explore --> Customize: Quick customise
+    Explore --> Customize: Quick customize
     Explore --> SafetyAccessibility: Settings
 
     Customize --> MapQuick: Generate route
@@ -69,7 +74,7 @@ stateDiagram-v2
 
     MapQuick --> Itinerary: View details
     MapQuick --> Saved: Save route
-    MapQuick --> WizardStep1: Customise
+    MapQuick --> WizardStep1: Customize
     MapQuick --> Offline: Download
 
     Itinerary --> MapQuick: Back
@@ -85,17 +90,17 @@ stateDiagram-v2
 
     note right of Welcome
         Entry point (redirects from /)
-    \nend note
+    end note
 
     note right of MapQuick
         Primary map view
         Shared MapStateProvider
-    \nend note
+    end note
 
     note right of WizardStep3
         Route preview and
-        final customisation
-    \nend note
+        final customization
+    end note
 ```
 
 ## Feature Modules

@@ -7,24 +7,24 @@
 Progressive Web Applications (PWAs) represent a paradigm shift in web
 development, leveraging modern web platform capabilities to deliver user
 experiences that are reliable, fast, and engaging, rivaling those of
-platform-specific native applications.^1^ A PWA is not a distinct technology or
+platform-specific native applications.[^1] A PWA is not a distinct technology or
 framework but rather a design philosophy and a set of technical criteria built
 upon standard web technologies---HTML, CSS, and JavaScript---and powered by a
-specific suite of Web APIs.^4^ Deployed on web servers and accessed via HTTPS,
+specific suite of Web APIs.[^4] Deployed on web servers and accessed via HTTPS,
 PWAs can be discovered by search engines, shared via a simple URL, and installed
 on a user's device directly from the browser or an application store, all from a
-single codebase.^1^ This unified development approach presents a compelling
+single codebase.[^1] This unified development approach presents a compelling
 value proposition, significantly reducing the cost and complexity associated
 with building and maintaining separate applications for different platforms like
-Android, iOS, and various desktop operating systems.^1^
+Android, iOS, and various desktop operating systems.[^1]
 
 The core of a PWA's power lies in its ability to bridge the gap between the web
 and native environments. It can be installed on a device, appearing with its own
 icon on the home screen or taskbar, and can be launched as a standalone
-application without the browser's user interface.^1^ Functionally, PWAs can
+application without the browser's user interface.[^1] Functionally, PWAs can
 operate when the device is offline, receive push notifications, perform
 background data synchronization, and access device hardware through APIs like
-WebBluetooth and WebUSB, capabilities once exclusive to native applications.^1^
+WebBluetooth and WebUSB, capabilities once exclusive to native applications.[^1]
 
 ### Establishing the Three Pillars of Excellence
 
@@ -39,21 +39,21 @@ applications.
    ability to provide a consistent and dependable experience, regardless of
    network conditions. This includes the capacity to work offline, load
    instantly from a local cache, be installable on user devices, and leverage
-   advanced web APIs to offer native-like functionalities.^1^
+   advanced web APIs to offer native-like functionalities.[^1]
 
 2. **Adaptability & Reach (RWD):** This pillar is defined by the principles of
    Responsive Web Design (RWD). It ensures that the application provides an
    optimal viewing, interaction, and navigation experience across the vast and
    ever-expanding ecosystem of devices. The PWA must intelligently adapt its
    layout and functionality to fit any screen size and input method, from a
-   small smartphone to a large desktop monitor.^6^
+   small smartphone to a large desktop monitor.[^6]
 
 3. **Inclusivity & Robustness (Accessibility):** This pillar addresses the
    ethical, legal, and commercial imperative to ensure that the application is
    usable by everyone, including people with disabilities. It involves a
    commitment to adhering to established international standards, primarily the
    W3C's Web Content Accessibility Guidelines (WCAG), to create an experience
-   that is perceivable, operable, understandable, and robust for all users.^9^
+   that is perceivable, operable, understandable, and robust for all users.[^9]
 
 These pillars are not independent objectives to be addressed in isolation; they
 are deeply interconnected and mutually reinforcing. A responsive design is a
@@ -78,11 +78,11 @@ application.
 
 The philosophical foundation that unifies these three pillars is **progressive
 enhancement**. Coined alongside the term "Progressive Web App" itself, this web
-development strategy is central to the PWA concept.^2^ It dictates that
+development strategy is central to the PWA concept.[^2] It dictates that
 development should begin with a baseline of content and functionality that is
 universally accessible to all browsers. From this solid foundation, more
 advanced features and a richer user experience are layered on for browsers and
-devices that can support them.^11^
+devices that can support them.[^11]
 
 In the context of this guide, progressive enhancement means:
 
@@ -100,7 +100,7 @@ possible audience. It inherently supports both responsiveness---by starting with
 a simple, mobile-friendly layout and enhancing it for larger screens---and
 accessibility---by ensuring the fundamental content and structure are semantic
 and available to assistive technologies before any complex scripting is
-applied.^2^
+applied.[^2]
 
 ## Section 1: The Architectural Foundation of a Progressive Web App
 
@@ -113,17 +113,17 @@ PWA.
 ### 1.1 The Web App Manifest: Crafting the Application's Identity
 
 The Web App Manifest is a JSON-based file, defined by a W3C specification, that
-serves as the application's identity card.^5^ It provides developers with a
+serves as the application's identity card.[^5] It provides developers with a
 centralized location to place metadata that informs the browser and the
 underlying operating system how the PWA should appear and behave when installed
-and launched.^15^ This manifest is the primary technical requirement that makes
-a web application installable, distinguishing it from a simple bookmark.^16^
+and launched.[^15] This manifest is the primary technical requirement that makes
+a web application installable, distinguishing it from a simple bookmark.[^16]
 
 #### Linking the Manifest
 
 To associate the manifest with a web application, it must be linked from all
 HTML pages from which a user might install the PWA. This is accomplished by
-adding a `<link>` element within the `<head>` of the document.^14^
+adding a `<link>` element within the `<head>` of the document.[^14]
 
 HTML
 
@@ -136,36 +136,36 @@ The web server should be configured to serve the manifest file with the
 `Content-Type` header of `application/manifest+json`. While browsers often
 support other JSON-compatible MIME types like `application/json` and file
 extensions like `.json`, the official extension specified by the standard is
-`.webmanifest`.^14^ If the manifest file requires credentials for access, the
+`.webmanifest`.[^14] If the manifest file requires credentials for access, the
 `crossorigin="use-credentials"` attribute must be included in the `<link>`
-tag.^14^
+tag.[^14]
 
 #### Core Members for Installability
 
 While the manifest specification includes numerous members, a specific subset is
 required for a PWA to meet the baseline installability criteria in most modern
-browsers.^5^
+browsers.[^5]
 
 - **`name` and/or `short_name`**: At least one of these must be present. `name`
   is the full name of the application, used in contexts like the app store
   listing or installation prompt. `short_name` is a shorter version, intended
   for display where space is limited, such as beneath the app icon on a home
-  screen.^5^
+  screen.[^5]
 
 - **`icons`**: An array of image objects that define the application's icons for
   various contexts (home screen, splash screen, task switcher, etc.). To ensure
   broad compatibility, this array must include at least a 192x192 pixel icon and
-  a 512x512 pixel icon.^5^
+  a 512x512 pixel icon.[^5]
 
 - **`start_url`**: The URL that the application should load when launched from
   the installed icon. This is typically the root of the application or a
-  specific entry point.^5^
+  specific entry point.[^5]
 
 - **`display`**: Defines the developer's preferred display mode for the
   application. For a native-like, standalone experience, this should be set to
   `standalone`, `fullscreen`, or `minimal-ui`. A value of `standalone` is most
   common, as it hides most of the browser UI, such as the address bar and
-  navigation buttons.^5^
+  navigation buttons.[^5]
 
 #### Enhancing the User Experience
 
@@ -174,23 +174,23 @@ recommended to create a more polished and integrated user experience.
 
 - **`scope`**: Defines the navigation scope of the PWA. Any URL outside of this
   scope will cause navigation to revert to a standard browser tab, effectively
-  defining the boundaries of the application.^13^
+  defining the boundaries of the application.[^13]
 
 - **`background_color` and `theme_color`**: These members allow for theming of
   the application's presentation. `background_color` defines a placeholder
   background color that is displayed before the application's stylesheet has
   loaded, creating a smoother transition on startup. `theme_color` suggests a
   color for the user agent to use in its UI, such as the address bar or taskbar,
-  helping the PWA feel more integrated with the host operating system.^3^
+  helping the PWA feel more integrated with the host operating system.[^3]
 
 - **`description`**: A string that provides a more detailed explanation of the
   application's purpose, which may be used in contexts like app store
-  listings.^17^
+  listings.[^17]
 
 - **`shortcuts`**: An array of objects that define a list of common actions or
   deep links within the application. These can be exposed by the operating
   system in contexts like an app's context menu (e.g., via a long-press on the
-  app icon), allowing users to jump directly to key features.^3^
+  app icon), allowing users to jump directly to key features.[^3]
 
 #### Iconography Best Practices
 
@@ -199,54 +199,30 @@ image objects, each with `src`, `sizes`, and `type` properties. To ensure icons
 render correctly across the diverse Android ecosystem and other platforms, a
 `maskable` icon should be provided. A maskable icon is designed with a "safe
 zone" that guarantees important parts of the icon will not be clipped when the
-operating system applies an arbitrary shape mask.^17^ This is specified by
+operating system applies an arbitrary shape mask.[^17] This is specified by
 setting `purpose` to `"maskable"` in the icon's definition.
 
 It is also advisable to avoid transparency in icons. Operating systems like iOS,
 iPadOS, and modern Android versions may fill transparent areas with an
-uncontrollable background color, leading to unexpected visual results.^17^
+uncontrollable background color, leading to unexpected visual results.[^17]
 Providing a square, non-transparent icon ensures consistent presentation. While
 providing icons in sizes 192x192 and 512x512 is the minimum, it is best practice
 to also include larger resolutions, such as 1024x1024, to accommodate
-high-resolution displays.^17^
+high-resolution displays.[^17]
 
-| **Member**    | **Purpose**                                       | **Example Value**                                                                               | **Best Practice/Accessibility Note**                              |
-| ------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `name`        | The full name of the application.                 | `"My Awesome PWA"`                                                                              | Should be descriptive and unique.                                 |
-| `short_name`  | A shorter name for display on home screens.       | `"AwesomePWA"`                                                                                  | Keep it concise, ideally under 12-15 characters.                  |
-| `description` | A brief explanation of the application's purpose. | `"A PWA that demonstrates best practices."`                                                     | Provides context for users in app stores or installation prompts. |
-| `icons`       | Array of icons for different contexts.            | `[{"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]` | Include sizes and purpose metadata for install surfaces.          |
-
-Provide at least 192x192 and 512x512 pixel icons. Include a `maskable` icon for
-better compatibility on Android. Avoid transparency.^17^
-
-| | `start_url` | The entry point URL when the app is launched. |
-`"/index.html"` | Should point to a page that is available offline. | |
-`display` | Defines the display mode. | `"standalone"` |
-
-Use `standalone` for an app-like feel that hides browser UI. `fullscreen` and
-`minimal-ui` are other options.^5^
-
-| | `scope` | Defines the navigation scope of the PWA. | `"/app/"` |
-
-Restricts the PWA to a specific URL path. Navigating outside this scope opens a
-regular browser tab.^13^
-
-| | `theme_color` | Sets the color of the browser UI/toolbar. | `"#3367D6"` |
-Creates a more integrated, native-like appearance. | | `background_color` |
-Placeholder background for the splash screen. | `"#FFFFFF"` | Improves perceived
-performance by showing a colored background before the CSS loads. | |
-`shortcuts` | Defines common app actions for OS integration. |
-`[{"name": "New Item", "url": "/new"}]` |
-
-Provides quick access to key features from the app's context menu.^3^
-
-| | `id` | A unique identifier for the PWA. | `"/app/"` |
-
-Helps uniquely identify the PWA, preventing conflicts if multiple PWAs are
-hosted on the same origin. Often mirrors the `start_url`.^17^
-
-|
+| **Property**       | **Description**                                         | **Example**                                                                                     | **Notes**                                                                                |
+| ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `name`             | Full name of the application.                           | `"My Awesome PWA"`                                                                              | Should be descriptive and unique.                                                        |
+| `short_name`       | Shorter name for display on home screens.               | `"AwesomePWA"`                                                                                  | Keep it concise, ideally under 12-15 characters.                                         |
+| `description`      | Brief explanation of the application's purpose.         | `"A PWA that demonstrates best practices."`                                                     | Provides context for users in app stores or installation prompts.                        |
+| `icons`            | Icons for home screen, splash screen, and app switcher. | `[{"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]` | Include 192x192 and 512x512 icons, plus a `maskable` icon. Avoid transparency.[^17]      |
+| `start_url`        | Entry point URL when the app is launched.               | `"/index.html"`                                                                                 | Should point to a page that is available offline.                                        |
+| `display`          | Preferred display mode.                                 | `"standalone"`                                                                                  | `standalone` hides browser UI; `fullscreen` and `minimal-ui` are other options.[^5]      |
+| `scope`            | Navigation scope of the PWA.                            | `"/app/"`                                                                                       | Navigating outside this scope opens a regular browser tab.[^13]                          |
+| `theme_color`      | Browser UI and toolbar colour.                          | `"#3367D6"`                                                                                     | Creates a more integrated, native-like appearance.                                       |
+| `background_color` | Placeholder background for the splash screen.           | `"#FFFFFF"`                                                                                     | Improves perceived performance by showing a coloured background before CSS loads.        |
+| `shortcuts`        | Common app actions for operating-system integration.    | `[{"name": "New Item", "url": "/new"}]`                                                         | Provides quick access to key features from the app's context menu.[^3]                   |
+| `id`               | Unique identifier for the PWA.                          | `"/app/"`                                                                                       | Prevents conflicts if multiple PWAs share an origin. Often mirrors the `start_url`.[^17] |
 
 ### 1.2 The Service Worker: An Introduction
 
@@ -254,14 +230,14 @@ hosted on the same origin. Often mirrors the `start_url`.^17^
 
 The second core component of a PWA is the service worker. A service worker is a
 specialized type of Web Worker, essentially a JavaScript file that the browser
-runs in the background on a separate thread from the main web page.^19^ This
+runs in the background on a separate thread from the main web page.[^19] This
 separation is crucial: because it does not run on the main thread, it is
-non-blocking and cannot directly access the Document Object Model (DOM).^21^ Its
+non-blocking and cannot directly access the Document Object Model (DOM).[^21] Its
 event-driven, fully asynchronous nature, which relies heavily on Promises,
-allows it to handle tasks without freezing the user interface.^19^
+allows it to handle tasks without freezing the user interface.[^19]
 
 Fundamentally, a service worker acts as a programmable network proxy that sits
-between the web application, the browser, and the network (when available).^19^
+between the web application, the browser, and the network (when available).[^19]
 This unique position allows it to intercept, inspect, and respond to all network
 requests originating from the pages it controls.
 
@@ -272,44 +248,44 @@ This proxying capability unlocks the defining features of a PWA:
 - **Offline Experience:** By intercepting network requests, a service worker can
   serve responses from a cache instead of the network. This enables the creation
   of robust offline-first experiences, where the application remains functional
-  even with an unreliable or non-existent internet connection.^5^
+  even with an unreliable or non-existent internet connection.[^5]
 
 - **Background Features:** Because it runs in the background, a service worker
   can listen for and respond to events even when the PWA is not open in a
   browser tab. This is the mechanism that enables features like receiving push
   notifications from a server and executing background data synchronization
-  tasks.^2^
+  tasks.[^2]
 
 - **Performance Enhancement:** By strategically caching assets, a service worker
   can significantly improve load times on subsequent visits, providing an
-  instant, app-like launch experience.^24^
+  instant, app-like launch experience.[^24]
 
 #### The App Shell Model
 
 A highly effective and widely adopted architectural pattern for PWAs is the
-**App Shell Model**.^5^ This model separates the application's core
+**App Shell Model**.[^5] This model separates the application's core
 infrastructure---the "shell"---from its dynamic content. The shell consists of
 the minimal HTML, CSS, and JavaScript required to render the user interface
-(e.g., the header, navigation, and main layout structure).^24^
+(e.g., the header, navigation, and main layout structure).[^24]
 
 In this pattern, the service worker pre-caches the entire app shell during the
 `install` event on the user's first visit. On subsequent visits, the service
 worker intercepts the navigation request and immediately serves the shell from
 the cache, resulting in a near-instantaneous load time. Once the shell is
 rendered, JavaScript is executed to fetch the dynamic content for the specific
-page from the network or a separate data cache.^24^ This approach provides a
+page from the network or a separate data cache.[^24] This approach provides a
 fast, reliable startup experience and greatly improves perceived performance,
-making the web application feel more like a native app.^24^
+making the web application feel more like a native app.[^24]
 
 ### 1.3 Security as a Prerequisite: The Role of HTTPS
 
 A foundational and non-negotiable requirement for all PWA technologies, and for
 service workers in particular, is that they must be served over a secure
-connection using HTTPS.^4^ This is a strict security mandate enforced by all
+connection using HTTPS.[^4] This is a strict security mandate enforced by all
 modern browsers.
 
 The rationale for this requirement is to mitigate the risk of man-in-the-middle
-(MITM) attacks.^22^ A service worker's ability to intercept and modify every
+(MITM) attacks.[^22] A service worker's ability to intercept and modify every
 network request from its controlled pages is incredibly powerful. If a service
 worker were allowed to be registered over an insecure HTTP connection, an
 attacker on the same network could inject a malicious script. This malicious
@@ -317,14 +293,14 @@ service worker could then capture sensitive data, alter responses, or redirect
 users, creating a persistent and severe security vulnerability. By enforcing
 HTTPS, browsers ensure that the service worker script is delivered from the
 intended origin without tampering, guaranteeing content authenticity and user
-security.^5^
+security.[^5]
 
 For development purposes, browsers make an exception and treat
 `http://localhost` as a secure context, allowing developers to test PWA features
-locally without needing to set up a self-signed certificate.^4^ However, for any
+locally without needing to set up a self-signed certificate.[^4] However, for any
 publicly deployed PWA, HTTPS is mandatory. Services like Let's Encrypt provide
 free SSL/TLS certificates, making it straightforward for developers to secure
-their applications.^4^
+their applications.[^4]
 
 ## Section 2: Mastering the Service Worker: Lifecycle and Caching Strategies
 
@@ -338,13 +314,13 @@ implementing reliable caching and update mechanisms.
 The lifecycle of a service worker is intentionally designed to ensure
 consistency and prevent conflicts, guaranteeing that only one version of a site
 is active at any given time and that a page is controlled by the same worker
-throughout its lifetime.^26^
+throughout its lifetime.[^26]
 
 #### Registration
 
 The lifecycle begins when the main application script registers a service worker
 file using the `navigator.serviceWorker.register()` method. This method is
-asynchronous and returns a Promise.^19^
+asynchronous and returns a Promise.[^19]
 
 JavaScript
 
@@ -364,24 +340,24 @@ if ('serviceWorker' in navigator) {
 The `register()` method can take an optional `scope` parameter, which is a URL
 path that defines the subset of your site that the service worker can control.
 If omitted, the scope defaults to the directory containing the service worker
-script.^21^ For example, a worker at `/js/sw.js` would default to controlling
+script.[^21] For example, a worker at `/js/sw.js` would default to controlling
 pages under `/js/`.
 
 #### Installation
 
 Once registered, the browser downloads and parses the service worker script. If
 successful, the worker is executed, and the `install` event is dispatched. This
-event fires only once per service worker version.^21^ It is the critical window
+event fires only once per service worker version.[^21] It is the critical window
 of opportunity to prepare the service worker for use, most commonly by
-pre-caching the essential assets that form the application shell.^23^
+pre-caching the essential assets that form the application shell.[^23]
 
 The `install` event handler is passed an `ExtendableEvent` object, which has a
 `waitUntil()` method. This method takes a promise and tells the browser's event
 dispatcher to keep the service worker in the `installing` phase until that
 promise resolves. This is essential for ensuring that all caching operations are
-complete before the worker is considered successfully installed.^19^ If the
+complete before the worker is considered successfully installed.[^19] If the
 promise passed to `waitUntil()` rejects, the installation fails, the browser
-discards the service worker, and it will never become active.^26^
+discards the service worker, and it will never become active.[^26]
 
 JavaScript
 
@@ -409,20 +385,20 @@ self.addEventListener('install', event => {
 #### Activation
 
 After a successful installation, the service worker moves to the `installed`
-state and will subsequently receive an `activate` event.^19^ This event signals
+state and will subsequently receive an `activate` event.[^19] This event signals
 that the worker is ready to take control of clients. However, a newly installed
 service worker does not immediately control open pages. If an older version of
 the service worker is already active and controlling clients, the new worker
-will enter a "waiting" state.^19^ This is a crucial safety mechanism that
+will enter a "waiting" state.[^19] This is a crucial safety mechanism that
 prevents two different versions of the application logic from running
 simultaneously, which could corrupt caches or client-side databases. The new
 worker will only activate once all browser tabs controlled by the old worker
-have been closed or navigated away from.^19^
+have been closed or navigated away from.[^19]
 
 The `activate` event is the ideal time for housekeeping tasks, such as cleaning
 up caches that are no longer needed. By iterating through existing cache names
 and deleting any that do not match a whitelist of current caches, a developer
-can ensure that old, outdated assets are removed from the user's device.^19^
+can ensure that old, outdated assets are removed from the user's device.[^19]
 
 JavaScript
 
@@ -449,17 +425,17 @@ self.addEventListener('activate', event => {
 
 An update to a service worker is triggered when a user navigates to a page
 within its scope and the browser detects that the service worker file on the
-server is byte-different from the one it has installed.^26^ When this happens,
+server is byte-different from the one it has installed.[^26] When this happens,
 the new version of the worker is downloaded and its `install` event is fired. It
 then proceeds through the same lifecycle, typically entering the "waiting" state
 until the old worker is no longer in use, at which point it activates and takes
-over.^19^
+over.[^19]
 
 #### Taking Control: `skipWaiting()` and `clients.claim()`
 
 Developers can exert more direct control over the update process. By calling
 `self.skipWaiting()` within the `install` event, a new service worker can bypass
-the waiting state and activate as soon as its installation is complete.^21^ This
+the waiting state and activate as soon as its installation is complete.[^21] This
 immediately deactivates the old worker.
 
 JavaScript
@@ -478,24 +454,24 @@ pages by default; it will only control new pages that are loaded. To remedy
 this, `clients.claim()` can be called within the `activate` event. This method
 allows an active service worker to take immediate control of all open clients
 (pages) within its scope that are not currently being controlled by another
-worker.^21^ Together, `skipWaiting()` and `clients.claim()` provide a pattern
+worker.[^21] Together, `skipWaiting()` and `clients.claim()` provide a pattern
 for forcing an immediate update across all open tabs, though this should be used
 with caution as it can disrupt a user's session if the new application version
-is incompatible with the state of the currently loaded page.^26^
+is incompatible with the state of the currently loaded page.[^26]
 
 ### 2.2 The Cache API and Strategic Caching
 
 The heart of a PWA's offline capability lies in its ability to manage a cache.
 This is accomplished through the Cache API, which provides a storage mechanism
 for `Request` and `Response` object pairs that is fully scriptable and
-accessible within the scope of a service worker.^19^ It is important to note
+accessible within the scope of a service worker.[^19] It is important to note
 that this cache is entirely separate from the browser's standard HTTP cache and
-is not governed by HTTP caching headers like `Cache-Control`.^27^
+is not governed by HTTP caching headers like `Cache-Control`.[^27]
 
 #### The `fetch` Event
 
 Once a service worker is active and controlling a page, it gains the ability to
-intercept every network request made by that page through the `fetch` event.^19^
+intercept every network request made by that page through the `fetch` event.[^19]
 This includes navigation requests, requests for assets like CSS and images, and
 `fetch()` or `XMLHttpRequest` calls made from JavaScript.
 
@@ -504,8 +480,8 @@ The `fetch` event handler receives a `FetchEvent` object, which contains the
 take control of the request and provide a response. This method takes a Promise
 that resolves with a `Response` object. This response can be constructed
 manually, retrieved from the network using `fetch()`, or, most commonly,
-retrieved from the Cache API.^21^ If `event.respondWith()` is not called, the
-request proceeds to the network as if the service worker did not exist.^28^
+retrieved from the Cache API.[^21] If `event.respondWith()` is not called, the
+request proceeds to the network as if the service worker did not exist.[^28]
 
 JavaScript
 
@@ -543,7 +519,7 @@ involves a trade-off between freshness, reliability, and performance.
 | **Network First, falling back to Cache** | Attempts to fetch the response from the network. If the network fails (e.g., offline), it falls back to the cached version.                                               | Freshness is preferred, but having some (potentially stale) data is better than nothing when offline.                      | Application pages (HTML), frequently updated API data, user timelines.                                                            | **Pros:** Users get the most up-to-date content when online. **Cons:** Slower than cache-first when online, as it always makes a network request.                                                           |
 | **Stale-While-Revalidate**               | Responds immediately with the cached version (if available), then fetches an updated version from the network in the background to update the cache for the next request. | It is acceptable to serve slightly old content immediately for performance, while ensuring it gets updated for future use. | News feeds, product listings, social media content---resources where immediate display is more important than absolute freshness. | **Pros:** Provides the speed of a cache-first approach with the benefit of background updates. **Cons:** The user may see stale content on the first load after an update. Requires careful implementation. |
 
-Data synthesized from sources: ^26^
+Data synthesized from sources: [^26]
 
 ## Section 3: Engineering a Responsive, Multi-Device User Interface
 
@@ -551,7 +527,7 @@ A Progressive Web App must provide an excellent user experience on any device,
 from a small mobile phone to a widescreen desktop monitor. This adaptability is
 achieved through the principles and techniques of Responsive Web Design (RWD),
 which are not just a best practice but a core requirement for a successful
-PWA.^1^
+PWA.[^1]
 
 ### 3.1 The Mobile-First Mandate
 
@@ -560,19 +536,19 @@ PWA.^1^
 The **mobile-first** approach is a design and development strategy that has
 become central to modern RWD. It mandates that the design process begins with
 the smallest screen size and then progressively enhances the layout and features
-for larger screens.^6^ This methodology is more than just a workflow preference;
+for larger screens.[^6] This methodology is more than just a workflow preference;
 it enforces a disciplined focus on what is truly essential. The constraints of a
 small mobile screen force designers and developers to prioritize content and
 core functionality, leading to a cleaner, more efficient, and user-focused
-experience.^30^ This inherent content-first mindset directly benefits
+experience.[^30] This inherent content-first mindset directly benefits
 performance, as the baseline experience is lightweight and optimized for devices
-that may have limited processing power and slower network connections.^30^
+that may have limited processing power and slower network connections.[^30]
 
 #### The Viewport Meta Tag
 
 The foundational element for enabling any responsive design on mobile devices is
 the viewport `<meta>` tag. It must be included in the `<head>` of every HTML
-document.^7^
+document.[^7]
 
 HTML
 
@@ -584,35 +560,35 @@ HTML
 Without this tag, mobile browsers will attempt to render the page at a typical
 desktop screen width (e.g., 980 pixels) and then scale it down to fit the
 physical screen, resulting in a zoomed-out, unreadable page that requires users
-to pan and zoom.^7^ The `width=device-width` directive instructs the browser to
+to pan and zoom.[^7] The `width=device-width` directive instructs the browser to
 set the layout viewport's width to the actual width of the device's screen in
 device-independent pixels (DIPs). The `initial-scale=1` part ensures a 1:1
-relationship between CSS pixels and DIPs, preventing any initial zooming.^7^
+relationship between CSS pixels and DIPs, preventing any initial zooming.[^7]
 
 #### Core Principles of RWD
 
 The mobile-first strategy is implemented using three core technical ingredients
-originally defined by Ethan Marcotte.^7^
+originally defined by Ethan Marcotte.[^7]
 
 1. **Fluid Grids:** This principle involves building the page layout using
    relative units, such as percentages (`%`), viewport units (`vw`, `vh`), or
    the flexible fraction unit (`fr`) in CSS Grid, instead of fixed units like
-   pixels (`px`).^6^ This allows containers and columns to resize proportionally
+   pixels (`px`).[^6] This allows containers and columns to resize proportionally
    to the viewport, creating a layout that flows and adapts smoothly rather than
-   breaking at arbitrary points.^8^
+   breaking at arbitrary points.[^8]
 
 2. **Flexible Images:** To prevent images from breaking the fluid layout, they
    must also be flexible. The most common technique is to apply
    `max-width: 100%;` and `height: auto;` to images in CSS. This allows an image
    to scale down to fit within its container but prevents it from scaling up
-   beyond its intrinsic size, which would cause pixelation.^6^
+   beyond its intrinsic size, which would cause pixelation.[^6]
 
 3. **Media Queries:** Media queries are the mechanism that allows for more
    significant layout changes at different viewport sizes. They are a feature of
    CSS that allows styles to be applied conditionally based on the
    characteristics of the device, such as its width, height, orientation, or
-   resolution.^35^ The specific viewport widths at which a media query is
-   introduced to change the layout are known as **breakpoints**.^7^ In a
+   resolution.[^35] The specific viewport widths at which a media query is
+   introduced to change the layout are known as **breakpoints**.[^7] In a
    mobile-first approach, the base CSS contains the styles for the single-column
    mobile layout, and `min-width` media queries are used to add styles for
    larger screens.
@@ -643,17 +619,17 @@ Accessibility Guidelines (WCAG) 2.2 include Success Criterion 1.4.10: Reflow,
 which mandates that content can be presented without loss of information or
 functionality and without requiring scrolling in two dimensions (i.e.,
 horizontally and vertically) at a viewport width equivalent to 320 CSS
-pixels.^38^ This is, by its very definition, a requirement for a responsive
+pixels.[^38] This is, by its very definition, a requirement for a responsive
 layout. A fixed-width design would immediately fail this criterion on a mobile
 device. The core RWD techniques of fluid grids and flexible layouts are the
 primary methods for achieving compliance.
 
 Furthermore, WCAG 2.2 Success Criterion 2.5.8: Target Size (Minimum) requires
 that interactive elements have a minimum size to be easily activated by users
-with motor impairments or those using touch devices.^39^ The mobile-first design
+with motor impairments or those using touch devices.[^39] The mobile-first design
 philosophy, with its emphasis on creating large, "fat-finger-friendly" touch
 targets, directly aligns with and helps fulfill this accessibility
-requirement.^11^ Consequently, building a responsive PWA is an integral part of
+requirement.[^11] Consequently, building a responsive PWA is an integral part of
 the process of building an accessible one.
 
 ### 3.2 Modern Layout with CSS Flexbox and Grid
@@ -667,36 +643,36 @@ easier and more robust.
 
 CSS Flexible Box Layout, or Flexbox, is a layout model designed for distributing
 space and aligning items in a single dimension---either as a row or a
-column.^40^ To use Flexbox, one applies `display: flex` to a container element.
+column.[^40] To use Flexbox, one applies `display: flex` to a container element.
 Its direct children then become "flex items" that can be arranged along a main
-axis and a cross axis.^40^
+axis and a cross axis.[^40]
 
 Key properties like `justify-content` (for alignment on the main axis),
 `align-items` (for alignment on the cross axis), and the `flex` shorthand
 property (which controls `flex-grow`, `flex-shrink`, and `flex-basis`) give
 developers precise control over how items expand to fill space, shrink to fit,
-and are distributed within their container.^40^ Flexbox is exceptionally
+and are distributed within their container.[^40] Flexbox is exceptionally
 well-suited for component-level layouts, such as navigation bars, card layouts,
-and vertical centering of content.^45^
+and vertical centering of content.[^45]
 
 #### Grid for Two-Dimensional Layout
 
 CSS Grid Layout is a more powerful system designed for two-dimensional layout,
-controlling both rows and columns simultaneously.^46^ Applying `display: grid`
+controlling both rows and columns simultaneously.[^46] Applying `display: grid`
 to a container allows the developer to define a grid of columns and rows using
 the `grid-template-columns` and `grid-template-rows` properties.
 
 A key feature of Grid is the fractional (`fr`) unit, which represents a fraction
 of the available space in the grid container. This makes it simple to create
-flexible, proportional columns that adapt to the viewport.^46^ Grid is ideal for
+flexible, proportional columns that adapt to the viewport.[^46] Grid is ideal for
 overall page layout, enabling the creation of complex, magazine-style designs
-that were previously difficult to achieve on the web.^49^
+that were previously difficult to achieve on the web.[^49]
 
 #### Choosing Between Flexbox and Grid
 
 The choice between Flexbox and Grid is not a matter of which is "better," but
 which is the right tool for the specific layout task. The fundamental
-distinction is one of dimensionality ^51^:
+distinction is one of dimensionality [^51]:
 
 - Use **Flexbox** when you need to arrange items in a single line (a row or a
   column) and need control over their spacing and alignment within that line. It
@@ -708,7 +684,7 @@ distinction is one of dimensionality ^51^:
 It is common and effective practice to use both layout methods together. For
 instance, CSS Grid can be used to define the main regions of a page (header,
 sidebar, main content, footer), while Flexbox can be used within one of those
-regions to align the items in a navigation bar.^36^
+regions to align the items in a navigation bar.[^36]
 
 ### 3.3 Responsive Typography and Flexible Media
 
@@ -722,7 +698,7 @@ browser settings. For more dynamic scaling, the CSS `clamp()` function is a
 powerful modern tool. It allows a developer to set a minimum font size, a
 preferred size (often based on viewport width), and a maximum font size,
 creating a fluid transition between breakpoints without explicit media
-queries.^35^
+queries.[^35]
 
 CSS
 
@@ -739,7 +715,7 @@ h1 {
 While `max-width: 100%` prevents images from breaking the layout, it is
 inefficient from a performance perspective, as it forces a small mobile device
 to download a large, high-resolution image intended for a desktop screen. Modern
-HTML provides more sophisticated solutions.^36^
+HTML provides more sophisticated solutions.[^36]
 
 - **`srcset` attribute:** This attribute on the `<img>` tag allows you to
   provide a comma-separated list of different-sized versions of the same image.
@@ -751,7 +727,7 @@ HTML provides more sophisticated solutions.^36^
   direction." It allows a developer to serve completely different image files or
   formats based on media queries. For example, a wide landscape image on a
   desktop could be replaced with a tightly cropped portrait version on a mobile
-  device, ensuring the subject of the image remains clear and impactful.^36^
+  device, ensuring the subject of the image remains clear and impactful.[^36]
 
 HTML
 
@@ -775,16 +751,16 @@ component of its design and engineering.
 ### 4.1 Foundations in Semantic HTML
 
 The most robust and sustainable path to an accessible application begins with
-the correct use of semantic HTML.^52^ Semantic HTML means using elements for
+the correct use of semantic HTML.[^52] Semantic HTML means using elements for
 their intended purpose, which provides meaning and structure to the content.
 Assistive technologies, such as screen readers, rely on this semantic structure
 to interpret the page and provide a comprehensible experience to their
-users.^53^
+users.[^53]
 
 Using a `<button>` element for a button, for example, provides more than just
 default styling; it comes with built-in keyboard accessibility (focusable with
 `Tab`, activatable with `Enter` and `Space`) and communicates its role as a
-"button" to the browser's accessibility API.^52^ Replicating this functionality
+"button" to the browser's accessibility API.[^52] Replicating this functionality
 with a non-semantic `<div>` requires significant extra effort with JavaScript
 and ARIA attributes and is far more brittle.
 
@@ -797,20 +773,20 @@ This is achieved through two primary mechanisms:
    and logical outline of the page content. There should be only one `<h1>` per
    page, which typically matches the page title. Heading levels should not be
    skipped when descending the hierarchy (e.g., an `<h2>` should not be followed
-   directly by an `<h4>`).^52^ Screen reader users frequently use headings to
-   scan a page and navigate directly to the section they are interested in.^52^
+   directly by an `<h4>`).[^52] Screen reader users frequently use headings to
+   scan a page and navigate directly to the section they are interested in.[^52]
 
 2. **Landmark Roles:** HTML5 introduced several sectioning elements that act as
    "landmarks" on the page, such as `<header>`, `<nav>`, `<main>`, and
    `<footer>`. These elements programmatically identify the major regions of a
    page, allowing assistive technology users to quickly jump between them,
-   bypassing repetitive content like navigation menus.^52^
+   bypassing repetitive content like navigation menus.[^52]
 
 ### 4.2 Adhering to WCAG 2.2
 
 The Web Content Accessibility Guidelines (WCAG), developed by the W3C's Web
 Accessibility Initiative (WAI), are the internationally recognized standard for
-web accessibility.^9^ WCAG is organized under four core principles, known by the
+web accessibility.[^9] WCAG is organized under four core principles, known by the
 acronym POUR:
 
 - **Perceivable:** Information and user interface components must be presentable
@@ -825,10 +801,10 @@ acronym POUR:
   by a wide variety of user agents, including assistive technologies.
 
 For each principle, there are guidelines and testable success criteria at three
-levels of conformance: A (lowest), AA (mid-range), and AAA (highest).^10^ Level
+levels of conformance: A (lowest), AA (mid-range), and AAA (highest).[^10] Level
 AA is the most common target for legal and standards compliance. WCAG 2.2,
 published in October 2023, is the latest version and is backwards-compatible
-with previous versions.^10^
+with previous versions.[^10]
 
 #### Key WCAG 2.2 Level AA Requirements
 
@@ -838,36 +814,36 @@ success criteria are particularly relevant to modern PWAs:
 - **SC 1.4.3 Contrast (Minimum):** This criterion requires a contrast ratio of
   at least **4.5:1** for normal-sized text and **3:1** for large text against
   their background. Large text is defined as 18 point (typically 24px) or 14
-  point (typically 18.66px) and bold.^54^
+  point (typically 18.66px) and bold.[^54]
 
 - **SC 1.4.11 Non-text Contrast:** This requires a contrast ratio of at least
   **3:1** for user interface components (like input borders and focus
   indicators) and meaningful graphics (like icons or parts of a chart) against
-  adjacent colors.^54^
+  adjacent colors.[^54]
 
 - **SC 2.4.11 Focus Not Obscured (Minimum):** This new criterion in WCAG 2.2
   ensures that when an element receives keyboard focus, it is not entirely
   hidden by other content created by the author, such as sticky headers or
-  footers.^39^
+  footers.[^39]
 
 - **SC 2.5.7 Dragging Movements:** For any functionality that uses a dragging
   motion (like a slider or drag-and-drop interface), a single-pointer
   alternative (like tapping or clicking) must be available, unless dragging is
-  essential to the function.^39^
+  essential to the function.[^39]
 
 - **SC 3.3.8 Accessible Authentication (Minimum):** This criterion aims to
   reduce cognitive load during authentication by ensuring that there is an
   accessible, easy-to-use authentication method that does not rely on a
   cognitive function test (like solving a puzzle or memorizing a password), or
-  by providing a mechanism to assist with the test.^39^
+  by providing a mechanism to assist with the test.[^39]
 
 ### 4.3 ARIA for Dynamic Components
 
 Accessible Rich Internet Applications (ARIA) is a W3C specification that
 provides a set of attributes that can be added to HTML elements to enhance their
 semantics, particularly for custom user interface components and dynamic content
-updates.^58^ It is a powerful tool but should be used with caution. The first
-rule of ARIA is to use a native semantic HTML element if one exists.^59^ ARIA
+updates.[^58] It is a powerful tool but should be used with caution. The first
+rule of ARIA is to use a native semantic HTML element if one exists.[^59] ARIA
 should only be used to bridge the accessibility gaps that HTML cannot fill on
 its own.
 
@@ -888,7 +864,7 @@ PWAs frequently use custom components like navigation menus, tabbed interfaces,
 and accordions that have no direct native HTML equivalent. Making these
 components accessible requires a combination of appropriate ARIA attributes and
 JavaScript-driven keyboard interaction patterns, as defined in the WAI-ARIA
-Authoring Practices Guide (APG).^60^
+Authoring Practices Guide (APG).[^60]
 
 - **Navigation menu (dropdown):** Use a `<button>` to toggle the menu, followed
   by a `<ul>` containing `<li>` and `<a>` elements. The button should expose
@@ -896,27 +872,27 @@ Authoring Practices Guide (APG).^60^
   `aria-controls="[menu-id]"`. The list can use `role="menu"` and the links can
   use `role="menuitem"` where the component follows the full APG menu pattern.
   Enter, Space, and arrow keys open or move through the menu. Escape closes the
-  menu and returns focus to the button.^59^
+  menu and returns focus to the button.[^59]
 - **Tabs:** Use a tab container with `role="tablist"`, tab buttons with
   `role="tab"`, `aria-selected="true/false"`, and
   `aria-controls="[panel-id]"`, and panels with `role="tabpanel"` and matching
   IDs. Left and Right Arrow, or Up and Down Arrow for vertical tabs, navigate
   between tabs. Home and End move to the first and last tabs. Enter or Space
   activates a tab when tabs are not auto-activated. Tab moves focus into the
-  active panel.^64^
+  active panel.[^64]
 - **Accordion:** Use heading elements containing buttons, followed by associated
   content panels. Each button should expose `aria-expanded="true/false"` and
   `aria-controls="[panel-id]"`; each panel should use the matching ID. Enter and
   Space toggle the associated panel. Tab moves to the next focusable element.
-  Optional Up and Down Arrow support can navigate between accordion headers.^66^
+  Optional Up and Down Arrow support can navigate between accordion headers.[^66]
 
-Data synthesized from WAI-ARIA Authoring Practices Guide sources: ^59^
+Data synthesized from WAI-ARIA Authoring Practices Guide sources: [^59]
 
 ### 4.4 Keyboard Navigation and Focus Management
 
 A cornerstone of web accessibility is ensuring that all interactive
 functionality is operable through a keyboard alone, without requiring a
-mouse.^68^ This is essential for users with motor disabilities and screen reader
+mouse.[^68] This is essential for users with motor disabilities and screen reader
 users.
 
 #### Keyboard Operability
@@ -926,31 +902,31 @@ to the next interactive element, and `Shift+Tab` should move to the previous
 one. The `Enter` and `Space` keys should activate the focused element (e.g.,
 click a button, follow a link). For composite widgets like menus or radio
 groups, the arrow keys are typically used to navigate among the items within the
-widget once it has received focus.^68^
+widget once it has received focus.[^68]
 
 #### Logical Focus Order (SC 2.4.3)
 
 The sequence in which elements receive keyboard focus must be logical and
 predictable. In most cases, this means the focus order should follow the visual
 reading order of the page (e.g., left-to-right, top-to-bottom in Western
-languages).^68^ The most reliable way to achieve this is by ensuring the source
+languages).[^68] The most reliable way to achieve this is by ensuring the source
 order of elements in the HTML document is logical. Using the `tabindex`
 attribute with a positive integer (e.g., `tabindex="1"`, `tabindex="2"`) is
 strongly discouraged, as it creates a separate tab order that overrides the
 natural document flow and is extremely difficult to maintain, often leading to a
-confusing user experience.^73^
+confusing user experience.[^73]
 
 #### Visible Focus (SC 2.4.7)
 
 It must always be visually apparent which element on the page currently has
-keyboard focus.^69^ Browsers provide a default focus indicator (typically a blue
+keyboard focus.[^69] Browsers provide a default focus indicator (typically a blue
 outline), but this is often removed by developers for aesthetic reasons using
 CSS like `*:focus { outline: none; }`. This is a common and severe accessibility
-failure.^69^ If the default focus indicator is removed, it is the developer's
-responsibility to provide a clear, high-contrast replacement.^71^ The CSS
+failure.[^69] If the default focus indicator is removed, it is the developer's
+responsibility to provide a clear, high-contrast replacement.[^71] The CSS
 pseudo-class `:focus-visible` provides a modern solution, allowing developers to
 show a custom focus style only for keyboard-initiated focus, while hiding it for
-mouse clicks, satisfying both aesthetic and accessibility requirements.^71^
+mouse clicks, satisfying both aesthetic and accessibility requirements.[^71]
 
 ## Section 5: Advanced Patterns: Synthesizing PWA, RWD, and Accessibility
 
@@ -962,9 +938,9 @@ solve complex challenges in the modern web application landscape.
 
 Creating a functional offline PWA goes beyond simply caching assets with a
 service worker; it requires a thoughtful user experience (UX) design that
-clearly communicates the application's state and capabilities to the user.^76^
+clearly communicates the application's state and capabilities to the user.[^76]
 Users of installed applications expect them to work reliably, and managing
-expectations during periods of intermittent or no connectivity is crucial.^12^
+expectations during periods of intermittent or no connectivity is crucial.[^12]
 
 #### UX Patterns for Offline States
 
@@ -972,19 +948,19 @@ expectations during periods of intermittent or no connectivity is crucial.^12^
   feedback when the network connection is lost and when it is restored. This can
   be achieved through subtle UI changes, such as displaying a "toast"
   notification, an icon, or graying out features that are only available
-  online.^18^ This helps manage user expectations and prevents confusion.
+  online.[^18] This helps manage user expectations and prevents confusion.
 
 - **Meaningful Fallback Content:** Instead of displaying a generic browser error
   page, the PWA should serve meaningful content from the cache. This could be a
   dedicated offline page explaining the situation, a read-only version of
   previously viewed content (like cached news articles), or simply the
   application's main shell, allowing the user to navigate to other cached
-  sections.^18^
+  sections.[^18]
 
 - **Queueing Actions:** For interactive features like form submissions or
   sending messages, the application should allow the user to complete the action
   optimistically. The data is saved locally, and the UI provides feedback that
-  the action is queued and will be completed once connectivity returns.^18^ This
+  the action is queued and will be completed once connectivity returns.[^18] This
   pattern is technically enabled by the Background Sync API.
 
 - **Skeleton Screens:** To improve perceived performance during both initial
@@ -992,15 +968,15 @@ expectations during periods of intermittent or no connectivity is crucial.^12^
   are highly effective. These are placeholder UIs, often showing a wireframe or
   grayed-out version of the content that is about to load. This reassures the
   user that the application is working and provides a smoother visual transition
-  than a blank screen or a loading spinner.^18^
+  than a blank screen or a loading spinner.[^18]
 
 ### 5.2 State Management in Offline-First Applications
 
 In an offline-first PWA, the application's state---such as user-generated
 content, settings, or a shopping cart---must be reliably managed on the client
-side and persist across sessions, regardless of network status.^79^ The
+side and persist across sessions, regardless of network status.[^79] The
 challenge lies in storing this state locally and then synchronizing it
-accurately with a server when the network becomes available.^80^
+accurately with a server when the network becomes available.[^80]
 
 #### Client-Side Storage Mechanisms
 
@@ -1008,12 +984,12 @@ accurately with a server when the network becomes available.^80^
   is the standard and most powerful client-side storage solution. It is an
   asynchronous, transactional database built into the browser, making it ideal
   for persisting application state, user data, and cached API responses for
-  offline use.^3^
+  offline use.[^3]
 
 - **Cache API:** While IndexedDB is for data, the Cache API is specifically
   designed for storing `Request` and `Response` objects. It is the appropriate
   tool for caching the application shell, static assets, and network API
-  responses that can be replayed later.^82^
+  responses that can be replayed later.[^82]
 
 #### Synchronization Patterns
 
@@ -1022,7 +998,7 @@ accurately with a server when the network becomes available.^80^
   waiting for server confirmation. The state change is applied locally and
   queued for synchronization. In the background, the application attempts to
   send the update to the server. If the request fails, the local state can be
-  rolled back, and the user can be notified of the failure.^80^
+  rolled back, and the user can be notified of the failure.[^80]
 
 - **Centralized State Management:** For applications with complex state
   interactions, using a dedicated state management library (such as Redux for
@@ -1030,7 +1006,7 @@ accurately with a server when the network becomes available.^80^
   libraries provide a single, predictable "source of truth" for the
   application's state. They can be integrated with client-side storage like
   IndexedDB for persistence and offer structured ways (e.g., middleware,
-  effects) to handle the complex side effects of data synchronization.^79^
+  effects) to handle the complex side effects of data synchronization.[^79]
 
 ### 5.3 Accessible SPA Routing
 
@@ -1038,7 +1014,7 @@ Many PWAs are built as Single-Page Applications (SPAs), where "page" transitions
 are handled by JavaScript dynamically updating the DOM rather than through
 traditional full-page browser navigation. This model offers a fluid, app-like
 feel but breaks fundamental browser mechanisms that are critical for
-accessibility.^83^
+accessibility.[^83]
 
 #### The Accessibility Challenge of Client-Side Routing
 
@@ -1050,7 +1026,7 @@ new content may appear on the screen, but the page title remains the same, and
 the keyboard focus stays on the link that was just clicked. For a screen reader
 user, it is as if nothing has happened; they receive no announcement that the
 view has changed and are left stranded on an element from the previous
-"page".^84^
+"page".[^84]
 
 #### The Two-Part Solution
 
@@ -1060,7 +1036,7 @@ native behavior on every view change:
 1. **Update the Page Title:** Immediately after the new content is rendered, the
    page title must be updated via JavaScript to reflect the new view's content.
    This is essential for user orientation and is a requirement of WCAG SC 2.4.2
-   (Page Titled).^84^
+   (Page Titled).[^84]
 
    JavaScript
 
@@ -1075,14 +1051,14 @@ native behavior on every view change:
    `<h1>`) of the new content. To make a non-interactive element like a heading
    focusable, it should be given `tabindex="-1"`. This allows it to receive
    focus via JavaScript (`element.focus()`) without adding it to the natural
-   keyboard tab order.^71^ This action causes a screen reader to announce the
+   keyboard tab order.[^71] This action causes a screen reader to announce the
    new heading, informing the user of the view change and placing them at the
    start of the new content.
 
 A critical nuance is that this focus management should **only** occur on
 client-side route changes, **not** on the initial page load. Moving focus on the
 initial load can disorient users and prevent them from easily accessing content
-at the beginning of the document, such as "skip to main content" links.^85^
+at the beginning of the document, such as "skip to main content" links.[^85]
 
 ### 5.4 Leveraging Advanced APIs (Push & Background Sync)
 
@@ -1090,35 +1066,35 @@ at the beginning of the document, such as "skip to main content" links.^85^
 
 The Push API and Notifications API work in tandem with a service worker to allow
 a PWA to subscribe to, receive, and display system-level notifications from a
-server.^87^ This is a powerful tool for re-engagement, but it must be used
+server.[^87] This is a powerful tool for re-engagement, but it must be used
 responsibly to be effective and accessible.
 
 The key to accessible push notifications is a respectful and context-aware
 permission model. A PWA should never request notification permission immediately
 on page load, as users lack the context to make an informed decision and are
-likely to deny the request.^89^ Instead, the permission prompt should be
+likely to deny the request.[^89] Instead, the permission prompt should be
 triggered by a user action that clearly indicates an interest in receiving
 updates, such as subscribing to a topic or completing a purchase. The
 notification content itself should be concise, clear, and provide tangible value
-to the user.^87^
+to the user.[^87]
 
 #### Background Sync API
 
 The Background Sync API provides the technical foundation for the "queueing
 actions" UX pattern discussed earlier. It allows a PWA to defer a
-network-dependent action until the user has a stable internet connection.^20^
+network-dependent action until the user has a stable internet connection.[^20]
 The application's front-end script can register a `sync` event with a unique tag
 name. The browser will then automatically trigger this event within the service
 worker when it detects that connectivity has been restored. The service worker's
 `sync` event handler can then attempt to process the queued data, such as
-sending a form submission that was made while offline.^80^ This creates a more
+sending a form submission that was made while offline.[^80] This creates a more
 resilient and reliable user experience.
 
 For tasks that need to happen periodically, such as a news app pre-fetching the
 latest articles every morning, the **Periodic Background Sync API** can be used.
 This allows the app to register a task to run at regular intervals, which the
 browser will execute in the background when conditions are optimal (e.g., the
-device is on Wi-Fi and has sufficient battery).^92^
+device is on Wi-Fi and has sufficient battery).[^92]
 
 ## Section 6: Auditing, Testing, and Continuous Improvement
 
@@ -1131,14 +1107,14 @@ tools and indispensable manual testing procedures.
 
 Lighthouse, an open-source tool from Google integrated directly into Chrome
 DevTools, is the industry-standard starting point for auditing a web
-application.^95^ It runs a series of automated checks against a given URL and
+application.[^95] It runs a series of automated checks against a given URL and
 generates a report with scores and actionable recommendations across several key
 categories.
 
 #### PWA-Specific Audits
 
 The Lighthouse "Progressive Web App" category specifically checks for the
-technical requirements of a PWA. The audits are grouped into subcategories ^96^:
+technical requirements of a PWA. The audits are grouped into subcategories [^96]:
 
 - **Fast and Reliable:** Verifies that the PWA loads quickly on slow networks
   and that both the current page and the manifest's `start_url` respond with a
@@ -1153,7 +1129,7 @@ technical requirements of a PWA. The audits are grouped into subcategories ^96^:
   and having a valid viewport tag.
 
 Passing these audits is a prerequisite for a PWA to be considered installable by
-Chrome and other browsers.^97^
+Chrome and other browsers.[^97]
 
 #### Holistic Quality Audits
 
@@ -1162,19 +1138,19 @@ on **Performance**, **Accessibility**, and **SEO**. A high-quality PWA must
 score well in all these areas. The accessibility audit, in particular, can
 automatically detect common issues like insufficient color contrast, missing
 image alt text, and improper ARIA role usage, providing a crucial first pass on
-inclusivity.^96^
+inclusivity.[^96]
 
 ### 6.2 Essential Manual Testing
 
 Automated tools are powerful but have significant limitations; they cannot
 assess the quality of alt text, the logical flow of a user experience, or
 whether all functionality is truly operable. Manual testing is therefore an
-essential and non-negotiable part of the quality assurance process.^83^
+essential and non-negotiable part of the quality assurance process.[^83]
 
 #### Keyboard-Only Navigation Testing
 
 A comprehensive keyboard accessibility test is one of the most effective manual
-checks a developer can perform. The process is straightforward ^69^:
+checks a developer can perform. The process is straightforward [^69]:
 
 1. **Disconnect the Mouse:** To avoid temptation, unplug or disable the mouse
    and trackpad.
@@ -1195,14 +1171,14 @@ checks a developer can perform. The process is straightforward ^69^:
    a component (like a modal dialog or a third-party widget) but cannot be moved
    out again using the keyboard. Ensure that focus can always be moved out of
    every component, and that modal dialogs can be dismissed with the `Escape`
-   key.^70^
+   key.[^70]
 
 #### Screen Reader Testing
 
 While full usability testing should be conducted with experienced screen reader
 users, developers can and should perform basic checks to catch obvious errors.
 Using a free screen reader like NVDA on Windows or VoiceOver on macOS, a
-developer should perform the following checks ^52^:
+developer should perform the following checks [^52]:
 
 1. **Listen to Announcements:** Navigate the page and listen to how key elements
    are announced. Does a link sound like a link? Is a button identified as a
@@ -1222,41 +1198,27 @@ This checklist provides a structured framework for conducting a comprehensive
 quality assurance review of a PWA, combining automated checks with essential
 manual testing procedures.
 
-| **Category**           | **Check**                                                                     | **Method** | **Key Tool/Technique** |
-| ---------------------- | ----------------------------------------------------------------------------- | ---------- | ---------------------- |
-| **PWA Installability** | Manifest has `name`/`short_name`, `icons` (192, 512), `start_url`, `display`. | Automated  | Lighthouse PWA Audit   |
+| **Category**           | **Check**                                                                     | **Method** | **Key Tool/Technique**               |
+| ---------------------- | ----------------------------------------------------------------------------- | ---------- | ------------------------------------ |
+| **PWA Installability** | Manifest has `name`/`short_name`, `icons` (192, 512), `start_url`, `display`. | Automated  | Lighthouse PWA Audit                 |
+| **PWA Installability** | Site is served over HTTPS.                                                    | Automated  | Lighthouse PWA Audit                 |
+| **PWA Installability** | Registers a service worker.                                                   | Automated  | Lighthouse PWA Audit                 |
+| **PWA Reliability**    | `start_url` responds with a 200 status code when offline.                     | Automated  | Lighthouse PWA Audit                 |
+| **Perceivable**        | All non-decorative images have descriptive `alt` text.                        | Manual     | Code Review, Screen Reader           |
+| **Perceivable**        | Colour contrast for text and UI components meets WCAG AA levels.              | Automated  | Lighthouse, DevTools Inspector       |
+| **Perceivable**        | Content reflows to a single column at 320px width without horizontal scroll.  | Manual     | Browser Resizing                     |
+| **Operable**           | All interactive functionality is operable with a keyboard.                    | Manual     | Keyboard-Only Testing                |
+| **Operable**           | A visible focus indicator is always present for the active element.           | Manual     | Keyboard-Only Testing                |
+| **Operable**           | Focus order is logical and follows the visual layout.                         | Manual     | Keyboard-Only Testing                |
+| **Operable**           | No keyboard traps exist, especially in modals or complex widgets.             | Manual     | Keyboard-Only Testing                |
+| **Operable**           | Focus is correctly managed on client-side route changes.                      | Manual     | Keyboard and Screen Reader           |
+| **Understandable**     | Page `title` is updated on every client-side route change.                    | Manual     | Browser Tab, Screen Reader           |
+| **Understandable**     | A logical heading structure (`<h1>`-`<h6>`) is used.                          | Manual     | Code Review, Screen Reader           |
+| **Understandable**     | Dynamic content changes and status messages are announced to screen readers.  | Manual     | Screen Reader Testing                |
+| **Robust**             | HTML is well-formed and uses semantic elements where appropriate.             | Manual     | Code Review, W3C Validator           |
+| **Robust**             | ARIA roles, states, and properties are used correctly on custom components.   | Manual     | Code Review, Accessibility Inspector |
 
-|\
- | Site is served over HTTPS. | Automated | Lighthouse PWA Audit | |\
- | Registers a service worker. | Automated | Lighthouse PWA Audit | | **PWA
-Reliability** | `start_url` responds with a 200 status code when offline. |
-Automated | Lighthouse PWA Audit | |\
- | Page provides a custom offline fallback experience. | Manual | DevTools
-Offline Mode | | **Perceivable** | All non-decorative images have descriptive
-`alt` text. | Manual | Code Review, Screen Reader | |\
- | Color contrast for text and UI components meets WCAG AA levels. | Automated |
-Lighthouse, DevTools Inspector | |\
- | Content reflows to a single column at 320px width without horizontal scroll.
-| Manual | Browser Resizing | | **Operable** | All interactive functionality is
-operable with a keyboard. | Manual | Keyboard-Only Testing | |\
- | A visible focus indicator is always present for the active element. | Manual
-| Keyboard-Only Testing | |\
- | Focus order is logical and follows the visual layout. | Manual |
-Keyboard-Only Testing | |\
- | No keyboard traps exist, especially in modals or complex widgets. | Manual |
-Keyboard-Only Testing | |\
- | Focus is correctly managed on client-side route changes. | Manual | Keyboard
-& Screen Reader | | **Understandable** | Page `title` is updated on every
-client-side route change. | Manual | Browser Tab, Screen Reader | |\
- | A logical heading structure (`<h1>`-`<h6>`) is used. | Manual | Code Review,
-Screen Reader | |\
- | Dynamic content changes and status messages are announced to screen readers.
-| Manual | Screen Reader Testing | | **Robust** | HTML is well-formed and uses
-semantic elements where appropriate. | Manual | Code Review, W3C Validator | |\
- | ARIA roles, states, and properties are used correctly on custom components. |
-Manual | Code Review, Accessibility Inspector |
-
-Data synthesized from sources: ^69^
+Data synthesized from sources: [^69]
 
 ### 6.3 Deployment and Beyond
 
@@ -1308,3 +1270,69 @@ testing---developers can build Progressive Web Applications that live up to
 their name. They can create experiences that are not only as capable as native
 applications but also more reachable, more adaptable, and fundamentally more
 inclusive, embodying the web's greatest strengths.
+
+## Footnotes
+
+[^1]: Reference 1 from the source material used to compile this standards-focused PWA guide.
+[^4]: Reference 4 from the source material used to compile this standards-focused PWA guide.
+[^6]: Reference 6 from the source material used to compile this standards-focused PWA guide.
+[^9]: Reference 9 from the source material used to compile this standards-focused PWA guide.
+[^2]: Reference 2 from the source material used to compile this standards-focused PWA guide.
+[^11]: Reference 11 from the source material used to compile this standards-focused PWA guide.
+[^5]: Reference 5 from the source material used to compile this standards-focused PWA guide.
+[^15]: Reference 15 from the source material used to compile this standards-focused PWA guide.
+[^16]: Reference 16 from the source material used to compile this standards-focused PWA guide.
+[^14]: Reference 14 from the source material used to compile this standards-focused PWA guide.
+[^13]: Reference 13 from the source material used to compile this standards-focused PWA guide.
+[^3]: Reference 3 from the source material used to compile this standards-focused PWA guide.
+[^17]: Reference 17 from the source material used to compile this standards-focused PWA guide.
+[^19]: Reference 19 from the source material used to compile this standards-focused PWA guide.
+[^21]: Reference 21 from the source material used to compile this standards-focused PWA guide.
+[^24]: Reference 24 from the source material used to compile this standards-focused PWA guide.
+[^22]: Reference 22 from the source material used to compile this standards-focused PWA guide.
+[^26]: Reference 26 from the source material used to compile this standards-focused PWA guide.
+[^23]: Reference 23 from the source material used to compile this standards-focused PWA guide.
+[^27]: Reference 27 from the source material used to compile this standards-focused PWA guide.
+[^28]: Reference 28 from the source material used to compile this standards-focused PWA guide.
+[^30]: Reference 30 from the source material used to compile this standards-focused PWA guide.
+[^7]: Reference 7 from the source material used to compile this standards-focused PWA guide.
+[^8]: Reference 8 from the source material used to compile this standards-focused PWA guide.
+[^35]: Reference 35 from the source material used to compile this standards-focused PWA guide.
+[^38]: Reference 38 from the source material used to compile this standards-focused PWA guide.
+[^39]: Reference 39 from the source material used to compile this standards-focused PWA guide.
+[^40]: Reference 40 from the source material used to compile this standards-focused PWA guide.
+[^45]: Reference 45 from the source material used to compile this standards-focused PWA guide.
+[^46]: Reference 46 from the source material used to compile this standards-focused PWA guide.
+[^49]: Reference 49 from the source material used to compile this standards-focused PWA guide.
+[^51]: Reference 51 from the source material used to compile this standards-focused PWA guide.
+[^36]: Reference 36 from the source material used to compile this standards-focused PWA guide.
+[^52]: Reference 52 from the source material used to compile this standards-focused PWA guide.
+[^53]: Reference 53 from the source material used to compile this standards-focused PWA guide.
+[^10]: Reference 10 from the source material used to compile this standards-focused PWA guide.
+[^54]: Reference 54 from the source material used to compile this standards-focused PWA guide.
+[^58]: Reference 58 from the source material used to compile this standards-focused PWA guide.
+[^59]: Reference 59 from the source material used to compile this standards-focused PWA guide.
+[^60]: Reference 60 from the source material used to compile this standards-focused PWA guide.
+[^64]: Reference 64 from the source material used to compile this standards-focused PWA guide.
+[^66]: Reference 66 from the source material used to compile this standards-focused PWA guide.
+[^68]: Reference 68 from the source material used to compile this standards-focused PWA guide.
+[^73]: Reference 73 from the source material used to compile this standards-focused PWA guide.
+[^69]: Reference 69 from the source material used to compile this standards-focused PWA guide.
+[^71]: Reference 71 from the source material used to compile this standards-focused PWA guide.
+[^76]: Reference 76 from the source material used to compile this standards-focused PWA guide.
+[^12]: Reference 12 from the source material used to compile this standards-focused PWA guide.
+[^18]: Reference 18 from the source material used to compile this standards-focused PWA guide.
+[^79]: Reference 79 from the source material used to compile this standards-focused PWA guide.
+[^80]: Reference 80 from the source material used to compile this standards-focused PWA guide.
+[^82]: Reference 82 from the source material used to compile this standards-focused PWA guide.
+[^83]: Reference 83 from the source material used to compile this standards-focused PWA guide.
+[^84]: Reference 84 from the source material used to compile this standards-focused PWA guide.
+[^85]: Reference 85 from the source material used to compile this standards-focused PWA guide.
+[^87]: Reference 87 from the source material used to compile this standards-focused PWA guide.
+[^89]: Reference 89 from the source material used to compile this standards-focused PWA guide.
+[^20]: Reference 20 from the source material used to compile this standards-focused PWA guide.
+[^92]: Reference 92 from the source material used to compile this standards-focused PWA guide.
+[^95]: Reference 95 from the source material used to compile this standards-focused PWA guide.
+[^96]: Reference 96 from the source material used to compile this standards-focused PWA guide.
+[^97]: Reference 97 from the source material used to compile this standards-focused PWA guide.
+[^70]: Reference 70 from the source material used to compile this standards-focused PWA guide.

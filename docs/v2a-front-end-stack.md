@@ -1,25 +1,26 @@
 # v2a front-end stack
 
-This document describes the df12 Productions v2a front-end stack as used in the
-Wildside and Corbusier mockups in two layers:
+This document describes the Wildside front-end stack in two layers:
 
-- the stack currently declared and wired in the checked-in mockup on
-  `origin/main`, and
+- the stack currently declared and wired in `frontend-pwa/package.json`, and
 - the fuller v2a application stack described elsewhere in this repository’s
   design and architecture documents.
 
-That distinction matters because the mockup already exercises much of the UI,
-styling, routing, localization, and map stack, while the broader product
-architecture adds local-first data and orchestration tooling that is not yet
-fully declared in the current `package.json`.
+That distinction matters because the repository currently contains a minimal
+PWA shell, while the broader v2a product architecture adds routing,
+localization, map, local-first data, and orchestration tooling that is not yet
+fully declared in `frontend-pwa/package.json`.
 
 ## Overview
 
-Both Wildside and Corbusier are client-side single-page applications built on
-the same v2a front-end stack: Bun, Vite, React 19, TanStack Router, Tailwind CSS
-v4, and DaisyUI v5. They share Radix UI primitives for interactive components,
-i18next with Fluent translation bundles for localization, and a common
-data-model-driven card architecture for presenting domain entities.
+The current Wildside PWA is a client-side React application built with Bun,
+Vite `^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
+TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
+
+The fuller v2a target stack described by the roadmap and mockup adds TanStack
+Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent
+translation bundles, MapLibre GL JS, and the data-model-driven card
+architecture for presenting domain entities.
 
 The map canvas, tile rendering, and location-aware UI are specific to the
 Wildside product domain. They are part of the Wildside mockup because it models
@@ -28,20 +29,23 @@ family would need them.
 
 ## Stack layers at a glance
 
-### Checked-in mockup stack
+### Current `frontend-pwa` stack
 
-The current mockup implementation on `origin/main` uses:
+The current `frontend-pwa/package.json` declares:
 
 - Bun,
-- Vite 5,
+- Vite `^7.3.2`,
 - React 19,
-- TanStack Router,
-- Tailwind CSS v4,
-- DaisyUI v5,
-- Radix UI,
-- i18next plus Fluent,
-- MapLibre GL JS, and
-- the current test, lint, and type-check toolchain described below.
+- React DOM 18,
+- TanStack Query 5,
+- Tailwind CSS `^3`,
+- DaisyUI `^4`,
+- Zod 3,
+- clsx 2,
+- TypeScript 5,
+- Vitest 3,
+- Orval 8, and
+- the current build, lint, token, and type-check toolchain described below.
 
 ### Full v2a application stack
 
@@ -54,32 +58,32 @@ The fuller v2a stack described across the repo’s architecture documents adds:
 - **XState** for modelling more complex interaction and workflow orchestration
   where a reducer or plain context store becomes too implicit.
 
-In other words, the mockup shows the presentation and navigation layer already
-working, while the full product stack includes a richer local-first state and
-data architecture.
+In other words, the current PWA shell proves the build, token, API-client, and
+TanStack Query foundation, while the full product stack still needs the
+presentation, navigation, localization, map, and richer local-first state
+architecture.
 
 ## Runtime and build toolchain
 
 - **Package manager and runner:** Bun drives local scripts, tests, and token
   generation via `package.json` and `bunfig.toml`.
-- **Bundler and dev server:** Vite 5 is the application bundler and development
-  server.
+- **Bundler and dev server:** Vite `^7.3.2` is the application bundler and
+  development server.
 - **React integration:** `@vitejs/plugin-react` handles JSX and React Fast
   Refresh.
-- **Tailwind integration:** Tailwind v4 runs through `postcss.config.cjs`, which
-  Vite uses during both development and production builds.
+- **Tailwind integration:** Tailwind CSS `^3` runs through
+  `tailwind.config.js`, which consumes generated token presets and DaisyUI theme
+  output.
 - **Module format:** The project is ESM-only (`"type": "module"` in
   `package.json`).
-- **Base-path handling:** `vite.config.ts`, `src/i18n.ts`, and
-  `src/app/routes/app-routes.tsx` normalize `APP_BASE_PATH` and
-  `import.meta.env.BASE_URL` so the SPA can run correctly under a subpath such
-  as GitHub Pages.
+- **Token integration:** `vite.config.ts` wires a design-token plugin so token
+  outputs are generated before development, build, and preview workflows.
 
 In practice, the front-end entry path is:
 
 1. `src/main.tsx` boots React with `StrictMode` and `Suspense`.
 2. `src/app/app.tsx` wires global providers.
-3. `src/app/routes/app-routes.tsx` mounts the TanStack Router tree.
+3. `src/app/App.tsx` renders the current single-route shell.
 
 ## Core application framework
 
@@ -91,16 +95,9 @@ Suspense, and avoids rendering during tests.
 
 ### Routing
 
-Routing is handled by TanStack Router:
-
-- `src/app/routes/app-routes.tsx` creates the router.
-- `src/app/routes/route-tree.tsx` assembles the route tree.
-- Route modules live under `src/app/routes/`.
-
-The route tree is explicit and file-based in practice, even though it is wired
-manually rather than generated. Current route groups include welcome, discover,
-explore, customize, map, saved, wizard, walk-complete, offline, and
-safety-accessibility flows.
+The current PWA does not declare TanStack Router and still renders a single
+`App` shell. The v2a target route tree is planned by the roadmap and sitemap,
+but it is not yet implemented in `frontend-pwa`.
 
 ### State management
 
@@ -126,13 +123,14 @@ For the fuller v2a application stack, the state split is broader:
 
 ### Tailwind CSS and DaisyUI
 
-The styling stack is built on Tailwind CSS v4 and DaisyUI v5.
+The current styling stack is built on Tailwind CSS `^3`, DaisyUI `^4`, and the
+repository token package.
 
-- `src/index.css` imports Tailwind and the generated token CSS first, then
-  layers project-specific component and utility styles on top.
-- `tailwind.config.cjs` loads generated Tailwind theme extensions from
-  `tokens/dist/tailwind.theme.cjs`.
-- DaisyUI is registered as a Tailwind plugin in `tailwind.config.cjs`.
+- `src/index.css` imports `@app/tokens/css/variables.css` and the Tailwind layer
+  directives.
+- `tailwind.config.js` loads generated Tailwind presets from
+  `@app/tokens/dist/tw/preset.js`.
+- DaisyUI theme output is imported from `@app/tokens/dist/daisy/theme.js`.
 
 The styling approach is not utility-only. The project uses a hybrid of:
 
@@ -145,12 +143,12 @@ The styling approach is not utility-only. The project uses a hybrid of:
 
 Design tokens are a first-class part of the stack.
 
-- `tokens/build/style-dictionary.js` uses Style Dictionary to generate token
-  artefacts.
-- `bun run tokens:build` produces:
-  - `tokens/dist/tokens.css` for runtime CSS variables and theme output,
-  - `tokens/dist/tailwind.theme.cjs` for Tailwind theme extension data, and
-  - legacy helper artefacts under `tokens/dist/` for incidental tooling.
+- `packages/tokens/build/style-dictionary.js` uses Style Dictionary to generate
+  token artefacts.
+- `pnpm --filter @app/tokens build` produces:
+  - `packages/tokens/dist/css/variables.css` for runtime CSS variables,
+  - `packages/tokens/dist/tw/preset.js` for Tailwind preset data, and
+  - `packages/tokens/dist/daisy/theme.js` for DaisyUI theme data.
 - `vite.config.ts` watches the generated token outputs and triggers a full-page
   reload when they change.
 
@@ -171,62 +169,39 @@ framework:
 
 ### PostCSS
 
-`postcss.config.cjs` applies:
-
-- `@tailwindcss/postcss`,
-- `autoprefixer`, and
-- a small custom plugin that removes DaisyUI's `@property --radialprogress` rule
-  to avoid Lightning CSS warnings during Vite builds.
+The current PWA does not declare a project-level PostCSS configuration. Tailwind
+is wired through `tailwind.config.js`, and any future Tailwind v4 migration
+should document the new PostCSS or CSS-first integration in the same change that
+adds the dependency upgrade.
 
 ## Component primitives and icons
 
-The UI component layer uses Radix UI packages for interaction primitives,
-including dialogs, popovers, tabs, switches, sliders, selects, accordions, and
-toasts. The codebase also depends on:
+The current UI component layer does not declare Radix UI packages. The checked-in
+runtime depends on:
 
-- `@tabler/icons-react` for iconography,
-- `@radix-ui/react-icons` for supplemental icons, and
 - `clsx` for conditional class composition.
 
-This gives the repository a Radix-behaviour plus Tailwind/DaisyUI-presentation
-shape, rather than a single monolithic component framework.
+Radix primitives remain part of the v2a target stack and should be introduced
+through the roadmap task that reconciles the front-end platform design.
 
 ## Localization stack
 
-Localization is one of the more specialized parts of this stack.
-
-- `src/i18n.ts` configures `i18next`.
-- `react-i18next` integrates translations with React.
-- `i18next-fluent` and `i18next-fluent-backend` load Fluent `.ftl` bundles.
-- Locale files live in `public/locales/<locale>/common.ftl`.
-- `src/app/i18n/supported-locales.ts` defines supported locales and direction
-  metadata.
-
-The current detection order is intentionally narrow:
-
-- query string first, then
-- `localStorage`.
-
-Navigator-based detection is deliberately excluded to keep first loads more
-deterministic. The runtime also updates `lang`, `dir`, and related attributes on
-the document so right-to-left languages such as Arabic and Hebrew are handled
-correctly.
+The current PWA does not declare i18next, React i18next, or Fluent packages.
+Localization is a v2a target capability and should be introduced with the
+entity and UI-chrome localization tasks in the roadmap.
 
 ## Map stack
 
-Interactive map views use MapLibre GL JS, but this should be understood as a
-domain-specific layer rather than a foundational part of the general front-end
-stack. The map, tile, and location elements exist because Wildside is a
-map-based application with itinerary, quick-walk, and saved-route flows.
+The current PWA does not declare MapLibre GL JS. Interactive map views are a
+Wildside v2a target capability for itinerary, quick-walk, saved-route, tile, and
+location flows.
 
-- The fuller map stack is expected to lazy-load `maplibre-gl` and its CSS.
-- OpenMapTiles-backed styling supplies the base map presentation.
-- The integration is expected to register the MapLibre RTL text plugin when the
+- The fuller map stack is expected to lazy-load `maplibre-gl` and its CSS when
+  that dependency is introduced.
+- OpenMapTiles-backed styling supplies the target base map presentation.
+- The target integration should register the MapLibre RTL text plugin when the
   runtime supports it.
 - Shared viewport and layer state should live in a dedicated map-state module.
-
-The map layer is therefore intended to be a real interactive map integration,
-not only a static mockup image.
 
 In the full v2a architecture, map-related persistence is also expected to touch
 the broader local-first stack:
@@ -243,53 +218,44 @@ The repository has a broader-than-average front-end verification setup.
 
 ### Unit and component tests
 
-- `bun test` is the primary unit and component test runner.
-- `tests/setup-happy-dom.ts` creates the DOM environment with Happy DOM.
-- React component tests use Testing Library packages.
-- `tests/setup-snapshot-guard.ts` fails the run if snapshots are left unchecked
-  or updated unexpectedly.
+- `vitest` is the current front-end test runner.
+- Root-level `make test-frontend` runs the front-end package tests through the
+  workspace scripts.
+- The richer v2a accessibility and Playwright harness is documented as roadmap
+  import work, not current `frontend-pwa` package state.
 
-### Accessibility-focused tests
+### Accessibility-focused and end-to-end tests
 
-There are two accessibility layers:
-
-- `bun run test:a11y` runs Vitest in a dedicated `jsdom` configuration for
-  `*.a11y.test.ts(x)` files.
-- `bun run test:e2e` runs Playwright tests, including `@axe-core/playwright`
-  sweeps against key routes.
-
-### End-to-end tests
-
-`playwright.config.ts` launches or reuses a Vite dev server, targets a mobile
-viewport, and runs the browser suite under Chromium. This fits the mobile-first
-nature of the mockup.
+The current `frontend-pwa/package.json` does not declare Testing Library,
+Happy DOM, Playwright, or `axe-core` packages. Those tools are part of the v2a
+target verification stack and should be imported through the roadmap tasks that
+cover lint, accessibility, and semantic testing gates.
 
 ## Linting, type-checking, and semantic checks
 
-The repo’s front-end quality stack goes beyond a simple formatter plus linter.
+The current repository quality stack uses Makefile entry points:
 
-- `bun fmt` runs Biome formatting.
-- `bun lint` runs Biome checks across source, tests, tools, and docs.
-- `bun check:types` runs strict TypeScript checking with `tsc --noEmit`.
-- `bun run semantic` layers on extra structural checks:
-  - class-list length and near-duplicate class scripts,
-  - Semgrep rules from `tools/semgrep-semantic.yml`, and
-  - Stylelint checks for CSS.
-- `bun run lint:ftl-vars` validates Fluent variable usage.
+- `make fmt` runs Rust formatting and Biome formatting for front-end packages.
+- `make lint-frontend` runs Biome checks for `frontend-pwa` and `packages`.
+- `make typecheck` runs `tsc --noEmit` for TypeScript workspaces.
+- `make markdownlint` validates Markdown using a local `markdownlint-cli2`
+  binary when present, with a pinned Bun fallback.
 
-The strict TypeScript settings in `tsconfig.json` include:
+The stricter v2a semantic checks, Stylelint rules, Semgrep rules, Fluent
+variable linting, and Playwright accessibility gates are roadmap import work.
+
+The current `frontend-pwa/tsconfig.json` includes:
 
 - `strict`,
-- `noUncheckedIndexedAccess`,
-- `exactOptionalPropertyTypes`,
-- `noImplicitOverride`, and
-- `noPropertyAccessFromIndexSignature`.
+- `moduleResolution: "Bundler"`,
+- `verbatimModuleSyntax`, and
+- `noEmit`.
 
 ## Data model-driven card architecture
 
 All v2a front ends — Wildside and Corbusier alike — share a common pattern for
 presenting domain entities on cards, lists, and detail screens. Entity models
-carry their own localised strings rather than delegating display-text
+carry their own localized strings rather than delegating display-text
 responsibility to the Fluent translation bundles. This keeps Fluent bundles
 focused on UI chrome (button labels, ARIA labels, section headings, format
 strings) while letting each entity own its names, descriptions, and badge text
@@ -323,7 +289,7 @@ free of null checks or conditional chains.
 ### Descriptor registries
 
 Stable internal identifiers (e.g. `task-status:in-progress`, `priority:high`)
-are resolved to localised display strings through descriptor registries. Each
+are resolved to localized display strings through descriptor registries. Each
 registry maps an identifier to a descriptor object whose labels are
 `LocalizedStringSet` values. This means that badge colours, icons, and display
 names for status values, priority levels, and similar enumerations are defined
@@ -338,7 +304,7 @@ The conventional folder layout is:
 - `src/data/entities/` — fixture data used during the mockup phase, structured
   to match the entity interfaces exactly.
 - `src/data/registries/` — descriptor registry modules that map stable
-  identifiers to localised descriptors.
+  identifiers to localized descriptors.
 
 ### Application-specific schemas
 
@@ -354,19 +320,17 @@ toward production data sources.
 For the shortest accurate summary of the checked-in mockup, the current
 front-end stack is:
 
-- Bun for package management, scripts, and the primary test runner,
-- Vite 5 for bundling and development,
+- Bun for scripts and package-manager-adjacent tooling,
+- Vite `^7.3.2` for bundling and development,
 - React 19 for the SPA runtime,
-- TanStack Router for routing,
-- Tailwind CSS v4 plus DaisyUI v5 for styling,
+- React DOM 18 for rendering,
+- TanStack Query 5 for server-state caching,
+- Tailwind CSS `^3` plus DaisyUI `^4` for current styling,
 - Style Dictionary for generated design tokens and themes,
-- Radix UI primitives for interactive components,
-- i18next plus Fluent for localization,
 - a data-model-driven card architecture for entity display strings,
-- MapLibre GL JS for map screens (Wildside only),
-- Biome, TypeScript, Stylelint, Semgrep, and custom scripts for code quality,
+- Biome, TypeScript, markdownlint, and Makefile validation for code quality,
   and
-- Happy DOM, Testing Library, Vitest, Playwright, and axe-core for testing.
+- Vitest for current front-end tests.
 
 For map/location-based applications specifically, add a domain layer atop that
 stack:
@@ -384,14 +348,18 @@ add:
 - XState for explicit interaction orchestration where state machines are
   warranted.
 
-## What is not currently declared in the checked-in mockup
+## What is not currently declared in `frontend-pwa`
 
-To avoid confusion, the following section refers to the currently checked-in
-mockup on `origin/main`, not the broader architecture described above.
+To avoid confusion, this section refers to `frontend-pwa/package.json`, not the
+broader v2a target architecture described above.
 
-The following common front-end tools are not currently declared in the mockup’s
-runtime dependencies:
+The following target or common front-end tools are not currently declared in the
+PWA runtime dependencies:
 
+- TanStack Router,
+- Radix UI,
+- i18next, React i18next, and Fluent integration packages,
+- MapLibre GL JS,
 - TanStack Table,
 - Redux,
 - Next.js, Remix, or any SSR framework, and
