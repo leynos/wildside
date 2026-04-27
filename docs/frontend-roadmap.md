@@ -94,6 +94,22 @@ implementation tasks in phases 1-4.
     mutation types, and route-plan persistence metadata.
   - Success: implementation tasks cite schemas and contracts that already contain
     the relevant field shapes, event shapes, and mutation semantics.
+- [ ] 0.2.4. Import and document the v2a front-end lint gates.
+  - Requires 0.1.2.
+  - Import the localization, accessibility, semantic CSS, testing-selector, and
+    architectural lint rules from
+    <https://github.com/leynos/wildside-mockup-v2a>.
+  - Cover the mockup sources `package.json`, `biome.jsonc`,
+    `vitest.a11y.config.ts`, `playwright.config.ts`,
+    `tests/setup-vitest-a11y.ts`, `scripts/check-fluent-vars.ts`,
+    `scripts/check-classlist-length.ts`,
+    `scripts/find-near-duplicate-classes.ts`, `tools/grit/`,
+    `tools/semantic-lint.config.json`, `tools/semgrep-semantic.yml`, and
+    `tools/stylelint.config.cjs`.
+  - Document which imported checks belong to Makefile gates, which remain
+    advisory, and which design or ADR source owns each policy.
+  - Success: the repository can trace every imported v2a lint to source,
+    documentation, and an executable or explicitly deferred gate.
 
 ### 0.3. Refresh the roadmap after authority is settled
 
