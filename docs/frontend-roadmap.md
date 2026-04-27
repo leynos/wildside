@@ -110,6 +110,22 @@ implementation tasks in phases 1-4.
     advisory, and which design or ADR source owns each policy.
   - Success: the repository can trace every imported v2a lint to source,
     documentation, and an executable or explicitly deferred gate.
+- [ ] 0.2.5. Import the current v2a tokens and design-system document.
+  - Requires 0.1.2.
+  - Import the most recent design-token set and design-system documentation from
+    <https://github.com/leynos/wildside-mockup-v2a>.
+  - Cover the mockup sources `tokens/src/tokens.json`,
+    `tokens/src/themes/light.json`, `tokens/src/themes/dark.json`,
+    `tokens/build/style-dictionary.js`, `tokens/build/validate-contrast.js`,
+    `tokens/src/utils/`, `tailwind.config.cjs`, `postcss.config.cjs`,
+    `src/index.css`, and `docs/wildside-mockup-design.md`.
+  - Integrate the imported token source with the repository-owned
+    `packages/tokens/` pipeline rather than committing generated artefacts from
+    the mockup.
+  - Success: the imported token source, design-system documentation, and local
+    token build path are traceable to one another, and local token generation
+    produces the CSS variables, Tailwind theme fragments, DaisyUI roles, and
+    contrast checks required by the v2a design system.
 
 ### 0.3. Refresh the roadmap after authority is settled
 
@@ -179,7 +195,7 @@ workflow.
     front-end entry points that developers use locally.
 - [ ] 1.1.3. Port the mockup token pipeline into the repository-owned token
       package.
-  - Requires 1.1.2.
+  - Requires 1.1.2 and 0.2.5.
   - Generate runtime CSS custom properties, Tailwind theme fragments, and
     DaisyUI theme roles from `packages/tokens/` rather than hand-maintained
     colour constants.
