@@ -25,6 +25,110 @@ All suites run through the same quality gateways:
 - `make lint`
 - `make test`
 
+## Front-end development
+
+The Wildside Progressive Web Application (PWA) lives under `frontend-pwa/`.
+The current checked-in package is intentionally smaller than the full v2a
+target stack. Contributors must treat `frontend-pwa/package.json` as the
+source of truth for installed packages, and use
+`docs/v2a-front-end-stack.md` and `docs/frontend-roadmap.md` for target-stack
+decisions that have not yet been implemented.
+
+### Local setup
+
+Use the repository Makefile entry points where possible. They keep Rust,
+TypeScript, tokens, and documentation gates aligned:
+
+```bash
+make deps
+make fmt
+make lint
+make test
+```
+
+The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
+React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
+Zod 3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI,
+i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
+target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
+and the lockfile.
+
+### Build and preview workflow
+
+Run front-end commands through workspace or Makefile targets unless debugging a
+package-local failure:
+
+```bash
+make build-frontend
+make test-frontend
+make lint-frontend
+make typecheck
+```
+
+Package-local commands remain useful while iterating in `frontend-pwa/`:
+
+```bash
+bun run dev
+bun run build
+bun run preview
+bun run test
+```
+
+Token generation runs before front-end development, build, and preview scripts
+through package hooks. The source token package is `packages/tokens/`; generated
+outputs are consumed by `frontend-pwa/tailwind.config.js` and
+`frontend-pwa/src/index.css`.
+
+### Architectural patterns
+
+Front-end implementation follows the roadmap phase order:
+
+- Phase 0 reconciles source documents, design tokens, and imported v2a lint
+  policy before feature work expands.
+- Phase 1 establishes the build spine, provider layout, route metadata, data
+  validation boundary, local-first storage boundary, and accessibility gates.
+- Phase 2 delivers catalogue-led onboarding and discovery.
+- Phase 3 delivers route generation, map-led quick generation, and active
+  navigation surfaces.
+- Phase 4 delivers installability, offline bundles, safety preferences, and
+  completion summaries.
+- Phase 5 evaluates deferred product extensions such as entitlement, richer
+  pagination, native wrappers, community features, and reporting.
+
+Feature code should be grouped by product capability rather than by technical
+layer. Route modules should own page-level composition, feature modules should
+own user-facing behaviour, shared query hooks should own server-state access,
+and durable offline writes should pass through the outbox boundary described in
+`docs/wildside-pwa-data-model.md`.
+
+### Quality gates
+
+Documentation-only front-end planning changes must pass:
+
+```bash
+make fmt
+make markdownlint
+```
+
+Changes that touch Mermaid diagrams must also pass:
+
+```bash
+make nixie
+```
+
+Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
+front-end gates plus the repository-wide commit gates:
+
+```bash
+make check-fmt
+make lint
+make test
+```
+
+When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
+gate, update this guide and the corresponding phase ExecPlan under
+`docs/execplans/` in the same change.
+
 ## Embedded PostgreSQL integration tests
 
 Backend integration and behavioural suites that require PostgreSQL use the
