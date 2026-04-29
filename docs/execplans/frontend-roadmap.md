@@ -1,9 +1,8 @@
 # Track front-end roadmap delivery
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DRAFT
 
@@ -24,13 +23,13 @@ the documented Makefile gates before committing.
 `docs/frontend-roadmap.md` remains the implementation task catalogue. This plan
 tracks execution and links to phase plans; it must not accumulate product
 requirements that belong in design documents, architecture documents, API
-schemas, or ADRs.
+schemas, or Architecture Decision Records.
 
-`frontend-pwa/package.json` remains the source of truth for installed
-front-end dependencies. `docs/v2a-front-end-stack.md` documents the current
-package state and target-stack boundary. Any change that adds target-stack
-dependencies must update package files, lockfiles, developer guidance, and the
-relevant phase plan in the same change.
+`frontend-pwa/package.json` remains the source of truth for installed front-end
+dependencies. `docs/v2a-front-end-stack.md` documents the current package state
+and target-stack boundary. Any change that adds target-stack dependencies must
+update package files, lockfiles, developer guidance, and the relevant phase plan
+in the same change.
 
 Documentation changes must use en-GB Oxford spelling conventions used by this
 repository, including `-ize` forms such as localization and customization.
@@ -42,16 +41,16 @@ captured in a design document, an API contract change outside the front-end
 scope, a new dependency that contradicts `docs/v2a-front-end-stack.md`, or a
 quality gate that cannot run in local development and CI.
 
-Escalate if implementation would make the roadmap the primary source of a
-schema shape, policy decision, accessibility requirement, cache rule, or
-entitlement rule.
+Escalate if implementation would make the roadmap the primary source of a schema
+shape, policy decision, accessibility requirement, cache rule, or entitlement
+rule.
 
 ## Risks
 
 The main risk is treating the roadmap as a design document. Mitigate this by
 moving substantive decisions to `docs/wildside-pwa-design.md`,
-`docs/wildside-pwa-data-model.md`, API specifications, or ADRs, then updating
-the roadmap with citations.
+`docs/wildside-pwa-data-model.md`, API specifications, or Architecture Decision
+Records, then updating the roadmap with citations.
 
 The second risk is dependency drift between the target v2a stack and the
 checked-in package. Mitigate this by verifying `frontend-pwa/package.json` and
@@ -63,9 +62,10 @@ and Playwright gates before feature slices become broad.
 
 ## Plan
 
-Start with phase 0 in `docs/execplans/frontend-phase-0-source-reconciliation.md`.
-Resolve source authority, reconcile design documents, import v2a lint policy,
-and import the token and design-system source into the local token pipeline.
+Start with phase 0 in
+`docs/execplans/frontend-phase-0-source-reconciliation.md`. Resolve source
+authority, reconcile design documents, import v2a lint policy, and import the
+token and design-system source into the local token pipeline.
 
 Proceed to phase 1 in `docs/execplans/frontend-phase-1-build-spine.md`. Ratify
 the stack boundary, establish application shell and route metadata, add
@@ -124,12 +124,12 @@ commit.
 ## Progress
 
 - [x] 2026-04-29: Create branch-level front-end roadmap ExecPlan.
-- [ ] Complete phase 0 source reconciliation.
-- [ ] Complete phase 1 build spine.
-- [ ] Complete phase 2 catalogue onboarding and discovery.
-- [ ] Complete phase 3 generated walks and map experience.
-- [ ] Complete phase 4 offline, safety, and completion trust.
-- [ ] Complete phase 5 deferred extension decisions.
+- Planned: Complete phase 0 source reconciliation.
+- Planned: Complete phase 1 build spine.
+- Planned: Complete phase 2 catalogue onboarding and discovery.
+- Planned: Complete phase 3 generated walks and map experience.
+- Planned: Complete phase 4 offline, safety, and completion trust.
+- Planned: Complete phase 5 deferred extension decisions.
 
 ## Surprises & Discoveries
 

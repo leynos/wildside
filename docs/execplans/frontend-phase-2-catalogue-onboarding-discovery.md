@@ -1,9 +1,8 @@
 # Deliver catalogue onboarding and discovery
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DRAFT
 
@@ -20,9 +19,9 @@ copy.
 Use the entity and descriptor model from
 `docs/data-model-driven-card-architecture.md` and
 `docs/wildside-pwa-data-model.md`. Entity names, descriptions, badges, and card
-copy belong to localized entity data, while UI chrome belongs to the
-translation layer. Discovery and preference writes must use the local-first
-query and outbox boundaries from phase 1.
+copy belong to localized entity data, while UI chrome belongs to the translation
+layer. Discovery and preference writes must use the local-first query and outbox
+boundaries from phase 1.
 
 ## Tolerances
 
@@ -34,7 +33,7 @@ guest and authenticated preference behaviour conflicts with the API contract.
 
 Catalogue work can drift into bespoke UI data models. Mitigate this by adding
 shared entity types and descriptor registries before rendering screens, and by
-testing fallback locale ordering and International System of Units (SI)-unit
+testing fallback locale ordering and International System of Units (SI) unit
 formatting before adding more card surfaces.
 
 ## Plan
@@ -70,10 +69,10 @@ fallback behaviour.
 ## Progress
 
 - [x] Draft phase-level ExecPlan.
-- [ ] Add shared entity and descriptor vocabulary.
-- [ ] Implement catalogue-backed Welcome, Discover, Explore, and Customize.
-- [ ] Persist interests and preferences.
-- [ ] Verify the catalogue journey.
+- Planned: Add shared entity and descriptor vocabulary.
+- Planned: Implement catalogue-backed Welcome, Discover, Explore, and Customize.
+- Planned: Persist interests and preferences.
+- Planned: Verify the catalogue journey.
 
 ## Surprises & Discoveries
 

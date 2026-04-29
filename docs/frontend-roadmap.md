@@ -1,22 +1,23 @@
 # Wildside front-end roadmap
 
 This roadmap translates the Wildside front-end design documents, API contracts,
-UX state graph, and v2a mockup into an outcome-oriented delivery sequence for
-`frontend-pwa/`. It does not promise dates. Each phase carries one testable idea
-at the GIST level; steps validate that idea through sequenced workstreams, and
-tasks are review-sized execution units with explicit acceptance criteria.
+user experience state graph, and v2a mockup into an outcome-oriented delivery
+sequence for `frontend-pwa/`. It does not promise dates. Each phase carries one
+testable idea at the GIST level; steps validate that idea through sequenced
+workstreams, and tasks are review-sized execution units with explicit acceptance
+criteria.
 
 The primary source material is `docs/wildside-pwa-design.md`,
 `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
 `docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and the v2a mockup
-in `../wildside-mockup-v2a`. The styling, testing, localization, and
-Progressive Web Application (PWA) constraints come from the supporting documents
-under `docs/`.
+in `../wildside-mockup-v2a`. The styling, testing, localization, and Progressive
+Web Application (PWA) constraints come from the supporting
+documents under `docs/`.
 
-The roadmap is a catalogue of correctly sized implementation tasks. It
-signposts authoritative design documents, ADRs, schemas, and API contracts
-through inline citations, but it is not the principal source of product policy,
-schema shape, platform, or UX requirements.
+The roadmap is a catalogue of correctly sized implementation tasks. It signposts
+authoritative design documents, Architecture Decision Records, schemas, and API
+contracts through inline citations, but it is not the principal source of
+product policy, schema shape, platform, or user experience requirements.
 
 ## 0. Source-of-truth reconciliation before implementation
 
@@ -26,65 +27,71 @@ accumulating decisions inside the roadmap.
 
 This phase catalogues the documentation reconciliation work needed before the
 roadmap is used as an implementation queue. It keeps design decisions in design
-documents or Architecture Decision Records (ADRs), resolves known
-inconsistencies where older PWA material differs from the v2a stack direction,
-and then refreshes roadmap citations so later phases remain task-focused.
+documents or Architecture Decision Records (ADRs),
+resolves known inconsistencies where older Progressive Web App material differs
+from the v2a stack direction, and then refreshes roadmap citations so later
+phases remain task-focused.
 
 ### 0.1. Catalogue authority, overlaps, and contradictions
 
 This step answers which document owns each front-end requirement and where
-contradictions need a design-document or ADR update. The outcome informs the
-source documents that phases 1-5 should cite.
+contradictions need a design-document or Architecture Decision Record update.
+The outcome informs the source documents that phases 1-5 should cite.
 
 - [ ] 0.1.1. Build a front-end source authority catalogue.
-  - Classify `docs/v2a-front-end-stack.md`,
-    `docs/wildside-pwa-design.md`, `docs/wildside-pwa-data-model.md`,
-    `docs/wildside-ux-state-graph-v0.1.json`, `docs/sitemap.md`,
-    `spec/openapi.json`, `spec/asyncapi.yaml`, and relevant ADRs as
-    authoritative, supporting, superseded, or needing reconciliation per topic.
-  - Record that `docs/v2a-front-end-stack.md` takes precedence where it conflicts
-    with older PWA platform guidance.
-  - Success: every platform, data, UX-state, API, and styling topic referenced by
-    this roadmap has one named authoritative source or a named reconciliation
-    follow-up.
+  - Classify `docs/v2a-front-end-stack.md`, `docs/wildside-pwa-design.md`,
+    `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
+    `docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and relevant
+    Architecture Decision Records as authoritative, supporting, superseded, or
+    needing reconciliation per topic.
+  - Record that `docs/v2a-front-end-stack.md` takes precedence where it
+    conflicts with older Progressive Web App platform guidance.
+  - Success: every platform, data, user experience-state, API, and styling topic
+    referenced by this roadmap has one named authoritative source or a named
+    reconciliation follow-up.
 - [ ] 0.1.2. Catalogue contradictions and duplicated requirements.
   - Requires 0.1.1.
-  - Review the v2a stack, accessible PWA guide, semantic Tailwind/DaisyUI guide,
-    Wildside PWA design, Wildside PWA data model, UX state graph, sitemap, and
+  - Review the v2a stack, accessible Progressive Web App guide, semantic
+    Tailwind/DaisyUI guide, Wildside Progressive Web App design, Wildside
+    Progressive Web App data model, user experience state graph, sitemap, and
     API specs for conflicting or duplicated requirements.
-  - Label each finding as "update design document", "merge into PWA design",
-    "update data model", "write ADR", or "roadmap citation fix".
+  - Label each finding as "update design document", "merge into Progressive Web
+    App design", "update data model", "write Architecture Decision Record", or
+    "roadmap citation fix".
   - Success: no finding is resolved by adding requirement prose only to this
     roadmap.
 
 ### 0.2. Move decisions into the right design authority
 
 This step answers which inconsistencies can be settled in existing design
-documents and which require a separate ADR. The outcome informs the concrete
-implementation tasks in phases 1-4.
+documents and which require a separate Architecture Decision Record. The outcome
+informs the concrete implementation tasks in phases 1-4.
 
-- [ ] 0.2.1. Reconcile PWA platform guidance under the v2a stack direction.
+- [ ] 0.2.1. Reconcile Progressive Web App platform guidance under the v2a stack
+      direction.
   - Requires 0.1.2.
-  - Update, merge, or supersede `docs/wildside-pwa-design.md` so PWA platform
-    requirements align with `docs/v2a-front-end-stack.md` on stack ownership,
-    local-first persistence, MapLibre, localization, semantic styling, and test
-    tooling.
+  - Update, merge, or supersede `docs/wildside-pwa-design.md` so Progressive Web
+    App platform requirements align with `docs/v2a-front-end-stack.md` on stack
+    ownership, local-first persistence, MapLibre, localization, semantic
+    styling, and test tooling.
   - See `docs/v2a-front-end-stack.md` §§Overview, State management, Map stack,
     and Testing and verification stack; and `docs/wildside-pwa-design.md`.
-  - Success: later roadmap tasks can cite one current PWA design source for
-    platform implementation requirements.
-- [ ] 0.2.2. Formalize substantive platform policy decisions as ADRs.
+  - Success: later roadmap tasks can cite one current Progressive Web App design
+    source for platform implementation requirements.
+- [ ] 0.2.2. Formalize substantive platform policy decisions as Architecture
+      Decision Records.
   - Requires 0.1.2.
-  - Write ADRs, rather than roadmap prose, for decisions that affect long-lived
-    platform policy, such as client-state ownership, service-worker/deployment
-    scope, cache and persistence versioning, outbox retry semantics, map tile
-    provider strategy, or test-gate policy.
+  - Write Architecture Decision Records, rather than roadmap prose, for
+    decisions that affect long-lived platform policy, such as client-state
+    ownership, service-worker/deployment scope, cache and persistence
+    versioning, outbox retry semantics, map tile provider strategy, or test-gate
+    policy.
   - See `docs/v2a-front-end-stack.md`,
     `docs/building-accessible-and-responsive-progressive-web-applications.md`,
     and `docs/wildside-pwa-design.md`.
   - Success: each substantive policy choice is either documented in a design
     document section small enough to own it clearly or linked from a dedicated
-    ADR.
+    Architecture Decision Record.
 - [ ] 0.2.3. Reconcile schema and contract inconsistencies in source documents.
   - Requires 0.1.2.
   - Update `docs/wildside-pwa-data-model.md`, OpenAPI, AsyncAPI, or their owning
@@ -93,8 +100,8 @@ implementation tasks in phases 1-4.
   - Include known reconciliation areas such as localized media alt text,
     narrative-snippet cache state, feedback/reporting contracts, offline
     mutation types, and route-plan persistence metadata.
-  - Success: implementation tasks cite schemas and contracts that already contain
-    the relevant field shapes, event shapes, and mutation semantics.
+  - Success: implementation tasks cite schemas and contracts that already
+    contain the relevant field shapes, event shapes, and mutation semantics.
 - [ ] 0.2.4. Import and document the v2a front-end lint gates.
   - Requires 0.1.2.
   - Import the localization, accessibility, semantic CSS, testing-selector, and
@@ -108,7 +115,8 @@ implementation tasks in phases 1-4.
     `tools/semantic-lint.config.json`, `tools/semgrep-semantic.yml`, and
     `tools/stylelint.config.cjs`.
   - Document which imported checks belong to Makefile gates, which remain
-    advisory, and which design or ADR source owns each policy.
+    advisory, and which design or Architecture Decision Record source owns each
+    policy.
   - Success: the repository can trace every imported v2a lint to source,
     documentation, and an executable or explicitly deferred gate.
 - [ ] 0.2.5. Import the current v2a tokens and design-system document.
@@ -131,21 +139,23 @@ implementation tasks in phases 1-4.
 ### 0.3. Refresh the roadmap after authority is settled
 
 This step answers whether the roadmap remains an implementation catalogue after
-the design sources are cleaned up. The outcome unblocks phase 1 without using the
-roadmap as a hidden design document.
+the design sources are cleaned up. The outcome unblocks phase 1 without using
+the roadmap as a hidden design document.
 
 - [ ] 0.3.1. Replace decision prose in later phases with citations.
   - Requires steps 0.1-0.2.
   - Audit phases 1-5 for wording that makes the roadmap the primary source of a
-    requirement, policy, schema shape, or UX rule.
+    requirement, policy, schema shape, or user experience rule.
   - Convert those passages into implementation tasks that cite the authoritative
-    design document, ADR, API spec, or UX graph section.
+    design document, Architecture Decision Record, API spec, or user experience
+    graph section.
   - Success: each task still has measurable acceptance criteria, but the
     underlying requirement lives in a cited source document.
 - [ ] 0.3.2. Recheck dependencies after reconciliation.
   - Requires 0.3.1.
-  - Update task dependencies where ADRs, design-document merges, schema updates,
-    or contract updates now gate implementation.
+  - Update task dependencies where Architecture Decision Records,
+    design-document merges, schema updates, or contract updates now gate
+    implementation.
   - Success: no phase 1-5 task depends on an unresolved design contradiction or
     undocumented policy decision.
 
@@ -156,10 +166,11 @@ schema-validation boundary, and accessibility-first quality gates before feature
 work expands, later slices can migrate from fixtures to backend data without
 repeatedly reshaping app structure.
 
-This phase turns the current minimal PWA into the production-ready skeleton that
-feature slices can reuse. It deliberately resolves version alignment, provider
-boundaries, route metadata, generated API shape, and verification rules first
-because every user-facing slice depends on them.
+This phase turns the current minimal Progressive Web App into the
+production-ready skeleton that feature slices can reuse. It deliberately
+resolves version alignment, provider boundaries, route metadata, generated API
+shape, and verification rules first because every user-facing slice depends on
+them.
 
 ### 1.1. Ratify the target stack and migration boundary
 
@@ -209,9 +220,9 @@ workflow.
 
 ### 1.2. Establish app shell, providers, and route-state metadata
 
-This step answers whether the route tree can represent the sitemap and the UX
-graph before screens become complex. The outcome informs focus management,
-code-splitting, route guards, and offline restore behaviour. See
+This step answers whether the route tree can represent the sitemap and the user
+experience graph before screens become complex. The outcome informs focus
+management, code-splitting, route guards, and offline restore behaviour. See
 `docs/sitemap.md` §§Route Structure and User Flows;
 `docs/wildside-ux-state-graph-v0.1.json`; and `docs/wildside-pwa-design.md`
 §§Frontend module layout and Accessible client-side routing.
@@ -226,8 +237,8 @@ code-splitting, route guards, and offline restore behaviour. See
     architecture direction.
   - Success: route modules can mount without importing backend fetchers or
     shared layout internals directly.
-- [ ] 1.2.2. Implement the TanStack Router route tree from the sitemap and UX
-      state graph.
+- [ ] 1.2.2. Implement the TanStack Router route tree from the sitemap and user
+      experience state graph.
   - Requires 1.2.1.
   - Cover `/welcome`, `/discover`, `/explore`, `/customize`, `/wizard/*`,
     `/map/*`, `/saved`, `/walk-complete`, `/offline`, and
@@ -248,8 +259,8 @@ code-splitting, route guards, and offline restore behaviour. See
     Strategies.
   - Success: Playwright keyboard tests prove focus moves only after client-side
     navigation, not on initial load.
-- [ ] 1.2.4. Model the UX graph as route-state fixtures and transition test
-      cases.
+- [ ] 1.2.4. Model the user experience graph as route-state fixtures and
+      transition test cases.
   - Requires 1.2.2.
   - Generate or hand-maintain a typed state catalogue covering the 74 states,
     205 transitions, API contracts, and testing recommendations in the graph.
@@ -291,7 +302,8 @@ Suggested inbound endpoints; `spec/openapi.json`; and `spec/asyncapi.yaml`.
 - [ ] 1.3.3. Introduce Dexie storage for outbox and offline bundle manifests.
   - Requires 1.3.2.
   - Implement the minimal schema for outbox items and offline bundles while
-    leaving tile bytes to Cache Storage for the Minimum Viable Product (MVP).
+    leaving tile bytes to Cache Storage for the Minimum Viable Product (Minimum
+    Viable Product).
   - See `docs/wildside-pwa-data-model.md` §§Outbox, Idempotency contract, and
     Frontend persistence; and `docs/local-first-react.md` §§Durable Offline
     Writes and Handling Large Offline Assets.
@@ -388,7 +400,8 @@ Catalogue.
       chrome.
   - Requires 2.1.1.
   - Add `pickLocalization`, supported-locale metadata, document `lang`/`dir`
-    updates, and Fluent loading for page chrome and ARIA scaffolding.
+    updates, and Fluent loading for page chrome and Accessible Rich Internet
+    Applications (ARIA) scaffolding.
   - See `docs/v2a-front-end-stack.md` §§Localization stack and Data model-driven
     card architecture; `docs/wildside-pwa-design.md` §§Internationalization and
     Locale normalisation and RTL; and
@@ -458,13 +471,13 @@ Explore, and Customize.
     and `explore.catalogue_unavailable`; and
     `../wildside-mockup-v2a/docs/wildside-mockup-design.md` §Stage 1
     implementation notes.
-  - Success: route cards use International System of Units (SI)-unit formatting
-    and no hard-coded entity copy.
+  - Success: route cards use International System of Units (International System
+    of Units)-unit formatting and no hard-coded entity copy.
 - [ ] 2.2.4. Implement Customize preference controls and planned generation
       entry points.
   - Requires 2.2.3.
-  - Port sliders, segment toggles, surface options, route preview selections,
-    an explicit "Popular Hotspots" / "Hidden Gems" control mapped to
+  - Port sliders, segment toggles, surface options, route preview selections, an
+    explicit "Popular Hotspots" / "Hidden Gems" control mapped to
     `discoveryMix`, and disabled/planned generate states.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `customize.editing`,
     `customize.preview_selected`, and `customize.generate_planned`;
@@ -525,20 +538,21 @@ sample data. The outcome informs later safety and wizard writes. See
 ### 2.4. Verify the catalogue slice as a user-facing flow
 
 This step answers whether the first vertical slice can be trusted as an
-accessible PWA flow rather than just a set of rendered screens. The outcome sets
-the verification template for later slices. See
+accessible Progressive Web App flow rather than just a set of rendered screens.
+The outcome sets the verification template for later slices. See
 `docs/high-velocity-accessibility-first-component-testing.md` and
 `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T001`.
 
 - [ ] 2.4.1. Add component and hook tests for entity localization, descriptor
       resolution, and unit formatting.
   - Requires 2.1.2 and 2.1.3.
-  - Cover fallback locale ordering, SI distance and duration formatting, and
-    descriptor registry lookups.
+  - Cover fallback locale ordering, International System of Units distance and
+    duration formatting, and descriptor registry lookups.
   - See `docs/data-model-driven-card-architecture.md` §§Localization handling
     rules and Attribute identifier strategy; and `docs/v2a-front-end-stack.md`
     §§Locale resolution and Descriptor registries.
-  - Success: entity cards do not render missing keys or raw SI values.
+  - Success: entity cards do not render missing keys or raw International System
+    of Units values.
 - [ ] 2.4.2. Add accessibility tests for Welcome, Discover, Explore, and
       Customize.
   - Requires 2.2.1 through 2.2.4.
@@ -587,16 +601,16 @@ Itinerary, Saved, and Walk completion. See
 - [ ] 3.1.1. Add route draft, request, status, and route-plan schemas.
   - Requires 1.3.1 and 2.2.4.
   - Model route preferences, generation request IDs, statuses, route geometry,
-    ordered stops, inline Points of Interest (POIs), Point of Interest (POI)
-    narrative snippet metadata, cache state, attribution, and sparse-data
-    errors.
+    ordered stops, inline Points of Interest (POIs), Point of
+    Interest (POI) narrative snippet metadata, cache state,
+    attribution, and sparse-data errors.
   - See `docs/wildside-pwa-data-model.md` §Generated routes and
     `docs/wildside-ux-state-graph-v0.1.json` states `route_generation.draft`,
     `route_generation.data_sparse`, and `route_generation.failed`; and
     `docs/wildside-high-level-design.md` §§In-Walk Navigation Experience and
     AI/LLM Integration Strategy.
-  - Success: route plans and narrative snippets can be rendered offline from
-    one persisted object, with missing snippets shown as recoverable loading or
+  - Success: route plans and narrative snippets can be rendered offline from one
+    persisted object, with missing snippets shown as recoverable loading or
     unavailable states.
 - [ ] 3.1.2. Implement route-generation mutation and polling hooks.
   - Requires 3.1.1.
@@ -640,14 +654,14 @@ Client-Side Logic with XState.
 - [ ] 3.2.2. Implement wizard step 2 for discovery and accessibility
       preferences.
   - Requires 3.2.1.
-  - Reuse safety descriptors where labels overlap, expose the
-    "Popular Hotspots" / "Hidden Gems" `discoveryMix` control, and keep draft
-    state separate from persisted preferences until submission.
+  - Reuse safety descriptors where labels overlap, expose the "Popular Hotspots"
+    / "Hidden Gems" `discoveryMix` control, and keep draft state separate from
+    persisted preferences until submission.
   - See `docs/wildside-ux-state-graph-v0.1.json` `wizard.step2`;
     `docs/wildside-pwa-data-model.md` §§Safety toggles and presets; and
     `docs/pure-accessible-and-localizable-react-components.md` §2.2; and
-    `docs/wildside-high-level-design.md` §Point of Interest (POI) Scoring & Personalization
-    Algorithm.
+    `docs/wildside-high-level-design.md` §Point of Interest (POI)
+    Scoring & Personalization Algorithm.
   - Success: slider and toggle summaries remain localized and deterministic in
     tests, and generated route requests carry the selected `discoveryMix`.
 - [ ] 3.2.3. Implement wizard step 3 review and generation transition.
@@ -667,8 +681,8 @@ Client-Side Logic with XState.
   - See `docs/pure-accessible-and-localizable-react-components.md` §2.2 and
     `docs/local-first-react.md` §§Orchestrating Complex Client-Side Logic with
     XState and The Division of Labor.
-  - Success: transition tests cover the UX graph wizard edges without relying on
-    incidental component state.
+  - Success: transition tests cover the user experience graph wizard edges
+    without relying on incidental component state.
 
 ### 3.3. Keep MapLibre stable while overlays change
 
@@ -687,7 +701,7 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     `map.location_denied`.
   - Success: map load failures do not block route details, stops, or notes.
 - [ ] 3.3.2. Add `MapStateProvider` for viewport, highlights, layers, and
-      selected POIs.
+      selected Points of Interest.
   - Requires 3.3.1.
   - Keep the map instance in a ref and expose imperative helpers for overlays.
   - See `docs/wildside-pwa-design.md` §Map state provider and
@@ -695,23 +709,23 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     persistence plan.
   - Success: switching overlays and hovering stops does not recreate the
     MapLibre instance.
-- [ ] 3.3.3. Implement route-start and location permission UX.
+- [ ] 3.3.3. Implement route-start and location permission user experience.
   - Requires 3.3.2.
-  - Support current Global Positioning System (GPS), dropped-pin start
-    selection, map-centre fallback, last known location, and denied-permission
-    recovery without blocking route browsing.
+  - Support current Global Positioning System (GPS),
+    dropped-pin start selection, map-centre fallback, last known location, and
+    denied-permission recovery without blocking route browsing.
   - See `docs/wildside-high-level-design.md` §Route Generation Controls;
     `docs/wildside-ux-state-graph-v0.1.json` states
     `map.location_permission_prompt` and `map.location_denied`; and
-    `docs/wildside-pwa-design.md` §§Map architecture and Accessible
-    client-side routing.
+    `docs/wildside-pwa-design.md` §§Map architecture and Accessible client-side
+    routing.
   - Success: users can create a valid route draft after granting location,
     denying location, or manually placing a start pin.
 - [ ] 3.3.4. Implement map-led quick generation as a primary route surface.
   - Requires 3.3.3 and 3.1.2.
-  - Let users pan and zoom the map, inspect tappable POIs, tune duration,
-    interests, `discoveryMix`, and start point, then request a generated walk
-    from the map without entering the full wizard.
+  - Let users pan and zoom the map, inspect tappable Points of Interest, tune
+    duration, interests, `discoveryMix`, and start point, then request a
+    generated walk from the map without entering the full wizard.
   - See `docs/wildside-high-level-design.md` §§Interactive Map & Discovery and
     Route Generation Controls; `docs/wildside-ux-state-graph-v0.1.json` states
     `map.quick.map_tab`, `route_generation.requesting`, and
@@ -722,8 +736,8 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     copy.
 - [ ] 3.3.5. Implement Quick Map tabs for map, stops, and notes.
   - Requires 3.3.4.
-  - Use Radix tabs, hash-aware tab selection, route draft controls, POI
-    highlights, and localized notes placeholders.
+  - Use Radix tabs, hash-aware tab selection, route draft controls, Point of
+    Interest highlights, and localized notes placeholders.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `map.quick.map_tab`,
     `map.quick.stops_tab`, and `map.quick.notes_tab`; `docs/sitemap.md` §Nested
     Routes; and `../wildside-mockup-v2a/docs/wildside-mockup-design.md` §Stage 2
@@ -732,8 +746,8 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     visual state.
 - [ ] 3.3.6. Implement Itinerary tabs and navigation-active states.
   - Requires 3.3.5.
-  - Render route plan geometry, ordered stops, POI detail dialogs, share dialog,
-    navigation active and paused states, and progress events.
+  - Render route plan geometry, ordered stops, Point of Interest detail dialogs,
+    share dialog, navigation active and paused states, and progress events.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `itinerary.map_tab`,
     `itinerary.stops_tab`, `itinerary.notes_tab`, `itinerary.navigation_active`,
     and `itinerary.navigation_paused`; and `docs/wildside-high-level-design.md`
@@ -742,21 +756,22 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
     losing the map viewport or selected stop.
 - [ ] 3.3.7. Add pedestrian instructions and degraded-location recovery.
   - Requires 3.3.6.
-  - Render next-turn instructions, upcoming POI highlights, off-route copy,
-    degraded-GPS confidence states, pause/resume affordances, and manual
-    progress fallback when reliable tracking is unavailable.
+  - Render next-turn instructions, upcoming Point of Interest highlights,
+    off-route copy, degraded-Global Positioning System confidence states,
+    pause/resume affordances, and manual progress fallback when reliable
+    tracking is unavailable.
   - See `docs/wildside-high-level-design.md` §In-Walk Navigation Experience;
     `docs/wildside-ux-state-graph-v0.1.json` states
     `itinerary.navigation_active`, `itinerary.navigation_paused`, and
     `map.location_denied`; and `docs/wildside-pwa-data-model.md` §§Notes and
     progress and Walk session and completion.
-  - Success: active navigation remains usable when GPS confidence drops, the
-    user leaves the route, or the device is offline.
+  - Success: active navigation remains usable when Global Positioning System
+    confidence drops, the user leaves the route, or the device is offline.
 - [ ] 3.3.8. Implement Saved route tabs, empty state, favourite, share, and
       start-route transitions.
   - Requires 3.3.6.
-  - Reuse route-plan and annotation models while preserving the saved-route UX
-    graph states.
+  - Reuse route-plan and annotation models while preserving the saved-route user
+    experience graph states.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `saved.empty`,
     `saved.map_tab`, `saved.stops_tab`, `saved.notes_tab`,
     `saved.favourite_toggled`, and `saved.share_dialog`; and `docs/sitemap.md`
@@ -792,17 +807,18 @@ Walk session and completion; and `docs/wildside-ux-state-graph-v0.1.json`
     without server or queued confirmation.
 - [ ] 3.4.3. Add route-plan persistence for generated and saved walks.
   - Requires 3.1.2 and 3.3.8.
-  - Persist route plans and related POIs in the Query cache so Map, Saved, and
-    Completion can render without refetching.
+  - Persist route plans and related Points of Interest in the Query cache so
+    Map, Saved, and Completion can render without refetching.
   - See `docs/wildside-pwa-data-model.md` §Generated routes and
     `docs/local-first-react.md` §Implementing Offline Persistence.
   - Success: reloading the app can restore the last generated route and saved
     route details from local storage.
-- [ ] 3.4.4. Implement POI narrative snippet lifecycle and cache behaviour.
+- [ ] 3.4.4. Implement Point of Interest narrative snippet lifecycle and cache
+      behaviour.
   - Requires 3.1.1 and 3.4.3.
   - Render loading, available, stale, unavailable, and refreshed snippet states
-    for POI detail surfaces, preserving attribution and avoiding duplicate LLM
-    requests after reload.
+    for Point of Interest detail surfaces, preserving attribution and avoiding
+    duplicate LLM requests after reload.
   - See `docs/wildside-high-level-design.md` §§In-Walk Navigation Experience and
     AI/LLM Integration Strategy; `docs/wildside-pwa-data-model.md` §Generated
     routes; and `docs/local-first-react.md` §Implementing Offline Persistence.
@@ -825,8 +841,9 @@ and `T006`.
   - Success: route-generation tests prove retry safety without a live backend.
 - [ ] 3.5.2. Add map provider stability and overlay tests.
   - Requires 3.3.2 through 3.3.8.
-  - Mock MapLibre and assert instance stability, layer toggles, POI highlights,
-    tab switching, route-start fallback, and hash deep links.
+  - Mock MapLibre and assert instance stability, layer toggles, Point of
+    Interest highlights, tab switching, route-start fallback, and hash deep
+    links.
   - See `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T003`
     and `../wildside-mockup-v2a/tests/map-state-provider.test.ts`.
   - Success: tests fail if overlay updates tear down the map canvas.
@@ -834,8 +851,9 @@ and `T006`.
       flows.
   - Requires 3.2.3, 3.3.6, 3.3.7, 3.3.8, and 3.4.4.
   - Exercise keyboard flow through wizard steps, generated-route success,
-    itinerary tab navigation, pedestrian instructions, degraded-GPS recovery,
-    narrative snippet fallback, saved-route actions, and share dialogs.
+    itinerary tab navigation, pedestrian instructions, degraded-Global
+    Positioning System recovery, narrative snippet fallback, saved-route
+    actions, and share dialogs.
   - See `docs/high-velocity-accessibility-first-component-testing.md` §III and
     `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T006`.
   - Success: a user can reach completion-ready navigation using only keyboard
@@ -845,8 +863,8 @@ and `T006`.
 
 Idea: if offline bundles, safety preferences, walk sessions, and completion
 summaries all reuse the same local-first outbox and route-plan model, Wildside
-can offer the premium reliability promised by the PWA without adding a second
-state system.
+can offer the premium reliability promised by the Progressive Web App without
+adding a second state system.
 
 This slice completes the local-first promise. It makes the app installable,
 defines service-worker cache policies, downloads route or region bundles,
@@ -855,11 +873,12 @@ non-fitness-style completion summary.
 
 ### 4.1. Make the app installable and explicit about cache behaviour
 
-This step answers whether the app shell can behave like a PWA before heavy
-offline bundle work begins. The outcome informs update UX, runtime cache
-policies, and offline affordances. See `docs/wildside-pwa-design.md` §Service
-worker, manifest, and caching strategy; and
-`docs/building-accessible-and-responsive-progressive-web-applications.md` §§1-2.
+This step answers whether the app shell can behave like a Progressive Web App
+before heavy offline bundle work begins. The outcome informs update user
+experience, runtime cache policies, and offline affordances. See
+`docs/wildside-pwa-design.md` §Service worker, manifest, and caching strategy;
+and `docs/building-accessible-and-responsive-progressive-web-applications.md`
+§§1-2.
 
 - [ ] 4.1.1. Add the Web App Manifest and installability metadata.
   - Requires 1.1.3 and 1.2.2.
@@ -922,8 +941,8 @@ handling and paid reliability features. See `docs/wildside-pwa-data-model.md`
 - [ ] 4.2.2. Implement Offline dashboard, add-area dialog, manage mode, delete
       undo, and storage pressure states.
   - Requires 4.2.1.
-  - Port the v2a offline UX with semantic dialogs, progress indicators, and
-    localized size formatting.
+  - Port the v2a offline user experience with semantic dialogs, progress
+    indicators, and localized size formatting.
   - See `docs/wildside-ux-state-graph-v0.1.json` states `offline.dashboard`,
     `offline.add_area_dialog`, `offline.manage_mode`,
     `offline.delete_pending_undo`, and `offline.storage_pressure`; and
@@ -942,7 +961,7 @@ handling and paid reliability features. See `docs/wildside-pwa-data-model.md`
     `offline.bundle_complete`, and `offline.bundle_failed`.
   - Success: tile bytes are not stored in React state or TanStack Query.
 
-### 4.3. Persist safety preferences with conflict-aware UX
+### 4.3. Persist safety preferences with conflict-aware user experience
 
 This step answers whether safety and accessibility preferences can share the
 same preference aggregate and conflict policy created during onboarding. The
@@ -980,15 +999,15 @@ outcome informs future accessibility presets and route-generation filters. See
 ### 4.4. Record walks and render completion summaries
 
 This step answers whether a generated route can become a completed experience
-without drifting into fitness-app metrics. The outcome closes the core MVP loop
-from discovery to post-walk summary. See `docs/wildside-high-level-design.md`
-§Post-Walk Summary and `docs/wildside-pwa-data-model.md` §Walk session and
-completion.
+without drifting into fitness-app metrics. The outcome closes the core Minimum
+Viable Product loop from discovery to post-walk summary. See
+`docs/wildside-high-level-design.md` §Post-Walk Summary and
+`docs/wildside-pwa-data-model.md` §Walk session and completion.
 
 - [ ] 4.4.1. Implement walk-session creation and completion mutation hooks.
   - Requires 3.4.1 and 3.4.3.
   - Use client-generated UUIDs, route IDs, start and end times, progress, and
-    highlighted POI IDs; queue writes offline when needed.
+    highlighted Point of Interest IDs; queue writes offline when needed.
   - See `docs/wildside-pwa-data-model.md` §Walk session and completion;
     `docs/wildside-ux-state-graph-v0.1.json` `apiContracts.walkSessions`; and
     `docs/local-first-react.md` §Durable Offline Writes.
@@ -1008,7 +1027,7 @@ completion.
 - [ ] 4.4.3. Connect active navigation completion to Saved route state.
   - Requires 4.4.1 and 4.4.2.
   - Persist completion state, update route progress, and route users to Saved or
-    Wizard according to the UX graph.
+    Wizard according to the user experience graph.
   - See `docs/wildside-ux-state-graph-v0.1.json` `testingRecommendations.T006`
     and transitions from `itinerary.navigation_active` to
     `walk_complete.summary`.
@@ -1028,8 +1047,8 @@ conditions it is meant to handle. See `docs/wildside-ux-state-graph-v0.1.json`
     `docs/building-accessible-and-responsive-progressive-web-applications.md` §6
     and `docs/wildside-pwa-design.md` §Service worker, manifest, and caching
     strategy.
-  - Success: Lighthouse PWA checks and local Playwright offline smoke tests pass
-    in a preview build.
+  - Success: Lighthouse Progressive Web App checks and local Playwright offline
+    smoke tests pass in a preview build.
 - [ ] 4.5.2. Add offline bundle lifecycle tests.
   - Requires 4.2.1 through 4.2.3.
   - Cover queued, downloading, complete, failed, retry, delete undo, quota
@@ -1047,15 +1066,16 @@ conditions it is meant to handle. See `docs/wildside-ux-state-graph-v0.1.json`
   - Success: queued writes drain with idempotency keys and completion remains
     accessible in at least one non-default locale.
 
-## 5. Deferred extensions after the core PWA promise
+## 5. Deferred extensions after the core Progressive Web App promise
 
-Idea: if the core PWA is already trustworthy, accessible, local-first, and
-boring to operate, the project can evaluate broader extensions on product value
-instead of letting them destabilize the main release.
+Idea: if the core Progressive Web App is already trustworthy, accessible,
+local-first, and boring to operate, the project can evaluate broader extensions
+on product value instead of letting them destabilize the main release.
 
 This phase collects work that the design documents mention but do not require
-for the first production PWA slice. These tasks should not block phases 1-4
-unless a product decision explicitly promotes them into MVP scope.
+for the first production Progressive Web App slice. These tasks should not block
+phases 1-4 unless a product decision explicitly promotes them into Minimum
+Viable Product scope.
 
 ### 5.1. Evaluate account, auth, and profile expansion
 
@@ -1067,7 +1087,7 @@ session handling. See `docs/wildside-ux-state-graph-v0.1.json` assumption
       production release.
   - Requires phase 2.
   - Compare the mockup `sign-in.html`, current OpenAPI login/current-user
-    contracts, and the UX graph's future auth region.
+    contracts, and the user experience graph's future auth region.
   - See `docs/wildside-ux-state-graph-v0.1.json` auth states;
     `spec/openapi.json` `/api/v1/login`; and
     `../wildside-mockup-v2a/public/mockups/sign-in.html`.
@@ -1079,15 +1099,16 @@ session handling. See `docs/wildside-ux-state-graph-v0.1.json` assumption
   - Decide whether `DisplayNameRequest`, `InvalidDisplayName`, and `UserCreated`
     remain active client contracts.
   - See `spec/asyncapi.yaml`.
-  - Success: unused WebSocket user events are either wired into auth UX or
-    documented as backend-only legacy scope.
-- [ ] 5.1.3. Decide entitlement and free-tier UX before premium controls ship.
+  - Success: unused WebSocket user events are either wired into auth user
+    experience or documented as backend-only legacy scope.
+- [ ] 5.1.3. Decide entitlement and free-tier user experience before premium
+      controls ship.
   - Requires phase 4.
   - Define how free walk-generation limits, unlimited generation, expanded
     interest themes, and offline-map entitlement are presented without blocking
     the core generative loop.
   - See `docs/wildside-high-level-design.md` §§Risk 5: Market Adoption and
-    Monetization and Post-MVP & Future Vision; and
+    Monetization and Post-Minimum Viable Product & Future Vision; and
     `docs/wildside-ux-state-graph-v0.1.json` assumption `A003`.
   - Success: entitlement is either promoted into a route/account slice with
     acceptance criteria or documented as out of scope for the first production
@@ -1101,8 +1122,8 @@ beyond the initial snapshot. See `docs/keyset-pagination-design.md` and
 
 - [ ] 5.2.1. Decide which front-end list surfaces need keyset pagination.
   - Requires phase 2.
-  - Audit users, catalogue collections, saved routes, POIs, and notes for
-    large-list behaviour.
+  - Audit users, catalogue collections, saved routes, Points of Interest, and
+    notes for large-list behaviour.
   - See `docs/keyset-pagination-design.md` §§Overview and Goals, Paginated
     Response Envelope, and Cursor Semantics; and `spec/openapi.json`
     `/api/v1/users`.
@@ -1119,16 +1140,18 @@ beyond the initial snapshot. See `docs/keyset-pagination-design.md` and
 
 ### 5.3. Evaluate native wrappers and advanced platform features
 
-This step answers whether the PWA foundation is ready for platform-specific
-distribution. See `docs/wildside-high-level-design.md` §Post-MVP Frontend
-Roadmap: Desktop and Mobile.
+This step answers whether the Progressive Web App foundation is ready for
+platform-specific distribution. See `docs/wildside-high-level-design.md`
+§Post-Minimum Viable Product Frontend Roadmap: Desktop and Mobile.
 
-- [ ] 5.3.1. Reassess Capacitor and Tauri packaging after PWA hardening.
+- [ ] 5.3.1. Reassess Capacitor and Tauri packaging after Progressive Web App
+      hardening.
   - Requires phase 4.
   - Validate service-worker, storage, geolocation, map, and offline tile
     behaviours inside native WebView constraints.
-  - See `docs/wildside-high-level-design.md` §§Post-MVP & Future Vision and
-    Post-MVP Frontend Roadmap: Desktop and Mobile.
+  - See `docs/wildside-high-level-design.md` §§Post-Minimum Viable Product &
+    Future Vision and Post-Minimum Viable Product Frontend Roadmap: Desktop and
+    Mobile.
   - Success: native wrapper work has a separate roadmap with platform-specific
     test gates.
 - [ ] 5.3.2. Evaluate push notifications and background sync as progressive
@@ -1147,8 +1170,8 @@ Roadmap: Desktop and Mobile.
 
 This step answers which higher-level product differentiators are worth adding
 after the core generative loop is dependable. See
-`docs/wildside-high-level-design.md` §§Post-MVP & Future Vision and AI/LLM
-Integration Strategy.
+`docs/wildside-high-level-design.md` §§Post-Minimum Viable Product & Future
+Vision and AI/LLM Integration Strategy.
 
 - [ ] 5.4.1. Decide whether community ratings, reviews, and route sharing
       graduate from mockup affordances.
@@ -1164,20 +1187,23 @@ Integration Strategy.
       experiments.
   - Requires phase 4.
   - Keep generated audio, device model constraints, and natural-language route
-    controls outwith the core PWA state machine until contracts are proven.
+    controls outwith the core Progressive Web App state machine until contracts
+    are proven.
   - See `docs/wildside-high-level-design.md` §§Audio Guides and AI/LLM
     Integration Strategy.
   - Success: advanced media and intent features have prototype success criteria
     before entering the main roadmap.
-- [ ] 5.4.3. Define feedback and reporting UX for route and data quality.
+- [ ] 5.4.3. Define feedback and reporting user experience for route and data
+      quality.
   - Requires phase 4.
-  - Decide whether users can report bad POIs, unsafe route segments, stale
-    narrative snippets, poor generated walks, or accessibility mismatches, and
-    define moderation and privacy expectations before adding visible write
-    paths.
+  - Decide whether users can report bad Points of Interest, unsafe route
+    segments, stale narrative snippets, poor generated walks, or accessibility
+    mismatches, and define moderation and privacy expectations before adding
+    visible write paths.
   - See `docs/wildside-high-level-design.md` §§Risk 1: Data Quality and
     Maintenance and Advanced Features & Community Integration; and
     `docs/wildside-pwa-data-model.md` §§Notes and progress and Trending and
     community picks.
   - Success: feedback either has explicit data contracts and user-visible
-    recovery copy or remains a documented post-MVP research item.
+    recovery copy or remains a documented post-Minimum Viable Product research
+    item.

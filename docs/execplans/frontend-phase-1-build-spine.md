@@ -1,9 +1,8 @@
 # Establish the front-end build spine
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DRAFT
 
@@ -16,8 +15,8 @@ boundaries, persist offline writes, and run accessibility-first quality gates.
 
 ## Constraints
 
-Do not add target-stack dependencies until the stack alignment task accepts
-them and updates `frontend-pwa/package.json`, the lockfile, and developer
+Do not add target-stack dependencies until the stack alignment task accepts them
+and updates `frontend-pwa/package.json`, the lockfile, and developer
 documentation. Generated API clients, token outputs, and route metadata must be
 owned by repeatable scripts. Server state belongs in TanStack Query, durable
 offline writes belong behind the outbox boundary, and feature views must not
@@ -41,14 +40,13 @@ and test harness changes as separate commits with focused verification.
 Follow `docs/frontend-roadmap.md` phase 1. First, record the stack alignment
 decision and normalize package versions, scripts, and token generation. Next,
 replace the single app view with a feature-first shell, implement route
-metadata, and map user experience (UX) graph states to routes or documented
-deferrals.
+metadata, and map user experience (UX) graph states to routes or
+documented deferrals.
 
 Then generate and wrap the OpenAPI REST client, introduce query-key factories,
 add Dexie-backed outbox and offline bundle manifest storage, and define the
-WebSocket event boundary. Finish by making component, accessibility,
-Playwright, semantic CSS, and documentation gates executable from Makefile
-targets.
+WebSocket event boundary. Finish by making component, accessibility, Playwright,
+semantic CSS, and documentation gates executable from Makefile targets.
 
 ## Validation
 
@@ -75,10 +73,10 @@ developer guide documents the workflow.
 ## Progress
 
 - [x] Draft phase-level ExecPlan.
-- [ ] Ratify stack and script boundaries.
-- [ ] Establish shell, routes, providers, and metadata.
-- [ ] Add validated API, query, outbox, and WebSocket boundaries.
-- [ ] Add accessibility, semantic CSS, and documentation gates.
+- Planned: Ratify stack and script boundaries.
+- Planned: Establish shell, routes, providers, and metadata.
+- Planned: Add validated API, query, outbox, and WebSocket boundaries.
+- Planned: Add accessibility, semantic CSS, and documentation gates.
 
 ## Surprises & Discoveries
 
@@ -86,8 +84,8 @@ None yet.
 
 ## Decision Log
 
-- 2026-04-28: Keep implementation order aligned with roadmap sections
-  1.1-1.4 because later feature slices depend on these boundaries.
+- 2026-04-28: Keep implementation order aligned with roadmap sections 1.1-1.4
+  because later feature slices depend on these boundaries.
 
 ## Outcomes & Retrospective
 
