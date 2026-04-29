@@ -34,6 +34,27 @@ source of truth for installed packages, and use
 `docs/v2a-front-end-stack.md` and `docs/frontend-roadmap.md` for target-stack
 decisions that have not yet been implemented.
 
+Canonical front-end references:
+
+- [v2a front-end stack](v2a-front-end-stack.md) documents the current package
+  state and the target v2a stack boundary.
+- [Wildside front-end roadmap](frontend-roadmap.md) is the implementation task
+  catalogue and dependency map.
+- [Wildside PWA design](wildside-pwa-design.md) documents the application
+  shell, offline-first behaviour, routing, and platform requirements.
+- [Wildside PWA data model](wildside-pwa-data-model.md) documents entity,
+  outbox, offline bundle, and persistence contracts.
+- [High-velocity accessibility-first component testing](high-velocity-accessibility-first-component-testing.md)
+  documents the accessibility test strategy for component and browser tests.
+- [Building accessible and responsive Progressive Web Applications](building-accessible-and-responsive-progressive-web-applications.md)
+  documents PWA, responsive design, and Web Content Accessibility Guidelines
+  (WCAG) expectations.
+- [Semantic Tailwind with DaisyUI best practice](semantic-tailwind-with-daisyui-best-practice.md)
+  and [Enforcing semantic Tailwind best practice](enforcing-semantic-tailwind-best-practice.md)
+  document semantic styling and lint policy.
+- [Frontend roadmap ExecPlan](execplans/frontend-roadmap.md) tracks overall
+  roadmap execution, with phase-specific ExecPlans under `docs/execplans/`.
+
 ### Local setup
 
 Use the repository Makefile entry points where possible. They keep Rust,
@@ -78,6 +99,10 @@ Token generation runs before front-end development, build, and preview scripts
 through package hooks. The source token package is `packages/tokens/`; generated
 outputs are consumed by `frontend-pwa/tailwind.config.js` and
 `frontend-pwa/src/index.css`.
+
+Makefile targets are the canonical local and Continuous Integration (CI) entry
+points. Package-local Bun commands are allowed for focused iteration, but a
+change is not ready to commit until the relevant Makefile gates pass.
 
 ### Architectural patterns
 
