@@ -7,15 +7,16 @@ This document describes the Wildside front-end stack in two layers:
   design and architecture documents.
 
 That distinction matters because the repository currently contains a minimal
-progressive web app (PWA) shell, while the broader v2a product architecture adds routing,
-localization, map, local-first data, and orchestration tooling that is not yet
-fully declared in `frontend-pwa/package.json`.
+progressive web app (PWA) shell, while the broader v2a product architecture
+adds routing, localization, map, local-first data, and orchestration tooling
+that is not yet fully declared in `frontend-pwa/package.json`.
 
 ## Overview
 
-The current Wildside progressive web app (PWA) is a client-side React application built with Bun,
-Vite `^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
-TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
+The current Wildside progressive web app (PWA) is a client-side React
+application built with Bun, Vite `^7.3.2`, React 19, React DOM 18, Tailwind
+CSS `^3`, DaisyUI `^4`, TanStack Query, Zod, clsx, TypeScript, Vitest, and
+Orval.
 
 The fuller v2a target stack described by the roadmap and mockup adds TanStack
 Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent
@@ -45,7 +46,8 @@ The current `frontend-pwa/package.json` declares:
 - TypeScript 5,
 - Vitest 3,
 - Orval 8, and
-- the current build, linting, token generation, and type checking toolchain described below.
+- the current build, linting, token generation, and type checking toolchain
+  described below.
 
 ### Full v2a application stack
 
@@ -58,10 +60,10 @@ The fuller v2a stack described across the repo’s architecture documents adds:
 - **XState** for modelling more complex interaction and workflow orchestration
   where a reducer or plain context store becomes too implicit.
 
-In other words, the current PWA shell proves the build, token-generation, API-client, and
-TanStack Query foundation, while the full product stack still needs the
-presentation, navigation, localization, map, and richer local-first state
-architecture.
+In other words, the current PWA shell proves the build, token-generation,
+API-client, and TanStack Query foundation, while the full product stack still
+needs the presentation, navigation, localization, map, and richer local-first
+state architecture.
 
 ## Runtime and build toolchain
 
@@ -74,8 +76,8 @@ architecture.
 - **Tailwind integration:** Tailwind CSS `^3` runs through
   `tailwind.config.js`, which consumes generated token presets and DaisyUI theme
   output.
-- **Module format:** The project is ECMAScript modules (ESM)-only (`"type": "module"` in
-  `package.json`).
+- **Module format:** The project is ECMAScript modules (ESM)-only (`"type":
+  "module"` in `package.json`).
 - **Token integration:** `vite.config.ts` wires a design-token plugin so token
   outputs are generated before development, build, and preview workflows.
 
@@ -176,8 +178,8 @@ adds the dependency upgrade.
 
 ## Component primitives and icons
 
-The current UI component layer does not declare Radix UI packages. The checked-in
-runtime depends on:
+The current UI component layer does not declare Radix UI packages. The
+checked-in runtime depends on:
 
 - `clsx` for conditional class composition.
 
