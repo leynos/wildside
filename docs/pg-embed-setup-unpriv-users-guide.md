@@ -321,7 +321,7 @@ assert!(std::ptr::eq(cluster, cluster2));
 # }
 ```
 
-**When to use each fixture:**
+#### When to use each fixture
 
 | Fixture               | Use case                                          |
 | --------------------- | ------------------------------------------------- |
@@ -504,7 +504,7 @@ The following table compares test isolation approaches:
 | Shared cluster, fresh database | Once      | 1–5 seconds       | Database  |
 | Shared cluster, template clone | Once      | 10–50 ms          | Database  |
 
-**When to use each approach:**
+#### When to use each approach
 
 - **Per-test cluster (`test_cluster` fixture):** Use when tests modify
   cluster-level settings, require specific PostgreSQL versions, or need
@@ -605,7 +605,7 @@ let temp_db = cluster.temporary_database_from_template("test_db", "migrated_temp
 # }
 ```
 
-**Drop behaviour:**
+#### Drop behaviour
 
 - `drop_database()` — Explicitly drop the database, failing if connections
   exist. Consumes the guard.

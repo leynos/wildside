@@ -40,7 +40,7 @@ This:
 After installation, run `whitaker --all` in any Rust project to lint it. Use
 `whitaker-ls` to list the installed Whitaker suite libraries.
 
-**Options:**
+#### Options
 
 - `--skip-deps` — Skip `cargo-dylint`/`dylint-link` installation check
 - `--skip-wrapper` — Skip wrapper script generation (prints
@@ -187,7 +187,7 @@ ______________________________________________________________________
 Limits the complexity of conditional predicates by enforcing a maximum number
 of boolean branches.
 
-**Configuration:**
+#### Configuration
 
 ```toml
 [conditional_max_n_branches]
@@ -241,7 +241,7 @@ ______________________________________________________________________
 
 Warns when modules exceed a configurable line count threshold.
 
-**Configuration:**
+#### Configuration
 
 ```toml
 [module_max_lines]
@@ -256,7 +256,7 @@ ______________________________________________________________________
 
 Enforces that every module begins with an inner documentation comment (`//!`).
 
-**How to fix:**
+#### How to fix
 
 ```rust
 mod my_module {
@@ -271,7 +271,7 @@ ______________________________________________________________________
 
 Forbids calling `.expect()` on `Option` or `Result` outside test contexts.
 
-**Configuration:**
+#### Configuration
 
 ```toml
 [no_expect_outside_tests]
@@ -288,7 +288,7 @@ ______________________________________________________________________
 Enforces capability-based filesystem access by forbidding direct use of
 `std::fs` operations.
 
-**Configuration:**
+#### Configuration
 
 ```toml
 [no_std_fs_operations]
@@ -329,21 +329,21 @@ ______________________________________________________________________
 Denies panicking `unwrap_or_else` fallbacks on `Option`/`Result`, including
 tests. Doctest runs remain exempt.
 
-**Configuration:**
+#### Configuration
 
 ```toml
 [no_unwrap_or_else_panic]
 allow_in_main = true
 ```
 
-**What is allowed:**
+#### What is allowed
 
 - Panicking `unwrap_or_else` fallbacks inside doctests
 - Panicking `unwrap_or_else` fallbacks inside `main` when
   `allow_in_main = true`
 - Non-panicking `unwrap_or_else` fallbacks
 
-**What is denied:**
+#### What is denied
 
 - `unwrap_or_else(|| panic!(..))`
 - `unwrap_or_else(|| value.unwrap())`

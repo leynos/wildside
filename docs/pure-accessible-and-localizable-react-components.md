@@ -838,7 +838,7 @@ This section synthesizes all the architectural principles into a step-by-step
 implementation of a complex, real-world component: a modal form for updating
 user settings.
 
-**Component Specification:**
+#### Component Specification
 
 - **Functionality:** A modal dialog that fetches current user data, allows the
   user to edit their name and email, validates the input, and submits the
@@ -852,7 +852,7 @@ user settings.
 - **Localization:** All visible text, including labels, buttons, and validation
   messages, must be translated.
 
-**Step-by-Step Implementation:**
+#### Step-by-Step Implementation
 
 1. **Foundation (Behavioral Layer):** The component's structure is defined
     using Radix UI primitives. `AlertDialog.Root` creates the modal context,

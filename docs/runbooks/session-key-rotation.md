@@ -150,7 +150,7 @@ will be logged out when routed to new pods. Options:
 
 **Cause:** Key file may not be mounted correctly or key is too short.
 
-**Resolution:**
+#### Resolution
 
 ```bash
 # Check if the secret is mounted
@@ -190,7 +190,7 @@ sessions expire naturally.
 **Cause:** Rolling restart may not have triggered, or pods cached the old
 secret.
 
-**Resolution:**
+#### Resolution
 
 ```bash
 # Force a rolling restart

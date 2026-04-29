@@ -443,12 +443,12 @@ The harness spawns a real `redis-server` process with:
 
 The cache adapter requires:
 
-**Production dependencies:**
+#### Production dependencies
 
 - `bb8-redis` – Connection pooling for `redis-rs`
 - `serde` / `serde_json` – Payload serialization
 
-**Test infrastructure:**
+#### Test infrastructure
 
 - `test-support` feature flag – Enables `RedisRouteCache::new()` constructor
   and `RedisTestServer::pool()` for test injection
@@ -647,7 +647,7 @@ Implementation details within `outbound::queue`:
 
 The queue adapter requires:
 
-**Production dependencies:**
+#### Production dependencies
 
 - `apalis-core` – Core Apalis job-queue primitives
 - `apalis-postgres` – PostgreSQL storage backend for Apalis
@@ -655,7 +655,7 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialisation
 
-**Test infrastructure:**
+#### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
 - No feature flags required; BDD tests are in the `tests/` integration

@@ -474,7 +474,7 @@ understanding the overall programme flow requires navigating through many tiny,
 disconnected pieces—making it as difficult to follow as the original
 spaghetti.24
 
-**Strategies to Avoid Ravioli Code:**
+#### Strategies to Avoid Ravioli Code
 
 1. **Focus on Cohesion:** When extracting methods or creating new classes,
    ensure that the extracted code is functionally cohesive. Elements within a

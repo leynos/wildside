@@ -170,14 +170,14 @@ ______________________________________________________________________
 - Frontend runs **orval** under bun to generate a fetch client and types that
   align with the backend.
 
-**Backend (sketch):**
+#### Backend (sketch)
 
 - `models/` contains structs with
   `#[derive(Serialize, Deserialize, utoipa::ToSchema)]`.
 - `api/` handlers carry `#[utoipa::path(...)]` per route.
 - `main.rs` derives `#[derive(utoipa::OpenApi)]` and mounts Swagger UI for DX.
 
-**Frontend (sketch):**
+#### Frontend (sketch)
 
 - `frontend-pwa/orval.config.cjs` points to `../spec/openapi.json` (or the dev
   URL).
@@ -189,7 +189,7 @@ ______________________________________________________________________
 - TanStack Query hooks (handwritten or template‑generated) wrap the client for
   caching and retries.
 
-**Flow:**
+#### Flow
 
 ```text
 Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  →  React + TanStack Query
@@ -204,7 +204,7 @@ Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  
   - Human‑readable HTML docs for events.
   - Optional client/server stubs (WebSocket helpers) as a starting point.
 
-**Flow:**
+#### Flow
 
 ```text
 Rust event payloads (serde + schemars)
@@ -237,7 +237,7 @@ Tailwind/daisyUI and any future native shells.
   the `contrastThreshold` (override via `CONTRAST_THRESHOLD` env or
   `packages/tokens/package.json`). Uses the `color` library for WCAG contrast.
 
-**Frontend consumption:**
+### Frontend consumption
 
 - Tailwind `presets: [require('@app/tokens/dist/tw/preset.cjs')]`.
 - daisyUI `daisyui: require('@app/tokens/dist/daisy/theme.cjs')`.
@@ -357,7 +357,7 @@ This repository ships the Helm chart used to deploy the application. Cluster
 automation, object storage/CDN uploads, and environment overlays are managed
 in the Nile Valley repository.
 
-**Principles:**
+### Principles
 
 - Backend pods are stateless; DB/cache live in managed services (for example,
   PostgreSQL and Redis). Migrations run via Job.
@@ -372,7 +372,7 @@ in the Nile Valley repository.
 Secret (tokens/DB URLs), HPA, PodDisruptionBudget (rendered only when
 `pdb.enabled` is true and `replicaCount` exceeds 1).
 
-**Deployment (sketch):**
+#### Deployment (sketch)
 
 ```yaml
 apiVersion: apps/v1

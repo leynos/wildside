@@ -1796,7 +1796,7 @@ The language server supports navigation from Rust step definitions to matching
 feature steps. This enables developers to quickly find all usages of a step
 definition across feature files.
 
-**Usage:**
+#### Usage for go to definition
 
 1. Place the cursor on a Rust function annotated with `#[given]`, `#[when]`, or
    `#[then]`.
@@ -1806,7 +1806,7 @@ definition across feature files.
 When multiple feature files contain matching steps, the editor presents a list
 of locations to choose from.
 
-**How matching works:**
+#### How matching works for go to definition
 
 - Matching is keyword-aware: a `#[given]` step only matches `Given` steps in
   feature files. The parser correctly handles `And` and `But` keywords by
@@ -1821,7 +1821,7 @@ via the `textDocument/implementation` handler. This enables developers to jump
 from a step line in a `.feature` file directly to the Rust function(s) that
 implement it.
 
-**Usage:**
+#### Usage for go to implementation
 
 1. Place the cursor on a step line in a `.feature` file (e.g., `Given a user
    exists`).
@@ -1832,7 +1832,7 @@ implement it.
 When multiple implementations match (duplicate step patterns), the editor
 presents a list of locations to choose from.
 
-**How matching works:**
+#### How matching works for go to implementation
 
 - Matching is keyword-aware: a `Given` step in a feature file only matches
   `#[given]` implementations in Rust.

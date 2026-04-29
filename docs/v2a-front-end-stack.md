@@ -7,16 +7,16 @@ This document describes the Wildside front-end stack in two layers:
   design and architecture documents.
 
 That distinction matters because the repository currently contains a minimal
-progressive web app (PWA) shell, while the broader v2a product architecture
-adds routing, localization, map, local-first data, and orchestration tooling
-that is not yet fully declared in `frontend-pwa/package.json`.
+Progressive Web Application (PWA) shell, while the broader v2a product
+architecture adds routing, localization, map, local-first data, and
+orchestration tooling that is not yet fully declared in
+`frontend-pwa/package.json`.
 
 ## Overview
 
-The current Wildside progressive web app (PWA) is a client-side React
-application built with Bun, Vite `^7.3.2`, React 19, React DOM 18, Tailwind
-CSS `^3`, DaisyUI `^4`, TanStack Query, Zod, clsx, TypeScript, Vitest, and
-Orval.
+The current Wildside PWA is a client-side React application built with Bun,
+Vite `^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
+TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
 
 The fuller v2a target stack described by the roadmap and mockup adds TanStack
 Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent
@@ -76,7 +76,7 @@ state architecture.
 - **Tailwind integration:** Tailwind CSS `^3` runs through
   `tailwind.config.js`, which consumes generated token presets and DaisyUI theme
   output.
-- **Module format:** The project is ECMAScript modules (ESM)-only (`"type":
+- **Module format:** The project is ECMAScript Modules (ESM)-only (`"type":
   "module"` in `package.json`).
 - **Token integration:** `vite.config.ts` wires a design-token plugin so token
   outputs are generated before development, build, and preview workflows.
@@ -92,14 +92,14 @@ In practice, the front-end entry path is:
 ### React
 
 The UI is built with React 19 and `react-dom/client`. The main bootstrap file,
-`src/main.tsx`, mounts the single-page application (SPA) into `#root`,
+`src/main.tsx`, mounts the Single-Page Application (SPA) into `#root`,
 provides a loading fallback via Suspense, and avoids rendering during tests.
 
 ### Routing
 
-The current PWA does not declare TanStack Router and still renders a single
-application (SPA) shell. The v2a target route tree is planned by the roadmap
-and sitemap, but it is not yet implemented in `frontend-pwa`.
+The current PWA does not declare TanStack Router and still renders a single SPA
+shell. The v2a target route tree is planned by the roadmap and sitemap, but it
+is not yet implemented in `frontend-pwa`.
 
 ### State management
 
@@ -365,5 +365,5 @@ PWA runtime dependencies:
 - MapLibre GL JS,
 - TanStack Table,
 - Redux,
-- Next.js, Remix, or any server-side rendering (SSR) framework, and
+- Next.js, Remix, or any Server-Side Rendering (SSR) framework, and
 - Framer Motion.

@@ -1182,7 +1182,7 @@ validation. During rotation:
 The 2-hour session TTL means existing sessions expire naturally within the
 overlap window. Users routed to new pods during rotation receive new sessions.
 
-**Requirements for zero-downtime rotation:**
+###### Requirements for zero-downtime rotation
 
 - At least 2 replicas must be running.
 - The Helm chart's `sessionSecret.enabled` must be `true`.
@@ -2307,7 +2307,7 @@ response times and reduce load on the database for frequently accessed or
 computationally heavy data. The Redis service is a single instance or managed
 service that the backend connects to, separate from the Postgres database.
 
-**Use cases for caching:**
+#### Use cases for caching
 
 - **Route result caching:** After the expensive process of generating a route,
   the result can be cached in Redis for a short period (e.g. 24
