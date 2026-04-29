@@ -79,8 +79,9 @@ preference hooks, and stale or offline catalogue states.
 
 Proceed to phase 3 in `docs/execplans/frontend-phase-3-generated-walks-map.md`.
 Deliver route generation, wizard flow, map-led quick generation, MapLibre
-stability, active navigation, degraded-GPS recovery, saved routes, notes,
-progress, and POI narrative snippet lifecycle.
+stability, active navigation, degraded Global Positioning System (GPS) recovery,
+saved routes, notes, progress, and Point of Interest (POI) narrative snippet
+lifecycle.
 
 Proceed to phase 4 in
 `docs/execplans/frontend-phase-4-offline-safety-completion.md`. Deliver
@@ -90,7 +91,7 @@ preferences, conflict recovery, walk completion, and completion summaries.
 Use phase 5 in `docs/execplans/frontend-phase-5-deferred-extensions.md` to
 evaluate account, entitlement, pagination, native wrappers, notifications,
 community features, audio, intent, feedback, and reporting only after the core
-PWA is trustworthy.
+Progressive Web Application (PWA) is trustworthy.
 
 ## Validation
 

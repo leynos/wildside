@@ -73,7 +73,7 @@ developer guide documents the workflow.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Ratify stack and script boundaries.
 - [ ] Establish shell, routes, providers, and metadata.
 - [ ] Add validated API, query, outbox, and WebSocket boundaries.

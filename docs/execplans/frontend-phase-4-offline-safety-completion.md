@@ -9,17 +9,18 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase completes the PWA reliability promise. Users can install the app,
-load the app shell offline, manage offline bundles, persist safety preferences,
-complete a walk, and see completion summaries that emphasize discovered places
-rather than fitness scoring.
+This phase completes the Progressive Web Application (PWA) reliability promise.
+Users can install the app, load the app shell offline, manage offline bundles,
+persist safety preferences, complete a walk, and see completion summaries that
+emphasize discovered places rather than fitness scoring.
 
 ## Constraints
 
-Service-worker cache policy must be explicit and tested. Tile bytes must live
-outside React state and TanStack Query. Offline writes must use the same outbox
-and idempotency strategy as earlier phases. Safety preferences must store
-semantic descriptor IDs rather than UI labels or CSS classes.
+Service-worker cache policy must be explicit and tested. HTTPS is required for
+installability, service-worker registration, and production PWA validation. Tile
+bytes must live outside React state and TanStack Query. Offline writes must use
+the same outbox and idempotency strategy as earlier phases. Safety preferences
+must store semantic descriptor IDs rather than UI labels or CSS classes.
 
 ## Tolerances
 
@@ -64,7 +65,7 @@ conflict recovery, and accessible completion in at least one non-default locale.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Add manifest, service worker, and cache policies.
 - [ ] Deliver offline bundle lifecycle.
 - [ ] Persist safety preferences with conflict recovery.

@@ -11,15 +11,16 @@ Status: DRAFT
 
 This phase proves Wildside's core product loop. A user can draft a walk, request
 generation, follow progress, review the route on a stable map, inspect stops,
-save the route, edit notes, and recover when location or GPS quality degrades.
+save the route, edit notes, and recover when location or Global Positioning
+System (GPS) quality degrades.
 
 ## Constraints
 
 Route generation must be durable and retry-safe. MapLibre ownership must remain
 imperative and stable while React overlays change. WebSocket events may patch or
 invalidate TanStack Query caches, but must not mutate view state directly.
-Generated route plans must carry POI narrative snippet lifecycle and cache
-metadata so offline rendering remains possible.
+Generated route plans must carry Point of Interest (POI) narrative snippet
+lifecycle and cache metadata so offline rendering remains possible.
 
 ## Tolerances
 
@@ -43,7 +44,7 @@ impossible states cannot render.
 
 Add lazy MapLibre loading, map state ownership, route-start and location
 permission UX, map-led quick generation, Quick Map tabs, Itinerary tabs,
-pedestrian instructions, degraded-GPS recovery, saved-route states, notes and
+pedestrian instructions, degraded GPS recovery, saved-route states, notes and
 progress hooks, route-plan persistence, and POI narrative snippet lifecycle.
 Finish with contract, state-transition, map-provider, and Playwright coverage.
 
@@ -65,7 +66,7 @@ share dialogs.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Add route-generation schemas and async state.
 - [ ] Deliver wizard and map-led generation surfaces.
 - [ ] Keep MapLibre stable across overlays.
@@ -78,7 +79,7 @@ None yet.
 
 ## Decision Log
 
-- 2026-04-28: Include map-led quick generation and degraded-GPS recovery in the
+- 2026-04-28: Include map-led quick generation and degraded GPS recovery in the
   phase plan because both are now phase 3 roadmap tasks.
 
 ## Outcomes & Retrospective

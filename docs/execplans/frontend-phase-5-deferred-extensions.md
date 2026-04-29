@@ -9,10 +9,11 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase protects the core PWA from speculative scope. After phases 1-4 are
-stable, product and engineering can decide which account, entitlement,
-pagination, native wrapper, notification, community, audio, intent, feedback,
-and reporting features deserve their own implementation slices.
+This phase protects the core Progressive Web Application (PWA) from speculative
+scope. After phases 1-4 are stable, product and engineering can decide which
+account, entitlement, pagination, native wrapper, notification, community,
+audio, intent, feedback, and reporting features deserve their own implementation
+slices.
 
 ## Constraints
 
@@ -23,10 +24,10 @@ privacy expectations, and user-visible recovery copy.
 
 ## Tolerances
 
-Escalate if a deferred feature becomes necessary for MVP acceptance, if
-entitlement rules affect access to the core route-generation loop, or if native
-wrapper testing exposes service-worker, storage, geolocation, or map behaviour
-that contradicts the PWA implementation.
+Escalate if a deferred feature becomes necessary for Minimum Viable Product
+(MVP) acceptance, if entitlement rules affect access to the core
+route-generation loop, or if native wrapper testing exposes service-worker,
+storage, geolocation, or map behaviour that contradicts the PWA implementation.
 
 ## Risks
 
@@ -61,7 +62,7 @@ contract, and browser validation before work starts.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Evaluate account, auth, entitlement, and free-tier UX.
 - [ ] Evaluate pagination requirements.
 - [ ] Evaluate native wrappers and progressive platform features.

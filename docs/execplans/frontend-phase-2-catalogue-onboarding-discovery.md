@@ -34,8 +34,8 @@ guest and authenticated preference behaviour conflicts with the API contract.
 
 Catalogue work can drift into bespoke UI data models. Mitigate this by adding
 shared entity types and descriptor registries before rendering screens, and by
-testing fallback locale ordering and SI-unit formatting before adding more card
-surfaces.
+testing fallback locale ordering and International System of Units (SI)-unit
+formatting before adding more card surfaces.
 
 ## Plan
 
@@ -69,7 +69,7 @@ fallback behaviour.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Add shared entity and descriptor vocabulary.
 - [ ] Implement catalogue-backed Welcome, Discover, Explore, and Customize.
 - [ ] Persist interests and preferences.

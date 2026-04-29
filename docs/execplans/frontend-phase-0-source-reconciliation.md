@@ -19,10 +19,10 @@ becoming the source of design decisions.
 
 `docs/frontend-roadmap.md` remains the task catalogue, not the primary design
 authority. Platform guidance in `docs/v2a-front-end-stack.md` takes precedence
-over older PWA design material when the documents conflict. Substantive policy,
-schema, and contract decisions must move into a design document or ADR. Imported
-v2a lint and token work must cite the source repository and local ownership
-path.
+over older Progressive Web Application (PWA) design material when the documents
+conflict. Substantive policy, schema, and contract decisions must move into a
+design document or Architecture Decision Record (ADR). Imported v2a lint and
+token work must cite the source repository and local ownership path.
 
 ## Tolerances
 
@@ -73,7 +73,7 @@ Markdown and Mermaid validation pass.
 
 ## Progress
 
-- [ ] Draft phase-level ExecPlan.
+- [x] Draft phase-level ExecPlan.
 - [ ] Catalogue authoritative sources and contradictions.
 - [ ] Reconcile source documents and ADR needs.
 - [ ] Import and document v2a lint and token requirements.
