@@ -7,13 +7,13 @@ This document describes the Wildside front-end stack in two layers:
   design and architecture documents.
 
 That distinction matters because the repository currently contains a minimal
-PWA shell, while the broader v2a product architecture adds routing,
+progressive web app (PWA) shell, while the broader v2a product architecture adds routing,
 localization, map, local-first data, and orchestration tooling that is not yet
 fully declared in `frontend-pwa/package.json`.
 
 ## Overview
 
-The current Wildside PWA is a client-side React application built with Bun,
+The current Wildside progressive web app (PWA) is a client-side React application built with Bun,
 Vite `^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
 TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
 
@@ -45,7 +45,7 @@ The current `frontend-pwa/package.json` declares:
 - TypeScript 5,
 - Vitest 3,
 - Orval 8, and
-- the current build, lint, token, and type-check toolchain described below.
+- the current build, linting, token generation, and type checking toolchain described below.
 
 ### Full v2a application stack
 
@@ -58,7 +58,7 @@ The fuller v2a stack described across the repo’s architecture documents adds:
 - **XState** for modelling more complex interaction and workflow orchestration
   where a reducer or plain context store becomes too implicit.
 
-In other words, the current PWA shell proves the build, token, API-client, and
+In other words, the current PWA shell proves the build, token-generation, API-client, and
 TanStack Query foundation, while the full product stack still needs the
 presentation, navigation, localization, map, and richer local-first state
 architecture.
@@ -74,7 +74,7 @@ architecture.
 - **Tailwind integration:** Tailwind CSS `^3` runs through
   `tailwind.config.js`, which consumes generated token presets and DaisyUI theme
   output.
-- **Module format:** The project is ESM-only (`"type": "module"` in
+- **Module format:** The project is ECMAScript modules (ESM)-only (`"type": "module"` in
   `package.json`).
 - **Token integration:** `vite.config.ts` wires a design-token plugin so token
   outputs are generated before development, build, and preview workflows.
@@ -90,14 +90,14 @@ In practice, the front-end entry path is:
 ### React
 
 The UI is built with React 19 and `react-dom/client`. The main bootstrap file,
-`src/main.tsx`, mounts the SPA into `#root`, provides a loading fallback via
-Suspense, and avoids rendering during tests.
+`src/main.tsx`, mounts the single-page application (SPA) into `#root`,
+provides a loading fallback via Suspense, and avoids rendering during tests.
 
 ### Routing
 
 The current PWA does not declare TanStack Router and still renders a single
-`App` shell. The v2a target route tree is planned by the roadmap and sitemap,
-but it is not yet implemented in `frontend-pwa`.
+application (SPA) shell. The v2a target route tree is planned by the roadmap
+and sitemap, but it is not yet implemented in `frontend-pwa`.
 
 ### State management
 
@@ -106,7 +106,7 @@ library such as Redux, Zustand, or XState in `package.json`. State is managed
 through:
 
 - React component state and hooks,
-- the checked-in `ThemeProvider` plus the i18n runtime, and
+- the checked-in `ThemeProvider`, and
 - route-local and component-local state for shell and screen behaviour.
 
 That keeps the checked-in mockup closer to a React-plus-context architecture
@@ -257,7 +257,8 @@ All v2a front ends — Wildside and Corbusier alike — share a common pattern f
 presenting domain entities on cards, lists, and detail screens. Entity models
 carry their own localized strings rather than delegating display-text
 responsibility to the Fluent translation bundles. This keeps Fluent bundles
-focused on UI chrome (button labels, ARIA labels, section headings, format
+focused on UI chrome (button labels, Accessible Rich Internet Applications
+(ARIA) labels, section headings, format
 strings) while letting each entity own its names, descriptions, and badge text
 per locale.
 
@@ -362,5 +363,5 @@ PWA runtime dependencies:
 - MapLibre GL JS,
 - TanStack Table,
 - Redux,
-- Next.js, Remix, or any SSR framework, and
+- Next.js, Remix, or any server-side rendering (SSR) framework, and
 - Framer Motion.
