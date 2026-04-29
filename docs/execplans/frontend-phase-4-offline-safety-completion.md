@@ -9,24 +9,26 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase completes the Progressive Web Application (PWA) reliability promise.
-Users can install the app, load the app shell offline, manage offline bundles,
+This phase completes the Progressive Web App (PWA) reliability promise. Users
+can install the app, load the app shell offline, manage offline bundles,
 persist safety preferences, complete a walk, and see completion summaries that
 emphasize discovered places rather than fitness scoring.
 
 ## Constraints
 
-Service-worker cache policy must be explicit and tested. HTTPS is required for
-installability, service-worker registration, and production PWA validation. Tile
-bytes must live outside React state and TanStack Query. Offline writes must use
-the same outbox and idempotency strategy as earlier phases. Safety preferences
-must store semantic descriptor IDs rather than UI labels or CSS classes.
+Service-worker cache policy must be explicit and tested. PWA features and
+service workers require HTTPS, with `http://localhost` as the sole development
+exception. Tile bytes must live outside React state and TanStack Query. Offline
+writes must use the same outbox and idempotency strategy as earlier phases.
+Safety preferences must store semantic descriptor IDs rather than UI labels or
+CSS classes.
 
 ## Tolerances
 
 Escalate if browser quota behaviour prevents reliable bundle status updates, if
-service-worker update UX requires an unplanned product decision, or if walk
-completion contracts cannot avoid duplicate sessions after offline retry.
+service-worker update user experience (UX) requires an unplanned product
+decision, or if walk completion contracts cannot avoid duplicate sessions after
+offline retry.
 
 ## Risks
 
@@ -67,6 +69,8 @@ conflict recovery, and accessible completion in at least one non-default locale.
 
 - [x] Draft phase-level ExecPlan.
 - [ ] Add manifest, service worker, and cache policies.
+- [ ] Add tests that assert service-worker registration requires HTTPS or
+  `http://localhost`.
 - [ ] Deliver offline bundle lifecycle.
 - [ ] Persist safety preferences with conflict recovery.
 - [ ] Record walks and render completion summaries.

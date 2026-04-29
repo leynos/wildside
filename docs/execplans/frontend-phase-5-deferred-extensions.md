@@ -9,10 +9,10 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase protects the core Progressive Web Application (PWA) from speculative
-scope. After phases 1-4 are stable, product and engineering can decide which
-account, entitlement, pagination, native wrapper, notification, community,
-audio, intent, feedback, and reporting features deserve their own implementation
+This phase protects the core Progressive Web App (PWA) from speculative scope.
+After phases 1-4 are stable, product and engineering can decide which account,
+entitlement, pagination, native wrapper, notification, community, audio,
+intent, feedback, and reporting features deserve their own implementation
 slices.
 
 ## Constraints
@@ -38,9 +38,10 @@ contracts, validation plan, and roadmap placement before implementation.
 ## Plan
 
 Follow `docs/frontend-roadmap.md` phase 5. Evaluate whether visible sign-in,
-profile expansion, WebSocket display-name validation, entitlement, and free-tier
-UX belong in the first production release. Decide which list surfaces need
-keyset pagination and only add pagination UI for promoted surfaces.
+profile expansion, WebSocket display-name validation, entitlement, and
+free-tier user experience (UX) belong in the first production release. Decide
+which list surfaces need keyset pagination and only add pagination UI for
+promoted surfaces.
 
 After phase 4, reassess Capacitor, Tauri, push notifications, and background
 sync as platform-specific extensions. Evaluate community ratings, reviews,

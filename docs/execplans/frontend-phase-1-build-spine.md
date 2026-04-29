@@ -41,7 +41,8 @@ and test harness changes as separate commits with focused verification.
 Follow `docs/frontend-roadmap.md` phase 1. First, record the stack alignment
 decision and normalize package versions, scripts, and token generation. Next,
 replace the single app view with a feature-first shell, implement route
-metadata, and map UX graph states to routes or documented deferrals.
+metadata, and map user experience (UX) graph states to routes or documented
+deferrals.
 
 Then generate and wrap the OpenAPI REST client, introduce query-key factories,
 add Dexie-backed outbox and offline bundle manifest storage, and define the

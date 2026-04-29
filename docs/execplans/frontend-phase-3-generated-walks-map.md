@@ -43,9 +43,10 @@ WebSocket progress convergence. Build the wizard steps and transition wrapper so
 impossible states cannot render.
 
 Add lazy MapLibre loading, map state ownership, route-start and location
-permission UX, map-led quick generation, Quick Map tabs, Itinerary tabs,
-pedestrian instructions, degraded GPS recovery, saved-route states, notes and
-progress hooks, route-plan persistence, and POI narrative snippet lifecycle.
+permission user experience (UX), map-led quick generation, Quick Map tabs,
+Itinerary tabs, pedestrian instructions, degraded GPS recovery, saved-route
+states, notes and progress hooks, route-plan persistence, and POI narrative
+snippet lifecycle.
 Finish with contract, state-transition, map-provider, and Playwright coverage.
 
 ## Validation

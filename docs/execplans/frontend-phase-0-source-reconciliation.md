@@ -19,7 +19,7 @@ becoming the source of design decisions.
 
 `docs/frontend-roadmap.md` remains the task catalogue, not the primary design
 authority. Platform guidance in `docs/v2a-front-end-stack.md` takes precedence
-over older Progressive Web Application (PWA) design material when the documents
+over older Progressive Web App (PWA) design material when the documents
 conflict. Substantive policy, schema, and contract decisions must move into a
 design document or Architecture Decision Record (ADR). Imported v2a lint and
 token work must cite the source repository and local ownership path.
