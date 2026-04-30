@@ -3,9 +3,9 @@
 This roadmap translates the Wildside front-end design documents, API contracts,
 user experience state graph, and v2a mockup into an outcome-oriented delivery
 sequence for `frontend-pwa/`. It does not promise dates. Each phase carries one
-testable idea at the GIST level; steps validate that idea through sequenced
-workstreams, and tasks are review-sized execution units with explicit acceptance
-criteria.
+testable idea at the Goals, Ideas, Steps, Tasks (GIST) level; steps validate
+that idea through sequenced workstreams, and tasks are review-sized execution
+units with explicit acceptance criteria.
 
 The primary source material is `docs/wildside-pwa-design.md`,
 `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
@@ -302,8 +302,7 @@ Suggested inbound endpoints; `spec/openapi.json`; and `spec/asyncapi.yaml`.
 - [ ] 1.3.3. Introduce Dexie storage for outbox and offline bundle manifests.
   - Requires 1.3.2.
   - Implement the minimal schema for outbox items and offline bundles while
-    leaving tile bytes to Cache Storage for the Minimum Viable Product (Minimum
-    Viable Product).
+    leaving tile bytes to Cache Storage for the Minimum Viable Product (MVP).
   - See `docs/wildside-pwa-data-model.md` §§Outbox, Idempotency contract, and
     Frontend persistence; and `docs/local-first-react.md` §§Durable Offline
     Writes and Handling Large Offline Assets.
@@ -471,8 +470,8 @@ Explore, and Customize.
     and `explore.catalogue_unavailable`; and
     `../wildside-mockup-v2a/docs/wildside-mockup-design.md` §Stage 1
     implementation notes.
-  - Success: route cards use International System of Units (International System
-    of Units)-unit formatting and no hard-coded entity copy.
+  - Success: route cards use International System of Units (SI) unit formatting
+    and no hard-coded entity copy.
 - [ ] 2.2.4. Implement Customize preference controls and planned generation
       entry points.
   - Requires 2.2.3.
@@ -757,9 +756,8 @@ architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
 - [ ] 3.3.7. Add pedestrian instructions and degraded-location recovery.
   - Requires 3.3.6.
   - Render next-turn instructions, upcoming Point of Interest highlights,
-    off-route copy, degraded-Global Positioning System confidence states,
-    pause/resume affordances, and manual progress fallback when reliable
-    tracking is unavailable.
+    off-route copy, degraded GPS-confidence states, pause/resume affordances,
+    and manual progress fallback when reliable tracking is unavailable.
   - See `docs/wildside-high-level-design.md` §In-Walk Navigation Experience;
     `docs/wildside-ux-state-graph-v0.1.json` states
     `itinerary.navigation_active`, `itinerary.navigation_paused`, and
@@ -894,13 +892,17 @@ and `docs/building-accessible-and-responsive-progressive-web-applications.md`
       fallback.
   - Requires 4.1.1.
   - Cache built assets, serve the app shell for client-side routes, and avoid
-    immediate `skipWaiting()` unless the update prompt is implemented.
+    immediate `skipWaiting()` unless the update prompt is implemented. Validate
+    service-worker registration and installability only in secure contexts:
+    Hypertext Transfer Protocol Secure (HTTPS), with `http://localhost` allowed
+    as the browser-enforced development exception.
   - See
     `docs/building-accessible-and-responsive-progressive-web-applications.md`
     §§1.2, 2.1, and 2.2; and `docs/wildside-pwa-design.md` §Service worker,
     manifest, and caching strategy.
   - Success: `/wizard/step-2` and `/map/quick` deep links load offline after a
-    successful precache.
+    successful precache, and registration checks fail outside HTTPS or
+    `http://localhost`.
 - [ ] 4.1.3. Implement runtime cache policies for catalogue, route plans, status
       requests, and tiles.
   - Requires 4.1.2 and 3.4.3.

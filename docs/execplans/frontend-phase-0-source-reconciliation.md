@@ -55,8 +55,8 @@ without committing generated mockup artefacts as source.
 
 Finish by replacing decision prose in roadmap phases 1-5 with inline citations
 to the reconciled source documents and by updating task dependencies where a new
-Architecture Decision Record, schema update, or design-document merge gates
-implementation.
+Architecture Decision Record, schema update, or design document requires
+implementation of merge gates.
 
 ## Validation
 
