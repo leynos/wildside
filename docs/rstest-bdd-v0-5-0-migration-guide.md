@@ -46,7 +46,7 @@ Projects are affected if any of the following are true:
 
 ### 1) Update scenario return types
 
-**Before (unsupported in `v0.5.0`):**
+#### Before (unsupported in `v0.5.0`)
 
 ```rust
 # use rstest_bdd_macros::scenario;
@@ -56,7 +56,7 @@ fn scenario_returns_value() -> Result<u32, &'static str> {
 }
 ```
 
-**After (supported):**
+#### After (supported)
 
 ```rust
 # use rstest_bdd_macros::scenario;
@@ -165,7 +165,7 @@ prefer the stable helper at `rstest_bdd::async_step::sync_to_async`. **Before:**
 use rstest_bdd::sync_to_async;
 ```
 
-**After:**
+#### After
 
 ```rust
 use rstest_bdd::async_step::sync_to_async;
@@ -207,7 +207,7 @@ fn runs_feature(harness: Harness) {
 }
 ```
 
-**After (clear intent, no dummy usage needed):**
+#### After (clear intent, no dummy usage needed)
 
 ```rust
 # use rstest_bdd_macros::scenario;

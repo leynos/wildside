@@ -25,6 +25,135 @@ All suites run through the same quality gateways:
 - `make lint`
 - `make test`
 
+## Front-end development
+
+The Wildside Progressive Web Application (PWA) lives under `frontend-pwa/`.
+The current checked-in package is intentionally smaller than the full v2a
+target stack. Contributors must treat `frontend-pwa/package.json` as the
+source of truth for installed packages, and use
+`docs/v2a-front-end-stack.md` and `docs/frontend-roadmap.md` for target-stack
+decisions that have not yet been implemented.
+
+Canonical front-end references:
+
+- [v2a front-end stack](v2a-front-end-stack.md) documents the current package
+  state and the target v2a stack boundary.
+- [Wildside front-end roadmap](frontend-roadmap.md) is the implementation task
+  catalogue and dependency map.
+- [Wildside PWA design](wildside-pwa-design.md) documents the application
+  shell, offline-first behaviour, routing, and platform requirements.
+- [Wildside PWA data model](wildside-pwa-data-model.md) documents entity,
+  outbox, offline bundle, and persistence contracts.
+- [High-velocity accessibility-first component testing](high-velocity-accessibility-first-component-testing.md)
+  documents the accessibility test strategy for component and browser tests.
+- [Building accessible and responsive Progressive Web Applications](building-accessible-and-responsive-progressive-web-applications.md)
+  documents PWA, responsive design, and Web Content Accessibility Guidelines
+  (WCAG) expectations.
+- [Semantic Tailwind with DaisyUI best practice](semantic-tailwind-with-daisyui-best-practice.md)
+  and [Enforcing semantic Tailwind best practice](enforcing-semantic-tailwind-best-practice.md)
+  document semantic styling and lint policy.
+- [Frontend roadmap ExecPlan](execplans/frontend-roadmap.md) tracks overall
+  roadmap execution, with phase-specific ExecPlans under `docs/execplans/`.
+
+### Local setup
+
+Use the repository Makefile entry points where possible. They keep Rust,
+TypeScript, tokens, and documentation gates aligned:
+
+```bash
+make deps
+make fmt
+make lint
+make test
+```
+
+The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
+React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
+Zod 3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI,
+i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
+target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
+and the lockfile.
+
+### Build and preview workflow
+
+Run front-end commands through workspace or Makefile targets unless debugging a
+package-local failure:
+
+```bash
+make build-frontend
+make test-frontend
+make lint-frontend
+make typecheck
+```
+
+Package-local commands remain useful while iterating in `frontend-pwa/`:
+
+```bash
+bun run dev
+bun run build
+bun run preview
+bun run test
+```
+
+Token generation runs before front-end development, build, and preview scripts
+through package hooks. The source token package is `packages/tokens/`; generated
+outputs are consumed by `frontend-pwa/tailwind.config.js` and
+`frontend-pwa/src/index.css`.
+
+Makefile targets are the canonical local and Continuous Integration (CI) entry
+points. Package-local Bun commands are allowed for focused iteration, but a
+change is not ready to commit until the relevant Makefile gates pass.
+
+### Architectural patterns
+
+Front-end implementation follows the roadmap phase order:
+
+- Phase 0 reconciles source documents, design tokens, and imported v2a lint
+  policy before feature work expands.
+- Phase 1 establishes the build spine, provider layout, route metadata, data
+  validation boundary, local-first storage boundary, and accessibility gates.
+- Phase 2 delivers catalogue-led onboarding and discovery.
+- Phase 3 delivers route generation, map-led quick generation, and active
+  navigation surfaces.
+- Phase 4 delivers installability, offline bundles, safety preferences, and
+  completion summaries.
+- Phase 5 evaluates deferred product extensions such as entitlement, richer
+  pagination, native wrappers, community features, and reporting.
+
+Feature code should be grouped by product capability rather than by technical
+layer. Route modules should own page-level composition, feature modules should
+own user-facing behaviour, shared query hooks should own server-state access,
+and durable offline writes should pass through the outbox boundary described in
+`docs/wildside-pwa-data-model.md`.
+
+### Quality gates
+
+Documentation-only front-end planning changes must pass:
+
+```bash
+make fmt
+make markdownlint
+```
+
+Changes that touch Mermaid diagrams must also pass:
+
+```bash
+make nixie
+```
+
+Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
+front-end gates plus the repository-wide commit gates:
+
+```bash
+make check-fmt
+make lint
+make test
+```
+
+When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
+gate, update this guide and the corresponding phase ExecPlan under
+`docs/execplans/` in the same change.
+
 ## Embedded PostgreSQL integration tests
 
 Backend integration and behavioural suites that require PostgreSQL use the
@@ -339,12 +468,12 @@ The harness spawns a real `redis-server` process with:
 
 The cache adapter requires:
 
-**Production dependencies:**
+#### Production dependencies
 
 - `bb8-redis` – Connection pooling for `redis-rs`
 - `serde` / `serde_json` – Payload serialization
 
-**Test infrastructure:**
+#### Test infrastructure
 
 - `test-support` feature flag – Enables `RedisRouteCache::new()` constructor
   and `RedisTestServer::pool()` for test injection
@@ -543,7 +672,7 @@ Implementation details within `outbound::queue`:
 
 The queue adapter requires:
 
-**Production dependencies:**
+#### Production dependencies
 
 - `apalis-core` – Core Apalis job-queue primitives
 - `apalis-postgres` – PostgreSQL storage backend for Apalis
@@ -551,7 +680,7 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialisation
 
-**Test infrastructure:**
+#### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
 - No feature flags required; BDD tests are in the `tests/` integration

@@ -884,7 +884,7 @@ struct GreetArgs {
 }
 ```
 
-**Precedence with the attribute (lowest to highest):**
+#### Precedence with the attribute (lowest to highest)
 
 1. Struct default (`#[ortho_config(default = ...)]`)
 2. Configuration file
