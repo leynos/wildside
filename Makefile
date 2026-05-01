@@ -1,5 +1,6 @@
 SHELL := bash
 KUBE_VERSION ?= 1.31.0
+export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(CURDIR)/node_modules/.bin:$(PATH)
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \

@@ -220,6 +220,11 @@ them requires escalation, not a workaround.
 - [x] 2026-05-01: Draft PR
   [#349](https://github.com/leynos/wildside/pull/349) updated from the
   pre-implementation plan into the implementation review PR.
+- [x] 2026-05-01: Post-turn hook failure fixed by making `Makefile` targets
+  bootstrap the local Cargo, Bun, Python, Go, and workspace binary paths
+  before running format, lint, and Markdown checks. Replayed
+  `PATH=/usr/local/bin:/usr/bin:/bin make check-fmt lint` and
+  `PATH=/usr/local/bin:/usr/bin:/bin make markdownlint`; both passed.
 
 ## Surprises & discoveries
 
@@ -262,6 +267,11 @@ them requires escalation, not a workaround.
   loop inside the step closure. Project Clippy runs with
   `clippy::excessive_nesting` as a hard error, so the traversal was extracted
   into a small async helper before the full lint gate was accepted.
+- 2026-05-01: The post-turn hook runs Makefile targets in a non-login
+  environment that did not include `~/.cargo/bin`, `~/.bun/bin`,
+  `~/.local/bin`, or `~/go/bin`. The interactive gates had passed because
+  those paths were already present. Exporting them from the Makefile makes
+  the gates deterministic for both interactive and hook execution.
 
 ## Decision log
 
