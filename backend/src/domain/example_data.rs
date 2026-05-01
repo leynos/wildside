@@ -179,7 +179,7 @@ fn convert_seed_user(
 ) -> Result<ExampleDataSeedUser, UserValidationError> {
     let user_id = UserId::from_uuid(seed_user.id);
     let display_name = DisplayName::new(seed_user.display_name)?;
-    let user = User::new(user_id.clone(), display_name);
+    let user = User::new(user_id.clone(), display_name, *now);
     let preferences = UserPreferencesBuilder::new(user_id)
         .interest_theme_ids(seed_user.interest_theme_ids)
         .safety_toggle_ids(seed_user.safety_toggle_ids)

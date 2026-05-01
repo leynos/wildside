@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{UserPersistenceError, UserRepository};
 use backend::domain::{DisplayName, User, UserId};
+use chrono::{DateTime, Utc};
 use futures::executor::block_on;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use postgres::{Client, NoTls};
@@ -53,11 +54,15 @@ impl UserRepository for PgUserRepository {
         let mut guard = self.client.lock().expect("pg client poisoned");
         let id = user.id().as_uuid();
         let display = user.display_name().as_ref();
+        let created_at = user.created_at().to_rfc3339();
         guard
             .execute(
-                "INSERT INTO users (id, display_name) VALUES ($1, $2)
-                 ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name",
-                &[id, &display],
+                "INSERT INTO users (id, display_name, created_at)
+                 VALUES ($1, $2, ($3::text)::timestamptz)
+                 ON CONFLICT (id) DO UPDATE
+                 SET display_name = excluded.display_name,
+                     created_at = excluded.created_at",
+                &[id, &display, &created_at],
             )
             .map(|_| ())
             .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))
@@ -67,7 +72,9 @@ impl UserRepository for PgUserRepository {
         let mut guard = self.client.lock().expect("pg client poisoned");
         let result = guard
             .query_opt(
-                "SELECT id, display_name FROM users WHERE id = $1",
+                "SELECT id, display_name, created_at::text AS created_at
+                 FROM users
+                 WHERE id = $1",
                 &[id.as_uuid()],
             )
             .map_err(|err| UserPersistenceError::query(format_postgres_error(&err)))?;
@@ -75,13 +82,23 @@ impl UserRepository for PgUserRepository {
         if let Some(row) = result {
             let id: Uuid = row.get(0);
             let display: String = row.get(1);
-            let user = User::try_from_strings(id.to_string(), display)
+            let created_at = parse_timestamptz(row.get(2)).map_err(UserPersistenceError::query)?;
+            let user = User::try_from_strings_at(id.to_string(), display, created_at)
                 .map_err(|err| UserPersistenceError::query(err.to_string()))?;
             Ok(Some(user))
         } else {
             Ok(None)
         }
     }
+}
+
+fn parse_timestamptz(value: String) -> Result<DateTime<Utc>, String> {
+    DateTime::parse_from_rfc3339(value.as_str())
+        .or_else(|_| DateTime::parse_from_str(value.as_str(), "%Y-%m-%d %H:%M:%S%.f%#z"))
+        .or_else(|_| DateTime::parse_from_str(value.as_str(), "%Y-%m-%d %H:%M:%S%.f%:z"))
+        .or_else(|_| DateTime::parse_from_str(value.as_str(), "%Y-%m-%d %H:%M:%S%.f%z"))
+        .map(|parsed| parsed.with_timezone(&Utc))
+        .map_err(|err| format!("invalid timestamptz '{value}': {err}"))
 }
 
 struct RepoContext {

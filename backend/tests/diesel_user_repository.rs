@@ -43,7 +43,7 @@ fn sample_display_name() -> DisplayName {
 
 #[fixture]
 fn sample_user(sample_user_id: UserId, sample_display_name: DisplayName) -> User {
-    User::new(sample_user_id, sample_display_name)
+    User::with_current_timestamp(sample_user_id, sample_display_name)
 }
 
 // -----------------------------------------------------------------------------
