@@ -68,6 +68,10 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, UserPersistenceError>;
 
     /// Fetch a keyset-ordered users page.
+    ///
+    /// Implementations should fetch one more row than `request.limit()` when
+    /// possible so the caller can detect whether another page exists. Returned
+    /// rows remain in `(created_at ASC, id ASC)` order for both directions.
     async fn list_page(
         &self,
         _request: ListUsersPageRequest,
