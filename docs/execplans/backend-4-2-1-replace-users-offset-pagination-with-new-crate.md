@@ -160,10 +160,23 @@ them requires escalation, not a workaround.
   `ListUsersPageRequest`, and `UsersPage`; `UserDto` accepts legacy payloads
   without `createdAt` but serialises the new field as `createdAt`. `make fmt`,
   `make markdownlint`, `make check-fmt`, `make lint`, and `make test` passed.
-- [ ] M3: Diesel adapter implements the keyset query (`limit + 1` fetch,
+- [x] M3: Diesel adapter implements the keyset query (`limit + 1` fetch,
   composite filter, asc ordering); covered by unit tests with a stubbed
   `UserRepository` for error mapping and an integration test against
   embedded Postgres.
+- [x] 2026-05-01: M3 implemented `DieselUserRepository::list_page` using
+  `(created_at, id)` keyset predicates, one-row overflow fetches, and stable
+  ascending return order for both forward and reverse pages. Reverse pages
+  query descending for index-friendly "before cursor" access, then reverse
+  rows before returning to the query port.
+- [x] 2026-05-01: M3 implemented `DieselUsersQuery::list_users_page` overflow
+  trimming and error mapping. Forward pages trim the trailing overflow row;
+  reverse pages trim the leading overflow row because the repository has
+  already restored ascending order. `cargo check -p backend`, focused
+  `diesel_users_query` and `diesel_user_repository` tests, `make fmt`, `make
+  check-fmt`, `make lint`, and `make test` passed. The full test gate ran
+  1202 Rust tests successfully before the frontend and token workspace tests
+  also passed.
 - [ ] M4: `list_users` handler rewritten to consume `web::Query<PageParams>`,
   decode cursor, call the port, build links from request URL, and return
   `Paginated<UserSchema>`; OpenAPI annotations updated; existing handler
@@ -201,6 +214,11 @@ them requires escalation, not a workaround.
   It now persists and reads `created_at`, using text casts because the direct
   `postgres` test client in this repository is not compiled with chrono
   `ToSql` / `FromSql` support.
+- 2026-05-01: Diesel's reverse keyset query is clearest and cheapest when it
+  asks PostgreSQL for rows before the cursor in descending order, applies the
+  same `limit + 1` cap, and reverses the in-memory page. That leaves a reverse
+  overflow row at the front of the returned ascending slice, so the query port
+  must trim from the leading edge for `Direction::Prev`.
 
 ## Decision log
 
@@ -246,6 +264,15 @@ them requires escalation, not a workaround.
   microsecond precision. Normalising once at the domain boundary avoids
   adapter-specific timestamp drift and keeps cursor keys based on the same
   values that will be read back from storage.
+  Date/Author: 2026-05-01, implementation agent.
+
+- Decision: keep `UserRepository::list_page` rows in `(created_at ASC,
+  id ASC)` order for both cursor directions.
+  Rationale: stable repository ordering keeps response assembly simple and
+  prevents inbound code from needing to know whether the page was fetched
+  forwards or backwards. For reverse pages, the Diesel adapter performs the
+  efficient descending SQL query internally, reverses the short page in
+  memory, and lets `DieselUsersQuery` trim the leading overflow row.
   Date/Author: 2026-05-01, implementation agent.
 
 ## Outcomes & retrospective
