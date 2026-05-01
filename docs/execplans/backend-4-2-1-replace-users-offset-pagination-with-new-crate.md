@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -132,9 +132,15 @@ them requires escalation, not a workaround.
 
 ## Progress
 
-- [ ] M0: Branch created from `main`; pagination crate added to
+- [x] 2026-05-01: Implementation started on branch
+  `4-2-1-replace-users-offset-pagination-with-new-crate`. The existing
+  plan's worker-agent split will be executed locally because this session only
+  permits sub-agent delegation when explicitly requested by the user.
+- [x] M0: Branch created from `main`; pagination crate added to
   `backend/Cargo.toml` and `backend` builds cleanly with the import in a
-  scratch module (no behaviour change).
+  scratch module (no behaviour change). `cargo check -p backend`, `make
+  check-fmt`, `make lint`, and a clean rerun of `make test` passed on
+  2026-05-01.
 - [ ] M1: Migration `add_users_created_at_id_index` added under
   `backend/migrations/`; `make test` still passes after the migration runs
   via the embedded-postgres fixtures.
@@ -157,7 +163,21 @@ them requires escalation, not a workaround.
 
 ## Surprises & discoveries
 
-(none yet)
+- 2026-05-01: `leta` was available, but Rust indexing initially failed because
+  `rust-analyzer` was missing from the active toolchain. Installing the rustup
+  component and restarting the `leta` daemon restored Rust symbol lookup.
+- 2026-05-01: The execplan says `GET /api/v1/users?limit=200` should return
+  HTTP 400, while `backend/crates/pagination` and
+  `docs/keyset-pagination-design.md` currently cap oversized limits to
+  `MAX_LIMIT`. The implementation will follow the execplan's endpoint
+  acceptance criteria and document any required pagination-crate behaviour
+  change before it is made.
+- 2026-05-01: The first full `make test` run after M0 failed in four
+  embedded-PostgreSQL-backed tests while bootstrapping `/var/tmp/pg-embed-1000`
+  (`pg_wal/... No such file or directory` and one `pg_ctl: another server might
+  be running` report). No active PostgreSQL worker was left behind, and an
+  immediate rerun passed all Rust and frontend tests without code changes, so
+  this was treated as a transient fixture startup failure.
 
 ## Decision log
 
