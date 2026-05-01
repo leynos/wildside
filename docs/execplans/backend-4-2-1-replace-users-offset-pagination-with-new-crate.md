@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: IMPLEMENTED
 
 ## Purpose / big picture
 
@@ -196,11 +196,27 @@ them requires escalation, not a workaround.
   `make check-fmt`, `make lint`, and `make test`. The final `make test` run
   completed 1206 Rust tests successfully with 4 skipped, then passed the root,
   frontend, and token workspace tests.
-- [ ] M5: BDD feature
+- [x] M5: BDD feature
   `backend/tests/features/users_list_pagination.feature` and step
   definitions cover happy and unhappy paths; full gate replay
   (`make check-fmt`, `make lint`, `make test`) is green; roadmap entry
-  4.2.1 marked done; PR opened.
+  4.2.1 marked done; final commit ready for PR creation.
+- [x] 2026-05-01: M5 added
+  `backend/tests/features/users_list_pagination.feature` and
+  `backend/tests/users_list_pagination_bdd.rs` with split flow support. The
+  scenarios cover first page links, forward traversal to the final page,
+  reverse traversal from the final page, oversized limit rejection, invalid
+  cursor rejection, and unauthenticated access. The direct BDD test run passed
+  14 tests.
+- [x] 2026-05-01: Roadmap item 4.2.1 in `docs/backend-roadmap.md` marked
+  complete after the endpoint, Diesel adapter, and BDD traversal coverage were
+  in place.
+- [x] 2026-05-01: M5 full gates passed after refactoring the BDD traversal
+  helper to satisfy Clippy: `make fmt`, `make markdownlint`,
+  `make check-fmt`, `make lint`, and `make test`. The final `make test` run
+  completed 1220 Rust tests successfully with 4 skipped, then passed the root
+  Vitest test, frontend workspace tests, TypeScript checks, and token contrast
+  checks.
 
 ## Surprises & discoveries
 
@@ -239,6 +255,10 @@ them requires escalation, not a workaround.
   needs the project `ErrorSchema` with `invalid_limit` details, so M4 parses a
   raw string limit in the inbound adapter and converts to `PageParams` after
   endpoint-specific validation.
+- 2026-05-01: The M5 BDD fixture initially used a nested next-link traversal
+  loop inside the step closure. Project Clippy runs with
+  `clippy::excessive_nesting` as a hard error, so the traversal was extracted
+  into a small async helper before the full lint gate was accepted.
 
 ## Decision log
 
@@ -307,7 +327,26 @@ them requires escalation, not a workaround.
 
 ## Outcomes & retrospective
 
-(to be filled in at completion)
+The users list endpoint now uses the workspace pagination crate end to end.
+`GET /api/v1/users` returns a paginated envelope, uses opaque direction-aware
+cursor tokens, and keeps `self`, `next`, and `prev` link generation in the
+inbound HTTP adapter. The domain owns the user cursor key and the outbound
+Diesel adapter owns all SQL, preserving the hexagonal boundary.
+
+The storage path now has a composite `(created_at, id)` index and the Diesel
+repository performs `limit + 1` keyset reads without `OFFSET` or `COUNT(*)`.
+Forward and reverse pages are returned to callers in stable ascending order,
+with overflow trimming handled in the query adapter.
+
+The main implementation friction was reconciling the generic pagination
+crate's limit-normalisation behaviour with the users endpoint's stricter
+acceptance criterion. The endpoint now performs adapter-local raw limit
+validation, which keeps the shared crate reusable while returning the required
+structured `invalid_limit` response for oversized requests.
+
+Validation finished cleanly on 2026-05-01: focused BDD coverage for the users
+list passed, then `make fmt`, `make markdownlint`, `make check-fmt`,
+`make lint`, and `make test` all passed.
 
 ## Context and orientation
 
