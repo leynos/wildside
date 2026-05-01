@@ -177,10 +177,25 @@ them requires escalation, not a workaround.
   check-fmt`, `make lint`, and `make test` passed. The full test gate ran
   1202 Rust tests successfully before the frontend and token workspace tests
   also passed.
-- [ ] M4: `list_users` handler rewritten to consume `web::Query<PageParams>`,
+- [x] M4: `list_users` handler rewritten to consume pagination query params,
   decode cursor, call the port, build links from request URL, and return
   `Paginated<UserSchema>`; OpenAPI annotations updated; existing handler
   tests adjusted to the new envelope.
+- [x] 2026-05-01: M4 moved users pagination HTTP concerns into
+  `backend/src/inbound/http/users_pagination.rs`. The handler now decodes
+  users cursors, rejects malformed or oversized limits with structured
+  `ErrorSchema` responses, calls `UsersQuery::list_users_page`, and returns
+  the `Paginated<User>` envelope with `self`, `next`, and `prev` links.
+- [x] 2026-05-01: M4 updated OpenAPI schema coverage for `createdAt`,
+  `PaginatedUsersResponse`, and `PaginationLinksSchema`; updated handler,
+  startup-mode, and adapter-guardrail tests to assert the new `data` envelope
+  shape. `cargo check -p backend`, users handler tests, affected startup and
+  guardrail tests, and OpenAPI/schema-focused tests passed before the full
+  commit gates.
+- [x] 2026-05-01: M4 full gates passed: `make fmt`, `make markdownlint`,
+  `make check-fmt`, `make lint`, and `make test`. The final `make test` run
+  completed 1206 Rust tests successfully with 4 skipped, then passed the root,
+  frontend, and token workspace tests.
 - [ ] M5: BDD feature
   `backend/tests/features/users_list_pagination.feature` and step
   definitions cover happy and unhappy paths; full gate replay
@@ -219,6 +234,11 @@ them requires escalation, not a workaround.
   same `limit + 1` cap, and reverses the in-memory page. That leaves a reverse
   overflow row at the front of the returned ascending slice, so the query port
   must trim from the leading edge for `Direction::Prev`.
+- 2026-05-01: Direct `web::Query<PageParams>` extraction would let Actix
+  produce its default extractor body for malformed limits. The users endpoint
+  needs the project `ErrorSchema` with `invalid_limit` details, so M4 parses a
+  raw string limit in the inbound adapter and converts to `PageParams` after
+  endpoint-specific validation.
 
 ## Decision log
 
@@ -273,6 +293,16 @@ them requires escalation, not a workaround.
   forwards or backwards. For reverse pages, the Diesel adapter performs the
   efficient descending SQL query internally, reverses the short page in
   memory, and lets `DieselUsersQuery` trim the leading overflow row.
+  Date/Author: 2026-05-01, implementation agent.
+
+- Decision: reject `GET /api/v1/users` limits above
+  `pagination::MAX_LIMIT` in the users inbound adapter rather than changing
+  the shared pagination crate.
+  Rationale: the pagination crate deliberately normalises generic page params
+  and existing documentation describes that behaviour. The users endpoint has
+  a stricter acceptance criterion (`limit=200` returns HTTP 400 with
+  structured details), so adapter-local validation satisfies the endpoint
+  contract while preserving the crate's reusable default.
   Date/Author: 2026-05-01, implementation agent.
 
 ## Outcomes & retrospective

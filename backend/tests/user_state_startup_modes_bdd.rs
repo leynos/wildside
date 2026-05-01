@@ -77,7 +77,10 @@ fn build_http_state_for_tests(
 }
 
 fn is_fixture_users(body: &Value) -> bool {
-    let users = body.as_array().expect("users array");
+    let users = body
+        .get("data")
+        .and_then(Value::as_array)
+        .expect("users data array");
     users.iter().any(|user| {
         user.get("id").and_then(Value::as_str) == Some(FIXTURE_USERS_ID)
             && user.get("displayName").and_then(Value::as_str) == Some(FIXTURE_USERS_NAME)

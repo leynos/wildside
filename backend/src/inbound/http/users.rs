@@ -16,10 +16,14 @@ use crate::inbound::http::ApiResult;
 use crate::inbound::http::schemas::{ErrorSchema, UserInterestsSchema, UserSchema};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
-use actix_web::{HttpResponse, get, post, put, web};
+use crate::inbound::http::users_pagination::{
+    PaginatedUsersResponse, UsersListQueryParams, build_users_page_response,
+    parse_users_page_params,
+};
+use actix_web::{HttpRequest, HttpResponse, get, post, put, web};
+use pagination::Paginated;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use utoipa::{PartialSchema, ToSchema};
 
 /// Login request body for `POST /api/v1/login`.
 ///
@@ -48,39 +52,6 @@ pub struct InterestsRequest {
 /// Maximum interest theme IDs per user; prevents payload bloat and ensures
 /// reasonable UI rendering.
 const INTEREST_THEME_IDS_MAX: usize = 100;
-/// Maximum users returned by the list_users endpoint; limits response size for
-/// PWA clients.
-const USERS_LIST_MAX: usize = 100;
-
-// OpenAPI helper: UsersListResponse exists to provide PartialSchema and ToSchema
-// impls that describe a bounded array response and register UserSchema for
-// OpenAPI generation.
-/// Schema token for utoipa representing an array of `UserSchema` with a max
-/// items constraint.
-struct UsersListResponse;
-
-impl PartialSchema for UsersListResponse {
-    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-        utoipa::openapi::schema::ArrayBuilder::new()
-            .items(utoipa::openapi::RefOr::Ref(
-                utoipa::openapi::Ref::from_schema_name(UserSchema::name()),
-            ))
-            .max_items(Some(USERS_LIST_MAX))
-            .into()
-    }
-}
-
-impl ToSchema for UsersListResponse {
-    fn schemas(
-        schemas: &mut Vec<(
-            String,
-            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
-        )>,
-    ) {
-        <UserSchema as ToSchema>::schemas(schemas);
-    }
-}
-
 #[derive(Debug)]
 enum InterestsRequestError {
     TooManyInterestThemeIds {
@@ -228,8 +199,12 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
 #[utoipa::path(
     get,
     path = "/api/v1/users",
+    params(
+        ("cursor" = Option<String>, Query, description = "Opaque users pagination cursor"),
+        ("limit" = Option<usize>, Query, description = "Number of users to return, default 20, max 100")
+    ),
     responses(
-        (status = 200, description = "Users", body = UsersListResponse),
+        (status = 200, description = "Users", body = PaginatedUsersResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
         (status = 401, description = "Unauthorised", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),
@@ -244,10 +219,14 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
 pub async fn list_users(
     state: web::Data<HttpState>,
     session: SessionContext,
-) -> ApiResult<web::Json<Vec<User>>> {
+    request: HttpRequest,
+    params: web::Query<UsersListQueryParams>,
+) -> ApiResult<web::Json<Paginated<User>>> {
     let user_id = session.require_user_id()?;
-    let data = state.users.list_users(&user_id).await?;
-    Ok(web::Json(data))
+    let (page_params, page_request, direction) = parse_users_page_params(params.into_inner())?;
+    let page = state.users.list_users_page(&user_id, page_request).await?;
+    let response = build_users_page_response(&request, &page_params, page, direction)?;
+    Ok(web::Json(response))
 }
 
 /// Fetch the authenticated user's profile.
