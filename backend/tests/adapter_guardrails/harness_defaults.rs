@@ -87,10 +87,16 @@ pub(super) fn create_user_doubles(
     let users = RecordingUsersQuery::new(UsersResponse::Ok(vec![User::new(
         UserId::new("22222222-2222-2222-2222-222222222222").expect("fixture user id"),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
+        chrono::DateTime::parse_from_rfc3339("2026-05-01T12:00:00Z")
+            .expect("fixture timestamp")
+            .with_timezone(&chrono::Utc),
     )]));
     let profile = RecordingUserProfileQuery::new(UserProfileResponse::Ok(User::new(
         user_id.clone(),
         DisplayName::new("Ada Lovelace").expect("fixture display name"),
+        chrono::DateTime::parse_from_rfc3339("2026-05-01T12:00:00Z")
+            .expect("fixture timestamp")
+            .with_timezone(&chrono::Utc),
     )));
 
     (login, users, profile)

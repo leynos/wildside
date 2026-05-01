@@ -110,10 +110,14 @@ mod tests {
 
     #[rstest]
     fn serialises_user_created_event() {
+        let created_at = chrono::DateTime::parse_from_rfc3339("2026-05-01T12:00:00Z")
+            .expect("static timestamp must be valid")
+            .with_timezone(&chrono::Utc);
         let user = User::new(
             UserId::new("3fa85f64-5717-4562-b3fc-2c963f66afa6")
                 .expect("static test UUID must be valid"),
             DisplayName::new("Alice").expect("static test display name must be valid"),
+            created_at,
         );
         let event = UserCreatedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),

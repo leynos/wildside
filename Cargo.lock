@@ -688,6 +688,7 @@ dependencies = [
  "mockable",
  "mockall 0.13.1",
  "ortho_config 0.7.0",
+ "pagination",
  "paste",
  "pg-embed-setup-unpriv",
  "postgres",

@@ -20,7 +20,6 @@ use super::schema::{
 pub(crate) struct UserRow {
     pub id: Uuid,
     pub display_name: String,
-    #[expect(dead_code, reason = "schema field for future audit trail support")]
     pub created_at: DateTime<Utc>,
     #[expect(dead_code, reason = "schema field for future audit trail support")]
     pub updated_at: DateTime<Utc>,
@@ -32,6 +31,7 @@ pub(crate) struct UserRow {
 pub(crate) struct NewUserRow<'a> {
     pub id: Uuid,
     pub display_name: &'a str,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Changeset struct for updating existing user records.

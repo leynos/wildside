@@ -95,6 +95,14 @@ pub struct UserSchema {
         example = "Ada Lovelace"
     )]
     display_name: String,
+    /// Creation timestamp used as the first users pagination key.
+    #[schema(
+        rename = "createdAt",
+        value_type = String,
+        format = "date-time",
+        example = "2026-01-01T00:00:00Z"
+    )]
+    created_at: String,
 }
 
 /// OpenAPI schema for [`crate::domain::InterestThemeId`].
@@ -180,7 +188,7 @@ mod tests {
 
     #[test]
     fn user_schema_has_expected_name() -> TestResult {
-        assert_schema_contains::<UserSchema>("crate.domain.User", &["displayName"])
+        assert_schema_contains::<UserSchema>("crate.domain.User", &["displayName", "createdAt"])
     }
 
     #[test]

@@ -15,8 +15,10 @@ use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use tracing::debug;
 
-use crate::domain::ports::{UserPersistenceError, UserRepository};
-use crate::domain::{DisplayName, User, UserId};
+use pagination::Direction;
+
+use crate::domain::ports::{ListUsersPageRequest, UserPersistenceError, UserRepository};
+use crate::domain::{DisplayName, User, UserCursorKey, UserId};
 
 use super::models::{NewUserRow, UserRow};
 use super::pool::{DbPool, PoolError};
@@ -115,7 +117,19 @@ fn row_to_user(row: UserRow) -> Result<User, UserPersistenceError> {
         debug!(?err, "invalid display name loaded from database");
         UserPersistenceError::query("invalid user record")
     })?;
-    Ok(User::new(user_id, display_name))
+    Ok(User::new(user_id, display_name, row.created_at))
+}
+
+fn row_to_users(rows: Vec<UserRow>) -> Result<Vec<User>, UserPersistenceError> {
+    rows.into_iter().map(row_to_user).collect()
+}
+
+fn fetch_limit(limit: usize) -> Result<i64, UserPersistenceError> {
+    let with_overflow_row = limit
+        .checked_add(1)
+        .ok_or_else(|| UserPersistenceError::query("page limit overflow"))?;
+    i64::try_from(with_overflow_row)
+        .map_err(|_| UserPersistenceError::query("page limit exceeds database range"))
 }
 
 #[async_trait]
@@ -126,6 +140,7 @@ impl UserRepository for DieselUserRepository {
         let new_user = NewUserRow {
             id: *user.id().as_uuid(),
             display_name: user.display_name().as_ref(),
+            created_at: user.created_at(),
         };
 
         diesel::insert_into(users::table)
@@ -155,6 +170,74 @@ impl UserRepository for DieselUserRepository {
             None => Ok(None),
         }
     }
+
+    async fn list_page(
+        &self,
+        request: ListUsersPageRequest,
+    ) -> Result<Vec<User>, UserPersistenceError> {
+        let mut conn = self.pool.get().await.map_err(map_pool_error)?;
+        let (cursor, limit) = request.into_parts();
+        let fetch_limit = fetch_limit(limit)?;
+
+        let rows = match cursor {
+            None => users::table
+                .order((users::created_at.asc(), users::id.asc()))
+                .limit(fetch_limit)
+                .select(UserRow::as_select())
+                .load(&mut conn)
+                .await
+                .map_err(map_diesel_error)?,
+            Some(cursor) => {
+                let (key, direction) = cursor.into_parts();
+                match direction {
+                    Direction::Next => list_page_after(&mut conn, key, fetch_limit).await?,
+                    Direction::Prev => list_page_before(&mut conn, key, fetch_limit).await?,
+                }
+            }
+        };
+
+        row_to_users(rows)
+    }
+}
+
+async fn list_page_after(
+    conn: &mut diesel_async::AsyncPgConnection,
+    key: UserCursorKey,
+    fetch_limit: i64,
+) -> Result<Vec<UserRow>, UserPersistenceError> {
+    users::table
+        .filter(
+            users::created_at.gt(key.created_at).or(users::created_at
+                .eq(key.created_at)
+                .and(users::id.gt(key.id))),
+        )
+        .order((users::created_at.asc(), users::id.asc()))
+        .limit(fetch_limit)
+        .select(UserRow::as_select())
+        .load(conn)
+        .await
+        .map_err(map_diesel_error)
+}
+
+async fn list_page_before(
+    conn: &mut diesel_async::AsyncPgConnection,
+    key: UserCursorKey,
+    fetch_limit: i64,
+) -> Result<Vec<UserRow>, UserPersistenceError> {
+    let mut rows = users::table
+        .filter(
+            users::created_at.lt(key.created_at).or(users::created_at
+                .eq(key.created_at)
+                .and(users::id.lt(key.id))),
+        )
+        .order((users::created_at.desc(), users::id.desc()))
+        .limit(fetch_limit)
+        .select(UserRow::as_select())
+        .load(conn)
+        .await
+        .map_err(map_diesel_error)?;
+    rows.reverse();
+    Ok(rows)
 }
 
 #[cfg(test)]
