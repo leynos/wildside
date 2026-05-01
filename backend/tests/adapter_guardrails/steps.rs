@@ -204,8 +204,9 @@ pub(crate) fn the_users_response_includes_the_expected_display_name(world: Share
     let ctx = world.borrow();
     let body = ctx.last_body.as_ref().expect("users body present");
     let first = body
-        .as_array()
-        .expect("users array")
+        .get("data")
+        .and_then(Value::as_array)
+        .expect("users data array")
         .first()
         .expect("user row");
     assert_eq!(
