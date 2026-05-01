@@ -141,9 +141,13 @@ them requires escalation, not a workaround.
   scratch module (no behaviour change). `cargo check -p backend`, `make
   check-fmt`, `make lint`, and a clean rerun of `make test` passed on
   2026-05-01.
-- [ ] M1: Migration `add_users_created_at_id_index` added under
+- [x] M1: Migration `add_users_created_at_id_index` added under
   `backend/migrations/`; `make test` still passes after the migration runs
   via the embedded-postgres fixtures.
+- [x] 2026-05-01: M1 migration files added with
+  `idx_users_created_at_id` on `(created_at, id)` and a matching down
+  migration; `make fmt`, `make markdownlint`, `make check-fmt`, `make lint`,
+  and `make test` passed.
 - [ ] M2: Domain and port updates -- `User` exposes `created_at`,
   `UserCursorKey` defined, `UsersQuery` and `UserRepository` extended with
   paginated reads, `FixtureUsersQuery` updated.
