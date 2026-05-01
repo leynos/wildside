@@ -115,7 +115,7 @@ fn row_to_user(row: UserRow) -> Result<User, UserPersistenceError> {
         debug!(?err, "invalid display name loaded from database");
         UserPersistenceError::query("invalid user record")
     })?;
-    Ok(User::new(user_id, display_name))
+    Ok(User::new(user_id, display_name, row.created_at))
 }
 
 #[async_trait]
@@ -126,6 +126,7 @@ impl UserRepository for DieselUserRepository {
         let new_user = NewUserRow {
             id: *user.id().as_uuid(),
             display_name: user.display_name().as_ref(),
+            created_at: user.created_at(),
         };
 
         diesel::insert_into(users::table)

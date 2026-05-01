@@ -148,9 +148,18 @@ them requires escalation, not a workaround.
   `idx_users_created_at_id` on `(created_at, id)` and a matching down
   migration; `make fmt`, `make markdownlint`, `make check-fmt`, `make lint`,
   and `make test` passed.
-- [ ] M2: Domain and port updates -- `User` exposes `created_at`,
+- [x] M2: Domain and port updates -- `User` exposes `created_at`,
   `UserCursorKey` defined, `UsersQuery` and `UserRepository` extended with
   paginated reads, `FixtureUsersQuery` updated.
+- [x] 2026-05-01: M2 kept the first port change additive by defining
+  default paginated trait methods that return a stable internal/query error
+  until the Diesel adapter is implemented in M3. `FixtureUsersQuery` overrides
+  the new query method immediately so handler-only tests have a deterministic
+  fallback path.
+- [x] 2026-05-01: M2 completed with `UserCursorKey`,
+  `ListUsersPageRequest`, and `UsersPage`; `UserDto` accepts legacy payloads
+  without `createdAt` but serialises the new field as `createdAt`. `make fmt`,
+  `make markdownlint`, `make check-fmt`, `make lint`, and `make test` passed.
 - [ ] M3: Diesel adapter implements the keyset query (`limit + 1` fetch,
   composite filter, asc ordering); covered by unit tests with a stubbed
   `UserRepository` for error mapping and an integration test against
@@ -182,6 +191,16 @@ them requires escalation, not a workaround.
   be running` report). No active PostgreSQL worker was left behind, and an
   immediate rerun passed all Rust and frontend tests without code changes, so
   this was treated as a transient fixture startup failure.
+- 2026-05-01: Adding `created_at` to `User` exposed PostgreSQL's timestamp
+  precision boundary: Diesel round-trips `timestamptz` values at microsecond
+  precision, while `Utc::now()` supplies nanoseconds. `User::new` now
+  normalises the domain timestamp to microsecond precision so persisted users,
+  cursor keys, and test equality all use the same precision.
+- 2026-05-01: `backend/tests/ports_behaviour.rs` had an independent
+  PostgreSQL test adapter that still inserted only `id` and `display_name`.
+  It now persists and reads `created_at`, using text casts because the direct
+  `postgres` test client in this repository is not compiled with chrono
+  `ToSql` / `FromSql` support.
 
 ## Decision log
 
@@ -210,6 +229,24 @@ them requires escalation, not a workaround.
   introducing it here would expand scope past tolerance and is not
   required by the roadmap.
   Date/Author: 2026-04-28, drafting agent.
+
+- Decision: make M2's port additions additive by giving
+  `UserRepository::list_page` and `UsersQuery::list_users_page` default
+  implementations that return stable query/internal errors until the Diesel
+  adapter is implemented.
+  Rationale: this keeps the M2 commit focused on domain and port shape while
+  avoiding a half-implemented persistence path. The fixture query overrides
+  the method immediately, so handler-only tests still have a deterministic
+  no-database path.
+  Date/Author: 2026-05-01, implementation agent.
+
+- Decision: normalise `User::created_at` to microsecond precision in the
+  domain constructor.
+  Rationale: users are persisted to PostgreSQL `timestamptz`, which stores
+  microsecond precision. Normalising once at the domain boundary avoids
+  adapter-specific timestamp drift and keeps cursor keys based on the same
+  values that will be read back from storage.
+  Date/Author: 2026-05-01, implementation agent.
 
 ## Outcomes & retrospective
 

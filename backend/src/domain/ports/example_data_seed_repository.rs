@@ -85,7 +85,10 @@ pub trait ExampleDataSeedRepository: Send + Sync {
     ///
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let user_id = UserId::from_uuid(Uuid::new_v4());
-    /// let user = User::new(user_id.clone(), DisplayName::new("Demo user".to_string())?);
+    /// let user = User::with_current_timestamp(
+    ///     user_id.clone(),
+    ///     DisplayName::new("Demo user".to_string())?,
+    /// );
     /// let preferences = UserPreferencesBuilder::new(user_id).revision(1).build();
     /// let request = ExampleDataSeedRequest {
     ///     seed_key: "mossy-owl".to_string(),

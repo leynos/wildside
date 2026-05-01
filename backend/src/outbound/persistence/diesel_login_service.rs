@@ -52,7 +52,7 @@ impl DieselLoginService {
 
         let display_name = DisplayName::new(FIXTURE_DISPLAY_NAME)
             .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
-        let user = User::new(user_id.clone(), display_name);
+        let user = User::with_current_timestamp(user_id.clone(), display_name);
 
         self.user_repository
             .upsert(&user)

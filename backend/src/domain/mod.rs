@@ -10,6 +10,7 @@
 //! - ErrorCode (alias to `error::ErrorCode`) — stable error identifier shared
 //!   across adapters.
 //! - User (alias to `user::User`) — domain user identity and display name.
+//! - UserCursorKey — stable `(created_at, id)` pagination boundary key.
 //! - InterestThemeId — validated identifier for interest themes.
 //! - UserInterests — selected interest themes for a user profile.
 //! - LoginCredentials — validated username/password inputs for authentication.
@@ -85,6 +86,7 @@ pub mod user_events;
 pub mod user_interests;
 pub mod user_onboarding;
 pub mod user_state_schema_audit;
+pub mod users_pagination;
 pub mod walk_session_service;
 pub mod walks;
 
@@ -147,6 +149,7 @@ pub use self::user_state_schema_audit::{
     EntitySchemaCoverage, InterestsStorageCoverage, LoginSchemaCoverage, MigrationDecision,
     UserStateSchemaAuditReport, UserStateSchemaAuditService, audit_user_state_schema_coverage,
 };
+pub use self::users_pagination::UserCursorKey;
 pub use self::walk_session_service::{WalkSessionCommandService, WalkSessionQueryService};
 pub use self::walks::{
     ParseWalkPrimaryStatKindError, ParseWalkSecondaryStatKindError, WalkCompletionSummary,
