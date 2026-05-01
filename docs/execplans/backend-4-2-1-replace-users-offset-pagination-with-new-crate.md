@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IMPLEMENTED
+Status: IMPLEMENTED; DRAFT PR OPEN
 
 ## Purpose / big picture
 
@@ -200,7 +200,7 @@ them requires escalation, not a workaround.
   `backend/tests/features/users_list_pagination.feature` and step
   definitions cover happy and unhappy paths; full gate replay
   (`make check-fmt`, `make lint`, `make test`) is green; roadmap entry
-  4.2.1 marked done; final commit ready for PR creation.
+  4.2.1 marked done; draft PR opened.
 - [x] 2026-05-01: M5 added
   `backend/tests/features/users_list_pagination.feature` and
   `backend/tests/users_list_pagination_bdd.rs` with split flow support. The
@@ -217,6 +217,9 @@ them requires escalation, not a workaround.
   completed 1220 Rust tests successfully with 4 skipped, then passed the root
   Vitest test, frontend workspace tests, TypeScript checks, and token contrast
   checks.
+- [x] 2026-05-01: Draft PR
+  [#349](https://github.com/leynos/wildside/pull/349) updated from the
+  pre-implementation plan into the implementation review PR.
 
 ## Surprises & discoveries
 
