@@ -156,8 +156,9 @@ fn round_coordinate(number: &Number) -> Number {
     };
 
     let rounded = (value * COORDINATE_PRECISION_FACTOR).round() / COORDINATE_PRECISION_FACTOR;
+    let canonical = if rounded == 0.0 { 0.0 } else { rounded };
 
-    Number::from_f64(rounded).unwrap_or_else(|| number.clone())
+    Number::from_f64(canonical).unwrap_or_else(|| number.clone())
 }
 
 #[cfg(test)]
@@ -257,6 +258,8 @@ mod tests {
     #[case("lng", -0.1000049, -0.1)]
     #[case("latitude", 48.8566141, 48.85661)]
     #[case("longitude", 2.3522249, 2.35222)]
+    #[case("lat", -0.0000049, 0.0000049)]
+    #[case("lng", -0.0000049, 0.0000049)]
     fn route_request_key_rounds_documented_coordinate_fields(
         #[case] field_name: &str,
         #[case] first_coordinate: f64,
