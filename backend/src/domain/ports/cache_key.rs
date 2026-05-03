@@ -130,7 +130,7 @@ fn normalize_route_request_value(value: &Value, current_key: Option<&str>) -> Va
                 .collect();
 
             if should_sort_array(current_key) && normalized.iter().all(Value::is_string) {
-                normalized.sort_by_key(|value| value.to_string());
+                normalized.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
             }
 
             Value::Array(normalized)
