@@ -1,5 +1,7 @@
 //! Tests for the domain user model.
 
+#![cfg(test)]
+
 use std::error::Error as StdError;
 
 use super::*;
