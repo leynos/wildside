@@ -101,12 +101,12 @@ impl RouteCacheKeyWorld {
     fn derive_equivalent_keys(&self) {
         let first_payload = json!({
             "destination": {
-                "lng": -0.1234561,
-                "lat": 51.5000001
+                "lng": 2.3522249,
+                "lat": 48.8566141
             },
             "origin": {
                 "lat": 51.4999999,
-                "lng": -0.1234564
+                "lng": -0.1000001
             },
             "preferences": {
                 "interestThemeIds": ["theme-c", "theme-a", "theme-b"],
@@ -119,12 +119,12 @@ impl RouteCacheKeyWorld {
                 "interestThemeIds": ["theme-b", "theme-c", "theme-a"]
             },
             "origin": {
-                "lng": -0.1234562,
-                "lat": 51.5000001
+                "lng": -0.0999998,
+                "lat": 51.5000002
             },
             "destination": {
-                "lat": 51.4999998,
-                "lng": -0.12345649
+                "lat": 48.85661,
+                "lng": 2.35222
             }
         });
 

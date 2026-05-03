@@ -1916,15 +1916,17 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    pauses requests after repeated failures. Responses merge into `pois` through
    the same `UPSERT` path.
 3. **Route caching:** Completed routes persist in PostgreSQL and are cached in
-   Redis using canonicalised keys. The canonical form sorts interest IDs,
+   Redis using canonicalised keys. The canonical form sorts the three
+   interest-id arrays (`themes`, `themeIds`, and `interestThemeIds`),
    rounds coordinates to five decimal places, serialises JSON with stable key
    ordering, and hashes the payload with SHA-256. Cache keys follow
    `route:v1:<sha256>`; anonymous routes expire after 24 hours with ±10 %
    jitter while saved routes remove the TTL. Rotate the namespace (`v2`,
    `v3`, …) whenever schema or engine changes invalidate cached content.
-   The canonicalization seam lives in `backend/src/domain/ports/cache_key.rs`;
+   The canonicalization seam lives in `backend/src/domain/ports/cache_key.rs`,
+   which performs the array sorting and coordinate rounding before hashing;
    `backend/src/outbound/cache/redis_route_cache.rs` only persists the derived
-   key.
+   key and never re-canonicalises payloads.
 
 This workflow ensures first-run requests succeed quickly while the dataset
 improves automatically for subsequent users.
