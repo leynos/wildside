@@ -1922,7 +1922,7 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    Redis using canonicalized keys. The canonical form sorts the three theme
    arrays (`themes`, which holds slug-style names, plus `themeIds` and
    `interestThemeIds`, which hold UUID identifiers),
-   rounds coordinates to five decimal places, serialises JSON with stable key
+   rounds coordinates to five decimal places, serializes JSON with stable key
    ordering, and hashes the payload with SHA-256. Cache keys follow
    `route:v1:<sha256>`; anonymous routes expire after 24 hours with ±10 %
    jitter while saved routes remove the TTL. Rotate the namespace (`v2`,
