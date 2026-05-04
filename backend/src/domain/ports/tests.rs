@@ -1,4 +1,7 @@
 //! In-memory doubles exercising the domain port contracts.
+
+#![cfg(test)]
+
 use super::*;
 use actix_rt::System;
 use async_trait::async_trait;

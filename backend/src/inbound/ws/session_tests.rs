@@ -1,5 +1,7 @@
 //! WebSocket session handler tests.
 
+#![cfg(test)]
+
 use super::*;
 use crate::domain::UserOnboardingService;
 use crate::inbound::ws;

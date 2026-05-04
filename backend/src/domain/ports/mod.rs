@@ -44,7 +44,7 @@ mod walk_session_command;
 mod walk_session_query;
 mod walk_session_repository;
 
-pub use cache_key::{RouteCacheKey, RouteCacheKeyValidationError};
+pub use cache_key::{RouteCacheKey, RouteCacheKeyDerivationError, RouteCacheKeyValidationError};
 #[cfg(test)]
 pub use catalogue_ingestion_repository::MockCatalogueIngestionRepository;
 pub use catalogue_ingestion_repository::{
