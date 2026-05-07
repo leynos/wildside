@@ -109,8 +109,8 @@ pub fn build_users_page_response(
 ) -> Result<Paginated<User>, Error> {
     let has_more = page.has_more();
     let rows = page.into_rows();
-    let next_cursor = next_cursor(&rows, has_more, direction)?;
-    let prev_cursor = prev_cursor(&rows, has_more, direction)?;
+    let next_cursor = boundary_cursor(rows.last(), Direction::Next, direction, has_more)?;
+    let prev_cursor = boundary_cursor(rows.first(), Direction::Prev, direction, has_more)?;
     let request_url = current_request_url(request)?;
     let links = PaginationLinks::from_request(
         &request_url,
@@ -142,29 +142,21 @@ fn cursor_direction(cursor: &Cursor<UserCursorKey>) -> UsersPageDirection {
     }
 }
 
-fn next_cursor(
-    rows: &[User],
+fn boundary_cursor(
+    row: Option<&User>,
+    cursor_dir: Direction,
+    page_dir: UsersPageDirection,
     has_more: bool,
-    direction: UsersPageDirection,
 ) -> Result<Option<String>, Error> {
-    let should_emit = match direction {
-        UsersPageDirection::First | UsersPageDirection::Next => has_more,
-        UsersPageDirection::Prev => true,
+    let should_emit = match (page_dir, cursor_dir) {
+        (UsersPageDirection::First, Direction::Next) => has_more,
+        (UsersPageDirection::First, Direction::Prev) => false,
+        (UsersPageDirection::Next, Direction::Next) => has_more,
+        (UsersPageDirection::Next, Direction::Prev) => true,
+        (UsersPageDirection::Prev, Direction::Next) => true,
+        (UsersPageDirection::Prev, Direction::Prev) => has_more,
     };
-    encode_boundary_cursor(rows.last(), Direction::Next, should_emit)
-}
-
-fn prev_cursor(
-    rows: &[User],
-    has_more: bool,
-    direction: UsersPageDirection,
-) -> Result<Option<String>, Error> {
-    let should_emit = match direction {
-        UsersPageDirection::First => false,
-        UsersPageDirection::Next => true,
-        UsersPageDirection::Prev => has_more,
-    };
-    encode_boundary_cursor(rows.first(), Direction::Prev, should_emit)
+    encode_boundary_cursor(row, cursor_dir, should_emit)
 }
 
 fn encode_boundary_cursor(
