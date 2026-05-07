@@ -247,15 +247,23 @@ fn next_path(snapshot: &Snapshot) -> Option<String> {
     link(snapshot, "next").map(|next| build_path_from_link(&next))
 }
 
-pub(crate) fn run_first_page(world: &mut World) {
+fn run_request(world: &mut World, path: &'static str, authenticated: bool) {
     with_world(world, |world| {
         let db = world.db.as_ref().expect("db context");
         world.last_response = Some(run_async(async {
             let app = build_app(build_state(db.pool.clone())).await;
-            let cookie = login_cookie(&app).await;
-            get_users(&app, "/api/v1/users?limit=2", Some(cookie)).await
+            let cookie = if authenticated {
+                Some(login_cookie(&app).await)
+            } else {
+                None
+            };
+            get_users(&app, path, cookie).await
         }));
     });
+}
+
+pub(crate) fn run_first_page(world: &mut World) {
+    run_request(world, "/api/v1/users?limit=2", true);
 }
 
 pub(crate) fn run_follow_next_to_final(world: &mut World) {
@@ -292,24 +300,11 @@ pub(crate) fn run_next_then_prev(world: &mut World) {
 }
 
 pub(crate) fn run_authenticated_request(world: &mut World, path: &'static str) {
-    with_world(world, |world| {
-        let db = world.db.as_ref().expect("db context");
-        world.last_response = Some(run_async(async {
-            let app = build_app(build_state(db.pool.clone())).await;
-            let cookie = login_cookie(&app).await;
-            get_users(&app, path, Some(cookie)).await
-        }));
-    });
+    run_request(world, path, true);
 }
 
 pub(crate) fn run_unauthenticated_request(world: &mut World) {
-    with_world(world, |world| {
-        let db = world.db.as_ref().expect("db context");
-        world.last_response = Some(run_async(async {
-            let app = build_app(build_state(db.pool.clone())).await;
-            get_users(&app, "/api/v1/users", None).await
-        }));
-    });
+    run_request(world, "/api/v1/users", false);
 }
 
 pub(crate) fn assert_status(world: &mut World, status: u16) {
