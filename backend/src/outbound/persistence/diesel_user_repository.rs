@@ -189,10 +189,7 @@ impl UserRepository for DieselUserRepository {
                 .map_err(map_diesel_error)?,
             Some(cursor) => {
                 let (key, direction) = cursor.into_parts();
-                match direction {
-                    Direction::Next => list_page_after(&mut conn, key, fetch_limit).await?,
-                    Direction::Prev => list_page_before(&mut conn, key, fetch_limit).await?,
-                }
+                list_page_keyset(&mut conn, key, fetch_limit, direction).await?
             }
         };
 
@@ -200,43 +197,41 @@ impl UserRepository for DieselUserRepository {
     }
 }
 
-async fn list_page_after(
+async fn list_page_keyset(
     conn: &mut diesel_async::AsyncPgConnection,
     key: UserCursorKey,
     fetch_limit: i64,
+    direction: Direction,
 ) -> Result<Vec<UserRow>, UserPersistenceError> {
-    users::table
-        .filter(
-            users::created_at.gt(key.created_at).or(users::created_at
-                .eq(key.created_at)
-                .and(users::id.gt(key.id))),
-        )
-        .order((users::created_at.asc(), users::id.asc()))
-        .limit(fetch_limit)
-        .select(UserRow::as_select())
-        .load(conn)
-        .await
-        .map_err(map_diesel_error)
-}
+    let mut query = users::table.into_boxed();
 
-async fn list_page_before(
-    conn: &mut diesel_async::AsyncPgConnection,
-    key: UserCursorKey,
-    fetch_limit: i64,
-) -> Result<Vec<UserRow>, UserPersistenceError> {
-    let mut rows = users::table
-        .filter(
-            users::created_at.lt(key.created_at).or(users::created_at
-                .eq(key.created_at)
-                .and(users::id.lt(key.id))),
-        )
-        .order((users::created_at.desc(), users::id.desc()))
+    query = match direction {
+        Direction::Next => query
+            .filter(
+                users::created_at.gt(key.created_at).or(users::created_at
+                    .eq(key.created_at)
+                    .and(users::id.gt(key.id))),
+            )
+            .order((users::created_at.asc(), users::id.asc())),
+        Direction::Prev => query
+            .filter(
+                users::created_at.lt(key.created_at).or(users::created_at
+                    .eq(key.created_at)
+                    .and(users::id.lt(key.id))),
+            )
+            .order((users::created_at.desc(), users::id.desc())),
+    };
+
+    let mut rows = query
         .limit(fetch_limit)
         .select(UserRow::as_select())
         .load(conn)
         .await
         .map_err(map_diesel_error)?;
-    rows.reverse();
+
+    if matches!(direction, Direction::Prev) {
+        rows.reverse();
+    }
     Ok(rows)
 }
 
