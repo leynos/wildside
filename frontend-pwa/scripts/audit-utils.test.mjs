@@ -209,6 +209,19 @@ describe('runAuditJson', () => {
     await expect(runAuditJson()).rejects.toThrow(
       'Bulk advisory audit failed (503 Service Unavailable)',
     );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes advisory IDs from the bulk payload URL to lowercase groups', async () => {
@@ -238,6 +251,21 @@ describe('runAuditJson', () => {
         [packageNameKey]: 'validator',
       }),
     });
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(String(fetch.mock.calls[0][0])).toBe(
+      'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
+    );
   });
 
   it('rejects blank bulk advisory responses instead of treating them as empty JSON', async () => {
@@ -253,5 +281,18 @@ describe('runAuditJson', () => {
     await expect(runAuditJson()).rejects.toThrow(
       'Failed to parse bulk advisory audit JSON: response body was empty.',
     );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
