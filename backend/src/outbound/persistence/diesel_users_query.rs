@@ -281,8 +281,16 @@ mod tests {
         Ok(())
     }
 
+    #[rstest]
+    #[case(Direction::Next, None, 0, 2)]
+    #[case(Direction::Prev, Some(2usize), 1, 3)]
     #[tokio::test]
-    async fn list_users_page_trims_forward_overflow_row() -> TestResult {
+    async fn list_users_page_trims_overflow_row(
+        #[case] direction: Direction,
+        #[case] cursor_index: Option<usize>,
+        #[case] expected_start: usize,
+        #[case] expected_end: usize,
+    ) -> TestResult {
         let rows = vec![
             user_at(
                 "11111111-1111-1111-1111-111111111111",
@@ -302,45 +310,15 @@ mod tests {
         ];
         let repository = Arc::new(StubUserRepository::with_page_rows(rows.clone()));
         let query = DieselUsersQuery::from_repository(repository);
+        let limit = rows.len() - 1;
+        let request = match cursor_index {
+            None => ListUsersPageRequest::new(None, limit),
+            Some(i) => request_with_cursor(&rows[i], direction, limit),
+        };
 
-        let page = query
-            .list_users_page(
-                rows[0].id(),
-                ListUsersPageRequest::new(None, rows.len() - 1),
-            )
-            .await?;
+        let page = query.list_users_page(rows[0].id(), request).await?;
 
-        assert_eq!(page.rows(), &rows[0..2]);
-        assert!(page.has_more());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn list_users_page_trims_reverse_overflow_row() -> TestResult {
-        let rows = vec![
-            user_at(
-                "11111111-1111-1111-1111-111111111111",
-                "Overflow",
-                "2026-01-01T00:00:00Z",
-            )?,
-            user_at(
-                "22222222-2222-2222-2222-222222222222",
-                "Ada Two",
-                "2026-01-02T00:00:00Z",
-            )?,
-            user_at(
-                "33333333-3333-3333-3333-333333333333",
-                "Ada Three",
-                "2026-01-03T00:00:00Z",
-            )?,
-        ];
-        let repository = Arc::new(StubUserRepository::with_page_rows(rows.clone()));
-        let query = DieselUsersQuery::from_repository(repository);
-        let request = request_with_cursor(&rows[2], Direction::Prev, rows.len() - 1);
-
-        let page = query.list_users_page(rows[2].id(), request).await?;
-
-        assert_eq!(page.rows(), &rows[1..3]);
+        assert_eq!(page.rows(), &rows[expected_start..expected_end]);
         assert!(page.has_more());
         Ok(())
     }
