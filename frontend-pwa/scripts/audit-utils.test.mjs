@@ -77,24 +77,7 @@ describe('runAuditJson', () => {
 
   /** @param {{ dependencies?: Record<string, unknown> }} [opts] */
   function setupRetiredEndpointFallback({ dependencies = {} } = {}) {
-    spawnSyncMock
-      .mockReturnValueOnce(
-        createPnpmResult({
-          status: 1,
-          stdout: JSON.stringify({
-            error: {
-              code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
-              message:
-                'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
-            },
-          }),
-        }),
-      )
-      .mockReturnValueOnce(
-        createPnpmResult({
-          stdout: JSON.stringify([{ name: 'frontend-pwa', dependencies }]),
-        }),
-      );
+    setupRetiredPnpmAudit([{ name: 'frontend-pwa', dependencies }]);
   }
 
   it('returns pnpm audit output when the native command succeeds', async () => {
