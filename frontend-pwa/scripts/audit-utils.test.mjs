@@ -240,6 +240,9 @@ describe('runAuditJson', () => {
       expect.objectContaining({ encoding: 'utf8' }),
     );
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toBe(
+      'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
+    );
   });
 
   it('normalizes advisory IDs from the bulk payload URL to lowercase groups', async () => {
