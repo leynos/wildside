@@ -566,7 +566,7 @@ node ./scripts/check-overrides-parity.mjs
 A passing run prints:
 
 ```text
-Override parity verified for basic-ftp, dompurify.
+Override parity verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
 A failing run prints a per-dependency diff to stderr and exits with code `1`.

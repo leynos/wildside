@@ -23,7 +23,12 @@ async function loadModule() {
 }
 
 /** Convenience fixture data shared across parity tests. */
-const SYNCED = { 'basic-ftp': '5.3.0', dompurify: '3.4.0', uuid: '14.0.0' };
+const SYNCED = {
+  'basic-ftp': '5.3.1',
+  dompurify: '3.4.0',
+  'ip-address': '10.1.1',
+  uuid: '14.0.0',
+};
 
 /**
  * Load a fresh module and immediately invoke checkOverridesParity.
@@ -77,7 +82,7 @@ describe('checkOverridesParity', () => {
 
     expect(result).toBe(0);
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('basic-ftp, dompurify, uuid'),
+      expect.stringContaining('basic-ftp, dompurify, ip-address, uuid'),
     );
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
@@ -85,8 +90,9 @@ describe('checkOverridesParity', () => {
   it('returns 1 and reports the mismatched dependency version', async () => {
     const result = await runParityCheck({
       overrides: {
-        'basic-ftp': '5.3.0',
+        'basic-ftp': '5.3.1',
         dompurify: '3.3.0',
+        'ip-address': '10.1.1',
         uuid: '14.0.0',
       },
       pnpm: { overrides: SYNCED },
@@ -107,7 +113,7 @@ describe('checkOverridesParity', () => {
       expect.stringContaining('overrides: <missing>'),
     );
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('pnpm.overrides: "5.3.0"'),
+      expect.stringContaining('pnpm.overrides: "5.3.1"'),
     );
   });
 
@@ -123,6 +129,7 @@ describe('checkOverridesParity', () => {
     const result = await runParityCheck({
       overrides: {
         dompurify: '3.4.0',
+        'ip-address': '10.1.1',
         uuid: '14.0.0',
       },
       pnpm: { overrides: SYNCED },
@@ -172,14 +179,16 @@ describe('direct execution guard', () => {
     readFileMock.mockResolvedValueOnce(
       JSON.stringify({
         overrides: {
-          'basic-ftp': '5.3.0',
+          'basic-ftp': '5.3.1',
           dompurify: '3.4.0',
+          'ip-address': '10.1.1',
           uuid: '14.0.0',
         },
         pnpm: {
           overrides: {
-            'basic-ftp': '5.3.0',
+            'basic-ftp': '5.3.1',
             dompurify: '3.4.0',
+            'ip-address': '10.1.1',
             uuid: '14.0.0',
           },
         },
@@ -192,7 +201,7 @@ describe('direct execution guard', () => {
     expect(readFileMock).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBe(0);
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      'Override parity verified for basic-ftp, dompurify, uuid.',
+      'Override parity verified for basic-ftp, dompurify, ip-address, uuid.',
     );
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });

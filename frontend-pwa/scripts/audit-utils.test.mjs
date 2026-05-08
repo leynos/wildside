@@ -75,6 +75,41 @@ describe('runAuditJson', () => {
     globalThis.fetch = originalFetch;
   });
 
+  /**
+   * Configure spawnSync mocks for the retired-endpoint fallback path.
+   *
+   * Delegates to {@link setupRetiredPnpmAudit} with a single `frontend-pwa` package entry,
+   * optionally populated with the supplied dependency map.
+   * @param {{ dependencies?: Record<string, unknown> }} [opts] Optional overrides.
+   * @param {Record<string, unknown>} [opts.dependencies={}] Dependency map for the `pnpm ls` payload.
+   * @returns {void}
+   */
+  function setupRetiredEndpointFallback({ dependencies = {} } = {}) {
+    setupRetiredPnpmAudit([{ name: 'frontend-pwa', dependencies }]);
+  }
+
+  /**
+   * Assert that spawnSync was invoked for the retired-endpoint fallback sequence.
+   *
+   * Verifies that `pnpm audit --json` was called first and `pnpm ls --json --depth Infinity`
+   * was called second, both with `encoding: 'utf8'`.
+   * @returns {void}
+   */
+  function assertFallbackSpawnCalls() {
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+  }
+
   it('returns pnpm audit output when the native command succeeds', async () => {
     spawnSyncMock.mockReturnValueOnce(
       createPnpmResult({
@@ -150,18 +185,7 @@ describe('runAuditJson', () => {
 
     const result = await runAuditJson();
 
-    expect(spawnSyncMock).toHaveBeenNthCalledWith(
-      1,
-      'pnpm',
-      ['audit', '--json'],
-      expect.objectContaining({ encoding: 'utf8' }),
-    );
-    expect(spawnSyncMock).toHaveBeenNthCalledWith(
-      2,
-      'pnpm',
-      ['ls', '--json', '--depth', 'Infinity'],
-      expect.objectContaining({ encoding: 'utf8' }),
-    );
+    assertFallbackSpawnCalls();
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'pnpm',
       ['config', 'get', 'registry'],
@@ -191,23 +215,53 @@ describe('runAuditJson', () => {
     });
   });
 
-  it('throws a clear error when the bulk advisory endpoint fails', async () => {
-    setupRetiredPnpmAudit();
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-      statusText: 'Service Unavailable',
-      text: async () => '{"error":"upstream unavailable"}',
-    });
+  it.each([
+    {
+      name: 'throws a clear error when the bulk advisory endpoint fails',
+      fetchResponse: {
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        text: async () => '{"error":"upstream unavailable"}',
+      },
+      expectedError: 'Bulk advisory audit failed (503 Service Unavailable)',
+    },
+    {
+      name: 'rejects blank bulk advisory responses instead of treating them as empty JSON',
+      fetchResponse: {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '   ',
+      },
+      expectedError: 'Failed to parse bulk advisory audit JSON: response body was empty.',
+    },
+  ])('$name', async ({ fetchResponse, expectedError }) => {
+    setupRetiredEndpointFallback();
+    fetch.mockResolvedValueOnce(fetchResponse);
     const { runAuditJson } = await loadAuditUtils();
 
-    await expect(runAuditJson()).rejects.toThrow(
-      'Bulk advisory audit failed (503 Service Unavailable)',
+    await expect(runAuditJson()).rejects.toThrow(expectedError);
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toBe(
+      'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
     );
   });
 
   it('normalizes advisory IDs from the bulk payload URL to lowercase groups', async () => {
-    setupRetiredPnpmAudit();
+    setupRetiredEndpointFallback();
     fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -233,20 +287,10 @@ describe('runAuditJson', () => {
         [packageNameKey]: 'validator',
       }),
     });
-  });
-
-  it('rejects blank bulk advisory responses instead of treating them as empty JSON', async () => {
-    setupRetiredPnpmAudit();
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      text: async () => '   ',
-    });
-    const { runAuditJson } = await loadAuditUtils();
-
-    await expect(runAuditJson()).rejects.toThrow(
-      'Failed to parse bulk advisory audit JSON: response body was empty.',
+    assertFallbackSpawnCalls();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toBe(
+      'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
     );
   });
 });

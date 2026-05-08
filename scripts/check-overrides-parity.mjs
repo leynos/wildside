@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const OVERRIDES_TO_CHECK = ['basic-ftp', 'dompurify', 'uuid'];
+const OVERRIDES_TO_CHECK = ['basic-ftp', 'dompurify', 'ip-address', 'uuid'];
 const PACKAGE_JSON_PATH = new URL('../package.json', import.meta.url);
 
 /**
