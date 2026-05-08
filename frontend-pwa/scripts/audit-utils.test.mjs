@@ -200,20 +200,45 @@ describe('runAuditJson', () => {
     });
   });
 
-  it('throws a clear error when the bulk advisory endpoint fails', async () => {
+  it.each([
+    {
+      name: 'throws a clear error when the bulk advisory endpoint fails',
+      fetchResponse: {
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        text: async () => '{"error":"upstream unavailable"}',
+      },
+      expectedError: 'Bulk advisory audit failed (503 Service Unavailable)',
+    },
+    {
+      name: 'rejects blank bulk advisory responses instead of treating them as empty JSON',
+      fetchResponse: {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '   ',
+      },
+      expectedError: 'Failed to parse bulk advisory audit JSON: response body was empty.',
+    },
+  ])('$name', async ({ fetchResponse, expectedError }) => {
     setupRetiredEndpointFallback();
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-      statusText: 'Service Unavailable',
-      text: async () => '{"error":"upstream unavailable"}',
-    });
+    fetch.mockResolvedValueOnce(fetchResponse);
     const { runAuditJson } = await loadAuditUtils();
 
-    await expect(runAuditJson()).rejects.toThrow(
-      'Bulk advisory audit failed (503 Service Unavailable)',
+    await expect(runAuditJson()).rejects.toThrow(expectedError);
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      'pnpm',
+      ['audit', '--json'],
+      expect.objectContaining({ encoding: 'utf8' }),
     );
-    assertFallbackSpawnCalls();
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      'pnpm',
+      ['ls', '--json', '--depth', 'Infinity'],
+      expect.objectContaining({ encoding: 'utf8' }),
+    );
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -248,22 +273,5 @@ describe('runAuditJson', () => {
     expect(String(fetch.mock.calls[0][0])).toBe(
       'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
     );
-  });
-
-  it('rejects blank bulk advisory responses instead of treating them as empty JSON', async () => {
-    setupRetiredEndpointFallback();
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      text: async () => '   ',
-    });
-    const { runAuditJson } = await loadAuditUtils();
-
-    await expect(runAuditJson()).rejects.toThrow(
-      'Failed to parse bulk advisory audit JSON: response body was empty.',
-    );
-    assertFallbackSpawnCalls();
-    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
