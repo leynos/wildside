@@ -273,6 +273,7 @@ describe('runAuditJson', () => {
       }),
     });
     assertFallbackSpawnCalls();
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(String(fetch.mock.calls[0][0])).toBe(
       'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
     );
