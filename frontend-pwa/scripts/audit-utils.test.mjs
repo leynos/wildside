@@ -75,11 +75,26 @@ describe('runAuditJson', () => {
     globalThis.fetch = originalFetch;
   });
 
-  /** @param {{ dependencies?: Record<string, unknown> }} [opts] */
+  /**
+   * Configure spawnSync mocks for the retired-endpoint fallback path.
+   *
+   * Delegates to {@link setupRetiredPnpmAudit} with a single `frontend-pwa` package entry,
+   * optionally populated with the supplied dependency map.
+   * @param {{ dependencies?: Record<string, unknown> }} [opts] Optional overrides.
+   * @param {Record<string, unknown>} [opts.dependencies={}] Dependency map for the `pnpm ls` payload.
+   * @returns {void}
+   */
   function setupRetiredEndpointFallback({ dependencies = {} } = {}) {
     setupRetiredPnpmAudit([{ name: 'frontend-pwa', dependencies }]);
   }
 
+  /**
+   * Assert that spawnSync was invoked for the retired-endpoint fallback sequence.
+   *
+   * Verifies that `pnpm audit --json` was called first and `pnpm ls --json --depth Infinity`
+   * was called second, both with `encoding: 'utf8'`.
+   * @returns {void}
+   */
   function assertFallbackSpawnCalls() {
     expect(spawnSyncMock).toHaveBeenNthCalledWith(
       1,
